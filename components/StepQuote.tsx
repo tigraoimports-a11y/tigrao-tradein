@@ -115,12 +115,6 @@ export default function StepQuote({
           {usedModel} {usedStorage}
         </p>
         <p className="text-[13px] text-[#6E6E73] mt-1">{conditionText}</p>
-        <div className="mt-4 flex items-center justify-between pt-3 border-t border-[#E8E8ED]">
-          <span className="text-[13px] text-[#6E6E73]">Avaliacao</span>
-          <span className="text-[22px] font-bold text-[#34C759]">
-            {formatBRL(quote.tradeInValue)}
-          </span>
-        </div>
       </div>
 
       {/* Valores */}

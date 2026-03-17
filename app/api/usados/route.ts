@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchUsedValues, fetchExcludedModels, fetchDiscountRules } from "@/lib/sheets";
+import { fetchUsedValues, fetchExcludedModels, fetchDiscountRules, fetchModelDiscounts, buildModelDiscountsMap } from "@/lib/sheets";
 import type { UsedDeviceValue } from "@/lib/types";
 
 // Fallback: valores base hardcoded (CLAUDE.md)
@@ -80,18 +80,21 @@ const FALLBACK_EXCLUDED = [
 
 export async function GET() {
   try {
-    const [usedValues, excludedModels, discountRules] = await Promise.all([
+    const [usedValues, excludedModels, discountRules, modelDiscountsRaw] = await Promise.all([
       fetchUsedValues(),
       fetchExcludedModels(),
       fetchDiscountRules(),
+      fetchModelDiscounts(),
     ]);
-    return NextResponse.json({ usedValues, excludedModels, discountRules });
+    const modelDiscounts = buildModelDiscountsMap(modelDiscountsRaw);
+    return NextResponse.json({ usedValues, excludedModels, discountRules, modelDiscounts });
   } catch (error) {
     console.error("Erro ao buscar dados de usados:", error);
     return NextResponse.json({
       usedValues: FALLBACK_USED_VALUES,
       excludedModels: FALLBACK_EXCLUDED,
       discountRules: [],
+      modelDiscounts: {},
     });
   }
 }

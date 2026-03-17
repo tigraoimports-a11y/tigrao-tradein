@@ -10,13 +10,16 @@ import {
 import {
   calculateTradeInValue,
   calculateWarrantyBonus,
+  getDiscountsForModel,
   formatBRL,
   type ConditionData,
+  type ModelDiscounts,
 } from "@/lib/calculations";
 
 interface StepUsedDeviceProps {
   usedValues: UsedDeviceValue[];
   excludedModels: string[];
+  modelDiscounts?: Record<string, ModelDiscounts>;
   onNext: (data: {
     usedModel: string;
     usedStorage: string;
@@ -39,6 +42,7 @@ const MONTHS = [
 export default function StepUsedDevice({
   usedValues,
   excludedModels,
+  modelDiscounts,
   onNext,
 }: StepUsedDeviceProps) {
   const [line, setLine] = useState("");
@@ -82,10 +86,15 @@ export default function StepUsedDevice({
     warrantyMonth: hasWarranty ? warrantyMonth : null,
   };
 
+  const modelDiscount = useMemo(
+    () => getDiscountsForModel(model, modelDiscounts),
+    [model, modelDiscounts]
+  );
+
   const tradeInValue = useMemo(
-    () => (baseValue !== null && hasDamage === false ? calculateTradeInValue(baseValue, condition) : 0),
+    () => (baseValue !== null && hasDamage === false ? calculateTradeInValue(baseValue, condition, modelDiscount) : 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth]
+    [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth, modelDiscount]
   );
 
   const isExcluded = excludedModels.some((m) =>
@@ -113,6 +122,11 @@ export default function StepUsedDevice({
 
   return (
     <div className="space-y-8">
+      {/* Título principal */}
+      <h2 className="text-[20px] font-bold text-[#1D1D1F]">
+        Qual é o modelo do seu usado?
+      </h2>
+
       {/* Linha */}
       <Section title="Linha do seu iPhone">
         <div className="grid grid-cols-3 gap-2">
@@ -224,11 +238,7 @@ export default function StepUsedDevice({
                 <span>50%</span>
                 <span>100%</span>
               </div>
-              {battery < 85 && (
-                <p className="text-[12px] text-[#FF3B30] mt-2 font-medium">
-                  Abaixo de 85% — desconto de R$ 200
-                </p>
-              )}
+              {/* Desconto de bateria não exibido ao cliente */}
             </div>
           </Section>
 

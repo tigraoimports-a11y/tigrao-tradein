@@ -119,11 +119,97 @@ export async function fetchConfig(): Promise<AppConfig> {
   };
 }
 
-export async function fetchAllSheetData() {
-  const [newProducts, usedValues, discountRules, excludedModels, config] =
-    await Promise.all([fetchNewProducts(), fetchUsedValues(), fetchDiscountRules(), fetchExcludedModels(), fetchConfig()]);
+/**
+ * Fetch descontos por modelo (nova aba na planilha)
+ * Formato: Modelo | Condição | Detalhe | Desconto (R$)
+ * Ex: iPhone 16 Pro | Bateria | Abaixo de 85% | -400
+ * Se nao tiver a env var configurada, retorna vazio (usa fallback geral)
+ */
+export async function fetchModelDiscounts(): Promise<Record<string, Record<string, Record<string, number>>>> {
+  const url = process.env.SHEET_USADOS_DESCONTOS_MODELO_URL;
+  if (!url) return {};
 
-  return { newProducts, usedValues, excludedModels, discountRules, config, loadedAt: Date.now() };
+  try {
+    const csv = await fetchCSV(url);
+    const raw = parseCSV<Record<string, string>>(csv);
+
+    // Agrupa por modelo -> condicao -> detalhe -> desconto
+    const result: Record<string, Record<string, Record<string, number>>> = {};
+
+    for (const row of raw) {
+      const modelo = (row["Modelo"] || "").trim();
+      const condicao = (row["Condição"] || row["Condicao"] || "").trim();
+      const detalhe = (row["Detalhe"] || "").trim();
+      const desconto = parseNumber(row["Desconto (R$)"] || "0");
+
+      if (!modelo || !condicao) continue;
+
+      if (!result[modelo]) result[modelo] = {};
+      if (!result[modelo][condicao]) result[modelo][condicao] = {};
+      result[modelo][condicao][detalhe] = desconto;
+    }
+
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Converte os dados brutos da planilha de descontos por modelo
+ * para o formato ModelDiscounts usado no calculations.ts
+ */
+export function buildModelDiscountsMap(
+  rawMap: Record<string, Record<string, Record<string, number>>>
+): Record<string, {
+  screenScratch: { none: number; one: number; multiple: number };
+  sideScratch: { none: number; one: number; multiple: number };
+  peeling: { none: number; light: number; heavy: number };
+  batteryDiscount: number;
+}> {
+  const result: Record<string, {
+    screenScratch: { none: number; one: number; multiple: number };
+    sideScratch: { none: number; one: number; multiple: number };
+    peeling: { none: number; light: number; heavy: number };
+    batteryDiscount: number;
+  }> = {};
+
+  for (const [modelo, condicoes] of Object.entries(rawMap)) {
+    const tela = condicoes["Riscos na tela"] || {};
+    const lateral = condicoes["Riscos laterais"] || {};
+    const desc = condicoes["Descascado/Amassado"] || {};
+    const bat = condicoes["Bateria"] || {};
+
+    result[modelo] = {
+      screenScratch: {
+        none: tela["Nenhum"] ?? 0,
+        one: tela["1 risco"] ?? -100,
+        multiple: tela["2 ou mais"] ?? -250,
+      },
+      sideScratch: {
+        none: lateral["Nenhum"] ?? 0,
+        one: lateral["1 risco"] ?? -100,
+        multiple: lateral["2 ou mais"] ?? -250,
+      },
+      peeling: {
+        none: desc["Não"] ?? desc["Nao"] ?? 0,
+        light: desc["Leve"] ?? -200,
+        heavy: desc["Forte"] ?? -300,
+      },
+      batteryDiscount: bat["Abaixo de 85%"] ?? -200,
+    };
+  }
+
+  return result;
+}
+
+export async function fetchAllSheetData() {
+  const [newProducts, usedValues, discountRules, excludedModels, config, modelDiscountsRaw] =
+    await Promise.all([fetchNewProducts(), fetchUsedValues(), fetchDiscountRules(), fetchExcludedModels(), fetchConfig(), fetchModelDiscounts()]);
+
+  const modelDiscounts = buildModelDiscountsMap(modelDiscountsRaw);
+
+  return { newProducts, usedValues, excludedModels, discountRules, config, modelDiscounts, loadedAt: Date.now() };
 }
 
 // Frontend helpers

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
-import type { ConditionData } from "@/lib/calculations";
+import type { ConditionData, ModelDiscounts } from "@/lib/calculations";
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
@@ -11,6 +11,7 @@ import StepQuote from "./StepQuote";
 interface UsedData {
   usedValues: UsedDeviceValue[];
   excludedModels: string[];
+  modelDiscounts: Record<string, ModelDiscounts>;
 }
 
 export default function TradeInCalculator() {
@@ -22,6 +23,7 @@ export default function TradeInCalculator() {
   const [usedData, setUsedData] = useState<UsedData>({
     usedValues: [],
     excludedModels: [],
+    modelDiscounts: {},
   });
   const [config, setConfig] = useState<AppConfig>({
     multiplier12: 1.14,
@@ -150,6 +152,7 @@ export default function TradeInCalculator() {
           <StepUsedDevice
             usedValues={usedData.usedValues}
             excludedModels={usedData.excludedModels}
+            modelDiscounts={usedData.modelDiscounts}
             onNext={handleStep1Complete}
           />
         )}
