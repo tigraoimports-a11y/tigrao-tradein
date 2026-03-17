@@ -55,6 +55,7 @@ export default function StepUsedDevice({
   const [peeling, setPeeling] = useState<"none" | "light" | "heavy">("none");
   const [hasWarranty, setHasWarranty] = useState<boolean | null>(null);
   const [warrantyMonth, setWarrantyMonth] = useState<number | null>(null);
+  const [hasOriginalBox, setHasOriginalBox] = useState<boolean | null>(null);
 
   const allModels = useMemo(() => getUniqueUsedModels(usedValues), [usedValues]);
 
@@ -84,6 +85,7 @@ export default function StepUsedDevice({
     hasDamage: hasDamage === true,
     hasWarranty: hasWarranty === true,
     warrantyMonth: hasWarranty ? warrantyMonth : null,
+    hasOriginalBox: hasOriginalBox === true,
   };
 
   const modelDiscount = useMemo(
@@ -101,7 +103,7 @@ export default function StepUsedDevice({
     model.toLowerCase().includes(m.toLowerCase())
   );
 
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false;
+  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && hasOriginalBox !== null;
 
   function handleLineChange(l: string) {
     setLine(l);
@@ -339,6 +341,27 @@ export default function StepUsedDevice({
               )}
             </Section>
           )}
+
+          {/* Caixa original */}
+          <Section title="Ainda tem a caixa original do aparelho?">
+            <div className="flex gap-2">
+              <SelectButton
+                selected={hasOriginalBox === true}
+                onClick={() => setHasOriginalBox(true)}
+                className="flex-1"
+                variant="success"
+              >
+                Sim
+              </SelectButton>
+              <SelectButton
+                selected={hasOriginalBox === false}
+                onClick={() => setHasOriginalBox(false)}
+                className="flex-1"
+              >
+                Nao
+              </SelectButton>
+            </div>
+          </Section>
 
           {/* Preview avaliação */}
           <div className="bg-[#F5F5F7] rounded-2xl p-5 text-center">

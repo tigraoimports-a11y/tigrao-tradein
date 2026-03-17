@@ -8,6 +8,7 @@ export interface ConditionData {
   hasDamage: boolean;
   hasWarranty: boolean;
   warrantyMonth: number | null; // 1-12
+  hasOriginalBox: boolean;
 }
 
 export interface QuoteResult {
@@ -148,31 +149,40 @@ export function calculateQuote(
 }
 
 /**
- * Gera texto da condicao
+ * Gera linhas de condicao para exibicao e WhatsApp
+ */
+export function getConditionLines(condition: ConditionData): string[] {
+  const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const lines: string[] = [];
+
+  if (condition.warrantyMonth !== null) {
+    lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
+  }
+
+  lines.push(`Saude bateria ${condition.battery}%`);
+
+  if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
+  else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
+  else lines.push("2 ou mais arranhoes na tela");
+
+  if (condition.sideScratch === "none") lines.push("Sem arranhoes laterais");
+  else if (condition.sideScratch === "one") lines.push("1 arranhao lateral");
+  else lines.push("2 ou mais arranhoes laterais");
+
+  if (condition.peeling === "none") lines.push("Sem marcas de uso");
+  else if (condition.peeling === "light") lines.push("Marcas de uso leves");
+  else lines.push("Marcas de uso fortes");
+
+  lines.push(condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original");
+
+  return lines;
+}
+
+/**
+ * @deprecated use getConditionLines
  */
 export function getConditionText(condition: ConditionData): string {
-  const parts: string[] = [];
-
-  if (condition.battery < BATTERY_THRESHOLD) {
-    parts.push(`Bateria: ${condition.battery}%`);
-  }
-  if (condition.screenScratch !== "none") {
-    parts.push(condition.screenScratch === "one" ? "1 risco na tela" : "2+ riscos na tela");
-  }
-  if (condition.sideScratch !== "none") {
-    parts.push(condition.sideScratch === "one" ? "1 risco lateral" : "2+ riscos laterais");
-  }
-  if (condition.peeling === "light") {
-    parts.push("descascado/amassado leve");
-  } else if (condition.peeling === "heavy") {
-    parts.push("descascado/amassado forte");
-  }
-  if (condition.warrantyMonth !== null) {
-    const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    parts.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
-  }
-
-  return parts.length > 0 ? parts.join(" | ") : "Bom estado geral";
+  return getConditionLines(condition).join(" | ");
 }
 
 export function getWhatsAppUrl(phoneNumber: string, message: string): string {

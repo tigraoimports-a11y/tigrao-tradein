@@ -43,6 +43,7 @@ export default function TradeInCalculator() {
     hasDamage: false,
     hasWarranty: false,
     warrantyMonth: null,
+    hasOriginalBox: false,
   });
   const [tradeInValue, setTradeInValue] = useState(0);
   const [newModel, setNewModel] = useState("");
@@ -112,6 +113,7 @@ export default function TradeInCalculator() {
       hasDamage: false,
       hasWarranty: false,
       warrantyMonth: null,
+      hasOriginalBox: false,
     });
     setTradeInValue(0);
     setNewModel("");

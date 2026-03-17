@@ -4,7 +4,7 @@ import type { ConditionData, QuoteResult } from "@/lib/calculations";
 import {
   calculateQuote,
   getWhatsAppUrl,
-  getConditionText,
+  getConditionLines,
   formatBRL,
 } from "@/lib/calculations";
 
@@ -30,7 +30,7 @@ function generateWhatsAppMsg(
   condition: ConditionData,
   quote: QuoteResult
 ): string {
-  const conditionText = getConditionText(condition);
+  const conditionLines = getConditionLines(condition);
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
 
   return `Ola! Vi meu orcamento no site e quero fechar!
@@ -44,9 +44,7 @@ Lacrado | 1 ano de garantia | Nota Fiscal
 
 *Seu aparelho na troca:*
 ${usedModel} ${usedStorage}
-${conditionText}
-
-*Avaliacao do seu aparelho: ${fmt(quote.tradeInValue)}*
+${conditionLines.join("\n")}
 
 ------------------------------------
 *Voce paga apenas a diferenca:*
@@ -73,7 +71,7 @@ export default function StepQuote({
   onReset,
 }: StepQuoteProps) {
   const quote: QuoteResult = calculateQuote(tradeInValue, newPrice, multipliers);
-  const conditionText = getConditionText(condition);
+  const conditionLines = getConditionLines(condition);
   const whatsappMsg = generateWhatsAppMsg(
     newModel, newStorage, usedModel, usedStorage, condition, quote
   );
@@ -114,7 +112,11 @@ export default function StepQuote({
         <p className="text-[18px] font-semibold text-[#1D1D1F]">
           {usedModel} {usedStorage}
         </p>
-        <p className="text-[13px] text-[#6E6E73] mt-1">{conditionText}</p>
+        <div className="mt-1 space-y-0.5">
+          {conditionLines.map((line, i) => (
+            <p key={i} className="text-[13px] text-[#6E6E73]">{line}</p>
+          ))}
+        </div>
       </div>
 
       {/* Valores */}
