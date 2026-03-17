@@ -49,8 +49,9 @@ const DEFAULT_MULTIPLIERS = {
 
 /**
  * Calcula bonus de garantia Apple baseado no mes informado.
- * Ate 3 meses restantes: +R$ 200
- * Mais de 3 meses restantes: +R$ 400
+ * Ate 3 meses restantes:    +R$ 200
+ * 3 a 6 meses restantes:    +R$ 300
+ * 6 meses ou mais:          +R$ 400
  */
 export function calculateWarrantyBonus(warrantyMonth: number | null): number {
   if (warrantyMonth === null) return 0;
@@ -69,6 +70,7 @@ export function calculateWarrantyBonus(warrantyMonth: number | null): number {
   const diffMonths = diffMs / (1000 * 60 * 60 * 24 * 30);
 
   if (diffMonths <= 3) return 200;
+  if (diffMonths <= 6) return 300;
   return 400;
 }
 
