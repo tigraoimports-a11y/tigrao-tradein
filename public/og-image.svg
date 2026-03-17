@@ -1,37 +1,70 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff"/>
-      <stop offset="100%" style="stop-color:#f5f5f7"/>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B00"/>
+      <stop offset="100%" style="stop-color:#E8740E"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#E8740E"/>
-      <stop offset="100%" style="stop-color:#F5A623"/>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.05"/>
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Orange background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
 
-  <!-- Orange accent bar top -->
-  <rect width="1200" height="8" fill="url(#accent)"/>
+  <!-- Decorative circles -->
+  <circle cx="1050" cy="80" r="200" fill="white" fill-opacity="0.05"/>
+  <circle cx="1150" cy="500" r="150" fill="white" fill-opacity="0.05"/>
+  <circle cx="100" cy="550" r="180" fill="white" fill-opacity="0.05"/>
 
-  <!-- Tiger emoji area -->
-  <text x="600" y="200" font-family="Arial, sans-serif" font-size="120" text-anchor="middle">🐯</text>
+  <!-- White card -->
+  <rect x="60" y="60" width="680" height="510" rx="24" fill="white" fill-opacity="0.95"/>
 
-  <!-- Title -->
-  <text x="600" y="300" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="64" font-weight="700" fill="#1d1d1f" text-anchor="middle">TigrãoImports</text>
+  <!-- Left orange accent bar on card -->
+  <rect x="60" y="60" width="8" height="510" rx="4" fill="#FF6B00"/>
+
+  <!-- Brand name -->
+  <text x="120" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="58" font-weight="800" fill="#1d1d1f" letter-spacing="-1">TigrãoImports</text>
+
+  <!-- Divider line -->
+  <rect x="120" y="205" width="80" height="4" rx="2" fill="#E8740E"/>
 
   <!-- Subtitle -->
-  <text x="600" y="375" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="40" font-weight="400" fill="#E8740E" text-anchor="middle">Trade-In de iPhone</text>
+  <text x="120" y="275" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="600" fill="#E8740E">Trade-In de iPhone</text>
 
-  <!-- Description -->
-  <text x="600" y="450" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" fill="#6e6e73" text-anchor="middle">Simule o valor do seu usado e descubra</text>
-  <text x="600" y="490" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" fill="#6e6e73" text-anchor="middle">quanto paga de diferença pelo novo</text>
+  <!-- Description line 1 -->
+  <text x="120" y="340" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="26" fill="#6e6e73">Descubra quanto vale seu iPhone usado</text>
+  <!-- Description line 2 -->
+  <text x="120" y="378" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="26" fill="#6e6e73">e simule a diferença para o novo.</text>
+
+  <!-- Pill badge -->
+  <rect x="120" y="420" width="320" height="52" rx="26" fill="#E8740E"/>
+  <text x="280" y="453" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="600" fill="white" text-anchor="middle">Cotacao instantanea</text>
 
   <!-- URL -->
-  <text x="600" y="570" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="22" fill="#adadb8" text-anchor="middle">tigrao-tradein.vercel.app</text>
+  <text x="120" y="530" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" font-size="20" fill="#adadb8">tigrao-tradein.vercel.app</text>
 
-  <!-- Bottom accent bar -->
-  <rect y="622" width="1200" height="8" fill="url(#accent)"/>
+  <!-- Right side: iPhone illustration -->
+  <!-- Phone body -->
+  <rect x="870" y="115" width="200" height="400" rx="30" fill="white" fill-opacity="0.2" stroke="white" stroke-width="3" stroke-opacity="0.6"/>
+  <!-- Phone screen -->
+  <rect x="885" y="145" width="170" height="340" rx="16" fill="white" fill-opacity="0.15"/>
+  <!-- Dynamic island -->
+  <rect x="940" y="158" width="60" height="18" rx="9" fill="white" fill-opacity="0.5"/>
+  <!-- Screen content lines -->
+  <rect x="905" y="200" width="130" height="10" rx="5" fill="white" fill-opacity="0.4"/>
+  <rect x="905" y="222" width="100" height="8" rx="4" fill="white" fill-opacity="0.3"/>
+  <rect x="905" y="252" width="130" height="40" rx="8" fill="white" fill-opacity="0.2"/>
+  <rect x="905" y="305" width="130" height="40" rx="8" fill="white" fill-opacity="0.2"/>
+  <rect x="905" y="358" width="130" height="40" rx="8" fill="white" fill-opacity="0.2"/>
+  <!-- Bottom button -->
+  <rect x="925" y="430" width="90" height="32" rx="16" fill="white" fill-opacity="0.35"/>
+
+  <!-- Arrow icon between phone and card (swap symbol) -->
+  <text x="820" y="330" font-family="Arial" font-size="48" fill="white" fill-opacity="0.7" text-anchor="middle">⇄</text>
+
+  <!-- Second phone (smaller, tilted effect) -->
+  <rect x="790" y="180" width="160" height="320" rx="24" fill="white" fill-opacity="0.12" stroke="white" stroke-width="2" stroke-opacity="0.4"/>
+  <rect x="803" y="205" width="134" height="272" rx="12" fill="white" fill-opacity="0.1"/>
 </svg>
