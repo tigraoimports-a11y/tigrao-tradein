@@ -137,10 +137,10 @@ export async function fetchModelDiscounts(): Promise<Record<string, Record<strin
     const result: Record<string, Record<string, Record<string, number>>> = {};
 
     for (const row of raw) {
-      const modelo = (row["Modelo"] || "").trim();
-      const condicao = (row["Condição"] || row["Condicao"] || "").trim();
-      const detalhe = (row["Detalhe"] || "").trim();
-      const desconto = parseNumber(row["Desconto (R$)"] || "0");
+      const modelo = (row["Modelo"] || row["MODELO"] || "").trim();
+      const condicao = (row["Condição"] || row["Condicao"] || row["CONDIÇÃO"] || row["CONDICAO"] || "").trim();
+      const detalhe = (row["Detalhe"] || row["DETALHE"] || "").trim();
+      const desconto = parseNumber(row["Desconto (R$)"] || row["DESCONTO"] || "0");
 
       if (!modelo || !condicao) continue;
 
