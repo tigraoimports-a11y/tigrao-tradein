@@ -1,0 +1,37 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#f5f5f7"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#E8740E"/>
+      <stop offset="100%" style="stop-color:#F5A623"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Orange accent bar top -->
+  <rect width="1200" height="8" fill="url(#accent)"/>
+
+  <!-- Tiger emoji area -->
+  <text x="600" y="200" font-family="Arial, sans-serif" font-size="120" text-anchor="middle">🐯</text>
+
+  <!-- Title -->
+  <text x="600" y="300" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="64" font-weight="700" fill="#1d1d1f" text-anchor="middle">TigrãoImports</text>
+
+  <!-- Subtitle -->
+  <text x="600" y="375" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="40" font-weight="400" fill="#E8740E" text-anchor="middle">Trade-In de iPhone</text>
+
+  <!-- Description -->
+  <text x="600" y="450" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" fill="#6e6e73" text-anchor="middle">Simule o valor do seu usado e descubra</text>
+  <text x="600" y="490" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="28" fill="#6e6e73" text-anchor="middle">quanto paga de diferença pelo novo</text>
+
+  <!-- URL -->
+  <text x="600" y="570" font-family="-apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="22" fill="#adadb8" text-anchor="middle">tigrao-tradein.vercel.app</text>
+
+  <!-- Bottom accent bar -->
+  <rect y="622" width="1200" height="8" fill="url(#accent)"/>
+</svg>
