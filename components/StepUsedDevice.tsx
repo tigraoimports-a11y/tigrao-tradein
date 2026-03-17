@@ -363,25 +363,6 @@ export default function StepUsedDevice({
             </div>
           </Section>
 
-          {/* Preview avaliação */}
-          <div className="bg-[#F5F5F7] rounded-2xl p-5 text-center">
-            <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-2">
-              Avaliacao estimada
-            </p>
-            <p className="text-[36px] font-bold text-[#34C759]">
-              {formatBRL(tradeInValue)}
-            </p>
-            {baseValue !== null && tradeInValue < baseValue && (
-              <p className="text-[12px] text-[#86868B] mt-2">
-                Valor base {formatBRL(baseValue)} com ajustes aplicados
-              </p>
-            )}
-            {baseValue !== null && tradeInValue > baseValue && (
-              <p className="text-[12px] text-[#86868B] mt-2">
-                Valor base {formatBRL(baseValue)} + bonus garantia
-              </p>
-            )}
-          </div>
         </>
       )}
 
