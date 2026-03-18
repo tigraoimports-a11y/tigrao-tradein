@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 
 interface SimulacaoRow {
@@ -48,6 +48,10 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
+  const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
+  const [filterModelo, setFilterModelo] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("admin_pw");
@@ -150,20 +154,53 @@ export default function AdminPage() {
     .slice(0, 7);
   const maxModeloCount = topModelos[0]?.[1] ?? 1;
 
+  // Unique models for filter dropdown
+  const uniqueModelos = useMemo(() => {
+    if (!data) return [];
+    return [...new Set(data.map((d) => d.modelo_novo))].sort();
+  }, [data]);
+
   // Filtered rows
   const filtered = data.filter((d) => {
     if (tab !== "todos" && d.status !== tab) return false;
+
     if (search) {
       const s = search.toLowerCase();
-      return (
+      const match =
         d.nome?.toLowerCase().includes(s) ||
         d.whatsapp?.includes(s) ||
         d.modelo_novo?.toLowerCase().includes(s) ||
-        d.modelo_usado?.toLowerCase().includes(s)
-      );
+        d.modelo_usado?.toLowerCase().includes(s);
+      if (!match) return false;
     }
+
+    if (filterModelo && d.modelo_novo !== filterModelo) return false;
+
+    const created = new Date(d.created_at);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (filterPeriod === "hoje") {
+      if (created < today) return false;
+    } else if (filterPeriod === "ontem") {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (created < yesterday || created >= today) return false;
+    } else if (filterPeriod === "7dias") {
+      if (created < new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) return false;
+    } else if (filterPeriod === "30dias") {
+      if (created < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) return false;
+    } else if (filterPeriod === "mes") {
+      if (created < new Date(now.getFullYear(), now.getMonth(), 1)) return false;
+    } else if (filterPeriod === "personalizado") {
+      if (filterFrom && created < new Date(filterFrom + "T00:00:00")) return false;
+      if (filterTo && created > new Date(filterTo + "T23:59:59")) return false;
+    }
+
     return true;
   });
+
+  const hasActiveFilter = filterPeriod !== "todos" || filterModelo !== "";
 
   const kpis = [
     { label: "Total simulações", value: total, color: "#E8740E", icon: "📊" },
@@ -260,6 +297,77 @@ export default function AdminPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] border border-[#D2D2D7] text-sm text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E] transition-colors w-full sm:w-64"
               />
+            </div>
+
+            {/* Filter bar */}
+            <div className="px-5 py-3 border-b border-[#D2D2D7] bg-[#FAFAFA] flex flex-wrap gap-3 items-center">
+              {/* Period quick buttons */}
+              <div className="flex gap-1.5 flex-wrap items-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider mr-1">Período:</span>
+                {(["todos", "hoje", "ontem", "7dias", "30dias", "mes", "personalizado"] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setFilterPeriod(p)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      filterPeriod === p
+                        ? "bg-[#E8740E] text-white"
+                        : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"
+                    }`}
+                  >
+                    {p === "todos" ? "Tudo" : p === "hoje" ? "Hoje" : p === "ontem" ? "Ontem" : p === "7dias" ? "7 dias" : p === "30dias" ? "30 dias" : p === "mes" ? "Este mês" : "Personalizado"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom date range */}
+              {filterPeriod === "personalizado" && (
+                <div className="flex gap-2 items-center flex-wrap">
+                  <span className="text-[11px] text-[#86868B]">De:</span>
+                  <input
+                    type="date"
+                    value={filterFrom}
+                    onChange={(e) => setFilterFrom(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-[#D2D2D7] bg-white text-xs text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] transition-colors"
+                  />
+                  <span className="text-[11px] text-[#86868B]">até:</span>
+                  <input
+                    type="date"
+                    value={filterTo}
+                    onChange={(e) => setFilterTo(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-[#D2D2D7] bg-white text-xs text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] transition-colors"
+                  />
+                </div>
+              )}
+
+              {/* Model filter */}
+              <div className="flex gap-1.5 items-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">Modelo:</span>
+                <select
+                  value={filterModelo}
+                  onChange={(e) => setFilterModelo(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-[#D2D2D7] bg-white text-xs text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] transition-colors"
+                >
+                  <option value="">Todos</option>
+                  {uniqueModelos.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Clear filters */}
+              {hasActiveFilter && (
+                <button
+                  onClick={() => { setFilterPeriod("todos"); setFilterModelo(""); setFilterFrom(""); setFilterTo(""); }}
+                  className="px-2.5 py-1 rounded-lg text-xs text-[#E74C3C] border border-[#E74C3C]/30 hover:bg-red-50 transition-colors ml-auto"
+                >
+                  Limpar filtros
+                </button>
+              )}
+
+              {/* Result count */}
+              <span className="text-[11px] text-[#86868B] ml-auto">
+                {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+              </span>
             </div>
 
             {/* Table */}
