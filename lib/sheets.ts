@@ -44,7 +44,11 @@ export async function fetchNewProducts(): Promise<NewProduct[]> {
   const raw = parseCSV<Record<string, string>>(csv);
 
   return raw
-    .filter((row) => row["Modelo"] && row["Preco Pix"] || row["Preço Pix"])
+    .filter((row) => {
+      if (!row["Modelo"] || !(row["Preco Pix"] || row["Preço Pix"])) return false;
+      const status = (row["Status"] || "").trim().toLowerCase();
+      return status !== "esgotado";
+    })
     .map((row) => ({
       modelo: row["Modelo"].trim(),
       armazenamento: (row["Armazenamento"] || "").trim(),
