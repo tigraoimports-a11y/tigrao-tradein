@@ -9,6 +9,7 @@ async function notificarTelegram(body: {
   modeloUsado: string;
   storageUsado: string;
   diferenca: number;
+  condicaoLinhas?: string[];
 }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -22,6 +23,9 @@ async function notificarTelegram(body: {
 
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const instagramLine = body.instagram ? `\nInstagram: ${body.instagram}` : "";
+  const condicaoBlock = body.condicaoLinhas?.length
+    ? `\n${body.condicaoLinhas.join("\n")}`
+    : "";
 
   const mensagem =
     `🚨 LEAD SAIU SEM FECHAR!\n\n` +
@@ -29,7 +33,8 @@ async function notificarTelegram(body: {
     `📱 WhatsApp: ${body.whatsapp}` +
     instagramLine + `\n\n` +
     `🆕 Queria: ${body.modeloNovo} ${body.storageNovo}\n` +
-    `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}\n` +
+    `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}` +
+    condicaoBlock + `\n` +
     `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
     `👉 Entre em contato e tente fechar!`;
 

@@ -16,4 +16,5 @@ export interface LeadSaiu {
   storageUsado: string;
   avaliacaoUsado: number;
   diferenca: number;
+  condicaoLinhas?: string[];
 }

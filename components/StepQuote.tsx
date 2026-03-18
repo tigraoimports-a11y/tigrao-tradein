@@ -315,6 +315,7 @@ export default function StepQuote({
             storageUsado: usedStorage,
             avaliacaoUsado: tradeInValue,
             diferenca,
+            condicaoLinhas: conditionLines,
           });
           setSairLoading(false);
           onReset();
