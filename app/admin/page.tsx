@@ -44,7 +44,7 @@ export default function AdminPage() {
   const [pwError, setPwError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SimulacaoRow[] | null>(null);
-  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR">("todos");
+  const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "PENDENTE">("todos");
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
@@ -160,8 +160,11 @@ export default function AdminPage() {
     .slice(0, 7);
   const maxModeloCount = topModelos[0]?.[1] ?? 1;
 
+  const pendente = data.filter((d) => !d.contatado).length;
+
   // Filtered rows
   const filtered = data.filter((d) => {
+    if (tab === "PENDENTE") return !d.contatado;
     if (tab !== "todos" && d.status !== tab) return false;
 
     if (search) {
@@ -271,8 +274,8 @@ export default function AdminPage() {
           <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
             {/* Table header */}
             <div className="px-5 py-4 border-b border-[#D2D2D7] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-              <div className="flex gap-2">
-                {(["todos", "GOSTEI", "SAIR"] as const).map((t) => (
+              <div className="flex gap-2 flex-wrap">
+                {(["todos", "GOSTEI", "SAIR", "PENDENTE"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
@@ -282,11 +285,19 @@ export default function AdminPage() {
                           ? "bg-green-100 text-green-700"
                           : t === "SAIR"
                           ? "bg-red-100 text-red-600"
+                          : t === "PENDENTE"
+                          ? "bg-yellow-100 text-yellow-700"
                           : "bg-orange-100 text-[#E8740E]"
                         : "text-[#86868B] hover:text-[#1D1D1F]"
                     }`}
                   >
-                    {t === "todos" ? `Todos (${total})` : t === "GOSTEI" ? `Fecharam (${gostei})` : `Saíram (${saiu})`}
+                    {t === "todos"
+                      ? `Todos (${total})`
+                      : t === "GOSTEI"
+                      ? `Fecharam (${gostei})`
+                      : t === "SAIR"
+                      ? `Saíram (${saiu})`
+                      : `Pendente (${pendente})`}
                   </button>
                 ))}
               </div>
