@@ -144,12 +144,6 @@ export default function StepNewDevice({
             <span className="text-[13px] text-[#6E6E73]">Preco novo (Pix)</span>
             <span className="text-[13px] font-semibold">{formatBRL(price)}</span>
           </div>
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-[13px] text-[#6E6E73]">Desconto do seu usado</span>
-            <span className="text-[13px] font-semibold text-[#34C759]">
-              - {formatBRL(tradeInValue)}
-            </span>
-          </div>
           <div className="border-t border-[#E8E8ED] my-3" />
           <div className="flex justify-between items-center">
             <span className="text-[14px] font-semibold text-[#6E6E73]">Diferenca</span>
