@@ -13,7 +13,12 @@ async function notificarTelegram(body: {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!token || !chatId) return;
+  console.log("[telegram] token presente:", !!token, "chatId presente:", !!chatId);
+
+  if (!token || !chatId) {
+    console.log("[telegram] env vars ausentes — pulando notificação");
+    return;
+  }
 
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const instagramLine = body.instagram ? `\nInstagram: ${body.instagram}` : "";
@@ -31,13 +36,15 @@ async function notificarTelegram(body: {
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text: mensagem }),
     });
+    const json = await res.json();
+    console.log("[telegram] resposta:", JSON.stringify(json));
   } catch (err) {
-    console.error("[leads] Erro ao notificar Telegram:", err);
+    console.error("[telegram] erro ao chamar API:", err);
   }
 }
 
