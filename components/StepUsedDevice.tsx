@@ -121,8 +121,9 @@ export default function StepUsedDevice({
     setHasDamage(null);
   }
 
+  // Usa bonus especifico do modelo (se tiver), senao cai no global
   const warrantyBonusText = warrantyMonth !== null
-    ? calculateWarrantyBonus(warrantyMonth, warrantyBonuses)
+    ? calculateWarrantyBonus(warrantyMonth, modelDiscount.warrantyBonuses || warrantyBonuses)
     : 0;
 
   return (
