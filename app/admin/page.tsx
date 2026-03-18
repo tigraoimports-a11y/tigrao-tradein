@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 
 interface SimulacaoRow {
   id: string;
@@ -185,6 +186,12 @@ export default function AdminPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/admin/precos"
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
+          >
+            Alterar Valores
+          </Link>
           <button
             onClick={handleRefresh}
             disabled={refreshing}

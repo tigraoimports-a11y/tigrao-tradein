@@ -41,6 +41,22 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Notify Nicolas via Telegram
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (botToken && chatId) {
+      const msg = `🐯 *ALTERAÇÃO DE PREÇO — TigrãoImports*\n\n📱 ${modelo} ${armazenamento}\n💰 Novo preço PIX: R$ ${Number(preco_pix).toLocaleString("pt-BR")}\nStatus: ${status ?? "ativo"}`;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "Markdown" }),
+      });
+    }
+  } catch {
+    // Telegram notification failure is non-critical
+  }
+
   return NextResponse.json({ ok: true });
 }
 
