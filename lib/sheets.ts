@@ -4,7 +4,7 @@ import Papa from "papaparse";
 import type { NewProduct, UsedDeviceValue, DiscountRule, AppConfig } from "./types";
 import type { BatteryTier } from "./calculations";
 
-const REVALIDATE_SECONDS = 300;
+const REVALIDATE_SECONDS = 60;
 
 async function fetchCSV(url: string): Promise<string> {
   const response = await fetch(url, {

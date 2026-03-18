@@ -115,14 +115,14 @@ export function calculateWarrantyBonus(
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
+  // Usa diferenca em meses inteiros (ex: marco→junho = 3 meses)
+  // Assim "Junho" selecionado em marco = 3 meses = "ate 3 meses"
   let warrantyYear = currentYear;
   if (warrantyMonth <= currentMonth) {
     warrantyYear = currentYear + 1;
   }
 
-  const warrantyDate = new Date(warrantyYear, warrantyMonth - 1, 28);
-  const diffMs = warrantyDate.getTime() - now.getTime();
-  const diffMonths = diffMs / (1000 * 60 * 60 * 24 * 30);
+  const diffMonths = (warrantyYear - currentYear) * 12 + (warrantyMonth - currentMonth);
 
   if (diffMonths <= 3) return b.ate3m;
   if (diffMonths <= 6) return b.de3a6m;
