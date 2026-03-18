@@ -77,8 +77,7 @@ export async function POST(req: NextRequest) {
       `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
       `Posso te fazer uma proposta especial? 🐯`
     );
-    const whatsappLinkLongo = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
-    const whatsappLink = await encurtarUrl(whatsappLinkLongo);
+    const whatsappLink = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
 
     const mensagemNotif =
       `🚨 LEAD SAIU SEM FECHAR!\n\n` +
