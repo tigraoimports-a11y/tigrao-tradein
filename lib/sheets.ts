@@ -182,6 +182,9 @@ export function buildModelDiscountsMap(
     const lateral = condicoes["Riscos laterais"] || {};
     const desc = condicoes["Descascado/Amassado"] || {};
     const bat = condicoes["Bateria"] || {};
+    const garantia = condicoes["Garantia"] || {};
+
+    const hasWarrantyBonuses = Object.keys(garantia).length > 0;
 
     result[modelo] = {
       screenScratch: {
@@ -200,6 +203,13 @@ export function buildModelDiscountsMap(
         heavy: desc["Forte"] ?? -300,
       },
       batteryDiscount: bat["Abaixo de 85%"] ?? -200,
+      ...(hasWarrantyBonuses ? {
+        warrantyBonuses: {
+          ate3m: garantia["Ate 3 meses"] ?? 200,
+          de3a6m: garantia["3 a 6 meses"] ?? 300,
+          acima6m: garantia["6 meses ou mais"] ?? 400,
+        },
+      } : {}),
     };
   }
 
