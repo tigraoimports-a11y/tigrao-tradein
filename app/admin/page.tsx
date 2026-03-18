@@ -98,6 +98,12 @@ export default function AdminPage() {
     if (password) fetchData(password);
   }, [password, fetchData]);
 
+  // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
+  const uniqueModelos = useMemo(() => {
+    if (!data) return [];
+    return [...new Set(data.map((d) => d.modelo_novo))].sort();
+  }, [data]);
+
   // --- LOGIN SCREEN ---
   if (!password || data === null) {
     return (
@@ -153,12 +159,6 @@ export default function AdminPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 7);
   const maxModeloCount = topModelos[0]?.[1] ?? 1;
-
-  // Unique models for filter dropdown
-  const uniqueModelos = useMemo(() => {
-    if (!data) return [];
-    return [...new Set(data.map((d) => d.modelo_novo))].sort();
-  }, [data]);
 
   // Filtered rows
   const filtered = data.filter((d) => {
@@ -398,32 +398,41 @@ export default function AdminPage() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1 items-start">
                             <button
-                              disabled={sending === row.id}
                               onClick={() => {
-                                // Atualiza UI imediatamente
+                                // Marca como contatado no Supabase
                                 setData((prev) =>
-                                  prev
-                                    ? prev.map((r) =>
-                                        r.id === row.id ? { ...r, contatado: true } : r
-                                      )
-                                    : prev
+                                  prev ? prev.map((r) => r.id === row.id ? { ...r, contatado: true } : r) : prev
                                 );
-                                setSending(row.id);
-                                fetch("/api/admin/followup", {
+                                fetch("/api/admin/contatar", {
                                   method: "POST",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                    "x-admin-password": password,
-                                  },
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password },
                                   body: JSON.stringify({ id: row.id }),
-                                }).finally(() => setSending(null));
+                                });
+                                // Abre WhatsApp do cliente no dispositivo de quem está usando o dashboard
+                                const num = row.whatsapp.replace(/\D/g, "");
+                                const full = num.startsWith("55") ? num : `55${num}`;
+                                const condicoes = row.condicao_linhas?.join("\n") ?? "";
+                                const msg = [
+                                  `Ola ${row.nome}!`,
+                                  ``,
+                                  `Vi que voce fez uma simulacao de trade-in aqui na TigraoimportsImports`,
+                                  ``,
+                                  `Produto novo: ${row.modelo_novo} ${row.storage_novo} (R$ ${row.preco_novo.toLocaleString("pt-BR")})`,
+                                  `Seu aparelho: ${row.modelo_usado} ${row.storage_usado}`,
+                                  ...(condicoes ? [condicoes] : []),
+                                  `Avaliacao: R$ ${row.avaliacao_usado.toLocaleString("pt-BR")}`,
+                                  `Diferenca no PIX: R$ ${row.diferenca.toLocaleString("pt-BR")}`,
+                                  ``,
+                                  `Posso te fazer uma proposta especial?`,
+                                ].join("\n");
+                                window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
                               }}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
                             >
-                              {sending === row.id ? "Enviando..." : "💬 WhatsApp"}
+                              💬 WhatsApp
                             </button>
                             {row.contatado && (
-                              <span className="text-[10px] text-green-600 font-medium">✓ Enviado</span>
+                              <span className="text-[10px] text-green-600 font-medium">✓ Contatado</span>
                             )}
                           </div>
                         </td>
