@@ -48,6 +48,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -386,7 +387,7 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Contato", "Data", "Nome", "WhatsApp", "Vendedor", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status"].map((h) => (
+                    {["Contato", "Data", "Nome", "WhatsApp", "Vendedor", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -498,6 +499,26 @@ export default function AdminPage() {
                           >
                             {row.status === "GOSTEI" ? "✅ Fechou" : "🚪 Saiu"}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            disabled={deleting === row.id}
+                            onClick={async () => {
+                              if (!confirm(`Excluir simulação de ${row.nome}?`)) return;
+                              setDeleting(row.id);
+                              await fetch("/api/admin/simulacoes", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                body: JSON.stringify({ id: row.id }),
+                              });
+                              setData((prev) => prev ? prev.filter((r) => r.id !== row.id) : prev);
+                              setDeleting(null);
+                            }}
+                            className="p-1.5 rounded-lg text-[#86868B] hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                            title="Excluir"
+                          >
+                            {deleting === row.id ? "..." : "🗑️"}
+                          </button>
                         </td>
                       </tr>
                     ))
