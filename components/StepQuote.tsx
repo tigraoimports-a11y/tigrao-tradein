@@ -64,15 +64,18 @@ function buildFormaPagamentoMsg(
 function generateWhatsAppMsg(
   newModel: string,
   newStorage: string,
+  newPrice: number,
   usedModel: string,
   usedStorage: string,
   condition: ConditionData,
+  tradeInValue: number,
   clienteNome: string,
   clienteWhatsApp: string,
   clienteInstagram: string,
   diferenca: number,
   formaPagamento: string
 ): string {
+  const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const conditionLines = getConditionLines(condition);
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
@@ -85,15 +88,18 @@ ${instagramLine}
 ————————————————————
 
 🆕 *Produto novo:*
-${newModel} ${newStorage}
+${newModel} ${newStorage} — ${fmt(newPrice)}
 🔒 Lacrado | ✅ 1 ano de garantia | 🧾 Nota Fiscal
 
 🔄 *Seu aparelho na troca:*
 ${usedModel} ${usedStorage}
 ${conditionLines.join("\n")}
+💰 Avaliacao do usado: ${fmt(tradeInValue)}
 
 ————————————————————
-💳 *Forma de pagamento:*
+💵 *Diferenca no PIX: ${fmt(diferenca)}*
+
+💳 *Forma de pagamento escolhida:*
 ${formaPagamento}
 
 🤝 Quero fechar o pedido!`;
@@ -145,8 +151,8 @@ export default function StepQuote({
   );
 
   const whatsappMsg = generateWhatsAppMsg(
-    newModel, newStorage, usedModel, usedStorage, condition,
-    clienteNome, clienteWhatsApp, clienteInstagram, diferenca, formaPagamento
+    newModel, newStorage, newPrice, usedModel, usedStorage, condition,
+    tradeInValue, clienteNome, clienteWhatsApp, clienteInstagram, diferenca, formaPagamento
   );
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 

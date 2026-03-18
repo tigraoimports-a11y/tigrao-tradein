@@ -72,9 +72,9 @@ export async function POST(req: NextRequest) {
     const textoFollowUp = encodeURIComponent(
       `Olá ${body.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.\n\n` +
       `📱 *Simulação:*\n` +
-      `🆕 Novo: ${body.modeloNovo} ${body.storageNovo}\n` +
-      `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}${condicaoBlock}\n` +
-      `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
+      `🆕 Novo: ${body.modeloNovo} ${body.storageNovo} (${fmt(body.precoNovo)})\n` +
+      `🔄 Usado: ${body.modeloUsado} ${body.storageUsado} — Avaliado em ${fmt(body.avaliacaoUsado)}\n` +
+      `💰 Diferença no PIX: ${fmt(body.diferenca)}\n\n` +
       `Posso te fazer uma proposta especial? 🐯`
     );
     const whatsappLink = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
@@ -84,10 +84,11 @@ export async function POST(req: NextRequest) {
       `👤 Nome: ${body.nome}\n` +
       `📱 WhatsApp: ${body.whatsapp}` +
       instagramLine + `\n\n` +
-      `🆕 Queria: ${body.modeloNovo} ${body.storageNovo}\n` +
+      `🆕 Queria: ${body.modeloNovo} ${body.storageNovo} — ${fmt(body.precoNovo)}\n` +
       `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}` +
       condicaoBlock + `\n` +
-      `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
+      `💱 Avaliação do usado: ${fmt(body.avaliacaoUsado)}\n` +
+      `💵 Diferença no PIX: ${fmt(body.diferenca)}\n\n` +
       `👉 Entre em contato e tente fechar!\n` +
       `💬 ${whatsappLink}`;
 
