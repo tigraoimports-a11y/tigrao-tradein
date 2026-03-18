@@ -28,7 +28,7 @@ interface StepQuoteProps {
   onReset: () => void;
 }
 
-async function salvarLeadSaiu(lead: LeadSaiu) {
+async function salvarLeadSaiu(lead: LeadSaiu & { formaPagamento?: string }) {
   try {
     await fetch("/api/leads", {
       method: "POST",
@@ -296,14 +296,29 @@ export default function StepQuote({
       </div>
 
       {/* Botão fechar */}
-      <a
-        href={whatsappUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        onClick={async () => {
+          await salvarLeadSaiu({
+            nome: clienteNome,
+            whatsapp: clienteWhatsApp,
+            instagram: clienteInstagram,
+            modeloNovo: newModel,
+            storageNovo: newStorage,
+            precoNovo: newPrice,
+            modeloUsado: usedModel,
+            storageUsado: usedStorage,
+            avaliacaoUsado: tradeInValue,
+            diferenca,
+            status: "GOSTEI",
+            formaPagamento,
+            condicaoLinhas: conditionLines,
+          });
+          window.open(whatsappUrl, "_blank");
+        }}
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-white text-center bg-[#34C759] hover:bg-[#2DB84D] transition-all duration-200 active:scale-[0.98]"
       >
         Gostei da proposta. Quero comprar!
-      </a>
+      </button>
 
       {/* Botão SAIR */}
       <button
@@ -321,6 +336,7 @@ export default function StepQuote({
             storageUsado: usedStorage,
             avaliacaoUsado: tradeInValue,
             diferenca,
+            status: "SAIR",
             condicaoLinhas: conditionLines,
           });
           setSairLoading(false);

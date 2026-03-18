@@ -5,10 +5,10 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-export interface LeadSaiu {
+export interface Simulacao {
   nome: string;
   whatsapp: string;
-  instagram: string;
+  instagram?: string;
   modeloNovo: string;
   storageNovo: string;
   precoNovo: number;
@@ -16,5 +16,10 @@ export interface LeadSaiu {
   storageUsado: string;
   avaliacaoUsado: number;
   diferenca: number;
+  status: "GOSTEI" | "SAIR";
+  formaPagamento?: string;
   condicaoLinhas?: string[];
 }
+
+// Keep backwards compat
+export type LeadSaiu = Simulacao;
