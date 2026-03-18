@@ -1,10 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 
+async function notificarWhatsApp(body: {
+  nome: string;
+  whatsapp: string;
+  instagram: string;
+  modeloNovo: string;
+  storageNovo: string;
+  modeloUsado: string;
+  storageUsado: string;
+  diferenca: number;
+}) {
+  const apiKey = process.env.CALLMEBOT_APIKEY;
+  const numero = process.env.WHATSAPP_NUMBER; // número do André
+
+  if (!apiKey || !numero) return; // não configurado, ignora silenciosamente
+
+  const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
+  const instagramLine = body.instagram ? `\nInstagram: ${body.instagram}` : "";
+
+  const mensagem =
+    `🚨 LEAD SAIU SEM FECHAR!\n\n` +
+    `👤 Nome: ${body.nome}\n` +
+    `📱 WhatsApp: ${body.whatsapp}` +
+    instagramLine + `\n\n` +
+    `🆕 Queria: ${body.modeloNovo} ${body.storageNovo}\n` +
+    `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}\n` +
+    `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
+    `👉 Entre em contato e tente fechar!`;
+
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${numero}&text=${encodeURIComponent(mensagem)}&apikey=${apiKey}`;
+
+  try {
+    await fetch(url);
+  } catch (err) {
+    console.error("[leads] Erro ao notificar CallMeBot:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Se Supabase não estiver configurado, retorna sucesso silencioso
+    // Notifica André via WhatsApp (CallMeBot) — funciona independente do Supabase
+    await notificarWhatsApp(body);
+
+    // Salva no Supabase (se configurado)
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.log("[leads] Supabase não configurado — lead ignorado:", body);
       return NextResponse.json({ ok: true });
