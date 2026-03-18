@@ -8,6 +8,7 @@ export interface ConditionData {
   hasDamage: boolean;
   hasWarranty: boolean;
   warrantyMonth: number | null; // 1-12
+  warrantyYear: number | null;  // ex: 2026, 2027
   hasOriginalBox: boolean;
 }
 
@@ -105,7 +106,8 @@ const DEFAULT_WARRANTY_BONUSES: WarrantyBonuses = {
  */
 export function calculateWarrantyBonus(
   warrantyMonth: number | null,
-  bonuses?: WarrantyBonuses
+  bonuses?: WarrantyBonuses,
+  warrantyYear?: number | null
 ): number {
   if (warrantyMonth === null) return 0;
 
@@ -115,15 +117,12 @@ export function calculateWarrantyBonus(
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  // Usa diferenca em meses inteiros (ex: marco→junho = 3 meses)
-  // Assim "Junho" selecionado em marco = 3 meses = "ate 3 meses"
-  let warrantyYear = currentYear;
-  if (warrantyMonth <= currentMonth) {
-    warrantyYear = currentYear + 1;
-  }
+  // Se ano foi informado, usa direto. Senao, assume o proximo mes/ano futuro.
+  const targetYear = warrantyYear ?? (warrantyMonth > currentMonth ? currentYear : currentYear + 1);
 
-  const diffMonths = (warrantyYear - currentYear) * 12 + (warrantyMonth - currentMonth);
+  const diffMonths = (targetYear - currentYear) * 12 + (warrantyMonth - currentMonth);
 
+  if (diffMonths <= 0) return 0; // garantia ja vencida ou vence esse mes
   if (diffMonths <= 3) return b.ate3m;
   if (diffMonths <= 6) return b.de3a6m;
   return b.acima6m;
@@ -175,7 +174,7 @@ export function calculateTradeInValue(
 
   // Usa bonus de garantia especifico do modelo (se tiver), senao usa o global
   const effectiveBonuses = d.warrantyBonuses || warrantyBonuses;
-  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses);
+  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses, condition.warrantyYear);
 
   return Math.max(value, 0);
 }

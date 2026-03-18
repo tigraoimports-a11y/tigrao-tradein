@@ -58,6 +58,7 @@ export default function StepUsedDevice({
   const [peeling, setPeeling] = useState<"none" | "light" | "heavy">("none");
   const [hasWarranty, setHasWarranty] = useState<boolean | null>(null);
   const [warrantyMonth, setWarrantyMonth] = useState<number | null>(null);
+  const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean | null>(null);
 
   const allModels = useMemo(() => getUniqueUsedModels(usedValues), [usedValues]);
@@ -88,6 +89,7 @@ export default function StepUsedDevice({
     hasDamage: hasDamage === true,
     hasWarranty: hasWarranty === true,
     warrantyMonth: hasWarranty ? warrantyMonth : null,
+    warrantyYear: hasWarranty ? warrantyYear : null,
     hasOriginalBox: hasOriginalBox === true,
   };
 
@@ -99,7 +101,7 @@ export default function StepUsedDevice({
   const tradeInValue = useMemo(
     () => (baseValue !== null && hasDamage === false ? calculateTradeInValue(baseValue, condition, modelDiscount, warrantyBonuses) : 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth, modelDiscount]
+    [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth, warrantyYear, modelDiscount]
   );
 
   const isExcluded = excludedModels.some((m) =>
@@ -323,9 +325,24 @@ export default function StepUsedDevice({
             </div>
           </Section>
 
-          {/* Garantia Apple - Pergunta 2 (mês) */}
+          {/* Garantia Apple - Pergunta 2 (ano + mês) */}
           {hasWarranty === true && (
             <Section title="Ate qual mes vai a garantia do seu aparelho?">
+              {/* Seletor de ano */}
+              <div className="flex gap-2 mb-3">
+                {[new Date().getFullYear(), new Date().getFullYear() + 1].map((y) => (
+                  <SelectButton
+                    key={y}
+                    selected={warrantyYear === y}
+                    onClick={() => setWarrantyYear(y)}
+                    className="flex-1"
+                    variant="success"
+                  >
+                    {y}
+                  </SelectButton>
+                ))}
+              </div>
+              {/* Seletor de mês */}
               <div className="grid grid-cols-3 gap-2">
                 {MONTHS.map((m, i) => (
                   <SelectButton
