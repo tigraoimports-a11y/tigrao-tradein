@@ -93,21 +93,21 @@ export default function AdminPage() {
   // --- LOGIN SCREEN ---
   if (!password || data === null) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="text-5xl mb-4">🐯</div>
-            <h1 className="text-2xl font-bold text-white">TigrãoImports</h1>
-            <p className="text-[#888] text-sm mt-1">Painel Administrativo</p>
+            <h1 className="text-2xl font-bold text-[#1D1D1F]">TigrãoImports</h1>
+            <p className="text-[#86868B] text-sm mt-1">Painel Administrativo</p>
           </div>
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-6 space-y-4">
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 space-y-4 shadow-sm">
             <input
               type="password"
               placeholder="Senha de acesso"
               value={inputPw}
               onChange={(e) => setInputPw(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              className="w-full px-4 py-3 rounded-xl bg-[#0A0A0A] border border-[#2A2A2A] text-white placeholder-[#555] focus:outline-none focus:border-[#E8740E] transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E] transition-colors"
             />
             {pwError && (
               <p className="text-[#E74C3C] text-sm text-center">Senha incorreta</p>
@@ -171,21 +171,21 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white">
+    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]">
       {/* Header */}
-      <div className="border-b border-[#2A2A2A] px-6 py-4 flex items-center justify-between">
+      <div className="bg-white border-b border-[#D2D2D7] px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🐯</span>
           <div>
-            <h1 className="text-lg font-bold text-white">TigrãoImports</h1>
-            <p className="text-[#555] text-xs">Painel Administrativo</p>
+            <h1 className="text-lg font-bold text-[#1D1D1F]">TigrãoImports</h1>
+            <p className="text-[#86868B] text-xs">Painel Administrativo</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="px-4 py-2 rounded-xl bg-[#141414] border border-[#2A2A2A] text-[#888] text-sm hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-50"
           >
             {refreshing ? "↻ Atualizando..." : "↻ Atualizar"}
           </button>
@@ -195,7 +195,7 @@ export default function AdminPage() {
               setPassword("");
               setData(null);
             }}
-            className="px-4 py-2 rounded-xl bg-[#141414] border border-[#2A2A2A] text-[#888] text-sm hover:border-[#E74C3C] hover:text-[#E74C3C] transition-colors"
+            className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E74C3C] hover:text-[#E74C3C] transition-colors"
           >
             Sair
           </button>
@@ -208,10 +208,10 @@ export default function AdminPage() {
           {kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4"
+              className="bg-white border border-[#D2D2D7] rounded-2xl p-4 shadow-sm"
             >
               <div className="text-2xl mb-2">{kpi.icon}</div>
-              <p className="text-[#888] text-xs mb-1">{kpi.label}</p>
+              <p className="text-[#86868B] text-xs mb-1">{kpi.label}</p>
               <p className="text-xl font-bold" style={{ color: kpi.color }}>
                 {kpi.value}
               </p>
@@ -221,9 +221,9 @@ export default function AdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
           {/* Main table */}
-          <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl overflow-hidden">
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
             {/* Table header */}
-            <div className="px-5 py-4 border-b border-[#2A2A2A] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+            <div className="px-5 py-4 border-b border-[#D2D2D7] flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
               <div className="flex gap-2">
                 {(["todos", "GOSTEI", "SAIR"] as const).map((t) => (
                   <button
@@ -232,11 +232,11 @@ export default function AdminPage() {
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                       tab === t
                         ? t === "GOSTEI"
-                          ? "bg-[#2ECC71]/20 text-[#2ECC71]"
+                          ? "bg-green-100 text-green-700"
                           : t === "SAIR"
-                          ? "bg-[#E74C3C]/20 text-[#E74C3C]"
-                          : "bg-[#E8740E]/20 text-[#E8740E]"
-                        : "text-[#555] hover:text-[#888]"
+                          ? "bg-red-100 text-red-600"
+                          : "bg-orange-100 text-[#E8740E]"
+                        : "text-[#86868B] hover:text-[#1D1D1F]"
                     }`}
                   >
                     {t === "todos" ? `Todos (${total})` : t === "GOSTEI" ? `Fecharam (${gostei})` : `Saíram (${saiu})`}
@@ -248,7 +248,7 @@ export default function AdminPage() {
                 placeholder="Buscar nome, WhatsApp, produto..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-[#0A0A0A] border border-[#2A2A2A] text-sm text-white placeholder-[#555] focus:outline-none focus:border-[#E8740E] transition-colors w-full sm:w-64"
+                className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] border border-[#D2D2D7] text-sm text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E] transition-colors w-full sm:w-64"
               />
             </div>
 
@@ -256,9 +256,9 @@ export default function AdminPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2A2A2A]">
+                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
                     {["Data", "Nome", "WhatsApp", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[#555] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
+                      <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -267,7 +267,7 @@ export default function AdminPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-[#555]">
+                      <td colSpan={9} className="px-4 py-8 text-center text-[#86868B]">
                         Nenhuma simulação encontrada
                       </td>
                     </tr>
@@ -275,12 +275,12 @@ export default function AdminPage() {
                     filtered.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-[#1A1A1A] hover:bg-[#1A1A1A] transition-colors"
+                        className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors"
                       >
-                        <td className="px-4 py-3 text-[#888] whitespace-nowrap text-xs">
+                        <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">
                           {fmtDate(row.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-white font-medium whitespace-nowrap">
+                        <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">
                           {row.nome}
                         </td>
                         <td className="px-4 py-3">
@@ -288,33 +288,33 @@ export default function AdminPage() {
                             href={`https://wa.me/55${row.whatsapp.replace(/\D/g, "")}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[#2ECC71] hover:underline whitespace-nowrap"
+                            className="text-green-600 hover:underline whitespace-nowrap"
                           >
                             {row.whatsapp}
                           </a>
                         </td>
-                        <td className="px-4 py-3 text-[#F5F5F5] whitespace-nowrap">
+                        <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">
                           {row.modelo_novo} {row.storage_novo}
-                          <span className="text-[#555] ml-1 text-xs">({fmt(row.preco_novo)})</span>
+                          <span className="text-[#86868B] ml-1 text-xs">({fmt(row.preco_novo)})</span>
                         </td>
-                        <td className="px-4 py-3 text-[#888] whitespace-nowrap">
+                        <td className="px-4 py-3 text-[#6E6E73] whitespace-nowrap">
                           {row.modelo_usado} {row.storage_usado}
                         </td>
-                        <td className="px-4 py-3 text-[#2ECC71] font-medium whitespace-nowrap">
+                        <td className="px-4 py-3 text-green-600 font-medium whitespace-nowrap">
                           {fmt(row.avaliacao_usado)}
                         </td>
                         <td className="px-4 py-3 text-[#E8740E] font-bold whitespace-nowrap">
                           {fmt(row.diferenca)}
                         </td>
-                        <td className="px-4 py-3 text-[#888] text-xs max-w-[160px] truncate">
+                        <td className="px-4 py-3 text-[#6E6E73] text-xs max-w-[160px] truncate">
                           {row.forma_pagamento || "—"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span
                             className={`px-2 py-1 rounded-lg text-xs font-semibold ${
                               row.status === "GOSTEI"
-                                ? "bg-[#2ECC71]/20 text-[#2ECC71]"
-                                : "bg-[#E74C3C]/20 text-[#E74C3C]"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-600"
                             }`}
                           >
                             {row.status === "GOSTEI" ? "✅ Fechou" : "🚪 Saiu"}
@@ -331,21 +331,21 @@ export default function AdminPage() {
           {/* Sidebar */}
           <div className="space-y-4">
             {/* Top modelos */}
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-[#888] uppercase tracking-wider mb-4">
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-4">
                 📱 Modelos mais buscados
               </h3>
               <div className="space-y-3">
                 {topModelos.length === 0 ? (
-                  <p className="text-[#555] text-sm">Nenhum dado ainda</p>
+                  <p className="text-[#86868B] text-sm">Nenhum dado ainda</p>
                 ) : (
                   topModelos.map(([modelo, count]) => (
                     <div key={modelo}>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-[#F5F5F5] truncate flex-1">{modelo}</span>
+                        <span className="text-[#1D1D1F] truncate flex-1">{modelo}</span>
                         <span className="text-[#E8740E] font-bold ml-2">{count}</span>
                       </div>
-                      <div className="h-1.5 bg-[#2A2A2A] rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-[#E8E8ED] rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-[#E8740E] to-[#F5A623] rounded-full transition-all"
                           style={{ width: `${(count / maxModeloCount) * 100}%` }}
@@ -358,8 +358,8 @@ export default function AdminPage() {
             </div>
 
             {/* Últimas 24h */}
-            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-[#888] uppercase tracking-wider mb-4">
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-4">
                 ⏱️ Últimas 24 horas
               </h3>
               {(() => {
@@ -370,16 +370,16 @@ export default function AdminPage() {
                 return (
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-[#888] text-sm">Simulações</span>
-                      <span className="text-white font-bold">{recentes.length}</span>
+                      <span className="text-[#86868B] text-sm">Simulações</span>
+                      <span className="text-[#1D1D1F] font-bold">{recentes.length}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#888] text-sm">Fecharam</span>
-                      <span className="text-[#2ECC71] font-bold">{recGostei}</span>
+                      <span className="text-[#86868B] text-sm">Fecharam</span>
+                      <span className="text-green-600 font-bold">{recGostei}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#888] text-sm">Saíram</span>
-                      <span className="text-[#E74C3C] font-bold">{recSair}</span>
+                      <span className="text-[#86868B] text-sm">Saíram</span>
+                      <span className="text-red-500 font-bold">{recSair}</span>
                     </div>
                   </div>
                 );
