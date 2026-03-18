@@ -49,6 +49,8 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -376,8 +378,32 @@ export default function AdminPage() {
                 </button>
               )}
 
+              {/* Bulk delete */}
+              {selected.size > 0 && (
+                <button
+                  disabled={bulkDeleting}
+                  onClick={async () => {
+                    if (!confirm(`Excluir ${selected.size} simulação(ões) selecionada(s)?`)) return;
+                    setBulkDeleting(true);
+                    await Promise.all([...selected].map((id) =>
+                      fetch("/api/admin/simulacoes", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json", "x-admin-password": password },
+                        body: JSON.stringify({ id }),
+                      })
+                    ));
+                    setData((prev) => prev ? prev.filter((r) => !selected.has(r.id)) : prev);
+                    setSelected(new Set());
+                    setBulkDeleting(false);
+                  }}
+                  className="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 ml-auto"
+                >
+                  {bulkDeleting ? "Excluindo..." : `🗑️ Excluir ${selected.size} selecionado${selected.size !== 1 ? "s" : ""}`}
+                </button>
+              )}
+
               {/* Result count */}
-              <span className="text-[11px] text-[#86868B] ml-auto">
+              <span className={`text-[11px] text-[#86868B] ${selected.size > 0 ? "" : "ml-auto"}`}>
                 {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
               </span>
             </div>
@@ -387,6 +413,20 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={filtered.length > 0 && filtered.every((r) => selected.has(r.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelected(new Set(filtered.map((r) => r.id)));
+                          } else {
+                            setSelected(new Set());
+                          }
+                        }}
+                        className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                      />
+                    </th>
                     {["Contato", "Data", "Nome", "WhatsApp", "Vendedor", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                         {h}
@@ -405,8 +445,21 @@ export default function AdminPage() {
                     filtered.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors"
+                        className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors ${selected.has(row.id) ? "bg-orange-50" : ""}`}
                       >
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(row.id)}
+                            onChange={(e) => {
+                              const next = new Set(selected);
+                              if (e.target.checked) next.add(row.id);
+                              else next.delete(row.id);
+                              setSelected(next);
+                            }}
+                            className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                          />
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1 items-start">
                             <button
