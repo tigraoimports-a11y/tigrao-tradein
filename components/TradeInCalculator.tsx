@@ -19,7 +19,7 @@ const VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:   "5521967442665",
   nicolas: "5521995618747",
   bianca:  "5521972461357",
-  anuncio: "5521967442665", // Meta Ads — cai no WhatsApp do André
+  anuncio: "5521995618747", // Meta Ads — cai no WhatsApp do Nicolas
 };
 
 export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor?: string | null }) {
