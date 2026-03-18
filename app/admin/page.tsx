@@ -257,7 +257,7 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Nome", "WhatsApp", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status"].map((h) => (
+                    {["Data", "Nome", "WhatsApp", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status", "Contato"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -267,7 +267,7 @@ export default function AdminPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-[#86868B]">
+                      <td colSpan={10} className="px-4 py-8 text-center text-[#86868B]">
                         Nenhuma simulação encontrada
                       </td>
                     </tr>
@@ -319,6 +319,28 @@ export default function AdminPage() {
                           >
                             {row.status === "GOSTEI" ? "✅ Fechou" : "🚪 Saiu"}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <a
+                            href={(() => {
+                              const num = row.whatsapp.replace(/\D/g, "");
+                              const full = num.startsWith("55") ? num : `55${num}`;
+                              const msg =
+                                `Olá ${row.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.\n\n` +
+                                `📱 *Simulação:*\n` +
+                                `🆕 Novo: ${row.modelo_novo} ${row.storage_novo} (${fmt(row.preco_novo)})\n` +
+                                `🔄 Usado: ${row.modelo_usado} ${row.storage_usado} — Avaliado em ${fmt(row.avaliacao_usado)}\n` +
+                                `💵 Diferença no PIX: ${fmt(row.diferenca)}\n` +
+                                (row.forma_pagamento ? `💳 Pagamento escolhido: ${row.forma_pagamento}\n` : "") +
+                                `\nPosso te fazer uma proposta especial? 🐯`;
+                              return `https://wa.me/${full}?text=${encodeURIComponent(msg)}`;
+                            })()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
+                          >
+                            💬 WhatsApp
+                          </a>
                         </td>
                       </tr>
                     ))
