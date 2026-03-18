@@ -283,27 +283,24 @@ export default function AdminPage() {
                           <div className="flex flex-col gap-1 items-start">
                             <button
                               disabled={sending === row.id}
-                              onClick={async () => {
+                              onClick={() => {
+                                // Atualiza UI imediatamente
+                                setData((prev) =>
+                                  prev
+                                    ? prev.map((r) =>
+                                        r.id === row.id ? { ...r, contatado: true } : r
+                                      )
+                                    : prev
+                                );
                                 setSending(row.id);
-                                try {
-                                  await fetch("/api/admin/followup", {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                      "x-admin-password": password,
-                                    },
-                                    body: JSON.stringify({ id: row.id }),
-                                  });
-                                  setData((prev) =>
-                                    prev
-                                      ? prev.map((r) =>
-                                          r.id === row.id ? { ...r, contatado: true } : r
-                                        )
-                                      : prev
-                                  );
-                                } finally {
-                                  setSending(null);
-                                }
+                                fetch("/api/admin/followup", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    "x-admin-password": password,
+                                  },
+                                  body: JSON.stringify({ id: row.id }),
+                                }).finally(() => setSending(null));
                               }}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors disabled:opacity-50"
                             >

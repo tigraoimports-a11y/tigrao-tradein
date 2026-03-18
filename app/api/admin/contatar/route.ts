@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
 
 export async function PATCH(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -12,7 +11,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { supabase } = await import("@/lib/supabase");
+
+  const { error } = await supabase
     .from("simulacoes")
     .update({ contatado: true })
     .eq("id", id);

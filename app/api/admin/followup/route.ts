@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
 
@@ -11,7 +10,9 @@ export async function POST(request: Request) {
 
   const { id } = await request.json();
 
-  const { data: row, error } = await supabaseAdmin
+  const { supabase } = await import("@/lib/supabase");
+
+  const { data: row, error } = await supabase
     .from("simulacoes")
     .select("*")
     .eq("id", id)
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   const zapiJson = await zapiRes.json();
   console.log("[followup] zapi:", JSON.stringify(zapiJson));
 
-  await supabaseAdmin
+  await supabase
     .from("simulacoes")
     .update({ contatado: true })
     .eq("id", id);
