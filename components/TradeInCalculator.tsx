@@ -50,6 +50,8 @@ export default function TradeInCalculator() {
     hasOriginalBox: false,
   });
   const [tradeInValue, setTradeInValue] = useState(0);
+  const [clienteNome, setClienteNome] = useState("");
+  const [clienteInstagram, setClienteInstagram] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newStorage, setNewStorage] = useState("");
   const [newPrice, setNewPrice] = useState(0);
@@ -84,11 +86,15 @@ export default function TradeInCalculator() {
     usedStorage: string;
     condition: ConditionData;
     tradeInValue: number;
+    clienteNome: string;
+    clienteInstagram: string;
   }) {
     setUsedModel(data.usedModel);
     setUsedStorage(data.usedStorage);
     setCondition(data.condition);
     setTradeInValue(data.tradeInValue);
+    setClienteNome(data.clienteNome);
+    setClienteInstagram(data.clienteInstagram);
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -187,6 +193,8 @@ export default function TradeInCalculator() {
             usedStorage={usedStorage}
             condition={condition}
             tradeInValue={tradeInValue}
+            clienteNome={clienteNome}
+            clienteInstagram={clienteInstagram}
             whatsappNumero={config.whatsappNumero}
             validadeHoras={config.validadeHoras}
             onReset={handleReset}

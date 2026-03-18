@@ -16,6 +16,8 @@ interface StepQuoteProps {
   usedStorage: string;
   condition: ConditionData;
   tradeInValue: number;
+  clienteNome: string;
+  clienteInstagram: string;
   whatsappNumero: string;
   validadeHoras: number;
   onReset: () => void;
@@ -27,7 +29,9 @@ function generateWhatsAppMsg(
   usedModel: string,
   usedStorage: string,
   condition: ConditionData,
-  quote: QuoteResult
+  quote: QuoteResult,
+  clienteNome: string,
+  clienteInstagram: string
 ): string {
   const conditionLines = getConditionLines(condition);
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
@@ -36,8 +40,12 @@ function generateWhatsAppMsg(
   const i18 = quote.installments.find(i => i.parcelas === 18)!;
   const i21 = quote.installments.find(i => i.parcelas === 21)!;
 
+  const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
+
   return `Ola! Vi meu orcamento no site e quero fechar!
 
+*Nome:* ${clienteNome}
+${instagramLine}
 *ORCAMENTO DE TROCA - TigraoImports*
 ------------------------------------
 
@@ -68,6 +76,8 @@ export default function StepQuote({
   usedStorage,
   condition,
   tradeInValue,
+  clienteNome,
+  clienteInstagram,
   whatsappNumero,
   validadeHoras,
   onReset,
@@ -75,7 +85,7 @@ export default function StepQuote({
   const quote: QuoteResult = calculateQuote(tradeInValue, newPrice);
   const conditionLines = getConditionLines(condition);
   const whatsappMsg = generateWhatsAppMsg(
-    newModel, newStorage, usedModel, usedStorage, condition, quote
+    newModel, newStorage, usedModel, usedStorage, condition, quote, clienteNome, clienteInstagram
   );
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 

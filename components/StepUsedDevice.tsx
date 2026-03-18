@@ -27,6 +27,8 @@ interface StepUsedDeviceProps {
     usedStorage: string;
     condition: ConditionData;
     tradeInValue: number;
+    clienteNome: string;
+    clienteInstagram: string;
   }) => void;
 }
 
@@ -60,6 +62,8 @@ export default function StepUsedDevice({
   const [warrantyMonth, setWarrantyMonth] = useState<number | null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean | null>(null);
+  const [clienteNome, setClienteNome] = useState("");
+  const [clienteInstagram, setClienteInstagram] = useState("");
 
   const allModels = useMemo(() => getUniqueUsedModels(usedValues), [usedValues]);
 
@@ -108,7 +112,7 @@ export default function StepUsedDevice({
     model.toLowerCase().includes(m.toLowerCase())
   );
 
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && hasOriginalBox !== null;
+  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && hasOriginalBox !== null && clienteNome.trim() !== "";
 
   function handleLineChange(l: string) {
     setLine(l);
@@ -382,11 +386,31 @@ export default function StepUsedDevice({
         </>
       )}
 
+      {/* Nome e Instagram */}
+      <Section title="Seus dados">
+        <div className="space-y-3">
+          <input
+            type="text"
+            placeholder="Nome"
+            value={clienteNome}
+            onChange={(e) => setClienteNome(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-[#D2D2D7] bg-white text-[15px] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#0071E3] transition-colors"
+          />
+          <input
+            type="text"
+            placeholder="Seu Instagram (ex: @tigraoimports)"
+            value={clienteInstagram}
+            onChange={(e) => setClienteInstagram(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-[#D2D2D7] bg-white text-[15px] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#0071E3] transition-colors"
+          />
+        </div>
+      </Section>
+
       {/* Botão próximo */}
       {canProceed && (
         <button
           onClick={() =>
-            onNext({ usedModel: model, usedStorage: storage, condition, tradeInValue })
+            onNext({ usedModel: model, usedStorage: storage, condition, tradeInValue, clienteNome: clienteNome.trim(), clienteInstagram: clienteInstagram.trim() })
           }
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] transition-all duration-200 active:scale-[0.98]"
         >
