@@ -60,7 +60,12 @@ export async function POST(req: NextRequest) {
     const whatsappNumero = (body.whatsapp || "").replace(/\D/g, "");
     const whatsappNumeroFull = whatsappNumero.startsWith("55") ? whatsappNumero : `55${whatsappNumero}`;
     const textoFollowUp = encodeURIComponent(
-      `Olá ${body.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.\n\nPosso te ajudar com alguma dúvida ou te fazer uma proposta especial? 🐯`
+      `Olá ${body.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.\n\n` +
+      `📱 *Simulação:*\n` +
+      `🆕 Novo: ${body.modeloNovo} ${body.storageNovo}\n` +
+      `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}${condicaoBlock}\n` +
+      `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
+      `Posso te fazer uma proposta especial? 🐯`
     );
     const whatsappLink = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
 
