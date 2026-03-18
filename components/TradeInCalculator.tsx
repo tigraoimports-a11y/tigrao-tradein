@@ -21,7 +21,16 @@ const VENDEDOR_WHATSAPP: Record<string, string> = {
   bianca:  "5521972461357",
 };
 
-export default function TradeInCalculator({ vendedor }: { vendedor?: string | null }) {
+export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor?: string | null }) {
+  // Lê ?ref= diretamente da URL como fallback caso o prop do servidor não chegue
+  const [vendedor] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const ref = new URLSearchParams(window.location.search).get("ref")?.toLowerCase();
+      if (ref) return ref;
+    }
+    return vendedorProp ?? null;
+  });
+
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
