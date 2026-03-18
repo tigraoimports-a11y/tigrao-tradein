@@ -27,6 +27,14 @@ async function notificarTelegram(body: {
     ? `\n${body.condicaoLinhas.join("\n")}`
     : "";
 
+  // Monta link do WhatsApp para o cliente
+  const whatsappNumero = body.whatsapp.replace(/\D/g, "");
+  const whatsappNumeroFull = whatsappNumero.startsWith("55") ? whatsappNumero : `55${whatsappNumero}`;
+  const textoFollowUp = encodeURIComponent(
+    `Olá ${body.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.\n\nPosso te ajudar com alguma dúvida ou te fazer uma proposta especial? 🐯`
+  );
+  const whatsappLink = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
+
   const mensagem =
     `🚨 LEAD SAIU SEM FECHAR!\n\n` +
     `👤 Nome: ${body.nome}\n` +
@@ -36,7 +44,8 @@ async function notificarTelegram(body: {
     `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}` +
     condicaoBlock + `\n` +
     `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
-    `👉 Entre em contato e tente fechar!`;
+    `👉 Entre em contato e tente fechar!\n` +
+    `💬 ${whatsappLink}`;
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
