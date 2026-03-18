@@ -17,7 +17,6 @@ interface StepQuoteProps {
   condition: ConditionData;
   tradeInValue: number;
   whatsappNumero: string;
-  multipliers: Record<number, number>;
   validadeHoras: number;
   onReset: () => void;
 }
@@ -32,6 +31,10 @@ function generateWhatsAppMsg(
 ): string {
   const conditionLines = getConditionLines(condition);
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
+
+  const i12 = quote.installments.find(i => i.parcelas === 12)!;
+  const i18 = quote.installments.find(i => i.parcelas === 18)!;
+  const i21 = quote.installments.find(i => i.parcelas === 21)!;
 
   return `Ola! Vi meu orcamento no site e quero fechar!
 
@@ -50,9 +53,9 @@ ${conditionLines.join("\n")}
 *Voce paga apenas a diferenca:*
 
 *${fmt(quote.pix)}* a vista no PIX
-12x de *${fmt(quote.installment12)}* (total: ${fmt(quote.total12)})
-18x de *${fmt(quote.installment18)}* (total: ${fmt(quote.total18)})
-21x de *${fmt(quote.installment21)}* (total: ${fmt(quote.total21)})
+12x de *${fmt(i12.valorParcela)}* (total: ${fmt(i12.total)})
+18x de *${fmt(i18.valorParcela)}* (total: ${fmt(i18.total)})
+21x de *${fmt(i21.valorParcela)}* (total: ${fmt(i21.total)})
 
 Quero fechar o pedido!`;
 }
@@ -66,11 +69,10 @@ export default function StepQuote({
   condition,
   tradeInValue,
   whatsappNumero,
-  multipliers,
   validadeHoras,
   onReset,
 }: StepQuoteProps) {
-  const quote: QuoteResult = calculateQuote(tradeInValue, newPrice, multipliers);
+  const quote: QuoteResult = calculateQuote(tradeInValue, newPrice);
   const conditionLines = getConditionLines(condition);
   const whatsappMsg = generateWhatsAppMsg(
     newModel, newStorage, usedModel, usedStorage, condition, quote
@@ -133,25 +135,22 @@ export default function StepQuote({
           </p>
         </div>
 
-        {/* Parcelas */}
+        {/* Todas as parcelas no cartao */}
+        <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3 text-center">
+          Cartao de credito
+        </p>
         <div className="space-y-2">
-          {[
-            { label: "12x", value: quote.installment12, total: quote.total12 },
-            { label: "18x", value: quote.installment18, total: quote.total18 },
-            { label: "21x", value: quote.installment21, total: quote.total21 },
-          ].map((p) => (
+          {quote.installments.map((inst) => (
             <div
-              key={p.label}
-              className="flex justify-between items-center bg-[#F5F5F7] rounded-xl px-4 py-3.5"
+              key={inst.parcelas}
+              className="flex justify-between items-center bg-[#F5F5F7] rounded-xl px-4 py-3"
             >
-              <div>
-                <p className="text-[14px] font-semibold text-[#1D1D1F]">
-                  {p.label} de {formatBRL(p.value)}
-                </p>
-                <p className="text-[12px] text-[#86868B]">
-                  total: {formatBRL(p.total)}
-                </p>
-              </div>
+              <p className="text-[14px] font-semibold text-[#1D1D1F]">
+                {inst.parcelas}x de {formatBRL(inst.valorParcela)}
+              </p>
+              <p className="text-[12px] text-[#86868B]">
+                total: {formatBRL(inst.total)}
+              </p>
             </div>
           ))}
         </div>

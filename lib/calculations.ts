@@ -11,18 +11,44 @@ export interface ConditionData {
   hasOriginalBox: boolean;
 }
 
+export interface InstallmentOption {
+  parcelas: number;
+  valorParcela: number;
+  total: number;
+}
+
 export interface QuoteResult {
   tradeInValue: number;
   newPrice: number;
   difference: number;
   pix: number;
-  installment12: number;
-  total12: number;
-  installment18: number;
-  total18: number;
-  installment21: number;
-  total21: number;
+  installments: InstallmentOption[];
 }
+
+// Tabela de taxas por numero de parcelas (cartao de credito)
+export const INSTALLMENT_RATES: [number, number][] = [
+  [1,  1.04],  // 4%
+  [2,  1.05],  // 5%
+  [3,  1.055], // 5.5%
+  [4,  1.06],  // 6%
+  [5,  1.065], // 6.5%
+  [6,  1.07],  // 7%
+  [7,  1.075], // 7.5%
+  [8,  1.085], // 8.5%
+  [9,  1.095], // 9.5%
+  [10, 1.11],  // 11%
+  [11, 1.12],  // 12%
+  [12, 1.13],  // 13%
+  [13, 1.13],  // 13%
+  [14, 1.14],  // 14%
+  [15, 1.15],  // 15%
+  [16, 1.16],  // 16%
+  [17, 1.17],  // 17%
+  [18, 1.18],  // 18%
+  [19, 1.20],  // 20%
+  [20, 1.21],  // 21%
+  [21, 1.22],  // 22%
+];
 
 /** Descontos por modelo - cada modelo pode ter seus proprios valores */
 export interface ModelDiscounts {
@@ -42,11 +68,6 @@ const DEFAULT_DISCOUNTS: ModelDiscounts = {
 
 const BATTERY_THRESHOLD = 85;
 
-const DEFAULT_MULTIPLIERS = {
-  12: 1.14,
-  18: 1.20,
-  21: 1.21,
-};
 
 /**
  * Calcula bonus de garantia Apple baseado no mes informado.
@@ -125,27 +146,20 @@ export function calculateTradeInValue(
 }
 
 /**
- * Calcula a cotacao completa
+ * Calcula a cotacao completa com todas as opcoes de parcelamento
  */
 export function calculateQuote(
   tradeInValue: number,
   newPrice: number,
-  multipliers?: Record<number, number>
 ): QuoteResult {
-  const m = multipliers || DEFAULT_MULTIPLIERS;
   const difference = Math.max(newPrice - tradeInValue, 0);
 
-  const installment12 = Math.round((difference * m[12]) / 12);
-  const total12 = installment12 * 12;
-  const installment18 = Math.round((difference * m[18]) / 18);
-  const total18 = installment18 * 18;
-  const installment21 = Math.round((difference * m[21]) / 21);
-  const total21 = installment21 * 21;
+  const installments: InstallmentOption[] = INSTALLMENT_RATES.map(([n, rate]) => {
+    const valorParcela = Math.round((difference * rate) / n);
+    return { parcelas: n, valorParcela, total: valorParcela * n };
+  });
 
-  return {
-    tradeInValue, newPrice, difference, pix: difference,
-    installment12, total12, installment18, total18, installment21, total21,
-  };
+  return { tradeInValue, newPrice, difference, pix: difference, installments };
 }
 
 /**

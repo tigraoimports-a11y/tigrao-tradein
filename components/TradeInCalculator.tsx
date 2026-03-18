@@ -178,11 +178,6 @@ export default function TradeInCalculator() {
             condition={condition}
             tradeInValue={tradeInValue}
             whatsappNumero={config.whatsappNumero}
-            multipliers={{
-              12: config.multiplier12,
-              18: config.multiplier18,
-              21: config.multiplier21,
-            }}
             validadeHoras={config.validadeHoras}
             onReset={handleReset}
           />
