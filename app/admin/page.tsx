@@ -18,6 +18,7 @@ interface SimulacaoRow {
   status: "GOSTEI" | "SAIR";
   forma_pagamento: string | null;
   condicao_linhas: string[] | null;
+  contatado: boolean | null;
 }
 
 const fmt = (v: number) =>
@@ -278,28 +279,52 @@ export default function AdminPage() {
                         className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors"
                       >
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              const num = row.whatsapp.replace(/\D/g, "");
-                              const full = num.startsWith("55") ? num : `55${num}`;
-                              const linhas = [
-                                `Olá ${row.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.`,
-                                ``,
-                                `📱 *Simulação:*`,
-                                `🆕 Novo: ${row.modelo_novo} ${row.storage_novo} (${fmt(row.preco_novo)})`,
-                                `🔄 Usado: ${row.modelo_usado} ${row.storage_usado} — Avaliado em ${fmt(row.avaliacao_usado)}`,
-                                `💵 Diferença no PIX: ${fmt(row.diferenca)}`,
-                                ...(row.forma_pagamento ? [`💳 Pagamento: ${row.forma_pagamento}`] : []),
-                                ``,
-                                `Posso te fazer uma proposta especial? 🐯`,
-                              ];
-                              const msg = linhas.join("\n");
-                              window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
-                          >
-                            💬 WhatsApp
-                          </button>
+                          <div className="flex flex-col gap-1 items-start">
+                            <button
+                              onClick={() => {
+                                const num = row.whatsapp.replace(/\D/g, "");
+                                const full = num.startsWith("55") ? num : `55${num}`;
+                                const linhas = [
+                                  `Olá ${row.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.`,
+                                  ``,
+                                  `📱 *Simulação:*`,
+                                  `🆕 Novo: ${row.modelo_novo} ${row.storage_novo} (${fmt(row.preco_novo)})`,
+                                  `🔄 Usado: ${row.modelo_usado} ${row.storage_usado} — Avaliado em ${fmt(row.avaliacao_usado)}`,
+                                  `💵 Diferença no PIX: ${fmt(row.diferenca)}`,
+                                  ...(row.forma_pagamento ? [`💳 Pagamento: ${row.forma_pagamento}`] : []),
+                                  ``,
+                                  `Posso te fazer uma proposta especial? 🐯`,
+                                ];
+                                const msg = linhas.join("\n");
+                                window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
+                                // Marca como contatado automaticamente
+                                if (!row.contatado) {
+                                  fetch("/api/admin/contatar", {
+                                    method: "PATCH",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      "x-admin-password": password,
+                                    },
+                                    body: JSON.stringify({ id: row.id }),
+                                  }).then(() => {
+                                    setData((prev) =>
+                                      prev
+                                        ? prev.map((r) =>
+                                            r.id === row.id ? { ...r, contatado: true } : r
+                                          )
+                                        : prev
+                                    );
+                                  });
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
+                            >
+                              💬 WhatsApp
+                            </button>
+                            {row.contatado && (
+                              <span className="text-[10px] text-green-600 font-medium">✓ Contatado</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">
                           {fmtDate(row.created_at)}
