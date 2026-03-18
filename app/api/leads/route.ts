@@ -49,9 +49,9 @@ async function notificarZAPI(mensagem: string) {
 
 async function encurtarUrl(url: string): Promise<string> {
   try {
-    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
+    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`);
     const short = await res.text();
-    return short.startsWith("https://") ? short : url;
+    return short.startsWith("https://") ? short.trim() : url;
   } catch {
     return url;
   }
