@@ -1,6 +1,8 @@
 import TradeInCalculator from "@/components/TradeInCalculator";
 
-export default function Home() {
+export default function Home({ searchParams }: { searchParams: { ref?: string } }) {
+  const vendedor = searchParams.ref?.toLowerCase() || null;
+
   return (
     <main className="min-h-dvh flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-[440px]">
@@ -14,7 +16,7 @@ export default function Home() {
           </p>
         </div>
 
-        <TradeInCalculator />
+        <TradeInCalculator vendedor={vendedor} />
 
         {/* Footer */}
         <footer className="text-center mt-12 mb-6">

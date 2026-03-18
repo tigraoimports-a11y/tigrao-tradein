@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
 
     const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
     const instagramLine = body.instagram ? `\nInstagram: ${body.instagram}` : "";
+    const vendedorLine = body.vendedor ? `\nVendedor: ${body.vendedor}` : "";
     const condicaoBlock = body.condicaoLinhas?.length
       ? `\n${body.condicaoLinhas.join("\n")}`
       : "";
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
         `🚨 LEAD SAIU SEM FECHAR!\n\n` +
         `👤 Nome: ${body.nome}\n` +
         `📱 WhatsApp: ${body.whatsapp}` +
-        instagramLine + `\n\n` +
+        instagramLine + vendedorLine + `\n\n` +
         `🆕 Queria: ${body.modeloNovo} ${body.storageNovo} — ${fmt(body.precoNovo)}\n` +
         `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}` +
         condicaoBlock + `\n` +
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
         `✅ LEAD FECHOU!\n\n` +
         `👤 Nome: ${body.nome}\n` +
         `📱 WhatsApp: ${body.whatsapp}` +
-        instagramLine + `\n\n` +
+        instagramLine + vendedorLine + `\n\n` +
         `🆕 Produto: ${body.modeloNovo} ${body.storageNovo} — ${fmt(body.precoNovo)}\n` +
         `🔄 Usado: ${body.modeloUsado} ${body.storageUsado}\n` +
         `💱 Avaliação: ${fmt(body.avaliacaoUsado)}\n` +
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
       status,
       forma_pagamento: body.formaPagamento || null,
       condicao_linhas: body.condicaoLinhas || [],
+      vendedor: body.vendedor || null,
     }]);
 
     if (error) {

@@ -25,6 +25,7 @@ interface StepQuoteProps {
   clienteInstagram: string;
   whatsappNumero: string;
   validadeHoras: number;
+  vendedor?: string | null;
   onReset: () => void;
 }
 
@@ -79,30 +80,30 @@ function generateWhatsAppMsg(
   const conditionLines = getConditionLines(condition);
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
-  return `👋 Ola! Vi meu orcamento no site e quero fechar!
+  return `Ola! Vi meu orcamento no site e quero fechar!
 
-👤 *Nome:* ${clienteNome}
-📱 *WhatsApp:* ${clienteWhatsApp}
+*Nome:* ${clienteNome}
+*WhatsApp:* ${clienteWhatsApp}
 ${instagramLine}
-🐯 *ORCAMENTO DE TROCA — TigraoImports*
-————————————————————
+*ORCAMENTO DE TROCA -- TigraoImports*
+---
 
-🆕 *Produto novo:*
-${newModel} ${newStorage} — ${fmt(newPrice)}
-🔒 Lacrado | ✅ 1 ano de garantia | 🧾 Nota Fiscal
+*Produto novo:*
+${newModel} ${newStorage} -- ${fmt(newPrice)}
+Lacrado | 1 ano de garantia | Nota Fiscal
 
-🔄 *Seu aparelho na troca:*
+*Seu aparelho na troca:*
 ${usedModel} ${usedStorage}
 ${conditionLines.join("\n")}
-💰 Avaliacao do usado: ${fmt(tradeInValue)}
+Avaliacao do usado: ${fmt(tradeInValue)}
 
-————————————————————
-💵 *Diferenca no PIX: ${fmt(diferenca)}*
+---
+*Diferenca no PIX: ${fmt(diferenca)}*
 
-💳 *Forma de pagamento escolhida:*
+*Forma de pagamento escolhida:*
 ${formaPagamento}
 
-🤝 Quero fechar o pedido!`;
+Quero fechar o pedido!`;
 }
 
 export default function StepQuote({
@@ -118,6 +119,7 @@ export default function StepQuote({
   clienteInstagram,
   whatsappNumero,
   validadeHoras,
+  vendedor,
   onReset,
 }: StepQuoteProps) {
   const [entradaStr, setEntradaStr] = useState("");
@@ -312,6 +314,7 @@ export default function StepQuote({
             status: "GOSTEI",
             formaPagamento,
             condicaoLinhas: conditionLines,
+            vendedor: vendedor || undefined,
           });
           window.open(whatsappUrl, "_blank");
         }}
@@ -338,6 +341,7 @@ export default function StepQuote({
             diferenca,
             status: "SAIR",
             condicaoLinhas: conditionLines,
+            vendedor: vendedor || undefined,
           });
           setSairLoading(false);
           onReset();

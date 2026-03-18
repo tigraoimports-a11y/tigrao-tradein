@@ -19,6 +19,7 @@ interface SimulacaoRow {
   forma_pagamento: string | null;
   condicao_linhas: string[] | null;
   contatado: boolean | null;
+  vendedor: string | null;
 }
 
 const fmt = (v: number) =>
@@ -259,7 +260,7 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Contato", "Data", "Nome", "WhatsApp", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status"].map((h) => (
+                    {["Contato", "Data", "Nome", "WhatsApp", "Vendedor", "Produto novo", "Aparelho na troca", "Avaliação", "Diferença PIX", "Pagamento", "Status"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -269,7 +270,7 @@ export default function AdminPage() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-[#86868B]">
+                      <td colSpan={11} className="px-4 py-8 text-center text-[#86868B]">
                         Nenhuma simulação encontrada
                       </td>
                     </tr>
@@ -326,6 +327,15 @@ export default function AdminPage() {
                           >
                             {row.whatsapp}
                           </a>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {row.vendedor ? (
+                            <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">
+                              {row.vendedor}
+                            </span>
+                          ) : (
+                            <span className="text-[#86868B] text-xs">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">
                           {row.modelo_novo} {row.storage_novo}
@@ -390,6 +400,37 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+
+            {/* Por vendedor */}
+            {(() => {
+              const vendedorCount: Record<string, { total: number; gostei: number }> = {};
+              data.forEach((d) => {
+                const v = d.vendedor || "direto";
+                if (!vendedorCount[v]) vendedorCount[v] = { total: 0, gostei: 0 };
+                vendedorCount[v].total++;
+                if (d.status === "GOSTEI") vendedorCount[v].gostei++;
+              });
+              const entries = Object.entries(vendedorCount).sort((a, b) => b[1].total - a[1].total);
+              if (entries.length === 0) return null;
+              return (
+                <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+                  <h3 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-4">
+                    👤 Por vendedor
+                  </h3>
+                  <div className="space-y-2">
+                    {entries.map(([v, s]) => (
+                      <div key={v} className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 capitalize">{v}</span>
+                        <div className="text-right">
+                          <span className="text-[#1D1D1F] font-bold text-sm">{s.total}</span>
+                          <span className="text-green-600 text-xs ml-2">({s.gostei} ✅)</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Últimas 24h */}
             <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">

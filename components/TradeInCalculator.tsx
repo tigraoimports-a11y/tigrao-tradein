@@ -15,7 +15,13 @@ interface UsedData {
   modelDiscounts: Record<string, ModelDiscounts>;
 }
 
-export default function TradeInCalculator() {
+const VENDEDOR_WHATSAPP: Record<string, string> = {
+  andre:   "5521967442665",
+  nicolas: "5521995618747",
+  bianca:  "5521972461357",
+};
+
+export default function TradeInCalculator({ vendedor }: { vendedor?: string | null }) {
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -219,8 +225,9 @@ export default function TradeInCalculator() {
             clienteNome={clienteNome}
             clienteWhatsApp={clienteWhatsApp}
             clienteInstagram={clienteInstagram}
-            whatsappNumero={config.whatsappNumero}
+            whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}
             validadeHoras={config.validadeHoras}
+            vendedor={vendedor}
             onReset={handleReset}
           />
         )}

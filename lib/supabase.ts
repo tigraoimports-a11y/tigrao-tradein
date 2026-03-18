@@ -19,6 +19,7 @@ export interface Simulacao {
   status: "GOSTEI" | "SAIR";
   formaPagamento?: string;
   condicaoLinhas?: string[];
+  vendedor?: string;
 }
 
 // Keep backwards compat
