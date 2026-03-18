@@ -31,9 +31,13 @@ async function notificarZAPI(mensagem: string) {
   const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
   try {
+    const clientToken = process.env.ZAPI_CLIENT_TOKEN ?? "";
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
       body: JSON.stringify({ phone: destinatario, message: mensagem }),
     });
     const json = await res.json();
