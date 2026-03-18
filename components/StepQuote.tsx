@@ -299,8 +299,12 @@ export default function StepQuote({
 
       {/* Botão fechar */}
       <button
-        onClick={async () => {
-          await salvarLeadSaiu({
+        onClick={() => {
+          // Abre WhatsApp de forma síncrona (antes de qualquer await),
+          // evitando o bloqueio de popup em browsers mobile.
+          window.open(whatsappUrl, "_blank");
+          // Salva o lead em background (fire-and-forget)
+          salvarLeadSaiu({
             nome: clienteNome,
             whatsapp: clienteWhatsApp,
             instagram: clienteInstagram,
@@ -316,7 +320,6 @@ export default function StepQuote({
             condicaoLinhas: conditionLines,
             vendedor: vendedor || undefined,
           });
-          window.open(whatsappUrl, "_blank");
         }}
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-white text-center bg-[#34C759] hover:bg-[#2DB84D] transition-all duration-200 active:scale-[0.98]"
       >
