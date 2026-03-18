@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ConditionData, QuoteResult } from "@/lib/calculations";
 import {
   calculateQuote,
@@ -7,6 +8,8 @@ import {
   getConditionLines,
   formatBRL,
 } from "@/lib/calculations";
+
+const PARCELAS_EXIBIDAS = [6, 10, 12, 18, 21];
 
 interface StepQuoteProps {
   newModel: string;
@@ -33,7 +36,8 @@ function generateWhatsAppMsg(
   quote: QuoteResult,
   clienteNome: string,
   clienteWhatsApp: string,
-  clienteInstagram: string
+  clienteInstagram: string,
+  entrada: number
 ): string {
   const conditionLines = getConditionLines(condition);
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
@@ -43,6 +47,9 @@ function generateWhatsAppMsg(
   const i21 = quote.installments.find(i => i.parcelas === 21)!;
 
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
+  const entradaLine = entrada > 0
+    ? `Entrada no PIX: ${fmt(entrada)}\nRestante parcelado:\n`
+    : "";
 
   return `Ola! Vi meu orcamento no site e quero fechar!
 
@@ -64,7 +71,7 @@ ${conditionLines.join("\n")}
 *Voce paga apenas a diferenca:*
 
 *${fmt(quote.pix)}* a vista no PIX
-12x de *${fmt(i12.valorParcela)}* (total: ${fmt(i12.total)})
+${entradaLine}12x de *${fmt(i12.valorParcela)}* (total: ${fmt(i12.total)})
 18x de *${fmt(i18.valorParcela)}* (total: ${fmt(i18.total)})
 21x de *${fmt(i21.valorParcela)}* (total: ${fmt(i21.total)})
 
@@ -86,12 +93,32 @@ export default function StepQuote({
   validadeHoras,
   onReset,
 }: StepQuoteProps) {
-  const quote: QuoteResult = calculateQuote(tradeInValue, newPrice);
+  const [entradaStr, setEntradaStr] = useState("");
+
+  const quoteTotal: QuoteResult = calculateQuote(tradeInValue, newPrice);
+  const diferenca = quoteTotal.pix; // PIX = diferença sem acréscimo
+
+  // Entrada válida: número positivo menor que a diferença
+  const entradaNum = Math.min(Math.max(parseFloat(entradaStr.replace(",", ".")) || 0, 0), diferenca - 1);
+  const temEntrada = entradaNum > 0;
+
+  // Recalcula parcelas sobre (diferença - entrada)
+  const restante = diferenca - entradaNum;
+  const quoteRestante: QuoteResult = temEntrada
+    ? calculateQuote(0, restante) // base já é o restante
+    : quoteTotal;
+
   const conditionLines = getConditionLines(condition);
+
   const whatsappMsg = generateWhatsAppMsg(
-    newModel, newStorage, usedModel, usedStorage, condition, quote, clienteNome, clienteWhatsApp, clienteInstagram
+    newModel, newStorage, usedModel, usedStorage, condition,
+    quoteRestante, clienteNome, clienteWhatsApp, clienteInstagram, entradaNum
   );
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
+
+  const parcelasExibidas = quoteRestante.installments.filter(i =>
+    PARCELAS_EXIBIDAS.includes(i.parcelas)
+  );
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -136,37 +163,67 @@ export default function StepQuote({
       </div>
 
       {/* Valores */}
-      <div className="rounded-2xl border border-[#D2D2D7] p-5">
-        <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-4 text-center">
+      <div className="rounded-2xl border border-[#D2D2D7] p-5 space-y-5">
+        <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] text-center">
           Voce paga apenas a diferenca
         </p>
 
-        {/* Pix */}
-        <div className="bg-[#34C759]/5 border border-[#34C759]/20 rounded-2xl p-5 mb-4 text-center">
+        {/* Pix à vista */}
+        <div className="bg-[#34C759]/5 border border-[#34C759]/20 rounded-2xl p-5 text-center">
           <p className="text-[12px] font-semibold text-[#34C759] mb-1">PIX / A vista</p>
           <p className="text-[36px] font-bold text-[#34C759]">
-            {formatBRL(quote.pix)}
+            {formatBRL(diferenca)}
           </p>
         </div>
 
-        {/* Todas as parcelas no cartao */}
-        <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3 text-center">
-          Cartao de credito
-        </p>
-        <div className="space-y-2">
-          {quote.installments.map((inst) => (
-            <div
-              key={inst.parcelas}
-              className="flex justify-between items-center bg-[#F5F5F7] rounded-xl px-4 py-3"
-            >
-              <p className="text-[14px] font-semibold text-[#1D1D1F]">
-                {inst.parcelas}x de {formatBRL(inst.valorParcela)}
-              </p>
-              <p className="text-[12px] text-[#86868B]">
-                total: {formatBRL(inst.total)}
-              </p>
+        {/* Entrada no PIX */}
+        <div>
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3 text-center">
+            Entrada no PIX + parcelamento no cartao
+          </p>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-[#6E6E73] font-medium">
+              R$
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={diferenca - 1}
+              placeholder="0"
+              value={entradaStr}
+              onChange={(e) => setEntradaStr(e.target.value)}
+              className="w-full pl-10 pr-4 py-3.5 rounded-2xl border border-[#D2D2D7] bg-white text-[15px] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#0071E3] transition-colors"
+            />
+          </div>
+          {temEntrada && (
+            <div className="mt-3 bg-[#F5F5F7] rounded-xl px-4 py-3 flex justify-between text-[13px]">
+              <span className="text-[#6E6E73]">Restante a parcelar</span>
+              <span className="font-semibold text-[#1D1D1F]">{formatBRL(restante)}</span>
             </div>
-          ))}
+          )}
+        </div>
+
+        {/* Parcelas */}
+        <div>
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3 text-center">
+            Cartao de credito{temEntrada ? " (sobre o restante)" : ""}
+          </p>
+          <div className="space-y-2">
+            {parcelasExibidas.map((inst) => (
+              <div
+                key={inst.parcelas}
+                className="flex justify-between items-center bg-[#F5F5F7] rounded-xl px-4 py-3"
+              >
+                <p className="text-[14px] font-semibold text-[#1D1D1F]">
+                  {inst.parcelas}x de {formatBRL(inst.valorParcela)}
+                </p>
+                <p className="text-[12px] text-[#86868B]">
+                  total: {formatBRL(inst.total)}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
