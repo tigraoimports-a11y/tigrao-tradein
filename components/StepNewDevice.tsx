@@ -116,6 +116,13 @@ export default function StepNewDevice({
 
   return (
     <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="text-[22px] font-bold text-[#1D1D1F] leading-tight">
+          Agora me diz, qual modelo você quer comprar?
+        </h2>
+      </div>
+
       {/* Linha */}
       <Section title="Linha do iPhone novo">
         <div className="grid grid-cols-3 gap-2">
