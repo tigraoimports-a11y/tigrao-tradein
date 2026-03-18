@@ -47,6 +47,16 @@ async function notificarZAPI(mensagem: string) {
   }
 }
 
+async function encurtarUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
+    const short = await res.text();
+    return short.startsWith("https://") ? short : url;
+  } catch {
+    return url;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -67,7 +77,8 @@ export async function POST(req: NextRequest) {
       `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
       `Posso te fazer uma proposta especial? 🐯`
     );
-    const whatsappLink = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
+    const whatsappLinkLongo = `https://wa.me/${whatsappNumeroFull}?text=${textoFollowUp}`;
+    const whatsappLink = await encurtarUrl(whatsappLinkLongo);
 
     const mensagemNotif =
       `🚨 LEAD SAIU SEM FECHAR!\n\n` +
