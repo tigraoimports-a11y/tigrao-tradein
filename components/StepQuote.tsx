@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ConditionData, QuoteResult } from "@/lib/calculations";
+import type { LeadSaiu } from "@/lib/supabase";
 import {
   calculateQuote,
   getWhatsAppUrl,
@@ -25,6 +26,18 @@ interface StepQuoteProps {
   whatsappNumero: string;
   validadeHoras: number;
   onReset: () => void;
+}
+
+async function salvarLeadSaiu(lead: LeadSaiu) {
+  try {
+    await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lead),
+    });
+  } catch {
+    // silencioso — não bloqueia o usuário
+  }
 }
 
 function generateWhatsAppMsg(
@@ -94,6 +107,7 @@ export default function StepQuote({
   onReset,
 }: StepQuoteProps) {
   const [entradaStr, setEntradaStr] = useState("");
+  const [sairLoading, setSairLoading] = useState(false);
 
   const quoteTotal: QuoteResult = calculateQuote(tradeInValue, newPrice);
   const diferenca = quoteTotal.pix; // PIX = diferença sem acréscimo
@@ -227,20 +241,39 @@ export default function StepQuote({
         </div>
       </div>
 
-      {/* Botão WhatsApp */}
+      {/* Botão fechar */}
       <a
         href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-white text-center bg-[#34C759] hover:bg-[#2DB84D] transition-all duration-200 active:scale-[0.98]"
       >
-        Desejo fechar meu pedido
+        Gostei da proposta. Quero comprar!
       </a>
+
+      {/* Botão SAIR */}
       <button
-        onClick={onReset}
-        className="w-full py-3 rounded-2xl text-[14px] text-[#86868B] hover:text-[#6E6E73] transition-colors"
+        disabled={sairLoading}
+        onClick={async () => {
+          setSairLoading(true);
+          await salvarLeadSaiu({
+            nome: clienteNome,
+            whatsapp: clienteWhatsApp,
+            instagram: clienteInstagram,
+            modeloNovo: newModel,
+            storageNovo: newStorage,
+            precoNovo: newPrice,
+            modeloUsado: usedModel,
+            storageUsado: usedStorage,
+            avaliacaoUsado: tradeInValue,
+            diferenca,
+          });
+          setSairLoading(false);
+          onReset();
+        }}
+        className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white bg-[#FF3B30] hover:bg-[#E0352B] transition-all duration-200 active:scale-[0.98] disabled:opacity-60"
       >
-        Recomecar simulacao
+        {sairLoading ? "Salvando..." : "Sair"}
       </button>
     </div>
   );
