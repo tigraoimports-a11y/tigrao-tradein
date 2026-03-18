@@ -3,7 +3,8 @@
 const STEPS = [
   { num: 1, label: "Seu aparelho" },
   { num: 2, label: "Aparelho novo" },
-  { num: 3, label: "Cotacao" },
+  { num: 3, label: "Seus dados" },
+  { num: 4, label: "Cotacao" },
 ];
 
 export default function StepBar({ current }: { current: number }) {

@@ -6,6 +6,7 @@ import type { ConditionData, ModelDiscounts, WarrantyBonuses } from "@/lib/calcu
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
+import StepClientData from "./StepClientData";
 import StepQuote from "./StepQuote";
 
 interface UsedData {
@@ -51,6 +52,7 @@ export default function TradeInCalculator() {
   });
   const [tradeInValue, setTradeInValue] = useState(0);
   const [clienteNome, setClienteNome] = useState("");
+  const [clienteWhatsApp, setClienteWhatsApp] = useState("");
   const [clienteInstagram, setClienteInstagram] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newStorage, setNewStorage] = useState("");
@@ -86,15 +88,11 @@ export default function TradeInCalculator() {
     usedStorage: string;
     condition: ConditionData;
     tradeInValue: number;
-    clienteNome: string;
-    clienteInstagram: string;
   }) {
     setUsedModel(data.usedModel);
     setUsedStorage(data.usedStorage);
     setCondition(data.condition);
     setTradeInValue(data.tradeInValue);
-    setClienteNome(data.clienteNome);
-    setClienteInstagram(data.clienteInstagram);
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -108,6 +106,18 @@ export default function TradeInCalculator() {
     setNewStorage(data.newStorage);
     setNewPrice(data.newPrice);
     setStep(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleStep3Complete(data: {
+    clienteNome: string;
+    clienteWhatsApp: string;
+    clienteInstagram: string;
+  }) {
+    setClienteNome(data.clienteNome);
+    setClienteWhatsApp(data.clienteWhatsApp);
+    setClienteInstagram(data.clienteInstagram);
+    setStep(4);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -127,6 +137,9 @@ export default function TradeInCalculator() {
       hasOriginalBox: false,
     });
     setTradeInValue(0);
+    setClienteNome("");
+    setClienteWhatsApp("");
+    setClienteInstagram("");
     setNewModel("");
     setNewStorage("");
     setNewPrice(0);
@@ -185,6 +198,13 @@ export default function TradeInCalculator() {
         )}
 
         {step === 3 && (
+          <StepClientData
+            onNext={handleStep3Complete}
+            onBack={() => setStep(2)}
+          />
+        )}
+
+        {step === 4 && (
           <StepQuote
             newModel={newModel}
             newStorage={newStorage}
@@ -194,6 +214,7 @@ export default function TradeInCalculator() {
             condition={condition}
             tradeInValue={tradeInValue}
             clienteNome={clienteNome}
+            clienteWhatsApp={clienteWhatsApp}
             clienteInstagram={clienteInstagram}
             whatsappNumero={config.whatsappNumero}
             validadeHoras={config.validadeHoras}

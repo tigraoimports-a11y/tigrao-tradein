@@ -17,6 +17,7 @@ interface StepQuoteProps {
   condition: ConditionData;
   tradeInValue: number;
   clienteNome: string;
+  clienteWhatsApp: string;
   clienteInstagram: string;
   whatsappNumero: string;
   validadeHoras: number;
@@ -31,6 +32,7 @@ function generateWhatsAppMsg(
   condition: ConditionData,
   quote: QuoteResult,
   clienteNome: string,
+  clienteWhatsApp: string,
   clienteInstagram: string
 ): string {
   const conditionLines = getConditionLines(condition);
@@ -45,6 +47,7 @@ function generateWhatsAppMsg(
   return `Ola! Vi meu orcamento no site e quero fechar!
 
 *Nome:* ${clienteNome}
+*WhatsApp:* ${clienteWhatsApp}
 ${instagramLine}
 *ORCAMENTO DE TROCA - TigraoImports*
 ------------------------------------
@@ -77,6 +80,7 @@ export default function StepQuote({
   condition,
   tradeInValue,
   clienteNome,
+  clienteWhatsApp,
   clienteInstagram,
   whatsappNumero,
   validadeHoras,
@@ -85,7 +89,7 @@ export default function StepQuote({
   const quote: QuoteResult = calculateQuote(tradeInValue, newPrice);
   const conditionLines = getConditionLines(condition);
   const whatsappMsg = generateWhatsAppMsg(
-    newModel, newStorage, usedModel, usedStorage, condition, quote, clienteNome, clienteInstagram
+    newModel, newStorage, usedModel, usedStorage, condition, quote, clienteNome, clienteWhatsApp, clienteInstagram
   );
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 
