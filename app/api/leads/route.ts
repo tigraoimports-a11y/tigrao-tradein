@@ -92,11 +92,8 @@ export async function POST(req: NextRequest) {
       `👉 Entre em contato e tente fechar!\n` +
       `💬 ${whatsappLink}`;
 
-    // Notifica via Telegram e WhatsApp (Z-API) em paralelo
-    await Promise.all([
-      notificarTelegram(body, mensagemNotif),
-      notificarZAPI(mensagemNotif),
-    ]);
+    // Notifica via WhatsApp (Z-API)
+    await notificarZAPI(mensagemNotif);
 
     // Salva no Supabase (se configurado)
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
