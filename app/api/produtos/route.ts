@@ -11,6 +11,32 @@ const FALLBACK_PRODUCTS: NewProduct[] = [
 ];
 
 export async function GET() {
+  // Tenta Supabase primeiro (painel de preços)
+  try {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { supabase } = await import("@/lib/supabase");
+      const { data } = await supabase
+        .from("precos")
+        .select("modelo, armazenamento, preco_pix, status")
+        .order("modelo")
+        .order("armazenamento");
+
+      if (data && data.length > 0) {
+        const products: NewProduct[] = data
+          .filter((r) => r.status !== "esgotado")
+          .map((r) => ({
+            modelo: r.modelo,
+            armazenamento: r.armazenamento,
+            precoPix: r.preco_pix,
+          }));
+        return NextResponse.json(products);
+      }
+    }
+  } catch {
+    // fallthrough para Sheets
+  }
+
+  // Fallback: Google Sheets
   try {
     const products = await fetchNewProducts();
     return NextResponse.json(products);

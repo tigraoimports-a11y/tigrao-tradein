@@ -1,7 +1,8 @@
 import TradeInCalculator from "@/components/TradeInCalculator";
 
-export default function Home({ searchParams }: { searchParams: { ref?: string } }) {
-  const vendedor = searchParams.ref?.toLowerCase() || null;
+export default async function Home({ searchParams }: { searchParams: Promise<{ ref?: string }> }) {
+  const params = await searchParams;
+  const vendedor = params.ref?.toLowerCase() || null;
 
   return (
     <main className="min-h-dvh flex flex-col items-center px-4 py-8">
