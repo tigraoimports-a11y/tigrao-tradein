@@ -50,12 +50,19 @@ export const INSTALLMENT_RATES: [number, number][] = [
   [21, 1.22],  // 22%
 ];
 
+/** Par threshold/desconto para bateria */
+export interface BatteryTier {
+  threshold: number; // ex: 95, 90, 85
+  discount: number;  // ex: -200, -300
+}
+
 /** Descontos por modelo - cada modelo pode ter seus proprios valores */
 export interface ModelDiscounts {
   screenScratch: { none: number; one: number; multiple: number };
   sideScratch: { none: number; one: number; multiple: number };
   peeling: { none: number; light: number; heavy: number };
-  batteryDiscount: number; // desconto quando bateria < 85%
+  batteryTiers: BatteryTier[]; // desconto por faixa de bateria
+  warrantyBonuses?: WarrantyBonuses; // bonus de garantia especifico do modelo (opcional)
 }
 
 // Fallback geral (usado quando nao tem desconto especifico pro modelo)
@@ -63,10 +70,21 @@ const DEFAULT_DISCOUNTS: ModelDiscounts = {
   screenScratch: { none: 0, one: -100, multiple: -250 },
   sideScratch: { none: 0, one: -100, multiple: -250 },
   peeling: { none: 0, light: -200, heavy: -300 },
-  batteryDiscount: -200,
+  batteryTiers: [{ threshold: 85, discount: -200 }],
 };
 
-const BATTERY_THRESHOLD = 85;
+/**
+ * Retorna o desconto de bateria aplicavel.
+ * Verifica do menor threshold pro maior — o menor threshold aplicavel vence.
+ * Ex: battery=88, tiers=[{90,-300},{95,-200}] → retorna -300 (pois 88 < 90)
+ */
+function applyBatteryDiscount(battery: number, tiers: BatteryTier[]): number {
+  const sorted = [...tiers].sort((a, b) => a.threshold - b.threshold);
+  for (const tier of sorted) {
+    if (battery < tier.threshold) return tier.discount;
+  }
+  return 0;
+}
 
 
 export interface WarrantyBonuses {
@@ -129,7 +147,8 @@ export function getDiscountsForModel(
     screenScratch: specific.screenScratch || DEFAULT_DISCOUNTS.screenScratch,
     sideScratch: specific.sideScratch || DEFAULT_DISCOUNTS.sideScratch,
     peeling: specific.peeling || DEFAULT_DISCOUNTS.peeling,
-    batteryDiscount: specific.batteryDiscount ?? DEFAULT_DISCOUNTS.batteryDiscount,
+    batteryTiers: specific.batteryTiers?.length ? specific.batteryTiers : DEFAULT_DISCOUNTS.batteryTiers,
+    ...(specific.warrantyBonuses ? { warrantyBonuses: specific.warrantyBonuses } : {}),
   };
 }
 
@@ -152,11 +171,11 @@ export function calculateTradeInValue(
   value += d.sideScratch[condition.sideScratch];
   value += d.peeling[condition.peeling];
 
-  if (condition.battery < BATTERY_THRESHOLD) {
-    value += d.batteryDiscount;
-  }
+  value += applyBatteryDiscount(condition.battery, d.batteryTiers);
 
-  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses);
+  // Usa bonus de garantia especifico do modelo (se tiver), senao usa o global
+  const effectiveBonuses = d.warrantyBonuses || warrantyBonuses;
+  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses);
 
   return Math.max(value, 0);
 }

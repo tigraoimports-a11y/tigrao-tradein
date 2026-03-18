@@ -2,6 +2,7 @@
 
 import Papa from "papaparse";
 import type { NewProduct, UsedDeviceValue, DiscountRule, AppConfig } from "./types";
+import type { BatteryTier } from "./calculations";
 
 const REVALIDATE_SECONDS = 300;
 
@@ -168,13 +169,15 @@ export function buildModelDiscountsMap(
   screenScratch: { none: number; one: number; multiple: number };
   sideScratch: { none: number; one: number; multiple: number };
   peeling: { none: number; light: number; heavy: number };
-  batteryDiscount: number;
+  batteryTiers: BatteryTier[];
+  warrantyBonuses?: { ate3m: number; de3a6m: number; acima6m: number };
 }> {
   const result: Record<string, {
     screenScratch: { none: number; one: number; multiple: number };
     sideScratch: { none: number; one: number; multiple: number };
     peeling: { none: number; light: number; heavy: number };
-    batteryDiscount: number;
+    batteryTiers: BatteryTier[];
+    warrantyBonuses?: { ate3m: number; de3a6m: number; acima6m: number };
   }> = {};
 
   for (const [modelo, condicoes] of Object.entries(rawMap)) {
@@ -183,6 +186,20 @@ export function buildModelDiscountsMap(
     const desc = condicoes["Descascado/Amassado"] || {};
     const bat = condicoes["Bateria"] || {};
     const garantia = condicoes["Garantia"] || {};
+
+    // Parse battery tiers — suporta qualquer combinacao de thresholds
+    const BATTERY_THRESHOLD_MAP: Record<string, number> = {
+      "Abaixo de 95%": 95,
+      "Abaixo de 90%": 90,
+      "Abaixo de 85%": 85,
+      "Abaixo de 80%": 80,
+    };
+    const batteryTiers: BatteryTier[] = [];
+    for (const [detail, threshold] of Object.entries(BATTERY_THRESHOLD_MAP)) {
+      if (bat[detail] !== undefined) {
+        batteryTiers.push({ threshold, discount: bat[detail] });
+      }
+    }
 
     const hasWarrantyBonuses = Object.keys(garantia).length > 0;
 
@@ -202,7 +219,7 @@ export function buildModelDiscountsMap(
         light: desc["Leve"] ?? -200,
         heavy: desc["Forte"] ?? -300,
       },
-      batteryDiscount: bat["Abaixo de 85%"] ?? -200,
+      batteryTiers: batteryTiers.length > 0 ? batteryTiers : [{ threshold: 85, discount: -200 }],
       ...(hasWarrantyBonuses ? {
         warrantyBonuses: {
           ate3m: garantia["Ate 3 meses"] ?? 200,
