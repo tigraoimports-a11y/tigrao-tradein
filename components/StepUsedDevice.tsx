@@ -338,11 +338,6 @@ export default function StepUsedDevice({
                   </SelectButton>
                 ))}
               </div>
-              {warrantyMonth !== null && (
-                <p className="text-[12px] text-[#34C759] mt-3 font-medium text-center">
-                  Bonus garantia: +{formatBRL(warrantyBonusText)}
-                </p>
-              )}
             </Section>
           )}
 
