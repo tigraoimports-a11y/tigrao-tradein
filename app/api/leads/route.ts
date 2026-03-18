@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-async function notificarWhatsApp(body: {
+async function notificarTelegram(body: {
   nome: string;
   whatsapp: string;
   instagram: string;
@@ -10,10 +10,10 @@ async function notificarWhatsApp(body: {
   storageUsado: string;
   diferenca: number;
 }) {
-  const apiKey = process.env.CALLMEBOT_APIKEY;
-  const numero = process.env.WHATSAPP_NUMBER; // número do André
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!apiKey || !numero) return; // não configurado, ignora silenciosamente
+  if (!token || !chatId) return;
 
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const instagramLine = body.instagram ? `\nInstagram: ${body.instagram}` : "";
@@ -28,12 +28,16 @@ async function notificarWhatsApp(body: {
     `💰 Diferença: ${fmt(body.diferenca)}\n\n` +
     `👉 Entre em contato e tente fechar!`;
 
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${numero}&text=${encodeURIComponent(mensagem)}&apikey=${apiKey}`;
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   try {
-    await fetch(url);
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: mensagem }),
+    });
   } catch (err) {
-    console.error("[leads] Erro ao notificar CallMeBot:", err);
+    console.error("[leads] Erro ao notificar Telegram:", err);
   }
 }
 
@@ -41,8 +45,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Notifica André via WhatsApp (CallMeBot) — funciona independente do Supabase
-    await notificarWhatsApp(body);
+    // Notifica André via Telegram — funciona independente do Supabase
+    await notificarTelegram(body);
 
     // Salva no Supabase (se configurado)
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
