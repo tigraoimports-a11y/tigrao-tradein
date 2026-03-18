@@ -17,6 +17,7 @@ interface UsedData {
 
 export default function TradeInCalculator() {
   const [step, setStep] = useState(1);
+  const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -123,6 +124,7 @@ export default function TradeInCalculator() {
 
   function handleReset() {
     setStep(1);
+    setResetKey(k => k + 1);
     setUsedModel("");
     setUsedStorage("");
     setCondition({
@@ -176,6 +178,7 @@ export default function TradeInCalculator() {
       <div className="animate-fadeIn">
         {step === 1 && (
           <StepUsedDevice
+            key={resetKey}
             usedValues={usedData.usedValues}
             excludedModels={usedData.excludedModels}
             modelDiscounts={usedData.modelDiscounts}
