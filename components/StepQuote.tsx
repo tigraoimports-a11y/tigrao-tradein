@@ -76,27 +76,27 @@ function generateWhatsAppMsg(
   const conditionLines = getConditionLines(condition);
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
-  return `Ola! Vi meu orcamento no site e quero fechar!
+  return `👋 Ola! Vi meu orcamento no site e quero fechar!
 
-*Nome:* ${clienteNome}
-*WhatsApp:* ${clienteWhatsApp}
+👤 *Nome:* ${clienteNome}
+📱 *WhatsApp:* ${clienteWhatsApp}
 ${instagramLine}
-*ORCAMENTO DE TROCA - TigraoImports*
-------------------------------------
+🐯 *ORCAMENTO DE TROCA — TigraoImports*
+————————————————————
 
-*Produto novo:*
+🆕 *Produto novo:*
 ${newModel} ${newStorage}
-Lacrado | 1 ano de garantia | Nota Fiscal
+🔒 Lacrado | ✅ 1 ano de garantia | 🧾 Nota Fiscal
 
-*Seu aparelho na troca:*
+🔄 *Seu aparelho na troca:*
 ${usedModel} ${usedStorage}
 ${conditionLines.join("\n")}
 
-------------------------------------
-*Forma de pagamento:*
+————————————————————
+💳 *Forma de pagamento:*
 ${formaPagamento}
 
-Quero fechar o pedido!`;
+🤝 Quero fechar o pedido!`;
 }
 
 export default function StepQuote({
