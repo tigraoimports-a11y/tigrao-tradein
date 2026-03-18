@@ -137,22 +137,6 @@ export default function StepNewDevice({
         </Section>
       )}
 
-      {/* Preview diferença */}
-      {price !== null && difference !== null && (
-        <div className="bg-[#F5F5F7] rounded-2xl p-5 animate-fadeIn">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[13px] text-[#6E6E73]">Preco novo (Pix)</span>
-            <span className="text-[13px] font-semibold">{formatBRL(price)}</span>
-          </div>
-          <div className="border-t border-[#E8E8ED] my-3" />
-          <div className="flex justify-between items-center">
-            <span className="text-[14px] font-semibold text-[#6E6E73]">Diferenca</span>
-            <span className="text-[24px] font-bold text-[#1D1D1F]">
-              {formatBRL(difference)}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Botões */}
       <div className="flex gap-3">
