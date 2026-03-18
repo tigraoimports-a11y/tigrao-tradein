@@ -282,19 +282,23 @@ export default function AdminPage() {
                             onClick={() => {
                               const num = row.whatsapp.replace(/\D/g, "");
                               const full = num.startsWith("55") ? num : `55${num}`;
-                              const msg =
-                                `Ol\u00E1 ${row.nome}! \u{1F60A} Vi que voc\u00EA fez uma simula\u00E7\u00E3o de trade-in no site da Tigr\u00E3oImports.\n\n` +
-                                `\u{1F4F1} *Simula\u00E7\u00E3o:*\n` +
-                                `\u{1F195} Novo: ${row.modelo_novo} ${row.storage_novo} (${fmt(row.preco_novo)})\n` +
-                                `\u{1F504} Usado: ${row.modelo_usado} ${row.storage_usado} \u2014 Avaliado em ${fmt(row.avaliacao_usado)}\n` +
-                                `\u{1F4B5} Diferen\u00E7a no PIX: ${fmt(row.diferenca)}\n` +
-                                (row.forma_pagamento ? `\u{1F4B3} Pagamento escolhido: ${row.forma_pagamento}\n` : "") +
-                                `\nPosso te fazer uma proposta especial? \u{1F42F}`;
+                              const linhas = [
+                                `Olá ${row.nome}! 😊 Vi que você fez uma simulação de trade-in no site da TigrãoImports.`,
+                                ``,
+                                `📱 *Simulação:*`,
+                                `🆕 Novo: ${row.modelo_novo} ${row.storage_novo} (${fmt(row.preco_novo)})`,
+                                `🔄 Usado: ${row.modelo_usado} ${row.storage_usado} — Avaliado em ${fmt(row.avaliacao_usado)}`,
+                                `💵 Diferença no PIX: ${fmt(row.diferenca)}`,
+                                ...(row.forma_pagamento ? [`💳 Pagamento: ${row.forma_pagamento}`] : []),
+                                ``,
+                                `Posso te fazer uma proposta especial? 🐯`,
+                              ];
+                              const msg = linhas.join("\n");
                               window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
                             }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors"
                           >
-                            {"\u{1F4AC}"} WhatsApp
+                            💬 WhatsApp
                           </button>
                         </td>
                         <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">
