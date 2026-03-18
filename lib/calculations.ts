@@ -69,14 +69,29 @@ const DEFAULT_DISCOUNTS: ModelDiscounts = {
 const BATTERY_THRESHOLD = 85;
 
 
+export interface WarrantyBonuses {
+  ate3m: number;   // bonus para ate 3 meses restantes
+  de3a6m: number;  // bonus para 3 a 6 meses restantes
+  acima6m: number; // bonus para 6 meses ou mais
+}
+
+const DEFAULT_WARRANTY_BONUSES: WarrantyBonuses = {
+  ate3m: 200,
+  de3a6m: 300,
+  acima6m: 400,
+};
+
 /**
  * Calcula bonus de garantia Apple baseado no mes informado.
- * Ate 3 meses restantes:    +R$ 200
- * 3 a 6 meses restantes:    +R$ 300
- * 6 meses ou mais:          +R$ 400
+ * Os valores de bonus sao configurados via Google Sheets (aba Configuracoes).
  */
-export function calculateWarrantyBonus(warrantyMonth: number | null): number {
+export function calculateWarrantyBonus(
+  warrantyMonth: number | null,
+  bonuses?: WarrantyBonuses
+): number {
   if (warrantyMonth === null) return 0;
+
+  const b = bonuses || DEFAULT_WARRANTY_BONUSES;
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -91,9 +106,9 @@ export function calculateWarrantyBonus(warrantyMonth: number | null): number {
   const diffMs = warrantyDate.getTime() - now.getTime();
   const diffMonths = diffMs / (1000 * 60 * 60 * 24 * 30);
 
-  if (diffMonths <= 3) return 200;
-  if (diffMonths <= 6) return 300;
-  return 400;
+  if (diffMonths <= 3) return b.ate3m;
+  if (diffMonths <= 6) return b.de3a6m;
+  return b.acima6m;
 }
 
 /**
@@ -125,7 +140,8 @@ export function getDiscountsForModel(
 export function calculateTradeInValue(
   baseValue: number,
   condition: ConditionData,
-  modelDiscounts?: ModelDiscounts
+  modelDiscounts?: ModelDiscounts,
+  warrantyBonuses?: WarrantyBonuses
 ): number {
   if (condition.hasDamage) return 0;
 
@@ -140,7 +156,7 @@ export function calculateTradeInValue(
     value += d.batteryDiscount;
   }
 
-  value += calculateWarrantyBonus(condition.warrantyMonth);
+  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses);
 
   return Math.max(value, 0);
 }

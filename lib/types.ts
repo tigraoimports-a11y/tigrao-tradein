@@ -26,6 +26,9 @@ export interface AppConfig {
   multiplier21: number;
   validadeHoras: number;
   whatsappNumero: string;
+  bonusGarantiaAte3m: number;
+  bonusGarantia3a6m: number;
+  bonusGarantia6mMais: number;
 }
 
 /** Regra de desconto por condição */

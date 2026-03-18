@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
-import type { ConditionData, ModelDiscounts } from "@/lib/calculations";
+import type { ConditionData, ModelDiscounts, WarrantyBonuses } from "@/lib/calculations";
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
@@ -31,6 +31,9 @@ export default function TradeInCalculator() {
     multiplier21: 1.21,
     validadeHoras: 24,
     whatsappNumero: "5521967442665",
+    bonusGarantiaAte3m: 200,
+    bonusGarantia3a6m: 300,
+    bonusGarantia6mMais: 400,
   });
 
   const [usedModel, setUsedModel] = useState("");
@@ -155,6 +158,11 @@ export default function TradeInCalculator() {
             usedValues={usedData.usedValues}
             excludedModels={usedData.excludedModels}
             modelDiscounts={usedData.modelDiscounts}
+            warrantyBonuses={{
+              ate3m: config.bonusGarantiaAte3m,
+              de3a6m: config.bonusGarantia3a6m,
+              acima6m: config.bonusGarantia6mMais,
+            }}
             onNext={handleStep1Complete}
           />
         )}

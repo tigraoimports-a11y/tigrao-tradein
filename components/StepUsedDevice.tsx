@@ -14,12 +14,14 @@ import {
   formatBRL,
   type ConditionData,
   type ModelDiscounts,
+  type WarrantyBonuses,
 } from "@/lib/calculations";
 
 interface StepUsedDeviceProps {
   usedValues: UsedDeviceValue[];
   excludedModels: string[];
   modelDiscounts?: Record<string, ModelDiscounts>;
+  warrantyBonuses?: WarrantyBonuses;
   onNext: (data: {
     usedModel: string;
     usedStorage: string;
@@ -43,6 +45,7 @@ export default function StepUsedDevice({
   usedValues,
   excludedModels,
   modelDiscounts,
+  warrantyBonuses,
   onNext,
 }: StepUsedDeviceProps) {
   const [line, setLine] = useState("");
@@ -94,7 +97,7 @@ export default function StepUsedDevice({
   );
 
   const tradeInValue = useMemo(
-    () => (baseValue !== null && hasDamage === false ? calculateTradeInValue(baseValue, condition, modelDiscount) : 0),
+    () => (baseValue !== null && hasDamage === false ? calculateTradeInValue(baseValue, condition, modelDiscount, warrantyBonuses) : 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth, modelDiscount]
   );
@@ -119,7 +122,7 @@ export default function StepUsedDevice({
   }
 
   const warrantyBonusText = warrantyMonth !== null
-    ? calculateWarrantyBonus(warrantyMonth)
+    ? calculateWarrantyBonus(warrantyMonth, warrantyBonuses)
     : 0;
 
   return (
