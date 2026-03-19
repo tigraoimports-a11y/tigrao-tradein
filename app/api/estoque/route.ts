@@ -29,12 +29,24 @@ export async function POST(req: NextRequest) {
     const rows = body.rows as Record<string, unknown>[];
     if (!rows?.length) return NextResponse.json({ error: "rows required" }, { status: 400 });
 
-    const { error } = await supabase.from("estoque").upsert(
-      rows.map((r) => ({ ...r, updated_at: new Date().toISOString() })),
-      { onConflict: "produto,cor" }
-    );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, imported: rows.length });
+    // Deduplicar por (produto, cor) — mantém o último
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const r of rows) {
+      const key = `${r.produto}|${r.cor ?? ""}`;
+      seen.set(key, { ...r, updated_at: new Date().toISOString() });
+    }
+    const unique = [...seen.values()];
+
+    // Importar um por um para evitar conflitos
+    let imported = 0;
+    const errors: string[] = [];
+    for (const row of unique) {
+      const { error } = await supabase.from("estoque").upsert(row, { onConflict: "produto,cor" });
+      if (error) errors.push(`${row.produto}: ${error.message}`);
+      else imported++;
+    }
+
+    return NextResponse.json({ ok: true, imported, errors: errors.slice(0, 5), total: unique.length });
   }
 
   // Inserir novo produto
