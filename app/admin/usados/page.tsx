@@ -345,43 +345,6 @@ export default function UsadosPage() {
             </div>
           ) : (
             <>
-              {/* Descontos gerais (sem modelo específico) */}
-              {Object.keys(descGerais).length > 0 && (
-                <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
-                    <h3 className="font-semibold text-[#1D1D1F]">Descontos Gerais</h3>
-                  </div>
-                  <div className="p-4">
-                    {Object.entries(descGerais).map(([cond, rows]) => (
-                      <div key={cond} className="mb-4 last:mb-0">
-                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">{cond}</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                          {rows.map((d) => {
-                            const key = `${d.condicao}|${d.detalhe}`;
-                            const isEd = editingDesc[key] !== undefined;
-                            return (
-                              <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
-                                <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
-                                {isEd ? (
-                                  <div className="flex items-center gap-1">
-                                    <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveDesconto(d); if (e.key === "Escape") { const ed = { ...editingDesc }; delete ed[key]; setEditingDesc(ed); } }} className="w-16 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
-                                    <button onClick={() => handleSaveDesconto(d)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                  </div>
-                                ) : (
-                                  <span className={`font-bold text-xs cursor-pointer hover:text-[#E8740E] ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
-                                    {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Descontos por modelo — 1 card por iPhone */}
               {Object.entries(descByModel).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, condicoes]) => (
                 <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
