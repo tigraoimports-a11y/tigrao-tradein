@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "table and rows required" }, { status: 400 });
   }
 
-  if (!["vendas", "gastos"].includes(table)) {
-    return NextResponse.json({ error: "table must be vendas or gastos" }, { status: 400 });
+  if (!["vendas", "gastos", "estoque"].includes(table)) {
+    return NextResponse.json({ error: "table must be vendas, gastos or estoque" }, { status: 400 });
   }
 
   // Importar em lotes de 100

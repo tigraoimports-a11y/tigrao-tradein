@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/admin/vendas", label: "Vendas", icon: "💰" },
   { href: "/admin/gastos", label: "Gastos", icon: "📤" },
   { href: "/admin/saldos", label: "Saldos", icon: "🏦" },
+  { href: "/admin/estoque", label: "Estoque", icon: "📦" },
   { href: "/admin/usados", label: "Avaliacao Usados", icon: "🔄" },
   { href: "/admin/importar", label: "Importar", icon: "📥" },
   { href: "/admin/precos", label: "Alteracao de Precos", icon: "🏷️" },

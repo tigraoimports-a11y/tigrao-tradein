@@ -6,7 +6,7 @@ import Papa from "papaparse";
 
 export default function ImportarPage() {
   const { password } = useAdmin();
-  const [table, setTable] = useState<"vendas" | "gastos">("vendas");
+  const [table, setTable] = useState<"vendas" | "gastos" | "estoque">("vendas");
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
@@ -43,8 +43,8 @@ export default function ImportarPage() {
         // Tentar converter números
         if (["custo", "preco_vendido", "valor", "sinal_antecipado", "entrada_pix", "valor_comprovante", "comp_alt"].includes(k)) {
           obj[k] = parseFloat(val.replace(",", ".").replace(/[^\d.-]/g, "")) || 0;
-        } else if (["qnt_parcelas", "parc_alt"].includes(k)) {
-          obj[k] = parseInt(val) || null;
+        } else if (["qnt_parcelas", "parc_alt", "qnt"].includes(k)) {
+          obj[k] = parseInt(val) || 0;
         } else if (k === "is_dep_esp") {
           obj[k] = val.toLowerCase() === "true" || val === "1" || val.toLowerCase() === "sim";
         } else {
@@ -73,9 +73,10 @@ export default function ImportarPage() {
         <div className="flex gap-4 items-center">
           <div>
             <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1">Tabela destino</p>
-            <select value={table} onChange={(e) => setTable(e.target.value as "vendas" | "gastos")} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm">
+            <select value={table} onChange={(e) => setTable(e.target.value as "vendas" | "gastos" | "estoque")} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm">
               <option value="vendas">Vendas</option>
               <option value="gastos">Gastos</option>
+              <option value="estoque">Estoque</option>
             </select>
           </div>
           <div>
@@ -105,11 +106,17 @@ export default function ImportarPage() {
               <p>data, cliente, origem (ANUNCIO/RECOMPRA/INDICACAO/ATACADO), tipo (VENDA/UPGRADE/ATACADO), produto, fornecedor, custo, preco_vendido, banco (ITAU/INFINITE/MERCADO_PAGO/ESPECIE), forma (PIX/CARTAO/DINHEIRO/FIADO), recebimento (D+0/D+1/FIADO)</p>
               <p className="mt-1 text-[#86868B]">Colunas opcionais: qnt_parcelas, bandeira, local, produto_na_troca, sinal_antecipado, banco_sinal</p>
             </div>
-          ) : (
+          ) : table === "gastos" ? (
             <div>
               <p className="font-semibold mb-1">Colunas esperadas para GASTOS:</p>
               <p>data, tipo (SAIDA/ENTRADA), categoria, valor, banco (ITAU/INFINITE/MERCADO_PAGO/ESPECIE)</p>
               <p className="mt-1 text-[#86868B]">Colunas opcionais: descricao, observacao, is_dep_esp (sim/nao)</p>
+            </div>
+          ) : (
+            <div>
+              <p className="font-semibold mb-1">Colunas esperadas para ESTOQUE:</p>
+              <p>produto, categoria (IPHONES/IPADS/MACBOOK/APPLE_WATCH/AIRPODS/ACESSORIOS/OUTROS), qnt, custo_unitario</p>
+              <p className="mt-1 text-[#86868B]">Colunas opcionais: status, fornecedor, cor, observacao</p>
             </div>
           )}
         </div>
