@@ -423,7 +423,7 @@ export default function StepUsedDevice({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="animate-fadeIn">
-      <label className="block text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3">
+      <label className="block text-[14px] font-bold text-[#1D1D1F] mb-3 text-center">
         {title}
       </label>
       {children}
