@@ -477,7 +477,7 @@ export default function AdminPage() {
             if (entries.length === 0) return null;
             return (
               <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-4">Por vendedor</h3>
+                <h3 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-4">Por Origem / Vendedor</h3>
                 <div className="space-y-2">
                   {entries.map(([v, s]) => (
                     <div key={v} className="flex items-center justify-between">

@@ -17,10 +17,13 @@ interface UsedData {
 }
 
 const VENDEDOR_WHATSAPP: Record<string, string> = {
-  andre:   "5521967442665",
-  nicolas: "5521995618747",
-  bianca:  "5521972461357",
-  anuncio: "5521995618747", // Meta Ads — cai no WhatsApp do Nicolas
+  andre:    "5521967442665",
+  nicolas:  "5521995618747",
+  bianca:   "5521972461357",
+  anuncio:  "5521995618747", // Meta Ads
+  direct:   "5521995618747", // Instagram Direct
+  story:    "5521995618747", // Instagram Stories
+  whatsapp: "5521995618747", // WhatsApp orgânico
 };
 
 export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor?: string | null }) {
