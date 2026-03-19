@@ -221,26 +221,37 @@ export default function StepUsedDevice({
         <>
           {/* Bateria */}
           <Section title="Saude da bateria">
-            <div className="bg-[#F5F5F7] rounded-2xl p-4">
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-[13px] text-[#6E6E73]">Porcentagem</span>
-                <span className={`text-[28px] font-bold ${battery >= 85 ? "text-[#34C759]" : "text-[#FF3B30]"}`}>
-                  {battery}%
+            <div className="bg-[#F5F5F7] rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min={50}
+                    max={100}
+                    value={battery}
+                    onChange={(e) => {
+                      const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                      setBattery(val);
+                    }}
+                    placeholder="Ex: 87"
+                    className="w-full px-4 py-3 pr-10 rounded-xl border border-[#D2D2D7] bg-white text-[20px] font-bold text-center text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold text-[#86868B]">%</span>
+                </div>
+                <span className={`text-[14px] font-semibold px-3 py-1.5 rounded-full ${battery >= 85 ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#FF3B30]/10 text-[#FF3B30]"}`}>
+                  {battery >= 85 ? "Boa" : "Baixa"}
                 </span>
               </div>
-              <input
-                type="range"
-                min={50}
-                max={100}
-                value={battery}
-                onChange={(e) => setBattery(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-[11px] text-[#86868B] mt-2">
-                <span>50%</span>
-                <span>100%</span>
+              {/* Passo a passo */}
+              <div className="bg-white rounded-xl p-3 border border-[#E5E5EA]">
+                <p className="text-[12px] font-semibold text-[#1D1D1F] mb-1.5">Como descobrir a saude da bateria:</p>
+                <div className="text-[11px] text-[#6E6E73] space-y-1">
+                  <p>1. Abra <strong>Ajustes</strong> no seu iPhone</p>
+                  <p>2. Toque em <strong>Bateria</strong></p>
+                  <p>3. Toque em <strong>Saude e Carregamento da Bateria</strong></p>
+                  <p>4. Veja o valor em <strong>Capacidade Maxima</strong></p>
+                </div>
               </div>
-              {/* Desconto de bateria não exibido ao cliente */}
             </div>
           </Section>
 
