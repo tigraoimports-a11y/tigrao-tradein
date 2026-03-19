@@ -65,23 +65,103 @@ export default function ImportarPage() {
     setResult(null);
 
     // Mapear campos para o formato do banco
+    const numericFields = ["custo", "preco_vendido", "valor", "sinal_antecipado", "entrada_pix", "valor_comprovante", "comp_alt", "custo_unitario"];
+    const intFields = ["qnt_parcelas", "parc_alt", "qnt", "bateria"];
+
+    // Converter data do Numbers (DD/MM/YY ou DD/MM/YYYY) para YYYY-MM-DD
+    function parseDate(val: string): string {
+      // Já no formato ISO
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+      // DD/MM/YY ou DD/MM/YYYY
+      const m = val.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+      if (m) {
+        const day = m[1].padStart(2, "0");
+        const month = m[2].padStart(2, "0");
+        let year = m[3];
+        if (year.length === 2) year = `20${year}`;
+        return `${year}-${month}-${day}`;
+      }
+      return val;
+    }
+
+    // Converter R$ 8.181,00 → 8181
+    function parseReais(val: string): number {
+      // Remove "R$", espaços, pontos de milhar, troca vírgula por ponto
+      const clean = val.replace(/R\$\s*/gi, "").replace(/\./g, "").replace(",", ".").trim();
+      return parseFloat(clean) || 0;
+    }
+
+    // Mapear banco: "ITAÚ" → "ITAU", "ITAÚ + MP" → "ITAU"
+    function parseBanco(val: string): string {
+      const v = val.toUpperCase().replace(/[ÚÜ]/g, "U").replace(/[ÃÂ]/g, "A").trim();
+      if (v.includes("ITAU") && v.includes("MP")) return "ITAU"; // banco principal
+      if (v.includes("ITAU")) return "ITAU";
+      if (v.includes("INFINITE") || v.includes("INF")) return "INFINITE";
+      if (v.includes("MERCADO") || v.includes("MP")) return "MERCADO_PAGO";
+      if (v.includes("ESPECIE") || v.includes("DINHEIRO")) return "ESPECIE";
+      return v;
+    }
+
+    // Mapear forma: "PIX", "C. CRÉDITO", "C. CRÉDITO + PIX" etc
+    function parseForma(val: string): string {
+      const v = val.toUpperCase().trim();
+      if (v.includes("CREDITO") || v.includes("CRÉDITO")) return "CARTAO";
+      if (v.includes("DEBITO") || v.includes("DÉBITO")) return "CARTAO";
+      if (v.includes("PIX")) return "PIX";
+      if (v.includes("DINHEIRO")) return "DINHEIRO";
+      if (v.includes("FIADO")) return "FIADO";
+      return v;
+    }
+
+    // Detectar recebimento
+    function parseRecebimento(forma: string, banco: string): string {
+      const f = forma.toUpperCase();
+      if (f.includes("CREDITO") || f.includes("CRÉDITO") || f.includes("LINK")) return "D+1";
+      if (f.includes("FIADO")) return "FIADO";
+      return "D+0"; // PIX, dinheiro, débito
+    }
+
     const mapped = rows.map((row) => {
       const obj: Record<string, unknown> = {};
+      // Track original values for recebimento detection
+      let rawForma = "";
+      let rawBanco = "";
+
       for (const [key, val] of Object.entries(row)) {
         const k = key.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
         if (!val || val.trim() === "") continue;
 
-        // Tentar converter números
-        if (["custo", "preco_vendido", "valor", "sinal_antecipado", "entrada_pix", "valor_comprovante", "comp_alt"].includes(k)) {
-          obj[k] = parseFloat(val.replace(",", ".").replace(/[^\d.-]/g, "")) || 0;
-        } else if (["qnt_parcelas", "parc_alt", "qnt"].includes(k)) {
-          obj[k] = parseInt(val) || 0;
+        if (k === "data") {
+          obj[k] = parseDate(val);
+        } else if (numericFields.includes(k)) {
+          obj[k] = parseReais(val);
+        } else if (intFields.includes(k)) {
+          obj[k] = parseInt(val.replace(/\D/g, "")) || 0;
+        } else if (k === "banco") {
+          rawBanco = val;
+          obj[k] = parseBanco(val);
+          // Se tem 2 bancos (ex: "ITAÚ + MP"), guardar o segundo
+          const parts = val.toUpperCase().split("+").map(s => s.trim());
+          if (parts.length > 1) {
+            obj["banco_2nd"] = parseBanco(parts[1]);
+          }
+        } else if (k === "forma") {
+          rawForma = val;
+          obj[k] = parseForma(val);
         } else if (k === "is_dep_esp") {
           obj[k] = val.toLowerCase() === "true" || val === "1" || val.toLowerCase() === "sim";
+        } else if (k === "preco_vendido" || k === "precovendido" || k === "preco") {
+          obj["preco_vendido"] = parseReais(val);
         } else {
-          obj[k] = val.trim();
+          obj[k] = val.trim().toUpperCase();
         }
       }
+
+      // Auto-detect recebimento se não veio no CSV
+      if (!obj["recebimento"] && (rawForma || rawBanco)) {
+        obj["recebimento"] = parseRecebimento(rawForma, rawBanco);
+      }
+
       return obj;
     });
 
