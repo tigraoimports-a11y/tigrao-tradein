@@ -20,6 +20,12 @@ interface StepQuoteProps {
   usedStorage: string;
   condition: ConditionData;
   tradeInValue: number;
+  // Segundo aparelho (opcional)
+  usedModel2?: string;
+  usedStorage2?: string;
+  condition2?: ConditionData;
+  tradeInValue1?: number;
+  tradeInValue2?: number;
   clienteNome: string;
   clienteWhatsApp: string;
   clienteInstagram: string;
@@ -114,6 +120,11 @@ export default function StepQuote({
   usedStorage,
   condition,
   tradeInValue,
+  usedModel2,
+  usedStorage2,
+  condition2,
+  tradeInValue1,
+  tradeInValue2,
   clienteNome,
   clienteWhatsApp,
   clienteInstagram,
@@ -122,6 +133,7 @@ export default function StepQuote({
   vendedor,
   onReset,
 }: StepQuoteProps) {
+  const hasSecond = !!(usedModel2 && usedStorage2);
   const [entradaStr, setEntradaStr] = useState("");
   const [parcelaSelecionada, setParcelaSelecionada] = useState("");
   const [sairLoading, setSairLoading] = useState(false);
@@ -152,10 +164,52 @@ export default function StepQuote({
     entradaNum, diferenca, parcelaSelecionada, quoteRestante
   );
 
-  const whatsappMsg = generateWhatsAppMsg(
-    newModel, newStorage, newPrice, usedModel, usedStorage, condition,
-    tradeInValue, clienteNome, clienteWhatsApp, clienteInstagram, diferenca, formaPagamento
-  );
+  const fmt2 = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
+  const cLines1 = getConditionLines(condition);
+  const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
+
+  let usadoSection: string;
+  if (hasSecond && condition2) {
+    const cLines2 = getConditionLines(condition2);
+    usadoSection = `*1o aparelho na troca:*
+${usedModel} ${usedStorage}
+${cLines1.join("\n")}
+Avaliacao: ${fmt2(tradeInValue1 ?? 0)}
+
+*2o aparelho na troca:*
+${usedModel2} ${usedStorage2}
+${cLines2.join("\n")}
+Avaliacao: ${fmt2(tradeInValue2 ?? 0)}
+
+*Total avaliacao: ${fmt2(tradeInValue)}*`;
+  } else {
+    usadoSection = `*Seu aparelho na troca:*
+${usedModel} ${usedStorage}
+${cLines1.join("\n")}
+Avaliacao do usado: ${fmt2(tradeInValue)}`;
+  }
+
+  const whatsappMsg = `Ola! Vi meu orcamento no site e quero fechar!
+
+*Nome:* ${clienteNome}
+*WhatsApp:* ${clienteWhatsApp}
+${instagramLine}
+*ORCAMENTO DE TROCA -- TigraoImports*
+---
+
+*Produto novo:*
+${newModel} ${newStorage} -- ${fmt2(newPrice)}
+Lacrado | 1 ano de garantia | Nota Fiscal
+
+${usadoSection}
+
+---
+*Diferenca no PIX: ${fmt2(diferenca)}*
+
+*Forma de pagamento escolhida:*
+${formaPagamento}
+
+Quero fechar o pedido!`;
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 
   const conditionLines = getConditionLines(condition);
@@ -186,16 +240,41 @@ export default function StepQuote({
       {/* Usado na troca */}
       <div className="bg-[#F5F5F7] rounded-2xl p-5">
         <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3">
-          Seu aparelho na troca
+          {hasSecond ? "Seus aparelhos na troca" : "Seu aparelho na troca"}
         </p>
-        <p className="text-[18px] font-semibold text-[#1D1D1F]">
-          {usedModel} {usedStorage}
-        </p>
-        <div className="mt-1 space-y-0.5">
-          {conditionLines.map((line, i) => (
-            <p key={i} className="text-[13px] text-[#6E6E73]">{line}</p>
-          ))}
+        <div className={hasSecond ? "space-y-3" : ""}>
+          <div>
+            <p className="text-[18px] font-semibold text-[#1D1D1F]">
+              {usedModel} {usedStorage}
+            </p>
+            <div className="mt-1 space-y-0.5">
+              {conditionLines.map((line, i) => (
+                <p key={i} className="text-[13px] text-[#6E6E73]">{line}</p>
+              ))}
+            </div>
+            {hasSecond && tradeInValue1 !== undefined && (
+              <p className="text-[13px] text-[#2ECC71] font-medium mt-1">Avaliacao: {formatBRL(tradeInValue1)}</p>
+            )}
+          </div>
+          {hasSecond && condition2 && (
+            <div className="pt-3 border-t border-[#D2D2D7]">
+              <p className="text-[18px] font-semibold text-[#1D1D1F]">
+                {usedModel2} {usedStorage2}
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {getConditionLines(condition2).map((line, i) => (
+                  <p key={i} className="text-[13px] text-[#6E6E73]">{line}</p>
+                ))}
+              </div>
+              {tradeInValue2 !== undefined && (
+                <p className="text-[13px] text-[#2ECC71] font-medium mt-1">Avaliacao: {formatBRL(tradeInValue2)}</p>
+              )}
+            </div>
+          )}
         </div>
+        {hasSecond && (
+          <p className="text-[15px] text-[#2ECC71] font-bold mt-3">Avaliacao total: {formatBRL(tradeInValue)}</p>
+        )}
       </div>
 
       {/* Pagamento */}

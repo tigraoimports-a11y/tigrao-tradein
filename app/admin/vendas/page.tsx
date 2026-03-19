@@ -10,7 +10,7 @@ const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 const VENDAS_PASSWORD = "tigrao$vendas";
 
 export default function VendasPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"nova" | "historico">("nova");
@@ -19,11 +19,15 @@ export default function VendasPage() {
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
 
+  // Admin não precisa de senha extra
+  const isAdmin = user?.role === "admin";
+
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
+    if (isAdmin) { setVendasUnlocked(true); return; }
     const unlocked = sessionStorage.getItem("vendas_unlocked");
     if (unlocked === "true") setVendasUnlocked(true);
-  }, []);
+  }, [isAdmin]);
 
   if (!vendasUnlocked) {
     return (

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
 import type { ConditionData, ModelDiscounts, WarrantyBonuses } from "@/lib/calculations";
+import { formatBRL } from "@/lib/calculations";
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
@@ -68,12 +69,27 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     hasOriginalBox: false,
   });
   const [tradeInValue, setTradeInValue] = useState(0);
+
+  // Segundo aparelho usado (opcional)
+  const [usedModel2, setUsedModel2] = useState("");
+  const [usedStorage2, setUsedStorage2] = useState("");
+  const [condition2, setCondition2] = useState<ConditionData>({
+    screenScratch: "none", sideScratch: "none", peeling: "none",
+    battery: 100, hasDamage: false, hasWarranty: false,
+    warrantyMonth: null, warrantyYear: null, hasOriginalBox: false,
+  });
+  const [tradeInValue2, setTradeInValue2] = useState(0);
+  const [hasSecondDevice, setHasSecondDevice] = useState(false);
+
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsApp, setClienteWhatsApp] = useState("");
   const [clienteInstagram, setClienteInstagram] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newStorage, setNewStorage] = useState("");
   const [newPrice, setNewPrice] = useState(0);
+
+  // Valor total da troca (1 ou 2 aparelhos)
+  const totalTradeInValue = tradeInValue + (hasSecondDevice ? tradeInValue2 : 0);
 
   useEffect(() => {
     async function load() {
@@ -106,11 +122,23 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     condition: ConditionData;
     tradeInValue: number;
   }) {
-    setUsedModel(data.usedModel);
-    setUsedStorage(data.usedStorage);
-    setCondition(data.condition);
-    setTradeInValue(data.tradeInValue);
-    setStep(2);
+    if (step === 1) {
+      // Primeiro aparelho
+      setUsedModel(data.usedModel);
+      setUsedStorage(data.usedStorage);
+      setCondition(data.condition);
+      setTradeInValue(data.tradeInValue);
+      // Vai para step 1.5 (perguntar se quer adicionar segundo)
+      setStep(1.5);
+    } else {
+      // Segundo aparelho (step === 1.7)
+      setUsedModel2(data.usedModel);
+      setUsedStorage2(data.usedStorage);
+      setCondition2(data.condition);
+      setTradeInValue2(data.tradeInValue);
+      setHasSecondDevice(true);
+      setStep(2);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -141,26 +169,13 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   function handleReset() {
     setStep(1);
     setResetKey(k => k + 1);
-    setUsedModel("");
-    setUsedStorage("");
-    setCondition({
-      screenScratch: "none",
-      sideScratch: "none",
-      peeling: "none",
-      battery: 100,
-      hasDamage: false,
-      hasWarranty: false,
-      warrantyMonth: null,
-    warrantyYear: null,
-      hasOriginalBox: false,
-    });
-    setTradeInValue(0);
-    setClienteNome("");
-    setClienteWhatsApp("");
-    setClienteInstagram("");
-    setNewModel("");
-    setNewStorage("");
-    setNewPrice(0);
+    setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
+    setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
+    setHasSecondDevice(false);
+    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false });
+    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false });
+    setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram("");
+    setNewModel(""); setNewStorage(""); setNewPrice(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -189,7 +204,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
 
   return (
     <div>
-      <StepBar current={step} />
+      <StepBar current={step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4} />
 
       <div className="animate-fadeIn">
         {step === 1 && (
@@ -207,12 +222,61 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
           />
         )}
 
+        {step === 1.5 && (
+          <div className="space-y-6 py-6">
+            <div className="text-center">
+              <p className="text-[15px] text-[#86868B] mb-1">Avaliacao do seu aparelho:</p>
+              <p className="text-3xl font-bold text-[#2ECC71]">{formatBRL(tradeInValue)}</p>
+              <p className="text-xs text-[#86868B] mt-1">{usedModel} {usedStorage}</p>
+            </div>
+            <div className="bg-[#F5F5F7] rounded-2xl p-6 text-center space-y-4">
+              <p className="text-[15px] font-semibold text-[#1D1D1F]">Deseja adicionar mais um aparelho na troca?</p>
+              <p className="text-[13px] text-[#86868B]">Voce pode dar ate 2 aparelhos usados para comprar 1 novo</p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setStep(1.7)}
+                  className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
+                >
+                  Sim, adicionar outro aparelho
+                </button>
+                <button
+                  onClick={() => setStep(2)}
+                  className="px-6 py-3 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] font-semibold hover:bg-[#E8E8ED] transition-colors"
+                >
+                  Nao, continuar com 1
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 1.7 && (
+          <div>
+            <div className="bg-[#2ECC71]/10 border border-[#2ECC71]/30 rounded-xl px-4 py-3 mb-4">
+              <p className="text-xs text-[#2ECC71] font-medium">1o aparelho: {usedModel} {usedStorage} — {formatBRL(tradeInValue)}</p>
+            </div>
+            <p className="text-[17px] font-bold text-[#1D1D1F] mb-4">Agora avalie o 2o aparelho:</p>
+            <StepUsedDevice
+              key={resetKey + 100}
+              usedValues={usedData.usedValues}
+              excludedModels={usedData.excludedModels}
+              modelDiscounts={usedData.modelDiscounts}
+              warrantyBonuses={{
+                ate3m: config.bonusGarantiaAte3m,
+                de3a6m: config.bonusGarantia3a6m,
+                acima6m: config.bonusGarantia6mMais,
+              }}
+              onNext={handleStep1Complete}
+            />
+          </div>
+        )}
+
         {step === 2 && (
           <StepNewDevice
             products={products}
-            tradeInValue={tradeInValue}
+            tradeInValue={totalTradeInValue}
             onNext={handleStep2Complete}
-            onBack={() => setStep(1)}
+            onBack={() => setStep(hasSecondDevice ? 1.7 : 1)}
           />
         )}
 
@@ -231,7 +295,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
             usedModel={usedModel}
             usedStorage={usedStorage}
             condition={condition}
-            tradeInValue={tradeInValue}
+            tradeInValue={totalTradeInValue}
+            usedModel2={hasSecondDevice ? usedModel2 : undefined}
+            usedStorage2={hasSecondDevice ? usedStorage2 : undefined}
+            condition2={hasSecondDevice ? condition2 : undefined}
+            tradeInValue1={hasSecondDevice ? tradeInValue : undefined}
+            tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
             clienteNome={clienteNome}
             clienteWhatsApp={clienteWhatsApp}
             clienteInstagram={clienteInstagram}
