@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Login ou senha incorretos" }, { status: 401 });
   }
 
+  // Retorna o token de API (admin password) para o client usar nas chamadas
+  const apiToken = process.env.ADMIN_PASSWORD ?? "";
+
   return NextResponse.json({
     ok: true,
     user: {
@@ -28,5 +31,6 @@ export async function POST(req: NextRequest) {
       login: user.login,
       role: user.role,
     },
+    apiToken,
   });
 }

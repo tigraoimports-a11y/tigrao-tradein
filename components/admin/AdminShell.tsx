@@ -61,11 +61,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       if (authRes.ok) {
         const json = await authRes.json();
         if (json.ok && json.user) {
-          // Usar a senha admin global para APIs existentes
-          const adminPw = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || inputSenha;
           setUser(json.user);
-          setPassword(adminPw);
-          localStorage.setItem("admin_pw", adminPw);
+          setPassword(json.apiToken || inputSenha);
+          localStorage.setItem("admin_pw", json.apiToken || inputSenha);
           localStorage.setItem("admin_user", JSON.stringify(json.user));
           setLoading(false);
           return;
