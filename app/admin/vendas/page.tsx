@@ -7,12 +7,70 @@ import type { Venda } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
+const VENDAS_PASSWORD = "tigrao$vendas";
+
 export default function VendasPage() {
   const { password } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"nova" | "historico">("nova");
   const [saving, setSaving] = useState(false);
+  const [vendasUnlocked, setVendasUnlocked] = useState(false);
+  const [vendasPw, setVendasPw] = useState("");
+  const [vendasPwError, setVendasPwError] = useState(false);
+
+  // Verificar se já desbloqueou nesta sessão
+  useEffect(() => {
+    const unlocked = sessionStorage.getItem("vendas_unlocked");
+    if (unlocked === "true") setVendasUnlocked(true);
+  }, []);
+
+  if (!vendasUnlocked) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-full max-w-sm">
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="text-center">
+              <div className="text-3xl mb-2">🔒</div>
+              <h2 className="text-lg font-bold text-[#1D1D1F]">Area Restrita</h2>
+              <p className="text-[#86868B] text-xs mt-1">Digite a senha para acessar Vendas</p>
+            </div>
+            <input
+              type="password"
+              placeholder="Senha de Vendas"
+              value={vendasPw}
+              onChange={(e) => { setVendasPw(e.target.value); setVendasPwError(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (vendasPw === VENDAS_PASSWORD) {
+                    setVendasUnlocked(true);
+                    sessionStorage.setItem("vendas_unlocked", "true");
+                  } else {
+                    setVendasPwError(true);
+                  }
+                }
+              }}
+              className="w-full px-4 py-3 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E]"
+            />
+            {vendasPwError && <p className="text-[#E74C3C] text-sm text-center">Senha incorreta</p>}
+            <button
+              onClick={() => {
+                if (vendasPw === VENDAS_PASSWORD) {
+                  setVendasUnlocked(true);
+                  sessionStorage.setItem("vendas_unlocked", "true");
+                } else {
+                  setVendasPwError(true);
+                }
+              }}
+              className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
+            >
+              Desbloquear
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [msg, setMsg] = useState("");
 
   // Form state

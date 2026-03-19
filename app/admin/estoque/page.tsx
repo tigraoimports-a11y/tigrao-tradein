@@ -81,7 +81,8 @@ function getModeloBase(produto: string, categoria: string): string {
 }
 
 export default function EstoquePage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
+  const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"estoque" | "seminovos" | "acaminho" | "novo">("estoque");
@@ -101,7 +102,7 @@ export default function EstoquePage() {
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": userName } });
       if (res.ok) { const json = await res.json(); setEstoque(json.data ?? []); }
     } catch { /* ignore */ }
     setLoading(false);
@@ -114,7 +115,7 @@ export default function EstoquePage() {
   const apiPatch = async (id: string, fields: Record<string, unknown>) => {
     await fetch("/api/estoque", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
       body: JSON.stringify({ id, ...fields }),
     });
   };
@@ -144,7 +145,7 @@ export default function EstoquePage() {
     if (!form.produto) { setMsg("Preencha o nome do produto"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
       body: JSON.stringify({
         produto: form.produto, categoria: form.categoria,
         qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
@@ -168,7 +169,7 @@ export default function EstoquePage() {
       const rows = await res.json();
       const importRes = await fetch("/api/estoque", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
         body: JSON.stringify({ action: "import", rows }),
       });
       const json = await importRes.json();
@@ -261,7 +262,7 @@ export default function EstoquePage() {
           )}
           <button onClick={async () => {
             if (!confirm(`Excluir ${p.produto}?`)) return;
-            await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: p.id }) });
+            await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
             setEstoque((prev) => prev.filter((r) => r.id !== p.id));
           }} className="text-[#86868B] hover:text-red-500 text-xs px-1">X</button>
         </td>

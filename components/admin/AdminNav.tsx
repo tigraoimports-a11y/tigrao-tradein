@@ -3,26 +3,35 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV_ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: "📊" },
-  { href: "/admin/vendas", label: "Vendas", icon: "💰" },
-  { href: "/admin/gastos", label: "Gastos", icon: "📤" },
-  { href: "/admin/saldos", label: "Saldos", icon: "🏦" },
-  { href: "/admin/estoque", label: "Estoque", icon: "📦" },
-  { href: "/admin/encomendas", label: "Encomendas", icon: "🛒" },
-  { href: "/admin/cotacao", label: "Cotacao", icon: "💬" },
-  { href: "/admin/usados", label: "Avaliacao Usados", icon: "🔄" },
-  { href: "/admin/importar", label: "Importar", icon: "📥" },
-  { href: "/admin/precos", label: "Alteracao de Precos", icon: "🏷️" },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  roles: string[]; // quais roles podem ver
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: "📊", roles: ["admin"] },
+  { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin"] },
+  { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin"] },
+  { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
+  { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque"] },
+  { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
+  { href: "/admin/cotacao", label: "Cotacao", icon: "💬", roles: ["admin"] },
+  { href: "/admin/usados", label: "Avaliacao Usados", icon: "🔄", roles: ["admin"] },
+  { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
+  { href: "/admin/precos", label: "Alteracao de Precos", icon: "🏷️", roles: ["admin"] },
 ];
 
-export default function AdminNav() {
+export default function AdminNav({ userRole }: { userRole: string }) {
   const pathname = usePathname();
+
+  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(userRole));
 
   return (
     <div className="bg-white border-b border-[#D2D2D7] px-6 overflow-x-auto">
       <nav className="flex gap-1 max-w-[1400px] mx-auto">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
