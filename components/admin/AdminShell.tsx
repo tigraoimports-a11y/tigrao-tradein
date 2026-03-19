@@ -159,6 +159,21 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password } });
+                const json = await res.json();
+                if (json.ok) {
+                  alert("Desfeito: " + json.undone);
+                  window.location.reload();
+                } else {
+                  alert(json.error || "Nada para desfazer");
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+            >
+              Desfazer
+            </button>
             <span className="text-sm text-[#86868B]">
               {user.nome} <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-[#F5F5F7]">{user.role}</span>
             </span>
