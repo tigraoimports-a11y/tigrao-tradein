@@ -14,8 +14,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 -- Inserir usuários iniciais
 INSERT INTO usuarios (nome, login, senha, role) VALUES
-  ('André', 'andre', 'tigrao2026', 'admin'),
-  ('Nicolas', 'nicolas', 'nicolas2026', 'admin'),
+  ('Admin', 'admin', '13A*avast', 'admin'),
   ('Bianca', 'bianca', 'bianca2026', 'estoque'),
   ('Laynne', 'laynne', 'laynne2026', 'estoque')
 ON CONFLICT (login) DO NOTHING;
