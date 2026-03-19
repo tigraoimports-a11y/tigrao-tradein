@@ -167,6 +167,7 @@ export default function VendasPage() {
       band_alt: form.band_alt || null,
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
+      status_pagamento: "AGUARDANDO",
     };
 
     // Se tem troca, enviar dados do seminovo para criar no estoque
