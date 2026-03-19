@@ -26,8 +26,31 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+
+  // Extrair dados do seminovo antes de inserir a venda
+  const seminovoData = body._seminovo;
+  delete body._seminovo;
+
   const { data, error } = await supabase.from("vendas").insert(body).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Se tem produto na troca, criar item no estoque como SEMINOVO
+  if (seminovoData && seminovoData.produto) {
+    await supabase.from("estoque").insert({
+      produto: seminovoData.produto,
+      categoria: "IPHONES",
+      qnt: 1,
+      custo_unitario: seminovoData.valor || 0,
+      status: "EM ESTOQUE",
+      tipo: "SEMINOVO",
+      cor: seminovoData.cor || null,
+      observacao: seminovoData.observacao || null,
+      bateria: seminovoData.bateria || null,
+      cliente: body.cliente || null,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
   return NextResponse.json({ ok: true, data });
 }
 

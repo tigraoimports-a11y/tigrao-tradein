@@ -30,8 +30,10 @@ export default function VendasPage() {
     cliente: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", banco: "ITAU", forma: "PIX",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-    entrada_pix: "", banco_pix: "", banco_2nd: "", banco_alt: "",
+    entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
+    // Dados do aparelho na troca (para criar seminovo)
+    troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
   });
 
   const fetchVendas = useCallback(async () => {
@@ -102,19 +104,27 @@ export default function VendasPage() {
     );
   }
 
-  const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
+  const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
 
   // Cálculos em tempo real
   const custo = parseFloat(form.custo) || 0;
   const preco = parseFloat(form.preco_vendido) || 0;
+  const valorTroca = parseFloat(form.produto_na_troca) || 0;
+  const entradaPix = parseFloat(form.entrada_pix) || 0;
+  const valorCartao = preco - valorTroca - entradaPix;
   const lucro = preco - custo;
   const margem = preco > 0 ? (lucro / preco) * 100 : 0;
   const parcelas = parseInt(form.qnt_parcelas) || 0;
   const taxa = form.forma === "CARTAO"
     ? getTaxa(form.banco, form.bandeira || null, parcelas, form.forma)
-    : 0;
-  const comprovante = taxa > 0 ? calcularBruto(preco, taxa) : preco;
-  const recebimento = calcularRecebimento(form.forma, parcelas || null);
+    : form.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, parcelas, "CARTAO") : 0;
+  const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
+  const recebimento = calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null);
+
+  // Resumo financeiro
+  const temTroca = valorTroca > 0;
+  const temEntradaPix = entradaPix > 0;
+  const temCartao = form.forma === "CARTAO" || form.forma === "LINK";
 
   const handleSubmit = async () => {
     if (!form.cliente || !form.produto || !form.preco_vendido) {
@@ -123,25 +133,32 @@ export default function VendasPage() {
     }
     setSaving(true);
     setMsg("");
-    const payload = {
+
+    // Determinar banco principal
+    let banco = form.banco;
+    if (form.forma === "LINK") banco = "MERCADO_PAGO";
+    if (form.forma === "PIX") banco = form.banco_pix || "ITAU";
+    if (form.forma === "DINHEIRO") banco = "ESPECIE";
+
+    const payload: Record<string, unknown> = {
       data: form.data,
       cliente: form.cliente,
       origem: form.origem,
-      tipo: form.tipo,
+      tipo: temTroca ? "UPGRADE" : form.tipo,
       produto: form.produto,
       fornecedor: form.fornecedor || null,
       custo,
       preco_vendido: preco,
-      banco: form.banco,
-      forma: form.forma,
-      recebimento,
+      banco,
+      forma: form.forma === "LINK" ? "CARTAO" : form.forma,
+      recebimento: form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
       qnt_parcelas: parcelas || null,
       bandeira: form.bandeira || null,
       valor_comprovante: comprovante || null,
       local: form.local || null,
-      produto_na_troca: form.produto_na_troca || null,
-      entrada_pix: parseFloat(form.entrada_pix) || 0,
-      banco_pix: form.banco_pix || null,
+      produto_na_troca: temTroca ? String(valorTroca) : null,
+      entrada_pix: entradaPix,
+      banco_pix: temEntradaPix ? (form.banco_pix || "ITAU") : null,
       banco_2nd: form.banco_2nd || null,
       banco_alt: form.banco_alt || null,
       parc_alt: parseInt(form.parc_alt) || null,
@@ -149,6 +166,17 @@ export default function VendasPage() {
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
     };
+
+    // Se tem troca, enviar dados do seminovo para criar no estoque
+    if (temTroca && form.troca_produto) {
+      payload._seminovo = {
+        produto: form.troca_produto,
+        valor: valorTroca,
+        cor: form.troca_cor || null,
+        bateria: form.troca_bateria ? parseInt(form.troca_bateria as string) : null,
+        observacao: form.troca_obs || null,
+      };
+    }
 
     const res = await fetch("/api/vendas", {
       method: "POST",
@@ -207,42 +235,88 @@ export default function VendasPage() {
           </div>
 
           {/* Row 3: Valores */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className={labelCls}>Custo (R$)</p><input type="number" value={form.custo} onChange={(e) => set("custo", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Preco Vendido (R$)</p><input type="number" value={form.preco_vendido} onChange={(e) => set("preco_vendido", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Banco</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
-              <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option><option>ESPECIE</option>
-            </select></div>
-            <div><p className={labelCls}>Forma</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
-              <option>PIX</option><option>CARTAO</option><option>DINHEIRO</option><option>FIADO</option>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div><p className={labelCls}>Custo (R$)</p><input type="number" value={form.custo} onChange={(e) => set("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
+            <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="number" value={form.preco_vendido} onChange={(e) => set("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
+            <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
+              <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option>
             </select></div>
           </div>
 
-          {/* Cartão details */}
-          {form.forma === "CARTAO" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
-              <div><p className={labelCls}>Parcelas</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
-              <div><p className={labelCls}>Bandeira</p><select value={form.bandeira} onChange={(e) => set("bandeira", e.target.value)} className={selectCls}>
-                <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+          {/* FORMA DE PAGAMENTO */}
+          <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+            <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
+                <option value="PIX">PIX (Itau/Infinite) — D+0</option>
+                <option value="LINK">Link Mercado Pago — D+0</option>
+                <option value="CARTAO">Maquina Cartao (Itau/Infinite) — D+1</option>
+                <option value="DINHEIRO">Dinheiro — D+0</option>
+                <option value="FIADO">Fiado</option>
               </select></div>
-              <div className="col-span-2 flex items-end gap-4 text-sm">
-                <span className="text-[#86868B]">Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                <span className="text-[#86868B]">Comprovante: <strong className="text-[#1D1D1F]">{fmt(comprovante)}</strong></span>
+
+              {form.forma === "PIX" && (
+                <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
+                  <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                </select></div>
+              )}
+
+              {(form.forma === "CARTAO") && (
+                <>
+                  <div><p className={labelCls}>Maquina</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
+                    <option>ITAU</option><option>INFINITE</option>
+                  </select></div>
+                  <div><p className={labelCls}>Parcelas</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
+                  <div><p className={labelCls}>Bandeira</p><select value={form.bandeira} onChange={(e) => set("bandeira", e.target.value)} className={selectCls}>
+                    <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+                  </select></div>
+                  {taxa > 0 && <div className="flex items-end text-sm gap-3">
+                    <span className="text-[#86868B]">Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+                    <span className="text-[#86868B]">Comprovante: <strong>{fmt(comprovante)}</strong></span>
+                  </div>}
+                </>
+              )}
+
+              {form.forma === "LINK" && (
+                <div><p className={labelCls}>Parcelas no Link</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
+              )}
+            </div>
+
+            {/* Entrada PIX (pagamento misto) */}
+            <div className="border-t border-[#E8E8ED] pt-3">
+              <p className="text-xs text-[#86868B] mb-2">Pagamento misto? (cliente deu PIX + cartao/link)</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div><p className={labelCls}>Entrada no PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => set("entrada_pix", e.target.value)} placeholder="0" className={inputCls} /></div>
+                {entradaPix > 0 && (
+                  <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
+                    <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                  </select></div>
+                )}
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Troca / Sinal */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className={labelCls}>Produto na troca</p><input value={form.produto_na_troca} onChange={(e) => set("produto_na_troca", e.target.value)} placeholder="iPhone usado (se houver)" className={inputCls} /></div>
-            <div><p className={labelCls}>Sinal antecipado (R$)</p><input type="number" value={form.sinal_antecipado} onChange={(e) => set("sinal_antecipado", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Banco do sinal</p><input value={form.banco_sinal} onChange={(e) => set("banco_sinal", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => set("entrada_pix", e.target.value)} className={inputCls} /></div>
+          {/* PRODUTO NA TROCA */}
+          <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+            <p className="text-sm font-bold text-[#1D1D1F]">Cliente deu produto na troca?</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => set("produto_na_troca", e.target.value)} placeholder="0" className={inputCls} /></div>
+              {temTroca && (
+                <>
+                  <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
+                  <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} className={inputCls} /></div>
+                  <div><p className={labelCls}>Bateria %</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="92" className={inputCls} /></div>
+                  <div className="col-span-2"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Grade, caixa, detalhes..." className={inputCls} /></div>
+                </>
+              )}
+            </div>
+            {temTroca && <p className="text-xs text-[#2ECC71]">O produto na troca sera adicionado ao estoque como SEMINOVO automaticamente</p>}
           </div>
 
           {/* Preview */}
           <div className="p-4 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl text-white">
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
               <div>
                 <p className="text-xs text-white/60">Lucro</p>
                 <p className={`text-lg font-bold ${lucro >= 0 ? "text-green-400" : "text-red-400"}`}>{fmt(lucro)}</p>
@@ -259,7 +333,18 @@ export default function VendasPage() {
                 <p className="text-xs text-white/60">Taxa</p>
                 <p className="text-lg font-bold text-white">{taxa > 0 ? `${taxa.toFixed(2)}%` : "—"}</p>
               </div>
+              {temTroca && <div>
+                <p className="text-xs text-white/60">Troca</p>
+                <p className="text-lg font-bold text-[#2ECC71]">{fmt(valorTroca)}</p>
+              </div>}
             </div>
+            {(temTroca || temEntradaPix) && (
+              <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 text-center">
+                {temTroca && <span>Troca: {fmt(valorTroca)} </span>}
+                {temEntradaPix && <span>+ PIX: {fmt(entradaPix)} ({form.banco_pix}) </span>}
+                {temCartao && valorCartao > 0 && <span>+ {form.forma === "LINK" ? "Link MP" : `Cartao ${form.banco}`}: {fmt(valorCartao)}</span>}
+              </div>
+            )}
           </div>
 
           <button
