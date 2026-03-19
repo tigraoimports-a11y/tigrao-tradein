@@ -59,7 +59,23 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, ...fields } = await req.json();
+  const body = await req.json();
+
+  // Bulk update: finalizar todas vendas de uma data
+  if (body.action === "finalizar_dia") {
+    const { data: dia } = body;
+    if (!dia) return NextResponse.json({ error: "data required" }, { status: 400 });
+    const { data: updated, error } = await supabase
+      .from("vendas")
+      .update({ status_pagamento: "FINALIZADO" })
+      .eq("data", dia)
+      .eq("status_pagamento", "AGUARDANDO")
+      .select("id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, finalizadas: updated?.length || 0 });
+  }
+
+  const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const { error } = await supabase.from("vendas").update(fields).eq("id", id);

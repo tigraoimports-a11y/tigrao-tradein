@@ -143,6 +143,28 @@ export async function POST(req: NextRequest) {
     const hoje = hojeISO();
 
     switch (command) {
+      case "/finalizar": {
+        // Finalizar todas as vendas AGUARDANDO de hoje
+        const { data: finalizadas, error: finErr } = await supabase
+          .from("vendas")
+          .update({ status_pagamento: "FINALIZADO" })
+          .eq("data", hoje)
+          .eq("status_pagamento", "AGUARDANDO")
+          .select("id, cliente");
+        if (finErr) {
+          await sendTelegramMessage(`❌ Erro: ${finErr.message}`, chatId);
+        } else {
+          const n = finalizadas?.length || 0;
+          if (n === 0) {
+            await sendTelegramMessage(`✅ Nenhuma venda pendente hoje.`, chatId);
+          } else {
+            const nomes = finalizadas!.map(v => v.cliente).join(", ");
+            await sendTelegramMessage(`✅ ${n} venda(s) finalizada(s) hoje:\n${nomes}`, chatId);
+          }
+        }
+        break;
+      }
+
       case "/status": {
         await sendTelegramMessage(
           [
