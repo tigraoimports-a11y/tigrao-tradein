@@ -7,7 +7,7 @@ import {
   getStoragesForModel,
   getProductPrice,
 } from "@/lib/sheets";
-import { formatBRL } from "@/lib/calculations";
+import { formatBRL, calculateQuote } from "@/lib/calculations";
 
 interface StepNewDeviceProps {
   products: NewProduct[];
@@ -263,7 +263,12 @@ export default function StepNewDevice({
       )}
 
       {/* Comparação lado a lado */}
-      {bothSelected && diffA !== null && diffB !== null && (
+      {bothSelected && diffA !== null && diffB !== null && (() => {
+        const quoteA = calculateQuote(tradeInValue, price!);
+        const quoteB = calculateQuote(tradeInValue, priceB!);
+        const getInst = (q: typeof quoteA, n: number) => q.installments.find(i => i.parcelas === n);
+
+        return (
         <div className="animate-fadeIn">
           <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3">
             Comparacao
@@ -274,9 +279,17 @@ export default function StepNewDevice({
               <p className="text-[13px] font-semibold text-[#1D1D1F] leading-tight">{model}</p>
               <p className="text-[12px] text-[#86868B]">{storage}</p>
               <p className="text-[15px] font-bold text-[#1D1D1F]">{fmt(price!)}</p>
-              <div className="border-t border-[#D2D2D7] pt-2 mt-1">
-                <p className="text-[11px] text-[#86868B]">Voce paga (PIX)</p>
-                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffA)}</p>
+              <div className="border-t border-[#D2D2D7] pt-2 mt-1 space-y-1">
+                <p className="text-[11px] text-[#86868B]">Voce paga:</p>
+                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffA)} <span className="text-[11px] font-normal">PIX</span></p>
+                {[6, 12, 21].map(n => {
+                  const inst = getInst(quoteA, n);
+                  return inst ? (
+                    <p key={n} className="text-[11px] text-[#6E6E73]">
+                      {n}x de <span className="font-semibold text-[#1D1D1F]">{fmt(inst.valorParcela)}</span>
+                    </p>
+                  ) : null;
+                })}
               </div>
               <button
                 onClick={() => { cancelCompare(); onNext({ newModel: model, newStorage: storage, newPrice: price! }); }}
@@ -291,9 +304,17 @@ export default function StepNewDevice({
               <p className="text-[13px] font-semibold text-[#1D1D1F] leading-tight">{modelB}</p>
               <p className="text-[12px] text-[#86868B]">{storageB}</p>
               <p className="text-[15px] font-bold text-[#1D1D1F]">{fmt(priceB!)}</p>
-              <div className="border-t border-[#D2D2D7] pt-2 mt-1">
-                <p className="text-[11px] text-[#86868B]">Voce paga (PIX)</p>
-                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffB)}</p>
+              <div className="border-t border-[#D2D2D7] pt-2 mt-1 space-y-1">
+                <p className="text-[11px] text-[#86868B]">Voce paga:</p>
+                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffB)} <span className="text-[11px] font-normal">PIX</span></p>
+                {[6, 12, 21].map(n => {
+                  const inst = getInst(quoteB, n);
+                  return inst ? (
+                    <p key={n} className="text-[11px] text-[#6E6E73]">
+                      {n}x de <span className="font-semibold text-[#1D1D1F]">{fmt(inst.valorParcela)}</span>
+                    </p>
+                  ) : null;
+                })}
               </div>
               <button
                 onClick={() => { cancelCompare(); onNext({ newModel: modelB, newStorage: storageB, newPrice: priceB! }); }}
@@ -304,7 +325,8 @@ export default function StepNewDevice({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Botões */}
       <div className="flex gap-3">

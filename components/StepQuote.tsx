@@ -171,12 +171,12 @@ export default function StepQuote({
   let usadoSection: string;
   if (hasSecond && condition2) {
     const cLines2 = getConditionLines(condition2);
-    usadoSection = `*1o aparelho na troca:*
+    usadoSection = `*PRODUTO 1 na troca:*
 ${usedModel} ${usedStorage}
 ${cLines1.join("\n")}
 Avaliacao: ${fmt2(tradeInValue1 ?? 0)}
 
-*2o aparelho na troca:*
+*PRODUTO 2 na troca:*
 ${usedModel2} ${usedStorage2}
 ${cLines2.join("\n")}
 Avaliacao: ${fmt2(tradeInValue2 ?? 0)}
