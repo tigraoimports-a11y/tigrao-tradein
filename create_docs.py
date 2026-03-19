@@ -253,7 +253,7 @@ def build_story(st):
     toc_sections = [
         ('1',  'Visao Geral do Projeto'),
         ('2',  'Stack Tecnica'),
-        ('3',  'Fluxo do Aplicativo (3 Etapas)'),
+        ('3',  'Fluxo do Aplicativo (4 Etapas)'),
         ('4',  'Estrutura de Arquivos do Projeto'),
         ('5',  'Variaveis de Ambiente (.env.local)'),
         ('6',  'Banco de Dados Supabase'),
@@ -266,6 +266,11 @@ def build_story(st):
         ('13', 'Deploy na Vercel'),
         ('14', 'Checklist de Setup do Zero'),
         ('15', 'Erros Comuns e Solucoes'),
+        ('16', 'Notificacoes Telegram — Google Apps Script'),
+        ('17', 'Links por Vendedor — Rastreamento de Atribuicao'),
+        ('18', 'Comparador de Modelos'),
+        ('19', 'Painel de Precos — Supabase'),
+        ('20', 'Filtros do Dashboard'),
     ]
     for num, title in toc_sections:
         row_t = Table(
@@ -368,7 +373,7 @@ def build_story(st):
     # ═══════════════════════════════════════════════════════════════════════════
     # SECAO 3 — FLUXO DO APLICATIVO
     # ═══════════════════════════════════════════════════════════════════════════
-    story.append(section_heading(3, 'Fluxo do Aplicativo (3 Etapas)', st))
+    story.append(section_heading(3, 'Fluxo do Aplicativo (4 Etapas)', st))
     story.append(Spacer(1, 6))
 
     story.append(Paragraph('<b>Etapa 1 — Aparelho Usado do Cliente</b>', st['h2']))
@@ -427,18 +432,27 @@ def build_story(st):
         '|   |-- globals.css                 # Estilos globais + variaveis CSS',
         '|   |',
         '|   |-- api/',
-        '|       |-- produtos/route.ts       # Fetch + parse planilha produtos novos',
+        '|       |-- produtos/route.ts       # Fetch + parse planilha produtos novos (Supabase > Sheets)',
         '|       |-- usados/route.ts         # Fetch + parse planilha avaliacao usados',
         '|       |-- config/route.ts         # Fetch + parse configuracoes',
         '|       |-- leads/route.ts          # Salvar lead no Supabase + notificar Z-API',
         '|       |-- admin/',
         '|           |-- stats/route.ts      # Dashboard admin (requer senha)',
+        '|           |-- precos/route.ts     # CRUD de precos no Supabase + notif. Telegram',
+        '|           |-- contatar/route.ts   # Marcar lead como contactado',
+        '|           |-- followup/route.ts   # Enviar follow-up WhatsApp via Z-API',
+        '|',
+        '|-- app/admin/',
+        '|   |-- page.tsx                    # Dashboard admin (leads + KPIs + analytics)',
+        '|   |-- precos/',
+        '|       |-- page.tsx                # Painel de edicao de precos (Secao 19)',
         '|',
         '|-- components/',
-        '|   |-- TradeInCalculator.tsx       # Componente principal (state machine 3 steps)',
+        '|   |-- TradeInCalculator.tsx       # State machine 4 etapas + mapeamento de vendedores',
         '|   |-- StepUsedDevice.tsx          # Etapa 1: selecao + condicao do usado',
-        '|   |-- StepNewDevice.tsx           # Etapa 2: selecao do aparelho novo',
-        '|   |-- StepQuote.tsx               # Etapa 3: cotacao formatada + botoes',
+        '|   |-- StepNewDevice.tsx           # Etapa 2: selecao + comparador de modelos',
+        '|   |-- StepClientData.tsx          # Etapa 3: nome, WhatsApp e Instagram do cliente',
+        '|   |-- StepQuote.tsx               # Etapa 4: cotacao formatada + botoes',
         '|   |-- StepBar.tsx                 # Barra de progresso das etapas',
         '|',
         '|-- lib/',
@@ -503,6 +517,10 @@ def build_story(st):
         '',
         '# Admin Dashboard',
         'ADMIN_PASSWORD=senha_segura_aqui',
+        '',
+        '# Telegram (notificacao ao Nicolas quando preco e alterado no painel)',
+        'TELEGRAM_BOT_TOKEN=8267667230:AAHD...',
+        'TELEGRAM_CHAT_ID=6076216940',
     ], st))
     story.append(Spacer(1, 6))
     story.append(Paragraph(
@@ -525,6 +543,8 @@ def build_story(st):
             ('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'Chave anonima Supabase (JWT legado, formato eyJ...)', 'Publico'),
             ('SUPABASE_SERVICE_ROLE_KEY', 'Chave service role Supabase (JWT legado, formato eyJ...)', 'Servidor'),
             ('ADMIN_PASSWORD', 'Senha para acessar o dashboard admin', 'Servidor'),
+            ('TELEGRAM_BOT_TOKEN', 'Token do bot Telegram (via @BotFather) para notificar Nicolas', 'Servidor'),
+            ('TELEGRAM_CHAT_ID', 'Chat ID do Nicolas no Telegram (6076216940)', 'Servidor'),
         ],
         col_widths=[58*mm, PAGE_W - 2*MARGIN - 84*mm, 26*mm]
     ))
@@ -887,13 +907,29 @@ def build_story(st):
     ))
     story.append(Spacer(1, 8))
 
+    story.append(Paragraph('<b>Botoes do Header do Dashboard</b>', st['h2']))
+    story.append(info_table(
+        ['Botao', 'Acao'],
+        [
+            ('Alterar Valores', 'Abre o painel /admin/precos para editar precos dos produtos (Secao 19)'),
+            ('Atualizar', 'Recarrega os dados das simulacoes sem sair da pagina'),
+            ('Sair', 'Limpa a senha salva no localStorage e retorna a tela de login'),
+        ],
+        col_widths=[40*mm, PAGE_W - 2*MARGIN - 40*mm]
+    ))
+    story.append(Spacer(1, 8))
+
     story.append(Paragraph('<b>Tabela de Simulacoes</b>', st['h2']))
     for item in [
         'Abas para filtrar: Todos / Gostei / Sair',
         'Campo de busca por nome, WhatsApp ou modelo do produto',
-        'Botao WhatsApp em cada linha — abre conversa com mensagem pre-preenchida da simulacao',
-        'Colunas: data/hora, nome, WhatsApp, modelo novo, modelo usado, avaliacao, diferenca, status',
+        'Botao WhatsApp em cada linha — envia mensagem de follow-up via Z-API automaticamente',
+        'Colunas: data/hora, nome, WhatsApp, modelo novo, modelo usado, avaliacao, diferenca, vendedor, status',
+        'Coluna Vendedor: exibe qual link foi usado (?ref=andre, ?ref=nicolas ou ?ref=bianca)',
         'Ordenacao por data decrescente (mais recente primeiro)',
+        'Bloco lateral "Por vendedor": total de simulacoes agrupado por vendedor',
+        "Botao 'Alterar Valores' no header abre /admin/precos para editar precos",
+        'Botao WhatsApp da tabela abre wa.me link no browser do admin — mensagem sai do numero de quem estiver usando o dashboard (sem Z-API)',
     ]:
         story.append(Paragraph(f'• {item}', st['bullet']))
     story.append(Spacer(1, 8))
@@ -1448,6 +1484,302 @@ def build_story(st):
     ]))
     story.append(t_fl)
     story.append(Spacer(1, 14))
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECAO 17 — LINKS POR VENDEDOR
+    # ═══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(section_heading(17, 'Links por Vendedor — Rastreamento de Atribuicao', st))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph(
+        'Cada vendedor possui um link exclusivo com o parametro ?ref= na URL. Quando o cliente '
+        'acessa pelo link do vendedor, o app registra essa atribuicao e, ao clicar em "fechar pedido", '
+        'abre o WhatsApp direto do vendedor responsavel (nao o numero padrao da loja).',
+        st['body']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Links dos Vendedores</b>', st['h2']))
+    story.append(info_table(
+        ['Vendedor / Ref', 'Link', 'WhatsApp Destino'],
+        [
+            ('Andre',   'tigrao-tradein.vercel.app/?ref=andre',   '+55 21 96744-2665'),
+            ('Nicolas', 'tigrao-tradein.vercel.app/?ref=nicolas', '+55 21 99561-8747'),
+            ('Bianca',  'tigrao-tradein.vercel.app/?ref=bianca',  '+55 21 97246-1357'),
+            ('Anuncio (Meta Ads)', 'tigrao-tradein.vercel.app/?ref=anuncio', '+55 21 99561-8747 (Nicolas)'),
+        ],
+        col_widths=[40*mm, 82*mm, PAGE_W - 2*MARGIN - 122*mm]
+    ))
+    story.append(Paragraph(
+        'Nota: ref=anuncio e usado para rastrear clientes vindos de anuncios do Meta Ads (Facebook/Instagram). '
+        'O pedido cai no WhatsApp do Nicolas, que gerencia as vendas de anuncios.',
+        st['note']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Como Funciona — Mapeamento no TradeInCalculator</b>', st['h2']))
+    story.append(code_block([
+        '// components/TradeInCalculator.tsx',
+        'const VENDEDOR_WHATSAPP: Record<string, string> = {',
+        "  andre:   '5521967442665',",
+        "  nicolas: '5521995618747',",
+        "  bianca:  '5521972461357',",
+        "  anuncio: '5521995618747', // Meta Ads — cai no WhatsApp do Nicolas",
+        '};',
+        '',
+        '// Le o ?ref= diretamente da URL no client (mais robusto que prop do servidor)',
+        '// Abordagem client-side: window.location.search e lido no useState initializer,',
+        '// garantindo que o parametro ?ref= seja capturado mesmo quando a prop do servidor',
+        '// nao e passada corretamente (ex: SSR sem searchParams explicitados no layout).',
+        'const [vendedor] = useState<string | null>(() => {',
+        '  if (typeof window !== "undefined") {',
+        '    const ref = new URLSearchParams(window.location.search).get("ref")?.toLowerCase();',
+        '    if (ref) return ref;',
+        '  }',
+        '  return vendedorProp ?? null;',
+        '});',
+        '',
+        '// Ao renderizar a cotacao, usa o numero do vendedor se disponivel',
+        'whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}',
+    ], st))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Rastreamento no Supabase e Dashboard</b>', st['h2']))
+    for item in [
+        'O campo vendedor e salvo na tabela simulacoes do Supabase a cada simulacao.',
+        'O dashboard admin exibe uma coluna "Vendedor" na tabela de simulacoes.',
+        'Um bloco lateral "Por vendedor" mostra o total de simulacoes agrupado por atribuicao.',
+        'As notificacoes Z-API tambem incluem o nome do vendedor na mensagem para o Andre.',
+    ]:
+        story.append(Paragraph(f'• {item}', st['bullet']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>SQL — Adicionar Coluna vendedor na Tabela simulacoes</b>', st['h2']))
+    story.append(code_block([
+        '-- Executar no SQL Editor do Supabase',
+        'ALTER TABLE simulacoes ADD COLUMN IF NOT EXISTS vendedor TEXT;',
+    ], st))
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECAO 18 — COMPARADOR DE MODELOS
+    # ═══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(section_heading(18, 'Comparador de Modelos', st))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph(
+        'Na Etapa 2 (selecao do aparelho novo), o cliente pode comparar dois modelos lado a lado '
+        'antes de decidir. O comparador mostra preco, diferenca a pagar (Pix) e um botao '
+        '"Escolher este" para cada opcao.',
+        st['body']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Fluxo de Uso</b>', st['h2']))
+    for item in [
+        'Cliente seleciona linha, modelo e armazenamento do primeiro iPhone (fluxo normal).',
+        'Apos selecionar o primeiro produto, aparece o botao "Comparar com outro modelo".',
+        'Ao clicar, abre um segundo seletor (linha B → modelo B → armazenamento B).',
+        'Com ambos selecionados, exibe cards lado a lado com preco e diferenca a pagar de cada.',
+        'Cada card tem um botao "Escolher este" que fecha o comparador e avanca com aquele produto.',
+        'O botao "Ver cotacao" fica oculto enquanto o comparador esta aberto.',
+    ]:
+        story.append(Paragraph(f'• {item}', st['bullet']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Implementacao — StepNewDevice.tsx</b>', st['h2']))
+    story.append(code_block([
+        '// Estados do comparador',
+        'const [compareMode, setCompareMode] = useState(false);',
+        'const [lineB, setLineB]   = useState("");',
+        'const [modelB, setModelB] = useState("");',
+        'const [storageB, setStorageB] = useState("");',
+        '',
+        '// Preco e diferenca de cada opcao',
+        'const price  = getProductPrice(products, model,  storage);   // opcao A',
+        'const priceB = getProductPrice(products, modelB, storageB);  // opcao B',
+        'const diffA  = price  !== null ? Math.max(price  - tradeInValue, 0) : null;',
+        'const diffB  = priceB !== null ? Math.max(priceB - tradeInValue, 0) : null;',
+        '',
+        '// Cards lado a lado (so aparecem quando ambos estao selecionados)',
+        '{bothSelected && (',
+        '  <div className="grid grid-cols-2 gap-3">',
+        '    {/* Card A */}',
+        '    <button onClick={() => onNext({ model, storage, price })}>',
+        '      Escolher este',
+        '    </button>',
+        '    {/* Card B */}',
+        '    <button onClick={() => onNext({ modelB, storageB, priceB })}>',
+        '      Escolher este',
+        '    </button>',
+        '  </div>',
+        ')}',
+    ], st))
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECAO 19 — PAINEL DE PRECOS SUPABASE
+    # ═══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(section_heading(19, 'Painel de Precos — Supabase', st))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph(
+        'O painel de precos permite ao Andre editar os precos dos produtos diretamente na '
+        'interface web, sem precisar acessar o Google Sheets. Os precos ficam armazenados no '
+        'Supabase e tem prioridade sobre a planilha. Cada alteracao notifica automaticamente '
+        'o Nicolas via Telegram.',
+        st['body']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Acesso</b>', st['h2']))
+    story.append(Paragraph('URL: https://tigrao-tradein.vercel.app/admin/precos', st['body']))
+    story.append(Paragraph('Autenticacao: mesma senha do dashboard admin (variavel ADMIN_PASSWORD).', st['body']))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph('<b>Funcionalidades do Painel</b>', st['h2']))
+    story.append(info_table(
+        ['Funcionalidade', 'Descricao'],
+        [
+            ('Listar precos', 'Exibe todos os produtos agrupados por modelo com preco Pix e status'),
+            ('Editar preco inline', 'Clique no preco ou no botao Editar → campo numerico → Enter ou Salvar'),
+            ('Toggle status', 'Botao Ativo/Esgotado em cada produto — esgotado oculta o produto no app'),
+            ('Importar do Sheets', 'Importa todos os produtos da planilha Google Sheets para o Supabase (seed inicial)'),
+            ('Notificacao Telegram', 'Ao salvar um preco, Nicolas recebe mensagem automatica no Telegram com modelo e novo preco'),
+        ],
+        col_widths=[44*mm, PAGE_W - 2*MARGIN - 44*mm]
+    ))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>SQL — Criar Tabela precos no Supabase</b>', st['h2']))
+    story.append(code_block([
+        'CREATE TABLE precos (',
+        '  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,',
+        '  modelo          TEXT NOT NULL,',
+        '  armazenamento   TEXT NOT NULL,',
+        "  preco_pix       NUMERIC NOT NULL,",
+        "  status          TEXT NOT NULL DEFAULT 'ativo',",
+        '  updated_at      TIMESTAMPTZ DEFAULT NOW(),',
+        '  UNIQUE (modelo, armazenamento)',
+        ');',
+        '',
+        'ALTER TABLE precos DISABLE ROW LEVEL SECURITY;',
+        'GRANT ALL ON TABLE precos TO service_role, anon, authenticated;',
+    ], st))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Arquitetura de Dados — Prioridade Supabase sobre Sheets</b>', st['h2']))
+    story.append(info_table(
+        ['Prioridade', 'Fonte', 'Condicao'],
+        [
+            ('1a (mais alta)', 'Supabase — tabela precos', 'Se tabela tem dados e SUPABASE_URL configurado'),
+            ('2a', 'Google Sheets — CSV publicado', 'Fallback se Supabase vazio ou indisponivel'),
+            ('3a (emergencia)', 'Hardcoded em route.ts', 'Fallback final se Sheets tambem falhar'),
+        ],
+        col_widths=[36*mm, 52*mm, PAGE_W - 2*MARGIN - 88*mm]
+    ))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Notificacao Telegram ao Alterar Preco — api/admin/precos/route.ts</b>', st['h2']))
+    story.append(code_block([
+        '// Apos upsert bem-sucedido no Supabase:',
+        'try {',
+        '  const botToken = process.env.TELEGRAM_BOT_TOKEN;',
+        '  const chatId   = process.env.TELEGRAM_CHAT_ID;',
+        '  if (botToken && chatId) {',
+        '    const msg = "ALTERACAO DE PRECO - TigraoImports\\n\\n" +',
+        '      modelo + " " + armazenamento + "\\n" +',
+        '      "Novo preco PIX: R$ " + preco_pix + "\\nStatus: " + status;',
+        '    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {',
+        "      method: 'POST',",
+        "      headers: { 'Content-Type': 'application/json' },",
+        '      body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "Markdown" }),',
+        '    });',
+        '  }',
+        '} catch { /* nao bloqueia o salvamento do preco */ }',
+    ], st))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Variaveis de Ambiente Necessarias</b>', st['h2']))
+    story.append(info_table(
+        ['Variavel', 'Valor'],
+        [
+            ('TELEGRAM_BOT_TOKEN', 'Token do bot obtido via @BotFather no Telegram'),
+            ('TELEGRAM_CHAT_ID', '6076216940 (Chat ID do Nicolas)'),
+            ('SUPABASE_URL', 'URL do projeto Supabase (mesmo ja usado para leads)'),
+            ('SUPABASE_SERVICE_ROLE_KEY', 'Service role key JWT legado do Supabase'),
+            ('ADMIN_PASSWORD', 'Senha de acesso ao painel (mesma do dashboard admin)'),
+        ],
+        col_widths=[58*mm, PAGE_W - 2*MARGIN - 58*mm]
+    ))
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECAO 20 — FILTROS DO DASHBOARD
+    # ═══════════════════════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(section_heading(20, 'Filtros do Dashboard', st))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph(
+        'A barra de filtros aparece logo abaixo das abas Todos/Fecharam/Saíram na tabela de '
+        'simulacoes do dashboard. Todos os filtros sao aplicados no client-side, sem chamadas '
+        'adicionais a API.',
+        st['body']))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Filtros Disponíveis</b>', st['h2']))
+    story.append(info_table(
+        ['Filtro', 'Opcoes / Comportamento'],
+        [
+            ('Periodo', 'Tudo | Hoje | Ontem | 7 dias | 30 dias | Este mes | Personalizado'),
+            ('Data personalizada', 'Campos "De:" e "ate:" (date inputs) — aparece apenas quando "Personalizado" esta ativo'),
+            ('Modelo', 'Dropdown com todos os modelos unicos presentes nas simulacoes'),
+            ('Limpar filtros', 'Botao em vermelho — aparece apenas quando ha filtro ativo'),
+            ('Contador', '"X resultado(s)" — atualiza em tempo real conforme os filtros mudam'),
+        ],
+        col_widths=[44*mm, PAGE_W - 2*MARGIN - 44*mm]
+    ))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Implementacao — app/admin/page.tsx</b>', st['h2']))
+    story.append(code_block([
+        '// Estados dos filtros',
+        'const [filterPeriod, setFilterPeriod] = useState("todos");',
+        'const [filterModelo, setFilterModelo] = useState("");',
+        'const [filterFrom, setFilterFrom]   = useState("");',
+        'const [filterTo, setFilterTo]       = useState("");',
+        '',
+        '// IMPORTANTE: useMemo antes de qualquer early return (Rules of Hooks)',
+        'const uniqueModelos = useMemo(() => {',
+        '  if (!data) return [];',
+        '  return [...new Set(data.map((d) => d.modelo_novo))].sort();',
+        '}, [data]);',
+        '',
+        '// Logica de filtragem aplicada na lista filtered',
+        'const filtered = data.filter((d) => {',
+        '  // ... tab filter, search filter, modelo filter ...',
+        '  const created = new Date(d.created_at);',
+        '  const now = new Date();',
+        '  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());',
+        '  if (filterPeriod === "hoje")   { if (created < today) return false; }',
+        '  if (filterPeriod === "ontem")  { /* yesterday range */ }',
+        '  if (filterPeriod === "7dias")  { if (created < now - 7d) return false; }',
+        '  if (filterPeriod === "30dias") { if (created < now - 30d) return false; }',
+        '  if (filterPeriod === "mes")    { if (created < startOfMonth) return false; }',
+        '  if (filterPeriod === "personalizado") {',
+        '    if (filterFrom && created < new Date(filterFrom + "T00:00:00")) return false;',
+        '    if (filterTo   && created > new Date(filterTo   + "T23:59:59")) return false;',
+        '  }',
+        '  return true;',
+        '});',
+    ], st))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<b>Regra Critica — React Rules of Hooks</b>', st['h2']))
+    story.append(Paragraph(
+        'O useMemo que deriva uniqueModelos DEVE ser chamado antes do early return da tela de login '
+        '(if (!password || data === null) return ...). Hooks nao podem ser chamados apos retornos '
+        'condicionais — isso causa "Application error: a client-side exception has occurred". '
+        'Sempre posicionar todos os hooks (useState, useEffect, useMemo, useCallback) '
+        'antes de qualquer return condicional no componente.',
+        st['note']))
 
     story.append(HRFlowable(width='100%', thickness=1, color=ORANGE, spaceAfter=8))
     story.append(Paragraph(

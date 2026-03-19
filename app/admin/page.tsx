@@ -78,14 +78,16 @@ export default function DashboardPage() {
   const vendasHojeTotal = vendasHoje.reduce((s, v) => s + (v.preco_vendido || 0), 0);
   const lucroHoje = vendasHoje.reduce((s, v) => s + (v.lucro || 0), 0);
 
-  // Gastos
-  const saidasMes = gastosMes.filter(g => g.tipo === "SAIDA").reduce((s, g) => s + (g.valor || 0), 0);
-  const saidasHoje = gastosHoje.filter(g => g.tipo === "SAIDA").reduce((s, g) => s + (g.valor || 0), 0);
+  // Gastos (excluir FORNECEDOR — compra de estoque não é gasto, vira produto)
+  const gastosReais = (arr: typeof gastosMes) => arr.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR");
+  const saidasMes = gastosReais(gastosMes).reduce((s, g) => s + (g.valor || 0), 0);
+  const saidasHoje = gastosReais(gastosHoje).reduce((s, g) => s + (g.valor || 0), 0);
   const entradasMes = gastosMes.filter(g => g.tipo === "ENTRADA").reduce((s, g) => s + (g.valor || 0), 0);
+  const comprasFornecedorMes = gastosMes.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
 
-  // Categorias de gastos
+  // Categorias de gastos (sem FORNECEDOR)
   const gastosPorCategoria: Record<string, number> = {};
-  gastosMes.filter(g => g.tipo === "SAIDA").forEach(g => {
+  gastosReais(gastosMes).forEach(g => {
     gastosPorCategoria[g.categoria] = (gastosPorCategoria[g.categoria] || 0) + (g.valor || 0);
   });
 
@@ -111,7 +113,7 @@ export default function DashboardPage() {
   const pixHojeInf = vendasHoje.filter(v => v.banco_pix === "INFINITE" || (v.forma === "PIX" && v.banco === "INFINITE")).reduce((s, v) => s + (v.entrada_pix || 0), 0);
   const pixHojeMP = vendasHoje.filter(v => v.banco === "MERCADO_PAGO" && v.recebimento === "D+0").reduce((s, v) => s + (v.preco_vendido || 0) - (v.entrada_pix || 0), 0);
 
-  // Gastos por banco hoje
+  // Gastos por banco hoje (todos — incluindo FORNECEDOR — porque SAI da conta)
   const gastosHojeItau = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "ITAU").reduce((s, g) => s + (g.valor || 0), 0);
   const gastosHojeInf = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "INFINITE").reduce((s, g) => s + (g.valor || 0), 0);
   const gastosHojeMP = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "MERCADO_PAGO").reduce((s, g) => s + (g.valor || 0), 0);
@@ -194,7 +196,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Card icon="💰" title="Faturamento do Mês" value={fmt(totalVendidoMes)} color="text-blue-700" sub={`${vendasMes.length} vendas | Custo: ${fmt(totalCustoMes)}`} />
           <Card icon="📈" title="Lucro do Mês" value={fmt(lucroMes)} color="text-green-700" sub={`Margem média: ${margemMedia}%`} />
-          <Card icon="📤" title="Gastos do Mês" value={fmt(saidasMes)} color="text-red-600" sub={`Entradas extras: ${fmt(entradasMes)}`} />
+          <Card icon="📤" title="Gastos do Mês" value={fmt(saidasMes)} color="text-red-600" sub={`Compras fornecedor: ${fmt(comprasFornecedorMes)} (não contabilizado)`} />
         </div>
       </div>
 

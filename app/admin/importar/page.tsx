@@ -24,7 +24,7 @@ export default function ImportarPage() {
       const endpoint = tipo === "estoque" ? "/api/estoque" : `/api/importar`;
       const body = tipo === "estoque"
         ? { action: "import", rows: data }
-        : { table: tipo, rows: data };
+        : { table: tipo, rows: data, autoStatus: tipo === "vendas" };
 
       const importRes = await fetch(endpoint, {
         method: "POST",
@@ -88,7 +88,7 @@ export default function ImportarPage() {
     const res = await fetch("/api/importar", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
-      body: JSON.stringify({ table, rows: mapped }),
+      body: JSON.stringify({ table, rows: mapped, autoStatus: table === "vendas" }),
     });
     const json = await res.json();
     setResult(json);
@@ -101,6 +101,38 @@ export default function ImportarPage() {
 
       {quickMsg && <div className={`px-4 py-3 rounded-xl text-sm ${quickMsg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{quickMsg}</div>}
 
+      {/* Limpar dados (antes de reimportar) */}
+      <div className="bg-white border border-red-200 rounded-2xl p-6 shadow-sm">
+        <h3 className="font-semibold text-red-600 mb-1">🗑️ Limpar Dados (antes de reimportar)</h3>
+        <p className="text-xs text-[#86868B] mb-4">Apaga TODOS os registros da tabela selecionada. Use antes de reimportar.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {(["vendas", "gastos", "estoque"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={async () => {
+                if (!confirm(`APAGAR TODOS os registros de ${t.toUpperCase()}? Essa ação não pode ser desfeita.`)) return;
+                setQuickImporting(`limpar-${t}`);
+                setQuickMsg("");
+                try {
+                  const res = await fetch("/api/importar", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json", "x-admin-password": password },
+                    body: JSON.stringify({ table: t }),
+                  });
+                  const json = await res.json();
+                  setQuickMsg(json.ok ? `${t.toUpperCase()} limpa com sucesso!` : `Erro: ${json.error}`);
+                } catch (err) { setQuickMsg(`Erro: ${String(err)}`); }
+                setQuickImporting("");
+              }}
+              disabled={!!quickImporting}
+              className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold hover:bg-red-100 transition-colors disabled:opacity-50 text-center"
+            >
+              {quickImporting === `limpar-${t}` ? "Limpando..." : `Limpar ${t.toUpperCase()}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Importação rápida das planilhas Numbers */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm">
         <h3 className="font-semibold text-[#1D1D1F] mb-1">Importacao Rapida — Planilhas Numbers</h3>
@@ -112,7 +144,7 @@ export default function ImportarPage() {
             className="px-4 py-4 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50 text-center"
           >
             {quickImporting === "vendas" ? "Importando..." : "Importar 297 Vendas"}
-            <span className="block text-xs font-normal mt-1 opacity-80">Marco 2026</span>
+            <span className="block text-xs font-normal mt-1 opacity-80">Marco 2026 (até dia 18 = Finalizado, dia 19+ = Pendente)</span>
           </button>
           <button
             onClick={() => handleQuickImport("gastos")}

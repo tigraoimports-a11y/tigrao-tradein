@@ -6,10 +6,25 @@ function auth(req: NextRequest) {
   return pw === process.env.ADMIN_PASSWORD;
 }
 
+// DELETE — limpar tabela inteira
+export async function DELETE(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { table } = await req.json();
+  if (!table || !["vendas", "gastos", "estoque"].includes(table)) {
+    return NextResponse.json({ error: "table must be vendas, gastos or estoque" }, { status: 400 });
+  }
+
+  // Deletar todos os registros (Supabase requer um filtro, usamos id > 0 via gte)
+  const { error, count } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, deleted: count });
+}
+
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { table, rows } = await req.json();
+  const { table, rows, autoStatus } = await req.json();
 
   if (!table || !rows || !Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json({ error: "table and rows required" }, { status: 400 });
@@ -19,13 +34,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "table must be vendas, gastos or estoque" }, { status: 400 });
   }
 
+  // Se autoStatus=true e table=vendas, definir status_pagamento baseado na data
+  // data < hoje = FINALIZADO, data = hoje = AGUARDANDO
+  const hoje = new Date().toISOString().split("T")[0];
+  const processedRows = (table === "vendas" && autoStatus)
+    ? rows.map(r => ({
+        ...r,
+        status_pagamento: r.data < hoje ? "FINALIZADO" : "AGUARDANDO",
+      }))
+    : rows;
+
   // Importar em lotes de 100
   const batchSize = 100;
   let imported = 0;
   const errors: { row: number; error: string }[] = [];
 
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
+  for (let i = 0; i < processedRows.length; i += batchSize) {
+    const batch = processedRows.slice(i, i + batchSize);
     const { error } = await supabase.from(table).insert(batch);
     if (error) {
       errors.push({ row: i, error: error.message });
