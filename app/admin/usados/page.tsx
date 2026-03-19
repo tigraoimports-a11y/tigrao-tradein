@@ -198,11 +198,23 @@ export default function UsadosPage() {
     grouped[v.modelo].push(v);
   });
 
-  // Agrupar descontos por condição
-  const descGrouped: Record<string, DescontoCondicao[]> = {};
+  // Agrupar descontos: separar gerais vs por modelo
+  // Descontos por modelo têm condicao no formato "iPhone XX - Condição"
+  const descByModel: Record<string, Record<string, DescontoCondicao[]>> = {};
+  const descGerais: Record<string, DescontoCondicao[]> = {};
+
   descontos.forEach((d) => {
-    if (!descGrouped[d.condicao]) descGrouped[d.condicao] = [];
-    descGrouped[d.condicao].push(d);
+    const match = d.condicao.match(/^(iPhone .+?) - (.+)$/);
+    if (match) {
+      const modelo = match[1];
+      const cond = match[2];
+      if (!descByModel[modelo]) descByModel[modelo] = {};
+      if (!descByModel[modelo][cond]) descByModel[modelo][cond] = [];
+      descByModel[modelo][cond].push(d);
+    } else {
+      if (!descGerais[d.condicao]) descGerais[d.condicao] = [];
+      descGerais[d.condicao].push(d);
+    }
   });
 
   return (
@@ -325,63 +337,88 @@ export default function UsadosPage() {
           )}
         </div>
       ) : tab === "descontos" ? (
-        /* DESCONTOS POR CONDIÇÃO */
+        /* DESCONTOS — agrupados por modelo */
         <div className="space-y-4">
-          {Object.keys(descGrouped).length === 0 ? (
+          {descontos.length === 0 ? (
             <div className="bg-white border border-[#D2D2D7] rounded-2xl p-12 text-center shadow-sm">
-              <p className="text-[#86868B]">Nenhum desconto cadastrado. Importe os valores padrao primeiro.</p>
+              <p className="text-[#86868B]">Nenhum desconto cadastrado. Importe do Sheets primeiro.</p>
             </div>
           ) : (
-            Object.entries(descGrouped).map(([cond, rows]) => (
-              <div key={cond} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
-                  <h3 className="font-semibold text-[#1D1D1F]">{cond}</h3>
+            <>
+              {/* Descontos gerais (sem modelo específico) */}
+              {Object.keys(descGerais).length > 0 && (
+                <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                    <h3 className="font-semibold text-[#1D1D1F]">Descontos Gerais</h3>
+                  </div>
+                  <div className="p-4">
+                    {Object.entries(descGerais).map(([cond, rows]) => (
+                      <div key={cond} className="mb-4 last:mb-0">
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">{cond}</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {rows.map((d) => {
+                            const key = `${d.condicao}|${d.detalhe}`;
+                            const isEd = editingDesc[key] !== undefined;
+                            return (
+                              <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
+                                <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
+                                {isEd ? (
+                                  <div className="flex items-center gap-1">
+                                    <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveDesconto(d); if (e.key === "Escape") { const ed = { ...editingDesc }; delete ed[key]; setEditingDesc(ed); } }} className="w-16 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
+                                    <button onClick={() => handleSaveDesconto(d)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                  </div>
+                                ) : (
+                                  <span className={`font-bold text-xs cursor-pointer hover:text-[#E8740E] ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
+                                    {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[#F5F5F7]">
-                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase font-medium">Detalhe</th>
-                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase font-medium">Desconto</th>
-                      <th className="px-5 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((d) => {
-                      const key = `${d.condicao}|${d.detalhe}`;
-                      const isEditing = editingDesc[key] !== undefined;
-                      const isSaving = saving === key;
-                      return (
-                        <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7]">
-                          <td className="px-5 py-3">{d.detalhe}</td>
-                          <td className="px-5 py-3">
-                            {isEditing ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-[#86868B] text-sm">R$</span>
-                                <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && handleSaveDesconto(d)} className={inputCls} autoFocus />
+              )}
+
+              {/* Descontos por modelo — 1 card por iPhone */}
+              {Object.entries(descByModel).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, condicoes]) => (
+                <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                    <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {Object.entries(condicoes).map(([cond, rows]) => (
+                      <div key={cond}>
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">{cond}</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {rows.map((d) => {
+                            const key = `${d.condicao}|${d.detalhe}`;
+                            const isEd = editingDesc[key] !== undefined;
+                            return (
+                              <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
+                                <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
+                                {isEd ? (
+                                  <div className="flex items-center gap-1">
+                                    <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveDesconto(d); if (e.key === "Escape") { const ed = { ...editingDesc }; delete ed[key]; setEditingDesc(ed); } }} className="w-16 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
+                                    <button onClick={() => handleSaveDesconto(d)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                  </div>
+                                ) : (
+                                  <span className={`font-bold text-xs cursor-pointer hover:text-[#E8740E] ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
+                                    {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
+                                  </span>
+                                )}
                               </div>
-                            ) : (
-                              <span className={`cursor-pointer hover:text-[#E8740E] font-medium ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
-                                {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `-${fmt(Math.abs(d.desconto))}` : "R$ 0"}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            {isEditing ? (
-                              <div className="flex gap-2 justify-end">
-                                <button onClick={() => { const e = { ...editingDesc }; delete e[key]; setEditingDesc(e); }} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B]">Cancelar</button>
-                                <button onClick={() => handleSaveDesconto(d)} disabled={isSaving} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white disabled:opacity-50">{isSaving ? "..." : "Salvar"}</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })} className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors">Editar</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
       ) : (
