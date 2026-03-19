@@ -31,8 +31,28 @@ export async function POST(req: NextRequest) {
   const seminovoData = body._seminovo;
   delete body._seminovo;
 
-  const { data, error } = await supabase.from("vendas").insert(body).select().single();
+  // Extrair estoque_id antes de inserir
+  const estoqueId = body._estoque_id;
+  delete body._estoque_id;
+
+  const { data, error } = await supabase.from("vendas").insert({
+    ...body,
+    estoque_id: estoqueId || null,
+  }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Descontar do estoque se veio de um produto cadastrado
+  if (estoqueId) {
+    const { data: item } = await supabase.from("estoque").select("qnt").eq("id", estoqueId).single();
+    if (item) {
+      const novaQnt = Math.max(0, Number(item.qnt) - 1);
+      await supabase.from("estoque").update({
+        qnt: novaQnt,
+        status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", estoqueId);
+    }
+  }
 
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
@@ -94,6 +114,18 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Devolver ao estoque se a venda veio de produto cadastrado
+  if (venda && venda.estoque_id) {
+    const { data: item } = await supabase.from("estoque").select("qnt").eq("id", venda.estoque_id).single();
+    if (item) {
+      await supabase.from("estoque").update({
+        qnt: Number(item.qnt) + 1,
+        status: "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", venda.estoque_id);
+    }
+  }
 
   // Se tinha produto na troca, remover o seminovo/pendencia do estoque
   if (venda && venda.produto_na_troca && venda.cliente) {

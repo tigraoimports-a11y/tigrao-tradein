@@ -38,6 +38,28 @@ export default function VendasPage() {
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
   });
 
+  // Estoque: catálogo de produtos
+  interface EstoqueItem { id: string; produto: string; categoria: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string }
+  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [catSel, setCatSel] = useState("");
+  const [estoqueId, setEstoqueId] = useState("");
+  const [produtoManual, setProdutoManual] = useState(false);
+
+  const fetchEstoque = useCallback(async () => {
+    try {
+      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const json = await res.json();
+        setEstoque((json.data ?? []).filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE"));
+      }
+    } catch { /* ignore */ }
+  }, [password]);
+
+  useEffect(() => { if (password) fetchEstoque(); }, [password, fetchEstoque]);
+
+  const categorias = [...new Set(estoque.map(p => p.categoria))].sort();
+  const produtosFiltrados = catSel ? estoque.filter(p => p.categoria === catSel) : [];
+
   const fetchVendas = useCallback(async () => {
     setLoading(true);
     try {
@@ -170,6 +192,11 @@ export default function VendasPage() {
       status_pagamento: "AGUARDANDO",
     };
 
+    // Se veio do estoque, enviar o ID para descontar
+    if (estoqueId) {
+      payload._estoque_id = estoqueId;
+    }
+
     // Se tem troca, enviar dados do seminovo para criar no estoque
     if (temTroca && form.troca_produto) {
       payload._seminovo = {
@@ -189,8 +216,11 @@ export default function VendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Venda registrada!");
-      setForm((f) => ({ ...f, cliente: "", produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "" }));
+      setForm((f) => ({ ...f, cliente: "", produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "" }));
+      setCatSel("");
+      setEstoqueId("");
       fetchVendas();
+      fetchEstoque();
     } else {
       setMsg("Erro: " + json.error);
     }
@@ -234,11 +264,62 @@ export default function VendasPage() {
             </select></div>
           </div>
 
-          {/* Row 2 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
-            <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Local</p><input value={form.local} onChange={(e) => set("local", e.target.value)} className={inputCls} /></div>
+          {/* Row 2: Produto */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-bold text-[#1D1D1F]">Produto</p>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={produtoManual} onChange={(e) => { setProdutoManual(e.target.checked); if (e.target.checked) { setEstoqueId(""); setCatSel(""); } }} className="accent-[#E8740E]" />
+                <span className="text-xs text-[#86868B]">Digitar manualmente</span>
+              </label>
+            </div>
+
+            {produtoManual ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
+                <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className={labelCls}>Categoria</p>
+                  <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
+                    <option value="">Selecionar...</option>
+                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <p className={labelCls}>Produto do estoque</p>
+                  <select
+                    value={estoqueId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setEstoqueId(id);
+                      const item = estoque.find(p => p.id === id);
+                      if (item) {
+                        const nome = item.cor ? `${item.produto} ${item.cor}` : item.produto;
+                        set("produto", nome);
+                        set("custo", String(item.custo_unitario));
+                        if (item.fornecedor) set("fornecedor", item.fornecedor);
+                      } else {
+                        set("produto", "");
+                        set("custo", "");
+                      }
+                    }}
+                    className={selectCls}
+                    disabled={!catSel}
+                  >
+                    <option value="">{catSel ? "Selecionar produto..." : "Escolha a categoria primeiro"}</option>
+                    {produtosFiltrados.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.produto}{p.cor ? ` - ${p.cor}` : ""} ({p.qnt} un.) — {fmt(p.custo_unitario)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+              </div>
+            )}
           </div>
 
           {/* Row 3: Valores */}
