@@ -158,7 +158,8 @@ export default function ImportarPage() {
       return "PIX"; // fallback seguro
     }
 
-    // Normalizar origem: remover acentos
+    // Normalizar origem: remover acentos e mapear para valores aceitos
+    // Constraint: ANUNCIO, RECOMPRA, INDICACAO, ATACADO
     function parseOrigem(val: string): string {
       const v = val.toUpperCase().trim()
         .replace(/[ÀÁÂÃÄ]/g, "A")
@@ -168,12 +169,14 @@ export default function ImportarPage() {
         .replace(/[ÙÚÛÜ]/g, "U")
         .replace(/[Ç]/g, "C")
         .replace(/[^A-Z0-9_\s]/g, "");
-      // Mapear variantes
       if (v.includes("ANUNCIO")) return "ANUNCIO";
       if (v.includes("RECOMPRA")) return "RECOMPRA";
       if (v.includes("INDICACAO") || v.includes("INDICAC")) return "INDICACAO";
       if (v.includes("ATACADO")) return "ATACADO";
-      return v;
+      // Canais de marketing → ANUNCIO
+      if (v.includes("CHAT") || v.includes("GPT") || v.includes("TIK") || v.includes("TOK") || v.includes("INSTAGRAM") || v.includes("FACEBOOK") || v.includes("GOOGLE")) return "ANUNCIO";
+      // Se não reconhecido, default RECOMPRA
+      return "RECOMPRA";
     }
 
     // Detectar recebimento
@@ -267,13 +270,50 @@ export default function ImportarPage() {
         obj["recebimento"] = parseRecebimento(rawForma, rawBanco);
       }
 
+      // Vendas: garantir campos NOT NULL tem valor válido
+      if (table === "vendas") {
+        // Origem default
+        if (!obj["origem"] || obj["origem"] === "") {
+          const tipo = String(obj["tipo"] || "").toUpperCase();
+          if (tipo === "ATACADO") obj["origem"] = "ATACADO";
+          else obj["origem"] = "RECOMPRA";
+        }
+        // Tipo default
+        if (!obj["tipo"] || obj["tipo"] === "") {
+          const origem = String(obj["origem"] || "").toUpperCase();
+          if (origem === "ATACADO") obj["tipo"] = "ATACADO";
+          else obj["tipo"] = "VENDA";
+        }
+        // Validar tipo está no check constraint
+        const tipoVal = String(obj["tipo"]).toUpperCase();
+        if (!["VENDA", "UPGRADE", "ATACADO"].includes(tipoVal)) {
+          obj["tipo"] = "VENDA";
+        }
+        // Banco default
+        if (!obj["banco"] || obj["banco"] === "") {
+          obj["banco"] = "ITAU";
+        }
+        // Forma default
+        if (!obj["forma"] || obj["forma"] === "") {
+          obj["forma"] = "PIX";
+        }
+        // Recebimento default
+        if (!obj["recebimento"] || obj["recebimento"] === "") {
+          obj["recebimento"] = "D+0";
+        }
+      }
+
       return obj;
     });
 
+    // Filtrar linhas sem data (totais, resumos, linhas vazias)
+    const validRows = mapped.filter(r => r["data"] && String(r["data"]).length >= 8);
+
+    const rowsToSend = table === "vendas" ? validRows : mapped;
     const res = await fetch("/api/importar", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
-      body: JSON.stringify({ table, rows: mapped, autoStatus: table === "vendas" }),
+      body: JSON.stringify({ table, rows: rowsToSend, autoStatus: table === "vendas" }),
     });
     const json = await res.json();
     setResult(json);
