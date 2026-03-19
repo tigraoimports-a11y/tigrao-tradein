@@ -187,6 +187,7 @@ export async function POST(req: NextRequest) {
               esp_itau: itau,
               esp_inf: inf,
               esp_mp: mp,
+              manual: true,
             },
             { onConflict: "data" }
           );

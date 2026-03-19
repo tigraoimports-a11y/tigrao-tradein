@@ -151,14 +151,13 @@ export async function gerarNoite(
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
   const saiu_esp = sumByBancoField(gastoRows, "ESPECIE");
 
-  // 6. Saldo final — usar valores reais informados via /saldos se existirem
-  // Se esp_itau já foi preenchido (via /saldos manual), usar o valor real
-  const hasManualSaldos = saldoRow?.esp_itau != null && Number(saldoRow.esp_itau) > 0;
+  // 6. Saldo final — usar valores manuais (/saldos) se flag manual=true
+  const isManual = saldoRow?.manual === true;
 
   let esp_itau: number, esp_inf: number, esp_mp: number, esp_especie: number;
 
-  if (hasManualSaldos) {
-    // Saldos foram informados manualmente — usar como estão
+  if (isManual) {
+    // Saldos foram informados manualmente via /saldos — usar como estão
     esp_itau = Number(saldoRow.esp_itau);
     esp_inf = Number(saldoRow.esp_inf);
     esp_mp = Number(saldoRow.esp_mp);
@@ -180,6 +179,7 @@ export async function gerarNoite(
       esp_inf,
       esp_mp,
       esp_especie,
+      manual: false,
     }, { onConflict: "data" });
   }
 
