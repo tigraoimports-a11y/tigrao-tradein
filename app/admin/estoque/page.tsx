@@ -305,9 +305,21 @@ export default function EstoquePage() {
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs + Desfazer */}
       <div className="flex gap-2 items-center justify-between flex-wrap">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={async () => {
+              const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password, "x-admin-user": userName } });
+              const json = await res.json();
+              if (json.ok) { setMsg(`Desfeito: ${json.undone}`); fetchEstoque(); }
+              else setMsg(json.error || "Nada para desfazer");
+            }}
+            className="px-3 py-2 rounded-xl text-xs text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+            title="Desfazer ultima acao"
+          >
+            Desfazer
+          </button>
           {([
             { key: "estoque", label: `Estoque (${novos.length})` },
             { key: "seminovos", label: `Seminovos (${seminovos.length})` },

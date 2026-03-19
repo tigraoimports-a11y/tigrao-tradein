@@ -21,6 +21,34 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const categoria = searchParams.get("categoria");
+  const action = searchParams.get("action");
+
+  // Buscar último log para desfazer
+  if (action === "last_log") {
+    const { data } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(1).single();
+    return NextResponse.json({ log: data });
+  }
+
+  // Desfazer última ação
+  if (action === "undo") {
+    const { data: lastLog } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(1).single();
+    if (!lastLog) return NextResponse.json({ error: "Nenhuma acao para desfazer" }, { status: 400 });
+
+    if (lastLog.acao === "alteracao" && lastLog.produto_id) {
+      await supabase.from("estoque").update({ [lastLog.campo]: lastLog.valor_anterior, updated_at: new Date().toISOString() }).eq("id", lastLog.produto_id);
+      // Remover o log
+      await supabase.from("estoque_log").delete().eq("id", lastLog.id);
+      return NextResponse.json({ ok: true, undone: `${lastLog.produto_nome}: ${lastLog.campo} voltou para ${lastLog.valor_anterior}` });
+    }
+
+    if (lastLog.acao === "exclusao" && lastLog.produto_id) {
+      // Não consegue restaurar item deletado sem os dados completos
+      await supabase.from("estoque_log").delete().eq("id", lastLog.id);
+      return NextResponse.json({ ok: true, undone: `Log de exclusao removido (produto nao pode ser restaurado)` });
+    }
+
+    return NextResponse.json({ error: "Acao nao pode ser desfeita" }, { status: 400 });
+  }
 
   let query = supabase.from("estoque").select("*").order("categoria").order("produto");
   if (categoria) query = query.eq("categoria", categoria);

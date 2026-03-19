@@ -416,12 +416,13 @@ export default function VendasPage() {
                         <td className="px-3 py-2.5">
                           <button
                             onClick={async () => {
-                              if (!confirm(`Excluir venda de ${v.cliente}?`)) return;
+                              if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Remover a venda do historico\n- Remover o seminovo do estoque (se houver troca)`)) return;
                               await fetch("/api/vendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: v.id }) });
                               setVendas((prev) => prev.filter((r) => r.id !== v.id));
+                              setMsg("Venda cancelada!");
                             }}
-                            className="text-[#86868B] hover:text-red-500 text-xs"
-                          >X</button>
+                            className="px-2 py-1 rounded-lg text-[10px] text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+                          >Cancelar</button>
                         </td>
                       </tr>
                     );

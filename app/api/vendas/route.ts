@@ -73,7 +73,19 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  // Buscar venda antes de deletar (para limpar seminovo se houver)
+  const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
+
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Se tinha produto na troca, remover o seminovo/pendencia do estoque
+  if (venda && venda.produto_na_troca && venda.cliente) {
+    await supabase.from("estoque")
+      .delete()
+      .eq("cliente", venda.cliente)
+      .in("tipo", ["PENDENCIA", "SEMINOVO"]);
+  }
+
   return NextResponse.json({ ok: true });
 }
