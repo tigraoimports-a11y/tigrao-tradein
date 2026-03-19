@@ -110,14 +110,34 @@ export default function ImportarPage() {
       return v;
     }
 
-    // Mapear forma: "PIX", "C. CRÉDITO", "C. CRÉDITO + PIX" etc
+    // Mapear forma: "PIX", "C. CRÉDITO", "C. CRÉDITO + PIX", "LINK" etc
     function parseForma(val: string): string {
       const v = val.toUpperCase().trim();
       if (v.includes("CREDITO") || v.includes("CRÉDITO")) return "CARTAO";
       if (v.includes("DEBITO") || v.includes("DÉBITO")) return "CARTAO";
+      if (v.includes("LINK")) return "CARTAO"; // Link de pagamento = cartão
       if (v.includes("PIX")) return "PIX";
       if (v.includes("DINHEIRO")) return "DINHEIRO";
       if (v.includes("FIADO")) return "FIADO";
+      if (v.includes("CARTAO") || v.includes("CARTÃO")) return "CARTAO";
+      return "PIX"; // fallback seguro
+    }
+
+    // Normalizar origem: remover acentos
+    function parseOrigem(val: string): string {
+      const v = val.toUpperCase().trim()
+        .replace(/[ÀÁÂÃÄ]/g, "A")
+        .replace(/[ÈÉÊË]/g, "E")
+        .replace(/[ÌÍÎÏ]/g, "I")
+        .replace(/[ÒÓÔÕÖ]/g, "O")
+        .replace(/[ÙÚÛÜ]/g, "U")
+        .replace(/[Ç]/g, "C")
+        .replace(/[^A-Z0-9_\s]/g, "");
+      // Mapear variantes
+      if (v.includes("ANUNCIO")) return "ANUNCIO";
+      if (v.includes("RECOMPRA")) return "RECOMPRA";
+      if (v.includes("INDICACAO") || v.includes("INDICAC")) return "INDICACAO";
+      if (v.includes("ATACADO")) return "ATACADO";
       return v;
     }
 
@@ -127,6 +147,18 @@ export default function ImportarPage() {
       if (f.includes("CREDITO") || f.includes("CRÉDITO") || f.includes("LINK")) return "D+1";
       if (f.includes("FIADO")) return "FIADO";
       return "D+0"; // PIX, dinheiro, débito
+    }
+
+    // Normalizar recebimento: aceitar datas e mapear para D+0/D+1/FIADO
+    function parseRecebimentoValue(val: string): string {
+      const v = val.toUpperCase().trim();
+      if (v === "D+0" || v === "D+1" || v === "FIADO") return v;
+      // Se é uma data (DD/MM/YYYY), não usar como recebimento — será auto-detectado
+      if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(v)) return "";
+      if (v.includes("D+0") || v.includes("PIX") || v.includes("DINHEIRO")) return "D+0";
+      if (v.includes("D+1") || v.includes("CREDIT") || v.includes("LINK")) return "D+1";
+      if (v.includes("FIADO")) return "FIADO";
+      return "";
     }
 
     const mapped = rows.map((row) => {
@@ -159,6 +191,12 @@ export default function ImportarPage() {
         } else if (k === "forma") {
           rawForma = val;
           obj[k] = parseForma(val);
+        } else if (k === "origem") {
+          obj[k] = parseOrigem(val);
+        } else if (k === "recebimento") {
+          const parsed = parseRecebimentoValue(val);
+          if (parsed) obj[k] = parsed;
+          // Se vazio (era uma data), será auto-detectado abaixo
         } else if (k === "is_dep_esp") {
           obj[k] = val.toLowerCase() === "true" || val === "1" || val.toLowerCase() === "sim";
         } else if (k === "preco_vendido" || k === "precovendido" || k === "preco") {
@@ -168,7 +206,7 @@ export default function ImportarPage() {
         }
       }
 
-      // Auto-detect recebimento se não veio no CSV
+      // Auto-detect recebimento se não veio no CSV ou foi inválido
       if (!obj["recebimento"] && (rawForma || rawBanco)) {
         obj["recebimento"] = parseRecebimento(rawForma, rawBanco);
       }
