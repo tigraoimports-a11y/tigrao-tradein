@@ -6,6 +6,125 @@ import { hojeISO } from "@/lib/business-days";
 
 const GRUPO_ID = process.env.TELEGRAM_CHAT_ID ?? "";
 
+// ============================================
+// Helpers
+// ============================================
+
+const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+
+const CAT_EMOJI: Record<string, string> = {
+  "SALARIO": "💼",
+  "ANUNCIOS": "📣",
+  "MARKETING": "📣",
+  "GASTOS LOJA": "🏪",
+  "SISTEMAS": "💻",
+  "CORREIOS": "📦",
+  "MOTOBOY RJ": "🏍️",
+  "MOTOBOY SP": "🏍️",
+  "TRANSPORTE": "🚚",
+  "ALIMENTACAO": "🍽️",
+  "DOACOES": "🎁",
+  "IMPOSTOS": "🧾",
+  "EQUIPAMENTOS": "🔧",
+  "FORNECEDOR": "🏭",
+  "OUTROS": "📋",
+};
+
+const PROD_EMOJI: Record<string, string> = {
+  "IPHONES": "📱",
+  "IPHONE": "📱",
+  "IPADS": "📱",
+  "IPAD": "📱",
+  "MACBOOK": "💻",
+  "MACBOOKS": "💻",
+  "MAC MINI": "💻",
+  "APPLE WATCH": "🍎",
+  "AIRPODS": "🎧",
+  "ACESSORIOS": "🔧",
+  "ACESSÓRIO": "🔧",
+  "ACESSÓRIOS": "🔧",
+};
+
+function getCatEmoji(cat: string): string {
+  const upper = cat.toUpperCase();
+  for (const [key, emoji] of Object.entries(CAT_EMOJI)) {
+    if (upper.includes(key)) return emoji;
+  }
+  return "•";
+}
+
+function getProdEmoji(cat: string): string {
+  const upper = cat.toUpperCase();
+  for (const [key, emoji] of Object.entries(PROD_EMOJI)) {
+    if (upper.includes(key)) return emoji;
+  }
+  return "📦";
+}
+
+// ============================================
+// Shared data fetchers
+// ============================================
+
+async function getPatrimonio() {
+  // Saldo bancário mais recente
+  const { data: saldoRecente } = await supabase
+    .from("saldos_bancarios")
+    .select("*")
+    .order("data", { ascending: false })
+    .limit(1)
+    .single();
+
+  const saldoBancario = saldoRecente
+    ? (Number(saldoRecente.esp_itau || 0) + Number(saldoRecente.esp_inf || 0) + Number(saldoRecente.esp_mp || 0) + Number(saldoRecente.esp_especie || 0))
+    : 0;
+
+  // Estoque (produtos com qnt > 0)
+  const { data: estoque } = await supabase
+    .from("estoque")
+    .select("qnt, custo_unitario")
+    .gt("qnt", 0)
+    .or("tipo.is.null,tipo.eq.NOVO");
+
+  const valorEstoque = (estoque ?? []).reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
+  const unidadesEstoque = (estoque ?? []).reduce((s, p) => s + p.qnt, 0);
+
+  // Produtos a caminho (vendas com status AGUARDANDO fornecedor ou gastos FORNECEDOR recentes)
+  const { data: aCaminho } = await supabase
+    .from("estoque")
+    .select("qnt, custo_unitario")
+    .gt("qnt", 0)
+    .eq("tipo", "A_CAMINHO");
+
+  const valorACaminho = (aCaminho ?? []).reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
+
+  const capitalProdutos = valorEstoque + valorACaminho;
+  const patrimonioTotal = saldoBancario + capitalProdutos;
+
+  return {
+    saldoBancario,
+    itau: Number(saldoRecente?.esp_itau || 0),
+    infinite: Number(saldoRecente?.esp_inf || 0),
+    mp: Number(saldoRecente?.esp_mp || 0),
+    especie: Number(saldoRecente?.esp_especie || 0),
+    valorEstoque,
+    unidadesEstoque,
+    valorACaminho,
+    capitalProdutos,
+    patrimonioTotal,
+  };
+}
+
+async function getFiadoPendente() {
+  const { data: fiados } = await supabase
+    .from("vendas")
+    .select("cliente, preco_vendido, data, produto")
+    .eq("forma", "FIADO")
+    .eq("status_pagamento", "AGUARDANDO")
+    .order("data", { ascending: true });
+
+  return fiados ?? [];
+}
+
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
@@ -27,13 +146,13 @@ export async function POST(req: NextRequest) {
       case "/status": {
         await sendTelegramMessage(
           [
-            `<b>Status do Bot TigrãoImports</b>`,
+            `🐯 <b>Status do Bot TigrãoImports</b>`,
             ``,
-            `Versao: 2.0 (Vercel)`,
+            `Versao: 2.1 (Vercel)`,
             `Data: ${hoje}`,
             `Plataforma: Vercel Serverless`,
             `Banco: Supabase`,
-            `Status: Online`,
+            `Status: ✅ Online`,
           ].join("\n"),
           chatId
         );
@@ -49,7 +168,132 @@ export async function POST(req: NextRequest) {
 
       case "/noite": {
         const report = await gerarNoite(supabase, hoje);
-        await sendTelegramMessage(formatNoiteHTML(report), chatId);
+
+        // Fetch extra data for enhanced report
+        const { data: vendasHoje } = await supabase
+          .from("vendas")
+          .select("*")
+          .eq("data", hoje)
+          .neq("status_pagamento", "CANCELADO")
+          .order("created_at", { ascending: true });
+
+        const vs = vendasHoje ?? [];
+
+        // Gastos de hoje por categoria
+        const { data: gastosHoje } = await supabase
+          .from("gastos")
+          .select("valor, tipo, categoria, descricao, banco")
+          .eq("data", hoje);
+
+        const gs = gastosHoje ?? [];
+        const saidasHoje = gs.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR");
+        const fornecedorHoje = gs.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR");
+
+        // Recebimentos hoje (D+0) e amanhã (D+1)
+        const vendasD0 = vs.filter(v => v.recebimento === "D+0");
+        const vendasD1 = vs.filter(v => v.recebimento === "D+1");
+
+        // Build enhanced report
+        const lines: string[] = [];
+        lines.push(`🌙 <b>FECHAMENTO DO DIA — TigrãoImports</b>`);
+        lines.push(`📅 ${hoje}`);
+        lines.push(``);
+
+        // VENDAS DE HOJE
+        const faturamento = vs.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const custoTotal = vs.reduce((s, v) => s + Number(v.custo || 0), 0);
+        const lucroHoje = vs.reduce((s, v) => s + Number(v.lucro || 0), 0);
+        const margemHoje = faturamento > 0 ? ((lucroHoje / faturamento) * 100).toFixed(1) : "0";
+
+        lines.push(`🛒 <b>VENDAS DE HOJE</b>`);
+        lines.push(`  Quantidade: <b>${vs.length}</b>`);
+        lines.push(`  Faturamento: <b>${fmtBRL(faturamento)}</b>`);
+        lines.push(`  Custo: ${fmtBRL(custoTotal)}`);
+        lines.push(`  Lucro: <b>${fmtBRL(lucroHoje)}</b>`);
+        lines.push(`  Margem: ${margemHoje}%`);
+
+        // Detalhes por tipo
+        const tipos: Record<string, { qty: number; lucro: number }> = {};
+        for (const v of vs) {
+          if (!tipos[v.tipo]) tipos[v.tipo] = { qty: 0, lucro: 0 };
+          tipos[v.tipo].qty++;
+          tipos[v.tipo].lucro += Number(v.lucro || 0);
+        }
+        for (const [tipo, info] of Object.entries(tipos)) {
+          const emoji = tipo === "UPGRADE" ? "🔄" : tipo === "ATACADO" ? "📦" : "🏪";
+          lines.push(`  ${emoji} ${tipo}: ${info.qty}x | ${fmtBRL(info.lucro)}`);
+        }
+        lines.push(``);
+
+        // RECEBIMENTOS HOJE (PIX/Dinheiro)
+        const pixItau = vendasD0.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixInf = vendasD0.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixMp = vendasD0.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixEsp = vendasD0.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const totalD0 = pixItau + pixInf + pixMp + pixEsp;
+
+        if (totalD0 > 0) {
+          lines.push(`💰 <b>RECEBIMENTOS HOJE (PIX/Dinheiro)</b>`);
+          if (pixItau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(pixItau)}`);
+          if (pixInf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(pixInf)}`);
+          if (pixMp > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(pixMp)}`);
+          if (pixEsp > 0) lines.push(`  💵 Espécie: ${fmtBRL(pixEsp)}`);
+          lines.push(`  <b>Total: ${fmtBRL(totalD0)}</b>`);
+          lines.push(``);
+        }
+
+        // RECEBIMENTOS AMANHÃ (Crédito D+1)
+        const d1Itau = vendasD1.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const d1Inf = vendasD1.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const d1Mp = vendasD1.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const totalD1 = d1Itau + d1Inf + d1Mp;
+
+        if (totalD1 > 0) {
+          lines.push(`💳 <b>RECEBIMENTOS AMANHÃ (Crédito)</b>`);
+          if (d1Itau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(d1Itau)}`);
+          if (d1Inf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(d1Inf)}`);
+          if (d1Mp > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(d1Mp)}`);
+          lines.push(`  <b>Total: ${fmtBRL(totalD1)}</b>`);
+          lines.push(``);
+        }
+
+        // SAÍDAS DE HOJE (por categoria)
+        if (saidasHoje.length > 0) {
+          const catGastos: Record<string, number> = {};
+          for (const g of saidasHoje) {
+            catGastos[g.categoria] = (catGastos[g.categoria] || 0) + Number(g.valor || 0);
+          }
+          const totalSaidas = saidasHoje.reduce((s, g) => s + Number(g.valor || 0), 0);
+
+          lines.push(`📤 <b>SAÍDAS DE HOJE</b>`);
+          for (const [cat, val] of Object.entries(catGastos).sort((a, b) => b[1] - a[1])) {
+            lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
+          }
+          lines.push(`  <b>Total: ${fmtBRL(totalSaidas)}</b>`);
+          lines.push(``);
+        }
+
+        // PAGO A FORNECEDOR HOJE → PRODUTOS A CAMINHO
+        if (fornecedorHoje.length > 0) {
+          const totalFornecedor = fornecedorHoje.reduce((s, g) => s + Number(g.valor || 0), 0);
+          lines.push(`🏭 <b>PAGO A FORNECEDOR HOJE → PRODUTOS A CAMINHO</b>`);
+          for (const g of fornecedorHoje) {
+            lines.push(`  • ${g.descricao || "Compra fornecedor"}: ${fmtBRL(Number(g.valor || 0))}`);
+          }
+          lines.push(`  <b>Total: ${fmtBRL(totalFornecedor)}</b>`);
+          lines.push(``);
+        }
+
+        // SALDOS BANCÁRIOS
+        lines.push(`🏦 <b>SALDOS BANCÁRIOS</b>`);
+        lines.push(`  Itaú: <b>${fmtBRL(report.esp_itau)}</b>`);
+        lines.push(`  Infinite: <b>${fmtBRL(report.esp_inf)}</b>`);
+        lines.push(`  Mercado Pago: <b>${fmtBRL(report.esp_mp)}</b>`);
+        lines.push(`  Espécie: <b>${fmtBRL(report.esp_especie)}</b>`);
+        const totalSaldos = report.esp_itau + report.esp_inf + report.esp_mp + report.esp_especie;
+        lines.push(`  <b>Total: ${fmtBRL(totalSaldos)}</b>`);
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
         break;
       }
 
@@ -62,8 +306,40 @@ export async function POST(req: NextRequest) {
       case "/saldos": {
         const parts = text.split(/\s+/);
         if (parts.length < 4) {
+          // Sem parâmetros: mostrar saldos atuais
+          const { data: saldoRecente } = await supabase
+            .from("saldos_bancarios")
+            .select("*")
+            .order("data", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!saldoRecente) {
+            await sendTelegramMessage(`Nenhum saldo registrado. Use:\n/saldos [itau] [infinite] [mp]\nEx: /saldos 15000 8000 3000`, chatId);
+            break;
+          }
+
+          const itau = Number(saldoRecente.esp_itau || saldoRecente.itau_base || 0);
+          const inf = Number(saldoRecente.esp_inf || saldoRecente.inf_base || 0);
+          const mp = Number(saldoRecente.esp_mp || saldoRecente.mp_base || 0);
+          const esp = Number(saldoRecente.esp_especie || 0);
+          const total = itau + inf + mp + esp;
+
           await sendTelegramMessage(
-            `Uso: /saldos [itau] [infinite] [mp]\nEx: /saldos 15000 8000 3000`,
+            [
+              `🏦 <b>SALDOS BANCÁRIOS</b>`,
+              `📅 Ref: ${saldoRecente.data}`,
+              ``,
+              `🏦 Itaú: <b>${fmtBRL(itau)}</b>`,
+              `🏦 Infinite: <b>${fmtBRL(inf)}</b>`,
+              `🏦 Mercado Pago: <b>${fmtBRL(mp)}</b>`,
+              `💵 Espécie: <b>${fmtBRL(esp)}</b>`,
+              ``,
+              `<b>Total: ${fmtBRL(total)}</b>`,
+              ``,
+              `Para atualizar base manhã:`,
+              `/saldos [itau] [infinite] [mp]`,
+            ].join("\n"),
             chatId
           );
           break;
@@ -83,14 +359,13 @@ export async function POST(req: NextRequest) {
           { onConflict: "data" }
         );
 
-        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
         await sendTelegramMessage(
           [
-            `<b>Saldos base atualizados</b>`,
+            `✅ <b>Saldos base atualizados</b>`,
             ``,
-            `Itau: ${fmtBRL(itau)}`,
-            `Infinite: ${fmtBRL(inf)}`,
-            `Mercado Pago: ${fmtBRL(mp)}`,
+            `🏦 Itaú: ${fmtBRL(itau)}`,
+            `🏦 Infinite: ${fmtBRL(inf)}`,
+            `🏦 Mercado Pago: ${fmtBRL(mp)}`,
             ``,
             `Data: ${hoje}`,
           ].join("\n"),
@@ -121,7 +396,7 @@ export async function POST(req: NextRequest) {
 
         const lines = [`🚨 <b>PRODUTOS ZERADOS — ${zerados.length} itens</b>`, ""];
         for (const [cat, items] of Object.entries(byCat)) {
-          lines.push(`<b>${cat}</b>`);
+          lines.push(`${getProdEmoji(cat)} <b>${cat}</b> (${items.length})`);
           lines.push(...items);
           lines.push("");
         }
@@ -152,7 +427,7 @@ export async function POST(req: NextRequest) {
 
         const lines = [`⚠️ <b>ACABANDO (1 unidade) — ${lowStock.length} itens</b>`, ""];
         for (const [cat, items] of Object.entries(byCat)) {
-          lines.push(`<b>${cat}</b>`);
+          lines.push(`${getProdEmoji(cat)} <b>${cat}</b> (${items.length})`);
           lines.push(...items);
           lines.push("");
         }
@@ -183,16 +458,28 @@ export async function POST(req: NextRequest) {
 
         if (zerados.length > 0) {
           lines.push(`🔴 <b>ZERADOS (${zerados.length}):</b>`);
+          const byCat: Record<string, string[]> = {};
           for (const p of zerados) {
-            lines.push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+            if (!byCat[p.categoria]) byCat[p.categoria] = [];
+            byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+          }
+          for (const [cat, items] of Object.entries(byCat)) {
+            lines.push(`${getProdEmoji(cat)} <b>${cat}</b>`);
+            lines.push(...items);
           }
           lines.push("");
         }
 
         if (acabando.length > 0) {
           lines.push(`🟡 <b>ACABANDO (${acabando.length}):</b>`);
+          const byCat: Record<string, string[]> = {};
           for (const p of acabando) {
-            lines.push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+            if (!byCat[p.categoria]) byCat[p.categoria] = [];
+            byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+          }
+          for (const [cat, items] of Object.entries(byCat)) {
+            lines.push(`${getProdEmoji(cat)} <b>${cat}</b>`);
+            lines.push(...items);
           }
         }
 
@@ -207,22 +494,39 @@ export async function POST(req: NextRequest) {
         d.setDate(d.getDate() - 6);
         const inicio = d.toISOString().split("T")[0];
 
-        const { data: vendasSem } = await supabase
-          .from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
-          .gte("data", inicio).lte("data", fim)
-          .neq("status_pagamento", "CANCELADO");
+        // Semana anterior (para comparativo)
+        const d2 = new Date();
+        d2.setDate(d2.getDate() - 7);
+        const fimAnterior = d2.toISOString().split("T")[0];
+        d2.setDate(d2.getDate() - 6);
+        const inicioAnterior = d2.toISOString().split("T")[0];
 
-        const { data: gastosSem } = await supabase
-          .from("gastos").select("valor, tipo, categoria")
-          .gte("data", inicio).lte("data", fim);
+        const [
+          { data: vendasSem },
+          { data: gastosSem },
+          { data: vendasSemAnt },
+          { data: gastosSemAnt },
+        ] = await Promise.all([
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, status_pagamento")
+            .gte("data", inicio).lte("data", fim).neq("status_pagamento", "CANCELADO"),
+          supabase.from("gastos").select("valor, tipo, categoria")
+            .gte("data", inicio).lte("data", fim),
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
+            .gte("data", inicioAnterior).lte("data", fimAnterior).neq("status_pagamento", "CANCELADO"),
+          supabase.from("gastos").select("valor, tipo, categoria")
+            .gte("data", inicioAnterior).lte("data", fimAnterior),
+        ]);
 
         const vs = vendasSem ?? [];
         const gs = gastosSem ?? [];
+        const vsAnt = vendasSemAnt ?? [];
+        const gsAnt = gastosSemAnt ?? [];
 
         const faturamento = vs.reduce((s, v) => s + (v.preco_vendido || 0), 0);
         const custoTotal = vs.reduce((s, v) => s + (v.custo || 0), 0);
         const lucroSem = vs.reduce((s, v) => s + (v.lucro || 0), 0);
         const gastosSaida = gs.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+        const comprasFornecedor = gs.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
         const margemMedia = faturamento > 0 ? ((lucroSem / faturamento) * 100).toFixed(1) : "0";
         const ticketMedio = vs.length > 0 ? Math.round(faturamento / vs.length) : 0;
 
@@ -231,26 +535,104 @@ export async function POST(req: NextRequest) {
         const vendas = vs.filter(v => v.tipo === "VENDA");
         const atacado = vs.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
 
-        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
-        const lines = [
-          `📊 <b>RELATÓRIO SEMANAL</b>`,
-          `${inicio} a ${fim}`,
+        // Médias diárias
+        const mediaDiariaFat = vs.length > 0 ? faturamento / 7 : 0;
+        const mediaDiariaLucro = vs.length > 0 ? lucroSem / 7 : 0;
+
+        // Gastos por categoria
+        const catGastos: Record<string, number> = {};
+        gs.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").forEach(g => {
+          catGastos[g.categoria] = (catGastos[g.categoria] || 0) + (g.valor || 0);
+        });
+
+        // Comparativo
+        const fatAnt = vsAnt.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+        const lucroAnt = vsAnt.reduce((s, v) => s + (v.lucro || 0), 0);
+        const gastosAnt = gsAnt.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+
+        const lines: string[] = [
+          `📊 <b>RELATÓRIO SEMANAL — TigrãoImports</b>`,
+          `📅 ${inicio} a ${fim}`,
           ``,
-          `💰 <b>Faturamento:</b> ${fmtBRL(faturamento)}`,
-          `📦 <b>Custo:</b> ${fmtBRL(custoTotal)}`,
-          `📈 <b>Lucro:</b> ${fmtBRL(lucroSem)}`,
-          `📉 <b>Margem:</b> ${margemMedia}%`,
-          `🎫 <b>Ticket médio:</b> ${fmtBRL(ticketMedio)}`,
-          `🛒 <b>Total vendas:</b> ${vs.length}`,
+          `🛒 <b>VENDAS DA SEMANA</b>`,
+          `  Quantidade: <b>${vs.length}</b>`,
+          `  Faturamento: <b>${fmtBRL(faturamento)}</b>`,
+          `  Custo: ${fmtBRL(custoTotal)}`,
+          `  Lucro bruto: <b>${fmtBRL(lucroSem)}</b>`,
+          `  Margem: ${margemMedia}%`,
+          `  Ticket médio: ${fmtBRL(ticketMedio)}`,
           ``,
-          `<b>Por tipo:</b>`,
-          `  🔄 Upgrades: ${upgrades.length} | Lucro: ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  🏪 Vendas: ${vendas.length} | Lucro: ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  📦 Atacado: ${atacado.length} | Lucro: ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  🔄 Upgrades: ${upgrades.length}x | ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  🏪 Vendas: ${vendas.length}x | ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  📦 Atacado: ${atacado.length}x | ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
           ``,
-          `📤 <b>Gastos (sem fornecedor):</b> ${fmtBRL(gastosSaida)}`,
-          `💵 <b>Lucro líquido:</b> ${fmtBRL(lucroSem - gastosSaida)}`,
+          `📈 <b>MÉDIAS DIÁRIAS</b>`,
+          `  Faturamento/dia: ${fmtBRL(mediaDiariaFat)}`,
+          `  Lucro/dia: ${fmtBRL(mediaDiariaLucro)}`,
         ];
+
+        // Saídas por categoria
+        if (Object.keys(catGastos).length > 0) {
+          lines.push(``);
+          lines.push(`📤 <b>SAÍDAS DA SEMANA</b>`);
+          for (const [cat, val] of Object.entries(catGastos).sort((a, b) => b[1] - a[1])) {
+            lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
+          }
+          lines.push(`  <b>Total operacional: ${fmtBRL(gastosSaida)}</b>`);
+        }
+
+        if (comprasFornecedor > 0) {
+          lines.push(``);
+          lines.push(`🏭 <b>Compras fornecedor:</b> ${fmtBRL(comprasFornecedor)}`);
+        }
+
+        lines.push(``);
+        lines.push(`💵 <b>RESULTADO</b>`);
+        lines.push(`  Lucro bruto: ${fmtBRL(lucroSem)}`);
+        lines.push(`  − Gastos operacionais: ${fmtBRL(gastosSaida)}`);
+        lines.push(`  <b>= Lucro líquido: ${fmtBRL(lucroSem - gastosSaida)}</b>`);
+
+        // Patrimônio
+        try {
+          const patrimonio = await getPatrimonio();
+          lines.push(``);
+          lines.push(`🏛️ <b>PATRIMÔNIO ATUAL</b>`);
+          lines.push(`  🏦 Saldo bancário: ${fmtBRL(patrimonio.saldoBancario)}`);
+          lines.push(`  📦 Em estoque (${patrimonio.unidadesEstoque} un.): ${fmtBRL(patrimonio.valorEstoque)}`);
+          if (patrimonio.valorACaminho > 0) {
+            lines.push(`  🚚 A caminho: ${fmtBRL(patrimonio.valorACaminho)}`);
+          }
+          lines.push(`  💰 Capital em produtos: ${fmtBRL(patrimonio.capitalProdutos)}`);
+          lines.push(`  <b>🏆 PATRIMÔNIO TOTAL: ${fmtBRL(patrimonio.patrimonioTotal)}</b>`);
+        } catch { /* ignore */ }
+
+        // Comparativo
+        if (vsAnt.length > 0) {
+          const fatDiff = faturamento - fatAnt;
+          const lucroDiff = lucroSem - lucroAnt;
+          const fatPct = fatAnt > 0 ? ((fatDiff / fatAnt) * 100).toFixed(1) : "—";
+          const lucroPct = lucroAnt > 0 ? ((lucroDiff / lucroAnt) * 100).toFixed(1) : "—";
+
+          lines.push(``);
+          lines.push(`📊 <b>COMPARATIVO (semana anterior)</b>`);
+          lines.push(`  Vendas: ${vsAnt.length} → ${vs.length} (${vs.length - vsAnt.length >= 0 ? "+" : ""}${vs.length - vsAnt.length})`);
+          lines.push(`  Faturamento: ${fatDiff >= 0 ? "+" : ""}${fmtBRL(fatDiff)} (${fatPct}%)`);
+          lines.push(`  Lucro: ${lucroDiff >= 0 ? "+" : ""}${fmtBRL(lucroDiff)} (${lucroPct}%)`);
+        }
+
+        // Fiado pendente
+        const fiados = await getFiadoPendente();
+        if (fiados.length > 0) {
+          const totalFiado = fiados.reduce((s, f) => s + Number(f.preco_vendido || 0), 0);
+          lines.push(``);
+          lines.push(`🔴 <b>FIADO PENDENTE (${fiados.length})</b>`);
+          for (const f of fiados.slice(0, 10)) {
+            lines.push(`  • ${f.cliente}: ${fmtBRL(Number(f.preco_vendido || 0))} (${f.data})`);
+          }
+          if (fiados.length > 10) lines.push(`  ... e mais ${fiados.length - 10}`);
+          lines.push(`  <b>Total: ${fmtBRL(totalFiado)}</b>`);
+        }
+
         await sendTelegramMessage(lines.join("\n"), chatId);
         break;
       }
@@ -258,17 +640,36 @@ export async function POST(req: NextRequest) {
       case "/mensal": {
         const mesAtual = hoje.slice(0, 7); // YYYY-MM
 
-        const { data: vendasMes } = await supabase
-          .from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
-          .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`)
-          .neq("status_pagamento", "CANCELADO");
+        // Mês anterior
+        const dMesAnt = new Date(`${mesAtual}-15T12:00:00`);
+        dMesAnt.setMonth(dMesAnt.getMonth() - 1);
+        const mesAnterior = `${dMesAnt.getFullYear()}-${String(dMesAnt.getMonth() + 1).padStart(2, "0")}`;
 
-        const { data: gastosMes } = await supabase
-          .from("gastos").select("valor, tipo, categoria")
-          .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`);
+        // Dia do mês atual
+        const diaDoMes = parseInt(hoje.slice(8, 10));
+        const totalDiasMes = new Date(parseInt(mesAtual.slice(0, 4)), parseInt(mesAtual.slice(5, 7)), 0).getDate();
+
+        const [
+          { data: vendasMes },
+          { data: gastosMes },
+          { data: vendasMesAnt },
+          { data: gastosMesAnt },
+        ] = await Promise.all([
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, cliente, status_pagamento")
+            .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`).neq("status_pagamento", "CANCELADO"),
+          supabase.from("gastos").select("valor, tipo, categoria, descricao")
+            .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`),
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
+            .gte("data", `${mesAnterior}-01`).lte("data", `${mesAnterior}-${String(Math.min(diaDoMes, 28)).padStart(2, "0")}`)
+            .neq("status_pagamento", "CANCELADO"),
+          supabase.from("gastos").select("valor, tipo, categoria")
+            .gte("data", `${mesAnterior}-01`).lte("data", `${mesAnterior}-${String(Math.min(diaDoMes, 28)).padStart(2, "0")}`),
+        ]);
 
         const vm = vendasMes ?? [];
         const gm = gastosMes ?? [];
+        const vmAnt = vendasMesAnt ?? [];
+        const gmAnt = gastosMesAnt ?? [];
 
         const faturamento = vm.reduce((s, v) => s + (v.preco_vendido || 0), 0);
         const custoTotal = vm.reduce((s, v) => s + (v.custo || 0), 0);
@@ -284,45 +685,113 @@ export async function POST(req: NextRequest) {
         const atacado = vm.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
         const clienteFinal = vm.filter(v => v.origem !== "ATACADO");
 
-        // Top categorias de gastos
+        // Médias e projeção
+        const diasUteis = Math.max(diaDoMes, 1);
+        const mediaDiariaFat = faturamento / diasUteis;
+        const mediaDiariaLucro = lucroMes / diasUteis;
+        const projecaoFat = mediaDiariaFat * totalDiasMes;
+        const projecaoLucro = mediaDiariaLucro * totalDiasMes;
+
+        const nomeMes = new Date(`${mesAtual}-15`).toLocaleString("pt-BR", { month: "long", year: "numeric" });
+
+        const lines: string[] = [
+          `📅 <b>RELATÓRIO MENSAL — ${nomeMes.toUpperCase()}</b>`,
+          `📊 Dia ${diaDoMes} de ${totalDiasMes}`,
+          ``,
+          `🛒 <b>VENDAS DO MÊS</b>`,
+          `  Quantidade: <b>${vm.length}</b>`,
+          `  Faturamento: <b>${fmtBRL(faturamento)}</b>`,
+          `  Custo: ${fmtBRL(custoTotal)}`,
+          `  Lucro bruto: <b>${fmtBRL(lucroMes)}</b>`,
+          `  Margem: ${margemMedia}%`,
+          `  Ticket médio: ${fmtBRL(ticketMedio)}`,
+          ``,
+          `  🔄 Upgrades: ${upgrades.length}x | ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  🏪 Vendas: ${vendas.length}x | ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  📦 Atacado: ${atacado.length}x | ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  👤 Cliente final: ${clienteFinal.length}x | ${fmtBRL(clienteFinal.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          ``,
+          `📈 <b>MÉDIAS E PROJEÇÃO</b>`,
+          `  Média diária fat: ${fmtBRL(mediaDiariaFat)}`,
+          `  Média diária lucro: ${fmtBRL(mediaDiariaLucro)}`,
+          `  Projeção fat mês: ${fmtBRL(projecaoFat)}`,
+          `  Projeção lucro mês: ${fmtBRL(projecaoLucro)}`,
+        ];
+
+        // Saídas por categoria com emojis
         const catGastos: Record<string, number> = {};
         gm.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").forEach(g => {
           catGastos[g.categoria] = (catGastos[g.categoria] || 0) + (g.valor || 0);
         });
 
-        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
-        const nomeMes = new Date(`${mesAtual}-15`).toLocaleString("pt-BR", { month: "long", year: "numeric" });
-
-        const lines = [
-          `📅 <b>RELATÓRIO MENSAL — ${nomeMes.toUpperCase()}</b>`,
-          ``,
-          `💰 <b>Faturamento:</b> ${fmtBRL(faturamento)}`,
-          `📦 <b>Custo produtos:</b> ${fmtBRL(custoTotal)}`,
-          `📈 <b>Lucro bruto:</b> ${fmtBRL(lucroMes)}`,
-          `📉 <b>Margem média:</b> ${margemMedia}%`,
-          `🎫 <b>Ticket médio:</b> ${fmtBRL(ticketMedio)}`,
-          `🛒 <b>Total vendas:</b> ${vm.length}`,
-          ``,
-          `<b>Por tipo:</b>`,
-          `  🔄 Upgrades: ${upgrades.length} | ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  🏪 Vendas: ${vendas.length} | ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  📦 Atacado: ${atacado.length} | ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  👤 Cliente final: ${clienteFinal.length} | ${fmtBRL(clienteFinal.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          ``,
-          `<b>Gastos operacionais:</b> ${fmtBRL(gastosSaida)}`,
-        ];
-
-        // Top 5 categorias
-        const topCats = Object.entries(catGastos).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        if (topCats.length > 0) {
-          for (const [cat, val] of topCats) {
-            lines.push(`  • ${cat}: ${fmtBRL(val)}`);
+        if (Object.keys(catGastos).length > 0) {
+          lines.push(``);
+          lines.push(`📤 <b>SAÍDAS DO MÊS</b>`);
+          for (const [cat, val] of Object.entries(catGastos).sort((a, b) => b[1] - a[1])) {
+            lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
           }
+          lines.push(`  <b>Total operacional: ${fmtBRL(gastosSaida)}</b>`);
+        }
+
+        if (comprasFornecedor > 0) {
+          lines.push(``);
+          lines.push(`🏭 <b>Compras fornecedor:</b> ${fmtBRL(comprasFornecedor)}`);
         }
 
         lines.push(``);
-        lines.push(`🏭 <b>Compras fornecedor:</b> ${fmtBRL(comprasFornecedor)}`);
-        lines.push(`💵 <b>Lucro líquido:</b> ${fmtBRL(lucroMes - gastosSaida)}`);
+        lines.push(`💵 <b>RESULTADO</b>`);
+        lines.push(`  Lucro bruto: ${fmtBRL(lucroMes)}`);
+        lines.push(`  − Gastos operacionais: ${fmtBRL(gastosSaida)}`);
+        lines.push(`  <b>= Lucro líquido: ${fmtBRL(lucroMes - gastosSaida)}</b>`);
+
+        // Patrimônio
+        try {
+          const patrimonio = await getPatrimonio();
+          lines.push(``);
+          lines.push(`🏛️ <b>PATRIMÔNIO ATUAL</b>`);
+          lines.push(`  🏦 Saldo bancário: ${fmtBRL(patrimonio.saldoBancario)}`);
+          lines.push(`    Itaú: ${fmtBRL(patrimonio.itau)}`);
+          lines.push(`    Infinite: ${fmtBRL(patrimonio.infinite)}`);
+          lines.push(`    MP: ${fmtBRL(patrimonio.mp)}`);
+          if (patrimonio.especie > 0) lines.push(`    Espécie: ${fmtBRL(patrimonio.especie)}`);
+          lines.push(`  📦 Em estoque (${patrimonio.unidadesEstoque} un.): ${fmtBRL(patrimonio.valorEstoque)}`);
+          if (patrimonio.valorACaminho > 0) {
+            lines.push(`  🚚 A caminho: ${fmtBRL(patrimonio.valorACaminho)}`);
+          }
+          lines.push(`  💰 Capital em produtos: ${fmtBRL(patrimonio.capitalProdutos)}`);
+          lines.push(`  <b>🏆 PATRIMÔNIO TOTAL: ${fmtBRL(patrimonio.patrimonioTotal)}</b>`);
+        } catch { /* ignore */ }
+
+        // Comparativo com mês anterior (mesmo período)
+        if (vmAnt.length > 0) {
+          const fatAnt = vmAnt.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+          const lucroAnt = vmAnt.reduce((s, v) => s + (v.lucro || 0), 0);
+          const fatDiff = faturamento - fatAnt;
+          const lucroDiff = lucroMes - lucroAnt;
+          const fatPct = fatAnt > 0 ? ((fatDiff / fatAnt) * 100).toFixed(1) : "—";
+          const lucroPct = lucroAnt > 0 ? ((lucroDiff / lucroAnt) * 100).toFixed(1) : "—";
+
+          const nomeMesAnt = new Date(`${mesAnterior}-15`).toLocaleString("pt-BR", { month: "long" });
+
+          lines.push(``);
+          lines.push(`📊 <b>COMPARATIVO (vs ${nomeMesAnt}, mesmo período)</b>`);
+          lines.push(`  Vendas: ${vmAnt.length} → ${vm.length} (${vm.length - vmAnt.length >= 0 ? "+" : ""}${vm.length - vmAnt.length})`);
+          lines.push(`  Faturamento: ${fatDiff >= 0 ? "+" : ""}${fmtBRL(fatDiff)} (${fatPct}%)`);
+          lines.push(`  Lucro: ${lucroDiff >= 0 ? "+" : ""}${fmtBRL(lucroDiff)} (${lucroPct}%)`);
+        }
+
+        // Fiado pendente
+        const fiados = await getFiadoPendente();
+        if (fiados.length > 0) {
+          const totalFiado = fiados.reduce((s, f) => s + Number(f.preco_vendido || 0), 0);
+          lines.push(``);
+          lines.push(`🔴 <b>FIADO PENDENTE (${fiados.length})</b>`);
+          for (const f of fiados.slice(0, 10)) {
+            lines.push(`  • ${f.cliente}: ${fmtBRL(Number(f.preco_vendido || 0))} — ${f.produto || ""}`);
+          }
+          if (fiados.length > 10) lines.push(`  ... e mais ${fiados.length - 10}`);
+          lines.push(`  <b>Total fiado: ${fmtBRL(totalFiado)}</b>`);
+        }
 
         await sendTelegramMessage(lines.join("\n"), chatId);
         break;
@@ -344,10 +813,9 @@ export async function POST(req: NextRequest) {
           totalValor += p.qnt * (p.custo_unitario || 0);
         }
 
-        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
         const lines = [`📦 <b>RESUMO DO ESTOQUE</b>`, ""];
         for (const [cat, v] of Object.entries(cats).sort(([a], [b]) => a.localeCompare(b))) {
-          lines.push(`<b>${cat}</b>: ${v.qtd} un. | ${fmtBRL(v.valor)}`);
+          lines.push(`${getProdEmoji(cat)} <b>${cat}</b>: ${v.qtd} un. | ${fmtBRL(v.valor)}`);
         }
         lines.push("");
         lines.push(`<b>TOTAL: ${totalQtd} unidades | ${fmtBRL(totalValor)}</b>`);
