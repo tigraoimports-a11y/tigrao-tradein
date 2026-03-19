@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { gerarParcial, gerarNoite, gerarManha } from "@/lib/reports";
-import { sendTelegramMessage, formatParcialHTML, formatNoiteHTML, formatManhaHTML } from "@/lib/telegram";
-import { hojeISO } from "@/lib/business-days";
+import { gerarNoite, gerarManha } from "@/lib/reports";
+import { sendTelegramMessage, formatNoiteHTML, formatManhaHTML } from "@/lib/telegram";
+import { hojeISO, proximoDiaUtil, formatDateBR } from "@/lib/business-days";
 
 const GRUPO_ID = process.env.TELEGRAM_CHAT_ID ?? "";
 
@@ -161,8 +161,246 @@ export async function POST(req: NextRequest) {
 
       case "/dashboard":
       case "/parcial": {
-        const report = await gerarParcial(supabase, hoje);
-        await sendTelegramMessage(formatParcialHTML(report), chatId);
+        const now = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        const hojeFormatado = formatDateBR(hoje);
+
+        // 1. Vendas de hoje
+        const { data: vendasHojeParcial } = await supabase
+          .from("vendas")
+          .select("*")
+          .eq("data", hoje)
+          .neq("status_pagamento", "CANCELADO")
+          .order("created_at", { ascending: true });
+
+        const vp = vendasHojeParcial ?? [];
+        const fatParcial = vp.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const custoParcial = vp.reduce((s, v) => s + Number(v.custo || 0), 0);
+        const lucroParcial = vp.reduce((s, v) => s + Number(v.lucro || 0), 0);
+        const margemParcial = fatParcial > 0 ? ((lucroParcial / fatParcial) * 100).toFixed(1) : "0";
+
+        // Atacado vs Cliente Final
+        const atacadoP = vp.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
+        const clienteFinalP = vp.filter(v => v.tipo !== "ATACADO" && v.origem !== "ATACADO");
+
+        // Por origem (dentro de cliente final)
+        const porOrigem: Record<string, { qty: number; lucro: number }> = {};
+        for (const v of clienteFinalP) {
+          const orig = v.origem || "Não informado";
+          if (!porOrigem[orig]) porOrigem[orig] = { qty: 0, lucro: 0 };
+          porOrigem[orig].qty++;
+          porOrigem[orig].lucro += Number(v.lucro || 0);
+        }
+
+        // Mapeamento de origens para labels
+        const origemLabel: Record<string, string> = {
+          "ANUNCIO": "Anúncio",
+          "RECOMPRA": "Recompra",
+          "INDICACAO": "Indicação",
+          "ATACADO": "Atacado",
+        };
+        // Por tipo (Upgrade, Venda)
+        const porTipo: Record<string, { qty: number; lucro: number }> = {};
+        for (const v of clienteFinalP) {
+          const tipo = v.tipo || "Não informado";
+          if (!porTipo[tipo]) porTipo[tipo] = { qty: 0, lucro: 0 };
+          porTipo[tipo].qty++;
+          porTipo[tipo].lucro += Number(v.lucro || 0);
+        }
+
+        const lines: string[] = [];
+        lines.push(`📊 <b>RESUMO DO DIA — TIGRÃO</b>`);
+        lines.push(`🕒 ${hojeFormatado} às ${now.split(", ")[1] || now.split(" ")[1] || ""}`);
+        lines.push(`──────────────────`);
+
+        // VENDAS REALIZADAS
+        lines.push(`🛒 <b>VENDAS REALIZADAS</b>`);
+        lines.push(`${vp.length} venda(s) concluída(s)`);
+        lines.push(`Faturamento: ${fmtBRL(fatParcial)}`);
+        lines.push(`Custo: ${fmtBRL(custoParcial)}`);
+        lines.push(`Lucro: ${fmtBRL(lucroParcial)}`);
+        lines.push(`Margem: ${margemParcial}%`);
+
+        if (atacadoP.length > 0) {
+          lines.push(`🏢 Atacado: ${atacadoP.length} — ${fmtBRL(atacadoP.reduce((s, v) => s + Number(v.lucro || 0), 0))} (lucro)`);
+        }
+        if (clienteFinalP.length > 0) {
+          lines.push(`👤 Cliente Final: ${clienteFinalP.length} — ${fmtBRL(clienteFinalP.reduce((s, v) => s + Number(v.lucro || 0), 0))} (lucro)`);
+        }
+
+        // Por origem
+        const origemOrder = ["ANUNCIO", "RECOMPRA", "INDICACAO"];
+        for (const key of origemOrder) {
+          if (porOrigem[key]) {
+            lines.push(`  • ${origemLabel[key] || key}: ${porOrigem[key].qty} / ${fmtBRL(porOrigem[key].lucro)}`);
+          }
+        }
+        // Tipos (Upgrade, Venda)
+        if (porTipo["UPGRADE"]) {
+          lines.push(`  • Upgrade: ${porTipo["UPGRADE"].qty} / ${fmtBRL(porTipo["UPGRADE"].lucro)}`);
+        }
+        if (porTipo["VENDA"]) {
+          lines.push(`  • Venda: ${porTipo["VENDA"].qty} / ${fmtBRL(porTipo["VENDA"].lucro)}`);
+        }
+        // Outras origens não listadas
+        for (const [key, info] of Object.entries(porOrigem)) {
+          if (!origemOrder.includes(key)) {
+            lines.push(`  • ${origemLabel[key] || key}: ${info.qty} / ${fmtBRL(info.lucro)}`);
+          }
+        }
+
+        // 2. FIADO VENDIDO HOJE
+        const fiadoHoje = vp.filter(v => v.forma === "FIADO");
+        if (fiadoHoje.length > 0) {
+          lines.push(``);
+          lines.push(`⏳ <b>FIADO VENDIDO HOJE</b>`);
+          for (const f of fiadoHoje) {
+            lines.push(`  • ${f.cliente} — ${fmtBRL(Number(f.preco_vendido || 0))}`);
+          }
+        }
+
+        // 3. FIADO PENDENTE (todos)
+        const fiadosPendentes = await getFiadoPendente();
+        if (fiadosPendentes.length > 0) {
+          lines.push(``);
+          lines.push(`📋 <b>FIADO PENDENTE</b>`);
+          // Agrupar por data
+          const porData: Record<string, typeof fiadosPendentes> = {};
+          for (const f of fiadosPendentes) {
+            if (!porData[f.data]) porData[f.data] = [];
+            porData[f.data].push(f);
+          }
+          for (const [data, items] of Object.entries(porData).sort(([a], [b]) => a.localeCompare(b))) {
+            const totalData = items.reduce((s, f) => s + Number(f.preco_vendido || 0), 0);
+            lines.push(`  📅 ${formatDateBR(data)}: ${items.length} — ${fmtBRL(totalData)}`);
+            for (const f of items) {
+              lines.push(`    • ${f.cliente} — ${fmtBRL(Number(f.preco_vendido || 0))}`);
+            }
+          }
+        }
+
+        // 4. VENDAS PENDENTES DE PAGAMENTO (status AGUARDANDO, não fiado)
+        const { data: pendentes } = await supabase
+          .from("vendas")
+          .select("cliente, custo, preco_vendido, produto")
+          .eq("status_pagamento", "AGUARDANDO")
+          .neq("forma", "FIADO")
+          .eq("data", hoje);
+
+        if (pendentes && pendentes.length > 0) {
+          lines.push(``);
+          lines.push(`⏳ <b>VENDAS PENDENTES DE PAGAMENTO</b>`);
+          for (const p of pendentes) {
+            lines.push(`  • ${p.cliente} — custo: ${fmtBRL(Number(p.custo || 0))}`);
+          }
+        }
+
+        lines.push(``);
+        lines.push(`──────────────────`);
+
+        // 5. RECEBIDO ATÉ AGORA (D+0)
+        const vendasD0P = vp.filter(v => v.recebimento === "D+0");
+        const pixItauP = vendasD0P.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixInfP = vendasD0P.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixMpP = vendasD0P.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const pixEspP = vendasD0P.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+
+        // Sinais antecipados
+        const totalSinal = vp.reduce((s, v) => s + Number(v.sinal_antecipado || 0), 0);
+
+        // Reajustes de hoje
+        const { data: reajustesHoje } = await supabase
+          .from("reajustes")
+          .select("*")
+          .eq("data", hoje);
+        const reajRows = reajustesHoje ?? [];
+        const totalReajuste = reajRows.reduce((s, r) => s + Number(r.valor || 0), 0);
+
+        const totalRecebido = pixItauP + pixInfP + pixMpP + pixEspP - totalSinal + totalReajuste;
+
+        lines.push(`💰 <b>RECEBIDO ATÉ AGORA</b>`);
+        if (pixItauP > 0) lines.push(`PIX/Dinheiro Itaú: ${fmtBRL(pixItauP)}`);
+        if (pixInfP > 0) lines.push(`PIX/Dinheiro Infinity: ${fmtBRL(pixInfP)}`);
+        if (pixMpP > 0) lines.push(`Link Mercado Pago: ${fmtBRL(pixMpP)}`);
+        if (pixEspP > 0) lines.push(`Dinheiro Espécie: ${fmtBRL(pixEspP)}`);
+        if (totalSinal > 0) lines.push(`📥 Sinal antecipado (já recebido): -${fmtBRL(totalSinal)}`);
+        for (const r of reajRows) {
+          const sinal = Number(r.valor) >= 0 ? "+" : "";
+          lines.push(`🔄 Reajuste (${r.cliente}): ${sinal}${fmtBRL(Number(r.valor))}  ${r.motivo || ""}`);
+        }
+        lines.push(`Total recebido: <b>${fmtBRL(totalRecebido)}</b>`);
+
+        lines.push(``);
+        lines.push(`──────────────────`);
+
+        // 6. PREVISÃO RECEBER (próximo dia útil)
+        const proxDiaUtil = proximoDiaUtil(new Date(hoje + "T12:00:00"));
+        const proxDiaFormatado = formatDateBR(proxDiaUtil);
+
+        const vendasD1P = vp.filter(v => v.recebimento === "D+1");
+        const d1ItauP = vendasD1P.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const d1InfP = vendasD1P.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const d1MpP = vendasD1P.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+
+        // Fiado previsto
+        const fiadoPrevisto = fiadoHoje.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+
+        const totalPrevisao = d1ItauP + d1InfP + d1MpP + fiadoPrevisto;
+
+        lines.push(`📅 <b>PREVISÃO RECEBER ${proxDiaFormatado} (próx. dia útil)</b>`);
+        if (d1ItauP > 0) lines.push(`💳 Crédito Itaú: ${fmtBRL(d1ItauP)}`);
+        if (d1InfP > 0) lines.push(`💳 Crédito Infinite: ${fmtBRL(d1InfP)}`);
+        if (d1MpP > 0) lines.push(`💳 Link Mercado Pago: ${fmtBRL(d1MpP)}`);
+        if (fiadoHoje.length > 0) {
+          lines.push(`📋 Fiado: ${fmtBRL(fiadoPrevisto)} (${fiadoHoje.length} venda(s))`);
+          for (const f of fiadoHoje) {
+            lines.push(`  • ${f.cliente} — ${fmtBRL(Number(f.preco_vendido || 0))}`);
+          }
+        }
+        lines.push(`Total: <b>${fmtBRL(totalPrevisao)}</b>`);
+
+        lines.push(``);
+        lines.push(`──────────────────`);
+
+        // 7. GASTOS OPERACIONAIS
+        const { data: gastosHojeP } = await supabase
+          .from("gastos")
+          .select("valor, tipo, categoria, descricao, banco")
+          .eq("data", hoje);
+
+        const gsP = gastosHojeP ?? [];
+        const saidasOpP = gsP.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR");
+        const fornecedorP = gsP.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR");
+
+        if (saidasOpP.length > 0) {
+          const catGastosP: Record<string, number> = {};
+          for (const g of saidasOpP) {
+            catGastosP[g.categoria] = (catGastosP[g.categoria] || 0) + Number(g.valor || 0);
+          }
+          const totalSaidasP = saidasOpP.reduce((s, g) => s + Number(g.valor || 0), 0);
+
+          lines.push(`💸 <b>GASTOS OPERACIONAIS</b>`);
+          for (const [cat, val] of Object.entries(catGastosP).sort((a, b) => b[1] - a[1])) {
+            lines.push(`${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
+          }
+          lines.push(`Total: <b>${fmtBRL(totalSaidasP)}</b>`);
+        }
+
+        // 8. PAGO A FORNECEDOR
+        if (fornecedorP.length > 0) {
+          const totalFornP = fornecedorP.reduce((s, g) => s + Number(g.valor || 0), 0);
+          lines.push(``);
+          lines.push(`🚚 <b>PAGO A FORNECEDOR</b>`);
+          for (const g of fornecedorP) {
+            const bancoLabel = g.banco ? ` (${g.banco})` : "";
+            lines.push(`${g.descricao || "Compra"}: ${fmtBRL(Number(g.valor || 0))}${bancoLabel}`);
+          }
+          lines.push(`Total fornecedores: <b>${fmtBRL(totalFornP)}</b>`);
+        }
+
+        lines.push(``);
+        lines.push(`<i>Gerado em ${now}</i>`);
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
         break;
       }
 
