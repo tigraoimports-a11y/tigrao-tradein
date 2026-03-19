@@ -1,21 +1,26 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-let _supabase: SupabaseClient | null = null;
+// Lazy singleton — only created on first actual use at runtime
+let _instance: SupabaseClient | null = null;
 
-export function getSupabase(): SupabaseClient {
-  if (!_supabase) {
+function getInstance(): SupabaseClient {
+  if (!_instance) {
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    if (!url) throw new Error("SUPABASE_URL not configured");
-    _supabase = createClient(url, key);
+    _instance = createClient(url, key);
   }
-  return _supabase;
+  return _instance;
 }
 
-// Backwards-compatible export — lazy getter
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
-    return (getSupabase() as unknown as Record<string | symbol, unknown>)[prop];
+export const getSupabase = getInstance;
+
+// Backwards-compatible named export using getter
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabase: SupabaseClient = new Proxy({} as any, {
+  get(_, prop, receiver) {
+    const real = getInstance();
+    const val = Reflect.get(real, prop, receiver);
+    return typeof val === "function" ? val.bind(real) : val;
   },
 });
 
