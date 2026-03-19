@@ -52,8 +52,16 @@ export default function ImportarPage() {
       skipEmptyLines: true,
       complete: (res) => {
         const data = res.data as Record<string, string>[];
+        // Filtrar linhas em branco — só manter linhas que tenham pelo menos
+        // CLIENTE ou PRODUTO ou DESCRICAO ou CATEGORIA preenchido
+        const filtered = data.filter(row => {
+          const vals = Object.values(row).map(v => (v || "").trim());
+          const nonEmpty = vals.filter(v => v.length > 0);
+          // Pelo menos 3 campos preenchidos para ser uma linha válida
+          return nonEmpty.length >= 3;
+        });
         setHeaders(res.meta.fields ?? []);
-        setRows(data);
+        setRows(filtered);
         setResult(null);
       },
     });
