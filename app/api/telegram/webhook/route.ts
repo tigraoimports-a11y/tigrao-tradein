@@ -200,6 +200,134 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "/semanal": {
+        // Últimos 7 dias
+        const d = new Date();
+        const fim = d.toISOString().split("T")[0];
+        d.setDate(d.getDate() - 6);
+        const inicio = d.toISOString().split("T")[0];
+
+        const { data: vendasSem } = await supabase
+          .from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
+          .gte("data", inicio).lte("data", fim)
+          .neq("status_pagamento", "CANCELADO");
+
+        const { data: gastosSem } = await supabase
+          .from("gastos").select("valor, tipo, categoria")
+          .gte("data", inicio).lte("data", fim);
+
+        const vs = vendasSem ?? [];
+        const gs = gastosSem ?? [];
+
+        const faturamento = vs.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+        const custoTotal = vs.reduce((s, v) => s + (v.custo || 0), 0);
+        const lucroSem = vs.reduce((s, v) => s + (v.lucro || 0), 0);
+        const gastosSaida = gs.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+        const margemMedia = faturamento > 0 ? ((lucroSem / faturamento) * 100).toFixed(1) : "0";
+        const ticketMedio = vs.length > 0 ? Math.round(faturamento / vs.length) : 0;
+
+        // Por tipo
+        const upgrades = vs.filter(v => v.tipo === "UPGRADE");
+        const vendas = vs.filter(v => v.tipo === "VENDA");
+        const atacado = vs.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
+
+        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+        const lines = [
+          `📊 <b>RELATÓRIO SEMANAL</b>`,
+          `${inicio} a ${fim}`,
+          ``,
+          `💰 <b>Faturamento:</b> ${fmtBRL(faturamento)}`,
+          `📦 <b>Custo:</b> ${fmtBRL(custoTotal)}`,
+          `📈 <b>Lucro:</b> ${fmtBRL(lucroSem)}`,
+          `📉 <b>Margem:</b> ${margemMedia}%`,
+          `🎫 <b>Ticket médio:</b> ${fmtBRL(ticketMedio)}`,
+          `🛒 <b>Total vendas:</b> ${vs.length}`,
+          ``,
+          `<b>Por tipo:</b>`,
+          `  🔄 Upgrades: ${upgrades.length} | Lucro: ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  🏪 Vendas: ${vendas.length} | Lucro: ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  📦 Atacado: ${atacado.length} | Lucro: ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          ``,
+          `📤 <b>Gastos (sem fornecedor):</b> ${fmtBRL(gastosSaida)}`,
+          `💵 <b>Lucro líquido:</b> ${fmtBRL(lucroSem - gastosSaida)}`,
+        ];
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/mensal": {
+        const mesAtual = hoje.slice(0, 7); // YYYY-MM
+
+        const { data: vendasMes } = await supabase
+          .from("vendas").select("preco_vendido, custo, lucro, tipo, origem")
+          .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`)
+          .neq("status_pagamento", "CANCELADO");
+
+        const { data: gastosMes } = await supabase
+          .from("gastos").select("valor, tipo, categoria")
+          .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`);
+
+        const vm = vendasMes ?? [];
+        const gm = gastosMes ?? [];
+
+        const faturamento = vm.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+        const custoTotal = vm.reduce((s, v) => s + (v.custo || 0), 0);
+        const lucroMes = vm.reduce((s, v) => s + (v.lucro || 0), 0);
+        const gastosSaida = gm.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+        const comprasFornecedor = gm.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+        const margemMedia = faturamento > 0 ? ((lucroMes / faturamento) * 100).toFixed(1) : "0";
+        const ticketMedio = vm.length > 0 ? Math.round(faturamento / vm.length) : 0;
+
+        // Por tipo
+        const upgrades = vm.filter(v => v.tipo === "UPGRADE");
+        const vendas = vm.filter(v => v.tipo === "VENDA");
+        const atacado = vm.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
+        const clienteFinal = vm.filter(v => v.origem !== "ATACADO");
+
+        // Top categorias de gastos
+        const catGastos: Record<string, number> = {};
+        gm.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").forEach(g => {
+          catGastos[g.categoria] = (catGastos[g.categoria] || 0) + (g.valor || 0);
+        });
+
+        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+        const nomeMes = new Date(`${mesAtual}-15`).toLocaleString("pt-BR", { month: "long", year: "numeric" });
+
+        const lines = [
+          `📅 <b>RELATÓRIO MENSAL — ${nomeMes.toUpperCase()}</b>`,
+          ``,
+          `💰 <b>Faturamento:</b> ${fmtBRL(faturamento)}`,
+          `📦 <b>Custo produtos:</b> ${fmtBRL(custoTotal)}`,
+          `📈 <b>Lucro bruto:</b> ${fmtBRL(lucroMes)}`,
+          `📉 <b>Margem média:</b> ${margemMedia}%`,
+          `🎫 <b>Ticket médio:</b> ${fmtBRL(ticketMedio)}`,
+          `🛒 <b>Total vendas:</b> ${vm.length}`,
+          ``,
+          `<b>Por tipo:</b>`,
+          `  🔄 Upgrades: ${upgrades.length} | ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  🏪 Vendas: ${vendas.length} | ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  📦 Atacado: ${atacado.length} | ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          `  👤 Cliente final: ${clienteFinal.length} | ${fmtBRL(clienteFinal.reduce((s, v) => s + (v.lucro || 0), 0))}`,
+          ``,
+          `<b>Gastos operacionais:</b> ${fmtBRL(gastosSaida)}`,
+        ];
+
+        // Top 5 categorias
+        const topCats = Object.entries(catGastos).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        if (topCats.length > 0) {
+          for (const [cat, val] of topCats) {
+            lines.push(`  • ${cat}: ${fmtBRL(val)}`);
+          }
+        }
+
+        lines.push(``);
+        lines.push(`🏭 <b>Compras fornecedor:</b> ${fmtBRL(comprasFornecedor)}`);
+        lines.push(`💵 <b>Lucro líquido:</b> ${fmtBRL(lucroMes - gastosSaida)}`);
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
       case "/estoque": {
         const { data: all } = await supabase
           .from("estoque")
