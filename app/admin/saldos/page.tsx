@@ -1,0 +1,189 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useAdmin } from "@/components/admin/AdminShell";
+import type { SaldoBancario } from "@/lib/admin-types";
+
+const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+
+export default function SaldosPage() {
+  const { password } = useAdmin();
+  const [saldos, setSaldos] = useState<SaldoBancario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dataAtual, setDataAtual] = useState(new Date().toISOString().split("T")[0]);
+  const [saldoHoje, setSaldoHoje] = useState<SaldoBancario | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [executando, setExecutando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  // Form para edição dos saldos base
+  const [itau, setItau] = useState("");
+  const [inf, setInf] = useState("");
+  const [mp, setMp] = useState("");
+  const [esp, setEsp] = useState("");
+
+  const fetchSaldos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/saldos", { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const json = await res.json();
+        setSaldos(json.data ?? []);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [password]);
+
+  const fetchSaldoData = useCallback(async (d: string) => {
+    try {
+      const res = await fetch(`/api/saldos?data=${d}`, { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const json = await res.json();
+        const s = json.data;
+        setSaldoHoje(s);
+        if (s) {
+          setItau(String(s.itau_base || 0));
+          setInf(String(s.inf_base || 0));
+          setMp(String(s.mp_base || 0));
+          setEsp(String(s.esp_especie || 0));
+        } else {
+          setItau("0"); setInf("0"); setMp("0"); setEsp("0");
+        }
+      }
+    } catch { /* ignore */ }
+  }, [password]);
+
+  useEffect(() => { fetchSaldos(); }, [fetchSaldos]);
+  useEffect(() => { fetchSaldoData(dataAtual); }, [dataAtual, fetchSaldoData]);
+
+  const handleSalvar = async () => {
+    setSaving(true);
+    setMsg("");
+    const res = await fetch("/api/saldos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({
+        data: dataAtual,
+        itau_base: parseFloat(itau) || 0,
+        inf_base: parseFloat(inf) || 0,
+        mp_base: parseFloat(mp) || 0,
+        esp_especie: parseFloat(esp) || 0,
+      }),
+    });
+    const json = await res.json();
+    setMsg(json.ok ? "Saldos base salvos!" : "Erro: " + json.error);
+    setSaving(false);
+    fetchSaldos();
+    fetchSaldoData(dataAtual);
+  };
+
+  const handleNoite = async () => {
+    setExecutando(true);
+    setMsg("");
+    const res = await fetch("/api/saldos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ data: dataAtual }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      setMsg("Fechamento executado!");
+      fetchSaldos();
+      fetchSaldoData(dataAtual);
+    } else {
+      setMsg("Erro: " + json.error);
+    }
+    setExecutando(false);
+  };
+
+  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <h2 className="text-lg font-bold text-[#1D1D1F]">Saldos Bancarios</h2>
+        <input type="date" value={dataAtual} onChange={(e) => setDataAtual(e.target.value)} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm" />
+      </div>
+
+      {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+
+      {/* Cards dos bancos */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Itau", color: "#F47920", base: itau, setBase: setItau, esp: saldoHoje?.esp_itau },
+          { label: "Infinite", color: "#1D1D1F", base: inf, setBase: setInf, esp: saldoHoje?.esp_inf },
+          { label: "Mercado Pago", color: "#00B1EA", base: mp, setBase: setMp, esp: saldoHoje?.esp_mp },
+          { label: "Especie", color: "#2ECC71", base: esp, setBase: setEsp, esp: saldoHoje?.esp_especie },
+        ].map((bank) => (
+          <div key={bank.label} className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bank.color }} />
+              <h3 className="font-semibold text-[#1D1D1F] text-sm">{bank.label}</h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] text-[#86868B] uppercase tracking-wider mb-1">Base manha (pre-D+1)</p>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-[#86868B]">R$</span>
+                  <input type="number" value={bank.base} onChange={(e) => bank.setBase(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+              {bank.esp !== undefined && bank.esp !== null && (
+                <div>
+                  <p className="text-[10px] text-[#86868B] uppercase tracking-wider mb-1">Fechamento noite</p>
+                  <p className="text-lg font-bold" style={{ color: bank.color }}>{fmt(Number(bank.esp))}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Botões */}
+      <div className="flex gap-3">
+        <button onClick={handleSalvar} disabled={saving} className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+          {saving ? "Salvando..." : "Salvar Saldos Base"}
+        </button>
+        <button onClick={handleNoite} disabled={executando} className="px-6 py-3 rounded-xl bg-[#1D1D1F] text-white font-semibold hover:bg-[#333] transition-colors disabled:opacity-50">
+          {executando ? "Executando..." : "Executar Fechamento /noite"}
+        </button>
+      </div>
+
+      {/* Histórico */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-[#D2D2D7]">
+          <h3 className="font-bold text-[#1D1D1F]">Historico (ultimos 7 dias)</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                {["Data", "Itau Base", "Inf Base", "MP Base", "Esp Itau", "Esp Inf", "Esp MP", "Especie"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-[#86868B]">Carregando...</td></tr>
+              ) : saldos.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-[#86868B]">Nenhum saldo registrado</td></tr>
+              ) : saldos.map((s) => (
+                <tr key={s.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7]">
+                  <td className="px-4 py-3 font-medium">{s.data}</td>
+                  <td className="px-4 py-3">{fmt(s.itau_base)}</td>
+                  <td className="px-4 py-3">{fmt(s.inf_base)}</td>
+                  <td className="px-4 py-3">{fmt(s.mp_base)}</td>
+                  <td className="px-4 py-3 font-bold text-[#F47920]">{fmt(s.esp_itau)}</td>
+                  <td className="px-4 py-3 font-bold text-[#1D1D1F]">{fmt(s.esp_inf)}</td>
+                  <td className="px-4 py-3 font-bold text-[#00B1EA]">{fmt(s.esp_mp)}</td>
+                  <td className="px-4 py-3 font-bold text-[#2ECC71]">{fmt(s.esp_especie)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
