@@ -165,6 +165,73 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "/saldos": {
+        // /saldos → mostrar saldos atuais
+        // /saldos 120000 260000 1400 0 → atualizar saldos (infinite, itau, mp, especie)
+        const parts = text.split(/\s+/).slice(1);
+        if (parts.length >= 3) {
+          // Atualizar saldos
+          const parseVal = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
+          const inf = parseVal(parts[0]);
+          const itau = parseVal(parts[1]);
+          const mp = parseVal(parts[2]);
+          const esp = parts[3] ? parseVal(parts[3]) : 0;
+
+          const { error: sErr } = await supabase.from("saldos_bancarios").upsert(
+            {
+              data: hoje,
+              inf_base: inf,
+              itau_base: itau,
+              mp_base: mp,
+              esp_especie: esp,
+              esp_itau: itau,
+              esp_inf: inf,
+              esp_mp: mp,
+            },
+            { onConflict: "data" }
+          );
+
+          if (sErr) {
+            await sendTelegramMessage(`❌ Erro: ${sErr.message}`, chatId);
+          } else {
+            await sendTelegramMessage(
+              [
+                `✅ <b>Saldos atualizados para ${hoje}</b>`,
+                ``,
+                `🏦 Infinite: ${fmtBRL(inf)}`,
+                `🏦 Itaú: ${fmtBRL(itau)}`,
+                `🏦 Mercado Pago: ${fmtBRL(mp)}`,
+                esp > 0 ? `💵 Espécie: ${fmtBRL(esp)}` : "",
+                ``,
+                `💰 Total: <b>${fmtBRL(inf + itau + mp + esp)}</b>`,
+              ].filter(Boolean).join("\n"),
+              chatId
+            );
+          }
+        } else {
+          // Mostrar saldos atuais
+          const patrimonio = await getPatrimonio();
+          await sendTelegramMessage(
+            [
+              `🏦 <b>SALDOS BANCÁRIOS</b>`,
+              ``,
+              `Itaú: ${fmtBRL(patrimonio.itau)}`,
+              `Infinite: ${fmtBRL(patrimonio.infinite)}`,
+              `Mercado Pago: ${fmtBRL(patrimonio.mp)}`,
+              patrimonio.especie > 0 ? `Espécie: ${fmtBRL(patrimonio.especie)}` : "",
+              ``,
+              `💰 Total bancário: <b>${fmtBRL(patrimonio.saldoBancario)}</b>`,
+              ``,
+              `📦 Em estoque: ${fmtBRL(patrimonio.valorEstoque)} (${patrimonio.unidadesEstoque} un.)`,
+              `🚚 A caminho: ${fmtBRL(patrimonio.valorACaminho)}`,
+              `🏆 Patrimônio total: <b>${fmtBRL(patrimonio.patrimonioTotal)}</b>`,
+            ].filter(Boolean).join("\n"),
+            chatId
+          );
+        }
+        break;
+      }
+
       case "/status": {
         await sendTelegramMessage(
           [
