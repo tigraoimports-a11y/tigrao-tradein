@@ -65,7 +65,10 @@ function getModeloBase(produto: string, categoria: string): string {
   }
   if (categoria === "MACBOOK") {
     if (p.includes("MAC MINI")) return "Mac Mini";
-    if (p.includes("AIR")) return "MacBook Air";
+    if (p.includes("AIR") && (p.includes("15") || p.includes("15\""))) return "MacBook Air 15\"";
+    if (p.includes("AIR")) return "MacBook Air 13\"";
+    if (p.includes("PRO") && (p.includes("16") || p.includes("16\""))) return "MacBook Pro 16\"";
+    if (p.includes("PRO") && (p.includes("14") || p.includes("14\""))) return "MacBook Pro 14\"";
     if (p.includes("PRO")) return "MacBook Pro";
     return "MacBook";
   }
