@@ -85,7 +85,7 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"estoque" | "seminovos" | "acaminho" | "novo">("estoque");
+  const [tab, setTab] = useState<"estoque" | "seminovos" | "pendencias" | "acaminho" | "novo">("estoque");
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
@@ -136,9 +136,10 @@ export default function EstoquePage() {
   };
 
   const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
-    await apiPatch(item.id, { tipo: "NOVO", status: "EM ESTOQUE" });
-    setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: "NOVO", status: "EM ESTOQUE" } : p));
-    setMsg(`${item.produto} movido para estoque!`);
+    const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
+    await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+    setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
+    setMsg(`${item.produto} movido para estoque${novoTipo === "SEMINOVO" ? " (seminovo)" : ""}!`);
   };
 
   const handleSubmit = async () => {
@@ -182,9 +183,10 @@ export default function EstoquePage() {
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
+  const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
 
-  const currentList = tab === "seminovos" ? seminovos : tab === "acaminho" ? aCaminho : novos;
+  const currentList = tab === "seminovos" ? seminovos : tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : novos;
 
   const filtered = currentList.filter((p) => {
     if (filterCat && p.categoria !== filterCat) return false;
@@ -216,6 +218,8 @@ export default function EstoquePage() {
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
 
+  const isPendenciasTab = tab === "pendencias";
+
   const renderProductRow = (p: ProdutoEstoque, showObs: boolean, showMover: boolean) => {
     const isEditCusto = editingCusto[p.id] !== undefined;
     const isEditQnt = editingQnt[p.id] !== undefined;
@@ -224,6 +228,7 @@ export default function EstoquePage() {
       <tr key={p.id} className={`border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors ${p.qnt === 0 ? "bg-red-50/50" : p.qnt === 1 ? "bg-yellow-50/50" : ""}`}>
         <td className="px-4 py-2.5 font-medium text-sm whitespace-nowrap">{p.produto}</td>
         <td className="px-4 py-2.5 text-[#86868B] text-xs">{p.cor || "—"}</td>
+        {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
         {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
         <td className="px-4 py-2.5">
           {isEditQnt ? (
@@ -258,7 +263,7 @@ export default function EstoquePage() {
         </td>
         <td className="px-4 py-2.5 flex gap-1">
           {showMover && (
-            <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors" title="Mover para estoque">Mover</button>
+            <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
           )}
           <button onClick={async () => {
             if (!confirm(`Excluir ${p.produto}?`)) return;
@@ -290,8 +295,8 @@ export default function EstoquePage() {
           { label: "Unidades", value: totalUnidades, color: "#3498DB" },
           { label: "Valor Estoque", value: fmt(valorEstoque), color: "#2ECC71" },
           { label: "Seminovos", value: `${seminovos.length} (${fmt(valorSeminovos)})`, color: "#9B59B6" },
+          { label: "Pendencias", value: pendencias.length, color: "#F39C12" },
           { label: "A Caminho", value: `${aCaminho.length} (${fmt(valorACaminho)})`, color: "#3498DB" },
-          { label: "Zerados / Acabando", value: `${zerados} / ${acabando}`, color: "#E74C3C" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-white border border-[#D2D2D7] rounded-2xl p-3 shadow-sm">
             <p className="text-[#86868B] text-[10px] uppercase tracking-wider">{kpi.label}</p>
@@ -306,6 +311,7 @@ export default function EstoquePage() {
           {([
             { key: "estoque", label: `Estoque (${novos.length})` },
             { key: "seminovos", label: `Seminovos (${seminovos.length})` },
+            { key: "pendencias", label: `Pendencias (${pendencias.length})` },
             { key: "acaminho", label: `A Caminho (${aCaminho.length})` },
             { key: "novo", label: "Adicionar" },
           ] as const).map((t) => (
@@ -389,7 +395,8 @@ export default function EstoquePage() {
                           <tr className="border-b border-[#F5F5F7]">
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Produto</th>
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Cor</th>
-                            {tab === "seminovos" && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Obs / Bateria</th>}
+                            {isPendenciasTab && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Cliente</th>}
+                            {(tab === "seminovos" || isPendenciasTab) && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Obs / Bateria</th>}
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Qnt</th>
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Custo Un.</th>
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Total</th>
@@ -398,7 +405,7 @@ export default function EstoquePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {items.map((p) => renderProductRow(p, tab === "seminovos", tab === "acaminho"))}
+                          {items.map((p) => renderProductRow(p, tab === "seminovos" || isPendenciasTab, tab === "acaminho" || isPendenciasTab))}
                         </tbody>
                       </table>
                     </div>

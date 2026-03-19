@@ -34,19 +34,21 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase.from("vendas").insert(body).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Se tem produto na troca, criar item no estoque como SEMINOVO
+  // Se tem produto na troca, criar item como PENDENCIA
+  // (cliente ainda tem o aparelho, devolve em 24h)
   if (seminovoData && seminovoData.produto) {
     await supabase.from("estoque").insert({
       produto: seminovoData.produto,
       categoria: "IPHONES",
       qnt: 1,
       custo_unitario: seminovoData.valor || 0,
-      status: "EM ESTOQUE",
-      tipo: "SEMINOVO",
+      status: "PENDENTE",
+      tipo: "PENDENCIA",
       cor: seminovoData.cor || null,
       observacao: seminovoData.observacao || null,
       bateria: seminovoData.bateria || null,
       cliente: body.cliente || null,
+      data_compra: body.data || null,
       updated_at: new Date().toISOString(),
     });
   }
