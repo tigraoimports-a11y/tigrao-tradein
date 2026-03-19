@@ -88,7 +88,7 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"estoque" | "seminovos" | "pendencias" | "acaminho" | "novo">("estoque");
+  const [tab, setTab] = useState<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo">("estoque");
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
@@ -232,11 +232,23 @@ export default function EstoquePage() {
 
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
+  const emEstoque = novos.filter((p) => p.qnt > 0);
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
+  const acabando = novos.filter((p) => p.qnt === 1);
 
-  const currentList = tab === "seminovos" ? seminovos : tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : novos;
+  // Esgotados: qnt=0 em NOVO. Marcar se já está a caminho
+  const produtosACaminho = new Set(aCaminho.map((p) => p.produto.toUpperCase()));
+  const esgotados = novos.filter((p) => p.qnt === 0);
+
+  const currentList =
+    tab === "seminovos" ? seminovos :
+    tab === "acaminho" ? aCaminho :
+    tab === "pendencias" ? pendencias :
+    tab === "esgotados" ? esgotados :
+    tab === "acabando" ? acabando :
+    emEstoque;
 
   const filtered = currentList.filter((p) => {
     if (filterCat && p.categoria !== filterCat) return false;
@@ -257,11 +269,9 @@ export default function EstoquePage() {
   });
 
   // KPIs
-  const totalProdutos = novos.length;
-  const totalUnidades = novos.reduce((s, p) => s + p.qnt, 0);
-  const valorEstoque = novos.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
-  const zerados = novos.filter((p) => p.qnt === 0).length;
-  const acabando = novos.filter((p) => p.qnt === 1).length;
+  const totalProdutos = emEstoque.length;
+  const totalUnidades = emEstoque.reduce((s, p) => s + p.qnt, 0);
+  const valorEstoque = emEstoque.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
   const valorSeminovos = seminovos.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
   const valorACaminho = aCaminho.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
 
@@ -310,6 +320,9 @@ export default function EstoquePage() {
         <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
         <td className="px-4 py-2.5">
           <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700"}`}>{p.status}</span>
+          {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
+            <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
+          )}
         </td>
         <td className="px-4 py-2.5 flex gap-1">
           {showMover && (
@@ -359,13 +372,21 @@ export default function EstoquePage() {
       <div className="flex gap-2 items-center justify-between flex-wrap">
         <div className="flex gap-2 items-center">
           {([
-            { key: "estoque", label: `Estoque (${novos.length})` },
-            { key: "seminovos", label: `Seminovos (${seminovos.length})` },
-            { key: "pendencias", label: `Pendencias (${pendencias.length})` },
-            { key: "acaminho", label: `A Caminho (${aCaminho.length})` },
-            { key: "novo", label: "Adicionar" },
+            { key: "estoque", label: `Estoque (${emEstoque.length})`, color: "" },
+            { key: "acabando", label: `Acabando (${acabando.length})`, color: "yellow" },
+            { key: "esgotados", label: `Esgotados (${esgotados.length})`, color: "red" },
+            { key: "seminovos", label: `Seminovos (${seminovos.length})`, color: "" },
+            { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
+            { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
+            { key: "novo", label: "Adicionar", color: "" },
           ] as const).map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+              tab === t.key
+                ? t.color === "red" ? "bg-red-500 text-white" : t.color === "yellow" ? "bg-yellow-500 text-white" : "bg-[#E8740E] text-white"
+                : t.color === "red" && esgotados.length > 0 ? "bg-white border border-red-300 text-red-500 hover:border-red-500"
+                : t.color === "yellow" && acabando.length > 0 ? "bg-white border border-yellow-300 text-yellow-600 hover:border-yellow-500"
+                : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+            }`}>
               {t.label}
             </button>
           ))}
