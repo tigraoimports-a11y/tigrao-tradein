@@ -151,23 +151,37 @@ export async function gerarNoite(
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
   const saiu_esp = sumByBancoField(gastoRows, "ESPECIE");
 
-  // 6. Calcular saldo final
-  const esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau;
-  const esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf;
-  const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp;
-  const esp_especie = Number(saldoRow?.esp_especie ?? 0) + pix_esp + reaj_esp - saiu_esp;
+  // 6. Saldo final — usar valores reais informados via /saldos se existirem
+  // Se esp_itau já foi preenchido (via /saldos manual), usar o valor real
+  const hasManualSaldos = saldoRow?.esp_itau != null && Number(saldoRow.esp_itau) > 0;
 
-  // 7. Salvar no banco
-  await supabase.from("saldos_bancarios").upsert({
-    data: dataISO,
-    itau_base,
-    inf_base,
-    mp_base,
-    esp_itau,
-    esp_inf,
-    esp_mp,
-    esp_especie,
-  }, { onConflict: "data" });
+  let esp_itau: number, esp_inf: number, esp_mp: number, esp_especie: number;
+
+  if (hasManualSaldos) {
+    // Saldos foram informados manualmente — usar como estão
+    esp_itau = Number(saldoRow.esp_itau);
+    esp_inf = Number(saldoRow.esp_inf);
+    esp_mp = Number(saldoRow.esp_mp);
+    esp_especie = Number(saldoRow.esp_especie ?? 0);
+  } else {
+    // Calcular a partir do saldo base + movimentações
+    esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau;
+    esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf;
+    esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp;
+    esp_especie = Number(saldoRow?.esp_especie ?? 0) + pix_esp + reaj_esp - saiu_esp;
+
+    // Salvar no banco
+    await supabase.from("saldos_bancarios").upsert({
+      data: dataISO,
+      itau_base,
+      inf_base,
+      mp_base,
+      esp_itau,
+      esp_inf,
+      esp_mp,
+      esp_especie,
+    }, { onConflict: "data" });
+  }
 
   // Totais do dia
   const { data: todasVendas } = await supabase
