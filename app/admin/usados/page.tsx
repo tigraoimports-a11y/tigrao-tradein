@@ -124,6 +124,7 @@ export default function UsadosPage() {
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
+  const [importingSheets, setImportingSheets] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -206,17 +207,45 @@ export default function UsadosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-lg font-bold text-[#1D1D1F]">Avaliacao de Usados</h2>
-        {valores.length === 0 && (
+        <div className="flex gap-2">
           <button
-            onClick={handleImportDefaults}
-            disabled={saving === "import"}
+            onClick={async () => {
+              setImportingSheets(true);
+              setMsg("");
+              try {
+                const res = await fetch("/api/admin/usados", {
+                  method: "PUT",
+                  headers: { "x-admin-password": password },
+                });
+                const json = await res.json();
+                if (json.ok) {
+                  setMsg(`Importado do Sheets: ${json.importedValores} valores, ${json.importedDescontos + json.importedDescontosModelo} descontos, ${json.importedExcluidos} excluidos`);
+                  fetchData();
+                } else {
+                  setMsg("Erro: " + json.error);
+                }
+              } catch (err) {
+                setMsg("Erro ao importar: " + String(err));
+              }
+              setImportingSheets(false);
+            }}
+            disabled={importingSheets}
             className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
           >
-            {saving === "import" ? "Importando..." : "Importar valores padrao"}
+            {importingSheets ? "Importando..." : "Importar do Sheets"}
           </button>
-        )}
+          {valores.length === 0 && (
+            <button
+              onClick={handleImportDefaults}
+              disabled={saving === "import"}
+              className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm font-semibold hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-50"
+            >
+              {saving === "import" ? "..." : "Usar valores padrao"}
+            </button>
+          )}
+        </div>
       </div>
 
       {msg && <div className="px-4 py-3 rounded-xl text-sm bg-green-50 text-green-700">{msg}</div>}
