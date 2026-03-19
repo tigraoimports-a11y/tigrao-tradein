@@ -12,6 +12,7 @@ export default function ImportarPage() {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; errors: { row: number; error: string }[]; total: number } | null>(null);
   const [quickImporting, setQuickImporting] = useState("");
+  const [jsonDirect, setJsonDirect] = useState(false);
   const [quickMsg, setQuickMsg] = useState("");
 
   const handleQuickImport = async (tipo: "vendas" | "gastos" | "estoque") => {
@@ -47,6 +48,27 @@ export default function ImportarPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // JSON files (e.g. estoque-merged.json) — import directly
+    if (file.name.endsWith(".json")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (Array.isArray(data) && data.length > 0) {
+            setHeaders(Object.keys(data[0]));
+            setRows(data);
+            setJsonDirect(true);
+            setResult(null);
+          }
+        } catch (err) {
+          alert("Erro ao ler JSON: " + String(err));
+        }
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    setJsonDirect(false);
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -71,6 +93,19 @@ export default function ImportarPage() {
     if (rows.length === 0) return;
     setImporting(true);
     setResult(null);
+
+    // JSON direto (ex: estoque-merged.json) — envia sem transformar
+    if (jsonDirect) {
+      const res = await fetch("/api/importar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ table, rows, autoStatus: false }),
+      });
+      const json = await res.json();
+      setResult(json);
+      setImporting(false);
+      return;
+    }
 
     // Mapear campos para o formato do banco
     const numericFields = ["custo", "preco_vendido", "valor", "sinal_antecipado", "entrada_pix", "valor_comprovante", "comp_alt", "custo_unitario"];
@@ -168,8 +203,18 @@ export default function ImportarPage() {
       let rawBanco = "";
 
       for (const [key, val] of Object.entries(row)) {
-        const k = key.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+        let k = key.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
         if (!val || val.trim() === "") continue;
+
+        // Normalize special column names from Numbers
+        if (k === "descrio" || k === "descriao" || k === "descricao") k = "descricao";
+        if (k === "valor_r" || k === "valorr" || k.startsWith("valor")) k = "valor";
+        if (k === "observao" || k === "observacao") k = "observacao";
+        if (k === "preo_vendido" || k === "precovendido" || k === "preco_vendido") k = "preco_vendido";
+        if (k === "margem_" || k === "margem") { continue; } // Skip margem % column
+        if (k === "hora") { continue; } // Skip hora column
+        if (k === "total_" || k === "total") { continue; } // Skip total columns
+        if (k === "entrada_no_pix" || k === "banco_entrada_pix" || k === "banco_alt" || k === "valor_comprovante" || k === "valor_comprovante_alt" || k === "bandeira_parcelado_alt" || k === "qnt_parcela_1" || k === "bandeira_parcelado") { continue; } // Skip extra vendas columns
 
         if (k === "data") {
           obj[k] = parseDate(val);
@@ -201,6 +246,17 @@ export default function ImportarPage() {
           obj[k] = val.toLowerCase() === "true" || val === "1" || val.toLowerCase() === "sim";
         } else if (k === "preco_vendido" || k === "precovendido" || k === "preco") {
           obj["preco_vendido"] = parseReais(val);
+        } else if (k === "tipo" && table === "gastos") {
+          const v = val.toUpperCase().trim()
+            .replace(/[ÀÁÂÃÄ]/g, "A").replace(/[ÈÉÊË]/g, "E").replace(/[ÌÍÎÏ]/g, "I").replace(/[ÒÓÔÕÖ]/g, "O").replace(/[ÙÚÛÜ]/g, "U");
+          obj[k] = v.includes("SAIDA") || v.includes("SAID") ? "SAIDA" : v.includes("ENTRADA") ? "ENTRADA" : v;
+        } else if (k === "categoria" && table === "gastos") {
+          // Normalize gastos category: remove accents
+          const v = val.toUpperCase().trim()
+            .replace(/[ÀÁÂÃÄ]/g, "A").replace(/[ÈÉÊË]/g, "E").replace(/[ÌÍÎÏ]/g, "I").replace(/[ÒÓÔÕÖ]/g, "O").replace(/[ÙÚÛÜ]/g, "U").replace(/[Ç]/g, "C");
+          if (v.includes("ANUNCIO")) obj[k] = "ANUNCIOS";
+          else if (v.includes("ALIMENTA")) obj[k] = "ALIMENTACAO";
+          else obj[k] = v;
         } else {
           obj[k] = val.trim().toUpperCase();
         }
@@ -331,7 +387,7 @@ export default function ImportarPage() {
           </div>
           <div>
             <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1">Arquivo CSV</p>
-            <input type="file" accept=".csv" onChange={handleFile} className="text-sm" />
+            <input type="file" accept=".csv,.json" onChange={handleFile} className="text-sm" />
           </div>
         </div>
 
