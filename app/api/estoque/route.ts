@@ -48,11 +48,11 @@ export async function POST(req: NextRequest) {
     }
     const unique = [...seen.values()];
 
-    // Importar um por um para evitar conflitos
+    // Importar um por um via insert
     let imported = 0;
     const errors: string[] = [];
     for (const row of unique) {
-      const { error } = await supabase.from("estoque").upsert(row, { onConflict: "produto,cor" });
+      const { error } = await supabase.from("estoque").insert(row);
       if (error) errors.push(`${row.produto}: ${error.message}`);
       else imported++;
     }

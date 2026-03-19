@@ -22,6 +22,32 @@ export default function VendasPage() {
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
 
+  const [msg, setMsg] = useState("");
+
+  // Form state — ALL hooks must be before any conditional return
+  const [form, setForm] = useState({
+    data: new Date().toISOString().split("T")[0],
+    cliente: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+    custo: "", preco_vendido: "", banco: "ITAU", forma: "PIX",
+    qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+    entrada_pix: "", banco_pix: "", banco_2nd: "", banco_alt: "",
+    parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
+  });
+
+  const fetchVendas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/vendas", { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const json = await res.json();
+        setVendas(json.data ?? []);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [password]);
+
+  useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
+
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
     if (isAdmin) { setVendasUnlocked(true); return; }
@@ -75,47 +101,6 @@ export default function VendasPage() {
       </div>
     );
   }
-  const [msg, setMsg] = useState("");
-
-  // Form state
-  const [form, setForm] = useState({
-    data: new Date().toISOString().split("T")[0],
-    cliente: "",
-    origem: "ANUNCIO",
-    tipo: "VENDA",
-    produto: "",
-    fornecedor: "",
-    custo: "",
-    preco_vendido: "",
-    banco: "ITAU",
-    forma: "PIX",
-    qnt_parcelas: "",
-    bandeira: "",
-    local: "",
-    produto_na_troca: "",
-    entrada_pix: "",
-    banco_pix: "",
-    banco_2nd: "",
-    banco_alt: "",
-    parc_alt: "",
-    band_alt: "",
-    sinal_antecipado: "",
-    banco_sinal: "",
-  });
-
-  const fetchVendas = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/vendas", { headers: { "x-admin-password": password } });
-      if (res.ok) {
-        const json = await res.json();
-        setVendas(json.data ?? []);
-      }
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [password]);
-
-  useEffect(() => { fetchVendas(); }, [fetchVendas]);
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
