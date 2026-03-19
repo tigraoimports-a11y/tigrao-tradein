@@ -24,18 +24,21 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const [saldosRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
-        fetch("/api/admin/saldos?latest=true", { headers: { "x-admin-password": password } }),
-        fetch("/api/admin/vendas", { headers: { "x-admin-password": password } }),
-        fetch("/api/admin/gastos", { headers: { "x-admin-password": password } }),
+        fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password } }),
+        fetch("/api/vendas", { headers: { "x-admin-password": password } }),
+        fetch("/api/gastos", { headers: { "x-admin-password": password } }),
         fetch("/api/estoque", { headers: { "x-admin-password": password } }),
       ]);
       const [saldos, vendas, gastos, estoque] = await Promise.all([
-        saldosRes.json(), vendasRes.json(), gastosRes.json(), estoqueRes.json()
+        saldosRes.ok ? saldosRes.json().catch(() => ({})) : {},
+        vendasRes.ok ? vendasRes.json().catch(() => ({})) : {},
+        gastosRes.ok ? gastosRes.json().catch(() => ({})) : {},
+        estoqueRes.ok ? estoqueRes.json().catch(() => ({})) : {},
       ]);
 
-      const estoqueArr = Array.isArray(estoque) ? estoque : estoque.data || [];
-      const vendasArr = Array.isArray(vendas) ? vendas : vendas.data || [];
-      const gastosArr = Array.isArray(gastos) ? gastos : gastos.data || [];
+      const estoqueArr = Array.isArray(estoque) ? estoque : estoque?.data || [];
+      const vendasArr = Array.isArray(vendas) ? vendas : vendas?.data || [];
+      const gastosArr = Array.isArray(gastos) ? gastos : gastos?.data || [];
 
       setData({
         saldos: saldos?.data?.[0] || saldos?.[0] || null,
