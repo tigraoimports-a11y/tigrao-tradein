@@ -44,6 +44,7 @@ export default function EstoquePage() {
   const [tab, setTab] = useState<"lista" | "novo">("lista");
   const [filterCat, setFilterCat] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [importingInitial, setImportingInitial] = useState(false);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -154,8 +155,44 @@ export default function EstoquePage() {
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
 
+  const handleImportInitial = async () => {
+    setImportingInitial(true);
+    setMsg("");
+    try {
+      const res = await fetch("/estoque-initial.json");
+      const rows = await res.json();
+      const importRes = await fetch("/api/estoque", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ action: "import", rows }),
+      });
+      const json = await importRes.json();
+      if (json.ok) {
+        setMsg(`${json.imported} produtos importados da planilha!`);
+        fetchEstoque();
+      } else {
+        setMsg("Erro: " + json.error);
+      }
+    } catch (err) {
+      setMsg("Erro: " + String(err));
+    }
+    setImportingInitial(false);
+  };
+
   return (
     <div className="space-y-6">
+      {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+
+      {/* Import button when empty */}
+      {estoque.length === 0 && !loading && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-8 text-center shadow-sm">
+          <p className="text-[#86868B] mb-4">Estoque vazio. Importar os 124 produtos da planilha ESTOQUE 2026?</p>
+          <button onClick={handleImportInitial} disabled={importingInitial} className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+            {importingInitial ? "Importando..." : "Importar Estoque da Planilha"}
+          </button>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
