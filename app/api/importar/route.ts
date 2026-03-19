@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   // Whitelist de colunas por tabela — remove campos que não existem no schema
   const COLUMNS: Record<string, Set<string>> = {
-    vendas: new Set(["data", "cliente", "origem", "tipo", "produto", "fornecedor", "custo", "preco_vendido", "banco", "forma", "recebimento", "lucro", "qnt_parcelas", "parcelas", "bandeira", "local", "produto_na_troca", "sinal_antecipado", "banco_sinal", "status_pagamento", "is_dep_esp", "observacao"]),
+    vendas: new Set(["data", "cliente", "origem", "tipo", "produto", "fornecedor", "custo", "preco_vendido", "banco", "forma", "recebimento", "qnt_parcelas", "parcelas", "bandeira", "local", "produto_na_troca", "sinal_antecipado", "banco_sinal", "status_pagamento", "is_dep_esp", "observacao"]),
     gastos: new Set(["data", "valor", "tipo", "categoria", "descricao", "banco", "forma", "observacao"]),
     estoque: new Set(["produto", "quantidade", "custo_unitario", "categoria", "cor", "armazenamento", "status", "fornecedor", "observacao"]),
   };
