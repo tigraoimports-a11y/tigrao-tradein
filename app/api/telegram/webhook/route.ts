@@ -726,18 +726,19 @@ export async function POST(req: NextRequest) {
       }
 
       case "/semanal": {
-        // Últimos 7 dias
-        const d = new Date();
-        const fim = d.toISOString().split("T")[0];
-        d.setDate(d.getDate() - 6);
-        const inicio = d.toISOString().split("T")[0];
+        // Últimos 7 dias — usando timezone BR
+        const hojeBR = hojeISO(); // "YYYY-MM-DD" em BRT
+        const fim = hojeBR;
+        const dSem = new Date(hojeBR + "T12:00:00");
+        dSem.setDate(dSem.getDate() - 6);
+        const inicio = `${dSem.getFullYear()}-${String(dSem.getMonth() + 1).padStart(2, "0")}-${String(dSem.getDate()).padStart(2, "0")}`;
 
         // Semana anterior (para comparativo)
-        const d2 = new Date();
-        d2.setDate(d2.getDate() - 7);
-        const fimAnterior = d2.toISOString().split("T")[0];
-        d2.setDate(d2.getDate() - 6);
-        const inicioAnterior = d2.toISOString().split("T")[0];
+        const d2Sem = new Date(hojeBR + "T12:00:00");
+        d2Sem.setDate(d2Sem.getDate() - 7);
+        const fimAnterior = `${d2Sem.getFullYear()}-${String(d2Sem.getMonth() + 1).padStart(2, "0")}-${String(d2Sem.getDate()).padStart(2, "0")}`;
+        d2Sem.setDate(d2Sem.getDate() - 6);
+        const inicioAnterior = `${d2Sem.getFullYear()}-${String(d2Sem.getMonth() + 1).padStart(2, "0")}-${String(d2Sem.getDate()).padStart(2, "0")}`;
 
         const [
           { data: vendasSem },
@@ -1059,6 +1060,55 @@ export async function POST(req: NextRequest) {
         lines.push(`<b>TOTAL: ${totalQtd} unidades | ${fmtBRL(totalValor)}</b>`);
 
         await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/debug": {
+        const hDbg = hojeISO();
+        const dDbg = new Date(hDbg + "T12:00:00");
+        dDbg.setDate(dDbg.getDate() - 6);
+        const inicioDbg = `${dDbg.getFullYear()}-${String(dDbg.getMonth() + 1).padStart(2, "0")}-${String(dDbg.getDate()).padStart(2, "0")}`;
+
+        const { data: totalVendas, count: countAll } = await supabase
+          .from("vendas").select("*", { count: "exact", head: true });
+
+        const { data: vendasSemDbg, count: countSem } = await supabase
+          .from("vendas").select("*", { count: "exact", head: true })
+          .gte("data", inicioDbg).lte("data", hDbg);
+
+        const { data: vendasSemNaoCanc, count: countSemNaoCanc } = await supabase
+          .from("vendas").select("*", { count: "exact", head: true })
+          .gte("data", inicioDbg).lte("data", hDbg).neq("status_pagamento", "CANCELADO");
+
+        // Pegar 3 vendas de exemplo para ver as datas
+        const { data: exemplos } = await supabase
+          .from("vendas").select("data, status_pagamento, cliente, preco_vendido")
+          .order("data", { ascending: false }).limit(5);
+
+        // Ver datas distintas
+        const { data: datas } = await supabase
+          .from("vendas").select("data").order("data", { ascending: false }).limit(20);
+
+        const datasUnicas = [...new Set((datas ?? []).map(d => d.data))].slice(0, 10);
+
+        const dbgLines = [
+          `🔧 <b>DEBUG</b>`,
+          `hoje (BRT): ${hDbg}`,
+          `início semana: ${inicioDbg}`,
+          `fim: ${hDbg}`,
+          ``,
+          `Total vendas no banco: ${countAll}`,
+          `Vendas ${inicioDbg} a ${hDbg}: ${countSem}`,
+          `Vendas sem CANCELADO: ${countSemNaoCanc}`,
+          ``,
+          `<b>Últimas 5 vendas:</b>`,
+          ...(exemplos ?? []).map(e => `  ${e.data} | ${e.status_pagamento} | ${e.cliente} | R$${e.preco_vendido}`),
+          ``,
+          `<b>Datas no banco (últ. 10):</b>`,
+          ...datasUnicas.map(d => `  ${d}`),
+        ];
+
+        await sendTelegramMessage(dbgLines.join("\n"), chatId);
         break;
       }
 
