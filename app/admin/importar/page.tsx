@@ -11,6 +11,37 @@ export default function ImportarPage() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; errors: { row: number; error: string }[]; total: number } | null>(null);
+  const [quickImporting, setQuickImporting] = useState("");
+  const [quickMsg, setQuickMsg] = useState("");
+
+  const handleQuickImport = async (tipo: "vendas" | "gastos" | "estoque") => {
+    setQuickImporting(tipo);
+    setQuickMsg("");
+    try {
+      const res = await fetch(`/${tipo}-initial.json`);
+      const data = await res.json();
+
+      const endpoint = tipo === "estoque" ? "/api/estoque" : `/api/importar`;
+      const body = tipo === "estoque"
+        ? { action: "import", rows: data }
+        : { table: tipo, rows: data };
+
+      const importRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify(body),
+      });
+      const json = await importRes.json();
+      if (json.ok || json.imported) {
+        setQuickMsg(`${json.imported ?? data.length} registros de ${tipo} importados!`);
+      } else {
+        setQuickMsg(`Erro: ${json.error}`);
+      }
+    } catch (err) {
+      setQuickMsg(`Erro: ${String(err)}`);
+    }
+    setQuickImporting("");
+  };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,8 +97,43 @@ export default function ImportarPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold text-[#1D1D1F]">Importar CSV</h2>
+      <h2 className="text-lg font-bold text-[#1D1D1F]">Importar Dados</h2>
 
+      {quickMsg && <div className={`px-4 py-3 rounded-xl text-sm ${quickMsg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{quickMsg}</div>}
+
+      {/* Importação rápida das planilhas Numbers */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm">
+        <h3 className="font-semibold text-[#1D1D1F] mb-1">Importacao Rapida — Planilhas Numbers</h3>
+        <p className="text-xs text-[#86868B] mb-4">Dados extraidos de VENDAS MARCO 2026 e ESTOQUE 2026</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button
+            onClick={() => handleQuickImport("vendas")}
+            disabled={!!quickImporting}
+            className="px-4 py-4 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50 text-center"
+          >
+            {quickImporting === "vendas" ? "Importando..." : "Importar 297 Vendas"}
+            <span className="block text-xs font-normal mt-1 opacity-80">Marco 2026</span>
+          </button>
+          <button
+            onClick={() => handleQuickImport("gastos")}
+            disabled={!!quickImporting}
+            className="px-4 py-4 rounded-xl bg-[#E74C3C] text-white font-semibold hover:bg-[#C0392B] transition-colors disabled:opacity-50 text-center"
+          >
+            {quickImporting === "gastos" ? "Importando..." : "Importar 143 Gastos"}
+            <span className="block text-xs font-normal mt-1 opacity-80">Marco 2026</span>
+          </button>
+          <button
+            onClick={() => handleQuickImport("estoque")}
+            disabled={!!quickImporting}
+            className="px-4 py-4 rounded-xl bg-[#2ECC71] text-white font-semibold hover:bg-[#27AE60] transition-colors disabled:opacity-50 text-center"
+          >
+            {quickImporting === "estoque" ? "Importando..." : "Importar 129 Produtos"}
+            <span className="block text-xs font-normal mt-1 opacity-80">Estoque 2026</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Upload CSV manual */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
         {/* Seleção de tabela */}
         <div className="flex gap-4 items-center">
