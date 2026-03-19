@@ -280,44 +280,83 @@ export default function VendasPage() {
                 <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className={labelCls}>Categoria</p>
-                  <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
-                    <option value="">Selecionar...</option>
-                    {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className={labelCls}>Categoria</p>
+                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
+                      <option value="">Selecionar...</option>
+                      {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
                 </div>
-                <div className="col-span-2">
-                  <p className={labelCls}>Produto do estoque</p>
-                  <select
-                    value={estoqueId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setEstoqueId(id);
-                      const item = estoque.find(p => p.id === id);
-                      if (item) {
-                        const nome = item.cor ? `${item.produto} ${item.cor}` : item.produto;
-                        set("produto", nome);
-                        set("custo", String(item.custo_unitario));
-                        if (item.fornecedor) set("fornecedor", item.fornecedor);
-                      } else {
-                        set("produto", "");
-                        set("custo", "");
-                      }
-                    }}
-                    className={selectCls}
-                    disabled={!catSel}
-                  >
-                    <option value="">{catSel ? "Selecionar produto..." : "Escolha a categoria primeiro"}</option>
-                    {produtosFiltrados.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.produto}{p.cor ? ` - ${p.cor}` : ""} ({p.qnt} un.) — {fmt(p.custo_unitario)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+
+                {/* Produtos agrupados por modelo com cores como botões */}
+                {catSel && (() => {
+                  // Agrupar por nome do produto (sem cor)
+                  const grupos: Record<string, EstoqueItem[]> = {};
+                  for (const p of produtosFiltrados) {
+                    const key = p.produto;
+                    if (!grupos[key]) grupos[key] = [];
+                    grupos[key].push(p);
+                  }
+                  const grupoKeys = Object.keys(grupos).sort();
+
+                  if (grupoKeys.length === 0) return (
+                    <div className="p-4 bg-[#F5F5F7] rounded-xl text-center text-sm text-[#86868B]">Nenhum produto disponivel nesta categoria</div>
+                  );
+
+                  return (
+                    <div className="border border-[#D2D2D7] rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
+                      {grupoKeys.map((modelo) => {
+                        const items = grupos[modelo];
+                        const custo = items[0].custo_unitario;
+                        const totalQnt = items.reduce((s, p) => s + p.qnt, 0);
+                        return (
+                          <div key={modelo} className="border-b border-[#F5F5F7] last:border-0">
+                            <div className="px-4 py-2.5 bg-[#F5F5F7] flex items-center justify-between">
+                              <span className="text-sm font-semibold text-[#1D1D1F]">{modelo}</span>
+                              <span className="text-[10px] text-[#86868B]">{totalQnt} un. | {fmt(custo)}</span>
+                            </div>
+                            <div className="px-4 py-2 flex flex-wrap gap-2">
+                              {items.map((p) => {
+                                const isSelected = estoqueId === p.id;
+                                return (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => {
+                                      setEstoqueId(p.id);
+                                      const nome = p.cor ? `${p.produto} ${p.cor}` : p.produto;
+                                      set("produto", nome);
+                                      set("custo", String(p.custo_unitario));
+                                      if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                      isSelected
+                                        ? "bg-[#E8740E] text-white shadow-sm"
+                                        : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E] hover:bg-[#FFF8F0]"
+                                    }`}
+                                  >
+                                    {p.cor || "Sem cor"} <span className="text-[10px] opacity-70">({p.qnt})</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* Produto selecionado */}
+                {estoqueId && (
+                  <div className="px-4 py-2.5 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl flex items-center justify-between">
+                    <span className="text-white text-sm font-medium">{form.produto}</span>
+                    <span className="text-[#F5A623] text-sm font-bold">{fmt(parseFloat(form.custo) || 0)}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
