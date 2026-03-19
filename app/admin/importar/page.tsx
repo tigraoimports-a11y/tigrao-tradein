@@ -153,6 +153,9 @@ export default function ImportarPage() {
           if (parts.length > 1) {
             obj["banco_2nd"] = parseBanco(parts[1]);
           }
+        } else if (k === "banco_1" || k === "banco1") {
+          // Coluna duplicada "banco" do Numbers → mapeia para banco_sinal
+          obj["banco_sinal"] = parseBanco(val);
         } else if (k === "forma") {
           rawForma = val;
           obj[k] = parseForma(val);

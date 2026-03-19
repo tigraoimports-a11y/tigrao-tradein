@@ -44,13 +44,31 @@ export async function POST(req: NextRequest) {
       }))
     : rows;
 
+  // Whitelist de colunas por tabela — remove campos que não existem no schema
+  const COLUMNS: Record<string, Set<string>> = {
+    vendas: new Set(["data", "cliente", "origem", "tipo", "produto", "fornecedor", "custo", "preco_vendido", "banco", "forma", "recebimento", "lucro", "qnt_parcelas", "parcelas", "bandeira", "local", "produto_na_troca", "sinal_antecipado", "banco_sinal", "status_pagamento", "is_dep_esp", "observacao"]),
+    gastos: new Set(["data", "valor", "tipo", "categoria", "descricao", "banco", "forma", "observacao"]),
+    estoque: new Set(["produto", "quantidade", "custo_unitario", "categoria", "cor", "armazenamento", "status", "fornecedor", "observacao"]),
+  };
+
+  const allowedCols = COLUMNS[table];
+  const cleanedRows = allowedCols
+    ? processedRows.map((row: Record<string, unknown>) => {
+        const clean: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) {
+          if (allowedCols.has(k)) clean[k] = v;
+        }
+        return clean;
+      })
+    : processedRows;
+
   // Importar em lotes de 100
   const batchSize = 100;
   let imported = 0;
   const errors: { row: number; error: string }[] = [];
 
-  for (let i = 0; i < processedRows.length; i += batchSize) {
-    const batch = processedRows.slice(i, i + batchSize);
+  for (let i = 0; i < cleanedRows.length; i += batchSize) {
+    const batch = cleanedRows.slice(i, i + batchSize);
     const { error } = await supabase.from(table).insert(batch);
     if (error) {
       errors.push({ row: i, error: error.message });
