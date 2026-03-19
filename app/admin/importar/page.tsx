@@ -84,12 +84,33 @@ export default function ImportarPage() {
           </div>
         </div>
 
+        {/* Instruções Numbers */}
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 space-y-2">
+          <p className="font-semibold">Como exportar do Numbers:</p>
+          <ol className="list-decimal list-inside space-y-1 text-xs">
+            <li>Abra sua planilha no Numbers</li>
+            <li>Selecione a <strong>aba</strong> que quer exportar (Vendas OU Gastos)</li>
+            <li>Va em <strong>Arquivo &gt; Exportar &gt; CSV</strong></li>
+            <li>Salve o arquivo .csv</li>
+            <li>Faca upload aqui selecionando a tabela correta</li>
+          </ol>
+          <p className="text-xs text-amber-600">O formato .numbers nao e suportado diretamente. Exporte cada aba como CSV separadamente.</p>
+        </div>
+
         {/* Info das colunas esperadas */}
         <div className="p-4 bg-[#F5F5F7] rounded-xl text-xs text-[#86868B]">
           {table === "vendas" ? (
-            <p><strong>Colunas esperadas:</strong> data, cliente, origem, tipo, produto, fornecedor, custo, preco_vendido, banco, forma, recebimento, qnt_parcelas, bandeira, local, produto_na_troca, sinal_antecipado, banco_sinal</p>
+            <div>
+              <p className="font-semibold mb-1">Colunas esperadas para VENDAS:</p>
+              <p>data, cliente, origem (ANUNCIO/RECOMPRA/INDICACAO/ATACADO), tipo (VENDA/UPGRADE/ATACADO), produto, fornecedor, custo, preco_vendido, banco (ITAU/INFINITE/MERCADO_PAGO/ESPECIE), forma (PIX/CARTAO/DINHEIRO/FIADO), recebimento (D+0/D+1/FIADO)</p>
+              <p className="mt-1 text-[#86868B]">Colunas opcionais: qnt_parcelas, bandeira, local, produto_na_troca, sinal_antecipado, banco_sinal</p>
+            </div>
           ) : (
-            <p><strong>Colunas esperadas:</strong> data, tipo, categoria, descricao, valor, banco, observacao, is_dep_esp</p>
+            <div>
+              <p className="font-semibold mb-1">Colunas esperadas para GASTOS:</p>
+              <p>data, tipo (SAIDA/ENTRADA), categoria, valor, banco (ITAU/INFINITE/MERCADO_PAGO/ESPECIE)</p>
+              <p className="mt-1 text-[#86868B]">Colunas opcionais: descricao, observacao, is_dep_esp (sim/nao)</p>
+            </div>
           )}
         </div>
 
