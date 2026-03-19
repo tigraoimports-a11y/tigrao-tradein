@@ -232,14 +232,14 @@ export default function StepUsedDevice({
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <input
-                    type="number"
-                    min={1}
-                    max={100}
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={battery ?? ""}
                     onChange={(e) => {
-                      const raw = e.target.value;
+                      const raw = e.target.value.replace(/\D/g, "");
                       if (raw === "") { setBattery(null); return; }
-                      const val = Math.min(100, Math.max(1, Number(raw) || 0));
+                      const val = Math.min(100, Number(raw));
                       setBattery(val);
                     }}
                     placeholder="Ex: 87"
@@ -247,11 +247,6 @@ export default function StepUsedDevice({
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold text-[#86868B]">%</span>
                 </div>
-                {battery !== null && (
-                  <span className={`text-[14px] font-semibold px-3 py-1.5 rounded-full ${battery >= 85 ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#FF3B30]/10 text-[#FF3B30]"}`}>
-                    {battery >= 85 ? "Boa" : "Baixa"}
-                  </span>
-                )}
               </div>
               {/* Passo a passo */}
               <div className="bg-white rounded-xl p-3 border border-[#E5E5EA]">
