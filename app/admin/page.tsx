@@ -29,7 +29,8 @@ export default function DashboardPage() {
         fetch("/api/gastos", { headers: { "x-admin-password": password } }),
         fetch("/api/estoque", { headers: { "x-admin-password": password } }),
       ]);
-      const [saldos, vendas, gastos, estoque] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const [saldos, vendas, gastos, estoque]: any[] = await Promise.all([
         saldosRes.ok ? saldosRes.json().catch(() => ({})) : {},
         vendasRes.ok ? vendasRes.json().catch(() => ({})) : {},
         gastosRes.ok ? gastosRes.json().catch(() => ({})) : {},

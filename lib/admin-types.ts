@@ -40,6 +40,9 @@ export interface Venda {
   parc_alt: number | null;
   band_alt: string | null;
   comp_alt: number | null;
+  status_pagamento: string;
+  comprovante_url: string | null;
+  notas: string | null;
 }
 
 export interface Reajuste {

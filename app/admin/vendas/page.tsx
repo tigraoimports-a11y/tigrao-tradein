@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularBruto, calcularRecebimento } from "@/lib/taxas";
 import type { Venda } from "@/lib/admin-types";
@@ -13,7 +13,9 @@ export default function VendasPage() {
   const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"nova" | "historico">("nova");
+  const [tab, setTab] = useState<"nova" | "andamento" | "finalizadas">("nova");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
   const [vendasPw, setVendasPw] = useState("");
@@ -202,9 +204,13 @@ export default function VendasPage() {
     <div className="space-y-6">
       {/* Tabs */}
       <div className="flex gap-2">
-        {(["nova", "historico"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "nova" ? "Nova Venda" : "Historico"}
+        {([
+          { key: "nova", label: "Nova Venda", count: 0 },
+          { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length },
+          { key: "finalizadas", label: "Finalizadas", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length },
+        ] as const).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+            {t.label}{t.count > 0 ? ` (${t.count})` : ""}
           </button>
         ))}
       </div>
@@ -356,82 +362,233 @@ export default function VendasPage() {
           </button>
         </div>
       ) : (
-        /* Histórico */
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
-            <h2 className="font-bold text-[#1D1D1F]">Historico de Vendas</h2>
-            <span className="text-xs text-[#86868B]">{vendas.length} vendas</span>
-          </div>
-          {loading ? (
-            <div className="p-8 text-center text-[#86868B]">Carregando...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", ""].map((h) => (
-                      <th key={h} className="px-3 py-3 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendas.length === 0 ? (
-                    <tr><td colSpan={11} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda registrada</td></tr>
-                  ) : vendas.map((v) => {
-                    const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
-                    const temEntrada = v.entrada_pix && v.entrada_pix > 0;
-                    const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+        /* Vendas Em Andamento / Finalizadas */
+        (() => {
+          const filtered = tab === "andamento"
+            ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
+          const titulo = tab === "andamento" ? "Vendas em Andamento" : "Vendas Finalizadas";
 
-                    // Montar descrição do pagamento
-                    const pagParts: string[] = [];
-                    if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
-                    if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
-                    if (v.forma === "CARTAO" && v.qnt_parcelas) {
-                      pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}`);
-                    } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
-                      pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
-                    } else if (!temEntrada && !valorTrocaV) {
-                      pagParts.push(`${v.forma} ${v.banco}`);
-                    }
-
-                    return (
-                      <tr key={v.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
-                        <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">{v.data}</td>
-                        <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
-                        <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
-                        <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
-                        <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate text-xs">{v.produto}</td>
-                        <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
-                        <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
-                        <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                        <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct).toFixed(1)}%</td>
-                        <td className="px-3 py-2.5 text-xs max-w-[250px]">
-                          <div className="space-y-0.5">
-                            {pagParts.map((p, i) => (
-                              <span key={i} className="block text-[11px] text-[#1D1D1F]">{p}</span>
-                            ))}
-                          </div>
-                          <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Remover a venda do historico\n- Remover o seminovo do estoque (se houver troca)`)) return;
-                              await fetch("/api/vendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: v.id }) });
-                              setVendas((prev) => prev.filter((r) => r.id !== v.id));
-                              setMsg("Venda cancelada!");
-                            }}
-                            className="px-2 py-1 rounded-lg text-[10px] text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
-                          >Cancelar</button>
-                        </td>
+          return (
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+                <h2 className="font-bold text-[#1D1D1F]">{titulo}</h2>
+                <span className="text-xs text-[#86868B]">{filtered.length} vendas</span>
+              </div>
+              {loading ? (
+                <div className="p-8 text-center text-[#86868B]">Carregando...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", "Status", ""].map((h) => (
+                          <th key={h} className="px-3 py-3 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {filtered.length === 0 ? (
+                        <tr><td colSpan={12} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : "finalizada"}</td></tr>
+                      ) : filtered.map((v) => {
+                        const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
+                        const temEntrada = v.entrada_pix && v.entrada_pix > 0;
+                        const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+                        const isExpanded = expandedId === v.id;
+
+                        const pagParts: string[] = [];
+                        if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
+                        if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        if (v.forma === "CARTAO" && v.qnt_parcelas) {
+                          pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}`);
+                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
+                          pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
+                        } else if (!temEntrada && !valorTrocaV) {
+                          pagParts.push(`${v.forma} ${v.banco}`);
+                        }
+
+                        return (
+                          <React.Fragment key={v.id}>
+                            <tr
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                              onClick={() => setExpandedId(isExpanded ? null : v.id)}
+                            >
+                              <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">{v.data}</td>
+                              <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
+                              <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
+                              <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
+                              <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate text-xs">{v.produto}</td>
+                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
+                              <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
+                              <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
+                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                              <td className="px-3 py-2.5 text-xs max-w-[250px]">
+                                <div className="space-y-0.5">
+                                  {pagParts.map((p, i) => (
+                                    <span key={i} className="block text-[11px] text-[#1D1D1F]">{p}</span>
+                                  ))}
+                                </div>
+                                <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                                  v.status_pagamento === "AGUARDANDO" ? "bg-yellow-100 text-yellow-700" :
+                                  v.status_pagamento === "CANCELADO" ? "bg-red-100 text-red-600" :
+                                  "bg-green-100 text-green-700"
+                                }`}>
+                                  {v.status_pagamento === "AGUARDANDO" ? "⏳ Pendente" : v.status_pagamento === "CANCELADO" ? "❌ Cancelado" : "✅ Finalizado"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-xs text-[#86868B]">{isExpanded ? "▲" : "▼"}</td>
+                            </tr>
+
+                            {/* Linha expandida */}
+                            {isExpanded && (
+                              <tr className="bg-[#FAFAFA]">
+                                <td colSpan={12} className="px-5 py-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* Detalhes da venda */}
+                                    <div className="space-y-2">
+                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
+                                      <div className="text-xs space-y-1">
+                                        <p><strong>Produto:</strong> {v.produto}</p>
+                                        <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
+                                        <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {v.notas && <p><strong>Notas:</strong> {v.notas}</p>}
+                                      </div>
+                                    </div>
+
+                                    {/* Ações de status */}
+                                    <div className="space-y-2">
+                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
+                                      <div className="flex gap-2 flex-wrap">
+                                        {v.status_pagamento === "AGUARDANDO" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                                body: JSON.stringify({ id: v.id, status_pagamento: "FINALIZADO" }),
+                                              });
+                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "FINALIZADO" } : r));
+                                              setMsg("Venda finalizada!");
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
+                                          >
+                                            ✅ Finalizar Venda
+                                          </button>
+                                        )}
+                                        {v.status_pagamento !== "CANCELADO" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                              await fetch("/api/vendas", {
+                                                method: "DELETE",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                                body: JSON.stringify({ id: v.id }),
+                                              });
+                                              setVendas(prev => prev.filter(r => r.id !== v.id));
+                                              setMsg("Venda cancelada!");
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+                                          >
+                                            ❌ Cancelar Venda
+                                          </button>
+                                        )}
+                                        {v.status_pagamento === "FINALIZADO" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                                body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }),
+                                              });
+                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "AGUARDANDO" } : r));
+                                              setMsg("Venda movida para Em Andamento");
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs text-yellow-600 border border-yellow-300 hover:bg-yellow-50 transition-colors"
+                                          >
+                                            ⏳ Mover para Andamento
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Comprovante */}
+                                    <div className="space-y-2">
+                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Comprovante</h4>
+                                      {v.comprovante_url ? (
+                                        <div>
+                                          <a href={v.comprovante_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">📎 Ver comprovante</a>
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                                body: JSON.stringify({ id: v.id, comprovante_url: null }),
+                                              });
+                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: "" } : r));
+                                            }}
+                                            className="ml-2 text-[10px] text-red-400 hover:text-red-600"
+                                          >remover</button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                              e.stopPropagation();
+                                              const file = e.target.files?.[0];
+                                              if (!file) return;
+                                              setUploadingId(v.id);
+                                              const formData = new FormData();
+                                              formData.append("file", file);
+                                              formData.append("venda_id", v.id);
+                                              try {
+                                                const res = await fetch("/api/vendas/comprovante", {
+                                                  method: "POST",
+                                                  headers: { "x-admin-password": password },
+                                                  body: formData,
+                                                });
+                                                const json = await res.json();
+                                                if (json.url) {
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: json.url } : r));
+                                                  setMsg("Comprovante salvo!");
+                                                } else {
+                                                  setMsg("Erro ao salvar comprovante");
+                                                }
+                                              } catch {
+                                                setMsg("Erro ao enviar arquivo");
+                                              }
+                                              setUploadingId(null);
+                                            }}
+                                            className="text-xs"
+                                          />
+                                          {uploadingId === v.id && <p className="text-[10px] text-[#86868B]">Enviando...</p>}
+                                          <p className="text-[10px] text-[#86868B]">Envie PNG/JPG do comprovante</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()
       )}
     </div>
   );
