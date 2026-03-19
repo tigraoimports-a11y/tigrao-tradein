@@ -99,6 +99,135 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "/faltando": {
+        const { data: zerados } = await supabase
+          .from("estoque")
+          .select("produto, categoria, cor")
+          .eq("qnt", 0)
+          .or("tipo.is.null,tipo.eq.NOVO")
+          .order("categoria")
+          .order("produto");
+
+        if (!zerados?.length) {
+          await sendTelegramMessage(`✅ Nenhum produto zerado no estoque!`, chatId);
+          break;
+        }
+
+        const byCat: Record<string, string[]> = {};
+        for (const p of zerados) {
+          if (!byCat[p.categoria]) byCat[p.categoria] = [];
+          byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+        }
+
+        const lines = [`🚨 <b>PRODUTOS ZERADOS — ${zerados.length} itens</b>`, ""];
+        for (const [cat, items] of Object.entries(byCat)) {
+          lines.push(`<b>${cat}</b>`);
+          lines.push(...items);
+          lines.push("");
+        }
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/acabando": {
+        const { data: lowStock } = await supabase
+          .from("estoque")
+          .select("produto, categoria, cor, qnt")
+          .eq("qnt", 1)
+          .or("tipo.is.null,tipo.eq.NOVO")
+          .order("categoria")
+          .order("produto");
+
+        if (!lowStock?.length) {
+          await sendTelegramMessage(`✅ Nenhum produto com apenas 1 unidade!`, chatId);
+          break;
+        }
+
+        const byCat: Record<string, string[]> = {};
+        for (const p of lowStock) {
+          if (!byCat[p.categoria]) byCat[p.categoria] = [];
+          byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+        }
+
+        const lines = [`⚠️ <b>ACABANDO (1 unidade) — ${lowStock.length} itens</b>`, ""];
+        for (const [cat, items] of Object.entries(byCat)) {
+          lines.push(`<b>${cat}</b>`);
+          lines.push(...items);
+          lines.push("");
+        }
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/reposicao": {
+        const { data: criticos } = await supabase
+          .from("estoque")
+          .select("produto, categoria, cor, qnt")
+          .lte("qnt", 1)
+          .or("tipo.is.null,tipo.eq.NOVO")
+          .order("qnt")
+          .order("categoria")
+          .order("produto");
+
+        if (!criticos?.length) {
+          await sendTelegramMessage(`✅ Estoque saudavel! Nenhum produto critico.`, chatId);
+          break;
+        }
+
+        const zerados = criticos.filter((p) => p.qnt === 0);
+        const acabando = criticos.filter((p) => p.qnt === 1);
+
+        const lines = [`📦 <b>ALERTA DE REPOSIÇÃO</b>`, ""];
+
+        if (zerados.length > 0) {
+          lines.push(`🔴 <b>ZERADOS (${zerados.length}):</b>`);
+          for (const p of zerados) {
+            lines.push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+          }
+          lines.push("");
+        }
+
+        if (acabando.length > 0) {
+          lines.push(`🟡 <b>ACABANDO (${acabando.length}):</b>`);
+          for (const p of acabando) {
+            lines.push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
+          }
+        }
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/estoque": {
+        const { data: all } = await supabase
+          .from("estoque")
+          .select("categoria, qnt, custo_unitario")
+          .or("tipo.is.null,tipo.eq.NOVO");
+
+        const cats: Record<string, { qtd: number; valor: number }> = {};
+        let totalQtd = 0, totalValor = 0;
+        for (const p of all ?? []) {
+          if (!cats[p.categoria]) cats[p.categoria] = { qtd: 0, valor: 0 };
+          cats[p.categoria].qtd += p.qnt;
+          cats[p.categoria].valor += p.qnt * (p.custo_unitario || 0);
+          totalQtd += p.qnt;
+          totalValor += p.qnt * (p.custo_unitario || 0);
+        }
+
+        const fmtBRL = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+        const lines = [`📦 <b>RESUMO DO ESTOQUE</b>`, ""];
+        for (const [cat, v] of Object.entries(cats).sort(([a], [b]) => a.localeCompare(b))) {
+          lines.push(`<b>${cat}</b>: ${v.qtd} un. | ${fmtBRL(v.valor)}`);
+        }
+        lines.push("");
+        lines.push(`<b>TOTAL: ${totalQtd} unidades | ${fmtBRL(totalValor)}</b>`);
+
+        await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
       default: {
         // Comando desconhecido — ignorar
         break;
