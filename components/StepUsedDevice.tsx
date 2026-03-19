@@ -51,10 +51,10 @@ export default function StepUsedDevice({
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
-  const [battery, setBattery] = useState(100);
-  const [screenScratch, setScreenScratch] = useState<"none" | "one" | "multiple">("none");
-  const [sideScratch, setSideScratch] = useState<"none" | "one" | "multiple">("none");
-  const [peeling, setPeeling] = useState<"none" | "light" | "heavy">("none");
+  const [battery, setBattery] = useState<number | null>(null);
+  const [screenScratch, setScreenScratch] = useState<"none" | "one" | "multiple" | null>(null);
+  const [sideScratch, setSideScratch] = useState<"none" | "one" | "multiple" | null>(null);
+  const [peeling, setPeeling] = useState<"none" | "light" | "heavy" | null>(null);
   const [hasWarranty, setHasWarranty] = useState<boolean | null>(null);
   const [warrantyMonth, setWarrantyMonth] = useState<number | null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
@@ -84,7 +84,10 @@ export default function StepUsedDevice({
   );
 
   const condition: ConditionData = {
-    screenScratch, sideScratch, peeling, battery,
+    screenScratch: screenScratch ?? "none",
+    sideScratch: sideScratch ?? "none",
+    peeling: peeling ?? "none",
+    battery: battery ?? 100,
     hasDamage: hasDamage === true,
     hasWarranty: hasWarranty === true,
     warrantyMonth: hasWarranty ? warrantyMonth : null,
@@ -107,7 +110,11 @@ export default function StepUsedDevice({
     model.toLowerCase().includes(m.toLowerCase())
   );
 
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && hasOriginalBox !== null;
+  // Todos os campos são obrigatórios
+  const batteryFilled = battery !== null && battery >= 1 && battery <= 100;
+  const allConditionsFilled = screenScratch !== null && sideScratch !== null && peeling !== null && batteryFilled;
+  const warrantyFilled = hasWarranty === false || (hasWarranty === true && warrantyMonth !== null);
+  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && allConditionsFilled && warrantyFilled && hasOriginalBox !== null;
 
   function handleLineChange(l: string) {
     setLine(l);
@@ -226,11 +233,13 @@ export default function StepUsedDevice({
                 <div className="relative flex-1">
                   <input
                     type="number"
-                    min={50}
+                    min={1}
                     max={100}
-                    value={battery}
+                    value={battery ?? ""}
                     onChange={(e) => {
-                      const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                      const raw = e.target.value;
+                      if (raw === "") { setBattery(null); return; }
+                      const val = Math.min(100, Math.max(1, Number(raw) || 0));
                       setBattery(val);
                     }}
                     placeholder="Ex: 87"
@@ -238,9 +247,11 @@ export default function StepUsedDevice({
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold text-[#86868B]">%</span>
                 </div>
-                <span className={`text-[14px] font-semibold px-3 py-1.5 rounded-full ${battery >= 85 ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#FF3B30]/10 text-[#FF3B30]"}`}>
-                  {battery >= 85 ? "Boa" : "Baixa"}
-                </span>
+                {battery !== null && (
+                  <span className={`text-[14px] font-semibold px-3 py-1.5 rounded-full ${battery >= 85 ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#FF3B30]/10 text-[#FF3B30]"}`}>
+                    {battery >= 85 ? "Boa" : "Baixa"}
+                  </span>
+                )}
               </div>
               {/* Passo a passo */}
               <div className="bg-white rounded-xl p-3 border border-[#E5E5EA]">
@@ -255,7 +266,8 @@ export default function StepUsedDevice({
             </div>
           </Section>
 
-          {/* Riscos na tela */}
+          {/* Riscos na tela — aparece após bateria preenchida */}
+          {batteryFilled && (
           <Section title="Riscos na tela">
             <div className="flex gap-2">
               {([["none", "Nenhum"], ["one", "1 risco"], ["multiple", "2 ou mais"]] as const).map(
@@ -272,8 +284,10 @@ export default function StepUsedDevice({
               )}
             </div>
           </Section>
+          )}
 
-          {/* Riscos laterais */}
+          {/* Riscos laterais — aparece após riscos tela */}
+          {screenScratch !== null && (
           <Section title="Riscos laterais">
             <div className="flex gap-2">
               {([["none", "Nenhum"], ["one", "1 risco"], ["multiple", "2 ou mais"]] as const).map(
@@ -290,8 +304,10 @@ export default function StepUsedDevice({
               )}
             </div>
           </Section>
+          )}
 
-          {/* Descascado/Amassado */}
+          {/* Descascado/Amassado — aparece após riscos laterais */}
+          {sideScratch !== null && (
           <Section title="Descascado / Amassado">
             <div className="flex gap-2">
               {([["none", "Nao"], ["light", "Leve"], ["heavy", "Forte"]] as const).map(
@@ -308,8 +324,10 @@ export default function StepUsedDevice({
               )}
             </div>
           </Section>
+          )}
 
-          {/* Garantia Apple - Pergunta 1 */}
+          {/* Garantia Apple - Pergunta 1 — aparece após descascado */}
+          {peeling !== null && (
           <Section title="Ainda esta na garantia Apple de 12 meses?">
             <div className="flex gap-2">
               <SelectButton
@@ -329,6 +347,7 @@ export default function StepUsedDevice({
               </SelectButton>
             </div>
           </Section>
+          )}
 
           {/* Garantia Apple - Pergunta 2 (ano + mês) */}
           {hasWarranty === true && (
@@ -363,7 +382,8 @@ export default function StepUsedDevice({
             </Section>
           )}
 
-          {/* Caixa original */}
+          {/* Caixa original — aparece após garantia respondida */}
+          {warrantyFilled && (
           <Section title="Ainda tem a caixa original do aparelho?">
             <div className="flex gap-2">
               <SelectButton
@@ -383,6 +403,7 @@ export default function StepUsedDevice({
               </SelectButton>
             </div>
           </Section>
+          )}
 
         </>
       )}
