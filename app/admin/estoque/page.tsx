@@ -102,6 +102,52 @@ export default function EstoquePage() {
     bateria: "", cliente: "", fornecedor: "",
   });
 
+  // Campos estruturados por categoria
+  const [spec, setSpec] = useState({
+    // IPHONES
+    ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
+    // MACBOOK
+    mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
+    // IPADS
+    ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+    // APPLE_WATCH
+    aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
+    // AIRPODS
+    air_modelo: "AIRPODS 4",
+  });
+  const setS = (field: string, value: string) => setSpec((s) => ({ ...s, [field]: value }));
+
+  // Gerar nome do produto automaticamente a partir dos campos estruturados
+  const buildProdutoName = (cat: string): string => {
+    switch (cat) {
+      case "IPHONES": {
+        const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
+        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
+      }
+      case "MACBOOK": {
+        if (spec.mb_modelo === "MAC MINI") return `MAC MINI ${spec.mb_chip} ${spec.mb_ram} ${spec.mb_storage}`;
+        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
+        return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}`;
+      }
+      case "IPADS": {
+        const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
+        const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
+        return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}`;
+      }
+      case "APPLE_WATCH": {
+        const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
+        return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}`;
+      }
+      case "AIRPODS":
+        return spec.air_modelo;
+      default:
+        return "";
+    }
+  };
+
+  // Verificar se a categoria tem campos estruturados
+  const hasStructuredFields = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH", "AIRPODS"].includes(form.categoria);
+
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
     try {
@@ -146,12 +192,13 @@ export default function EstoquePage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.produto) { setMsg("Preencha o nome do produto"); return; }
+    const nomeProduto = hasStructuredFields ? buildProdutoName(form.categoria) : form.produto;
+    if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
       body: JSON.stringify({
-        produto: form.produto, categoria: form.categoria,
+        produto: nomeProduto, categoria: form.categoria,
         qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
         status: form.status, cor: form.cor || null, observacao: form.observacao || null,
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
@@ -338,9 +385,10 @@ export default function EstoquePage() {
         /* FORMULÁRIO */
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
           <h2 className="text-lg font-bold text-[#1D1D1F]">Adicionar Produto</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
-            <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => set("categoria", e.target.value)} className={inputCls}>
+
+          {/* Row 1: Categoria + Tipo */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => { set("categoria", e.target.value); set("produto", ""); }} className={inputCls}>
               {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
             </select></div>
             <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
@@ -349,6 +397,104 @@ export default function EstoquePage() {
               <option value="A_CAMINHO">A Caminho</option>
             </select></div>
           </div>
+
+          {/* Campos específicos por categoria */}
+          {form.categoria === "IPHONES" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
+                {["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "17 PRO", "17 PRO MAX"].map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
+                {["64GB", "128GB", "256GB", "512GB", "1TB"].map((s) => <option key={s}>{s}</option>)}
+              </select></div>
+            </div>
+          )}
+
+          {form.categoria === "MACBOOK" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
+                <option value="AIR">MacBook Air</option>
+                <option value="PRO">MacBook Pro</option>
+                <option value="MAC MINI">Mac Mini</option>
+              </select></div>
+              {spec.mb_modelo !== "MAC MINI" && (
+                <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
+                  {spec.mb_modelo === "AIR"
+                    ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
+                    : [<option key='14"' value='14"'>14 polegadas</option>, <option key='16"' value='16"'>16 polegadas</option>]
+                  }
+                </select></div>
+              )}
+              <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
+                {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX"].map((c) => <option key={c}>{c}</option>)}
+              </select></div>
+              <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
+                {["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"].map((r) => <option key={r}>{r}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Armazenamento</p><select value={spec.mb_storage} onChange={(e) => setS("mb_storage", e.target.value)} className={inputCls}>
+                {["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"].map((s) => <option key={s}>{s}</option>)}
+              </select></div>
+            </div>
+          )}
+
+          {form.categoria === "IPADS" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
+                <option value="IPAD">iPad</option>
+                <option value="MINI">iPad Mini</option>
+                <option value="AIR">iPad Air</option>
+                <option value="PRO">iPad Pro</option>
+              </select></div>
+              <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
+                {['8.3"', '10.9"', '11"', '13"'].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Armazenamento</p><select value={spec.ipad_storage} onChange={(e) => setS("ipad_storage", e.target.value)} className={inputCls}>
+                {["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Conectividade</p><select value={spec.ipad_conn} onChange={(e) => setS("ipad_conn", e.target.value)} className={inputCls}>
+                <option value="WIFI">WiFi</option>
+                <option value="WIFI+CELL">WiFi + Cellular (5G)</option>
+              </select></div>
+            </div>
+          )}
+
+          {form.categoria === "APPLE_WATCH" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
+                {["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].map((m) => <option key={m}>{m}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
+                {["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"].map((t) => <option key={t}>{t}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Conectividade</p><select value={spec.aw_conn} onChange={(e) => setS("aw_conn", e.target.value)} className={inputCls}>
+                <option value="GPS">GPS</option>
+                <option value="GPS+CELL">GPS + Cellular</option>
+              </select></div>
+            </div>
+          )}
+
+          {form.categoria === "AIRPODS" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
+                {["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].map((m) => <option key={m}>{m}</option>)}
+              </select></div>
+            </div>
+          )}
+
+          {/* Categorias sem campos estruturados: texto livre */}
+          {!hasStructuredFields && (
+            <div><p className={labelCls}>Nome do Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: Cabo USB-C Lightning 1m" className={inputCls} /></div>
+          )}
+
+          {/* Preview do nome gerado */}
+          {hasStructuredFields && (
+            <div className="px-4 py-3 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl">
+              <p className="text-xs text-white/60 mb-1">Nome do produto (gerado automaticamente)</p>
+              <p className="text-white font-semibold">{buildProdutoName(form.categoria)}</p>
+            </div>
+          )}
+
+          {/* Row: Cor, Qtd, Custo, Fornecedor */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Quantidade</p><input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={inputCls} /></div>
