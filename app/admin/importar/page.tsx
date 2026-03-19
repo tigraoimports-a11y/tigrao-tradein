@@ -130,6 +130,29 @@ export default function ImportarPage() {
             {quickImporting === "estoque" ? "Importando..." : "Importar 129 Produtos"}
             <span className="block text-xs font-normal mt-1 opacity-80">Estoque 2026</span>
           </button>
+          <button
+            onClick={async () => {
+              setQuickImporting("extras");
+              setQuickMsg("");
+              try {
+                const res = await fetch("/estoque-extras.json");
+                const data = await res.json();
+                const importRes = await fetch("/api/estoque", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "x-admin-password": password },
+                  body: JSON.stringify({ action: "import", rows: data }),
+                });
+                const json = await importRes.json();
+                setQuickMsg(json.ok ? `${json.imported} pendencias e a caminho importados!` : `Erro: ${json.error}`);
+              } catch (err) { setQuickMsg(`Erro: ${String(err)}`); }
+              setQuickImporting("");
+            }}
+            disabled={!!quickImporting}
+            className="px-4 py-4 rounded-xl bg-[#F39C12] text-white font-semibold hover:bg-[#E67E22] transition-colors disabled:opacity-50 text-center"
+          >
+            {quickImporting === "extras" ? "Importando..." : "Importar Pendencias + A Caminho"}
+            <span className="block text-xs font-normal mt-1 opacity-80">5 pendencias + 9 a caminho</span>
+          </button>
         </div>
       </div>
 
