@@ -369,38 +369,63 @@ export default function VendasPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Cliente", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Banco", "Forma", "Receb.", ""].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", ""].map((h) => (
+                      <th key={h} className="px-3 py-3 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {vendas.length === 0 ? (
                     <tr><td colSpan={11} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda registrada</td></tr>
-                  ) : vendas.map((v) => (
-                    <tr key={v.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
-                      <td className="px-4 py-3 text-xs text-[#86868B] whitespace-nowrap">{v.data}</td>
-                      <td className="px-4 py-3 font-medium whitespace-nowrap">{v.cliente}</td>
-                      <td className="px-4 py-3 whitespace-nowrap max-w-[200px] truncate">{v.produto}</td>
-                      <td className="px-4 py-3 text-[#86868B]">{fmt(v.custo)}</td>
-                      <td className="px-4 py-3 font-medium">{fmt(v.preco_vendido)}</td>
-                      <td className={`px-4 py-3 font-bold ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                      <td className="px-4 py-3 text-[#86868B]">{Number(v.margem_pct).toFixed(1)}%</td>
-                      <td className="px-4 py-3 text-xs">{v.banco}</td>
-                      <td className="px-4 py-3 text-xs">{v.forma}{v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}</td>
-                      <td className="px-4 py-3 text-xs"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span></td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={async () => {
-                            if (!confirm(`Excluir venda de ${v.cliente}?`)) return;
-                            await fetch("/api/vendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: v.id }) });
-                            setVendas((prev) => prev.filter((r) => r.id !== v.id));
-                          }}
-                          className="text-[#86868B] hover:text-red-500 text-xs"
-                        >X</button>
-                      </td>
-                    </tr>
-                  ))}
+                  ) : vendas.map((v) => {
+                    const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
+                    const temEntrada = v.entrada_pix && v.entrada_pix > 0;
+                    const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+
+                    // Montar descrição do pagamento
+                    const pagParts: string[] = [];
+                    if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
+                    if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                    if (v.forma === "CARTAO" && v.qnt_parcelas) {
+                      pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}`);
+                    } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
+                      pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
+                    } else if (!temEntrada && !valorTrocaV) {
+                      pagParts.push(`${v.forma} ${v.banco}`);
+                    }
+
+                    return (
+                      <tr key={v.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
+                        <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">{v.data}</td>
+                        <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
+                        <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
+                        <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
+                        <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate text-xs">{v.produto}</td>
+                        <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
+                        <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
+                        <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
+                        <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct).toFixed(1)}%</td>
+                        <td className="px-3 py-2.5 text-xs max-w-[250px]">
+                          <div className="space-y-0.5">
+                            {pagParts.map((p, i) => (
+                              <span key={i} className="block text-[11px] text-[#1D1D1F]">{p}</span>
+                            ))}
+                          </div>
+                          <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Excluir venda de ${v.cliente}?`)) return;
+                              await fetch("/api/vendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: v.id }) });
+                              setVendas((prev) => prev.filter((r) => r.id !== v.id));
+                            }}
+                            className="text-[#86868B] hover:text-red-500 text-xs"
+                          >X</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
