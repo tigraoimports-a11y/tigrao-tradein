@@ -32,7 +32,7 @@ export default function VendasPage() {
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
-    cliente: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+    cliente: "", cpf: "", email: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", banco: "ITAU", forma: "PIX",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
@@ -170,7 +170,9 @@ export default function VendasPage() {
     const payload: Record<string, unknown> = {
       data: form.data,
       cliente: form.cliente,
-      origem: form.origem,
+      cpf: form.cpf || null,
+      email: form.email || null,
+      origem: form.tipo === "ATACADO" ? "ATACADO" : form.origem,
       tipo: temTroca ? "UPGRADE" : form.tipo,
       produto: form.produto,
       fornecedor: form.fornecedor || null,
@@ -219,7 +221,7 @@ export default function VendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Venda registrada!");
-      setForm((f) => ({ ...f, cliente: "", produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "" }));
+      setForm((f) => ({ ...f, cliente: "", cpf: "", email: "", produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "" }));
       setCatSel("");
       setEstoqueId("");
       fetchVendas();
@@ -255,17 +257,29 @@ export default function VendasPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          {/* Row 1 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Cliente</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Nome" className={inputCls} /></div>
-            <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
-              <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option>
-            </select></div>
-            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={selectCls}>
+          {/* Row 1: Tipo + Data */}
+          <div className="grid grid-cols-2 gap-4">
+            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); } }} className={selectCls}>
               <option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
             </select></div>
+            <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
           </div>
+
+          {/* Campos condicionais por tipo */}
+          {form.tipo === "ATACADO" ? (
+            <div className="grid grid-cols-1 gap-4">
+              <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div><p className={labelCls}>Cliente</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Nome completo" className={inputCls} /></div>
+              <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
+              <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
+              <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
+                <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option>
+              </select></div>
+            </div>
+          )}
 
           {/* Row 2: Produto */}
           <div className="space-y-3">
