@@ -965,6 +965,8 @@ export default function VendasPage() {
                                                 if (ef.bandeira !== (v.bandeira || "")) updates.bandeira = ef.bandeira || null;
                                                 if (ef.banco_pix !== (v.banco_pix || "")) updates.banco_pix = ef.banco_pix || null;
                                                 if (ef.entrada_pix !== String(v.entrada_pix || 0)) updates.entrada_pix = parseFloat(ef.entrada_pix) || 0;
+                                                if (ef.entrada_especie !== String(v.entrada_especie || 0)) updates.entrada_especie = parseFloat(ef.entrada_especie) || 0;
+                                                if (ef.produto_na_troca !== String(v.produto_na_troca || 0)) updates.produto_na_troca = parseFloat(ef.produto_na_troca) || 0;
                                                 if (ef.cliente !== v.cliente) updates.cliente = ef.cliente;
                                                 if (ef.produto !== v.produto) updates.produto = ef.produto;
 
@@ -996,6 +998,8 @@ export default function VendasPage() {
                                                     bandeira: (ef.bandeira || null) as Venda["bandeira"],
                                                     banco_pix: ef.banco_pix || null,
                                                     entrada_pix: parseFloat(ef.entrada_pix) || 0,
+                                                    entrada_especie: parseFloat(ef.entrada_especie) || 0,
+                                                    produto_na_troca: ef.produto_na_troca || null,
                                                     cliente: ef.cliente,
                                                     produto: ef.produto,
                                                   } : r));
@@ -1088,7 +1092,58 @@ export default function VendasPage() {
                                               <option value="MERCADO_PAGO">MERCADO PAGO</option>
                                             </select>
                                           </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Entrada Especie</span>
+                                            <input type="number" value={ef.entrada_especie} onChange={e => setEf("entrada_especie", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Valor Troca</span>
+                                            <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
                                         </div>
+                                        {/* Valor no Comprovante — edição */}
+                                        {(ef.forma === "CARTAO" || ef.forma === "LINK") && (() => {
+                                          const efParcelas = parseInt(ef.qnt_parcelas) || 0;
+                                          const efTaxa = ef.forma === "CARTAO"
+                                            ? getTaxa(ef.banco, ef.bandeira || null, efParcelas, ef.forma)
+                                            : ef.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, efParcelas, "CARTAO") : 0;
+                                          if (efTaxa <= 0) return null;
+                                          return (
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#E8740E] uppercase">Valor no Comprovante (R$)</span>
+                                                <input type="number" value={ef.valor_comprovante} onChange={e => {
+                                                  const comp = e.target.value;
+                                                  const compVal = parseFloat(comp) || 0;
+                                                  if (compVal > 0 && efTaxa > 0) {
+                                                    const liqCartao = calcularLiquido(compVal, efTaxa);
+                                                    const pix = parseFloat(ef.entrada_pix) || 0;
+                                                    const esp = parseFloat(ef.entrada_especie) || 0;
+                                                    const trc = parseFloat(ef.produto_na_troca) || 0;
+                                                    const totalVendido = Math.round(liqCartao + pix + esp + trc);
+                                                    setEditForm(prev => ({ ...prev, valor_comprovante: comp, preco_vendido: String(totalVendido) }));
+                                                  } else {
+                                                    setEf("valor_comprovante", comp);
+                                                  }
+                                                }} placeholder="Valor da maquina" className="w-full px-2 py-1.5 border border-[#E8740E] rounded-lg text-xs bg-white" />
+                                              </label>
+                                              <div className="col-span-1 md:col-span-3 flex items-end">
+                                                <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-[10px] text-[#86868B] flex flex-wrap gap-2 w-full">
+                                                  <span>Taxa: <strong className="text-[#E8740E]">{efTaxa.toFixed(2)}%</strong></span>
+                                                  {(parseFloat(ef.valor_comprovante) || 0) > 0 && (
+                                                    <>
+                                                      <span>Liq: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(ef.valor_comprovante) || 0, efTaxa))}</strong></span>
+                                                      {(parseFloat(ef.entrada_pix) || 0) > 0 && <span>+ PIX: <strong>{fmt(parseFloat(ef.entrada_pix) || 0)}</strong></span>}
+                                                      {(parseFloat(ef.entrada_especie) || 0) > 0 && <span>+ Esp: <strong>{fmt(parseFloat(ef.entrada_especie) || 0)}</strong></span>}
+                                                      {(parseFloat(ef.produto_na_troca) || 0) > 0 && <span>+ Troca: <strong>{fmt(parseFloat(ef.produto_na_troca) || 0)}</strong></span>}
+                                                      <span>= <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(ef.valor_comprovante) || 0, efTaxa) + (parseFloat(ef.entrada_pix) || 0) + (parseFloat(ef.entrada_especie) || 0) + (parseFloat(ef.produto_na_troca) || 0)))}</strong></span>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                     );
                                   })() : (
@@ -1111,7 +1166,10 @@ export default function VendasPage() {
                                               qnt_parcelas: String(v.qnt_parcelas || ""),
                                               bandeira: v.bandeira || "",
                                               entrada_pix: String(v.entrada_pix || 0),
+                                              entrada_especie: String(v.entrada_especie || 0),
                                               banco_pix: v.banco_pix || "",
+                                              valor_comprovante: "",
+                                              produto_na_troca: String(v.produto_na_troca || 0),
                                             });
                                             setEditingId(v.id);
                                           }}
