@@ -38,14 +38,41 @@ export default function AdminPrecosPage() {
   const [specFields, setSpecFields] = useState<{ label: string; value: string }[]>([{ label: "", value: "" }]);
 
   // Defaults por categoria ao abrir formulário
+  const BUILTIN_SPECS: Record<string, string[]> = {
+    MACBOOK: ["Tela", "RAM", "Armazenamento"],
+    IPHONE: ["Armazenamento"],
+    IPAD: ["Armazenamento"],
+    APPLE_WATCH: ["Tamanho"],
+    AIRPODS: ["Modelo"],
+  };
+
+  // Salvar/carregar labels customizados por categoria no localStorage
+  function getSavedLabels(catKey: string): string[] | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(`tigrao_spec_labels_${catKey}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function saveLabels(catKey: string, labels: string[]) {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(`tigrao_spec_labels_${catKey}`, JSON.stringify(labels));
+  }
+
   function getDefaultSpecs(catKey: string): { label: string; value: string }[] {
-    switch (catKey) {
-      case "MACBOOK": return [{ label: "Tela", value: "" }, { label: "RAM", value: "" }, { label: "Armazenamento", value: "" }];
-      case "IPHONE": case "IPAD": return [{ label: "Armazenamento", value: "" }];
-      case "APPLE_WATCH": return [{ label: "Tamanho", value: "" }];
-      case "AIRPODS": return [{ label: "Modelo", value: "" }];
-      default: return [{ label: "Variação", value: "" }];
-    }
+    // Primeiro tenta labels salvos (customizados pelo usuário)
+    const saved = getSavedLabels(catKey);
+    if (saved && saved.length > 0) return saved.map((l) => ({ label: l, value: "" }));
+    // Senão usa defaults
+    const builtin = BUILTIN_SPECS[catKey] || ["Variação"];
+    return builtin.map((l) => ({ label: l, value: "" }));
+  }
+
+  function getLabelsForCategory(catKey: string): string[] {
+    const saved = getSavedLabels(catKey);
+    if (saved && saved.length > 0) return saved;
+    return BUILTIN_SPECS[catKey] || ["Variação"];
   }
 
   function handleAddCategoria() {
@@ -178,6 +205,9 @@ export default function AdminPrecosPage() {
     const filledSpecs = specFields.filter((s) => s.value.trim());
     const armazenamentoFinal = filledSpecs.map((s) => s.value.trim()).join(" | ");
     if (!newProd.modelo || !armazenamentoFinal || isNaN(preco) || preco <= 0) return;
+    // Salvar labels dos campos para essa categoria (pra tabela mostrar nomes corretos)
+    const currentLabels = specFields.map((s) => s.label || `Spec ${specFields.indexOf(s) + 1}`);
+    saveLabels(tab, currentLabels);
     setSaving("new");
     await fetch("/api/admin/precos", {
       method: "POST",
@@ -191,10 +221,11 @@ export default function AdminPrecosPage() {
       }),
     });
     await fetchData(password);
-    setNewProd({ modelo: "", preco_pix: "" });
-    setSpecFields(getDefaultSpecs(tab));
-    setShowAdd(false);
+    // Manter labels dos campos, só limpar valores (pra facilitar adicionar variantes do mesmo modelo)
+    setNewProd((prev) => ({ ...prev, preco_pix: "" }));
+    setSpecFields((prev) => prev.map((s) => ({ ...s, value: "" })));
     setSaving(null);
+    // NÃO fechar o form — facilita adicionar múltiplas variantes seguidas
   }
 
   if (loading && data === null) {
@@ -471,9 +502,8 @@ export default function AdminPrecosPage() {
           // Para MacBooks agrupados por tela, incluir coluna "Modelo"
           const showModeloCol = isMac;
 
-          // Gerar headers das colunas de spec
-          // Tentar extrair labels dos specFields defaults pra essa categoria
-          const defaultLabels = getDefaultSpecs(tab).map((s) => s.label);
+          // Gerar headers das colunas de spec (usa labels salvos pelo usuário)
+          const defaultLabels = getLabelsForCategory(tab);
 
           return (
           <div key={groupLabel} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
