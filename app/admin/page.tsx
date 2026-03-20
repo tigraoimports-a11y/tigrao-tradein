@@ -7,8 +7,8 @@ const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigi
 
 interface DashData {
   saldos: { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean } | null;
-  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; produto_na_troca: string; status_pagamento: string }[];
-  gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string }[];
+  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string }[];
+  gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string; is_dep_esp?: boolean }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
   pendencias: number;
   aCaminho: { qnt: number; custo_unitario: number }[];
@@ -114,16 +114,22 @@ export default function DashboardPage() {
   const pixHojeInf = vendasHoje.filter(v => v.banco_pix === "INFINITE" || (v.forma === "PIX" && v.banco === "INFINITE")).reduce((s, v) => s + (v.entrada_pix || 0), 0);
   const pixHojeMP = vendasHoje.filter(v => v.banco === "MERCADO_PAGO" && v.recebimento === "D+0").reduce((s, v) => s + (v.preco_vendido || 0) - (v.entrada_pix || 0), 0);
 
+  // Espécie recebido hoje (entrada_especie das vendas de hoje)
+  const especieHoje = vendasHoje.reduce((s, v) => s + (v.entrada_especie || 0), 0);
+
   // Gastos por banco hoje (todos — incluindo FORNECEDOR — porque SAI da conta)
   const gastosHojeItau = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "ITAU").reduce((s, g) => s + (g.valor || 0), 0);
   const gastosHojeInf = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "INFINITE").reduce((s, g) => s + (g.valor || 0), 0);
   const gastosHojeMP = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "MERCADO_PAGO").reduce((s, g) => s + (g.valor || 0), 0);
+  const gastosHojeEsp = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "ESPECIE").reduce((s, g) => s + (g.valor || 0), 0);
+  // Depósitos de espécie (saem do caixa espécie, entram no banco)
+  const depEspHoje = gastosHoje.filter(g => g.is_dep_esp).reduce((s, g) => s + (g.valor || 0), 0);
 
   // Se saldos foram informados manualmente (/saldos), usar valores diretos sem recalcular
   const saldoItau = isManual ? (s?.esp_itau || itauBase) : (itauBase - gastosHojeItau + pixHojeItau);
   const saldoInf = isManual ? (s?.esp_inf || infBase) : (infBase - gastosHojeInf + pixHojeInf);
   const saldoMP = isManual ? (s?.esp_mp || mpBase) : (mpBase - gastosHojeMP + pixHojeMP);
-  const saldoEsp = espBase;
+  const saldoEsp = isManual ? espBase : (espBase + especieHoje - gastosHojeEsp - depEspHoje);
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
 
   // Estoque
