@@ -19,6 +19,13 @@ interface ProdutoEstoque {
   fornecedor: string | null;
 }
 
+interface Fornecedor {
+  id: string;
+  nome: string;
+  contato: string | null;
+  observacao: string | null;
+}
+
 const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
 const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as const;
 
@@ -96,6 +103,9 @@ export default function EstoquePage() {
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
+  const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
 
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
@@ -158,7 +168,33 @@ export default function EstoquePage() {
     setLoading(false);
   }, [password]);
 
-  useEffect(() => { fetchEstoque(); }, [fetchEstoque]);
+  const fetchFornecedores = useCallback(async () => {
+    try {
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password } });
+      if (res.ok) { const json = await res.json(); setFornecedores(json.data ?? []); }
+    } catch { /* ignore */ }
+  }, [password]);
+
+  useEffect(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
+
+  const handleAddFornecedor = async () => {
+    if (!novoFornecedorNome.trim()) return;
+    const res = await fetch("/api/fornecedores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ nome: novoFornecedorNome }),
+    });
+    const json = await res.json();
+    if (json.ok && json.data) {
+      setFornecedores((prev) => [...prev, json.data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      set("fornecedor", json.data.nome);
+      setNovoFornecedorNome("");
+      setShowNovoFornecedor(false);
+      setMsg("Fornecedor cadastrado!");
+    } else {
+      setMsg("Erro: " + (json.error || "Falha ao cadastrar"));
+    }
+  };
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -465,7 +501,31 @@ export default function EstoquePage() {
             <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Quantidade</p><input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Custo unitario (R$)</p><input type="number" value={form.custo_unitario} onChange={(e) => set("custo_unitario", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+            <div>
+              <p className={labelCls}>Fornecedor</p>
+              {showNovoFornecedor ? (
+                <div className="flex gap-1">
+                  <input
+                    value={novoFornecedorNome}
+                    onChange={(e) => setNovoFornecedorNome(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddFornecedor(); if (e.key === "Escape") setShowNovoFornecedor(false); }}
+                    placeholder="Nome do fornecedor"
+                    className={inputCls}
+                    autoFocus
+                  />
+                  <button onClick={handleAddFornecedor} className="px-3 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-bold shrink-0">+</button>
+                  <button onClick={() => setShowNovoFornecedor(false)} className="px-2 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-xs shrink-0">X</button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls}>
+                    <option value="">— Selecionar —</option>
+                    {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                  </select>
+                  <button onClick={() => setShowNovoFornecedor(true)} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] text-xs font-bold shrink-0" title="Cadastrar novo fornecedor">+</button>
+                </div>
+              )}
+            </div>
           </div>
           {form.tipo === "SEMINOVO" && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
