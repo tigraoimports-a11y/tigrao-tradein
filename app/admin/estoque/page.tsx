@@ -94,6 +94,7 @@ export default function EstoquePage() {
   const [msg, setMsg] = useState("");
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
+  const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
 
   const [form, setForm] = useState({
@@ -579,15 +580,48 @@ export default function EstoquePage() {
                                           <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
                                         )}
                                       </td>
-                                      <td className="px-4 py-2.5 flex gap-1">
+                                      <td className="px-4 py-2.5">
+                                        <div className="flex gap-1 items-center">
                                         {showMover && (
                                           <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
+                                        )}
+                                        {/* Alterar categoria */}
+                                        {editingCat[p.id] !== undefined ? (
+                                          <select
+                                            value={editingCat[p.id]}
+                                            onChange={async (e) => {
+                                              const newCat = e.target.value;
+                                              if (newCat && newCat !== p.categoria) {
+                                                await fetch("/api/estoque", {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+                                                  body: JSON.stringify({ id: p.id, categoria: newCat }),
+                                                });
+                                                setEstoque((prev) => prev.map((r) => r.id === p.id ? { ...r, categoria: newCat } : r));
+                                                setMsg(`${p.produto} movido para ${newCat}`);
+                                              }
+                                              const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec);
+                                            }}
+                                            onBlur={() => { const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec); }}
+                                            className="px-1 py-0.5 rounded border border-[#E8740E] text-[10px] bg-white"
+                                            autoFocus
+                                          >
+                                            <option value="">Selecionar...</option>
+                                            {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+                                          </select>
+                                        ) : (
+                                          <button
+                                            onClick={() => setEditingCat({ ...editingCat, [p.id]: p.categoria })}
+                                            className="text-[#86868B] hover:text-[#E8740E] text-[10px] px-1"
+                                            title="Alterar categoria"
+                                          >📁</button>
                                         )}
                                         <button onClick={async () => {
                                           if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
                                           await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
                                           setEstoque((prev) => prev.filter((r) => r.id !== p.id));
                                         }} className="text-[#86868B] hover:text-red-500 text-xs px-1">X</button>
+                                        </div>
                                       </td>
                                     </tr>
                                   );
