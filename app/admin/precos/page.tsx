@@ -189,11 +189,48 @@ export default function AdminPrecosPage() {
     return cat === tab;
   });
 
-  // Agrupar por modelo
+  // Parser MacBook: extrai tela|ram|armazenamento do campo combinado
+  function parseMacSpec(spec: string) {
+    const parts = spec.split("|").map((s) => s.trim());
+    if (parts.length >= 3) {
+      return { tela: parts[0], ram: parts[1].replace(/\s*RAM$/i, ""), arm: parts[2] };
+    }
+    return { tela: "-", ram: "-", arm: spec };
+  }
+
+  // Agrupar: MacBooks por tela, demais por modelo
   const grouped: Record<string, PrecoProduto[]> = {};
-  filtered.forEach((r) => {
-    if (!grouped[r.modelo]) grouped[r.modelo] = [];
-    grouped[r.modelo].push(r);
+  if (tab === "MACBOOK") {
+    filtered.forEach((r) => {
+      const spec = parseMacSpec(r.armazenamento);
+      const telaKey = `MacBooks ${spec.tela}`;
+      if (!grouped[telaKey]) grouped[telaKey] = [];
+      grouped[telaKey].push(r);
+    });
+    // Ordenar dentro de cada grupo: Air antes de Pro
+    for (const key of Object.keys(grouped)) {
+      grouped[key].sort((a, b) => {
+        const aIsAir = a.modelo.toUpperCase().includes("AIR") ? 0 : 1;
+        const bIsAir = b.modelo.toUpperCase().includes("AIR") ? 0 : 1;
+        if (aIsAir !== bIsAir) return aIsAir - bIsAir;
+        return a.modelo.localeCompare(b.modelo);
+      });
+    }
+  } else {
+    filtered.forEach((r) => {
+      if (!grouped[r.modelo]) grouped[r.modelo] = [];
+      grouped[r.modelo].push(r);
+    });
+  }
+
+  // Ordenar chaves: para MacBooks, 13" antes de 15" antes de 16"
+  const groupedEntries = Object.entries(grouped).sort(([a], [b]) => {
+    if (tab === "MACBOOK") {
+      const numA = parseInt(a.replace(/\D/g, "")) || 99;
+      const numB = parseInt(b.replace(/\D/g, "")) || 99;
+      return numA - numB;
+    }
+    return a.localeCompare(b);
   });
 
   const catInfo = CATEGORIAS.find((c) => c.key === tab)!;
@@ -364,28 +401,19 @@ export default function AdminPrecosPage() {
           </button>
         </div>
       ) : (
-        Object.entries(grouped).map(([modelo, rows]) => {
-          // Detectar se é MacBook para mostrar colunas separadas
+        groupedEntries.map(([groupLabel, rows]) => {
           const isMac = tab === "MACBOOK";
-          // Parser: tenta extrair tela|ram|armazenamento do campo combinado
-          function parseMacSpec(spec: string) {
-            const parts = spec.split("|").map((s) => s.trim());
-            if (parts.length >= 3) {
-              return { tela: parts[0], ram: parts[1].replace(/\s*RAM$/i, ""), arm: parts[2] };
-            }
-            return { tela: "-", ram: "-", arm: spec };
-          }
           return (
-          <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+          <div key={groupLabel} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
-              <h2 className="font-semibold text-[#1D1D1F]">{modelo}</h2>
+              <h2 className="font-semibold text-[#1D1D1F]">{groupLabel}</h2>
             </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#F5F5F7]">
                   {isMac ? (
                     <>
-                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Tela</th>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Modelo</th>
                       <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">RAM</th>
                       <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
                     </>
@@ -407,7 +435,7 @@ export default function AdminPrecosPage() {
                     <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
                       {isMac && macSpec ? (
                         <>
-                          <td className="px-4 py-3 font-medium">{macSpec.tela}</td>
+                          <td className="px-4 py-3 font-medium">{row.modelo}</td>
                           <td className="px-4 py-3 font-medium">{macSpec.ram}</td>
                           <td className="px-4 py-3 font-medium">{macSpec.arm}</td>
                         </>
