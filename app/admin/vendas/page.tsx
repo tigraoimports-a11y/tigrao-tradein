@@ -615,10 +615,10 @@ export default function VendasPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
                 <option value="">— Definir depois —</option>
-                <option value="PIX">PIX — D+0</option>
-                <option value="CARTAO">Maquina Cartao — D+1</option>
-                <option value="LINK">Link Mercado Pago — D+0</option>
-                <option value="ESPECIE">Especie (Dinheiro) — D+0</option>
+                <option value="PIX">PIX</option>
+                <option value="CARTAO">Maquina Cartao</option>
+                <option value="LINK">Link Mercado Pago</option>
+                <option value="ESPECIE">Especie (Dinheiro)</option>
                 <option value="FIADO">Fiado</option>
               </select></div>
 
