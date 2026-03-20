@@ -9,8 +9,20 @@ interface PrecoProduto {
   armazenamento: string;
   preco_pix: number;
   status: string;
+  categoria: string;
   updated_at?: string;
 }
+
+const CATEGORIAS = [
+  { key: "IPHONE", label: "iPhones", emoji: "📱" },
+  { key: "MACBOOK", label: "MacBooks", emoji: "💻" },
+  { key: "IPAD", label: "iPads", emoji: "📟" },
+  { key: "APPLE_WATCH", label: "Apple Watch", emoji: "⌚" },
+  { key: "AIRPODS", label: "AirPods", emoji: "🎧" },
+  { key: "ACESSORIOS", label: "Acessórios", emoji: "🔌" },
+] as const;
+
+type CategoriaKey = typeof CATEGORIAS[number]["key"];
 
 export default function AdminPrecosPage() {
   const { password } = useAdmin();
@@ -20,6 +32,9 @@ export default function AdminPrecosPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
+  const [tab, setTab] = useState<CategoriaKey>("IPHONE");
+  const [showAdd, setShowAdd] = useState(false);
+  const [newProd, setNewProd] = useState({ modelo: "", armazenamento: "", preco_pix: "" });
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -39,6 +54,17 @@ export default function AdminPrecosPage() {
     if (password) fetchData(password);
   }, [password, fetchData]);
 
+  // Inferir categoria pelo nome do modelo
+  function inferCategoria(modelo: string): CategoriaKey {
+    const m = modelo.toUpperCase();
+    if (m.includes("IPHONE") || m.includes("PHONE")) return "IPHONE";
+    if (m.includes("MACBOOK") || m.includes("MAC MINI") || m.includes("IMAC")) return "MACBOOK";
+    if (m.includes("IPAD")) return "IPAD";
+    if (m.includes("WATCH")) return "APPLE_WATCH";
+    if (m.includes("AIRPOD")) return "AIRPODS";
+    return "ACESSORIOS";
+  }
+
   async function handleSave(row: PrecoProduto) {
     const key = `${row.modelo}|${row.armazenamento}`;
     const newPrice = parseFloat((editing[key] ?? String(row.preco_pix)).replace(",", "."));
@@ -48,7 +74,13 @@ export default function AdminPrecosPage() {
     await fetch("/api/admin/precos", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
-      body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento, preco_pix: newPrice, status: row.status }),
+      body: JSON.stringify({
+        modelo: row.modelo,
+        armazenamento: row.armazenamento,
+        preco_pix: newPrice,
+        status: row.status,
+        categoria: row.categoria || inferCategoria(row.modelo),
+      }),
     });
     setData((prev) => prev?.map((r) =>
       r.modelo === row.modelo && r.armazenamento === row.armazenamento
@@ -66,12 +98,30 @@ export default function AdminPrecosPage() {
     await fetch("/api/admin/precos", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
-      body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento, preco_pix: row.preco_pix, status: newStatus }),
+      body: JSON.stringify({
+        modelo: row.modelo,
+        armazenamento: row.armazenamento,
+        preco_pix: row.preco_pix,
+        status: newStatus,
+        categoria: row.categoria || inferCategoria(row.modelo),
+      }),
     });
     setData((prev) => prev?.map((r) =>
       r.modelo === row.modelo && r.armazenamento === row.armazenamento
         ? { ...r, status: newStatus }
         : r
+    ) ?? null);
+  }
+
+  async function handleDelete(row: PrecoProduto) {
+    if (!confirm(`Remover ${row.modelo} ${row.armazenamento}?`)) return;
+    await fetch("/api/admin/precos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento }),
+    });
+    setData((prev) => prev?.filter((r) =>
+      !(r.modelo === row.modelo && r.armazenamento === row.armazenamento)
     ) ?? null);
   }
 
@@ -92,33 +142,92 @@ export default function AdminPrecosPage() {
     setImporting(false);
   }
 
+  async function handleAddProd() {
+    const preco = parseFloat(newProd.preco_pix);
+    if (!newProd.modelo || !newProd.armazenamento || isNaN(preco) || preco <= 0) return;
+    setSaving("new");
+    await fetch("/api/admin/precos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({
+        modelo: newProd.modelo.trim(),
+        armazenamento: newProd.armazenamento.trim(),
+        preco_pix: preco,
+        status: "ativo",
+        categoria: tab,
+      }),
+    });
+    await fetchData(password);
+    setNewProd({ modelo: "", armazenamento: "", preco_pix: "" });
+    setShowAdd(false);
+    setSaving(null);
+  }
+
   if (loading && data === null) {
     return <div className="flex items-center justify-center py-20"><p className="text-[#86868B]">Carregando...</p></div>;
   }
 
   if (!data) return null;
 
+  // Filtrar por categoria da tab
+  const filtered = data.filter((r) => {
+    const cat = r.categoria || inferCategoria(r.modelo);
+    return cat === tab;
+  });
+
   // Agrupar por modelo
   const grouped: Record<string, PrecoProduto[]> = {};
-  data.forEach((r) => {
+  filtered.forEach((r) => {
     if (!grouped[r.modelo]) grouped[r.modelo] = [];
     grouped[r.modelo].push(r);
   });
 
+  const catInfo = CATEGORIAS.find((c) => c.key === tab)!;
+
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-bold text-[#1D1D1F]">Painel de Precos</h2>
-          <p className="text-[#86868B] text-xs">Edite os precos diretamente aqui</p>
+          <p className="text-[#86868B] text-xs">Edite os precos diretamente aqui. Alteracoes notificam via Telegram.</p>
         </div>
-        <button
-          onClick={handleImport}
-          disabled={importing}
-          className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-50"
-        >
-          {importing ? "Importando..." : "Importar do Sheets"}
-        </button>
+        <div className="flex gap-2">
+          {tab === "IPHONE" && (
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-50"
+            >
+              {importing ? "Importando..." : "Importar do Sheets"}
+            </button>
+          )}
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
+          >
+            + Adicionar Produto
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs por categoria */}
+      <div className="flex gap-2 flex-wrap">
+        {CATEGORIAS.map((c) => {
+          const count = data.filter((r) => (r.categoria || inferCategoria(r.modelo)) === c.key).length;
+          return (
+            <button
+              key={c.key}
+              onClick={() => { setTab(c.key); setShowAdd(false); }}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                tab === c.key
+                  ? "bg-[#E8740E] text-white"
+                  : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+              }`}
+            >
+              {c.emoji} {c.label} {count > 0 ? `(${count})` : ""}
+            </button>
+          );
+        })}
       </div>
 
       {importMsg && (
@@ -127,15 +236,66 @@ export default function AdminPrecosPage() {
         </div>
       )}
 
-      {data.length === 0 ? (
+      {/* Form adicionar produto */}
+      {showAdd && (
+        <div className="bg-white border border-[#E8740E] rounded-2xl p-5 space-y-3 shadow-sm">
+          <h3 className="font-semibold text-sm text-[#1D1D1F]">Adicionar produto em {catInfo.emoji} {catInfo.label}</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+              <input
+                value={newProd.modelo}
+                onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
+                placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : tab === "MACBOOK" ? "MacBook Air M4" : "Nome do produto"}
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Variação</p>
+              <input
+                value={newProd.armazenamento}
+                onChange={(e) => setNewProd({ ...newProd, armazenamento: e.target.value })}
+                placeholder="256GB / Único / etc"
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
+              <input
+                type="number"
+                value={newProd.preco_pix}
+                onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
+                placeholder="4.997"
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleAddProd}
+              disabled={saving === "new"}
+              className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            >
+              {saving === "new" ? "Salvando..." : "Adicionar"}
+            </button>
+            <button
+              onClick={() => setShowAdd(false)}
+              className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && !showAdd ? (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-12 text-center shadow-sm">
-          <p className="text-[#86868B] mb-4">Nenhum produto cadastrado ainda.</p>
+          <p className="text-[#86868B] mb-4">Nenhum produto em {catInfo.label}.</p>
           <button
-            onClick={handleImport}
-            disabled={importing}
-            className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            onClick={() => setShowAdd(true)}
+            className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
           >
-            {importing ? "Importando..." : "Importar precos do Google Sheets"}
+            + Adicionar primeiro produto
           </button>
         </div>
       ) : (
@@ -147,8 +307,8 @@ export default function AdminPrecosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#F5F5F7]">
-                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
-                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preco PIX</th>
+                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Variação</th>
+                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Status</th>
                   <th className="px-5 py-2"></th>
                 </tr>
@@ -213,12 +373,20 @@ export default function AdminPrecosPage() {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setEditing({ ...editing, [key]: String(row.preco_pix) })}
-                            className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors"
-                          >
-                            Editar
-                          </button>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => setEditing({ ...editing, [key]: String(row.preco_pix) })}
+                              className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(row)}
+                              className="px-2 py-1.5 rounded-lg text-xs text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
