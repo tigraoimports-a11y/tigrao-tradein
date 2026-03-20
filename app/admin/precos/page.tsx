@@ -33,9 +33,20 @@ export default function AdminPrecosPage() {
   const tabKeys = categorias.map((c) => c.key);
   const [tab, setTab] = useTabParam<string>("IPHONE", tabKeys);
   const [showAdd, setShowAdd] = useState(false);
-  const [newProd, setNewProd] = useState({ modelo: "", armazenamento: "", preco_pix: "" });
-  // Campos extras para MacBook (tela + ram + armazenamento separados)
-  const [macFields, setMacFields] = useState({ tela: "", ram: "", armazenamento: "" });
+  const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "" });
+  // Campos de especificação dinâmicos (label + valor) — combinados com " | " no armazenamento
+  const [specFields, setSpecFields] = useState<{ label: string; value: string }[]>([{ label: "", value: "" }]);
+
+  // Defaults por categoria ao abrir formulário
+  function getDefaultSpecs(catKey: string): { label: string; value: string }[] {
+    switch (catKey) {
+      case "MACBOOK": return [{ label: "Tela", value: "" }, { label: "RAM", value: "" }, { label: "Armazenamento", value: "" }];
+      case "IPHONE": case "IPAD": return [{ label: "Armazenamento", value: "" }];
+      case "APPLE_WATCH": return [{ label: "Tamanho", value: "" }];
+      case "AIRPODS": return [{ label: "Modelo", value: "" }];
+      default: return [{ label: "Variação", value: "" }];
+    }
+  }
 
   function handleAddCategoria() {
     if (!newCat.label.trim()) return;
@@ -163,15 +174,9 @@ export default function AdminPrecosPage() {
 
   async function handleAddProd() {
     const preco = parseFloat(newProd.preco_pix);
-    // Para MacBooks, montar armazenamento a partir dos campos separados
-    let armazenamentoFinal = newProd.armazenamento.trim();
-    if (tab === "MACBOOK") {
-      const t = macFields.tela.trim();
-      const r = macFields.ram.trim();
-      const a = macFields.armazenamento.trim();
-      if (!t || !r || !a) return;
-      armazenamentoFinal = `${t} | ${r} RAM | ${a}`;
-    }
+    // Combinar campos de spec com " | "
+    const filledSpecs = specFields.filter((s) => s.value.trim());
+    const armazenamentoFinal = filledSpecs.map((s) => s.value.trim()).join(" | ");
     if (!newProd.modelo || !armazenamentoFinal || isNaN(preco) || preco <= 0) return;
     setSaving("new");
     await fetch("/api/admin/precos", {
@@ -186,8 +191,8 @@ export default function AdminPrecosPage() {
       }),
     });
     await fetchData(password);
-    setNewProd({ modelo: "", armazenamento: "", preco_pix: "" });
-    setMacFields({ tela: "", ram: "", armazenamento: "" });
+    setNewProd({ modelo: "", preco_pix: "" });
+    setSpecFields(getDefaultSpecs(tab));
     setShowAdd(false);
     setSaving(null);
   }
@@ -268,7 +273,7 @@ export default function AdminPrecosPage() {
             </button>
           )}
           <button
-            onClick={() => setShowAdd(!showAdd)}
+            onClick={() => { setShowAdd(!showAdd); if (!showAdd) setSpecFields(getDefaultSpecs(tab)); }}
             className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
           >
             + Adicionar Produto
@@ -370,89 +375,65 @@ export default function AdminPrecosPage() {
       {showAdd && (
         <div className="bg-white border border-[#E8740E] rounded-2xl p-5 space-y-3 shadow-sm">
           <h3 className="font-semibold text-sm text-[#1D1D1F]">Adicionar produto em {catInfo.emoji} {catInfo.label}</h3>
-          {tab === "MACBOOK" ? (
-            <div className="grid grid-cols-5 gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
-                <input
-                  value={newProd.modelo}
-                  onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
-                  placeholder="MacBook Air M4"
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tela</p>
-                <input
-                  value={macFields.tela}
-                  onChange={(e) => setMacFields({ ...macFields, tela: e.target.value })}
-                  placeholder={'13"'}
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">RAM</p>
-                <input
-                  value={macFields.ram}
-                  onChange={(e) => setMacFields({ ...macFields, ram: e.target.value })}
-                  placeholder="16GB"
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Armazenamento</p>
-                <input
-                  value={macFields.armazenamento}
-                  onChange={(e) => setMacFields({ ...macFields, armazenamento: e.target.value })}
-                  placeholder="256GB"
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
-                <input
-                  type="number"
-                  value={newProd.preco_pix}
-                  onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
-                  placeholder="8.997"
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
+          <div className="flex gap-3 flex-wrap items-end">
+            {/* Modelo (sempre presente) */}
+            <div className="min-w-[160px] flex-1">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+              <input
+                value={newProd.modelo}
+                onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
+                placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : tab === "MACBOOK" ? "MacBook Air M4" : tab === "IPAD" ? "iPad Air M3" : "Nome do produto"}
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              />
             </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+            {/* Campos de spec dinâmicos */}
+            {specFields.map((sf, i) => (
+              <div key={i} className="min-w-[120px] flex-1">
+                <div className="flex items-center gap-1 mb-1">
+                  <input
+                    value={sf.label}
+                    onChange={(e) => { const nf = [...specFields]; nf[i] = { ...nf[i], label: e.target.value }; setSpecFields(nf); }}
+                    placeholder="Nome do campo"
+                    className="text-[10px] font-bold text-[#86868B] uppercase bg-transparent border-none outline-none w-full placeholder:text-[#C7C7CC]"
+                  />
+                  {specFields.length > 1 && (
+                    <button
+                      onClick={() => setSpecFields(specFields.filter((_, j) => j !== i))}
+                      className="text-red-400 hover:text-red-600 text-xs leading-none"
+                      title="Remover campo"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <input
-                  value={newProd.modelo}
-                  onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
-                  placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : tab === "IPAD" ? "iPad Air M3" : tab === "APPLE_WATCH" ? "Apple Watch Series 10" : tab === "AIRPODS" ? "AirPods 4" : "Nome do produto"}
+                  value={sf.value}
+                  onChange={(e) => { const nf = [...specFields]; nf[i] = { ...nf[i], value: e.target.value }; setSpecFields(nf); }}
+                  placeholder={sf.label || "Valor"}
                   className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
                 />
               </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">
-                  {tab === "IPAD" || tab === "IPHONE" ? "Armazenamento" : "Variação"}
-                </p>
-                <input
-                  value={newProd.armazenamento}
-                  onChange={(e) => setNewProd({ ...newProd, armazenamento: e.target.value })}
-                  placeholder={tab === "IPAD" || tab === "IPHONE" ? "256GB" : tab === "APPLE_WATCH" ? "42mm GPS" : tab === "AIRPODS" ? "ANC / Único" : "256GB / Único / etc"}
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
-                <input
-                  type="number"
-                  value={newProd.preco_pix}
-                  onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
-                  placeholder="4.997"
-                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-                />
-              </div>
+            ))}
+            {/* Botão + campo */}
+            <button
+              onClick={() => setSpecFields([...specFields, { label: "", value: "" }])}
+              className="px-3 py-2 rounded-lg border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors text-lg leading-none mb-px"
+              title="Adicionar campo"
+            >
+              +
+            </button>
+            {/* Preço (sempre presente) */}
+            <div className="min-w-[120px]">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
+              <input
+                type="number"
+                value={newProd.preco_pix}
+                onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
+                placeholder="4.997"
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              />
             </div>
-          )}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleAddProd}
@@ -484,6 +465,16 @@ export default function AdminPrecosPage() {
       ) : (
         groupedEntries.map(([groupLabel, rows]) => {
           const isMac = tab === "MACBOOK";
+          // Detectar colunas dinâmicas: pegar o máximo de " | " partes nos rows
+          const maxParts = Math.max(...rows.map((r) => r.armazenamento.split("|").length));
+          const hasMultipleCols = maxParts > 1;
+          // Para MacBooks agrupados por tela, incluir coluna "Modelo"
+          const showModeloCol = isMac;
+
+          // Gerar headers das colunas de spec
+          // Tentar extrair labels dos specFields defaults pra essa categoria
+          const defaultLabels = getDefaultSpecs(tab).map((s) => s.label);
+
           return (
           <div key={groupLabel} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
@@ -492,15 +483,18 @@ export default function AdminPrecosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#F5F5F7]">
-                  {isMac ? (
-                    <>
-                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Modelo</th>
-                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">RAM</th>
-                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
-                    </>
+                  {showModeloCol && (
+                    <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Modelo</th>
+                  )}
+                  {hasMultipleCols ? (
+                    Array.from({ length: maxParts }).map((_, i) => (
+                      <th key={i} className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">
+                        {defaultLabels[i] || `Spec ${i + 1}`}
+                      </th>
+                    ))
                   ) : (
                     <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">
-                      {tab === "IPAD" || tab === "IPHONE" ? "Armazenamento" : "Variação"}
+                      {defaultLabels[0] || "Variação"}
                     </th>
                   )}
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
@@ -513,15 +507,16 @@ export default function AdminPrecosPage() {
                   const key = `${row.modelo}|${row.armazenamento}`;
                   const isEditing = editing[key] !== undefined;
                   const isSaving = saving === key;
-                  const macSpec = isMac ? parseMacSpec(row.armazenamento) : null;
+                  const specParts = row.armazenamento.split("|").map((s) => s.trim().replace(/\s*RAM$/i, ""));
                   return (
                     <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
-                      {isMac && macSpec ? (
-                        <>
-                          <td className="px-4 py-3 font-medium">{row.modelo}</td>
-                          <td className="px-4 py-3 font-medium">{macSpec.ram}</td>
-                          <td className="px-4 py-3 font-medium">{macSpec.arm}</td>
-                        </>
+                      {showModeloCol && (
+                        <td className="px-4 py-3 font-medium">{row.modelo}</td>
+                      )}
+                      {hasMultipleCols ? (
+                        Array.from({ length: maxParts }).map((_, i) => (
+                          <td key={i} className="px-4 py-3 font-medium">{specParts[i] || "-"}</td>
+                        ))
                       ) : (
                         <td className="px-5 py-3 font-medium">{row.armazenamento}</td>
                       )}
