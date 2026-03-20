@@ -206,6 +206,19 @@ export default function VendasPage() {
   const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
   const recebimento = form.forma ? calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null) : "—";
 
+  // Auto-recalcular preco_vendido quando qualquer componente muda
+  useEffect(() => {
+    const compVal = parseFloat(form.valor_comprovante_input) || 0;
+    if (compVal > 0 && taxa > 0) {
+      const liquidoCartao = calcularLiquido(compVal, taxa);
+      const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
+      if (String(totalLiq) !== form.preco_vendido) {
+        setForm(f => ({ ...f, preco_vendido: String(totalLiq) }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, taxa]);
+
   // Resumo financeiro
   const temTroca = valorTroca > 0;
   const temEntradaPix = entradaPix > 0;
