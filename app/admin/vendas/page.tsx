@@ -964,8 +964,9 @@ export default function VendasPage() {
                                                   entrada_pix: parseFloat(ef.entrada_pix) || 0,
                                                   entrada_especie: parseFloat(ef.entrada_especie) || 0,
                                                   banco_pix: ef.banco_pix || null,
-                                                  produto_na_troca: ef.produto_na_troca || null,
+                                                  produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
                                                 };
+                                                console.log("PATCH updates:", JSON.stringify(updates));
 
                                                 if (Object.keys(updates).length <= 1) {
                                                   setEditingId(null);
@@ -978,6 +979,8 @@ export default function VendasPage() {
                                                   headers: { "Content-Type": "application/json", "x-admin-password": password },
                                                   body: JSON.stringify(updates),
                                                 });
+                                                const resBody = await res.json();
+                                                console.log("PATCH response:", res.status, resBody);
                                                 if (res.ok) {
                                                   setVendas(prev => prev.map(r => r.id === v.id ? {
                                                     ...r,
