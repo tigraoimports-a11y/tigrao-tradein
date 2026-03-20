@@ -17,6 +17,9 @@ export default function VendasPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [editSaving, setEditSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
@@ -567,6 +570,169 @@ export default function VendasPage() {
                             {isExpanded && (
                               <tr className="bg-[#FAFAFA]">
                                 <td colSpan={12} className="px-5 py-4">
+                                  {/* MODO EDIÇÃO */}
+                                  {editingId === v.id ? (() => {
+                                    const ef = editForm;
+                                    const setEf = (k: string, val: string) => setEditForm(prev => ({ ...prev, [k]: val }));
+                                    return (
+                                      <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                          <h4 className="text-sm font-bold text-[#1D1D1F]">Editando venda</h4>
+                                          <div className="flex gap-2">
+                                            <button
+                                              disabled={editSaving}
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                setEditSaving(true);
+                                                const updates: Record<string, unknown> = { id: v.id };
+                                                if (ef.banco !== v.banco) updates.banco = ef.banco;
+                                                if (ef.forma !== v.forma) updates.forma = ef.forma;
+                                                if (ef.recebimento !== v.recebimento) updates.recebimento = ef.recebimento;
+                                                if (ef.preco_vendido !== String(v.preco_vendido)) {
+                                                  updates.preco_vendido = parseFloat(ef.preco_vendido) || 0;
+                                                  updates.lucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
+                                                  const pv = parseFloat(ef.preco_vendido) || 0;
+                                                  const c = parseFloat(ef.custo) || 0;
+                                                  updates.margem_pct = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
+                                                }
+                                                if (ef.custo !== String(v.custo)) {
+                                                  updates.custo = parseFloat(ef.custo) || 0;
+                                                  updates.lucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
+                                                  const pv = parseFloat(ef.preco_vendido) || 0;
+                                                  const c = parseFloat(ef.custo) || 0;
+                                                  updates.margem_pct = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
+                                                }
+                                                if (ef.qnt_parcelas !== String(v.qnt_parcelas || "")) updates.qnt_parcelas = parseInt(ef.qnt_parcelas) || null;
+                                                if (ef.bandeira !== (v.bandeira || "")) updates.bandeira = ef.bandeira || null;
+                                                if (ef.banco_pix !== (v.banco_pix || "")) updates.banco_pix = ef.banco_pix || null;
+                                                if (ef.entrada_pix !== String(v.entrada_pix || 0)) updates.entrada_pix = parseFloat(ef.entrada_pix) || 0;
+                                                if (ef.cliente !== v.cliente) updates.cliente = ef.cliente;
+                                                if (ef.produto !== v.produto) updates.produto = ef.produto;
+
+                                                if (Object.keys(updates).length <= 1) {
+                                                  setEditingId(null);
+                                                  setEditSaving(false);
+                                                  return;
+                                                }
+
+                                                const res = await fetch("/api/vendas", {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password },
+                                                  body: JSON.stringify(updates),
+                                                });
+                                                if (res.ok) {
+                                                  const newLucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
+                                                  const newPv = parseFloat(ef.preco_vendido) || 0;
+                                                  const newMargem = newPv > 0 ? Math.round(((newPv - (parseFloat(ef.custo) || 0)) / newPv) * 1000) / 10 : 0;
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? {
+                                                    ...r,
+                                                    banco: ef.banco as Venda["banco"],
+                                                    forma: ef.forma as Venda["forma"],
+                                                    recebimento: ef.recebimento as Venda["recebimento"],
+                                                    preco_vendido: parseFloat(ef.preco_vendido) || 0,
+                                                    custo: parseFloat(ef.custo) || 0,
+                                                    lucro: newLucro,
+                                                    margem_pct: newMargem,
+                                                    qnt_parcelas: parseInt(ef.qnt_parcelas) || null,
+                                                    bandeira: (ef.bandeira || null) as Venda["bandeira"],
+                                                    banco_pix: ef.banco_pix || null,
+                                                    entrada_pix: parseFloat(ef.entrada_pix) || 0,
+                                                    cliente: ef.cliente,
+                                                    produto: ef.produto,
+                                                  } : r));
+                                                  setMsg("Venda atualizada!");
+                                                } else {
+                                                  setMsg("Erro ao atualizar venda");
+                                                }
+                                                setEditingId(null);
+                                                setEditSaving(false);
+                                              }}
+                                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                                            >
+                                              {editSaving ? "Salvando..." : "Salvar"}
+                                            </button>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
+                                              className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] border border-[#D2D2D7] hover:bg-[#F5F5F7] transition-colors"
+                                            >
+                                              Cancelar
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Cliente</span>
+                                            <input value={ef.cliente} onChange={e => setEf("cliente", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Produto</span>
+                                            <input value={ef.produto} onChange={e => setEf("produto", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Custo</span>
+                                            <input type="number" value={ef.custo} onChange={e => setEf("custo", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Preço Vendido</span>
+                                            <input type="number" value={ef.preco_vendido} onChange={e => setEf("preco_vendido", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Banco</span>
+                                            <select value={ef.banco} onChange={e => setEf("banco", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="ITAU">ITAU</option>
+                                              <option value="INFINITE">INFINITE</option>
+                                              <option value="MERCADO_PAGO">MERCADO PAGO</option>
+                                              <option value="ESPECIE">ESPECIE</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Forma</span>
+                                            <select value={ef.forma} onChange={e => setEf("forma", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="PIX">PIX</option>
+                                              <option value="CARTAO">CARTAO</option>
+                                              <option value="DINHEIRO">DINHEIRO</option>
+                                              <option value="FIADO">FIADO</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Recebimento</span>
+                                            <select value={ef.recebimento} onChange={e => setEf("recebimento", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="D+0">D+0</option>
+                                              <option value="D+1">D+1</option>
+                                              <option value="FIADO">FIADO</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Parcelas</span>
+                                            <input type="number" value={ef.qnt_parcelas} onChange={e => setEf("qnt_parcelas", e.target.value)} placeholder="—" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Bandeira</span>
+                                            <select value={ef.bandeira} onChange={e => setEf("bandeira", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="">—</option>
+                                              <option value="VISA">VISA</option>
+                                              <option value="MASTERCARD">MASTERCARD</option>
+                                              <option value="ELO">ELO</option>
+                                              <option value="AMEX">AMEX</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Entrada PIX</span>
+                                            <input type="number" value={ef.entrada_pix} onChange={e => setEf("entrada_pix", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Banco PIX</span>
+                                            <select value={ef.banco_pix} onChange={e => setEf("banco_pix", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="">—</option>
+                                              <option value="ITAU">ITAU</option>
+                                              <option value="INFINITE">INFINITE</option>
+                                              <option value="MERCADO_PAGO">MERCADO PAGO</option>
+                                            </select>
+                                          </label>
+                                        </div>
+                                      </div>
+                                    );
+                                  })() : (
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {/* Detalhes da venda */}
                                     <div className="space-y-2">
@@ -575,7 +741,7 @@ export default function VendasPage() {
                                         <p><strong>Produto:</strong> {v.produto}</p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
-                                        {v.notas && <p><strong>Notas:</strong> {v.notas}</p>}
+                                        {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
 
@@ -583,6 +749,28 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditForm({
+                                              cliente: v.cliente,
+                                              produto: v.produto,
+                                              custo: String(v.custo),
+                                              preco_vendido: String(v.preco_vendido),
+                                              banco: v.banco,
+                                              forma: v.forma,
+                                              recebimento: v.recebimento,
+                                              qnt_parcelas: String(v.qnt_parcelas || ""),
+                                              bandeira: v.bandeira || "",
+                                              entrada_pix: String(v.entrada_pix || 0),
+                                              banco_pix: v.banco_pix || "",
+                                            });
+                                            setEditingId(v.id);
+                                          }}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
+                                        >
+                                          ✏️ Editar
+                                        </button>
                                         {v.status_pagamento === "AGUARDANDO" && (
                                           <button
                                             onClick={async (e) => {
@@ -696,7 +884,7 @@ export default function VendasPage() {
                                         </div>
                                       )}
                                     </div>
-                                  </div>
+                                  </div>)}
                                 </td>
                               </tr>
                             )}
