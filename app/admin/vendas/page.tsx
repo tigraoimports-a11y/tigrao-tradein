@@ -971,18 +971,7 @@ export default function VendasPage() {
                                     );
                                   })() : (
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Detalhes da venda */}
-                                    <div className="space-y-2">
-                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
-                                      <div className="text-xs space-y-1">
-                                        <p><strong>Produto:</strong> {v.produto}</p>
-                                        <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
-                                        <p><strong>Local:</strong> {v.local || "—"}</p>
-                                        {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
-                                      </div>
-                                    </div>
-
-                                    {/* Ações de status */}
+                                    {/* Ações de status — PRIMEIRO */}
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
@@ -1060,6 +1049,17 @@ export default function VendasPage() {
                                             ⏳ Mover para Andamento
                                           </button>
                                         )}
+                                      </div>
+                                    </div>
+
+                                    {/* Detalhes da venda */}
+                                    <div className="space-y-2">
+                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
+                                      <div className="text-xs space-y-1">
+                                        <p><strong>Produto:</strong> {v.produto}</p>
+                                        <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
+                                        <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
 
