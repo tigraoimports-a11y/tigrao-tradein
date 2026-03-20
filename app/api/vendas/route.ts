@@ -126,9 +126,7 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  console.log("PATCH vendas id:", id, "fields:", JSON.stringify(fields));
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
-  console.log("PATCH result:", error ? `ERROR: ${error.message}` : `OK, rows: ${data?.length}`);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, updated: data });
 }

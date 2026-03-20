@@ -971,18 +971,19 @@ export default function VendasPage() {
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
                                                 };
-                                                const debugInfo = `pv=${pv} c=${c} lucro=${newLucro} margem=${newMargem}`;
-                                                alert("DEBUG ANTES DO SAVE:\n" + debugInfo);
-
                                                 const res = await fetch("/api/vendas", {
                                                   method: "PATCH",
                                                   headers: { "Content-Type": "application/json", "x-admin-password": password },
                                                   body: JSON.stringify(updates),
                                                 });
                                                 const resBody = await res.json();
-                                                alert("DEBUG RESPONSE:\n" + JSON.stringify(resBody).substring(0, 500));
-                                                console.log("PATCH response:", res.status, resBody);
-                                                if (res.ok) {
+                                                if (res.ok && resBody.updated?.[0]) {
+                                                  // Usar dados retornados do Supabase (fonte de verdade)
+                                                  const updated = resBody.updated[0] as Venda;
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updated } : r));
+                                                  setMsg("Venda atualizada!");
+                                                } else if (res.ok) {
+                                                  // Fallback: usar dados calculados localmente
                                                   setVendas(prev => prev.map(r => r.id === v.id ? {
                                                     ...r,
                                                     cliente: ef.cliente,
@@ -1003,7 +1004,7 @@ export default function VendasPage() {
                                                   } : r));
                                                   setMsg("Venda atualizada!");
                                                 } else {
-                                                  setMsg("Erro ao atualizar venda");
+                                                  setMsg("Erro: " + (resBody.error || "falha ao atualizar"));
                                                 }
                                                 setEditingId(null);
                                                 setEditSaving(false);
