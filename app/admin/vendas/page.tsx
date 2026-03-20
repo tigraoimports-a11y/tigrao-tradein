@@ -189,9 +189,6 @@ export default function VendasPage() {
     setSaving(true);
     setMsg("");
 
-    // Se não tem preço OU forma de pagamento, salvar como AGUARDANDO (preencher depois)
-    const isPartial = preco === 0 || !form.forma;
-
     // Determinar banco principal
     let banco = form.banco;
     if (form.forma === "LINK") banco = "MERCADO_PAGO";
@@ -228,7 +225,7 @@ export default function VendasPage() {
       band_alt: form.band_alt || null,
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
-      status_pagamento: isPartial ? "AGUARDANDO" : "FINALIZADO",
+      status_pagamento: "AGUARDANDO",
     };
 
     // Se veio do estoque, enviar o ID para descontar
@@ -255,12 +252,21 @@ export default function VendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Venda registrada!");
-      // Limpar só produto/valores — manter dados do cliente para "+1 Produto"
-      setForm((f) => ({ ...f, produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", forma: "" }));
+      // Salvar dados do cliente para "+1 Produto" antes de limpar tudo
+      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo });
+      // Limpar TODOS os campos
+      setForm({
+        data: new Date().toISOString().split("T")[0],
+        cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+        custo: "", preco_vendido: "", banco: "ITAU", forma: "",
+        qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+        entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
+        parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
+        troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+      });
       setCatSel("");
       setEstoqueId("");
       setProdutoManual(false);
-      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo });
       fetchVendas();
       fetchEstoque();
     } else {
@@ -343,32 +349,12 @@ export default function VendasPage() {
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowPasteModal(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF8F0] transition-colors"
-              >
-                📋 Colar dados cliente
-              </button>
-              {lastClienteData && (
-                <button
-                  onClick={() => {
-                    set("cliente", lastClienteData.cliente);
-                    set("cpf", lastClienteData.cpf);
-                    set("cnpj", lastClienteData.cnpj);
-                    set("email", lastClienteData.email);
-                    set("endereco", lastClienteData.endereco);
-                    set("pessoa", lastClienteData.pessoa);
-                    set("origem", lastClienteData.origem);
-                    set("tipo", lastClienteData.tipo);
-                    setMsg(`+1 produto para ${lastClienteData.cliente}`);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
-                >
-                  +1 Produto ({lastClienteData.cliente.split(" ")[0]})
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => setShowPasteModal(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF8F0] transition-colors"
+            >
+              📋 Colar dados cliente
+            </button>
           </div>
 
           {/* Modal para colar texto do formulário */}
@@ -530,6 +516,26 @@ export default function VendasPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* +1 Produto — mesmo cliente, outro produto */}
+            {lastClienteData && !form.cliente && (
+              <button
+                onClick={() => {
+                  set("cliente", lastClienteData.cliente);
+                  set("cpf", lastClienteData.cpf);
+                  set("cnpj", lastClienteData.cnpj);
+                  set("email", lastClienteData.email);
+                  set("endereco", lastClienteData.endereco);
+                  set("pessoa", lastClienteData.pessoa);
+                  set("origem", lastClienteData.origem);
+                  set("tipo", lastClienteData.tipo);
+                  setMsg(`+1 produto para ${lastClienteData.cliente}`);
+                }}
+                className="w-full py-3 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+              >
+                ➕ +1 Produto para {lastClienteData.cliente.split(" ")[0]}
+              </button>
             )}
           </div>
 
