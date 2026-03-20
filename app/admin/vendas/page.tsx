@@ -33,7 +33,7 @@ export default function VendasPage() {
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
     cliente: "", cpf: "", email: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
-    custo: "", preco_vendido: "", banco: "ITAU", forma: "PIX",
+    custo: "", preco_vendido: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
@@ -146,7 +146,7 @@ export default function VendasPage() {
     ? getTaxa(form.banco, form.bandeira || null, parcelas, form.forma)
     : form.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, parcelas, "CARTAO") : 0;
   const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
-  const recebimento = calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null);
+  const recebimento = form.forma ? calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null) : "—";
 
   // Resumo financeiro
   const temTroca = valorTroca > 0;
@@ -161,14 +161,15 @@ export default function VendasPage() {
     setSaving(true);
     setMsg("");
 
-    // Se não tem preço, salvar como AGUARDANDO (venda parcial — preencher depois)
-    const isPartial = preco === 0;
+    // Se não tem preço OU forma de pagamento, salvar como AGUARDANDO (preencher depois)
+    const isPartial = preco === 0 || !form.forma;
 
     // Determinar banco principal
     let banco = form.banco;
     if (form.forma === "LINK") banco = "MERCADO_PAGO";
     if (form.forma === "PIX") banco = form.banco_pix || "ITAU";
     if (form.forma === "DINHEIRO") banco = "ESPECIE";
+    if (!form.forma) banco = "ITAU"; // default para not-null constraint
 
     const payload: Record<string, unknown> = {
       data: form.data,
@@ -182,8 +183,8 @@ export default function VendasPage() {
       custo,
       preco_vendido: preco,
       banco: banco,
-      forma: form.forma === "LINK" ? "CARTAO" : form.forma,
-      recebimento: form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
+      forma: !form.forma ? "PIX" : form.forma === "LINK" ? "CARTAO" : form.forma,
+      recebimento: !form.forma ? "D+0" : form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
       qnt_parcelas: parcelas || null,
       bandeira: form.bandeira || null,
       valor_comprovante: comprovante || null,
@@ -396,6 +397,7 @@ export default function VendasPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
+                <option value="">— Definir depois —</option>
                 <option value="PIX">PIX (Itau/Infinite) — D+0</option>
                 <option value="LINK">Link Mercado Pago — D+0</option>
                 <option value="CARTAO">Maquina Cartao (Itau/Infinite) — D+1</option>
@@ -403,7 +405,7 @@ export default function VendasPage() {
                 <option value="FIADO">Fiado</option>
               </select></div>
 
-              {form.forma === "PIX" && (
+              {form.forma === "PIX" && form.forma && (
                 <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                   <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                 </select></div>
@@ -430,7 +432,8 @@ export default function VendasPage() {
               )}
             </div>
 
-            {/* Entrada PIX (pagamento misto) */}
+            {/* Entrada PIX (pagamento misto) — só mostra se forma foi selecionada */}
+            {form.forma && (
             <div className="border-t border-[#E8E8ED] pt-3">
               <p className="text-xs text-[#86868B] mb-2">Pagamento misto? (cliente deu PIX + cartao/link)</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -442,6 +445,7 @@ export default function VendasPage() {
                 )}
               </div>
             </div>
+            )}
           </div>
 
           {/* PRODUTO NA TROCA */}
