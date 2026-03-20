@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS } from "@/lib/categorias";
@@ -14,6 +14,33 @@ interface PrecoProduto {
   status: string;
   categoria: string;
   updated_at?: string;
+}
+
+// Persistir ordem customizada por categoria
+function getSavedOrder(catKey: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`tigrao_precos_order_${catKey}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveOrder(catKey: string, keys: string[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(`tigrao_precos_order_${catKey}`, JSON.stringify(keys));
+}
+function applyOrder(rows: PrecoProduto[], catKey: string): PrecoProduto[] {
+  const order = getSavedOrder(catKey);
+  if (!order.length) return rows;
+  return [...rows].sort((a, b) => {
+    const ka = `${a.modelo}|${a.armazenamento}`;
+    const kb = `${b.modelo}|${b.armazenamento}`;
+    const ia = order.indexOf(ka);
+    const ib = order.indexOf(kb);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
 }
 
 export default function AdminPrecosPage() {
@@ -36,6 +63,10 @@ export default function AdminPrecosPage() {
   const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "" });
   // Campos de especificação dinâmicos (label + valor) — combinados com " | " no armazenamento
   const [specFields, setSpecFields] = useState<{ label: string; value: string }[]>([{ label: "", value: "" }]);
+  // Drag and drop
+  const dragItem = useRef<string | null>(null);
+  const dragOverItem = useRef<string | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
 
   // Defaults por categoria ao abrir formulário
   const BUILTIN_SPECS: Record<string, string[]> = {
@@ -234,11 +265,33 @@ export default function AdminPrecosPage() {
 
   if (!data) return null;
 
-  // Filtrar por categoria da tab
-  const filtered = data.filter((r) => {
+  // Filtrar por categoria da tab e aplicar ordem salva
+  const filteredRaw = data.filter((r) => {
     const cat = r.categoria || inferCategoria(r.modelo);
     return cat === tab;
   });
+  const filtered = applyOrder(filteredRaw, tab);
+
+  // Handler de drag-and-drop para reordenar
+  function handleDragEnd() {
+    if (!dragItem.current || !dragOverItem.current || dragItem.current === dragOverItem.current) {
+      setDragKey(null);
+      return;
+    }
+    // Reordenar: pegar ordem atual, mover item
+    const keys = filtered.map((r) => `${r.modelo}|${r.armazenamento}`);
+    const fromIdx = keys.indexOf(dragItem.current);
+    const toIdx = keys.indexOf(dragOverItem.current);
+    if (fromIdx === -1 || toIdx === -1) { setDragKey(null); return; }
+    keys.splice(fromIdx, 1);
+    keys.splice(toIdx, 0, dragItem.current);
+    saveOrder(tab, keys);
+    // Forçar re-render
+    setData((prev) => prev ? [...prev] : prev);
+    setDragKey(null);
+    dragItem.current = null;
+    dragOverItem.current = null;
+  }
 
   // Parser MacBook: extrai tela|ram|armazenamento do campo combinado
   function parseMacSpec(spec: string) {
@@ -513,6 +566,7 @@ export default function AdminPrecosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#F5F5F7]">
+                  <th className="w-6"></th>
                   {showModeloCol && (
                     <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Modelo</th>
                   )}
@@ -538,8 +592,20 @@ export default function AdminPrecosPage() {
                   const isEditing = editing[key] !== undefined;
                   const isSaving = saving === key;
                   const specParts = row.armazenamento.split("|").map((s) => s.trim().replace(/\s*RAM$/i, ""));
+                  const isDragging = dragKey === key;
                   return (
-                    <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
+                    <tr
+                      key={key}
+                      draggable
+                      onDragStart={() => { dragItem.current = key; setDragKey(key); }}
+                      onDragEnter={() => { dragOverItem.current = key; }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnd={handleDragEnd}
+                      className={`border-b border-[#F5F5F7] last:border-0 transition-colors ${isDragging ? "opacity-40 bg-[#FFF3E8]" : "hover:bg-[#F5F5F7]"}`}
+                    >
+                      <td className="px-1 py-3 cursor-grab active:cursor-grabbing text-center text-[#C7C7CC] select-none w-6">
+                        <span className="text-xs">⠿</span>
+                      </td>
                       {showModeloCol && (
                         <td className="px-4 py-3 font-medium">{row.modelo}</td>
                       )}
