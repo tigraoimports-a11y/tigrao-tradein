@@ -27,6 +27,34 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  // Importação em lote (vendas históricas)
+  if (body.action === "import_bulk") {
+    const rows = body.rows as Record<string, unknown>[];
+    if (!rows?.length) return NextResponse.json({ error: "rows required" }, { status: 400 });
+
+    let imported = 0;
+    const errors: string[] = [];
+
+    // Inserir em lotes de 100 via Supabase
+    for (let i = 0; i < rows.length; i += 100) {
+      const batch = rows.slice(i, i + 100);
+      const { error } = await supabase.from("vendas").insert(batch);
+      if (error) {
+        errors.push(`Lote ${i}-${i + batch.length}: ${error.message}`);
+        // Tentar um a um no lote com erro
+        for (const row of batch) {
+          const { error: e2 } = await supabase.from("vendas").insert(row);
+          if (e2) errors.push(`${(row as Record<string, string>).cliente}: ${e2.message}`);
+          else imported++;
+        }
+      } else {
+        imported += batch.length;
+      }
+    }
+
+    return NextResponse.json({ ok: true, imported, errors: errors.slice(0, 20), total: rows.length });
+  }
+
   // Extrair dados do seminovo antes de inserir a venda
   const seminovoData = body._seminovo;
   delete body._seminovo;
