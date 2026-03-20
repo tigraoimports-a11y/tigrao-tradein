@@ -82,9 +82,28 @@ export async function gerarNoite(
     .eq("data", dataISO)
     .single();
 
-  const itau_base = Number(saldoRow?.itau_base ?? 0);
-  const inf_base = Number(saldoRow?.inf_base ?? 0);
-  const mp_base = Number(saldoRow?.mp_base ?? 0);
+  let itau_base = Number(saldoRow?.itau_base ?? 0);
+  let inf_base = Number(saldoRow?.inf_base ?? 0);
+  let mp_base = Number(saldoRow?.mp_base ?? 0);
+  let esp_especie_base = Number(saldoRow?.esp_especie ?? 0);
+
+  // Se não tem saldo para hoje ou bases são todas zero, carregar fechamento anterior
+  if (!saldoRow || (itau_base === 0 && inf_base === 0 && mp_base === 0)) {
+    const { data: prevSaldo } = await supabase
+      .from("saldos_bancarios")
+      .select("esp_itau, esp_inf, esp_mp, esp_especie")
+      .lt("data", dataISO)
+      .order("data", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (prevSaldo) {
+      itau_base = Number(prevSaldo.esp_itau ?? 0);
+      inf_base = Number(prevSaldo.esp_inf ?? 0);
+      mp_base = Number(prevSaldo.esp_mp ?? 0);
+      esp_especie_base = Number(prevSaldo.esp_especie ?? 0);
+    }
+  }
 
   // 2. Vendas D+0 de hoje (PIX, dinheiro, débito)
   const { data: vendasHoje } = await supabase
@@ -151,6 +170,14 @@ export async function gerarNoite(
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
   const saiu_esp = sumByBancoField(gastoRows, "ESPECIE");
 
+  // 5b. Entrada em espécie de vendas (ex: parte em dinheiro + parte cartão)
+  const { data: todasVendasHoje } = await supabase
+    .from("vendas")
+    .select("entrada_especie")
+    .eq("data", dataISO)
+    .neq("status_pagamento", "CANCELADO");
+  const entradaEspecieHoje = (todasVendasHoje ?? []).reduce((s, v) => s + Number(v.entrada_especie || 0), 0);
+
   // 6. Saldo final — usar valores manuais (/saldos) se flag manual=true
   const isManual = saldoRow?.manual === true;
 
@@ -167,7 +194,7 @@ export async function gerarNoite(
     esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau;
     esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf;
     esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp;
-    esp_especie = Number(saldoRow?.esp_especie ?? 0) + pix_esp + reaj_esp - saiu_esp;
+    esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp;
 
     // Salvar no banco
     await supabase.from("saldos_bancarios").upsert({

@@ -554,31 +554,37 @@ export async function POST(req: NextRequest) {
         }
         lines.push(``);
 
-        // RECEBIMENTOS HOJE (PIX/Dinheiro)
+        // RECEBIMENTOS HOJE (PIX/Dinheiro + Espécie)
         const pixItau = vendasD0.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const pixInf = vendasD0.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const pixMp = vendasD0.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const pixEsp = vendasD0.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const totalD0 = pixItau + pixInf + pixMp + pixEsp;
+        // Entrada em espécie de TODAS as vendas (ex: cliente paga parte em dinheiro + parte no cartão)
+        const especieEntradas = vs.reduce((s, v) => s + Number(v.entrada_especie || 0), 0);
+        const totalEspecieHoje = pixEsp + especieEntradas;
+        const totalD0 = pixItau + pixInf + pixMp + totalEspecieHoje;
 
         if (totalD0 > 0) {
           lines.push(`💰 <b>RECEBIMENTOS HOJE (PIX/Dinheiro)</b>`);
           if (pixItau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(pixItau)}`);
           if (pixInf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(pixInf)}`);
           if (pixMp > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(pixMp)}`);
-          if (pixEsp > 0) lines.push(`  💵 Espécie: ${fmtBRL(pixEsp)}`);
+          if (totalEspecieHoje > 0) lines.push(`  💵 Espécie: ${fmtBRL(totalEspecieHoje)}`);
           lines.push(`  <b>Total: ${fmtBRL(totalD0)}</b>`);
           lines.push(``);
         }
 
-        // RECEBIMENTOS AMANHÃ (Crédito D+1)
+        // RECEBIMENTOS PRÓXIMO DIA ÚTIL (Crédito D+1)
+        const proximoDU = proximoDiaUtil(new Date(hoje + "T12:00:00"));
+        const duISO = `${proximoDU.getFullYear()}-${String(proximoDU.getMonth() + 1).padStart(2, "0")}-${String(proximoDU.getDate()).padStart(2, "0")}`;
+        const duLabel = formatDateBR(proximoDU);
         const d1Itau = vendasD1.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const d1Inf = vendasD1.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const d1Mp = vendasD1.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const totalD1 = d1Itau + d1Inf + d1Mp;
 
         if (totalD1 > 0) {
-          lines.push(`💳 <b>RECEBIMENTOS AMANHÃ (Crédito)</b>`);
+          lines.push(`💳 <b>RECEBIMENTOS ${duLabel} (Crédito D+1)</b>`);
           if (d1Itau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(d1Itau)}`);
           if (d1Inf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(d1Inf)}`);
           if (d1Mp > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(d1Mp)}`);
