@@ -5,8 +5,10 @@ import { useAdmin } from "@/components/admin/AdminShell";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
+interface SaldoRow { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean }
 interface DashData {
-  saldos: { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean } | null;
+  saldos: SaldoRow | null;
+  saldoAnterior: SaldoRow | null;
   vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string }[];
   gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string; is_dep_esp?: boolean }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
@@ -23,15 +25,18 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [saldosRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
+      const hoje = new Date().toISOString().split("T")[0];
+      const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
         fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password } }),
+        fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password } }),
         fetch("/api/vendas", { headers: { "x-admin-password": password } }),
         fetch("/api/gastos", { headers: { "x-admin-password": password } }),
         fetch("/api/estoque", { headers: { "x-admin-password": password } }),
       ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const [saldos, vendas, gastos, estoque]: any[] = await Promise.all([
+      const [saldos, saldoPrev, vendas, gastos, estoque]: any[] = await Promise.all([
         saldosRes.ok ? saldosRes.json().catch(() => ({})) : {},
+        saldoPrevRes.ok ? saldoPrevRes.json().catch(() => ({})) : {},
         vendasRes.ok ? vendasRes.json().catch(() => ({})) : {},
         gastosRes.ok ? gastosRes.json().catch(() => ({})) : {},
         estoqueRes.ok ? estoqueRes.json().catch(() => ({})) : {},
@@ -43,6 +48,7 @@ export default function DashboardPage() {
 
       setData({
         saldos: saldos?.data?.[0] || saldos?.[0] || null,
+        saldoAnterior: saldoPrev?.data?.[0] || saldoPrev?.[0] || null,
         vendas: vendasArr,
         gastos: gastosArr,
         estoque: estoqueArr.filter((e: { tipo: string }) => e.tipo === "NOVO" || e.tipo === "SEMINOVO"),
@@ -101,13 +107,22 @@ export default function DashboardPage() {
   const vendasPendentes = data.vendas.filter(v => v.status_pagamento === "AGUARDANDO");
   const valorPendente = vendasPendentes.reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
-  // Saldos bancários
+  // Saldos bancários — usar fechamento anterior como base se as bases do dia estão zeradas
   const s = data.saldos;
+  const prev = data.saldoAnterior;
   const isManual = s?.manual === true;
-  const itauBase = s?.itau_base || 0;
-  const infBase = s?.inf_base || 0;
-  const mpBase = s?.mp_base || 0;
-  const espBase = s?.esp_especie || 0;
+  let itauBase = s?.itau_base || 0;
+  let infBase = s?.inf_base || 0;
+  let mpBase = s?.mp_base || 0;
+  let espBase = s?.esp_especie || 0;
+
+  // Se bases do dia estão todas zeradas, carregar fechamento anterior
+  if (!isManual && itauBase === 0 && infBase === 0 && mpBase === 0 && prev) {
+    itauBase = prev.esp_itau || 0;
+    infBase = prev.esp_inf || 0;
+    mpBase = prev.esp_mp || 0;
+    espBase = prev.esp_especie || 0;
+  }
 
   // PIX recebido hoje (D+0)
   const pixHojeItau = vendasHoje.filter(v => v.banco_pix === "ITAU" || (v.forma === "PIX" && v.banco === "ITAU")).reduce((s, v) => s + (v.entrada_pix || 0), 0);

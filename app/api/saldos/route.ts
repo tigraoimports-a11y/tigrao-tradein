@@ -12,6 +12,19 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const dataParam = searchParams.get("data");
+  const beforeParam = searchParams.get("before");
+
+  // Buscar saldo mais recente ANTES de uma data (para carregar fechamento anterior)
+  if (beforeParam) {
+    const { data: prev } = await supabase
+      .from("saldos_bancarios")
+      .select("*")
+      .lt("data", beforeParam)
+      .order("data", { ascending: false })
+      .limit(1);
+
+    return NextResponse.json({ data: prev ?? [] });
+  }
 
   if (dataParam) {
     const { data } = await supabase
