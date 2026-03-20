@@ -514,52 +514,34 @@ export default function EstoquePage() {
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[#F5F5F7]">
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase" style={{ minWidth: 180 }}>Produto / Cor</th>
-                            {isPendenciasTab && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Cliente</th>}
-                            {(tab === "seminovos" || isPendenciasTab) && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Obs / Bateria</th>}
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Qnt</th>
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Custo Un.</th>
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Total</th>
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Status</th>
-                            <th className="px-4 py-2"></th>
-                          </tr>
-                        </thead>
                         <tbody>
                           {produtoEntries.map(([prodNome, prodItems]) => {
                             const showObs = tab === "seminovos" || isPendenciasTab;
                             const showMover = tab === "acaminho" || isPendenciasTab;
-                            const hasManyProducts = produtoEntries.length > 1;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
 
                             return (
                               <React.Fragment key={prodNome}>
-                                {/* Linha do produto (sub-header) — só mostra se há mais de 1 grupo de produto dentro do modelo */}
-                                {hasManyProducts && (
-                                  <tr className="bg-[#FAFAFA] border-b border-[#F0F0F0]">
-                                    <td className="px-4 py-2 font-semibold text-xs text-[#1D1D1F]" colSpan={isPendenciasTab ? 2 : 1}>{prodNome}</td>
-                                    {showObs && <td></td>}
-                                    <td className="px-4 py-2 text-xs font-bold text-[#86868B]">{prodTotal}</td>
-                                    <td className="px-4 py-2 text-xs text-[#86868B]">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
-                                    <td className="px-4 py-2 text-xs font-medium text-[#86868B]">{fmt(prodValor)}</td>
-                                    <td></td>
-                                    <td></td>
-                                  </tr>
-                                )}
+                                {/* Header do produto — sempre mostra */}
+                                <tr className="bg-[#FAFAFA] border-b border-[#E8E8ED]">
+                                  <td className="px-4 py-2.5 font-semibold text-sm text-[#1D1D1F]" colSpan={2}>{prodNome}</td>
+                                  <td className="px-4 py-2 text-right">
+                                    <span className="text-xs font-bold text-[#1D1D1F]">{prodTotal} un.</span>
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-[#86868B]">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                  <td className="px-4 py-2 text-xs font-semibold text-[#1D1D1F]">{fmt(prodValor)}</td>
+                                  <td></td>
+                                  <td></td>
+                                </tr>
                                 {/* Linhas de cada cor */}
                                 {prodItems.map((p) => {
                                   const isEditCusto = editingCusto[p.id] !== undefined;
                                   const isEditQnt = editingQnt[p.id] !== undefined;
                                   return (
                                     <tr key={p.id} className={`border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors ${p.qnt === 0 ? "bg-red-50/50" : p.qnt === 1 ? "bg-yellow-50/50" : ""}`}>
-                                      <td className="px-4 py-2.5 text-sm whitespace-nowrap">
-                                        {hasManyProducts ? (
-                                          <span className="text-[#86868B] ml-2">• {p.cor || "—"}</span>
-                                        ) : (
-                                          <span><span className="font-medium">{p.produto}</span> <span className="text-[#86868B]">— {p.cor || "—"}</span></span>
-                                        )}
+                                      <td className="px-4 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
+                                        <span className="text-[#86868B] ml-3">• {p.cor || "—"}</span>
                                       </td>
                                       {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
                                       {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}

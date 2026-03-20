@@ -154,12 +154,15 @@ export default function VendasPage() {
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK";
 
   const handleSubmit = async () => {
-    if (!form.cliente || !form.produto || !form.preco_vendido) {
-      setMsg("Preencha cliente, produto e preco");
+    if (!form.cliente || !form.produto) {
+      setMsg("Preencha cliente e produto");
       return;
     }
     setSaving(true);
     setMsg("");
+
+    // Se não tem preço, salvar como AGUARDANDO (venda parcial — preencher depois)
+    const isPartial = preco === 0;
 
     // Determinar banco principal
     let banco = form.banco;
@@ -178,9 +181,11 @@ export default function VendasPage() {
       fornecedor: form.fornecedor || null,
       custo,
       preco_vendido: preco,
-      banco,
-      forma: form.forma === "LINK" ? "CARTAO" : form.forma,
-      recebimento: form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
+      lucro: preco > 0 ? preco - custo : 0,
+      margem_pct: preco > 0 ? Math.round(((preco - custo) / preco) * 1000) / 10 : 0,
+      banco: isPartial ? null : banco,
+      forma: isPartial ? null : (form.forma === "LINK" ? "CARTAO" : form.forma),
+      recebimento: isPartial ? null : (form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1"),
       qnt_parcelas: parcelas || null,
       bandeira: form.bandeira || null,
       valor_comprovante: comprovante || null,
@@ -194,7 +199,7 @@ export default function VendasPage() {
       band_alt: form.band_alt || null,
       sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
       banco_sinal: form.banco_sinal || null,
-      status_pagamento: "AGUARDANDO",
+      status_pagamento: isPartial ? "AGUARDANDO" : "FINALIZADO",
     };
 
     // Se veio do estoque, enviar o ID para descontar

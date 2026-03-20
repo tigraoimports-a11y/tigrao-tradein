@@ -6,7 +6,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 interface DashData {
-  saldos: { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number } | null;
+  saldos: { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean } | null;
   vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; produto_na_troca: string; status_pagamento: string }[];
   gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
@@ -103,6 +103,7 @@ export default function DashboardPage() {
 
   // Saldos bancários
   const s = data.saldos;
+  const isManual = s?.manual === true;
   const itauBase = s?.itau_base || 0;
   const infBase = s?.inf_base || 0;
   const mpBase = s?.mp_base || 0;
@@ -118,9 +119,10 @@ export default function DashboardPage() {
   const gastosHojeInf = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "INFINITE").reduce((s, g) => s + (g.valor || 0), 0);
   const gastosHojeMP = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "MERCADO_PAGO").reduce((s, g) => s + (g.valor || 0), 0);
 
-  const saldoItau = itauBase - gastosHojeItau + pixHojeItau;
-  const saldoInf = infBase - gastosHojeInf + pixHojeInf;
-  const saldoMP = mpBase - gastosHojeMP + pixHojeMP;
+  // Se saldos foram informados manualmente (/saldos), usar valores diretos sem recalcular
+  const saldoItau = isManual ? (s?.esp_itau || itauBase) : (itauBase - gastosHojeItau + pixHojeItau);
+  const saldoInf = isManual ? (s?.esp_inf || infBase) : (infBase - gastosHojeInf + pixHojeInf);
+  const saldoMP = isManual ? (s?.esp_mp || mpBase) : (mpBase - gastosHojeMP + pixHojeMP);
   const saldoEsp = espBase;
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
 
@@ -172,10 +174,10 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={`Manhã: ${fmt(itauBase)} | Gastos: -${fmt(gastosHojeItau)} | PIX: +${fmt(pixHojeItau)}`} />
-          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={`Manhã: ${fmt(infBase)} | Gastos: -${fmt(gastosHojeInf)} | PIX: +${fmt(pixHojeInf)}`} />
-          <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={`Manhã: ${fmt(mpBase)} | Gastos: -${fmt(gastosHojeMP)} | Link: +${fmt(pixHojeMP)}`} />
-          <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={`Manhã: ${fmt(espBase)}`} />
+          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(itauBase)} | Gastos: -${fmt(gastosHojeItau)} | PIX: +${fmt(pixHojeItau)}`} />
+          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(infBase)} | Gastos: -${fmt(gastosHojeInf)} | PIX: +${fmt(pixHojeInf)}`} />
+          <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(mpBase)} | Gastos: -${fmt(gastosHojeMP)} | Link: +${fmt(pixHojeMP)}`} />
+          <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(espBase)}`} />
         </div>
       </div>
 

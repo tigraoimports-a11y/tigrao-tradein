@@ -81,7 +81,8 @@ function parseOrigem(val) {
 function parseRecebimento(formaRaw) {
   if (!formaRaw) return "D+0";
   const f = formaRaw.toUpperCase();
-  if (f.includes("CREDITO") || f.includes("CRÉDITO") || f.includes("LINK")) return "D+1";
+  if (f.includes("CREDITO") || f.includes("CRÉDITO")) return "D+1";
+  if (f.includes("LINK")) return "D+0"; // Mercado Pago Link = D+0
   if (f.includes("FIADO")) return "FIADO";
   return "D+0";
 }

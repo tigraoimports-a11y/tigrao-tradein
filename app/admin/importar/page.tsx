@@ -182,7 +182,8 @@ export default function ImportarPage() {
     // Detectar recebimento
     function parseRecebimento(forma: string, banco: string): string {
       const f = forma.toUpperCase();
-      if (f.includes("CREDITO") || f.includes("CRÉDITO") || f.includes("LINK")) return "D+1";
+      if (f.includes("CREDITO") || f.includes("CRÉDITO")) return "D+1";
+      if (f.includes("LINK")) return "D+0"; // Mercado Pago Link = D+0
       if (f.includes("FIADO")) return "FIADO";
       return "D+0"; // PIX, dinheiro, débito
     }
@@ -194,7 +195,8 @@ export default function ImportarPage() {
       // Se é uma data (DD/MM/YYYY), não usar como recebimento — será auto-detectado
       if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(v)) return "";
       if (v.includes("D+0") || v.includes("PIX") || v.includes("DINHEIRO")) return "D+0";
-      if (v.includes("D+1") || v.includes("CREDIT") || v.includes("LINK")) return "D+1";
+      if (v.includes("D+1") || v.includes("CREDIT")) return "D+1";
+      if (v.includes("LINK")) return "D+0"; // Mercado Pago Link = D+0
       if (v.includes("FIADO")) return "FIADO";
       return "";
     }
