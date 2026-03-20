@@ -208,7 +208,7 @@ export default function VendasPage() {
     let banco = form.banco;
     if (form.forma === "LINK") banco = "MERCADO_PAGO";
     if (form.forma === "PIX") banco = form.banco_pix || "ITAU";
-    if (form.forma === "DINHEIRO") banco = "ESPECIE";
+    if (form.forma === "ESPECIE") banco = "ESPECIE";
     if (!form.forma) banco = "ITAU"; // default para not-null constraint
 
     const payload: Record<string, unknown> = {
@@ -225,8 +225,8 @@ export default function VendasPage() {
       custo,
       preco_vendido: preco,
       banco: banco,
-      forma: !form.forma ? "PIX" : form.forma === "LINK" ? "CARTAO" : form.forma,
-      recebimento: !form.forma ? "D+0" : form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
+      forma: !form.forma ? "PIX" : form.forma === "LINK" ? "CARTAO" : form.forma === "ESPECIE" ? "ESPECIE" : form.forma,
+      recebimento: !form.forma ? "D+0" : form.forma === "PIX" || form.forma === "ESPECIE" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
       qnt_parcelas: parcelas || null,
       bandeira: form.bandeira || null,
       valor_comprovante: comprovante || null,
@@ -595,7 +595,7 @@ export default function VendasPage() {
                 <option value="PIX">PIX (Itau/Infinite) — D+0</option>
                 <option value="LINK">Link Mercado Pago — D+0</option>
                 <option value="CARTAO">Maquina Cartao (Itau/Infinite) — D+1</option>
-                <option value="DINHEIRO">Dinheiro — D+0</option>
+                <option value="ESPECIE">Espécie (Dinheiro) — D+0</option>
                 <option value="FIADO">Fiado</option>
               </select></div>
 
@@ -957,7 +957,7 @@ export default function VendasPage() {
                                             <select value={ef.forma} onChange={e => setEf("forma", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
                                               <option value="PIX">PIX</option>
                                               <option value="CARTAO">CARTAO</option>
-                                              <option value="DINHEIRO">DINHEIRO</option>
+                                              <option value="ESPECIE">ESPECIE</option>
                                               <option value="FIADO">FIADO</option>
                                             </select>
                                           </label>
