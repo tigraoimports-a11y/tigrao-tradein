@@ -35,6 +35,8 @@ export default function AdminPrecosPage() {
   const [tab, setTab] = useState<CategoriaKey>("IPHONE");
   const [showAdd, setShowAdd] = useState(false);
   const [newProd, setNewProd] = useState({ modelo: "", armazenamento: "", preco_pix: "" });
+  // Campos extras para MacBook (tela + ram + armazenamento separados)
+  const [macFields, setMacFields] = useState({ tela: "", ram: "", armazenamento: "" });
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -144,14 +146,23 @@ export default function AdminPrecosPage() {
 
   async function handleAddProd() {
     const preco = parseFloat(newProd.preco_pix);
-    if (!newProd.modelo || !newProd.armazenamento || isNaN(preco) || preco <= 0) return;
+    // Para MacBooks, montar armazenamento a partir dos campos separados
+    let armazenamentoFinal = newProd.armazenamento.trim();
+    if (tab === "MACBOOK") {
+      const t = macFields.tela.trim();
+      const r = macFields.ram.trim();
+      const a = macFields.armazenamento.trim();
+      if (!t || !r || !a) return;
+      armazenamentoFinal = `${t} | ${r} RAM | ${a}`;
+    }
+    if (!newProd.modelo || !armazenamentoFinal || isNaN(preco) || preco <= 0) return;
     setSaving("new");
     await fetch("/api/admin/precos", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
       body: JSON.stringify({
         modelo: newProd.modelo.trim(),
-        armazenamento: newProd.armazenamento.trim(),
+        armazenamento: armazenamentoFinal,
         preco_pix: preco,
         status: "ativo",
         categoria: tab,
@@ -159,6 +170,7 @@ export default function AdminPrecosPage() {
     });
     await fetchData(password);
     setNewProd({ modelo: "", armazenamento: "", preco_pix: "" });
+    setMacFields({ tela: "", ram: "", armazenamento: "" });
     setShowAdd(false);
     setSaving(null);
   }
@@ -240,36 +252,87 @@ export default function AdminPrecosPage() {
       {showAdd && (
         <div className="bg-white border border-[#E8740E] rounded-2xl p-5 space-y-3 shadow-sm">
           <h3 className="font-semibold text-sm text-[#1D1D1F]">Adicionar produto em {catInfo.emoji} {catInfo.label}</h3>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
-              <input
-                value={newProd.modelo}
-                onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
-                placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : tab === "MACBOOK" ? "MacBook Air M4" : "Nome do produto"}
-                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-              />
+          {tab === "MACBOOK" ? (
+            <div className="grid grid-cols-5 gap-3">
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+                <input
+                  value={newProd.modelo}
+                  onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
+                  placeholder="MacBook Air M4"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tela</p>
+                <input
+                  value={macFields.tela}
+                  onChange={(e) => setMacFields({ ...macFields, tela: e.target.value })}
+                  placeholder={'13"'}
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">RAM</p>
+                <input
+                  value={macFields.ram}
+                  onChange={(e) => setMacFields({ ...macFields, ram: e.target.value })}
+                  placeholder="16GB"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Armazenamento</p>
+                <input
+                  value={macFields.armazenamento}
+                  onChange={(e) => setMacFields({ ...macFields, armazenamento: e.target.value })}
+                  placeholder="256GB"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
+                <input
+                  type="number"
+                  value={newProd.preco_pix}
+                  onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
+                  placeholder="8.997"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Variação</p>
-              <input
-                value={newProd.armazenamento}
-                onChange={(e) => setNewProd({ ...newProd, armazenamento: e.target.value })}
-                placeholder="256GB / Único / etc"
-                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-              />
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+                <input
+                  value={newProd.modelo}
+                  onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
+                  placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : "Nome do produto"}
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Variação</p>
+                <input
+                  value={newProd.armazenamento}
+                  onChange={(e) => setNewProd({ ...newProd, armazenamento: e.target.value })}
+                  placeholder="256GB / Único / etc"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
+                <input
+                  type="number"
+                  value={newProd.preco_pix}
+                  onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
+                  placeholder="4.997"
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
-              <input
-                type="number"
-                value={newProd.preco_pix}
-                onChange={(e) => setNewProd({ ...newProd, preco_pix: e.target.value })}
-                placeholder="4.997"
-                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
-              />
-            </div>
-          </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={handleAddProd}
@@ -299,7 +362,18 @@ export default function AdminPrecosPage() {
           </button>
         </div>
       ) : (
-        Object.entries(grouped).map(([modelo, rows]) => (
+        Object.entries(grouped).map(([modelo, rows]) => {
+          // Detectar se é MacBook para mostrar colunas separadas
+          const isMac = tab === "MACBOOK";
+          // Parser: tenta extrair tela|ram|armazenamento do campo combinado
+          function parseMacSpec(spec: string) {
+            const parts = spec.split("|").map((s) => s.trim());
+            if (parts.length >= 3) {
+              return { tela: parts[0], ram: parts[1].replace(/\s*RAM$/i, ""), arm: parts[2] };
+            }
+            return { tela: "-", ram: "-", arm: spec };
+          }
+          return (
           <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
               <h2 className="font-semibold text-[#1D1D1F]">{modelo}</h2>
@@ -307,7 +381,15 @@ export default function AdminPrecosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#F5F5F7]">
-                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Variação</th>
+                  {isMac ? (
+                    <>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Tela</th>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">RAM</th>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
+                    </>
+                  ) : (
+                    <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Variação</th>
+                  )}
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Status</th>
                   <th className="px-5 py-2"></th>
@@ -318,9 +400,18 @@ export default function AdminPrecosPage() {
                   const key = `${row.modelo}|${row.armazenamento}`;
                   const isEditing = editing[key] !== undefined;
                   const isSaving = saving === key;
+                  const macSpec = isMac ? parseMacSpec(row.armazenamento) : null;
                   return (
                     <tr key={key} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
-                      <td className="px-5 py-3 font-medium">{row.armazenamento}</td>
+                      {isMac && macSpec ? (
+                        <>
+                          <td className="px-4 py-3 font-medium">{macSpec.tela}</td>
+                          <td className="px-4 py-3 font-medium">{macSpec.ram}</td>
+                          <td className="px-4 py-3 font-medium">{macSpec.arm}</td>
+                        </>
+                      ) : (
+                        <td className="px-5 py-3 font-medium">{row.armazenamento}</td>
+                      )}
                       <td className="px-5 py-3">
                         {isEditing ? (
                           <div className="flex items-center gap-2">
@@ -395,7 +486,8 @@ export default function AdminPrecosPage() {
               </tbody>
             </table>
           </div>
-        ))
+          );
+        })
       )}
     </div>
   );
