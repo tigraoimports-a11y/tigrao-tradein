@@ -602,10 +602,25 @@ export default function AdminPrecosPage() {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              onClick={() => {
+                                // Duplicar: abre form preenchido com dados desse produto
+                                const parts = row.armazenamento.split("|").map((s) => s.trim());
+                                const labels = getLabelsForCategory(tab);
+                                setSpecFields(parts.map((v, idx) => ({ label: labels[idx] || `Spec ${idx + 1}`, value: v.replace(/\s*RAM$/i, "") })));
+                                setNewProd({ modelo: row.modelo, preco_pix: String(row.preco_pix) });
+                                setShowAdd(true);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className="px-2 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#0071E3] border border-[#D2D2D7] hover:border-[#0071E3] transition-colors"
+                              title="Duplicar produto"
+                            >
+                              Duplicar
+                            </button>
                             <button
                               onClick={() => setEditing({ ...editing, [key]: String(row.preco_pix) })}
-                              className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors"
+                              className="px-2 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors"
                             >
                               Editar
                             </button>
