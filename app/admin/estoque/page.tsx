@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface ProdutoEstoque {
@@ -280,63 +280,7 @@ export default function EstoquePage() {
 
   const isPendenciasTab = tab === "pendencias";
 
-  const renderProductRow = (p: ProdutoEstoque, showObs: boolean, showMover: boolean) => {
-    const isEditCusto = editingCusto[p.id] !== undefined;
-    const isEditQnt = editingQnt[p.id] !== undefined;
-
-    return (
-      <tr key={p.id} className={`border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors ${p.qnt === 0 ? "bg-red-50/50" : p.qnt === 1 ? "bg-yellow-50/50" : ""}`}>
-        <td className="px-4 py-2.5 font-medium text-sm whitespace-nowrap">{p.produto}</td>
-        <td className="px-4 py-2.5 text-[#86868B] text-xs">{p.cor || "—"}</td>
-        {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
-        {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
-        <td className="px-4 py-2.5">
-          {isEditQnt ? (
-            <div className="flex items-center gap-1">
-              <input type="number" value={editingQnt[p.id]} onChange={(e) => setEditingQnt({ ...editingQnt, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0); if (e.key === "Escape") { const eq = { ...editingQnt }; delete eq[p.id]; setEditingQnt(eq); } }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-center" autoFocus />
-              <button onClick={() => handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1">
-              <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-red-100 hover:text-red-500 text-xs font-bold">-</button>
-              <span className={`font-bold min-w-[24px] text-center cursor-pointer hover:text-[#E8740E] ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : "text-[#1D1D1F]"}`} onClick={() => setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
-              <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-green-100 hover:text-green-600 text-xs font-bold">+</button>
-            </div>
-          )}
-        </td>
-        <td className="px-4 py-2.5">
-          {isEditCusto ? (
-            <div className="flex items-center gap-1">
-              <input type="number" value={editingCusto[p.id]} onChange={(e) => setEditingCusto({ ...editingCusto, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveCusto(p); if (e.key === "Escape") { const ec = { ...editingCusto }; delete ec[p.id]; setEditingCusto(ec); } }} className="w-20 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
-              <button onClick={() => handleSaveCusto(p)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-            </div>
-          ) : (
-            <span className="text-xs cursor-pointer hover:text-[#E8740E] flex items-center gap-1" onClick={() => setEditingCusto({ ...editingCusto, [p.id]: String(p.custo_unitario || "") })}>
-              {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
-              <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-            </span>
-          )}
-        </td>
-        <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
-        <td className="px-4 py-2.5">
-          <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700"}`}>{p.status}</span>
-          {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
-            <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
-          )}
-        </td>
-        <td className="px-4 py-2.5 flex gap-1">
-          {showMover && (
-            <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
-          )}
-          <button onClick={async () => {
-            if (!confirm(`Excluir ${p.produto}?`)) return;
-            await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
-            setEstoque((prev) => prev.filter((r) => r.id !== p.id));
-          }} className="text-[#86868B] hover:text-red-500 text-xs px-1">X</button>
-        </td>
-      </tr>
-    );
-  };
+  // renderProductRow removido — agora renderizado inline com agrupamento por produto/cor
 
   return (
     <div className="space-y-6">
@@ -553,7 +497,16 @@ export default function EstoquePage() {
                   </span>
                 </h2>
 
-                {Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, items]) => (
+                {Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, items]) => {
+                  // Sub-agrupar por nome do produto (sem cor)
+                  const byProduto: Record<string, ProdutoEstoque[]> = {};
+                  items.forEach((p) => {
+                    if (!byProduto[p.produto]) byProduto[p.produto] = [];
+                    byProduto[p.produto].push(p);
+                  });
+                  const produtoEntries = Object.entries(byProduto).sort(([a], [b]) => a.localeCompare(b));
+
+                  return (
                   <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
                     <div className="px-5 py-2.5 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
                       <h3 className="font-semibold text-[#1D1D1F] text-sm">{modelo}</h3>
@@ -563,8 +516,7 @@ export default function EstoquePage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-[#F5F5F7]">
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Produto</th>
-                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Cor</th>
+                            <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase" style={{ minWidth: 180 }}>Produto / Cor</th>
                             {isPendenciasTab && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Cliente</th>}
                             {(tab === "seminovos" || isPendenciasTab) && <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Obs / Bateria</th>}
                             <th className="px-4 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase">Qnt</th>
@@ -575,12 +527,98 @@ export default function EstoquePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {items.map((p) => renderProductRow(p, tab === "seminovos" || isPendenciasTab, tab === "acaminho" || isPendenciasTab))}
+                          {produtoEntries.map(([prodNome, prodItems]) => {
+                            const showObs = tab === "seminovos" || isPendenciasTab;
+                            const showMover = tab === "acaminho" || isPendenciasTab;
+                            const hasManyProducts = produtoEntries.length > 1;
+                            const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
+                            const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+
+                            return (
+                              <React.Fragment key={prodNome}>
+                                {/* Linha do produto (sub-header) — só mostra se há mais de 1 grupo de produto dentro do modelo */}
+                                {hasManyProducts && (
+                                  <tr className="bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                                    <td className="px-4 py-2 font-semibold text-xs text-[#1D1D1F]" colSpan={isPendenciasTab ? 2 : 1}>{prodNome}</td>
+                                    {showObs && <td></td>}
+                                    <td className="px-4 py-2 text-xs font-bold text-[#86868B]">{prodTotal}</td>
+                                    <td className="px-4 py-2 text-xs text-[#86868B]">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                    <td className="px-4 py-2 text-xs font-medium text-[#86868B]">{fmt(prodValor)}</td>
+                                    <td></td>
+                                    <td></td>
+                                  </tr>
+                                )}
+                                {/* Linhas de cada cor */}
+                                {prodItems.map((p) => {
+                                  const isEditCusto = editingCusto[p.id] !== undefined;
+                                  const isEditQnt = editingQnt[p.id] !== undefined;
+                                  return (
+                                    <tr key={p.id} className={`border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors ${p.qnt === 0 ? "bg-red-50/50" : p.qnt === 1 ? "bg-yellow-50/50" : ""}`}>
+                                      <td className="px-4 py-2.5 text-sm whitespace-nowrap">
+                                        {hasManyProducts ? (
+                                          <span className="text-[#86868B] ml-2">• {p.cor || "—"}</span>
+                                        ) : (
+                                          <span><span className="font-medium">{p.produto}</span> <span className="text-[#86868B]">— {p.cor || "—"}</span></span>
+                                        )}
+                                      </td>
+                                      {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
+                                      {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
+                                      <td className="px-4 py-2.5">
+                                        {isEditQnt ? (
+                                          <div className="flex items-center gap-1">
+                                            <input type="number" value={editingQnt[p.id]} onChange={(e) => setEditingQnt({ ...editingQnt, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0); if (e.key === "Escape") { const eq = { ...editingQnt }; delete eq[p.id]; setEditingQnt(eq); } }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-center" autoFocus />
+                                            <button onClick={() => handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1">
+                                            <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-red-100 hover:text-red-500 text-xs font-bold">-</button>
+                                            <span className={`font-bold min-w-[24px] text-center cursor-pointer hover:text-[#E8740E] ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : "text-[#1D1D1F]"}`} onClick={() => setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
+                                            <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-green-100 hover:text-green-600 text-xs font-bold">+</button>
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        {isEditCusto ? (
+                                          <div className="flex items-center gap-1">
+                                            <input type="number" value={editingCusto[p.id]} onChange={(e) => setEditingCusto({ ...editingCusto, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveCusto(p); if (e.key === "Escape") { const ec = { ...editingCusto }; delete ec[p.id]; setEditingCusto(ec); } }} className="w-20 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
+                                            <button onClick={() => handleSaveCusto(p)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs cursor-pointer hover:text-[#E8740E] flex items-center gap-1" onClick={() => setEditingCusto({ ...editingCusto, [p.id]: String(p.custo_unitario || "") })}>
+                                            {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
+                                            <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700"}`}>{p.status}</span>
+                                        {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
+                                          <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2.5 flex gap-1">
+                                        {showMover && (
+                                          <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
+                                        )}
+                                        <button onClick={async () => {
+                                          if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
+                                          await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
+                                          setEstoque((prev) => prev.filter((r) => r.id !== p.id));
+                                        }} className="text-[#86868B] hover:text-red-500 text-xs px-1">X</button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ))
           )}
