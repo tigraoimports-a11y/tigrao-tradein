@@ -971,13 +971,8 @@ export default function VendasPage() {
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
                                                 };
-                                                console.log("PATCH updates:", JSON.stringify(updates));
-
-                                                if (Object.keys(updates).length <= 1) {
-                                                  setEditingId(null);
-                                                  setEditSaving(false);
-                                                  return;
-                                                }
+                                                const debugInfo = `pv=${pv} c=${c} lucro=${newLucro} margem=${newMargem}`;
+                                                alert("DEBUG ANTES DO SAVE:\n" + debugInfo);
 
                                                 const res = await fetch("/api/vendas", {
                                                   method: "PATCH",
@@ -985,6 +980,7 @@ export default function VendasPage() {
                                                   body: JSON.stringify(updates),
                                                 });
                                                 const resBody = await res.json();
+                                                alert("DEBUG RESPONSE:\n" + JSON.stringify(resBody).substring(0, 500));
                                                 console.log("PATCH response:", res.status, resBody);
                                                 if (res.ok) {
                                                   setVendas(prev => prev.map(r => r.id === v.id ? {
