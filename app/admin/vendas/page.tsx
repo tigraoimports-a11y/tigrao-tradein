@@ -29,6 +29,7 @@ export default function VendasPage() {
   const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
   const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [filtroDia, setFiltroDia] = useState("");
+  const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
@@ -715,9 +716,16 @@ export default function VendasPage() {
       ) : (
         /* Vendas Em Andamento / Finalizadas */
         (() => {
-          const filtered = tab === "andamento"
+          const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
+          const filtered = [...filteredRaw].sort((a, b) => {
+            if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
+            if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
+            if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
+            if (ordenar === "cliente") return (a.cliente || "").localeCompare(b.cliente || "");
+            return 0;
+          });
           const titulo = tab === "andamento" ? "Vendas em Andamento" : "Vendas Finalizadas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -725,7 +733,19 @@ export default function VendasPage() {
           return (
             <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between flex-wrap gap-2">
-                <h2 className="font-bold text-[#1D1D1F]">{titulo}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="font-bold text-[#1D1D1F]">{titulo}</h2>
+                  <select
+                    value={ordenar}
+                    onChange={(e) => setOrdenar(e.target.value as typeof ordenar)}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-[#F5F5F7] border border-[#D2D2D7] text-[#86868B] focus:outline-none focus:border-[#E8740E]"
+                  >
+                    <option value="recente">⏰ Mais recente</option>
+                    <option value="antigo">⏰ Mais antigo</option>
+                    <option value="origem">📌 Origem</option>
+                    <option value="cliente">👤 Cliente</option>
+                  </select>
+                </div>
                 <div className="flex gap-3 text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
                   {tab === "finalizadas" && filtered.length > 0 && (
@@ -774,7 +794,17 @@ export default function VendasPage() {
                               className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
-                              <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">{v.data}</td>
+                              <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">
+                                {(() => {
+                                  const [y, m, d] = (v.data || "").split("-");
+                                  return d && m ? `${d}/${m}` : v.data;
+                                })()}
+                                {v.created_at && (
+                                  <span className="block text-[10px] text-[#B0B0B0]">
+                                    {new Date(v.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
                               <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
                               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
