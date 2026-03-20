@@ -26,7 +26,7 @@ interface Fornecedor {
   observacao: string | null;
 }
 
-const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
+const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
 const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as const;
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -35,6 +35,7 @@ const CAT_LABELS: Record<string, string> = {
   IPHONES: "iPhones",
   IPADS: "iPads",
   MACBOOK: "MacBooks",
+  MAC_MINI: "Mac Mini",
   APPLE_WATCH: "Apple Watch",
   AIRPODS: "AirPods",
   ACESSORIOS: "Acessorios",
@@ -70,8 +71,10 @@ function getModeloBase(produto: string, categoria: string): string {
     if (p.includes("PRO")) return "iPad Pro";
     return "iPad";
   }
+  if (categoria === "MAC_MINI") {
+    return "Mac Mini";
+  }
   if (categoria === "MACBOOK") {
-    if (p.includes("MAC MINI")) return "Mac Mini";
     if (p.includes("AIR") && (p.includes("15") || p.includes("15\""))) return "MacBook Air 15\"";
     if (p.includes("AIR")) return "MacBook Air 13\"";
     if (p.includes("PRO") && (p.includes("16") || p.includes("16\""))) return "MacBook Pro 16\"";
@@ -119,6 +122,8 @@ export default function EstoquePage() {
     ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
     // MACBOOK
     mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
+    // MAC_MINI
+    mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
     // IPADS
     ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
@@ -135,8 +140,9 @@ export default function EstoquePage() {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
         return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
       }
+      case "MAC_MINI":
+        return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`;
       case "MACBOOK": {
-        if (spec.mb_modelo === "MAC MINI") return `MAC MINI ${spec.mb_chip} ${spec.mb_ram} ${spec.mb_storage}`;
         const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
         return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}`;
       }
@@ -157,7 +163,7 @@ export default function EstoquePage() {
   };
 
   // Verificar se a categoria tem campos estruturados
-  const hasStructuredFields = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH", "AIRPODS"].includes(form.categoria);
+  const hasStructuredFields = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"].includes(form.categoria);
 
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
@@ -417,16 +423,13 @@ export default function EstoquePage() {
               <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
                 <option value="AIR">MacBook Air</option>
                 <option value="PRO">MacBook Pro</option>
-                <option value="MAC MINI">Mac Mini</option>
               </select></div>
-              {spec.mb_modelo !== "MAC MINI" && (
-                <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
-                  {spec.mb_modelo === "AIR"
-                    ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
-                    : [<option key='14"' value='14"'>14 polegadas</option>, <option key='16"' value='16"'>16 polegadas</option>]
-                  }
-                </select></div>
-              )}
+              <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
+                {spec.mb_modelo === "AIR"
+                  ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
+                  : [<option key='14"' value='14"'>14 polegadas</option>, <option key='16"' value='16"'>16 polegadas</option>]
+                }
+              </select></div>
               <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
                 {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX"].map((c) => <option key={c}>{c}</option>)}
               </select></div>
@@ -435,6 +438,20 @@ export default function EstoquePage() {
               </select></div>
               <div><p className={labelCls}>Armazenamento</p><select value={spec.mb_storage} onChange={(e) => setS("mb_storage", e.target.value)} className={inputCls}>
                 {["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"].map((s) => <option key={s}>{s}</option>)}
+              </select></div>
+            </div>
+          )}
+
+          {form.categoria === "MAC_MINI" && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+              <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
+                {["M1", "M2", "M2 PRO", "M4", "M4 PRO"].map((c) => <option key={c}>{c}</option>)}
+              </select></div>
+              <div><p className={labelCls}>RAM</p><select value={spec.mm_ram} onChange={(e) => setS("mm_ram", e.target.value)} className={inputCls}>
+                {["8GB", "16GB", "24GB", "32GB", "48GB", "64GB"].map((r) => <option key={r}>{r}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Armazenamento</p><select value={spec.mm_storage} onChange={(e) => setS("mm_storage", e.target.value)} className={inputCls}>
+                {["256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
               </select></div>
             </div>
           )}

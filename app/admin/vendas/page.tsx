@@ -24,6 +24,12 @@ export default function VendasPage() {
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
 
+  // Filtros de data para histórico
+  const now = new Date();
+  const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
+  const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, "0"));
+  const [filtroDia, setFiltroDia] = useState("");
+
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
 
@@ -94,14 +100,22 @@ export default function VendasPage() {
   const fetchVendas = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/vendas", { headers: { "x-admin-password": password } });
+      // Construir filtro de data
+      const from = filtroDia
+        ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
+        : `${filtroAno}-${filtroMes}-01`;
+      const to = filtroDia
+        ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
+        : `${filtroAno}-${filtroMes}-31`;
+      const params = new URLSearchParams({ from, to });
+      const res = await fetch(`/api/vendas?${params}`, { headers: { "x-admin-password": password } });
       if (res.ok) {
         const json = await res.json();
         setVendas(json.data ?? []);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password]);
+  }, [password, filtroAno, filtroMes, filtroDia]);
 
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
@@ -333,16 +347,38 @@ export default function VendasPage() {
   return (
     <div className="space-y-6">
       {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto">
-        {([
-          { key: "nova", label: "Nova Venda", count: 0 },
-          { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length },
-          { key: "finalizadas", label: "Finalizadas", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length },
-        ] as const).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t.label}{t.count > 0 ? ` (${t.count})` : ""}
-          </button>
-        ))}
+      <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
+        <div className="flex gap-2">
+          {([
+            { key: "nova", label: "Nova Venda", count: 0 },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length },
+            { key: "finalizadas", label: "Finalizadas", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length },
+          ] as const).map((t) => (
+            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+              {t.label}{t.count > 0 ? ` (${t.count})` : ""}
+            </button>
+          ))}
+        </div>
+
+        {/* Filtros de data */}
+        {tab !== "nova" && (
+          <div className="flex gap-1.5 items-center ml-auto">
+            <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+              {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+              {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m) => (
+                <option key={m} value={m}>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m)-1]}</option>
+              ))}
+            </select>
+            <select value={filtroDia} onChange={(e) => setFiltroDia(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+              <option value="">Todos os dias</option>
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={String(d).padStart(2, "0")}>{d}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {tab === "nova" ? (
@@ -683,12 +719,22 @@ export default function VendasPage() {
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
           const titulo = tab === "andamento" ? "Vendas em Andamento" : "Vendas Finalizadas";
+          const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+          const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
 
           return (
             <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between flex-wrap gap-2">
                 <h2 className="font-bold text-[#1D1D1F]">{titulo}</h2>
-                <span className="text-xs text-[#86868B]">{filtered.length} vendas</span>
+                <div className="flex gap-3 text-xs text-[#86868B]">
+                  <span>{filtered.length} vendas</span>
+                  {tab === "finalizadas" && filtered.length > 0 && (
+                    <>
+                      <span>Vendido: <strong className="text-[#1D1D1F]">{fmt(totalVendido)}</strong></span>
+                      <span>Lucro: <strong className={totalLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(totalLucro)}</strong></span>
+                    </>
+                  )}
+                </div>
               </div>
               {loading ? (
                 <div className="p-8 text-center text-[#86868B]">Carregando...</div>

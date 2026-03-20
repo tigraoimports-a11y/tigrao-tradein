@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (from) query = query.gte("data", from);
   if (to) query = query.lte("data", to);
 
-  const { data, error } = await query.limit(500);
+  const { data, error } = await query.limit(1000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
 }
