@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useTabParam } from "@/lib/useTabParam";
 
 interface ProdutoEstoque {
   id: string;
@@ -98,7 +99,8 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo">("estoque");
+  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo">("estoque", ESTOQUE_TABS);
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");

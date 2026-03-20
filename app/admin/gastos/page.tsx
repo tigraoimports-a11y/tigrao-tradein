@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
+import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -11,7 +12,8 @@ export default function GastosPage() {
   const { password } = useAdmin();
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"novo" | "historico">("novo");
+  const GASTOS_TABS = ["novo", "historico"] as const;
+  const [tab, setTab] = useTabParam<"novo" | "historico">("novo", GASTOS_TABS);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 

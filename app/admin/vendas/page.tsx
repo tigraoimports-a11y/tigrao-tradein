@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularBruto, calcularLiquido, calcularRecebimento } from "@/lib/taxas";
+import { useTabParam } from "@/lib/useTabParam";
 import type { Venda } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -13,7 +14,8 @@ export default function VendasPage() {
   const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"nova" | "andamento" | "hoje" | "finalizadas">("nova");
+  const VENDAS_TABS = ["nova", "andamento", "hoje", "finalizadas"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "andamento" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

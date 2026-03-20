@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useTabParam } from "@/lib/useTabParam";
 
 interface PrecoProduto {
   id?: string;
@@ -32,7 +33,8 @@ export default function AdminPrecosPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
-  const [tab, setTab] = useState<CategoriaKey>("IPHONE");
+  const PRECO_TABS = CATEGORIAS.map((c) => c.key);
+  const [tab, setTab] = useTabParam<CategoriaKey>("IPHONE", PRECO_TABS);
   const [showAdd, setShowAdd] = useState(false);
   const [newProd, setNewProd] = useState({ modelo: "", armazenamento: "", preco_pix: "" });
   // Campos extras para MacBook (tela + ram + armazenamento separados)
