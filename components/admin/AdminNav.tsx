@@ -30,21 +30,21 @@ export default function AdminNav({ userRole }: { userRole: string }) {
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(userRole));
 
   return (
-    <div className="bg-white border-b border-[#D2D2D7] px-6 overflow-x-auto">
-      <nav className="flex gap-1 max-w-[1400px] mx-auto">
+    <div className="bg-white border-b border-[#D2D2D7] px-2 sm:px-6 overflow-x-auto scrollbar-hide">
+      <nav className="flex gap-0 sm:gap-1 max-w-[1400px] mx-auto">
         {visibleItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive
                   ? "border-[#E8740E] text-[#E8740E]"
                   : "border-transparent text-[#86868B] hover:text-[#1D1D1F] hover:border-[#D2D2D7]"
               }`}
             >
-              <span className="text-base">{item.icon}</span>
+              <span className="text-sm sm:text-base">{item.icon}</span>
               {item.label}
             </Link>
           );

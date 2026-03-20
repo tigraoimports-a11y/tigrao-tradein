@@ -148,17 +148,17 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <AdminContext.Provider value={{ password, user, logout }}>
-      <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]">
+      <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] overflow-x-hidden">
         {/* Header */}
-        <div className="bg-white border-b border-[#D2D2D7] px-6 py-3 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🐯</span>
-            <div>
-              <h1 className="text-lg font-bold text-[#1D1D1F]">TigrãoImports</h1>
-              <p className="text-[#86868B] text-xs">Painel Administrativo</p>
+        <div className="bg-white border-b border-[#D2D2D7] px-3 sm:px-6 py-3 flex items-center justify-between shadow-sm gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl sm:text-2xl">🐯</span>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-lg font-bold text-[#1D1D1F] truncate">TigrãoImports</h1>
+              <p className="text-[#86868B] text-[10px] sm:text-xs hidden sm:block">Painel Administrativo</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button
               onClick={async () => {
                 const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password } });
@@ -170,16 +170,16 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   alert(json.error || "Nada para desfazer");
                 }
               }}
-              className="px-3 py-1.5 rounded-xl text-xs text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+              className="px-2 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
             >
               Desfazer
             </button>
-            <span className="text-sm text-[#86868B]">
+            <span className="text-xs sm:text-sm text-[#86868B] hidden sm:inline">
               {user.nome} <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-[#F5F5F7]">{user.role}</span>
             </span>
             <button
               onClick={logout}
-              className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E74C3C] hover:text-[#E74C3C] transition-colors"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-xs sm:text-sm hover:border-[#E74C3C] hover:text-[#E74C3C] transition-colors"
             >
               Sair
             </button>
@@ -190,7 +190,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <AdminNav userRole={user.role} />
 
         {/* Content */}
-        <div className="p-6 max-w-[1400px] mx-auto">
+        <div className="p-3 sm:p-6 max-w-[1400px] mx-auto">
           {children}
         </div>
       </div>

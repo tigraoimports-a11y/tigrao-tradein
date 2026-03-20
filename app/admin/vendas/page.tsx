@@ -283,22 +283,22 @@ export default function VendasPage() {
   return (
     <div className="space-y-6">
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto">
         {([
           { key: "nova", label: "Nova Venda", count: 0 },
           { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length },
           { key: "finalizadas", label: "Finalizadas", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length },
         ] as const).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
             {t.label}{t.count > 0 ? ` (${t.count})` : ""}
           </button>
         ))}
       </div>
 
       {tab === "nova" ? (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
+            <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPasteModal(true)}
