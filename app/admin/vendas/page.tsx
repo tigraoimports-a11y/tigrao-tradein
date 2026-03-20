@@ -58,6 +58,20 @@ export default function VendasPage() {
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
 
+  // Fornecedores
+  interface Fornecedor { id: string; nome: string }
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+
+  const fetchFornecedores = useCallback(async () => {
+    try {
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const json = await res.json();
+        setFornecedores(json.data ?? []);
+      }
+    } catch { /* ignore */ }
+  }, [password]);
+
   const fetchEstoque = useCallback(async () => {
     try {
       const res = await fetch("/api/estoque", { headers: { "x-admin-password": password } });
@@ -68,7 +82,7 @@ export default function VendasPage() {
     } catch { /* ignore */ }
   }, [password]);
 
-  useEffect(() => { if (password) fetchEstoque(); }, [password, fetchEstoque]);
+  useEffect(() => { if (password) { fetchEstoque(); fetchFornecedores(); } }, [password, fetchEstoque, fetchFornecedores]);
 
   // Gerar categorias separadas por tipo (Lacrado vs Seminovo)
   const categorias = (() => {
@@ -475,7 +489,10 @@ export default function VendasPage() {
             {produtoManual ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
-                <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+                <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
+                  <option value="">— Selecionar —</option>
+                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                </select></div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -487,7 +504,10 @@ export default function VendasPage() {
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
+                  <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
+                  <option value="">— Selecionar —</option>
+                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                </select></div>
                 </div>
 
                 {/* Produtos agrupados por modelo com cores como botões */}
