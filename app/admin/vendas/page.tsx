@@ -181,8 +181,6 @@ export default function VendasPage() {
       fornecedor: form.fornecedor || null,
       custo,
       preco_vendido: preco,
-      lucro: preco > 0 ? preco - custo : 0,
-      margem_pct: preco > 0 ? Math.round(((preco - custo) / preco) * 1000) / 10 : 0,
       banco: isPartial ? null : banco,
       forma: isPartial ? null : (form.forma === "LINK" ? "CARTAO" : form.forma),
       recebimento: isPartial ? null : (form.forma === "PIX" || form.forma === "DINHEIRO" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1"),
