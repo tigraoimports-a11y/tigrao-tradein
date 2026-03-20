@@ -948,7 +948,7 @@ export default function VendasPage() {
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 setEditSaving(true);
-                                                // Sempre enviar todos os campos editáveis + recalcular lucro/margem
+                                                // lucro e margem_pct são GENERATED ALWAYS no Supabase — NÃO enviar!
                                                 const pv = parseFloat(ef.preco_vendido) || 0;
                                                 const c = parseFloat(ef.custo) || 0;
                                                 const newLucro = pv - c;
@@ -959,15 +959,13 @@ export default function VendasPage() {
                                                   produto: ef.produto,
                                                   custo: c,
                                                   preco_vendido: pv,
-                                                  lucro: newLucro,
-                                                  margem_pct: newMargem,
+                                                  // NÃO enviar lucro e margem_pct (GENERATED ALWAYS)
                                                   banco: ef.banco,
                                                   forma: ef.forma,
                                                   recebimento: ef.recebimento,
                                                   qnt_parcelas: parseInt(ef.qnt_parcelas) || null,
                                                   bandeira: ef.bandeira || null,
                                                   entrada_pix: parseFloat(ef.entrada_pix) || 0,
-                                                  entrada_especie: parseFloat(ef.entrada_especie) || 0,
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
                                                 };
@@ -981,9 +979,9 @@ export default function VendasPage() {
                                                   // Usar dados retornados do Supabase (fonte de verdade)
                                                   const updated = resBody.updated[0] as Venda;
                                                   setVendas(prev => prev.map(r => r.id === v.id ? { ...r, ...updated } : r));
-                                                  setMsg("Venda atualizada!");
+                                                  setMsg("Venda atualizada! Lucro: R$ " + (updated.lucro || newLucro));
                                                 } else if (res.ok) {
-                                                  // Fallback: usar dados calculados localmente
+                                                  // Fallback: atualizar com dados locais
                                                   setVendas(prev => prev.map(r => r.id === v.id ? {
                                                     ...r,
                                                     cliente: ef.cliente,
@@ -992,15 +990,6 @@ export default function VendasPage() {
                                                     preco_vendido: pv,
                                                     lucro: newLucro,
                                                     margem_pct: newMargem,
-                                                    banco: ef.banco as Venda["banco"],
-                                                    forma: ef.forma as Venda["forma"],
-                                                    recebimento: ef.recebimento as Venda["recebimento"],
-                                                    qnt_parcelas: parseInt(ef.qnt_parcelas) || null,
-                                                    bandeira: (ef.bandeira || null) as Venda["bandeira"],
-                                                    entrada_pix: parseFloat(ef.entrada_pix) || 0,
-                                                    entrada_especie: parseFloat(ef.entrada_especie) || 0,
-                                                    banco_pix: ef.banco_pix || null,
-                                                    produto_na_troca: ef.produto_na_troca || null,
                                                   } : r));
                                                   setMsg("Venda atualizada!");
                                                 } else {
