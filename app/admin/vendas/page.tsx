@@ -367,8 +367,11 @@ export default function VendasPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          {/* Row 1: Tipo + Data */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Row 1: Origem + Tipo + Data */}
+          <div className="grid grid-cols-3 gap-4">
+            <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
+              <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option>
+            </select></div>
             <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); } }} className={selectCls}>
               <option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
             </select></div>
@@ -379,7 +382,6 @@ export default function VendasPage() {
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
-              <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -392,7 +394,7 @@ export default function VendasPage() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} /></div>
                 {form.pessoa === "PJ" ? (
                   <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
@@ -400,9 +402,6 @@ export default function VendasPage() {
                   <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
-                <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
-                  <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option>
-                </select></div>
               </div>
 
               {/* Endereço — só PJ */}
