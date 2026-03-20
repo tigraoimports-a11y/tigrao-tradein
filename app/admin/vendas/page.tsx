@@ -28,6 +28,9 @@ export default function VendasPage() {
   const isAdmin = user?.role === "admin";
 
   const [msg, setMsg] = useState("");
+  const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; email: string; origem: string; tipo: string } | null>(null);
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
@@ -225,15 +228,52 @@ export default function VendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Venda registrada!");
-      setForm((f) => ({ ...f, cliente: "", cpf: "", email: "", produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "" }));
+      // Limpar só produto/valores — manter dados do cliente para "+1 Produto"
+      setForm((f) => ({ ...f, produto: "", fornecedor: "", custo: "", preco_vendido: "", qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "", entrada_pix: "", banco_pix: "", sinal_antecipado: "", banco_sinal: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", forma: "" }));
       setCatSel("");
       setEstoqueId("");
+      setProdutoManual(false);
+      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, email: form.email, origem: form.origem, tipo: form.tipo });
       fetchVendas();
       fetchEstoque();
     } else {
       setMsg("Erro: " + json.error);
     }
     setSaving(false);
+  };
+
+  // Parser de texto colado (formulário WhatsApp)
+  const parseClienteText = (text: string) => {
+    const lines = text.split("\n").map(l => l.trim());
+    let nome = "", cpf = "", email = "";
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      // Nome completo
+      if (lower.includes("nome completo") || lower.includes("nome:")) {
+        nome = line.replace(/.*(?:nome completo|nome)\s*[:：]\s*/i, "").trim();
+      }
+      // CPF
+      if (lower.includes("cpf")) {
+        const cpfMatch = line.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}/);
+        if (cpfMatch) cpf = cpfMatch[0];
+      }
+      // Email
+      if (lower.includes("e-mail") || lower.includes("email")) {
+        const emailMatch = line.match(/[\w.+-]+@[\w.-]+\.\w+/);
+        if (emailMatch) email = emailMatch[0];
+      }
+    }
+    return { nome, cpf, email };
+  };
+
+  const handlePasteConfirm = () => {
+    const { nome, cpf, email } = parseClienteText(pasteText);
+    if (nome) set("cliente", nome);
+    if (cpf) set("cpf", cpf);
+    if (email) set("email", email);
+    setShowPasteModal(false);
+    setPasteText("");
+    setMsg(nome ? `Dados preenchidos: ${nome}` : "Nenhum dado encontrado no texto");
   };
 
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
@@ -257,7 +297,51 @@ export default function VendasPage() {
 
       {tab === "nova" ? (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
-          <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowPasteModal(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF8F0] transition-colors"
+              >
+                📋 Colar dados cliente
+              </button>
+              {lastClienteData && (
+                <button
+                  onClick={() => {
+                    set("cliente", lastClienteData.cliente);
+                    set("cpf", lastClienteData.cpf);
+                    set("email", lastClienteData.email);
+                    set("origem", lastClienteData.origem);
+                    set("tipo", lastClienteData.tipo);
+                    setMsg(`+1 produto para ${lastClienteData.cliente}`);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors"
+                >
+                  +1 Produto ({lastClienteData.cliente.split(" ")[0]})
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Modal para colar texto do formulário */}
+          {showPasteModal && (
+            <div className="border border-[#E8740E] bg-[#FFF8F0] rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-[#1D1D1F]">📋 Colar dados do cliente</p>
+              <p className="text-xs text-[#86868B]">Cole o texto do formulário de confirmação do WhatsApp abaixo. O sistema vai extrair nome, CPF e email automaticamente.</p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="Cole aqui o texto do formulário..."
+                rows={5}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] resize-none"
+              />
+              <div className="flex gap-2">
+                <button onClick={handlePasteConfirm} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors">Extrair dados</button>
+                <button onClick={() => { setShowPasteModal(false); setPasteText(""); }} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors">Cancelar</button>
+              </div>
+            </div>
+          )}
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -498,13 +582,26 @@ export default function VendasPage() {
             )}
           </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
-          >
-            {saving ? "Salvando..." : "Registrar Venda"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            >
+              {saving ? "Salvando..." : "Registrar Venda"}
+            </button>
+            {form.cliente && (
+              <button
+                onClick={() => {
+                  setForm((f) => ({ ...f, cliente: "", cpf: "", email: "" }));
+                  setLastClienteData(null);
+                }}
+                className="px-4 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         /* Vendas Em Andamento / Finalizadas */
