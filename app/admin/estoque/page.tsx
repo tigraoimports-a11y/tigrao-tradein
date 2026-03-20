@@ -243,7 +243,8 @@ export default function EstoquePage() {
       body: JSON.stringify({
         produto: nomeProduto, categoria: form.categoria,
         qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
-        status: form.status, cor: form.cor || null, observacao: form.observacao || null,
+        status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+        cor: form.cor || null, observacao: form.observacao || null,
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
       }),
