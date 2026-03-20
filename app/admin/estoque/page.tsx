@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
@@ -141,6 +141,60 @@ export default function EstoquePage() {
     const updated = removeCategoriaEstoque(key);
     setCategoriasState(updated);
     if (filterCat === key) setFilterCat("");
+  }
+
+  // Drag-and-drop para reordenar
+  const dragItemRef = useRef<string | null>(null);
+  const dragOverRef = useRef<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  function handleEstoqueDragEnd() {
+    if (!dragItemRef.current || !dragOverRef.current || dragItemRef.current === dragOverRef.current) {
+      setDragId(null); return;
+    }
+    // Reordenar no state local
+    setEstoque((prev) => {
+      const arr = [...prev];
+      const fromIdx = arr.findIndex((p) => p.id === dragItemRef.current);
+      const toIdx = arr.findIndex((p) => p.id === dragOverRef.current);
+      if (fromIdx === -1 || toIdx === -1) return arr;
+      const [moved] = arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, moved);
+      return arr;
+    });
+    setDragId(null);
+    dragItemRef.current = null;
+    dragOverRef.current = null;
+  }
+
+  // Duplicar produto do estoque
+  async function handleDuplicar(p: ProdutoEstoque) {
+    const novaCor = prompt("Cor do novo produto:", p.cor || "");
+    if (novaCor === null) return; // cancelou
+    const res = await fetch("/api/estoque", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+      body: JSON.stringify({
+        produto: p.produto,
+        categoria: p.categoria,
+        qnt: 1,
+        custo_unitario: p.custo_unitario || 0,
+        status: p.status,
+        cor: novaCor || null,
+        observacao: p.observacao || null,
+        tipo: p.tipo,
+        bateria: p.bateria || null,
+        cliente: p.cliente || null,
+        fornecedor: p.fornecedor || null,
+      }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      setMsg(`Duplicado: ${p.produto} ${novaCor || ""}`);
+      fetchEstoque();
+    } else {
+      setMsg("Erro: " + json.error);
+    }
   }
 
   const [form, setForm] = useState({
@@ -680,7 +734,8 @@ export default function EstoquePage() {
                               <React.Fragment key={prodNome}>
                                 {/* Header do produto — sempre mostra */}
                                 <tr className="bg-[#FAFAFA] border-b border-[#E8E8ED]">
-                                  <td className="px-4 py-2.5 font-semibold text-sm text-[#1D1D1F]" colSpan={2}>{prodNome}</td>
+                                  <td className="w-4"></td>
+                                  <td className="px-2 py-2.5 font-semibold text-sm text-[#1D1D1F]" colSpan={1}>{prodNome}</td>
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-[#1D1D1F]">{prodTotal} un.</span>
                                   </td>
@@ -694,9 +749,20 @@ export default function EstoquePage() {
                                   const isEditCusto = editingCusto[p.id] !== undefined;
                                   const isEditQnt = editingQnt[p.id] !== undefined;
                                   return (
-                                    <tr key={p.id} className={`border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors ${p.qnt === 0 ? "bg-red-50/50" : p.qnt === 1 ? "bg-yellow-50/50" : ""}`}>
-                                      <td className="px-4 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
-                                        <span className="text-[#86868B] ml-3">• {p.cor || "—"}</span>
+                                    <tr
+                                      key={p.id}
+                                      draggable
+                                      onDragStart={() => { dragItemRef.current = p.id; setDragId(p.id); }}
+                                      onDragEnter={() => { dragOverRef.current = p.id; }}
+                                      onDragOver={(e) => e.preventDefault()}
+                                      onDragEnd={handleEstoqueDragEnd}
+                                      className={`border-b border-[#F5F5F7] last:border-0 transition-colors ${dragId === p.id ? "opacity-40 bg-[#FFF3E8]" : p.qnt === 0 ? "bg-red-50/50 hover:bg-[#F5F5F7]" : p.qnt === 1 ? "bg-yellow-50/50 hover:bg-[#F5F5F7]" : "hover:bg-[#F5F5F7]"}`}
+                                    >
+                                      <td className="pl-2 py-2.5 cursor-grab active:cursor-grabbing text-[#C7C7CC] select-none w-4">
+                                        <span className="text-[10px]">⠿</span>
+                                      </td>
+                                      <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
+                                        <span className="text-[#86868B]">• {p.cor || "—"}</span>
                                       </td>
                                       {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
                                       {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
@@ -739,6 +805,12 @@ export default function EstoquePage() {
                                         {showMover && (
                                           <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
                                         )}
+                                        {/* Duplicar */}
+                                        <button
+                                          onClick={() => handleDuplicar(p)}
+                                          className="text-[#86868B] hover:text-[#0071E3] text-[10px] px-1"
+                                          title="Duplicar produto"
+                                        >📋</button>
                                         {/* Alterar categoria */}
                                         {editingCat[p.id] !== undefined ? (
                                           <select
