@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
+import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS } from "@/lib/categorias";
+import type { Categoria } from "@/lib/categorias";
 
 interface PrecoProduto {
   id?: string;
@@ -14,17 +16,6 @@ interface PrecoProduto {
   updated_at?: string;
 }
 
-const CATEGORIAS = [
-  { key: "IPHONE", label: "iPhones", emoji: "📱" },
-  { key: "MACBOOK", label: "MacBooks", emoji: "💻" },
-  { key: "IPAD", label: "iPads", emoji: "📟" },
-  { key: "APPLE_WATCH", label: "Apple Watch", emoji: "⌚" },
-  { key: "AIRPODS", label: "AirPods", emoji: "🎧" },
-  { key: "ACESSORIOS", label: "Acessórios", emoji: "🔌" },
-] as const;
-
-type CategoriaKey = typeof CATEGORIAS[number]["key"];
-
 export default function AdminPrecosPage() {
   const { password } = useAdmin();
   const [loading, setLoading] = useState(false);
@@ -33,12 +24,36 @@ export default function AdminPrecosPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
-  const PRECO_TABS = CATEGORIAS.map((c) => c.key);
-  const [tab, setTab] = useTabParam<CategoriaKey>("IPHONE", PRECO_TABS);
+
+  // Categorias dinâmicas
+  const [categorias, setCategorias] = useState<Categoria[]>(() => getCategoriasPrecos());
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCat, setNewCat] = useState({ label: "", emoji: "\u{1F4E6}" });
+
+  const tabKeys = categorias.map((c) => c.key);
+  const [tab, setTab] = useTabParam<string>("IPHONE", tabKeys);
   const [showAdd, setShowAdd] = useState(false);
   const [newProd, setNewProd] = useState({ modelo: "", armazenamento: "", preco_pix: "" });
   // Campos extras para MacBook (tela + ram + armazenamento separados)
   const [macFields, setMacFields] = useState({ tela: "", ram: "", armazenamento: "" });
+
+  function handleAddCategoria() {
+    if (!newCat.label.trim()) return;
+    const key = newCat.label.trim().toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+    if (!key) return;
+    const updated = addCategoriaPrecos({ key, label: newCat.label.trim(), emoji: newCat.emoji, custom: true });
+    setCategorias(updated);
+    setTab(key);
+    setNewCat({ label: "", emoji: "\u{1F4E6}" });
+    setShowNewCat(false);
+  }
+
+  function handleRemoveCategoria(key: string) {
+    if (!confirm(`Remover categoria "${categorias.find((c) => c.key === key)?.label}"?`)) return;
+    const updated = removeCategoriaPrecos(key);
+    setCategorias(updated);
+    if (tab === key) setTab("IPHONE");
+  }
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -59,7 +74,7 @@ export default function AdminPrecosPage() {
   }, [password, fetchData]);
 
   // Inferir categoria pelo nome do modelo
-  function inferCategoria(modelo: string): CategoriaKey {
+  function inferCategoria(modelo: string): string {
     const m = modelo.toUpperCase();
     if (m.includes("IPHONE") || m.includes("PHONE")) return "IPHONE";
     if (m.includes("MACBOOK") || m.includes("MAC MINI") || m.includes("IMAC")) return "MACBOOK";
@@ -233,7 +248,7 @@ export default function AdminPrecosPage() {
     return a.localeCompare(b);
   });
 
-  const catInfo = CATEGORIAS.find((c) => c.key === tab)!;
+  const catInfo = categorias.find((c) => c.key === tab) || { key: tab, label: tab, emoji: "\u{1F4E6}" };
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -262,24 +277,88 @@ export default function AdminPrecosPage() {
       </div>
 
       {/* Tabs por categoria */}
-      <div className="flex gap-2 flex-wrap">
-        {CATEGORIAS.map((c) => {
+      <div className="flex gap-2 flex-wrap items-center">
+        {categorias.map((c) => {
           const count = data.filter((r) => (r.categoria || inferCategoria(r.modelo)) === c.key).length;
           return (
-            <button
-              key={c.key}
-              onClick={() => { setTab(c.key); setShowAdd(false); }}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
-                tab === c.key
-                  ? "bg-[#E8740E] text-white"
-                  : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
-              }`}
-            >
-              {c.emoji} {c.label} {count > 0 ? `(${count})` : ""}
-            </button>
+            <div key={c.key} className="relative group">
+              <button
+                onClick={() => { setTab(c.key); setShowAdd(false); setShowNewCat(false); }}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                  tab === c.key
+                    ? "bg-[#E8740E] text-white"
+                    : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+                }`}
+              >
+                {c.emoji} {c.label} {count > 0 ? `(${count})` : ""}
+              </button>
+              {c.custom && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRemoveCategoria(c.key); }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remover categoria"
+                >
+                  x
+                </button>
+              )}
+            </div>
           );
         })}
+        <button
+          onClick={() => setShowNewCat(!showNewCat)}
+          className="px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+          title="Criar nova categoria"
+        >
+          + Categoria
+        </button>
       </div>
+
+      {/* Modal criar categoria */}
+      {showNewCat && (
+        <div className="bg-white border border-[#E8740E] rounded-2xl p-4 shadow-sm space-y-3">
+          <h3 className="font-semibold text-sm text-[#1D1D1F]">Nova Categoria</h3>
+          <div className="flex gap-3 items-end">
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</p>
+              <div className="flex gap-1 flex-wrap max-w-xs">
+                {EMOJI_OPTIONS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setNewCat({ ...newCat, emoji: e })}
+                    className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors ${
+                      newCat.emoji === e ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] hover:bg-[#E8E8ED]"
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome da Categoria</p>
+              <input
+                value={newCat.label}
+                onChange={(e) => setNewCat({ ...newCat, label: e.target.value })}
+                placeholder="Ex: Cabos, Samsung, etc."
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                onKeyDown={(e) => e.key === "Enter" && handleAddCategoria()}
+              />
+            </div>
+            <button
+              onClick={handleAddCategoria}
+              className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
+            >
+              Criar
+            </button>
+            <button
+              onClick={() => setShowNewCat(false)}
+              className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {importMsg && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm">

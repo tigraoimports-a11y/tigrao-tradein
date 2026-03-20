@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
+import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
+import type { Categoria } from "@/lib/categorias";
 
 interface ProdutoEstoque {
   id: string;
@@ -27,7 +29,7 @@ interface Fornecedor {
   observacao: string | null;
 }
 
-const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
+const DEFAULT_CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
 const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as const;
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -111,6 +113,35 @@ export default function EstoquePage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
+
+  // Categorias dinâmicas
+  const [categoriasState, setCategoriasState] = useState<Categoria[]>(() => getCategoriasEstoque());
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCat, setNewCat] = useState({ label: "", emoji: "\u{1F4E6}" });
+  const CATEGORIAS = categoriasState.map((c) => c.key);
+  const catLabelsFromState: Record<string, string> = {};
+  categoriasState.forEach((c) => { catLabelsFromState[c.key] = c.label; });
+  // Merge com CAT_LABELS estático para backwards compat
+  const dynamicCatLabels: Record<string, string> = { ...CAT_LABELS, ...catLabelsFromState };
+
+  function handleAddCategoriaEstoque() {
+    if (!newCat.label.trim()) return;
+    const key = newCat.label.trim().toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z0-9_]/g, "");
+    if (!key) return;
+    const updated = addCategoriaEstoque({ key, label: newCat.label.trim(), emoji: newCat.emoji, custom: true });
+    setCategoriasState(updated);
+    setNewCat({ label: "", emoji: "\u{1F4E6}" });
+    setShowNewCat(false);
+  }
+
+  function handleRemoveCategoriaEstoque(key: string) {
+    const cat = categoriasState.find((c) => c.key === key);
+    if (!cat?.custom) return;
+    if (!confirm(`Remover categoria "${cat.label}"?`)) return;
+    const updated = removeCategoriaEstoque(key);
+    setCategoriasState(updated);
+    if (filterCat === key) setFilterCat("");
+  }
 
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
@@ -385,12 +416,55 @@ export default function EstoquePage() {
           <div className="flex gap-2 items-center flex-wrap">
             <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs">
               <option value="">Todas categorias</option>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
             </select>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-xs w-40 focus:outline-none focus:border-[#E8740E]" />
+            <button
+              onClick={() => setShowNewCat(!showNewCat)}
+              className="px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+            >
+              + Categoria
+            </button>
           </div>
         )}
       </div>
+
+      {/* Form criar categoria */}
+      {showNewCat && (
+        <div className="bg-white border border-[#E8740E] rounded-2xl p-4 shadow-sm space-y-3">
+          <h3 className="font-semibold text-sm text-[#1D1D1F]">Nova Categoria de Estoque</h3>
+          <div className="flex gap-3 items-end flex-wrap">
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</p>
+              <div className="flex gap-1 flex-wrap max-w-xs">
+                {EMOJI_OPTIONS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setNewCat({ ...newCat, emoji: e })}
+                    className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors ${
+                      newCat.emoji === e ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] hover:bg-[#E8E8ED]"
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome da Categoria</p>
+              <input
+                value={newCat.label}
+                onChange={(e) => setNewCat({ ...newCat, label: e.target.value })}
+                placeholder="Ex: Samsung, Cabos, etc."
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                onKeyDown={(e) => e.key === "Enter" && handleAddCategoriaEstoque()}
+              />
+            </div>
+            <button onClick={handleAddCategoriaEstoque} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors">Criar</button>
+            <button onClick={() => setShowNewCat(false)} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors">Cancelar</button>
+          </div>
+        </div>
+      )}
 
       {tab === "novo" ? (
         /* FORMULÁRIO */
@@ -400,7 +474,7 @@ export default function EstoquePage() {
           {/* Row 1: Categoria + Tipo */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => { set("categoria", e.target.value); set("produto", ""); }} className={inputCls}>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
             </select></div>
             <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
               <option value="NOVO">Novo (Lacrado)</option>
@@ -572,7 +646,7 @@ export default function EstoquePage() {
             Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className="text-lg font-bold text-[#1D1D1F] flex items-center gap-2">
-                  {CAT_LABELS[cat] || cat}
+                  {dynamicCatLabels[cat] || cat}
                   <span className="text-xs font-normal text-[#86868B]">
                     {Object.values(modelos).flat().length} produtos | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
@@ -687,7 +761,7 @@ export default function EstoquePage() {
                                             autoFocus
                                           >
                                             <option value="">Selecionar...</option>
-                                            {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+                                            {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
                                           </select>
                                         ) : (
                                           <button
