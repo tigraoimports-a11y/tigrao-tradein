@@ -45,7 +45,7 @@ export default function VendasPage() {
     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-    entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
+    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
     // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
@@ -181,7 +181,8 @@ export default function VendasPage() {
   const preco = parseFloat(form.preco_vendido) || 0;
   const valorTroca = parseFloat(form.produto_na_troca) || 0;
   const entradaPix = parseFloat(form.entrada_pix) || 0;
-  const valorCartao = preco - valorTroca - entradaPix;
+  const entradaEspecie = parseFloat(form.entrada_especie) || 0;
+  const valorCartao = preco - valorTroca - entradaPix - entradaEspecie;
   const lucro = preco - custo;
   const margem = preco > 0 ? (lucro / preco) * 100 : 0;
   const parcelas = parseInt(form.qnt_parcelas) || 0;
@@ -194,6 +195,7 @@ export default function VendasPage() {
   // Resumo financeiro
   const temTroca = valorTroca > 0;
   const temEntradaPix = entradaPix > 0;
+  const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK";
 
   const handleSubmit = async () => {
@@ -234,6 +236,7 @@ export default function VendasPage() {
       produto_na_troca: temTroca ? String(valorTroca) : null,
       entrada_pix: entradaPix,
       banco_pix: temEntradaPix ? (form.banco_pix || "ITAU") : null,
+      entrada_especie: entradaEspecie,
       banco_2nd: form.banco_2nd || null,
       banco_alt: form.banco_alt || null,
       parc_alt: parseInt(form.parc_alt) || null,
@@ -275,7 +278,7 @@ export default function VendasPage() {
         cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
         custo: "", preco_vendido: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-        entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
+        entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
         parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
         troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
       });
@@ -592,20 +595,20 @@ export default function VendasPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
                 <option value="">— Definir depois —</option>
-                <option value="PIX">PIX (Itau/Infinite) — D+0</option>
+                <option value="PIX">PIX — D+0</option>
+                <option value="CARTAO">Maquina Cartao — D+1</option>
                 <option value="LINK">Link Mercado Pago — D+0</option>
-                <option value="CARTAO">Maquina Cartao (Itau/Infinite) — D+1</option>
-                <option value="ESPECIE">Espécie (Dinheiro) — D+0</option>
+                <option value="ESPECIE">Especie (Dinheiro) — D+0</option>
                 <option value="FIADO">Fiado</option>
               </select></div>
 
-              {form.forma === "PIX" && form.forma && (
+              {form.forma === "PIX" && (
                 <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                   <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                 </select></div>
               )}
 
-              {(form.forma === "CARTAO") && (
+              {form.forma === "CARTAO" && (
                 <>
                   <div><p className={labelCls}>Maquina</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option>
@@ -626,18 +629,39 @@ export default function VendasPage() {
               )}
             </div>
 
-            {/* Entrada PIX (pagamento misto) — só mostra se forma foi selecionada */}
-            {form.forma && (
-            <div className="border-t border-[#E8E8ED] pt-3">
-              <p className="text-xs text-[#86868B] mb-2">Pagamento misto? (cliente deu PIX + cartao/link)</p>
+            {/* Pagamento misto — combinações extras */}
+            {form.forma && form.forma !== "FIADO" && (
+            <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
+              <p className="text-xs text-[#86868B] font-semibold">Pagamento misto? (combine valores abaixo)</p>
+
+              {/* Entrada PIX */}
+              {form.forma !== "PIX" && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Entrada no PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => set("entrada_pix", e.target.value)} placeholder="0" className={inputCls} /></div>
+                <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => set("entrada_pix", e.target.value)} placeholder="0" className={inputCls} /></div>
                 {entradaPix > 0 && (
                   <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                   </select></div>
                 )}
               </div>
+              )}
+
+              {/* Entrada Especie */}
+              {form.forma !== "ESPECIE" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div><p className={labelCls}>Entrada Especie (R$)</p><input type="number" value={form.entrada_especie} onChange={(e) => set("entrada_especie", e.target.value)} placeholder="0" className={inputCls} /></div>
+              </div>
+              )}
+
+              {/* Resumo misto */}
+              {(entradaPix > 0 || entradaEspecie > 0) && (
+                <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                  {entradaPix > 0 && <span>PIX: <strong className="text-[#1D1D1F]">{fmt(entradaPix)}</strong></span>}
+                  {entradaEspecie > 0 && <span>Especie: <strong className="text-[#1D1D1F]">{fmt(entradaEspecie)}</strong></span>}
+                  {valorTroca > 0 && <span>Troca: <strong className="text-[#1D1D1F]">{fmt(valorTroca)}</strong></span>}
+                  <span>Restante ({form.forma}): <strong className="text-[#E8740E]">{fmt(Math.max(0, valorCartao))}</strong></span>
+                </div>
+              )}
             </div>
             )}
           </div>

@@ -31,6 +31,7 @@ export interface Venda {
   local: string | null;
   produto_na_troca: string | null;
   entrada_pix: number;
+  entrada_especie: number;
   banco_pix: string | null;
   banco_2nd: string | null;
   qnt_parcelas: number | null;
