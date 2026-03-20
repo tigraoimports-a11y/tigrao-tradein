@@ -167,6 +167,49 @@ export default function EstoquePage() {
     dragOverRef.current = null;
   }
 
+  // Drag-and-drop para cards (modelo inteiro)
+  const dragCardRef = useRef<string | null>(null);
+  const dragOverCardRef = useRef<string | null>(null);
+  const [dragCardKey, setDragCardKey] = useState<string | null>(null);
+  // Guardar ordem dos cards por categoria em localStorage
+  function getCardOrder(cat: string): string[] {
+    if (typeof window === "undefined") return [];
+    try { const r = localStorage.getItem(`tigrao_estoque_card_order_${cat}`); return r ? JSON.parse(r) : []; } catch { return []; }
+  }
+  function saveCardOrder(cat: string, keys: string[]) {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
+  }
+  function sortByCardOrder(entries: [string, ProdutoEstoque[]][], cat: string): [string, ProdutoEstoque[]][] {
+    const order = getCardOrder(cat);
+    if (!order.length) return entries;
+    return [...entries].sort(([a], [b]) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  }
+  function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
+    if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
+      setDragCardKey(null); return;
+    }
+    const keys = modeloEntries.map(([m]) => m);
+    const fromIdx = keys.indexOf(dragCardRef.current);
+    const toIdx = keys.indexOf(dragOverCardRef.current);
+    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); return; }
+    keys.splice(fromIdx, 1);
+    keys.splice(toIdx, 0, dragCardRef.current);
+    saveCardOrder(cat, keys);
+    // Forçar re-render
+    setEstoque((prev) => [...prev]);
+    setDragCardKey(null);
+    dragCardRef.current = null;
+    dragOverCardRef.current = null;
+  }
+
   // Duplicar produto do estoque
   async function handleDuplicar(p: ProdutoEstoque) {
     const novaCor = prompt("Cor do novo produto:", p.cor || "");
@@ -706,7 +749,10 @@ export default function EstoquePage() {
                   </span>
                 </h2>
 
-                {Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, items]) => {
+                {(() => {
+                  const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
+                  const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
+                  return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem cor)
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
@@ -714,11 +760,23 @@ export default function EstoquePage() {
                     byProduto[p.produto].push(p);
                   });
                   const produtoEntries = Object.entries(byProduto).sort(([a], [b]) => a.localeCompare(b));
+                  const isCardDragging = dragCardKey === modelo;
 
                   return (
-                  <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-5 py-2.5 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
-                      <h3 className="font-semibold text-[#1D1D1F] text-sm">{modelo}</h3>
+                  <div
+                    key={modelo}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
+                    onDragEnter={(e) => { e.stopPropagation(); dragOverCardRef.current = modelo; }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
+                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm transition-opacity ${isCardDragging ? "opacity-40 border-[#E8740E]" : "border-[#D2D2D7]"}`}
+                  >
+                    <div className="px-5 py-2.5 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between cursor-grab active:cursor-grabbing">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#C7C7CC] text-xs select-none">⠿</span>
+                        <h3 className="font-semibold text-[#1D1D1F] text-sm">{modelo}</h3>
+                      </div>
                       <span className="text-[10px] text-[#86868B]">{items.length} var. | {items.reduce((s, p) => s + p.qnt, 0)} un. | {fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
                     </div>
                     <div className="overflow-x-auto">
@@ -752,10 +810,10 @@ export default function EstoquePage() {
                                     <tr
                                       key={p.id}
                                       draggable
-                                      onDragStart={() => { dragItemRef.current = p.id; setDragId(p.id); }}
-                                      onDragEnter={() => { dragOverRef.current = p.id; }}
-                                      onDragOver={(e) => e.preventDefault()}
-                                      onDragEnd={handleEstoqueDragEnd}
+                                      onDragStart={(e) => { e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
+                                      onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
+                                      onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                      onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
                                       className={`border-b border-[#F5F5F7] last:border-0 transition-colors ${dragId === p.id ? "opacity-40 bg-[#FFF3E8]" : p.qnt === 0 ? "bg-red-50/50 hover:bg-[#F5F5F7]" : p.qnt === 1 ? "bg-yellow-50/50 hover:bg-[#F5F5F7]" : "hover:bg-[#F5F5F7]"}`}
                                     >
                                       <td className="pl-2 py-2.5 cursor-grab active:cursor-grabbing text-[#C7C7CC] select-none w-4">
@@ -860,7 +918,8 @@ export default function EstoquePage() {
                     </div>
                   </div>
                   );
-                })}
+                });
+                })()}
               </div>
             ))
           )}

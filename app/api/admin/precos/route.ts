@@ -58,15 +58,23 @@ export async function POST(req: NextRequest) {
         APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
       };
       const emoji = catEmoji[categoria || "IPHONE"] || "📱";
-      const msg = `🐯 *ALTERAÇÃO DE PREÇO — TigrãoImports*\n\n${emoji} *${modelo} ${armazenamento}*\n💰 Novo preço PIX: *R$ ${Number(preco_pix).toLocaleString("pt-BR")}*\n📌 Status: ${status ?? "ativo"}\n\n⚠️ _Atualizar arte do Instagram_`;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      // Escapar caracteres especiais para HTML
+      const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const msg = `🐯 <b>ALTERAÇÃO DE PREÇO — TigrãoImports</b>\n\n${emoji} <b>${escHtml(modelo)} ${escHtml(armazenamento)}</b>\n💰 Novo preço PIX: <b>R$ ${Number(preco_pix).toLocaleString("pt-BR")}</b>\n📌 Status: ${escHtml(status ?? "ativo")}\n\n⚠️ <i>Atualizar arte do Instagram</i>`;
+      const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "Markdown" }),
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: "HTML" }),
       });
+      if (!tgRes.ok) {
+        const tgErr = await tgRes.text();
+        console.error("Telegram send error:", tgRes.status, tgErr);
+      }
+    } else {
+      console.warn("Telegram env vars missing: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set");
     }
-  } catch {
-    // Telegram notification failure is non-critical
+  } catch (err) {
+    console.error("Telegram notification failed:", err);
   }
 
   return NextResponse.json({ ok: true });
