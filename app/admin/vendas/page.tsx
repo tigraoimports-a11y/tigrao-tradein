@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { getTaxa, calcularBruto, calcularRecebimento } from "@/lib/taxas";
+import { getTaxa, calcularBruto, calcularLiquido, calcularRecebimento } from "@/lib/taxas";
 import type { Venda } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -43,7 +43,7 @@ export default function VendasPage() {
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
-    custo: "", preco_vendido: "", banco: "ITAU", forma: "",
+    custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
@@ -245,7 +245,7 @@ export default function VendasPage() {
       recebimento: !form.forma ? "D+0" : form.forma === "PIX" || form.forma === "ESPECIE" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
       qnt_parcelas: parcelas || null,
       bandeira: form.bandeira || null,
-      valor_comprovante: comprovante || null,
+      valor_comprovante: parseFloat(form.valor_comprovante_input) || comprovante || null,
       local: form.local || null,
       produto_na_troca: temTroca ? String(valorTroca) : null,
       entrada_pix: entradaPix,
@@ -290,7 +290,7 @@ export default function VendasPage() {
       setForm({
         data: new Date().toISOString().split("T")[0],
         cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
-        custo: "", preco_vendido: "", banco: "ITAU", forma: "",
+        custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
         parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
@@ -637,10 +637,32 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Bandeira</p><select value={form.bandeira} onChange={(e) => set("bandeira", e.target.value)} className={selectCls}>
                     <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
                   </select></div>
-                  {taxa > 0 && <div className="flex items-end text-sm gap-3">
-                    <span className="text-[#86868B]">Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                    <span className="text-[#86868B]">Comprovante: <strong>{fmt(comprovante)}</strong></span>
-                  </div>}
+                  {taxa > 0 && (
+                    <>
+                      <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
+                        const comp = e.target.value;
+                        set("valor_comprovante_input", comp);
+                        const compVal = parseFloat(comp) || 0;
+                        if (compVal > 0 && taxa > 0) {
+                          const liquidoCartao = calcularLiquido(compVal, taxa);
+                          const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
+                          setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                        }
+                      }} placeholder="Valor da maquina" className={inputCls} /></div>
+                      <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                        <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                          <>
+                            <span>Liquido cartao: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
+                            {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
+                            {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
+                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
