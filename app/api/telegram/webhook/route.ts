@@ -495,6 +495,7 @@ export async function POST(req: NextRequest) {
       }
 
       case "/noite": {
+        try {
         const report = await gerarNoite(supabase, hoje);
 
         // Fetch extra data for enhanced report
@@ -621,7 +622,19 @@ export async function POST(req: NextRequest) {
         const totalSaldos = report.esp_itau + report.esp_inf + report.esp_mp + report.esp_especie;
         lines.push(`  <b>Total: ${fmtBRL(totalSaldos)}</b>`);
 
-        await sendTelegramMessage(lines.join("\n"), chatId);
+        const fullMsg = lines.join("\n");
+        // Telegram limit is 4096 chars — split if needed
+        if (fullMsg.length > 4000) {
+          const mid = fullMsg.lastIndexOf("\n\n", 4000);
+          await sendTelegramMessage(fullMsg.slice(0, mid > 0 ? mid : 4000), chatId);
+          await sendTelegramMessage(fullMsg.slice(mid > 0 ? mid + 2 : 4000), chatId);
+        } else {
+          await sendTelegramMessage(fullMsg, chatId);
+        }
+        } catch (noiteErr) {
+          console.error("/noite error:", noiteErr);
+          await sendTelegramMessage(`❌ Erro no /noite: ${String(noiteErr)}`, chatId);
+        }
         break;
       }
 
