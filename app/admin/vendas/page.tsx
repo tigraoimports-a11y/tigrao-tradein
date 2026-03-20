@@ -943,32 +943,29 @@ export default function VendasPage() {
                                               onClick={async (e) => {
                                                 e.stopPropagation();
                                                 setEditSaving(true);
-                                                const updates: Record<string, unknown> = { id: v.id };
-                                                if (ef.banco !== v.banco) updates.banco = ef.banco;
-                                                if (ef.forma !== v.forma) updates.forma = ef.forma;
-                                                if (ef.recebimento !== v.recebimento) updates.recebimento = ef.recebimento;
-                                                if (ef.preco_vendido !== String(v.preco_vendido)) {
-                                                  updates.preco_vendido = parseFloat(ef.preco_vendido) || 0;
-                                                  updates.lucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
-                                                  const pv = parseFloat(ef.preco_vendido) || 0;
-                                                  const c = parseFloat(ef.custo) || 0;
-                                                  updates.margem_pct = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
-                                                }
-                                                if (ef.custo !== String(v.custo)) {
-                                                  updates.custo = parseFloat(ef.custo) || 0;
-                                                  updates.lucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
-                                                  const pv = parseFloat(ef.preco_vendido) || 0;
-                                                  const c = parseFloat(ef.custo) || 0;
-                                                  updates.margem_pct = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
-                                                }
-                                                if (ef.qnt_parcelas !== String(v.qnt_parcelas || "")) updates.qnt_parcelas = parseInt(ef.qnt_parcelas) || null;
-                                                if (ef.bandeira !== (v.bandeira || "")) updates.bandeira = ef.bandeira || null;
-                                                if (ef.banco_pix !== (v.banco_pix || "")) updates.banco_pix = ef.banco_pix || null;
-                                                if (ef.entrada_pix !== String(v.entrada_pix || 0)) updates.entrada_pix = parseFloat(ef.entrada_pix) || 0;
-                                                if (ef.entrada_especie !== String(v.entrada_especie || 0)) updates.entrada_especie = parseFloat(ef.entrada_especie) || 0;
-                                                if (ef.produto_na_troca !== String(v.produto_na_troca || 0)) updates.produto_na_troca = parseFloat(ef.produto_na_troca) || 0;
-                                                if (ef.cliente !== v.cliente) updates.cliente = ef.cliente;
-                                                if (ef.produto !== v.produto) updates.produto = ef.produto;
+                                                // Sempre enviar todos os campos editáveis + recalcular lucro/margem
+                                                const pv = parseFloat(ef.preco_vendido) || 0;
+                                                const c = parseFloat(ef.custo) || 0;
+                                                const newLucro = pv - c;
+                                                const newMargem = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
+                                                const updates: Record<string, unknown> = {
+                                                  id: v.id,
+                                                  cliente: ef.cliente,
+                                                  produto: ef.produto,
+                                                  custo: c,
+                                                  preco_vendido: pv,
+                                                  lucro: newLucro,
+                                                  margem_pct: newMargem,
+                                                  banco: ef.banco,
+                                                  forma: ef.forma,
+                                                  recebimento: ef.recebimento,
+                                                  qnt_parcelas: parseInt(ef.qnt_parcelas) || null,
+                                                  bandeira: ef.bandeira || null,
+                                                  entrada_pix: parseFloat(ef.entrada_pix) || 0,
+                                                  entrada_especie: parseFloat(ef.entrada_especie) || 0,
+                                                  banco_pix: ef.banco_pix || null,
+                                                  produto_na_troca: ef.produto_na_troca || null,
+                                                };
 
                                                 if (Object.keys(updates).length <= 1) {
                                                   setEditingId(null);
@@ -982,26 +979,23 @@ export default function VendasPage() {
                                                   body: JSON.stringify(updates),
                                                 });
                                                 if (res.ok) {
-                                                  const newLucro = (parseFloat(ef.preco_vendido) || 0) - (parseFloat(ef.custo) || 0);
-                                                  const newPv = parseFloat(ef.preco_vendido) || 0;
-                                                  const newMargem = newPv > 0 ? Math.round(((newPv - (parseFloat(ef.custo) || 0)) / newPv) * 1000) / 10 : 0;
                                                   setVendas(prev => prev.map(r => r.id === v.id ? {
                                                     ...r,
+                                                    cliente: ef.cliente,
+                                                    produto: ef.produto,
+                                                    custo: c,
+                                                    preco_vendido: pv,
+                                                    lucro: newLucro,
+                                                    margem_pct: newMargem,
                                                     banco: ef.banco as Venda["banco"],
                                                     forma: ef.forma as Venda["forma"],
                                                     recebimento: ef.recebimento as Venda["recebimento"],
-                                                    preco_vendido: parseFloat(ef.preco_vendido) || 0,
-                                                    custo: parseFloat(ef.custo) || 0,
-                                                    lucro: newLucro,
-                                                    margem_pct: newMargem,
                                                     qnt_parcelas: parseInt(ef.qnt_parcelas) || null,
                                                     bandeira: (ef.bandeira || null) as Venda["bandeira"],
-                                                    banco_pix: ef.banco_pix || null,
                                                     entrada_pix: parseFloat(ef.entrada_pix) || 0,
                                                     entrada_especie: parseFloat(ef.entrada_especie) || 0,
+                                                    banco_pix: ef.banco_pix || null,
                                                     produto_na_troca: ef.produto_na_troca || null,
-                                                    cliente: ef.cliente,
-                                                    produto: ef.produto,
                                                   } : r));
                                                   setMsg("Venda atualizada!");
                                                 } else {
