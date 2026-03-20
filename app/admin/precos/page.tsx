@@ -426,16 +426,18 @@ export default function AdminPrecosPage() {
                 <input
                   value={newProd.modelo}
                   onChange={(e) => setNewProd({ ...newProd, modelo: e.target.value })}
-                  placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : "Nome do produto"}
+                  placeholder={tab === "IPHONE" ? "iPhone 17 Pro" : tab === "IPAD" ? "iPad Air M3" : tab === "APPLE_WATCH" ? "Apple Watch Series 10" : tab === "AIRPODS" ? "AirPods 4" : "Nome do produto"}
                   className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
                 />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Variação</p>
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">
+                  {tab === "IPAD" || tab === "IPHONE" ? "Armazenamento" : "Variação"}
+                </p>
                 <input
                   value={newProd.armazenamento}
                   onChange={(e) => setNewProd({ ...newProd, armazenamento: e.target.value })}
-                  placeholder="256GB / Único / etc"
+                  placeholder={tab === "IPAD" || tab === "IPHONE" ? "256GB" : tab === "APPLE_WATCH" ? "42mm GPS" : tab === "AIRPODS" ? "ANC / Único" : "256GB / Único / etc"}
                   className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
                 />
               </div>
@@ -497,7 +499,9 @@ export default function AdminPrecosPage() {
                       <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
                     </>
                   ) : (
-                    <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Variação</th>
+                    <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">
+                      {tab === "IPAD" || tab === "IPHONE" ? "Armazenamento" : "Variação"}
+                    </th>
                   )}
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Status</th>
