@@ -45,7 +45,7 @@ export default function VendasPage() {
   });
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -63,8 +63,33 @@ export default function VendasPage() {
 
   useEffect(() => { if (password) fetchEstoque(); }, [password, fetchEstoque]);
 
-  const categorias = [...new Set(estoque.map(p => p.categoria))].sort();
-  const produtosFiltrados = catSel ? estoque.filter(p => p.categoria === catSel) : [];
+  // Gerar categorias separadas por tipo (Lacrado vs Seminovo)
+  const categorias = (() => {
+    const cats: { key: string; label: string }[] = [];
+    const catSet = new Set<string>();
+    for (const p of estoque) {
+      const tipo = (p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+      const key = `${p.categoria}__${tipo}`;
+      if (!catSet.has(key)) {
+        catSet.add(key);
+        const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", OUTROS: "Outros" };
+        const tipoLabel = tipo === "SEMINOVO" ? "Seminovos" : "Lacrados";
+        cats.push({ key, label: `${catLabel[p.categoria] || p.categoria} — ${tipoLabel}` });
+      }
+    }
+    // Ordenar: Lacrados primeiro, depois Seminovos, dentro de cada tipo por nome
+    return cats.sort((a, b) => {
+      const aS = a.key.includes("SEMINOVO") ? 1 : 0;
+      const bS = b.key.includes("SEMINOVO") ? 1 : 0;
+      if (aS !== bS) return aS - bS;
+      return a.label.localeCompare(b.label);
+    });
+  })();
+
+  const produtosFiltrados = catSel ? (() => {
+    const [cat, tipo] = catSel.split("__");
+    return estoque.filter(p => p.categoria === cat && ((p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO") === tipo);
+  })() : [];
 
   const fetchVendas = useCallback(async () => {
     setLoading(true);
@@ -433,7 +458,7 @@ export default function VendasPage() {
                     <p className={labelCls}>Categoria</p>
                     <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
                       <option value="">Selecionar...</option>
-                      {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                      {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
                   <div><p className={labelCls}>Fornecedor</p><input value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls} /></div>
