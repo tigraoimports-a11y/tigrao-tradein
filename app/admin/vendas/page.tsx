@@ -206,18 +206,19 @@ export default function VendasPage() {
   const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
   const recebimento = form.forma ? calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null) : "—";
 
-  // Auto-recalcular preco_vendido quando qualquer componente muda
-  useEffect(() => {
-    const compVal = parseFloat(form.valor_comprovante_input) || 0;
-    if (compVal > 0 && taxa > 0) {
-      const liquidoCartao = calcularLiquido(compVal, taxa);
-      const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
-      if (String(totalLiq) !== form.preco_vendido) {
-        setForm(f => ({ ...f, preco_vendido: String(totalLiq) }));
-      }
+  // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
+  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; comp?: string }) => {
+    const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
+    const curTaxa = taxa;
+    if (compVal > 0 && curTaxa > 0) {
+      const liqCartao = calcularLiquido(compVal, curTaxa);
+      const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
+      const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
+      const trc = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
+      return String(Math.round(liqCartao + pix + esp + trc));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, taxa]);
+    return undefined;
+  };
 
   // Resumo financeiro
   const temTroca = valorTroca > 0;
@@ -692,7 +693,11 @@ export default function VendasPage() {
               {/* Entrada PIX */}
               {form.forma !== "PIX" && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => set("entrada_pix", e.target.value)} placeholder="0" className={inputCls} /></div>
+                <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => {
+                  const v = e.target.value;
+                  const newVendido = recalcVendido({ pix: v });
+                  setForm(f => ({ ...f, entrada_pix: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+                }} placeholder="0" className={inputCls} /></div>
                 {entradaPix > 0 && (
                   <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
@@ -704,7 +709,11 @@ export default function VendasPage() {
               {/* Entrada Especie */}
               {form.forma !== "ESPECIE" && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Entrada Especie (R$)</p><input type="number" value={form.entrada_especie} onChange={(e) => set("entrada_especie", e.target.value)} placeholder="0" className={inputCls} /></div>
+                <div><p className={labelCls}>Entrada Especie (R$)</p><input type="number" value={form.entrada_especie} onChange={(e) => {
+                  const v = e.target.value;
+                  const newVendido = recalcVendido({ especie: v });
+                  setForm(f => ({ ...f, entrada_especie: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+                }} placeholder="0" className={inputCls} /></div>
               </div>
               )}
 
@@ -725,7 +734,11 @@ export default function VendasPage() {
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <p className="text-sm font-bold text-[#1D1D1F]">Cliente deu produto na troca?</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => set("produto_na_troca", e.target.value)} placeholder="0" className={inputCls} /></div>
+              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => {
+                const v = e.target.value;
+                const newVendido = recalcVendido({ troca: v });
+                setForm(f => ({ ...f, produto_na_troca: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+              }} placeholder="0" className={inputCls} /></div>
               {temTroca && (
                 <>
                   <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
