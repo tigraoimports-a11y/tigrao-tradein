@@ -13,7 +13,7 @@ export default function VendasPage() {
   const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"nova" | "andamento" | "finalizadas">("nova");
+  const [tab, setTab] = useState<"nova" | "andamento" | "hoje" | "finalizadas">("nova");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -382,18 +382,19 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0 },
-            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length },
-            { key: "finalizadas", label: "Finalizadas", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length },
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]" },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500" },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === now.toISOString().split("T")[0]).length, color: "bg-blue-500" },
+            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
           ] as const).map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? t.key === "andamento" ? "bg-yellow-500 text-white" : t.key === "finalizadas" ? "bg-green-600 text-white" : "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
           ))}
         </div>
 
-        {/* Filtros de data */}
-        {tab !== "nova" && (
+        {/* Filtros de data — só no histórico e em andamento */}
+        {(tab === "andamento" || tab === "finalizadas") && (
           <div className="flex gap-1.5 items-center ml-auto">
             <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
               {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
@@ -414,6 +415,7 @@ export default function VendasPage() {
       </div>
 
       {tab === "nova" ? (
+        /* Form de Nova Venda */
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
@@ -808,8 +810,11 @@ export default function VendasPage() {
       ) : (
         /* Vendas Em Andamento / Finalizadas */
         (() => {
+          const hoje = now.toISOString().split("T")[0];
           const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : tab === "hoje"
+            ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
           const filtered = [...filteredRaw].sort((a, b) => {
             if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
@@ -818,7 +823,7 @@ export default function VendasPage() {
             if (ordenar === "cliente") return (a.cliente || "").localeCompare(b.cliente || "");
             return 0;
           });
-          const titulo = tab === "andamento" ? "Vendas em Andamento" : "Vendas Finalizadas";
+          const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : "Histórico de Vendas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
 
@@ -840,7 +845,7 @@ export default function VendasPage() {
                 </div>
                 <div className="flex gap-3 text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
-                  {tab === "finalizadas" && filtered.length > 0 && (
+                  {(tab === "finalizadas" || tab === "hoje") && filtered.length > 0 && (
                     <>
                       <span>Vendido: <strong className="text-[#1D1D1F]">{fmt(totalVendido)}</strong></span>
                       <span>Lucro: <strong className={totalLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(totalLucro)}</strong></span>
@@ -862,7 +867,7 @@ export default function VendasPage() {
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
-                        <tr><td colSpan={12} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : "finalizada"}</td></tr>
+                        <tr><td colSpan={12} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</td></tr>
                       ) : filtered.map((v) => {
                         const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
