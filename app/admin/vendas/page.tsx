@@ -28,14 +28,14 @@ export default function VendasPage() {
   const isAdmin = user?.role === "admin";
 
   const [msg, setMsg] = useState("");
-  const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; email: string; origem: string; tipo: string } | null>(null);
+  const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; cnpj: string; email: string; endereco: string; pessoa: string; origem: string; tipo: string } | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState("");
 
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
-    cliente: "", cpf: "", email: "", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", banco_2nd: "", banco_alt: "",
@@ -178,7 +178,9 @@ export default function VendasPage() {
       data: form.data,
       cliente: form.cliente,
       cpf: form.cpf || null,
+      cnpj: form.cnpj || null,
       email: form.email || null,
+      endereco: form.endereco || null,
       origem: form.tipo === "ATACADO" ? "ATACADO" : form.origem,
       tipo: temTroca ? "UPGRADE" : form.tipo,
       produto: form.produto,
@@ -233,7 +235,7 @@ export default function VendasPage() {
       setCatSel("");
       setEstoqueId("");
       setProdutoManual(false);
-      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, email: form.email, origem: form.origem, tipo: form.tipo });
+      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo });
       fetchVendas();
       fetchEstoque();
     } else {
@@ -245,12 +247,18 @@ export default function VendasPage() {
   // Parser de texto colado (formulário WhatsApp)
   const parseClienteText = (text: string) => {
     const lines = text.split("\n").map(l => l.trim());
-    let nome = "", cpf = "", email = "";
-    for (const line of lines) {
+    let nome = "", cpf = "", cnpj = "", email = "", endereco = "";
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const lower = line.toLowerCase();
-      // Nome completo
-      if (lower.includes("nome completo") || lower.includes("nome:")) {
-        nome = line.replace(/.*(?:nome completo|nome)\s*[:：]\s*/i, "").trim();
+      // Nome completo / Razão Social
+      if (lower.includes("nome completo") || lower.includes("nome:") || lower.includes("razão social") || lower.includes("razao social")) {
+        nome = line.replace(/.*(?:nome completo|razão social|razao social|nome)\s*[:：]\s*/i, "").trim();
+      }
+      // CNPJ
+      if (lower.includes("cnpj")) {
+        const cnpjMatch = line.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2}/);
+        if (cnpjMatch) cnpj = cnpjMatch[0];
       }
       // CPF
       if (lower.includes("cpf")) {
@@ -262,18 +270,29 @@ export default function VendasPage() {
         const emailMatch = line.match(/[\w.+-]+@[\w.-]+\.\w+/);
         if (emailMatch) email = emailMatch[0];
       }
+      // Endereço
+      if (lower.includes("end.:") || lower.includes("endereço") || lower.includes("endereco") || lower.includes("end:")) {
+        endereco = line.replace(/.*(?:end\.|endereço|endereco|end)\s*[:：]\s*/i, "").trim();
+        // Pegar próxima linha se existir (endereço pode ter 2 linhas)
+        if (i + 1 < lines.length && !lines[i + 1].includes(":") && !lines[i + 1].startsWith("✅") && lines[i + 1].length > 3) {
+          endereco += " " + lines[i + 1].trim();
+        }
+      }
     }
-    return { nome, cpf, email };
+    return { nome, cpf, cnpj, email, endereco };
   };
 
   const handlePasteConfirm = () => {
-    const { nome, cpf, email } = parseClienteText(pasteText);
+    const { nome, cpf, cnpj, email, endereco } = parseClienteText(pasteText);
     if (nome) set("cliente", nome);
     if (cpf) set("cpf", cpf);
+    if (cnpj) { set("cnpj", cnpj); set("pessoa", "PJ"); }
     if (email) set("email", email);
+    if (endereco) set("endereco", endereco);
     setShowPasteModal(false);
     setPasteText("");
-    setMsg(nome ? `Dados preenchidos: ${nome}` : "Nenhum dado encontrado no texto");
+    const tipo = cnpj ? "PJ" : "PF";
+    setMsg(nome ? `Dados ${tipo} preenchidos: ${nome}` : "Nenhum dado encontrado no texto");
   };
 
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
@@ -311,7 +330,10 @@ export default function VendasPage() {
                   onClick={() => {
                     set("cliente", lastClienteData.cliente);
                     set("cpf", lastClienteData.cpf);
+                    set("cnpj", lastClienteData.cnpj);
                     set("email", lastClienteData.email);
+                    set("endereco", lastClienteData.endereco);
+                    set("pessoa", lastClienteData.pessoa);
                     set("origem", lastClienteData.origem);
                     set("tipo", lastClienteData.tipo);
                     setMsg(`+1 produto para ${lastClienteData.cliente}`);
@@ -357,15 +379,36 @@ export default function VendasPage() {
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+              <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div><p className={labelCls}>Cliente</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Nome completo" className={inputCls} /></div>
-              <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
-              <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
-              <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
-                <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option>
-              </select></div>
+            <div className="space-y-4">
+              {/* Toggle PF / PJ */}
+              <div className="flex gap-2">
+                {(["PF", "PJ"] as const).map((p) => (
+                  <button key={p} onClick={() => set("pessoa", p)} className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.pessoa === p ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                    {p === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} /></div>
+                {form.pessoa === "PJ" ? (
+                  <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
+                ) : (
+                  <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
+                )}
+                <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
+                <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
+                  <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option>
+                </select></div>
+              </div>
+
+              {/* Endereço — só PJ */}
+              {form.pessoa === "PJ" && (
+                <div><p className={labelCls}>Endereço</p><input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereço completo" className={inputCls} /></div>
+              )}
             </div>
           )}
 
@@ -593,7 +636,7 @@ export default function VendasPage() {
             {form.cliente && (
               <button
                 onClick={() => {
-                  setForm((f) => ({ ...f, cliente: "", cpf: "", email: "" }));
+                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ" }));
                   setLastClienteData(null);
                 }}
                 className="px-4 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"
