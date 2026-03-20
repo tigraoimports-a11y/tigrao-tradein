@@ -209,6 +209,8 @@ ${usadoSection}
 *Forma de pagamento escolhida:*
 ${formaPagamento}
 
+_Validade deste orcamento: ${validadeHoras} horas_
+
 Quero fechar o pedido!`;
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 

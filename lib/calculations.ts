@@ -176,6 +176,11 @@ export function calculateTradeInValue(
   const effectiveBonuses = d.warrantyBonuses || warrantyBonuses;
   value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses, condition.warrantyYear);
 
+  // Desconto por não ter caixa original: -R$ 100
+  if (!condition.hasOriginalBox) {
+    value -= 100;
+  }
+
   return Math.max(value, 0);
 }
 
