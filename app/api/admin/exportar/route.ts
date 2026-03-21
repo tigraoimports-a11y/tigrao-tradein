@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
   }
 
   const dataInicio = `${mes}-01`;
-  const dataFim = `${mes}-31`;
+  // Calcular último dia do mês corretamente
+  const [year, month] = mes.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate(); // dia 0 do próximo mês = último dia deste mês
+  const dataFim = `${mes}-${String(lastDay).padStart(2, "0")}`;
 
   try {
     // Fetch vendas e gastos do mês em paralelo
