@@ -45,6 +45,7 @@ export interface Venda {
   comprovante_url: string | null;
   notas: string | null;
   imei: string | null;
+  serial_no: string | null;
 }
 
 export interface Reajuste {
