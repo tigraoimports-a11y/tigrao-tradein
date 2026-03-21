@@ -1,15 +1,26 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAdmin } from "@/components/admin/AdminShell";
 import {
-  CATEGORIAS_ETIQUETA,
-  ARMAZENAMENTOS,
-  CORES_ETIQUETA,
   TAMANHOS_ETIQUETA,
   STATUS_ETIQUETA,
   renderBarcode,
   formatarCodigo,
 } from "@/lib/barcode";
+import {
+  CATEGORIAS,
+  CAT_LABELS,
+  STRUCTURED_CATS,
+  IPHONE_MODELOS, IPHONE_STORAGES,
+  MACBOOK_TIPOS, MACBOOK_TELAS_AIR, MACBOOK_TELAS_PRO, MACBOOK_CHIPS, MACBOOK_RAMS, MACBOOK_STORAGES,
+  MAC_MINI_CHIPS, MAC_MINI_RAMS, MAC_MINI_STORAGES,
+  IPAD_MODELOS, IPAD_TELAS, IPAD_STORAGES, IPAD_CONNS,
+  WATCH_MODELOS, WATCH_TAMANHOS, WATCH_CONNS,
+  AIRPODS_MODELOS,
+  DEFAULT_SPEC, buildProdutoName,
+  type ProdutoSpec,
+} from "@/lib/produto-specs";
 
 interface Etiqueta {
   id: string;
@@ -61,34 +72,38 @@ function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean) {
   }, [onScan, enabled]);
 }
 
-// ── Fornecedores padrão ──
-const FORNECEDORES = [
-  "EcoCel", "TM CEL", "Mega Center", "Ultra", "Miami",
-  "Maximus", "DUE", "Smart Cell", "Trade-In Cliente", "Outro",
-];
-
 export default function EtiquetasPage() {
   const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false);
+  const { password } = useAdmin();
   const [tab, setTab] = useState<"gerar" | "bipar" | "historico">("gerar");
 
   // ── Estado: Gerar Etiqueta ──
-  const [form, setForm] = useState({
-    categoria: "",
-    produto: "",
-    cor: "",
-    armazenamento: "",
-    custo_unitario: "",
-    fornecedor: "",
-    observacao: "",
-    tamanho_etiqueta: "62x29",
-    quantidade: "1",
-  });
+  const [categoria, setCategoria] = useState("");
+  const [spec, setSpec] = useState<ProdutoSpec>({ ...DEFAULT_SPEC });
+  const setS = (field: string, value: string) => setSpec((s) => ({ ...s, [field]: value }));
+  const [cor, setCor] = useState("");
+  const [custoUnitario, setCustoUnitario] = useState("");
+  const [fornecedor, setFornecedor] = useState("");
+  const [observacao, setObservacao] = useState("");
+  const [tamanhoEtiqueta, setTamanhoEtiqueta] = useState("62x29");
+  const [quantidade, setQuantidade] = useState("1");
+  const [produtoLivre, setProdutoLivre] = useState("");
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+
   const [gerandoLoading, setGerandoLoading] = useState(false);
   const [etiquetaGerada, setEtiquetaGerada] = useState<Etiqueta | null>(null);
   const [errMsg, setErrMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  const isStructured = STRUCTURED_CATS.includes(categoria);
+
+  // Buscar fornecedores do banco
+  useEffect(() => {
+    fetch("/api/fornecedores", { headers: { "x-admin-password": password } })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setFornecedores(Array.isArray(data) ? data : data?.data || []))
+      .catch(() => {});
+  }, [password]);
 
   // ── Estado: Bipador ──
   const [scanResult, setScanResult] = useState<{ tipo: string; etiqueta?: Etiqueta; mensagem: string } | null>(null);
@@ -101,23 +116,6 @@ export default function EtiquetasPage() {
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [filtroStatus, setFiltroStatus] = useState("");
   const [histLoading, setHistLoading] = useState(false);
-
-  // ── Listas dinâmicas ──
-  const modelos = form.categoria ? CATEGORIAS_ETIQUETA[form.categoria] || [] : [];
-  const armazenamentos = form.categoria ? ARMAZENAMENTOS[form.categoria] || [] : [];
-  const cores = form.categoria ? CORES_ETIQUETA[form.categoria] || [] : [];
-
-  // ── Login ──
-  useEffect(() => {
-    const saved = localStorage.getItem("admin_password");
-    if (saved) { setPassword(saved); setLoggedIn(true); }
-  }, []);
-
-  function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    localStorage.setItem("admin_password", password);
-    setLoggedIn(true);
-  }
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -135,19 +133,14 @@ export default function EtiquetasPage() {
 
   // ── Gerar Etiqueta ──
   async function handleGerar() {
-    if (!form.produto) { setErrMsg("Selecione o modelo do produto."); return; }
-    if (!form.custo_unitario) { setErrMsg("Informe o custo unitário."); return; }
+    const nomeProduto = isStructured ? buildProdutoName(categoria, spec) : produtoLivre;
+    if (!nomeProduto) { setErrMsg("Preencha os dados do produto."); return; }
+    if (!custoUnitario) { setErrMsg("Informe o custo unitário."); return; }
     setErrMsg("");
     setGerandoLoading(true);
 
-    const nomeProduto = [
-      form.produto,
-      form.armazenamento || null,
-      form.cor || null,
-    ].filter(Boolean).join(" ");
-
     try {
-      const qty = Math.max(1, parseInt(form.quantidade) || 1);
+      const qty = Math.max(1, parseInt(quantidade) || 1);
       let lastEtiqueta: Etiqueta | null = null;
 
       for (let i = 0; i < qty; i++) {
@@ -155,13 +148,13 @@ export default function EtiquetasPage() {
           method: "POST",
           headers: headers(),
           body: JSON.stringify({
-            categoria: form.categoria,
+            categoria,
             produto: nomeProduto,
-            cor: form.cor || null,
-            armazenamento: form.armazenamento || null,
-            custo_unitario: parseFloat(form.custo_unitario.replace(/\./g, "").replace(",", ".")) || 0,
-            fornecedor: form.fornecedor || null,
-            observacao: form.observacao || null,
+            cor: cor || null,
+            armazenamento: null,
+            custo_unitario: parseFloat(custoUnitario.replace(/\./g, "").replace(",", ".")) || 0,
+            fornecedor: fornecedor || null,
+            observacao: observacao || null,
           }),
         });
         const json = await res.json();
@@ -184,7 +177,7 @@ export default function EtiquetasPage() {
 
   // ── Imprimir Etiqueta ──
   function handlePrint(etiqueta: Etiqueta) {
-    const tamanho = TAMANHOS_ETIQUETA[form.tamanho_etiqueta] || TAMANHOS_ETIQUETA["57x32"];
+    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["62x29"];
     const win = window.open("", "_blank", "width=400,height=300");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
@@ -293,38 +286,25 @@ export default function EtiquetasPage() {
   }
 
   useEffect(() => {
-    if (loggedIn && tab === "historico") carregarHistorico();
+    if (tab === "historico") carregarHistorico();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filtroStatus, loggedIn]);
-
-  // ── Login Screen ──
-  if (!loggedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-lg w-80">
-          <h2 className="text-xl font-bold mb-4">Etiquetas - Admin</h2>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha admin" className="w-full border rounded-lg px-3 py-2 mb-4" />
-          <button type="submit" className="w-full bg-orange-500 text-white font-bold py-2 rounded-lg">Entrar</button>
-        </form>
-      </div>
-    );
-  }
-
-  function handleChange(field: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-      ...(field === "categoria" ? { produto: "", cor: "", armazenamento: "" } : {}),
-    }));
-  }
+  }, [tab, filtroStatus]);
 
   function handleNova() {
     setEtiquetaGerada(null);
     setSuccessMsg("");
-    setForm((prev) => ({ ...prev, custo_unitario: "", observacao: "", quantidade: "1" }));
+    setCustoUnitario("");
+    setObservacao("");
+    setQuantidade("1");
   }
 
+  // Preview do nome gerado
+  const previewNome = isStructured ? buildProdutoName(categoria, spec) : produtoLivre;
+
   const statusConfig = modalScan ? STATUS_ETIQUETA[modalScan.status as keyof typeof STATUS_ETIQUETA] : null;
+
+  const labelCls = "text-xs font-semibold text-gray-500 mb-1";
+  const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -364,81 +344,161 @@ export default function EtiquetasPage() {
           <div className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
             <h2 className="font-bold text-lg text-gray-900">Gerar Nova Etiqueta</h2>
 
-            {/* Categoria + Modelo */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Categoria *</label>
-                <select value={form.categoria} onChange={(e) => handleChange("categoria", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400">
-                  <option value="">Selecione...</option>
-                  {Object.keys(CATEGORIAS_ETIQUETA).map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Modelo *</label>
-                <select value={form.produto} onChange={(e) => handleChange("produto", e.target.value)} disabled={!form.categoria} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 disabled:bg-gray-100">
-                  <option value="">Selecione...</option>
-                  {modelos.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+            {/* Categoria */}
+            <div>
+              <p className={labelCls}>Categoria *</p>
+              <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSpec({ ...DEFAULT_SPEC }); setCor(""); }} className={inputCls}>
+                <option value="">Selecione...</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+              </select>
             </div>
 
-            {/* Armazenamento + Cor */}
-            <div className="grid grid-cols-2 gap-4">
-              {armazenamentos.length > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Armazenamento</label>
-                  <select value={form.armazenamento} onChange={(e) => handleChange("armazenamento", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400">
-                    <option value="">Selecione...</option>
-                    {armazenamentos.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Cor</label>
-                <select value={form.cor} onChange={(e) => handleChange("cor", e.target.value)} disabled={!form.categoria} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 disabled:bg-gray-100">
-                  <option value="">Selecione...</option>
-                  {cores.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+            {/* Campos estruturados por categoria (idênticos ao Estoque) */}
+            {categoria === "IPHONES" && (
+              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
+                  {IPHONE_MODELOS.map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
+                  {IPHONE_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                </select></div>
               </div>
-            </div>
+            )}
+
+            {categoria === "MACBOOK" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
+                  {MACBOOK_TIPOS.map((t) => <option key={t} value={t}>{t === "AIR" ? "MacBook Air" : "MacBook Pro"}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
+                  {(spec.mb_modelo === "AIR" ? MACBOOK_TELAS_AIR : MACBOOK_TELAS_PRO).map((t) => <option key={t} value={t}>{t}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
+                  {MACBOOK_CHIPS.map((c) => <option key={c}>{c}</option>)}
+                </select></div>
+                <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
+                  {MACBOOK_RAMS.map((r) => <option key={r}>{r}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Armazenamento</p><select value={spec.mb_storage} onChange={(e) => setS("mb_storage", e.target.value)} className={inputCls}>
+                  {MACBOOK_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                </select></div>
+              </div>
+            )}
+
+            {categoria === "MAC_MINI" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
+                  {MAC_MINI_CHIPS.map((c) => <option key={c}>{c}</option>)}
+                </select></div>
+                <div><p className={labelCls}>RAM</p><select value={spec.mm_ram} onChange={(e) => setS("mm_ram", e.target.value)} className={inputCls}>
+                  {MAC_MINI_RAMS.map((r) => <option key={r}>{r}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Armazenamento</p><select value={spec.mm_storage} onChange={(e) => setS("mm_storage", e.target.value)} className={inputCls}>
+                  {MAC_MINI_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                </select></div>
+              </div>
+            )}
+
+            {categoria === "IPADS" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
+                  {IPAD_MODELOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
+                  {IPAD_TELAS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Armazenamento</p><select value={spec.ipad_storage} onChange={(e) => setS("ipad_storage", e.target.value)} className={inputCls}>
+                  {IPAD_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Conectividade</p><select value={spec.ipad_conn} onChange={(e) => setS("ipad_conn", e.target.value)} className={inputCls}>
+                  {IPAD_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select></div>
+              </div>
+            )}
+
+            {categoria === "APPLE_WATCH" && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
+                  {WATCH_MODELOS.map((m) => <option key={m}>{m}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
+                  {WATCH_TAMANHOS.map((t) => <option key={t}>{t}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Conectividade</p><select value={spec.aw_conn} onChange={(e) => setS("aw_conn", e.target.value)} className={inputCls}>
+                  {WATCH_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select></div>
+              </div>
+            )}
+
+            {categoria === "AIRPODS" && (
+              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+                <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
+                  {AIRPODS_MODELOS.map((m) => <option key={m}>{m}</option>)}
+                </select></div>
+              </div>
+            )}
+
+            {/* Categorias sem campos estruturados */}
+            {categoria && !isStructured && (
+              <div>
+                <p className={labelCls}>Nome do Produto *</p>
+                <input value={produtoLivre} onChange={(e) => setProdutoLivre(e.target.value)} placeholder="Ex: Cabo USB-C Lightning 1m" className={inputCls} />
+              </div>
+            )}
+
+            {/* Preview do nome */}
+            {categoria && previewNome && (
+              <div className="px-4 py-3 bg-gray-900 rounded-xl">
+                <p className="text-xs text-gray-400">Produto na etiqueta:</p>
+                <p className="text-white font-bold">{previewNome}</p>
+              </div>
+            )}
+
+            {/* Cor */}
+            {categoria && (
+              <div>
+                <p className={labelCls}>Cor</p>
+                <input value={cor} onChange={(e) => setCor(e.target.value)} placeholder="Ex: Preto, Natural, Prata..." className={inputCls} />
+              </div>
+            )}
 
             {/* Custo + Fornecedor + Quantidade */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Custo Unitario (R$) *</label>
-                <input type="text" placeholder="5.100" value={form.custo_unitario} onChange={(e) => handleChange("custo_unitario", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400" />
+                <p className={labelCls}>Custo Unitario (R$) *</p>
+                <input type="text" placeholder="5.100" value={custoUnitario} onChange={(e) => setCustoUnitario(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Fornecedor</label>
-                <select value={form.fornecedor} onChange={(e) => handleChange("fornecedor", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400">
+                <p className={labelCls}>Fornecedor</p>
+                <select value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} className={inputCls}>
                   <option value="">Selecione...</option>
-                  {FORNECEDORES.map((f) => <option key={f} value={f}>{f}</option>)}
+                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Quantidade</label>
-                <input type="number" min="1" max="50" value={form.quantidade} onChange={(e) => handleChange("quantidade", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400" />
+                <p className={labelCls}>Quantidade</p>
+                <input type="number" min="1" max="50" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} className={inputCls} />
               </div>
             </div>
 
             {/* Tamanho etiqueta */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Tamanho da Etiqueta</label>
-              <select value={form.tamanho_etiqueta} onChange={(e) => handleChange("tamanho_etiqueta", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400">
+              <p className={labelCls}>Tamanho da Etiqueta</p>
+              <select value={tamanhoEtiqueta} onChange={(e) => setTamanhoEtiqueta(e.target.value)} className={inputCls}>
                 {Object.entries(TAMANHOS_ETIQUETA).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
               </select>
             </div>
 
             {/* Observação */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Observacao (opcional)</label>
-              <input type="text" placeholder="Ex: eSIM only, bateria 87%..." value={form.observacao} onChange={(e) => handleChange("observacao", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400" />
+              <p className={labelCls}>Observacao (opcional)</p>
+              <input type="text" placeholder="Ex: eSIM only, bateria 87%..." value={observacao} onChange={(e) => setObservacao(e.target.value)} className={inputCls} />
             </div>
 
             {errMsg && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{errMsg}</div>}
 
             <button onClick={handleGerar} disabled={gerandoLoading} className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-bold py-3 rounded-xl transition-colors">
-              {gerandoLoading ? "Gerando..." : `Gerar ${parseInt(form.quantidade) > 1 ? form.quantidade + " Etiquetas" : "Etiqueta"}`}
+              {gerandoLoading ? "Gerando..." : `Gerar ${parseInt(quantidade) > 1 ? quantidade + " Etiquetas" : "Etiqueta"}`}
             </button>
 
             <p className="text-xs text-gray-400 text-center">
