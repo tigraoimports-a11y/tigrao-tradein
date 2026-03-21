@@ -236,37 +236,36 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;overflow:hidden}
-        .page{width:100mm;height:29mm;display:flex;flex-direction:row}
-        .etiqueta{width:50mm;height:29mm;padding:1mm 2mm;display:flex;flex-direction:column;justify-content:space-between;border-right:0.3mm dashed #ccc}
-        .etiqueta:last-child{border-right:none}
-        .top{display:flex;justify-content:space-between;align-items:flex-start}
-        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.3pt}
-        .codigo-small{font-size:3.5pt;color:#888}
-        .produto{font-size:6pt;font-weight:bold;line-height:1.15;text-align:center;margin:0.5mm 0}
-        .cor{font-size:4.5pt;color:#555;text-align:center}
+        body{font-family:Arial,sans-serif;overflow:hidden;width:29mm}
+        .page{width:29mm;display:flex;flex-direction:column}
+        .etiqueta{width:29mm;height:40mm;padding:1.5mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between}
+        .divider{width:29mm;border-top:0.3mm dashed #aaa;margin:0}
+        .marca{font-size:3pt;font-weight:bold;text-align:center;letter-spacing:0.3pt}
+        .produto{font-size:4.5pt;font-weight:bold;line-height:1.15;text-align:center;overflow:hidden;max-height:4mm}
+        .cor{font-size:3.5pt;color:#555;text-align:center}
         .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
-        svg{width:85%!important;height:auto!important}
-        @page{size:100mm 29mm;margin:0}
+        svg{width:95%!important;height:auto!important}
+        @page{size:29mm 83mm;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
       <div class="page">
         <div class="etiqueta">
-          <div class="top"><span class="marca">TIGRAO IMPORTS</span><span class="codigo-small">${et1.codigo_barras}</span></div>
+          <div class="marca">TIGRAO IMPORTS</div>
           <div class="produto">${et1.produto}</div>
           ${et1.cor ? `<div class="cor">${et1.cor}</div>` : ""}
           <div class="barcode-area"><svg id="bc1"></svg></div>
         </div>
+        <div class="divider"></div>
         <div class="etiqueta">
-          <div class="top"><span class="marca">TIGRAO IMPORTS</span><span class="codigo-small">${et2.codigo_barras}</span></div>
+          <div class="marca">TIGRAO IMPORTS</div>
           <div class="produto">${et2.produto}</div>
           ${et2.cor ? `<div class="cor">${et2.cor}</div>` : ""}
           <div class="barcode-area"><svg id="bc2"></svg></div>
         </div>
       </div>
       <script>
-        JsBarcode('#bc1','${et1.codigo_barras}',{format:'CODE128',width:1.2,height:14,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
-        JsBarcode('#bc2','${et2.codigo_barras}',{format:'CODE128',width:1.2,height:14,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
+        JsBarcode('#bc1','${et1.codigo_barras}',{format:'CODE128',width:1,height:18,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
+        JsBarcode('#bc2','${et2.codigo_barras}',{format:'CODE128',width:1,height:18,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -477,18 +476,18 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
 
     const pagesHtml = pares.map((par, idx) => {
       const et1 = par[0];
-      const et2 = par[1] || par[0]; // se ímpar, duplica a última
-      const hasTwoDifferent = par.length === 2;
+      const et2 = par[1] || par[0];
       return `
         <div class="page" ${idx < pares.length - 1 ? 'style="page-break-after:always"' : ''}>
           <div class="etiqueta">
-            <div class="top"><span class="marca">TIGRAO IMPORTS</span><span class="codigo-small">${et1.codigo_barras}</span></div>
+            <div class="marca">TIGRAO IMPORTS</div>
             <div class="produto">${et1.produto}</div>
             ${et1.cor ? `<div class="cor">${et1.cor}</div>` : ""}
             <div class="barcode-area"><svg id="bc-${idx}-1"></svg></div>
           </div>
+          <div class="divider"></div>
           <div class="etiqueta">
-            <div class="top"><span class="marca">TIGRAO IMPORTS</span><span class="codigo-small">${et2.codigo_barras}</span></div>
+            <div class="marca">TIGRAO IMPORTS</div>
             <div class="produto">${et2.produto}</div>
             ${et2.cor ? `<div class="cor">${et2.cor}</div>` : ""}
             <div class="barcode-area"><svg id="bc-${idx}-2"></svg></div>
@@ -509,18 +508,16 @@ JsBarcode('#bc-${idx}-2','${et2.codigo_barras}',{format:'CODE128',width:1.2,heig
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif}
-        .page{width:100mm;height:29mm;display:flex;flex-direction:row}
-        .etiqueta{width:50mm;height:29mm;padding:1mm 2mm;display:flex;flex-direction:column;justify-content:space-between;border-right:0.3mm dashed #ccc}
-        .etiqueta:last-child{border-right:none}
-        .top{display:flex;justify-content:space-between;align-items:flex-start}
-        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.3pt}
-        .codigo-small{font-size:3.5pt;color:#888}
-        .produto{font-size:6pt;font-weight:bold;line-height:1.15;text-align:center;margin:0.5mm 0}
-        .cor{font-size:4.5pt;color:#555;text-align:center}
+        body{font-family:Arial,sans-serif;width:29mm}
+        .page{width:29mm;display:flex;flex-direction:column}
+        .etiqueta{width:29mm;height:40mm;padding:1.5mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between}
+        .divider{width:29mm;border-top:0.3mm dashed #aaa;margin:0}
+        .marca{font-size:3pt;font-weight:bold;text-align:center;letter-spacing:0.3pt}
+        .produto{font-size:4.5pt;font-weight:bold;line-height:1.15;text-align:center;overflow:hidden;max-height:4mm}
+        .cor{font-size:3.5pt;color:#555;text-align:center}
         .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
-        svg{width:85%!important;height:auto!important}
-        @page{size:100mm 29mm;margin:0}
+        svg{width:95%!important;height:auto!important}
+        @page{size:29mm 83mm;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
       ${pagesHtml}
