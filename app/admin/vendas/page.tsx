@@ -1149,13 +1149,20 @@ export default function VendasPage() {
             {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
           </div>
 
-          {/* Botão Adicionar Produto ao Carrinho */}
-          {form.produto && form.cliente && (
+          {/* Botão Adicionar Produto ao Carrinho — sempre visível quando tem cliente */}
+          {form.cliente && (
             <button
               onClick={handleAddToCart}
-              className="w-full py-3 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-2 shadow-sm"
+              disabled={!form.produto}
+              className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                form.produto
+                  ? "bg-green-500 text-white hover:bg-green-600"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
             >
-              + Adicionar Produto ao Carrinho
+              {produtosCarrinho.length > 0
+                ? `+ Adicionar Produto ${produtosCarrinho.length + 1} ao Carrinho`
+                : "+ Adicionar Produto ao Carrinho"}
             </button>
           )}
 
