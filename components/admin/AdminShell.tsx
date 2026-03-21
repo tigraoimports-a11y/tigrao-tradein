@@ -149,16 +149,13 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   return (
     <AdminContext.Provider value={{ password, user, logout }}>
       <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] overflow-x-hidden">
-        {/* Header */}
-        <div className="bg-white border-b border-[#D2D2D7] px-3 sm:px-6 py-3 flex items-center justify-between shadow-sm gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xl sm:text-2xl">🐯</span>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-lg font-bold text-[#1D1D1F] truncate">TigrãoImports</h1>
-              <p className="text-[#86868B] text-[10px] sm:text-xs hidden sm:block">Painel Administrativo</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Sidebar Navigation */}
+        <AdminNav userRole={user.role} />
+
+        {/* Main content area — offset by sidebar width */}
+        <div className="lg:ml-[220px] min-h-screen flex flex-col">
+          {/* Top bar */}
+          <div className="bg-white border-b border-[#D2D2D7] px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30">
             <button
               onClick={async () => {
                 const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password } });
@@ -184,14 +181,11 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               Sair
             </button>
           </div>
-        </div>
 
-        {/* Navigation — passa o role do usuário */}
-        <AdminNav userRole={user.role} />
-
-        {/* Content */}
-        <div className="p-3 sm:p-6 max-w-[1400px] mx-auto">
-          {children}
+          {/* Content */}
+          <div className="p-3 sm:p-6 max-w-[1400px] mx-auto w-full flex-1">
+            {children}
+          </div>
         </div>
       </div>
     </AdminContext.Provider>
