@@ -5,7 +5,6 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import {
   TAMANHOS_ETIQUETA,
   STATUS_ETIQUETA,
-  renderBarcode,
   formatarCodigo,
 } from "@/lib/barcode";
 import {
@@ -169,12 +168,21 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     "x-admin-password": password,
   }), [password]);
 
-  // ── Renderizar barcode quando etiqueta é gerada ──
+  // ── Renderizar QR code quando etiqueta é gerada ──
   useEffect(() => {
     if (etiquetaGerada?.codigo_barras) {
       setTimeout(() => {
-        renderBarcode("barcode-preview", etiquetaGerada.codigo_barras);
-      }, 200);
+        const el = document.getElementById("barcode-preview");
+        if (!el) return;
+        // Usar canvas QR code via CDN já carregado ou fallback texto
+        const img = document.createElement("img");
+        img.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(etiquetaGerada.codigo_barras)}`;
+        img.alt = etiquetaGerada.codigo_barras;
+        img.style.width = "80px";
+        img.style.height = "80px";
+        el.innerHTML = "";
+        el.appendChild(img);
+      }, 100);
     }
   }, [etiquetaGerada]);
 
@@ -231,34 +239,56 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     const serial = etiqueta.serial_no || "";
     const imei = etiqueta.imei || "";
     const hasExtra = serial || imei;
-    // Layout: texto em cima, barcode embaixo, sem espaço desperdiçado
+    // Layout horizontal: QR code à esquerda, texto à direita
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta ${etiqueta.codigo_barras}</title>
-      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{width:62mm;margin:0;padding:0}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;padding:2mm 3mm;text-align:center}
-        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
-        .extra{font-size:5.5pt;color:#444;margin-top:1mm;line-height:1.3}
-        .bc{margin-top:1.5mm;text-align:center}
-        .cod{font-size:6pt;color:#666;margin-top:0.5mm}
-        svg{width:50mm!important;height:12mm!important}
+        .wrap{width:62mm;padding:2mm;display:flex;align-items:center;gap:2mm}
+        .qr{flex-shrink:0}
+        .qr img{width:18mm;height:18mm}
+        .info{flex:1;min-width:0}
+        .produto{font-size:8pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:6pt;color:#333;margin-top:0.5mm}
+        .extra{font-size:5pt;color:#444;margin-top:0.5mm;line-height:1.2;word-break:break-all}
+        .cod{font-size:6pt;color:#666;margin-top:1mm;font-weight:bold}
         @page{size:62mm auto;margin:0}
         @media print{html,body{width:62mm}}
       </style></head><body>
       <div class="wrap">
-        <div class="produto">${etiqueta.produto}</div>
-        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
-        ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? " | " : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
-        <div class="bc"><svg id="bc"></svg></div>
-        <div class="cod">${etiqueta.codigo_barras}</div>
+        <div class="qr"><canvas id="qr"></canvas></div>
+        <div class="info">
+          <div class="produto">${etiqueta.produto}</div>
+          ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+          ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? "<br>" : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
+          <div class="cod">${etiqueta.codigo_barras}</div>
+        </div>
       </div>
       <script>
-        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:2,height:50,displayValue:false,margin:2,background:'#ffffff',lineColor:'#000000'});
-        window.onload=()=>{window.print();window.close()};
+        var qr = qrcode(0, 'M');
+        qr.addData('${etiqueta.codigo_barras}');
+        qr.make();
+        var canvas = document.getElementById('qr');
+        var size = 18 * 3.78; // 18mm em pixels (~68px)
+        canvas.width = size;
+        canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        var cells = qr.getModuleCount();
+        var cellSize = size / cells;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000000';
+        for (var r = 0; r < cells; r++) {
+          for (var c = 0; c < cells; c++) {
+            if (qr.isDark(r, c)) {
+              ctx.fillRect(c * cellSize, r * cellSize, cellSize + 0.5, cellSize + 0.5);
+            }
+          }
+        }
+        window.onload = function() { window.print(); window.close(); };
       <\/script></body></html>`);
     win.document.close();
   }
@@ -333,10 +363,10 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
       const scanner = new Html5Qrcode("camera-scanner", {
         formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.QR_CODE,
         ],
         verbose: false,
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
@@ -463,43 +493,60 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     if (!win) return;
 
     const etiquetasHtml = lista.map((et, idx) => {
-      const serial = (et as unknown as Record<string,string>).serial_no || "";
-      const imei = (et as unknown as Record<string,string>).imei || "";
+      const serial = et.serial_no || "";
+      const imei = et.imei || "";
       const hasExtra = serial || imei;
       return `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
-        <div class="produto">${et.produto}</div>
-        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
-        ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? " | " : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
-        <div class="bc"><svg id="bc-${idx}"></svg></div>
-        <div class="cod">${et.codigo_barras}</div>
+        <div class="qr"><canvas id="qr-${idx}"></canvas></div>
+        <div class="info">
+          <div class="produto">${et.produto}</div>
+          ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+          ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? "<br>" : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
+          <div class="cod">${et.codigo_barras}</div>
+        </div>
       </div>
     `}).join("");
 
-    const barcodeScripts = lista.map((et, idx) =>
-      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:2,height:50,displayValue:false,margin:2,background:'#ffffff',lineColor:'#000000'});`
-    ).join("\n");
+    const qrScripts = lista.map((et, idx) => `
+      (function(){
+        var qr = qrcode(0, 'M');
+        qr.addData('${et.codigo_barras}');
+        qr.make();
+        var canvas = document.getElementById('qr-${idx}');
+        var size = 68;
+        canvas.width = size; canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        var cells = qr.getModuleCount();
+        var cellSize = size / cells;
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+        ctx.fillStyle = '#000';
+        for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+          if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
+      })();
+    `).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Imprimir ${lista.length} Etiquetas</title>
-      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{width:62mm;margin:0;padding:0}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;padding:2mm 3mm;text-align:center}
-        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
-        .extra{font-size:5.5pt;color:#444;margin-top:1mm;line-height:1.3}
-        .bc{margin-top:1.5mm;text-align:center}
-        .cod{font-size:6pt;color:#666;margin-top:0.5mm}
-        svg{width:50mm!important;height:12mm!important}
+        .wrap{width:62mm;padding:2mm;display:flex;align-items:center;gap:2mm}
+        .qr{flex-shrink:0}
+        .qr canvas{width:18mm;height:18mm}
+        .info{flex:1;min-width:0}
+        .produto{font-size:8pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:6pt;color:#333;margin-top:0.5mm}
+        .extra{font-size:5pt;color:#444;margin-top:0.5mm;line-height:1.2;word-break:break-all}
+        .cod{font-size:6pt;color:#666;margin-top:1mm;font-weight:bold}
         @page{size:62mm auto;margin:0}
         @media print{html,body{width:62mm}}
       </style></head><body>
       ${etiquetasHtml}
       <script>
-        ${barcodeScripts}
+        ${qrScripts}
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -837,7 +884,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                     {etiquetaGerada.imei && `IMEI: ${etiquetaGerada.imei}`}
                   </p>
                 )}
-                <div className="mt-2 flex justify-center"><svg id="barcode-preview"></svg></div>
+                <div className="mt-2 flex justify-center" id="barcode-preview"></div>
                 <p className="text-[10px] text-gray-400 text-center mt-1">{etiquetaGerada.codigo_barras}</p>
               </div>
             </div>
