@@ -59,6 +59,9 @@ export async function GET(req: NextRequest) {
     variacoes: variacoesByProduto.get(p.id) ?? [],
   }));
 
+  // Debug: log config fetch result
+  console.log("mostruario_config fetch:", { data: configRes.data, error: configRes.error?.message });
+
   const config = configRes.data ?? {
     banner_titulo: "Produtos Apple Originais",
     banner_subtitulo: "Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple",
@@ -293,9 +296,21 @@ export async function PATCH(req: NextRequest) {
 
     if (Object.keys(update).length === 0) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
 
-    const { error } = await supabase
-      .from("mostruario_config")
-      .upsert({ id: 1, ...update }, { onConflict: "id" });
+    // First check if a config row exists
+    const { data: existing } = await supabase.from("mostruario_config").select("id").limit(1).single();
+
+    let error;
+    if (existing?.id) {
+      // Update existing row
+      const res = await supabase.from("mostruario_config").update(update).eq("id", existing.id);
+      error = res.error;
+      console.log("Config UPDATE result:", { id: existing.id, update, error: res.error?.message });
+    } else {
+      // Insert new row
+      const res = await supabase.from("mostruario_config").insert({ ...update });
+      error = res.error;
+      console.log("Config INSERT result:", { update, error: res.error?.message });
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

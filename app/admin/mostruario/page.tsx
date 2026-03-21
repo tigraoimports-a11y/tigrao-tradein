@@ -198,7 +198,7 @@ export default function MostruarioPage() {
         <p className="text-[#86868B] text-xs">Gerencie categorias, produtos e variacoes do mostruario independente.</p>
       </div>
 
-      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} onToggleManutencao={async () => { const newVal = !config.manutencao; setConfig({ ...config, manutencao: newVal }); await apiCall("PATCH", { action: "update_config", manutencao: newVal }); showToast(newVal ? "Mostruario DESATIVADO (manutencao ativa)" : "Mostruario ATIVADO"); }} />
+      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} onToggleManutencao={async () => { const newVal = !config.manutencao; setConfig({ ...config, manutencao: newVal }); const res = await apiCall("PATCH", { action: "update_config", manutencao: newVal }); console.log("Toggle manutencao response:", res); if (res?.error) { showToast("ERRO: " + res.error); } else { showToast(newVal ? "Mostruario DESATIVADO (manutencao ativa)" : "Mostruario ATIVADO"); } }} />
 
       <div className="flex gap-6">
         <div className="w-56 shrink-0 space-y-2">
