@@ -804,12 +804,10 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50 flex justify-center">
               <div className="bg-white border border-gray-400 rounded p-3 shadow-sm" style={{ minWidth: 200, maxWidth: 280 }}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-bold text-orange-600">TIGRAO IMPORTS</span>
                   <span className="text-xs text-gray-400">{etiquetaGerada.codigo_barras}</span>
                 </div>
                 <p className="text-sm font-bold text-gray-900 leading-tight">{etiquetaGerada.produto}</p>
-                {etiquetaGerada.fornecedor && <p className="text-xs text-gray-500">Forn: {etiquetaGerada.fornecedor}</p>}
-                <p className="text-xs font-semibold text-gray-700 mt-1">Custo: R$ {Number(etiquetaGerada.custo_unitario).toLocaleString("pt-BR")}</p>
+                {etiquetaGerada.cor && <p className="text-xs text-gray-500">{etiquetaGerada.cor}</p>}
                 <div className="mt-2 flex justify-center"><svg id="barcode-preview"></svg></div>
               </div>
             </div>
@@ -1038,7 +1036,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                 {modalScan.cor && <p className="text-sm text-gray-600">Cor: {modalScan.cor}</p>}
                 {modalScan.armazenamento && <p className="text-sm text-gray-600">Armazenamento: {modalScan.armazenamento}</p>}
                 {modalScan.fornecedor && <p className="text-sm text-gray-600">Fornecedor: {modalScan.fornecedor}</p>}
-                <p className="text-sm font-semibold text-gray-800">Custo: R$ {Number(modalScan.custo_unitario || 0).toLocaleString("pt-BR")}</p>
+                {/* Custo salvo internamente, não exibido na tela */}
               </div>
 
               <div className="flex items-center gap-3 justify-center">
