@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
-import type { ConditionData, ModelDiscounts, WarrantyBonuses } from "@/lib/calculations";
+import type { ConditionData, ModelDiscounts, WarrantyBonuses, AnyConditionData, DeviceType } from "@/lib/calculations";
 import { formatBRL } from "@/lib/calculations";
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
@@ -58,9 +58,10 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     bonusGarantia6mMais: 400,
   });
 
+  const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
-  const [condition, setCondition] = useState<ConditionData>({
+  const [condition, setCondition] = useState<AnyConditionData>({
     screenScratch: "none",
     sideScratch: "none",
     peeling: "none",
@@ -70,17 +71,18 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     warrantyMonth: null,
     warrantyYear: null,
     hasOriginalBox: false,
-  });
+  } as ConditionData);
   const [tradeInValue, setTradeInValue] = useState(0);
 
   // Segundo aparelho usado (opcional)
+  const [deviceType2, setDeviceType2] = useState<DeviceType>("iphone");
   const [usedModel2, setUsedModel2] = useState("");
   const [usedStorage2, setUsedStorage2] = useState("");
-  const [condition2, setCondition2] = useState<ConditionData>({
+  const [condition2, setCondition2] = useState<AnyConditionData>({
     screenScratch: "none", sideScratch: "none", peeling: "none",
     battery: 100, hasDamage: false, hasWarranty: false,
     warrantyMonth: null, warrantyYear: null, hasOriginalBox: false,
-  });
+  } as ConditionData);
   const [tradeInValue2, setTradeInValue2] = useState(0);
   const [hasSecondDevice, setHasSecondDevice] = useState(false);
 
@@ -122,11 +124,13 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   function handleStep1Complete(data: {
     usedModel: string;
     usedStorage: string;
-    condition: ConditionData;
+    condition: AnyConditionData;
     tradeInValue: number;
+    deviceType: DeviceType;
   }) {
     if (step === 1) {
       // Primeiro aparelho
+      setDeviceType(data.deviceType);
       setUsedModel(data.usedModel);
       setUsedStorage(data.usedStorage);
       setCondition(data.condition);
@@ -135,6 +139,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
       setStep(1.5);
     } else {
       // Segundo aparelho (step === 1.7)
+      setDeviceType2(data.deviceType);
       setUsedModel2(data.usedModel);
       setUsedStorage2(data.usedStorage);
       setCondition2(data.condition);
@@ -172,11 +177,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   function handleReset() {
     setStep(1);
     setResetKey(k => k + 1);
+    setDeviceType("iphone"); setDeviceType2("iphone");
     setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
     setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
     setHasSecondDevice(false);
-    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false });
-    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false });
+    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
+    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram("");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -298,10 +304,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
             usedModel={usedModel}
             usedStorage={usedStorage}
             condition={condition}
+            deviceType={deviceType}
             tradeInValue={totalTradeInValue}
             usedModel2={hasSecondDevice ? usedModel2 : undefined}
             usedStorage2={hasSecondDevice ? usedStorage2 : undefined}
             condition2={hasSecondDevice ? condition2 : undefined}
+            deviceType2={hasSecondDevice ? deviceType2 : undefined}
             tradeInValue1={hasSecondDevice ? tradeInValue : undefined}
             tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
             clienteNome={clienteNome}

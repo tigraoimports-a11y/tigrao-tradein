@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { ConditionData, QuoteResult, InstallmentOption } from "@/lib/calculations";
+import type { ConditionData, QuoteResult, InstallmentOption, AnyConditionData, DeviceType } from "@/lib/calculations";
 import type { LeadSaiu } from "@/lib/supabase";
 import {
   calculateQuote,
   getWhatsAppUrl,
   getConditionLines,
+  getAnyConditionLines,
   formatBRL,
 } from "@/lib/calculations";
 
@@ -18,12 +19,14 @@ interface StepQuoteProps {
   newPrice: number;
   usedModel: string;
   usedStorage: string;
-  condition: ConditionData;
+  condition: AnyConditionData;
+  deviceType: DeviceType;
   tradeInValue: number;
   // Segundo aparelho (opcional)
   usedModel2?: string;
   usedStorage2?: string;
-  condition2?: ConditionData;
+  condition2?: AnyConditionData;
+  deviceType2?: DeviceType;
   tradeInValue1?: number;
   tradeInValue2?: number;
   clienteNome: string;
@@ -74,16 +77,17 @@ function generateWhatsAppMsg(
   newPrice: number,
   usedModel: string,
   usedStorage: string,
-  condition: ConditionData,
+  condition: AnyConditionData,
   tradeInValue: number,
   clienteNome: string,
   clienteWhatsApp: string,
   clienteInstagram: string,
   diferenca: number,
-  formaPagamento: string
+  formaPagamento: string,
+  msgDeviceType: DeviceType = "iphone"
 ): string {
   const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
-  const conditionLines = getConditionLines(condition);
+  const conditionLines = getAnyConditionLines(msgDeviceType, condition);
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
   return `Ola! Vi meu orcamento no site e quero fechar!
@@ -119,10 +123,12 @@ export default function StepQuote({
   usedModel,
   usedStorage,
   condition,
+  deviceType,
   tradeInValue,
   usedModel2,
   usedStorage2,
   condition2,
+  deviceType2,
   tradeInValue1,
   tradeInValue2,
   clienteNome,
@@ -165,12 +171,12 @@ export default function StepQuote({
   );
 
   const fmt2 = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
-  const cLines1 = getConditionLines(condition);
+  const cLines1 = getAnyConditionLines(deviceType, condition);
   const instagramLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
   let usadoSection: string;
   if (hasSecond && condition2) {
-    const cLines2 = getConditionLines(condition2);
+    const cLines2 = getAnyConditionLines(deviceType2 ?? "iphone", condition2);
     usadoSection = `*PRODUTO 1 na troca:*
 ${usedModel} ${usedStorage}
 ${cLines1.join("\n")}
@@ -214,7 +220,7 @@ _Validade deste orcamento: ${validadeHoras} horas_
 Quero fechar o pedido!`;
   const whatsappUrl = getWhatsAppUrl(whatsappNumero, whatsappMsg);
 
-  const conditionLines = getConditionLines(condition);
+  const conditionLines = getAnyConditionLines(deviceType, condition);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -264,7 +270,7 @@ Quero fechar o pedido!`;
                 {usedModel2} {usedStorage2}
               </p>
               <div className="mt-1 space-y-0.5">
-                {getConditionLines(condition2).map((line, i) => (
+                {getAnyConditionLines(deviceType2 ?? "iphone", condition2).map((line, i) => (
                   <p key={i} className="text-[13px] text-[#6E6E73]">{line}</p>
                 ))}
               </div>

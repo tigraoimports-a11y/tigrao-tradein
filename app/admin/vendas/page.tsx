@@ -25,6 +25,7 @@ export default function VendasPage() {
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   // Filtros de data para histórico
   const now = new Date();
@@ -374,6 +375,35 @@ export default function VendasPage() {
     setMsg(nome ? `Dados ${tipo} preenchidos: ${nome}` : "Nenhum dado encontrado no texto");
   };
 
+  // Exportar mês para Excel
+  const handleExportar = async () => {
+    setExportando(true);
+    try {
+      const mes = `${filtroAno}-${filtroMes}`;
+      const res = await fetch(`/api/admin/exportar?mes=${mes}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        alert(`Erro: ${json.error || "Falha ao exportar"}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tigrao-${filtroAno}${filtroMes}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erro ao exportar: ${err}`);
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
   const selectCls = inputCls;
@@ -412,6 +442,15 @@ export default function VendasPage() {
                 <option key={d} value={String(d).padStart(2, "0")}>{d}</option>
               ))}
             </select>
+            {tab === "finalizadas" && isAdmin && (
+              <button
+                onClick={handleExportar}
+                disabled={exportando}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {exportando ? "Exportando..." : "Exportar Mês"}
+              </button>
+            )}
           </div>
         )}
       </div>

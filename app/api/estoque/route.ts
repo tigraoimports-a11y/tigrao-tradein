@@ -68,27 +68,108 @@ export async function POST(req: NextRequest) {
     const rows = body.rows as Record<string, unknown>[];
     if (!rows?.length) return NextResponse.json({ error: "rows required" }, { status: 400 });
 
-    // Deduplicar por (produto, cor) — mantém o último
+    // Deduplicar por (produto, cor) — mantém o último, mas soma quantidades e calcula custo médio
     const seen = new Map<string, Record<string, unknown>>();
     for (const r of rows) {
       const key = `${r.produto}|${r.cor ?? ""}`;
-      seen.set(key, { ...r, updated_at: new Date().toISOString() });
+      if (seen.has(key)) {
+        const existing = seen.get(key)!;
+        const existQnt = Number(existing.qnt || 0);
+        const existCost = Number(existing.custo_unitario || 0);
+        const newQnt = Number(r.qnt || 0);
+        const newCost = Number(r.custo_unitario || 0);
+        const totalQnt = existQnt + newQnt;
+        const avgCost = totalQnt > 0 ? Math.round(((existQnt * existCost) + (newQnt * newCost)) / totalQnt) : newCost;
+        seen.set(key, { ...r, qnt: totalQnt, custo_unitario: avgCost, updated_at: new Date().toISOString() });
+      } else {
+        seen.set(key, { ...r, updated_at: new Date().toISOString() });
+      }
     }
     const unique = [...seen.values()];
 
-    // Importar um por um via insert
+    // Importar: se produto+cor já existe no estoque, fazer merge (somar qnt + custo médio)
     let imported = 0;
+    let merged = 0;
     const errors: string[] = [];
     for (const row of unique) {
-      const { error } = await supabase.from("estoque").insert(row);
-      if (error) errors.push(`${row.produto}: ${error.message}`);
-      else imported++;
+      const produto = String(row.produto || "").trim();
+      const cor = String(row.cor || "").trim() || null;
+
+      // Verificar se já existe no estoque
+      let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produto);
+      if (cor) existQuery = existQuery.eq("cor", cor);
+      else existQuery = existQuery.is("cor", null);
+      const { data: existing } = await existQuery.limit(1).single();
+
+      if (existing) {
+        // Merge: somar quantidade e calcular custo médio ponderado
+        const existQnt = Number(existing.qnt || 0);
+        const existCost = Number(existing.custo_unitario || 0);
+        const addQnt = Number(row.qnt || 0);
+        const addCost = Number(row.custo_unitario || 0);
+        const totalQnt = existQnt + addQnt;
+        const avgCost = totalQnt > 0 && existQnt > 0 && existCost > 0
+          ? Math.round(((existQnt * existCost) + (addQnt * addCost)) / totalQnt)
+          : addCost;
+
+        const { error: ue } = await supabase.from("estoque").update({
+          qnt: totalQnt,
+          custo_unitario: avgCost,
+          status: totalQnt > 0 ? "EM ESTOQUE" : "ESGOTADO",
+          updated_at: new Date().toISOString(),
+        }).eq("id", existing.id);
+        if (ue) errors.push(`${produto} (merge): ${ue.message}`);
+        else merged++;
+      } else {
+        const { error: ie } = await supabase.from("estoque").insert(row);
+        if (ie) errors.push(`${produto}: ${ie.message}`);
+        else imported++;
+      }
     }
 
-    return NextResponse.json({ ok: true, imported, errors: errors.slice(0, 5), total: unique.length });
+    return NextResponse.json({ ok: true, imported, merged, errors: errors.slice(0, 5), total: unique.length });
   }
 
-  // Inserir novo produto
+  // Inserir novo produto — verificar se já existe (merge por produto+cor)
+  const produtoNome = String(body.produto || "").trim();
+  const corNome = String(body.cor || "").trim() || null;
+
+  if (produtoNome) {
+    let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome);
+    if (corNome) existQuery = existQuery.eq("cor", corNome);
+    else existQuery = existQuery.is("cor", null);
+    const { data: existing } = await existQuery.limit(1).single();
+
+    if (existing) {
+      // Merge: calcular custo médio ponderado e somar quantidade
+      const existQnt = Number(existing.qnt || 0);
+      const existCost = Number(existing.custo_unitario || 0);
+      const addQnt = Number(body.qnt || 1);
+      const addCost = Number(body.custo_unitario || 0);
+      const totalQnt = existQnt + addQnt;
+      const avgCost = totalQnt > 0 && existQnt > 0 && existCost > 0
+        ? Math.round(((existQnt * existCost) + (addQnt * addCost)) / totalQnt)
+        : addCost;
+
+      const { error: ue } = await supabase.from("estoque").update({
+        qnt: totalQnt,
+        custo_unitario: avgCost,
+        status: totalQnt > 0 ? "EM ESTOQUE" : "ESGOTADO",
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+      if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
+
+      await logEstoque(
+        getUsuario(req), "alteracao", existing.id, produtoNome,
+        "merge (qnt+custo_medio)",
+        `${existQnt}un x R$${existCost}`,
+        `${totalQnt}un x R$${avgCost}`
+      );
+
+      return NextResponse.json({ ok: true, merged: true, id: existing.id });
+    }
+  }
+
   const { data, error } = await supabase.from("estoque").insert({
     ...body,
     updated_at: new Date().toISOString(),
@@ -106,6 +187,30 @@ export async function PATCH(req: NextRequest) {
 
   // Buscar estado anterior para o log
   const { data: antes } = await supabase.from("estoque").select("*").eq("id", id).single();
+
+  // Custo Médio Automático: quando quantidade aumenta (reposição) e novo custo é informado,
+  // calcular custo médio ponderado automaticamente
+  if (antes && fields.qnt !== undefined && fields.custo_unitario !== undefined) {
+    const existingQty = Number(antes.qnt || 0);
+    const existingCost = Number(antes.custo_unitario || 0);
+    const newQty = Number(fields.qnt);
+    const newCost = Number(fields.custo_unitario);
+
+    // Só calcula média se está AUMENTANDO a quantidade (reposição)
+    if (newQty > existingQty && existingQty > 0 && existingCost > 0 && newCost !== existingCost) {
+      const addedQty = newQty - existingQty;
+      const avgCost = Math.round(((existingQty * existingCost) + (addedQty * newCost)) / newQty);
+      fields.custo_unitario = avgCost;
+
+      // Log da operação de custo médio
+      await logEstoque(
+        usuario, "alteracao", id, antes.produto,
+        "custo_unitario (média ponderada)",
+        String(existingCost),
+        `${avgCost} (${existingQty}un x R$${existingCost} + ${addedQty}un x R$${newCost})`
+      );
+    }
+  }
 
   const { error } = await supabase.from("estoque").update({
     ...fields,

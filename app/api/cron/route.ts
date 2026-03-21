@@ -92,8 +92,18 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: true, tipo: "faltando" });
       }
 
+      case "semanal": {
+        // Trigger semanal report — redireciona para /api/reports/semanal
+        const baseUrl = req.nextUrl.origin;
+        const res = await fetch(`${baseUrl}/api/reports/semanal`, {
+          headers: { "authorization": req.headers.get("authorization") || "" },
+        });
+        const data = await res.json();
+        return NextResponse.json({ ok: true, tipo: "semanal", ...data });
+      }
+
       default:
-        return NextResponse.json({ error: "tipo invalido. Use: manha, parcial, noite, reposicao, faltando" }, { status: 400 });
+        return NextResponse.json({ error: "tipo invalido. Use: manha, parcial, noite, reposicao, faltando, semanal" }, { status: 400 });
     }
   } catch (err) {
     console.error("Cron error:", err);

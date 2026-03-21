@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { gerarNoite, gerarManha } from "@/lib/reports";
 import { sendTelegramMessage, formatNoiteHTML, formatManhaHTML } from "@/lib/telegram";
 import { hojeISO, proximoDiaUtil, formatDateBR } from "@/lib/business-days";
+import { calcularReposicaoInteligente, formatReposicaoHTML } from "@/app/api/admin/reposicao/route";
 
 const GRUPO_ID = process.env.TELEGRAM_CHAT_ID ?? "";
 
@@ -784,53 +785,9 @@ export async function POST(req: NextRequest) {
       }
 
       case "/reposicao": {
-        const { data: criticos } = await supabase
-          .from("estoque")
-          .select("produto, categoria, cor, qnt")
-          .lte("qnt", 1)
-          .or("tipo.is.null,tipo.eq.NOVO")
-          .order("qnt")
-          .order("categoria")
-          .order("produto");
-
-        if (!criticos?.length) {
-          await sendTelegramMessage(`✅ Estoque saudavel! Nenhum produto critico.`, chatId);
-          break;
-        }
-
-        const zerados = criticos.filter((p) => p.qnt === 0);
-        const acabando = criticos.filter((p) => p.qnt === 1);
-
-        const lines = [`📦 <b>ALERTA DE REPOSIÇÃO</b>`, ""];
-
-        if (zerados.length > 0) {
-          lines.push(`🔴 <b>ZERADOS (${zerados.length}):</b>`);
-          const byCat: Record<string, string[]> = {};
-          for (const p of zerados) {
-            if (!byCat[p.categoria]) byCat[p.categoria] = [];
-            byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
-          }
-          for (const [cat, items] of Object.entries(byCat)) {
-            lines.push(`${getProdEmoji(cat)} <b>${cat}</b>`);
-            lines.push(...items);
-          }
-          lines.push("");
-        }
-
-        if (acabando.length > 0) {
-          lines.push(`🟡 <b>ACABANDO (${acabando.length}):</b>`);
-          const byCat: Record<string, string[]> = {};
-          for (const p of acabando) {
-            if (!byCat[p.categoria]) byCat[p.categoria] = [];
-            byCat[p.categoria].push(`  • ${p.produto}${p.cor ? ` (${p.cor})` : ""}`);
-          }
-          for (const [cat, items] of Object.entries(byCat)) {
-            lines.push(`${getProdEmoji(cat)} <b>${cat}</b>`);
-            lines.push(...items);
-          }
-        }
-
-        await sendTelegramMessage(lines.join("\n"), chatId);
+        const alerts = await calcularReposicaoInteligente();
+        const reposicaoMsg = formatReposicaoHTML(alerts);
+        await sendTelegramMessage(reposicaoMsg, chatId);
         break;
       }
 
@@ -1169,6 +1126,203 @@ export async function POST(req: NextRequest) {
         lines.push(`<b>TOTAL: ${totalQtd} unidades | ${fmtBRL(totalValor)}</b>`);
 
         await sendTelegramMessage(lines.join("\n"), chatId);
+        break;
+      }
+
+      case "/vendahoje": {
+        const { data: vendasHj } = await supabase
+          .from("vendas")
+          .select("*")
+          .eq("data", hoje)
+          .neq("status_pagamento", "CANCELADO");
+
+        const vh = vendasHj ?? [];
+
+        if (vh.length === 0) {
+          await sendTelegramMessage(`📊 <b>VENDAS DE HOJE — ${hoje}</b>\n\nNenhuma venda registrada hoje 😴`, chatId);
+          break;
+        }
+
+        const fatHj = vh.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        const lucroHj = vh.reduce((s, v) => s + Number(v.lucro || 0), 0);
+        const ticketMedioHj = vh.length > 0 ? Math.round(fatHj / vh.length) : 0;
+
+        // Por forma de pagamento
+        const porForma: Record<string, { qty: number; total: number }> = {};
+        for (const v of vh) {
+          const forma = v.forma || "Não informado";
+          if (!porForma[forma]) porForma[forma] = { qty: 0, total: 0 };
+          porForma[forma].qty++;
+          porForma[forma].total += Number(v.preco_vendido || 0);
+        }
+
+        // Por origem
+        const porOrigemHj: Record<string, number> = {};
+        for (const v of vh) {
+          const orig = v.origem || "Não informado";
+          porOrigemHj[orig] = (porOrigemHj[orig] || 0) + 1;
+        }
+
+        const origemLabelHj: Record<string, string> = {
+          "ANUNCIO": "Anúncio",
+          "RECOMPRA": "Recompra",
+          "INDICACAO": "Indicação",
+          "ATACADO": "Atacado",
+        };
+
+        const linesHj: string[] = [
+          `📊 <b>VENDAS DE HOJE — ${hoje}</b>`,
+          ``,
+          `🛒 ${vh.length} venda(s) realizada(s)`,
+          `💰 Faturamento: <b>${fmtBRL(fatHj)}</b>`,
+          `📈 Lucro: <b>${fmtBRL(lucroHj)}</b>`,
+          `🎯 Ticket Médio: ${fmtBRL(ticketMedioHj)}`,
+          ``,
+          `💳 <b>Por forma de pagamento:</b>`,
+        ];
+
+        for (const [forma, info] of Object.entries(porForma).sort((a, b) => b[1].total - a[1].total)) {
+          linesHj.push(`• ${forma}: ${info.qty} (${fmtBRL(info.total)})`);
+        }
+
+        linesHj.push(``, `📱 <b>Por origem:</b>`);
+        for (const [orig, qty] of Object.entries(porOrigemHj).sort((a, b) => b[1] - a[1])) {
+          linesHj.push(`• ${origemLabelHj[orig] || orig}: ${qty}`);
+        }
+
+        await sendTelegramMessage(linesHj.join("\n"), chatId);
+        break;
+      }
+
+      case "/venda": {
+        // /venda João | iPhone 16 Pro 256GB | 7500 | PIX | ITAU
+        const argsText = text.slice("/venda".length).trim();
+
+        if (!argsText || !argsText.includes("|")) {
+          await sendTelegramMessage(
+            [
+              `📝 <b>Como registrar uma venda:</b>`,
+              ``,
+              `/venda cliente | produto | preco | forma | banco`,
+              ``,
+              `<b>Obrigatórios:</b> cliente, produto, preco`,
+              `<b>Opcionais:</b> forma (padrão PIX), banco (padrão ITAU)`,
+              ``,
+              `<b>Exemplo:</b>`,
+              `/venda João | iPhone 16 Pro 256GB | 7500 | PIX | ITAU`,
+            ].join("\n"),
+            chatId
+          );
+          break;
+        }
+
+        const partsVenda = argsText.split("|").map((s: string) => s.trim());
+        if (partsVenda.length < 3 || !partsVenda[0] || !partsVenda[1] || !partsVenda[2]) {
+          await sendTelegramMessage(`❌ Formato inválido. Mínimo: /venda cliente | produto | preco`, chatId);
+          break;
+        }
+
+        const clienteVenda = partsVenda[0];
+        const produtoVenda = partsVenda[1];
+        const precoVenda = parseFloat(partsVenda[2].replace(/\./g, "").replace(",", "."));
+        const formaVenda = (partsVenda[3] || "PIX").toUpperCase();
+        const bancoVenda = (partsVenda[4] || "ITAU").toUpperCase();
+
+        if (isNaN(precoVenda) || precoVenda <= 0) {
+          await sendTelegramMessage(`❌ Preço inválido: "${partsVenda[2]}"`, chatId);
+          break;
+        }
+
+        // Buscar item no estoque para calcular lucro
+        const produtoUpper = produtoVenda.toUpperCase();
+        const { data: estoqueItems } = await supabase
+          .from("estoque")
+          .select("id, produto, qnt, custo_unitario")
+          .gt("qnt", 0)
+          .or("tipo.is.null,tipo.eq.NOVO");
+
+        // Tentar match: produto do estoque que contenha o texto buscado
+        let matchedItem: { id: string; produto: string; qnt: number; custo_unitario: number } | null = null;
+        if (estoqueItems) {
+          for (const item of estoqueItems) {
+            if (item.produto && item.produto.toUpperCase().includes(produtoUpper)) {
+              matchedItem = item;
+              break;
+            }
+          }
+          // Tentar match parcial se não achou exato
+          if (!matchedItem) {
+            const palavras = produtoUpper.split(/\s+/);
+            for (const item of estoqueItems) {
+              const itemUpper = (item.produto || "").toUpperCase();
+              const matchCount = palavras.filter((p: string) => itemUpper.includes(p)).length;
+              if (matchCount >= Math.min(2, palavras.length)) {
+                matchedItem = item;
+                break;
+              }
+            }
+          }
+        }
+
+        const custoVenda = matchedItem?.custo_unitario || 0;
+        const lucroVenda = custoVenda > 0 ? precoVenda - custoVenda : 0;
+        const margemVenda = custoVenda > 0 && precoVenda > 0 ? ((lucroVenda / precoVenda) * 100).toFixed(1) : "—";
+
+        // Determinar recebimento
+        const recebimento = ["PIX", "DINHEIRO", "ESPECIE"].includes(formaVenda) ? "D+0" : "D+1";
+
+        // Registrar venda
+        const { error: errVenda } = await supabase.from("vendas").insert({
+          data: hoje,
+          cliente: clienteVenda,
+          produto: produtoVenda,
+          preco_vendido: precoVenda,
+          custo: custoVenda,
+          lucro: lucroVenda,
+          forma: formaVenda,
+          banco: bancoVenda,
+          recebimento,
+          status_pagamento: "AGUARDANDO",
+          estoque_id: matchedItem?.id || null,
+          tipo: "VENDA",
+          origem: "ANUNCIO",
+        }).select().single();
+
+        if (errVenda) {
+          await sendTelegramMessage(`❌ Erro ao registrar venda: ${errVenda.message}`, chatId);
+          break;
+        }
+
+        // Descontar estoque
+        let estoqueMsg = "";
+        if (matchedItem) {
+          const novaQnt = Math.max(0, matchedItem.qnt - 1);
+          await supabase.from("estoque").update({
+            qnt: novaQnt,
+            status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+            updated_at: new Date().toISOString(),
+          }).eq("id", matchedItem.id);
+          estoqueMsg = `📦 Estoque atualizado: ${novaQnt} un.`;
+        } else {
+          estoqueMsg = `⚠️ Produto não encontrado no estoque (venda registrada mesmo assim)`;
+        }
+
+        const linesVenda = [
+          `✅ <b>Venda registrada!</b>`,
+          ``,
+          `👤 Cliente: ${clienteVenda}`,
+          `📱 Produto: ${produtoVenda}`,
+          `💰 Preço: ${fmtBRL(precoVenda)}`,
+          `💳 Forma: ${formaVenda}`,
+          `🏦 Banco: ${bancoVenda}`,
+        ];
+
+        if (custoVenda > 0) {
+          linesVenda.push(`📈 Lucro: ${fmtBRL(lucroVenda)} (${margemVenda}%)`);
+        }
+        linesVenda.push(estoqueMsg);
+
+        await sendTelegramMessage(linesVenda.join("\n"), chatId);
         break;
       }
 

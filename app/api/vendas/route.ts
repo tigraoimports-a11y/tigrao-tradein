@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { sendPaymentNotification } from "@/lib/telegram";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -128,6 +129,13 @@ export async function PATCH(req: NextRequest) {
 
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Enviar notificação no Telegram quando pagamento é confirmado
+  if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
+    const venda = data[0];
+    sendPaymentNotification(venda).catch(() => {}); // fire-and-forget
+  }
+
   return NextResponse.json({ ok: true, updated: data });
 }
 

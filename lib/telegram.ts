@@ -36,8 +36,61 @@ export async function sendTelegramMessage(
   }
 }
 
+/**
+ * Envia documento (PDF, Excel, etc.) para o grupo do Telegram.
+ */
+export async function sendTelegramDocument(
+  fileBuffer: Buffer,
+  filename: string,
+  caption: string,
+  chatId?: string
+): Promise<boolean> {
+  const token = BOT_TOKEN;
+  const chat = chatId ?? GRUPO_ID;
+  if (!token || !chat) return false;
+
+  try {
+    const formData = new FormData();
+    formData.append("chat_id", chat);
+    formData.append("document", new Blob([new Uint8Array(fileBuffer)]), filename);
+    formData.append("caption", caption);
+    formData.append("parse_mode", "HTML");
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: "POST",
+      body: formData,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 function fmtBRL(v: number): string {
   return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+}
+
+/**
+ * Envia notificação de pagamento confirmado para o grupo do Telegram.
+ */
+export async function sendPaymentNotification(venda: {
+  cliente?: string;
+  produto?: string;
+  preco_vendido?: number;
+  forma?: string;
+  banco?: string;
+  lucro?: number;
+}): Promise<boolean> {
+  const lines = [
+    `💵 <b>Pagamento confirmado!</b>`,
+    ``,
+    `👤 ${venda.cliente || "—"}`,
+    `📱 ${venda.produto || "—"}`,
+    `💰 ${fmtBRL(Number(venda.preco_vendido || 0))} — ${venda.forma || "—"} ${venda.banco || ""}`,
+    `📈 Lucro: ${fmtBRL(Number(venda.lucro || 0))}`,
+  ];
+
+  return sendTelegramMessage(lines.join("\n"));
 }
 
 /**

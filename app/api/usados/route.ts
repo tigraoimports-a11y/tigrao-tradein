@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { fetchUsedValues, fetchExcludedModels, fetchDiscountRules, fetchModelDiscounts, buildModelDiscountsMap } from "@/lib/sheets";
+import { FALLBACK_IPAD_VALUES, FALLBACK_MACBOOK_VALUES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
 
-// Fallback hardcoded (último recurso)
+// Fallback hardcoded (último recurso) — iPhones
 const FALLBACK_USED_VALUES: UsedDeviceValue[] = [
   { modelo: "iPhone 11", armazenamento: "64GB", valorBase: 900 },
   { modelo: "iPhone 11", armazenamento: "128GB", valorBase: 1050 },
@@ -13,6 +14,10 @@ const FALLBACK_USED_VALUES: UsedDeviceValue[] = [
   { modelo: "iPhone 14", armazenamento: "128GB", valorBase: 2300 },
   { modelo: "iPhone 15", armazenamento: "128GB", valorBase: 3000 },
   { modelo: "iPhone 16", armazenamento: "128GB", valorBase: 3800 },
+  // iPads
+  ...FALLBACK_IPAD_VALUES,
+  // MacBooks
+  ...FALLBACK_MACBOOK_VALUES,
 ];
 
 const FALLBACK_EXCLUDED = [
