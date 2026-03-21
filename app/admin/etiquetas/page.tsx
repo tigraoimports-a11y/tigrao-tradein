@@ -85,7 +85,7 @@ export default function EtiquetasPage() {
   const [custoUnitario, setCustoUnitario] = useState("");
   const [fornecedor, setFornecedor] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [tamanhoEtiqueta, setTamanhoEtiqueta] = useState("62x29");
+  const [tamanhoEtiqueta, setTamanhoEtiqueta] = useState("29x30");
   const [quantidade, setQuantidade] = useState("1");
   const [produtoLivre, setProdutoLivre] = useState("");
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
@@ -96,6 +96,30 @@ export default function EtiquetasPage() {
   const [successMsg, setSuccessMsg] = useState("");
 
   const isStructured = STRUCTURED_CATS.includes(categoria);
+
+  // ── Produtos do estoque (para selecionar variações reais) ──
+  interface EstoqueItem { id: string; produto: string; categoria: string; cor: string | null; custo: number }
+  const [estoqueProdutos, setEstoqueProdutos] = useState<EstoqueItem[]>([]);
+  const [produtoEstoque, setProdutoEstoque] = useState("");
+  const [useEstoque, setUseEstoque] = useState(true); // true = selecionar do estoque, false = digitação livre
+
+  // Buscar produtos do estoque quando categoria muda
+  useEffect(() => {
+    if (!categoria || !password) return;
+    fetch(`/api/estoque?categoria=${categoria}`, { headers: { "x-admin-password": password } })
+      .then((r) => r.ok ? r.json() : { data: [] })
+      .then((json) => {
+        const items = (json.data || []) as EstoqueItem[];
+        setEstoqueProdutos(items);
+      })
+      .catch(() => setEstoqueProdutos([]));
+  }, [categoria, password]);
+
+  // Produtos únicos do estoque para a categoria selecionada
+  const produtosUnicos = [...new Map(estoqueProdutos.map((p) => [p.produto, p])).values()];
+  // Cores disponíveis para o produto selecionado
+  const coresDoEstoque = estoqueProdutos.filter((p) => p.produto === produtoEstoque).map((p) => p.cor).filter(Boolean) as string[];
+  const coresUnicas = [...new Set(coresDoEstoque)];
 
   // Buscar fornecedores do banco
   useEffect(() => {
@@ -116,6 +140,8 @@ export default function EtiquetasPage() {
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [filtroStatus, setFiltroStatus] = useState("");
   const [histLoading, setHistLoading] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
@@ -133,8 +159,8 @@ export default function EtiquetasPage() {
 
   // ── Gerar Etiqueta ──
   async function handleGerar() {
-    const nomeProduto = isStructured ? buildProdutoName(categoria, spec) : produtoLivre;
-    if (!nomeProduto) { setErrMsg("Preencha os dados do produto."); return; }
+    const nomeProduto = useEstoque ? produtoEstoque : (isStructured ? buildProdutoName(categoria, spec) : produtoLivre);
+    if (!nomeProduto) { setErrMsg("Selecione um produto."); return; }
     if (!custoUnitario) { setErrMsg("Informe o custo unitário."); return; }
     setErrMsg("");
     setGerandoLoading(true);
@@ -298,6 +324,96 @@ export default function EtiquetasPage() {
     setQuantidade("1");
   }
 
+  // ── Seleção de etiquetas ──
+  function toggleSelecionada(id: string) {
+    setSelecionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleTodas() {
+    if (selecionadas.size === etiquetas.length) {
+      setSelecionadas(new Set());
+    } else {
+      setSelecionadas(new Set(etiquetas.map((e) => e.id)));
+    }
+  }
+
+  // ── Imprimir múltiplas etiquetas em uma página ──
+  function handlePrintBatch() {
+    const lista = etiquetas.filter((e) => selecionadas.has(e.id));
+    if (lista.length === 0) return;
+    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["62x29"];
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (!win) return;
+
+    const etiquetasHtml = lista.map((et) => `
+      <div class="etiqueta">
+        <div class="header">
+          <span class="marca">TIGRAO IMPORTS</span>
+          <span class="codigo-texto">${et.codigo_barras}</span>
+        </div>
+        <div>
+          <div class="produto">${et.produto}</div>
+          ${et.fornecedor ? `<div class="detalhe">Forn: ${et.fornecedor}</div>` : ""}
+          <div class="detalhe">Custo: R$ ${Number(et.custo_unitario).toLocaleString("pt-BR")}</div>
+        </div>
+        <div class="barcode-area"><svg id="bc-${et.codigo_barras}"></svg></div>
+      </div>
+    `).join("");
+
+    const barcodeScripts = lista.map((et) =>
+      `JsBarcode('#bc-${et.codigo_barras}','${et.codigo_barras}',{format:'CODE128',width:${tamanho.width > 50 ? 1.8 : 1.3},height:${tamanho.height > 30 ? 28 : 20},displayValue:false,margin:0});`
+    ).join("\n");
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Imprimir ${lista.length} Etiquetas</title>
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif;padding:5mm}
+        .etiquetas{display:flex;flex-wrap:wrap;gap:3mm}
+        .etiqueta{width:${tamanho.width}mm;height:${tamanho.height}mm;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;border:0.3mm solid #000;page-break-inside:avoid}
+        .header{display:flex;justify-content:space-between;align-items:center}
+        .marca{font-size:${tamanho.height > 30 ? 7 : 5}pt;font-weight:bold}
+        .codigo-texto{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#555}
+        .produto{font-size:${tamanho.height > 30 ? 8 : 6}pt;font-weight:bold;line-height:1.2}
+        .detalhe{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#333}
+        .barcode-area{text-align:center}
+        svg{max-width:100%}
+        @media print{body{padding:0}.etiquetas{gap:0}}
+      </style></head><body>
+      <div class="etiquetas">${etiquetasHtml}</div>
+      <script>
+        ${barcodeScripts}
+        window.onload=()=>{window.print();window.close()};
+      <\/script></body></html>`);
+    win.document.close();
+  }
+
+  // ── Excluir etiqueta ──
+  async function handleExcluir(etiqueta: Etiqueta) {
+    if (!confirm(`Excluir etiqueta ${etiqueta.codigo_barras}?\n${etiqueta.produto}`)) return;
+    setExcluindoId(etiqueta.id);
+    try {
+      const res = await fetch("/api/etiquetas", {
+        method: "DELETE",
+        headers: headers(),
+        body: JSON.stringify({ id: etiqueta.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setEtiquetas((prev) => prev.filter((e) => e.id !== etiqueta.id));
+      setSelecionadas((prev) => { const next = new Set(prev); next.delete(etiqueta.id); return next; });
+    } catch (e: unknown) {
+      alert("Erro ao excluir: " + (e instanceof Error ? e.message : "desconhecido"));
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   // Preview do nome gerado
   const previewNome = isStructured ? buildProdutoName(categoria, spec) : produtoLivre;
 
@@ -347,119 +463,170 @@ export default function EtiquetasPage() {
             {/* Categoria */}
             <div>
               <p className={labelCls}>Categoria *</p>
-              <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSpec({ ...DEFAULT_SPEC }); setCor(""); }} className={inputCls}>
+              <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSpec({ ...DEFAULT_SPEC }); setCor(""); setProdutoEstoque(""); }} className={inputCls}>
                 <option value="">Selecione...</option>
                 {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
               </select>
             </div>
 
-            {/* Campos estruturados por categoria (idênticos ao Estoque) */}
-            {categoria === "IPHONES" && (
-              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
-                  {IPHONE_MODELOS.map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
-                  {IPHONE_STORAGES.map((s) => <option key={s}>{s}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {categoria === "MACBOOK" && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
-                  {MACBOOK_TIPOS.map((t) => <option key={t} value={t}>{t === "AIR" ? "MacBook Air" : "MacBook Pro"}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
-                  {(spec.mb_modelo === "AIR" ? MACBOOK_TELAS_AIR : MACBOOK_TELAS_PRO).map((t) => <option key={t} value={t}>{t}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
-                  {MACBOOK_CHIPS.map((c) => <option key={c}>{c}</option>)}
-                </select></div>
-                <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
-                  {MACBOOK_RAMS.map((r) => <option key={r}>{r}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Armazenamento</p><select value={spec.mb_storage} onChange={(e) => setS("mb_storage", e.target.value)} className={inputCls}>
-                  {MACBOOK_STORAGES.map((s) => <option key={s}>{s}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {categoria === "MAC_MINI" && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
-                  {MAC_MINI_CHIPS.map((c) => <option key={c}>{c}</option>)}
-                </select></div>
-                <div><p className={labelCls}>RAM</p><select value={spec.mm_ram} onChange={(e) => setS("mm_ram", e.target.value)} className={inputCls}>
-                  {MAC_MINI_RAMS.map((r) => <option key={r}>{r}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Armazenamento</p><select value={spec.mm_storage} onChange={(e) => setS("mm_storage", e.target.value)} className={inputCls}>
-                  {MAC_MINI_STORAGES.map((s) => <option key={s}>{s}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {categoria === "IPADS" && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
-                  {IPAD_MODELOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
-                  {IPAD_TELAS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Armazenamento</p><select value={spec.ipad_storage} onChange={(e) => setS("ipad_storage", e.target.value)} className={inputCls}>
-                  {IPAD_STORAGES.map((s) => <option key={s}>{s}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Conectividade</p><select value={spec.ipad_conn} onChange={(e) => setS("ipad_conn", e.target.value)} className={inputCls}>
-                  {IPAD_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {categoria === "APPLE_WATCH" && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
-                  {WATCH_MODELOS.map((m) => <option key={m}>{m}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
-                  {WATCH_TAMANHOS.map((t) => <option key={t}>{t}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Conectividade</p><select value={spec.aw_conn} onChange={(e) => setS("aw_conn", e.target.value)} className={inputCls}>
-                  {WATCH_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {categoria === "AIRPODS" && (
-              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-                <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
-                  {AIRPODS_MODELOS.map((m) => <option key={m}>{m}</option>)}
-                </select></div>
-              </div>
-            )}
-
-            {/* Categorias sem campos estruturados */}
-            {categoria && !isStructured && (
-              <div>
-                <p className={labelCls}>Nome do Produto *</p>
-                <input value={produtoLivre} onChange={(e) => setProdutoLivre(e.target.value)} placeholder="Ex: Cabo USB-C Lightning 1m" className={inputCls} />
-              </div>
-            )}
-
-            {/* Preview do nome */}
-            {categoria && previewNome && (
-              <div className="px-4 py-3 bg-gray-900 rounded-xl">
-                <p className="text-xs text-gray-400">Produto na etiqueta:</p>
-                <p className="text-white font-bold">{previewNome}</p>
-              </div>
-            )}
-
-            {/* Cor */}
+            {/* Modo: Estoque vs Livre */}
             {categoria && (
-              <div>
-                <p className={labelCls}>Cor</p>
-                <input value={cor} onChange={(e) => setCor(e.target.value)} placeholder="Ex: Preto, Natural, Prata..." className={inputCls} />
+              <div className="flex gap-2">
+                <button onClick={() => setUseEstoque(true)} className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${useEstoque ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-500 border-gray-300 hover:border-gray-400"}`}>
+                  📦 Selecionar do Estoque
+                </button>
+                <button onClick={() => setUseEstoque(false)} className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${!useEstoque ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-500 border-gray-300 hover:border-gray-400"}`}>
+                  ✏️ Digitação Livre
+                </button>
               </div>
+            )}
+
+            {/* ── Modo Estoque: selecionar produto existente ── */}
+            {categoria && useEstoque && (
+              <>
+                <div>
+                  <p className={labelCls}>Produto *</p>
+                  {produtosUnicos.length > 0 ? (
+                    <select value={produtoEstoque} onChange={(e) => { setProdutoEstoque(e.target.value); setCor(""); }} className={inputCls}>
+                      <option value="">Selecione o produto...</option>
+                      {produtosUnicos.map((p) => <option key={p.id} value={p.produto}>{p.produto}</option>)}
+                    </select>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Nenhum produto nesta categoria no estoque.</p>
+                  )}
+                </div>
+
+                {/* Cor: opções do estoque */}
+                {produtoEstoque && coresUnicas.length > 0 && (
+                  <div>
+                    <p className={labelCls}>Cor</p>
+                    <select value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls}>
+                      <option value="">Selecione a cor...</option>
+                      {coresUnicas.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Preview */}
+                {produtoEstoque && (
+                  <div className="px-4 py-3 bg-gray-900 rounded-xl">
+                    <p className="text-xs text-gray-400">Produto na etiqueta:</p>
+                    <p className="text-white font-bold">{produtoEstoque}{cor ? ` — ${cor}` : ""}</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Modo Livre: campos manuais ── */}
+            {categoria && !useEstoque && (
+              <>
+                {/* Campos estruturados por categoria */}
+                {categoria === "IPHONES" && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
+                      {IPHONE_MODELOS.map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
+                      {IPHONE_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {categoria === "MACBOOK" && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
+                      {MACBOOK_TIPOS.map((t) => <option key={t} value={t}>{t === "AIR" ? "MacBook Air" : "MacBook Pro"}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
+                      {(spec.mb_modelo === "AIR" ? MACBOOK_TELAS_AIR : MACBOOK_TELAS_PRO).map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
+                      {MACBOOK_CHIPS.map((c) => <option key={c}>{c}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
+                      {MACBOOK_RAMS.map((r) => <option key={r}>{r}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Armazenamento</p><select value={spec.mb_storage} onChange={(e) => setS("mb_storage", e.target.value)} className={inputCls}>
+                      {MACBOOK_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {categoria === "MAC_MINI" && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
+                      {MAC_MINI_CHIPS.map((c) => <option key={c}>{c}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>RAM</p><select value={spec.mm_ram} onChange={(e) => setS("mm_ram", e.target.value)} className={inputCls}>
+                      {MAC_MINI_RAMS.map((r) => <option key={r}>{r}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Armazenamento</p><select value={spec.mm_storage} onChange={(e) => setS("mm_storage", e.target.value)} className={inputCls}>
+                      {MAC_MINI_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {categoria === "IPADS" && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
+                      {IPAD_MODELOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
+                      {IPAD_TELAS.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Armazenamento</p><select value={spec.ipad_storage} onChange={(e) => setS("ipad_storage", e.target.value)} className={inputCls}>
+                      {IPAD_STORAGES.map((s) => <option key={s}>{s}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Conectividade</p><select value={spec.ipad_conn} onChange={(e) => setS("ipad_conn", e.target.value)} className={inputCls}>
+                      {IPAD_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {categoria === "APPLE_WATCH" && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
+                      {WATCH_MODELOS.map((m) => <option key={m}>{m}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
+                      {WATCH_TAMANHOS.map((t) => <option key={t}>{t}</option>)}
+                    </select></div>
+                    <div><p className={labelCls}>Conectividade</p><select value={spec.aw_conn} onChange={(e) => setS("aw_conn", e.target.value)} className={inputCls}>
+                      {WATCH_CONNS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {categoria === "AIRPODS" && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
+                      {AIRPODS_MODELOS.map((m) => <option key={m}>{m}</option>)}
+                    </select></div>
+                  </div>
+                )}
+
+                {/* Categorias sem campos estruturados */}
+                {!isStructured && (
+                  <div>
+                    <p className={labelCls}>Nome do Produto *</p>
+                    <input value={produtoLivre} onChange={(e) => setProdutoLivre(e.target.value)} placeholder="Ex: Cabo USB-C Lightning 1m" className={inputCls} />
+                  </div>
+                )}
+
+                {/* Preview do nome */}
+                {previewNome && (
+                  <div className="px-4 py-3 bg-gray-900 rounded-xl">
+                    <p className="text-xs text-gray-400">Produto na etiqueta:</p>
+                    <p className="text-white font-bold">{previewNome}</p>
+                  </div>
+                )}
+
+                {/* Cor */}
+                <div>
+                  <p className={labelCls}>Cor</p>
+                  <input value={cor} onChange={(e) => setCor(e.target.value)} placeholder="Ex: Preto, Natural, Prata..." className={inputCls} />
+                </div>
+              </>
             )}
 
             {/* Custo + Fornecedor + Quantidade */}
@@ -626,9 +793,9 @@ export default function EtiquetasPage() {
         {/* ═══════════ TAB: HISTORICO ═══════════ */}
         {tab === "historico" && (
           <div className="space-y-4">
-            {/* Filtros */}
-            <div className="bg-white rounded-xl border p-4 flex gap-4 items-center">
-              <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            {/* Filtros + Ações em lote */}
+            <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-3 items-center">
+              <select value={filtroStatus} onChange={(e) => { setFiltroStatus(e.target.value); setSelecionadas(new Set()); }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                 <option value="">Todos os status</option>
                 <option value="AGUARDANDO_ENTRADA">Aguardando Entrada</option>
                 <option value="EM_ESTOQUE">Em Estoque</option>
@@ -636,6 +803,11 @@ export default function EtiquetasPage() {
               </select>
               <button onClick={carregarHistorico} className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-lg text-sm">Atualizar</button>
               <span className="text-sm text-gray-500">{etiquetas.length} etiquetas</span>
+              {selecionadas.size > 0 && (
+                <button onClick={handlePrintBatch} className="ml-auto bg-gray-800 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                  🖨️ Imprimir {selecionadas.size} selecionada{selecionadas.size > 1 ? "s" : ""}
+                </button>
+              )}
             </div>
 
             {/* Tabela */}
@@ -646,6 +818,9 @@ export default function EtiquetasPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
+                      <th className="px-3 py-3 text-center w-10">
+                        <input type="checkbox" checked={etiquetas.length > 0 && selecionadas.size === etiquetas.length} onChange={toggleTodas} className="w-4 h-4 accent-orange-500 cursor-pointer" />
+                      </th>
                       <th className="px-4 py-3 text-left font-semibold text-gray-600">Codigo</th>
                       <th className="px-4 py-3 text-left font-semibold text-gray-600">Produto</th>
                       <th className="px-4 py-3 text-left font-semibold text-gray-600">Fornecedor</th>
@@ -658,7 +833,10 @@ export default function EtiquetasPage() {
                     {etiquetas.map((et) => {
                       const st = STATUS_ETIQUETA[et.status as keyof typeof STATUS_ETIQUETA];
                       return (
-                        <tr key={et.id} className="hover:bg-gray-50">
+                        <tr key={et.id} className={`hover:bg-gray-50 ${selecionadas.has(et.id) ? "bg-orange-50" : ""}`}>
+                          <td className="px-3 py-3 text-center">
+                            <input type="checkbox" checked={selecionadas.has(et.id)} onChange={() => toggleSelecionada(et.id)} className="w-4 h-4 accent-orange-500 cursor-pointer" />
+                          </td>
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">{et.codigo_barras}</td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{et.produto}</p>
@@ -683,15 +861,20 @@ export default function EtiquetasPage() {
                             {new Date(et.created_at).toLocaleDateString("pt-BR")}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {et.status === "AGUARDANDO_ENTRADA" && (
+                            <div className="flex gap-1.5 justify-center">
                               <button onClick={() => handlePrint(et)} className="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-lg">Imprimir</button>
-                            )}
+                              {et.status === "AGUARDANDO_ENTRADA" && (
+                                <button onClick={() => handleExcluir(et)} disabled={excluindoId === et.id} className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg disabled:opacity-50">
+                                  {excluindoId === et.id ? "..." : "Excluir"}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
                     })}
                     {etiquetas.length === 0 && (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Nenhuma etiqueta encontrada</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Nenhuma etiqueta encontrada</td></tr>
                     )}
                   </tbody>
                 </table>
