@@ -44,6 +44,7 @@ export interface Venda {
   status_pagamento: string;
   comprovante_url: string | null;
   notas: string | null;
+  imei: string | null;
 }
 
 export interface Reajuste {
