@@ -218,33 +218,40 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  // ── Imprimir Etiqueta individual (Brother 29mm — 1 etiqueta por fita, compacta) ──
+  // ── Imprimir Etiqueta individual (Brother 29mm DK-2210) ──
   function handlePrint(etiqueta: Etiqueta) {
-    const win = window.open("", "_blank", "width=400,height=300");
+    const win = window.open("", "_blank", "width=500,height=200");
     if (!win) return;
+    // Layout horizontal: 62mm largura x 29mm altura (padrão Brother DK-2210)
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta ${etiqueta.codigo_barras}</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;overflow:hidden;width:29mm}
-        .etiqueta{width:29mm;padding:2mm 1.5mm;display:flex;flex-direction:column;align-items:center;gap:1mm}
-        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.5pt}
-        .produto{font-size:5pt;font-weight:bold;line-height:1.2;text-align:center}
-        .cor{font-size:4pt;color:#555;text-align:center}
-        .barcode-area{text-align:center;width:100%}
-        svg{width:90%!important;height:auto!important}
-        @page{size:29mm auto;margin:0}
+        html,body{width:62mm;height:29mm;overflow:hidden}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .etiqueta{width:62mm;height:29mm;padding:1.5mm 2mm;display:flex;flex-direction:row;align-items:center;gap:2mm}
+        .info{flex:1;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;min-width:0}
+        .marca{font-size:5pt;font-weight:bold;letter-spacing:0.3pt;white-space:nowrap}
+        .produto{font-size:7pt;font-weight:bold;line-height:1.2;word-wrap:break-word}
+        .cor{font-size:5.5pt;color:#555}
+        .codigo{font-size:5pt;color:#888;margin-top:0.5mm}
+        .barcode-area{width:26mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+        .barcode-area svg{width:100%!important;height:auto!important}
+        @page{size:62mm 29mm;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
       <div class="etiqueta">
-        <div class="marca">TIGRAO IMPORTS</div>
-        <div class="produto">${etiqueta.produto}</div>
-        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+        <div class="info">
+          <div class="marca">TIGRAO IMPORTS</div>
+          <div class="produto">${etiqueta.produto}</div>
+          ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+          <div class="codigo">${etiqueta.codigo_barras}</div>
+        </div>
         <div class="barcode-area"><svg id="bc"></svg></div>
       </div>
       <script>
-        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:1.5,height:22,displayValue:true,fontSize:6,margin:1,textMargin:1});
+        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:1.8,height:50,displayValue:false,margin:0});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -444,20 +451,23 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   function handlePrintBatch() {
     const lista = etiquetas.filter((e) => selecionadas.has(e.id));
     if (lista.length === 0) return;
-    const win = window.open("", "_blank", "width=400,height=600");
+    const win = window.open("", "_blank", "width=500,height=600");
     if (!win) return;
 
     const etiquetasHtml = lista.map((et, idx) => `
       <div class="etiqueta" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
-        <div class="marca">TIGRAO IMPORTS</div>
-        <div class="produto">${et.produto}</div>
-        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+        <div class="info">
+          <div class="marca">TIGRAO IMPORTS</div>
+          <div class="produto">${et.produto}</div>
+          ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+          <div class="codigo">${et.codigo_barras}</div>
+        </div>
         <div class="barcode-area"><svg id="bc-${idx}"></svg></div>
       </div>
     `).join("");
 
     const barcodeScripts = lista.map((et, idx) =>
-      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:1.5,height:22,displayValue:true,fontSize:6,margin:1,textMargin:1});`
+      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:1.8,height:50,displayValue:false,margin:0});`
     ).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
@@ -465,14 +475,17 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;width:29mm}
-        .etiqueta{width:29mm;padding:2mm 1.5mm;display:flex;flex-direction:column;align-items:center;gap:1mm}
-        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.5pt}
-        .produto{font-size:5pt;font-weight:bold;line-height:1.2;text-align:center}
-        .cor{font-size:4pt;color:#555;text-align:center}
-        .barcode-area{text-align:center;width:100%}
-        svg{width:90%!important;height:auto!important}
-        @page{size:29mm auto;margin:0}
+        html,body{width:62mm;overflow:hidden}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .etiqueta{width:62mm;height:29mm;padding:1.5mm 2mm;display:flex;flex-direction:row;align-items:center;gap:2mm}
+        .info{flex:1;display:flex;flex-direction:column;justify-content:center;gap:0.5mm;min-width:0}
+        .marca{font-size:5pt;font-weight:bold;letter-spacing:0.3pt;white-space:nowrap}
+        .produto{font-size:7pt;font-weight:bold;line-height:1.2;word-wrap:break-word}
+        .cor{font-size:5.5pt;color:#555}
+        .codigo{font-size:5pt;color:#888;margin-top:0.5mm}
+        .barcode-area{width:26mm;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+        .barcode-area svg{width:100%!important;height:auto!important}
+        @page{size:62mm 29mm;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
       ${etiquetasHtml}
