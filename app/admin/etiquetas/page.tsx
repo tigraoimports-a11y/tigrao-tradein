@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 import {
@@ -39,27 +39,31 @@ interface Etiqueta {
 }
 
 // ── Hook: detecta scanner USB HID (digita muito rápido + Enter) ──
-function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean) {
+function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean, inputRef?: React.RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     if (!enabled) return;
     let buffer = "";
     let lastTime = 0;
-    const THRESHOLD = 80;
+    const THRESHOLD = 80; // Scanner USB digita muito rápido (< 80ms entre teclas)
 
     function handleKey(e: KeyboardEvent) {
-      // Ignorar se está focado em input/textarea/select
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const isInScanInput = inputRef?.current && e.target === inputRef.current;
+
+      // Permitir captura global OU dentro do input do scanner
+      if (!isInScanInput && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
 
       const now = Date.now();
       if (now - lastTime > THRESHOLD) buffer = "";
       lastTime = now;
 
       if (e.key === "Enter") {
-        const codigo = buffer.trim();
+        const codigo = buffer.trim().toUpperCase();
         if (codigo.length >= 4) {
           e.preventDefault();
           onScan(codigo);
+          // Limpar o input se o scanner digitou nele
+          if (isInScanInput && inputRef?.current) inputRef.current.value = "";
         }
         buffer = "";
       } else if (e.key.length === 1) {
@@ -69,7 +73,7 @@ function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean) {
 
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onScan, enabled]);
+  }, [onScan, enabled, inputRef]);
 }
 
 export default function EtiquetasPage() {
@@ -144,6 +148,10 @@ export default function EtiquetasPage() {
   const [scanManual, setScanManual] = useState("");
   const [modalScan, setModalScan] = useState<Etiqueta | null>(null);
   const [historicoSessao, setHistoricoSessao] = useState<{ codigo: string; nome: string; acao: string; hora: string }[]>([]);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [cameraAtiva, setCameraAtiva] = useState(false);
+  const cameraRef = useRef<HTMLDivElement>(null);
+  const scannerInstanceRef = useRef<unknown>(null);
 
   // ── Estado: Histórico ──
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
@@ -273,7 +281,58 @@ export default function EtiquetasPage() {
   }, [modalScan, scanLoading, headers]);
 
   // Ativar scanner global na aba "bipar"
-  useGlobalScanner(handleScan, tab === "bipar");
+  useGlobalScanner(handleScan, tab === "bipar", scanInputRef);
+
+  // Auto-focus no input quando abre aba bipar (scanner USB digita no campo focado)
+  useEffect(() => {
+    if (tab === "bipar") {
+      setTimeout(() => scanInputRef.current?.focus(), 100);
+    }
+  }, [tab]);
+
+  // ── Camera scanner (celular) ──
+  const iniciarCamera = useCallback(async () => {
+    if (cameraAtiva) return;
+    setCameraAtiva(true);
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("camera-scanner");
+      scannerInstanceRef.current = scanner;
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 2.0 },
+        (decodedText: string) => {
+          const codigo = decodedText.trim().toUpperCase();
+          if (codigo.length >= 4) {
+            handleScan(codigo);
+            // Parar câmera após leitura bem sucedida
+            scanner.stop().then(() => {
+              scanner.clear();
+              scannerInstanceRef.current = null;
+              setCameraAtiva(false);
+            }).catch(() => {});
+          }
+        },
+        () => {} // ignora erros de frame sem código
+      );
+    } catch {
+      setCameraAtiva(false);
+    }
+  }, [cameraAtiva, handleScan]);
+
+  const pararCamera = useCallback(async () => {
+    const scanner = scannerInstanceRef.current as { stop: () => Promise<void>; clear: () => void } | null;
+    if (scanner) {
+      try { await scanner.stop(); scanner.clear(); } catch {}
+      scannerInstanceRef.current = null;
+    }
+    setCameraAtiva(false);
+  }, []);
+
+  // Limpar câmera ao sair da aba
+  useEffect(() => {
+    if (tab !== "bipar") pararCamera();
+  }, [tab, pararCamera]);
 
   // ── Confirmar ação do scan (entrada ou saída) ──
   async function confirmarScan(etiqueta: Etiqueta) {
@@ -759,15 +818,37 @@ export default function EtiquetasPage() {
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
               <div>
                 <p className="font-semibold text-green-800">Scanner ativo — pronto para bipar</p>
-                <p className="text-sm text-green-600">Bipe qualquer etiqueta Tigrao. O sistema detecta automaticamente.</p>
+                <p className="text-sm text-green-600">Bipe com leitor USB, camera do celular, ou digite o codigo.</p>
               </div>
             </div>
 
-            {/* Input manual */}
+            {/* Camera do celular */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <p className="text-sm font-semibold text-gray-600 mb-2">Ou digite o codigo manualmente:</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-600">Camera do celular:</p>
+                {!cameraAtiva ? (
+                  <button onClick={iniciarCamera} className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                    📷 Abrir Camera
+                  </button>
+                ) : (
+                  <button onClick={pararCamera} className="bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                    ✕ Fechar Camera
+                  </button>
+                )}
+              </div>
+              {cameraAtiva && (
+                <div className="relative rounded-lg overflow-hidden bg-black">
+                  <div id="camera-scanner" ref={cameraRef} className="w-full" />
+                  <p className="text-center text-xs text-gray-400 mt-2 pb-2">Aponte para o codigo de barras da etiqueta</p>
+                </div>
+              )}
+            </div>
+
+            {/* Input manual / Scanner USB */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-sm font-semibold text-gray-600 mb-2">Leitor USB ou codigo manual:</p>
               <form onSubmit={(e) => { e.preventDefault(); if (scanManual.trim()) { handleScan(scanManual.trim().toUpperCase()); setScanManual(""); } }} className="flex gap-2">
-                <input type="text" value={scanManual} onChange={(e) => setScanManual(e.target.value.toUpperCase())} placeholder="TG000001" className="flex-1 border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-orange-400" maxLength={10} />
+                <input ref={scanInputRef} type="text" value={scanManual} onChange={(e) => setScanManual(e.target.value.toUpperCase())} placeholder="TG000001" className="flex-1 border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-orange-400" maxLength={10} autoFocus />
                 <button type="submit" disabled={scanLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-lg">Buscar</button>
               </form>
             </div>
