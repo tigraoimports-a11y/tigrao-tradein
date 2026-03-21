@@ -202,14 +202,27 @@ export default function VendasPage() {
   const entradaPix = parseFloat(form.entrada_pix) || 0;
   const entradaEspecie = parseFloat(form.entrada_especie) || 0;
   const valorCartao = preco - valorTroca - entradaPix - entradaEspecie;
-  const lucro = preco - custo;
-  const margem = preco > 0 ? (lucro / preco) * 100 : 0;
   const parcelas = parseInt(form.qnt_parcelas) || 0;
   const taxa = form.forma === "CARTAO"
     ? getTaxa(form.banco, form.bandeira || null, parcelas, form.forma)
     : form.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, parcelas, "CARTAO") : 0;
   const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
   const recebimento = form.forma ? calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null) : "—";
+
+  // Lógica correta de lucro (diagrama):
+  // 1. Busca taxa da maquininha (forma + parcelas)
+  // 2. Valor líquido = bruto × (1 − taxa)
+  // 3. Total real recebido = líquido + troca
+  // 4. Lucro = total real − custo
+  // 5. Margem = lucro ÷ total real × 100
+  const parteCartao = Math.max(0, valorCartao);
+  const valorComprovanteInput = parseFloat(form.valor_comprovante_input) || 0;
+  const valorLiquido = taxa > 0
+    ? calcularLiquido(valorComprovanteInput > 0 ? valorComprovanteInput : comprovante || parteCartao, taxa)
+    : parteCartao;
+  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca;
+  const lucro = totalRealRecebido - custo;
+  const margem = totalRealRecebido > 0 ? (lucro / totalRealRecebido) * 100 : 0;
 
   // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
   const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; comp?: string }) => {
@@ -258,7 +271,7 @@ export default function VendasPage() {
       produto: form.produto,
       fornecedor: form.fornecedor || null,
       custo,
-      preco_vendido: preco,
+      preco_vendido: Math.round(totalRealRecebido),
       banco: banco,
       forma: !form.forma ? "PIX" : form.forma === "LINK" ? "CARTAO" : form.forma === "ESPECIE" ? "ESPECIE" : form.forma,
       recebimento: !form.forma ? "D+0" : form.forma === "PIX" || form.forma === "ESPECIE" ? "D+0" : form.forma === "LINK" ? "D+0" : "D+1",
@@ -1112,6 +1125,7 @@ export default function VendasPage() {
                                                 // lucro e margem_pct são GENERATED ALWAYS no Supabase — NÃO enviar!
                                                 const pv = parseFloat(ef.preco_vendido) || 0;
                                                 const c = parseFloat(ef.custo) || 0;
+                                                // Lucro = total real recebido - custo (preco_vendido já é o total real)
                                                 const newLucro = pv - c;
                                                 const newMargem = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
                                                 const updates: Record<string, unknown> = {
