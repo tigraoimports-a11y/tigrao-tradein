@@ -261,7 +261,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         .extra{font-size:6pt;color:#444;margin-top:1mm}
         .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
         .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
-        @page{size:62mm 50mm;margin:0}
+        @page{size:62mm 45mm;margin:0}
       </style></head><body>
       <div class="wrap">
         <div class="produto">${etiqueta.produto}</div>
@@ -535,7 +535,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         .extra{font-size:6pt;color:#444;margin-top:1mm}
         .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
         .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
-        @page{size:62mm 50mm;margin:0}
+        @page{size:62mm 45mm;margin:0}
       </style></head><body>
       ${etiquetasHtml}
       <script>
