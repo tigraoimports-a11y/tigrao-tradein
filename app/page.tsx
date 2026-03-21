@@ -42,7 +42,6 @@ interface LojaConfig {
   banner_subtitulo: string;
   banner_image_url: string | null;
   accent_color: string;
-  whatsapp_numero: string;
   manutencao?: boolean;
   tema?: string;
 }
@@ -87,7 +86,6 @@ export default function LojaPage() {
     banner_subtitulo: "Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple",
     banner_image_url: null,
     accent_color: "#E8740E",
-    whatsapp_numero: "5521999999999",
     tema: "tigrao",
   });
   const [loading, setLoading] = useState(true);
@@ -98,8 +96,6 @@ export default function LojaPage() {
 
   const tema = useMemo(() => getTema(config.tema), [config.tema]);
   const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
-
-  // WhatsApp contact removed from showcase — display only
 
   /* ── Destaques ── */
   const destaques = useMemo(() => {

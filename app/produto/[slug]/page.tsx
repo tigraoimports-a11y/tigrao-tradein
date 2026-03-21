@@ -36,7 +36,6 @@ interface LojaConfig {
   banner_subtitulo: string;
   banner_image_url: string | null;
   accent_color: string;
-  whatsapp_numero: string;
   manutencao?: boolean;
   tema?: string;
 }
@@ -67,7 +66,6 @@ export default function ProdutoPage() {
     banner_subtitulo: "",
     banner_image_url: null,
     accent_color: "#E8740E",
-    whatsapp_numero: "5521999999999",
     tema: "tigrao",
   });
   const [loading, setLoading] = useState(true);
@@ -78,7 +76,6 @@ export default function ProdutoPage() {
 
   const tema = useMemo(() => getTema(config.tema), [config.tema]);
   const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
-  // WhatsApp contact removed from showcase — display only
 
   /* ── Fetch all products and find current one ── */
   useEffect(() => {
@@ -139,7 +136,26 @@ export default function ProdutoPage() {
   /* ── Current image (variacao image or product image) ── */
   const currentImage = currentVariacao?.imagem || produto?.imagem || null;
 
-  // WhatsApp purchase flow removed — showcase is display only
+  /* ── Maintenance mode ── */
+  if (!loading && config.manutencao) {
+    return (
+      <div style={{ backgroundColor: tema.bgSecondary, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <div className="text-8xl mb-6">🔧</div>
+          <h1 className="text-2xl font-bold mb-3">Estamos realizando melhorias</h1>
+          <p style={{ color: tema.textMuted }} className="text-base mb-8">
+            Nosso site esta em manutencao para ficar ainda melhor. Voltaremos em breve!
+          </p>
+          <div className="flex flex-col gap-3">
+            <Link href="/troca" style={{ backgroundColor: tema.accent }} className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-semibold transition-colors">
+              🔄 Simulador de Troca
+            </Link>
+          </div>
+          <p style={{ color: tema.textMuted }} className="text-xs mt-8 opacity-60">TigraoImports — Barra da Tijuca, RJ 🐯</p>
+        </div>
+      </div>
+    );
+  }
 
   /* ── Loading / Error ── */
   if (loading) {

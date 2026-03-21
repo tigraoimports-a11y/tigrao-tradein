@@ -139,6 +139,18 @@ export async function GET(req: NextRequest) {
     // Strip whatsapp_numero from public API response — showcase should not expose contact info
     const { whatsapp_numero: _unused, ...publicConfig } = config as Record<string, unknown>;
 
+    // ── If manutencao is enabled, return empty products + maintenance flag only ──
+    if (publicConfig.manutencao) {
+      const maintenanceResponse = {
+        produtos: [],
+        categorias: [],
+        config: { manutencao: true, tema: publicConfig.tema ?? "tigrao" },
+      };
+      return NextResponse.json(maintenanceResponse, {
+        headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" },
+      });
+    }
+
     // ── Grouped format (new default) ──
     if (format === "grouped" || !format) {
       const categoriasOutput = categorias.map((c) => ({
