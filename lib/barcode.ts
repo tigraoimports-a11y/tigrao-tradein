@@ -51,9 +51,9 @@ export function renderBarcode(elementId: string, codigo: string, options?: { sma
  * Tamanhos de etiqueta suportados (mm)
  */
 export const TAMANHOS_ETIQUETA: Record<string, { label: string; width: number; height: number }> = {
-  "57x32": { label: "57 × 32mm (Padrão — rolo térmico)", width: 57, height: 32 },
+  "62x29": { label: "62 × 29mm (Brother QL-820NWB — DK2210)", width: 62, height: 29 },
+  "57x32": { label: "57 × 32mm (Rolo térmico genérico)", width: 57, height: 32 },
   "40x25": { label: "40 × 25mm (Mini)", width: 40, height: 25 },
-  "62x29": { label: "62 × 29mm (Brother QL)", width: 62, height: 29 },
   "100x50": { label: "100 × 50mm (Grande)", width: 100, height: 50 },
   "58x40": { label: "58 × 40mm (Elgin / Argox)", width: 58, height: 40 },
 };

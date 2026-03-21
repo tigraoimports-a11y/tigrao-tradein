@@ -82,7 +82,7 @@ export default function EtiquetasPage() {
     custo_unitario: "",
     fornecedor: "",
     observacao: "",
-    tamanho_etiqueta: "57x32",
+    tamanho_etiqueta: "62x29",
     quantidade: "1",
   });
   const [gerandoLoading, setGerandoLoading] = useState(false);
