@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { categoria, produto, cor, armazenamento, custo_unitario, fornecedor, observacao } = body;
+    const { categoria, produto, cor, armazenamento, custo_unitario, fornecedor, observacao, serial_no, imei } = body;
 
     if (!produto) {
       return NextResponse.json({ error: "Produto é obrigatório" }, { status: 400 });
@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
         custo_unitario: custo_unitario || 0,
         fornecedor: fornecedor || null,
         observacao: observacao || null,
+        serial_no: serial_no || null,
+        imei: imei || null,
         status: "AGUARDANDO_ENTRADA",
       })
       .select()

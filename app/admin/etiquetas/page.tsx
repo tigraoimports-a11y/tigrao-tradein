@@ -32,6 +32,8 @@ interface Etiqueta {
   custo_unitario: number;
   fornecedor: string | null;
   observacao: string | null;
+  serial_no: string | null;
+  imei: string | null;
   status: string;
   created_at: string;
   data_entrada: string | null;
@@ -89,6 +91,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   const [custoUnitario, setCustoUnitario] = useState("");
   const [fornecedor, setFornecedor] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [serialNo, setSerialNo] = useState("");
+  const [imeiNo, setImeiNo] = useState("");
   const [tamanhoEtiqueta, setTamanhoEtiqueta] = useState("29x30");
   const [quantidade, setQuantidade] = useState("1");
   const [produtoLivre, setProdutoLivre] = useState("");
@@ -198,6 +202,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             custo_unitario: parseFloat(custoUnitario.replace(/\./g, "").replace(",", ".")) || 0,
             fornecedor: fornecedor || null,
             observacao: observacao || null,
+            serial_no: serialNo || null,
+            imei: imeiNo || null,
           }),
         });
         const json = await res.json();
@@ -218,38 +224,40 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  // ── Imprimir Etiqueta individual (Brother 29mm DK-2210) ──
+  // ── Imprimir Etiqueta individual (Brother QL-820NWB DK-2210 62mm contínuo) ──
   function handlePrint(etiqueta: Etiqueta) {
-    const win = window.open("", "_blank", "width=500,height=200");
+    const win = window.open("", "_blank", "width=500,height=300");
     if (!win) return;
-    // Layout horizontal 62x29mm — texto esquerda, barcode direita
+    const serial = etiqueta.serial_no || "";
+    const imei = etiqueta.imei || "";
+    const hasExtra = serial || imei;
+    // Layout: texto em cima, barcode embaixo, sem espaço desperdiçado
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta ${etiqueta.codigo_barras}</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;height:29mm;margin:0;padding:0;overflow:hidden}
+        html,body{width:62mm;margin:0;padding:0}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;height:29mm;display:flex;align-items:center;padding:1mm}
-        .info{width:32mm;padding-left:1mm}
-        .bc{width:28mm;text-align:center}
-        .marca{font-size:5pt;font-weight:bold}
-        .produto{font-size:6.5pt;font-weight:bold;line-height:1.15;margin-top:0.5mm}
-        .cor{font-size:5pt;color:#555;margin-top:0.3mm}
-        .cod{font-size:5pt;color:#888;margin-top:0.5mm}
-        svg{height:22mm!important;width:auto!important}
-        @page{size:62mm 29mm;margin:0}
+        .wrap{width:62mm;padding:2mm 3mm;text-align:center}
+        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
+        .extra{font-size:5.5pt;color:#444;margin-top:1mm;line-height:1.3}
+        .bc{margin-top:1.5mm;text-align:center}
+        .cod{font-size:6pt;color:#666;margin-top:0.5mm}
+        svg{width:50mm!important;height:12mm!important}
+        @page{size:62mm auto;margin:0}
+        @media print{html,body{width:62mm}}
       </style></head><body>
       <div class="wrap">
-        <div class="info">
-                    <div class="produto">${etiqueta.produto}</div>
-          ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
-          <div class="cod">${etiqueta.codigo_barras}</div>
-        </div>
+        <div class="produto">${etiqueta.produto}</div>
+        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+        ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? " | " : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
         <div class="bc"><svg id="bc"></svg></div>
+        <div class="cod">${etiqueta.codigo_barras}</div>
       </div>
       <script>
-        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:1.5,height:80,displayValue:false,margin:0});
+        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:2,height:50,displayValue:false,margin:2,background:'#ffffff',lineColor:'#000000'});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -425,6 +433,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     setSuccessMsg("");
     setCustoUnitario("");
     setObservacao("");
+    setSerialNo("");
+    setImeiNo("");
     setQuantidade("1");
   }
 
@@ -445,26 +455,29 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  // ── Imprimir múltiplas etiquetas (2 por fita, lado a lado na Brother 29mm) ──
+  // ── Imprimir múltiplas etiquetas (Brother QL-820NWB DK-2210) ──
   function handlePrintBatch() {
     const lista = etiquetas.filter((e) => selecionadas.has(e.id));
     if (lista.length === 0) return;
     const win = window.open("", "_blank", "width=500,height=600");
     if (!win) return;
 
-    const etiquetasHtml = lista.map((et, idx) => `
+    const etiquetasHtml = lista.map((et, idx) => {
+      const serial = (et as unknown as Record<string,string>).serial_no || "";
+      const imei = (et as unknown as Record<string,string>).imei || "";
+      const hasExtra = serial || imei;
+      return `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
-        <div class="info">
-                    <div class="produto">${et.produto}</div>
-          ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
-          <div class="cod">${et.codigo_barras}</div>
-        </div>
+        <div class="produto">${et.produto}</div>
+        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+        ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? " | " : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
         <div class="bc"><svg id="bc-${idx}"></svg></div>
+        <div class="cod">${et.codigo_barras}</div>
       </div>
-    `).join("");
+    `}).join("");
 
     const barcodeScripts = lista.map((et, idx) =>
-      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:1.5,height:80,displayValue:false,margin:0});`
+      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:2,height:50,displayValue:false,margin:2,background:'#ffffff',lineColor:'#000000'});`
     ).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
@@ -472,17 +485,17 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;margin:0;padding:0;overflow:hidden}
+        html,body{width:62mm;margin:0;padding:0}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;height:29mm;display:flex;align-items:center;padding:1mm}
-        .info{width:32mm;padding-left:1mm}
-        .bc{width:28mm;text-align:center}
-        .marca{font-size:5pt;font-weight:bold}
-        .produto{font-size:6.5pt;font-weight:bold;line-height:1.15;margin-top:0.5mm}
-        .cor{font-size:5pt;color:#555;margin-top:0.3mm}
-        .cod{font-size:5pt;color:#888;margin-top:0.5mm}
-        svg{height:22mm!important;width:auto!important}
-        @page{size:62mm 29mm;margin:0}
+        .wrap{width:62mm;padding:2mm 3mm;text-align:center}
+        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
+        .extra{font-size:5.5pt;color:#444;margin-top:1mm;line-height:1.3}
+        .bc{margin-top:1.5mm;text-align:center}
+        .cod{font-size:6pt;color:#666;margin-top:0.5mm}
+        svg{width:50mm!important;height:12mm!important}
+        @page{size:62mm auto;margin:0}
+        @media print{html,body{width:62mm}}
       </style></head><body>
       ${etiquetasHtml}
       <script>
@@ -771,6 +784,18 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
               </select>
             </div>
 
+            {/* Serial No. e IMEI */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className={labelCls}>Serial No.</p>
+                <input type="text" placeholder="Ex: C39XXXXX..." value={serialNo} onChange={(e) => setSerialNo(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <p className={labelCls}>IMEI</p>
+                <input type="text" placeholder="Ex: 35XXXXXXXXXXXXX" value={imeiNo} onChange={(e) => setImeiNo(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+
             {/* Observação */}
             <div>
               <p className={labelCls}>Observacao (opcional)</p>
@@ -803,12 +828,17 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             {/* Preview */}
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50 flex justify-center">
               <div className="bg-white border border-gray-400 rounded p-3 shadow-sm" style={{ minWidth: 200, maxWidth: 280 }}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-gray-400">{etiquetaGerada.codigo_barras}</span>
-                </div>
-                <p className="text-sm font-bold text-gray-900 leading-tight">{etiquetaGerada.produto}</p>
-                {etiquetaGerada.cor && <p className="text-xs text-gray-500">{etiquetaGerada.cor}</p>}
+                <p className="text-sm font-bold text-gray-900 leading-tight text-center">{etiquetaGerada.produto}</p>
+                {etiquetaGerada.cor && <p className="text-xs text-gray-500 text-center">{etiquetaGerada.cor}</p>}
+                {(etiquetaGerada.serial_no || etiquetaGerada.imei) && (
+                  <p className="text-[10px] text-gray-400 text-center mt-1">
+                    {etiquetaGerada.serial_no && `SN: ${etiquetaGerada.serial_no}`}
+                    {etiquetaGerada.serial_no && etiquetaGerada.imei && " | "}
+                    {etiquetaGerada.imei && `IMEI: ${etiquetaGerada.imei}`}
+                  </p>
+                )}
                 <div className="mt-2 flex justify-center"><svg id="barcode-preview"></svg></div>
+                <p className="text-[10px] text-gray-400 text-center mt-1">{etiquetaGerada.codigo_barras}</p>
               </div>
             </div>
 
