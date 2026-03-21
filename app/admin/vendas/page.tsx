@@ -956,15 +956,7 @@ export default function VendasPage() {
               </div>
             )}
 
-            {/* Serial No. e IMEI */}
-            {form.produto && (
-              <div className="grid grid-cols-2 gap-4 mt-2">
-                <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                {form.produto.toUpperCase().includes("IPHONE") && (
-                  <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
-                )}
-              </div>
-            )}
+            {/* Serial No. e IMEI movidos para seção de troca */}
 
             {/* Limpar formulário — aparece quando tem cliente preenchido após uma venda */}
             {lastClienteData && form.cliente && (
@@ -1144,7 +1136,9 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
                   <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} className={inputCls} /></div>
                   <div><p className={labelCls}>Bateria %</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="92" className={inputCls} /></div>
-                  <div className="col-span-2"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Grade, caixa, detalhes..." className={inputCls} /></div>
+                  <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
+                  <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
+                  <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Grade, caixa, detalhes..." className={inputCls} /></div>
                 </>
               )}
             </div>
@@ -1689,11 +1683,30 @@ export default function VendasPage() {
                                         <p><strong>Produto:</strong> {v.produto}</p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
-                                        {v.serial_no && <p><strong>Serial No.:</strong> {v.serial_no}</p>}
-                                        {v.imei && <p><strong>IMEI:</strong> {v.imei}</p>}
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
+
+                                    {/* Produto na troca */}
+                                    {(() => {
+                                      const vx = v as unknown as Record<string, unknown>;
+                                      const temInfoTroca = vx.troca_produto || vx.produto_na_troca;
+                                      if (!temInfoTroca) return null;
+                                      return (
+                                        <div className="space-y-2">
+                                          <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 Produto na Troca</h4>
+                                          <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                            {vx.troca_produto && <p><strong>Modelo:</strong> {String(vx.troca_produto)}</p>}
+                                            {vx.troca_cor && <p><strong>Cor:</strong> {String(vx.troca_cor)}</p>}
+                                            {vx.troca_bateria && <p><strong>Bateria:</strong> {String(vx.troca_bateria)}%</p>}
+                                            {v.serial_no && <p><strong>Serial No.:</strong> {v.serial_no}</p>}
+                                            {v.imei && <p><strong>IMEI:</strong> {v.imei}</p>}
+                                            {vx.produto_na_troca && <p><strong>Valor da troca:</strong> R$ {Number(vx.produto_na_troca).toLocaleString("pt-BR")}</p>}
+                                            {vx.troca_obs && <p><strong>Obs:</strong> {String(vx.troca_obs)}</p>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Comprovante */}
                                     <div className="space-y-2">
