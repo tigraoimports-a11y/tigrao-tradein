@@ -823,13 +823,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
               </div>
             </div>
 
-            {/* Tamanho etiqueta */}
-            <div>
-              <p className={labelCls}>Tamanho da Etiqueta</p>
-              <select value={tamanhoEtiqueta} onChange={(e) => setTamanhoEtiqueta(e.target.value)} className={inputCls}>
-                {Object.entries(TAMANHOS_ETIQUETA).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-              </select>
-            </div>
+            {/* Tamanho fixo: Brother QL-820NWB 62mm contínuo */}
 
             {/* Serial No. e IMEI */}
             <div className="grid grid-cols-2 gap-4">
