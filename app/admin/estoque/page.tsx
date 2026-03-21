@@ -488,7 +488,20 @@ export default function EstoquePage() {
         ))}
       </div>
 
+      {/* Botão Gerar Etiqueta */}
+      <button
+        onClick={() => setTab("etiquetas")}
+        className={`w-full py-3 rounded-xl text-base font-bold transition-colors flex items-center justify-center gap-2 ${
+          tab === "etiquetas"
+            ? "bg-green-600 text-white shadow-lg"
+            : "bg-green-500 hover:bg-green-600 text-white shadow-md"
+        }`}
+      >
+        🏷️ Gerar Etiqueta
+      </button>
+
       {/* Tabs */}
+      {tab !== "etiquetas" && (
       <div className="flex gap-2 items-center justify-between flex-wrap">
         <div className="flex gap-2 items-center">
           {([
@@ -499,7 +512,6 @@ export default function EstoquePage() {
             { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
             { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
             { key: "novo", label: "Adicionar", color: "" },
-            { key: "etiquetas", label: "Etiquetas", color: "" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
               tab === t.key
@@ -528,9 +540,10 @@ export default function EstoquePage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Form criar categoria */}
-      {showNewCat && (
+      {tab !== "etiquetas" && showNewCat && (
         <div className="bg-white border border-[#E8740E] rounded-2xl p-4 shadow-sm space-y-3">
           <h3 className="font-semibold text-sm text-[#1D1D1F]">Nova Categoria de Estoque</h3>
           <div className="flex gap-3 items-end flex-wrap">
