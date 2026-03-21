@@ -241,63 +241,52 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  // ── Imprimir Etiqueta individual (Brother QL-820NWB DK-2210 62mm contínuo) ──
+  // ── Imprimir Etiqueta individual (Brother QL-820NWB 62mm contínuo) ──
   function handlePrint(etiqueta: Etiqueta) {
-    const win = window.open("", "_blank", "width=500,height=300");
+    const win = window.open("", "_blank", "width=400,height=400");
     if (!win) return;
     const serial = etiqueta.serial_no || "";
     const imei = etiqueta.imei || "";
-    const hasExtra = serial || imei;
-    // Layout horizontal: QR code à esquerda, texto à direita
+    // Layout vertical centralizado — compacto
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta ${etiqueta.codigo_barras}</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;margin:0;padding:0}
+        html,body{width:62mm;height:62mm;margin:0;padding:0;overflow:hidden}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;padding:2mm;display:flex;align-items:center;gap:2mm}
-        .qr{flex-shrink:0}
-        .qr img{width:18mm;height:18mm}
-        .info{flex:1;min-width:0}
-        .produto{font-size:8pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:6pt;color:#333;margin-top:0.5mm}
-        .extra{font-size:5pt;color:#444;margin-top:0.5mm;line-height:1.2;word-break:break-all}
-        .cod{font-size:6pt;color:#666;margin-top:1mm;font-weight:bold}
-        @page{size:62mm auto;margin:0}
-        @media print{html,body{width:62mm}}
+        .wrap{width:62mm;height:62mm;text-align:center;padding:3mm 4mm}
+        .produto{font-size:12pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:9pt;color:#333;margin-top:1mm}
+        .extra{font-size:6pt;color:#444;margin-top:1.5mm;line-height:1.4}
+        .qr{margin:2mm auto 1mm}
+        .cod{font-size:8pt;color:#333;font-weight:bold;margin-top:1mm}
+        @page{size:62mm 62mm;margin:0}
       </style></head><body>
       <div class="wrap">
+        <div class="produto">${etiqueta.produto}</div>
+        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+        ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+        ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr"></canvas></div>
-        <div class="info">
-          <div class="produto">${etiqueta.produto}</div>
-          ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
-          ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? "<br>" : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
-          <div class="cod">${etiqueta.codigo_barras}</div>
-        </div>
+        <div class="cod">${etiqueta.codigo_barras}</div>
       </div>
       <script>
         var qr = qrcode(0, 'M');
         qr.addData('${etiqueta.codigo_barras}');
         qr.make();
         var canvas = document.getElementById('qr');
-        var size = 18 * 3.78; // 18mm em pixels (~68px)
-        canvas.width = size;
-        canvas.height = size;
+        var size = 150;
+        canvas.width = size; canvas.height = size;
+        canvas.style.width = '20mm'; canvas.style.height = '20mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = '#000000';
-        for (var r = 0; r < cells; r++) {
-          for (var c = 0; c < cells; c++) {
-            if (qr.isDark(r, c)) {
-              ctx.fillRect(c * cellSize, r * cellSize, cellSize + 0.5, cellSize + 0.5);
-            }
-          }
-        }
-        window.onload = function() { window.print(); window.close(); };
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+        ctx.fillStyle = '#000';
+        for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+          if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
+        window.onload=function(){window.print();window.close();};
       <\/script></body></html>`);
     win.document.close();
   }
@@ -503,16 +492,14 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     const etiquetasHtml = lista.map((et, idx) => {
       const serial = et.serial_no || "";
       const imei = et.imei || "";
-      const hasExtra = serial || imei;
       return `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
+        <div class="produto">${et.produto}</div>
+        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+        ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+        ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr-${idx}"></canvas></div>
-        <div class="info">
-          <div class="produto">${et.produto}</div>
-          ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
-          ${hasExtra ? `<div class="extra">${serial ? `SN: ${serial}` : ""}${serial && imei ? "<br>" : ""}${imei ? `IMEI: ${imei}` : ""}</div>` : ""}
-          <div class="cod">${et.codigo_barras}</div>
-        </div>
+        <div class="cod">${et.codigo_barras}</div>
       </div>
     `}).join("");
 
@@ -522,8 +509,9 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         qr.addData('${et.codigo_barras}');
         qr.make();
         var canvas = document.getElementById('qr-${idx}');
-        var size = 68;
+        var size = 150;
         canvas.width = size; canvas.height = size;
+        canvas.style.width = '20mm'; canvas.style.height = '20mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
@@ -539,18 +527,15 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;margin:0;padding:0}
+        html,body{width:62mm;height:62mm;margin:0;padding:0;overflow:hidden}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;padding:2mm;display:flex;align-items:center;gap:2mm}
-        .qr{flex-shrink:0}
-        .qr canvas{width:18mm;height:18mm}
-        .info{flex:1;min-width:0}
-        .produto{font-size:8pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:6pt;color:#333;margin-top:0.5mm}
-        .extra{font-size:5pt;color:#444;margin-top:0.5mm;line-height:1.2;word-break:break-all}
-        .cod{font-size:6pt;color:#666;margin-top:1mm;font-weight:bold}
-        @page{size:62mm auto;margin:0}
-        @media print{html,body{width:62mm}}
+        .wrap{width:62mm;height:62mm;text-align:center;padding:3mm 4mm}
+        .produto{font-size:12pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:9pt;color:#333;margin-top:1mm}
+        .extra{font-size:6pt;color:#444;margin-top:1.5mm;line-height:1.4}
+        .qr{margin:2mm auto 1mm}
+        .cod{font-size:8pt;color:#333;font-weight:bold;margin-top:1mm}
+        @page{size:62mm 62mm;margin:0}
       </style></head><body>
       ${etiquetasHtml}
       <script>
