@@ -20,6 +20,8 @@ interface ProdutoLoja {
   storages: StorageVariant[];
   descricao: string;
   imagem: string | null;
+  destaque?: boolean;
+  ordem?: number;
 }
 
 /* ── Category emoji ── */
@@ -243,10 +245,19 @@ export default function ProdutoPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
           {/* ── Left: Product Image ── */}
-          <div className="aspect-square rounded-3xl bg-gradient-to-br from-[#F5F5F7] to-[#E8E8ED] flex items-center justify-center">
-            <span className="text-[120px] sm:text-[160px] opacity-80">
-              {emoji}
-            </span>
+          <div className="aspect-square rounded-3xl bg-gradient-to-br from-[#F5F5F7] to-[#E8E8ED] flex items-center justify-center overflow-hidden">
+            {produto.imagem ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={produto.imagem}
+                alt={produto.nome}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-[120px] sm:text-[160px] opacity-80">
+                {emoji}
+              </span>
+            )}
           </div>
 
           {/* ── Right: Product Info ── */}
@@ -280,6 +291,11 @@ export default function ProdutoPage() {
             </div>
 
             {/* Description */}
+            {produto.descricao && produto.descricao !== "Novo | Lacrado | 1 ano de garantia Apple | Nota Fiscal" && (
+              <p className="mt-3 text-[14px] text-[#6E6E73] leading-relaxed">
+                {produto.descricao}
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap gap-2">
               {[
                 { icon: "📦", text: "Novo" },
