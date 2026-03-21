@@ -433,7 +433,15 @@ export default function MostruarioPage() {
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-3">
+              <a
+                href="/?nocache=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2 rounded-xl border-2 border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors flex items-center gap-1.5"
+              >
+                👁️ Ver Preview do Site
+              </a>
               <button
                 onClick={saveConfig}
                 disabled={savingConfig}
