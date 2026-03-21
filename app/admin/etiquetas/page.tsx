@@ -253,15 +253,15 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0}
-        body{font-family:Arial,Helvetica,sans-serif;width:54mm}
-        .wrap{text-align:center;padding:2mm 1mm}
-        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        html,body{margin:0;padding:0;width:100%}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .wrap{text-align:center;padding:3mm 5mm 2mm 5mm}
+        .produto{font-size:11pt;font-weight:bold;line-height:1.2}
         .cor{font-size:8pt;color:#333;margin-top:1mm}
-        .extra{font-size:5.5pt;color:#444;margin-top:1mm}
-        .qr{margin:2mm auto 1mm}
-        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm}
-        @page{size:62mm 55mm;margin:3mm 4mm}
+        .extra{font-size:6pt;color:#444;margin-top:1mm}
+        .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
+        @page{size:62mm 50mm;margin:0}
       </style></head><body>
       <div class="wrap">
         <div class="produto">${etiqueta.produto}</div>
@@ -527,15 +527,15 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0}
-        body{font-family:Arial,Helvetica,sans-serif;width:54mm}
-        .wrap{text-align:center;padding:2mm 1mm}
-        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        html,body{margin:0;padding:0;width:100%}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .wrap{text-align:center;padding:3mm 5mm 2mm 5mm}
+        .produto{font-size:11pt;font-weight:bold;line-height:1.2}
         .cor{font-size:8pt;color:#333;margin-top:1mm}
-        .extra{font-size:5.5pt;color:#444;margin-top:1mm}
-        .qr{margin:2mm auto 1mm}
-        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm}
-        @page{size:62mm 55mm;margin:3mm 4mm}
+        .extra{font-size:6pt;color:#444;margin-top:1mm}
+        .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
+        @page{size:62mm 50mm;margin:0}
       </style></head><body>
       ${etiquetasHtml}
       <script>
