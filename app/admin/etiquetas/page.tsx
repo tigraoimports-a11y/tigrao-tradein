@@ -242,8 +242,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       </style></head><body>
       <div class="wrap">
         <div class="info">
-          <div class="marca">TIGRAO IMPORTS</div>
-          <div class="produto">${etiqueta.produto}</div>
+                    <div class="produto">${etiqueta.produto}</div>
           ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
           <div class="cod">${etiqueta.codigo_barras}</div>
         </div>
@@ -456,8 +455,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     const etiquetasHtml = lista.map((et, idx) => `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
         <div class="info">
-          <div class="marca">TIGRAO IMPORTS</div>
-          <div class="produto">${et.produto}</div>
+                    <div class="produto">${et.produto}</div>
           ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
           <div class="cod">${et.codigo_barras}</div>
         </div>
