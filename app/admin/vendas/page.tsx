@@ -1324,6 +1324,50 @@ export default function VendasPage() {
                                         >
                                           📋 Duplicar
                                         </button>
+                                        {v.produto_na_troca && parseFloat(v.produto_na_troca) > 0 && (
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              const hoje = new Date().toLocaleDateString("pt-BR");
+                                              const res = await fetch("/api/admin/contrato", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({
+                                                  clienteNome: v.cliente,
+                                                  clienteTelefone: "",
+                                                  aparelhoModelo: "Aparelho na troca",
+                                                  aparelhoStorage: "",
+                                                  aparelhoIMEI: v.imei || undefined,
+                                                  condicao: "Conforme avaliação presencial",
+                                                  valorAvaliado: parseFloat(v.produto_na_troca),
+                                                  novoModelo: v.produto,
+                                                  novoStorage: "",
+                                                  novoCor: "—",
+                                                  novoPreco: v.preco_vendido,
+                                                  diferenca: v.preco_vendido - parseFloat(v.produto_na_troca),
+                                                  formaPagamento: v.forma + (v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""),
+                                                  data: hoje,
+                                                  validade: "24 horas",
+                                                }),
+                                              });
+                                              if (!res.ok) throw new Error("Erro");
+                                              const blob = await res.blob();
+                                              const url = URL.createObjectURL(blob);
+                                              const a = document.createElement("a");
+                                              a.href = url;
+                                              a.download = `contrato_${v.cliente.replace(/\s+/g, "_").toLowerCase()}.pdf`;
+                                              document.body.appendChild(a);
+                                              a.click();
+                                              document.body.removeChild(a);
+                                              URL.revokeObjectURL(url);
+                                            } catch { alert("Erro ao gerar contrato"); }
+                                          }}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
+                                        >
+                                          📄 Contrato
+                                        </button>
+                                        )}
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
