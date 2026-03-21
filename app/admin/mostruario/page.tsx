@@ -28,6 +28,7 @@ interface MostruarioConfig {
   accent_color: string;
   whatsapp_numero: string;
   tema: string;
+  manutencao: boolean;
 }
 
 /* ── Category config ── */
@@ -71,6 +72,7 @@ export default function MostruarioPage() {
     accent_color: "#E8740E",
     whatsapp_numero: "5521999999999",
     tema: "tigrao",
+    manutencao: false,
   });
   const [activeTab, setActiveTab] = useState<string>("");
   const [toast, setToast] = useState<string | null>(null);
@@ -348,6 +350,42 @@ export default function MostruarioPage() {
                   placeholder="5521999999999"
                 />
               </div>
+            </div>
+
+            {/* ── Modo Manutenção ── */}
+            <div className={`flex items-center justify-between p-4 rounded-xl border-2 ${config.manutencao ? "bg-red-50 border-red-300" : "bg-green-50 border-green-300"}`}>
+              <div>
+                <p className="text-sm font-bold text-[#1D1D1F]">
+                  {config.manutencao ? "🔧 Site em Manutenção" : "🟢 Site Ativo"}
+                </p>
+                <p className="text-xs text-[#86868B] mt-0.5">
+                  {config.manutencao
+                    ? "O site público está exibindo a tela de manutenção"
+                    : "O site público está visível para os clientes"}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  const newVal = !config.manutencao;
+                  setConfig({ ...config, manutencao: newVal });
+                  try {
+                    await fetch("/api/admin/mostruario", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json", "x-admin-password": password },
+                      body: JSON.stringify({ manutencao: newVal }),
+                    });
+                    setToast(newVal ? "🔧 Manutenção ativada" : "🟢 Site reativado!");
+                    setTimeout(() => setToast(null), 2000);
+                  } catch { /* silent */ }
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                  config.manutencao
+                    ? "bg-green-500 text-white hover:bg-green-600"
+                    : "bg-red-500 text-white hover:bg-red-600"
+                }`}
+              >
+                {config.manutencao ? "Reativar Site" : "Ativar Manutenção"}
+              </button>
             </div>
 
             {/* ── Theme selector ── */}
