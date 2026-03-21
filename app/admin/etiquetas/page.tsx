@@ -243,25 +243,25 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
 
   // ── Imprimir Etiqueta individual (Brother QL-820NWB 62mm contínuo) ──
   function handlePrint(etiqueta: Etiqueta) {
-    const win = window.open("", "_blank", "width=400,height=400");
+    const win = window.open("", "_blank", "width=300,height=300");
     if (!win) return;
     const serial = etiqueta.serial_no || "";
     const imei = etiqueta.imei || "";
-    // Layout vertical centralizado — compacto
+    // Layout vertical — usa 54mm de largura útil (62mm - margens internas da Brother)
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta ${etiqueta.codigo_barras}</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;height:62mm;margin:0;padding:0;overflow:hidden}
-        body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;height:62mm;text-align:center;padding:3mm 4mm}
-        .produto{font-size:12pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:9pt;color:#333;margin-top:1mm}
-        .extra{font-size:6pt;color:#444;margin-top:1.5mm;line-height:1.4}
+        html,body{margin:0;padding:0}
+        body{font-family:Arial,Helvetica,sans-serif;width:54mm}
+        .wrap{text-align:center;padding:2mm 1mm}
+        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:8pt;color:#333;margin-top:1mm}
+        .extra{font-size:5.5pt;color:#444;margin-top:1mm}
         .qr{margin:2mm auto 1mm}
-        .cod{font-size:8pt;color:#333;font-weight:bold;margin-top:1mm}
-        @page{size:62mm 62mm;margin:0}
+        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm}
+        @page{size:62mm 42mm;margin:3mm 4mm}
       </style></head><body>
       <div class="wrap">
         <div class="produto">${etiqueta.produto}</div>
@@ -278,7 +278,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         var canvas = document.getElementById('qr');
         var size = 150;
         canvas.width = size; canvas.height = size;
-        canvas.style.width = '20mm'; canvas.style.height = '20mm';
+        canvas.style.width = '15mm'; canvas.style.height = '15mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
@@ -511,7 +511,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         var canvas = document.getElementById('qr-${idx}');
         var size = 150;
         canvas.width = size; canvas.height = size;
-        canvas.style.width = '20mm'; canvas.style.height = '20mm';
+        canvas.style.width = '15mm'; canvas.style.height = '15mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
@@ -527,15 +527,15 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{width:62mm;height:62mm;margin:0;padding:0;overflow:hidden}
-        body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{width:62mm;height:62mm;text-align:center;padding:3mm 4mm}
-        .produto{font-size:12pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:9pt;color:#333;margin-top:1mm}
-        .extra{font-size:6pt;color:#444;margin-top:1.5mm;line-height:1.4}
+        html,body{margin:0;padding:0}
+        body{font-family:Arial,Helvetica,sans-serif;width:54mm}
+        .wrap{text-align:center;padding:2mm 1mm}
+        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:8pt;color:#333;margin-top:1mm}
+        .extra{font-size:5.5pt;color:#444;margin-top:1mm}
         .qr{margin:2mm auto 1mm}
-        .cod{font-size:8pt;color:#333;font-weight:bold;margin-top:1mm}
-        @page{size:62mm 62mm;margin:0}
+        .cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm}
+        @page{size:62mm 42mm;margin:3mm 4mm}
       </style></head><body>
       ${etiquetasHtml}
       <script>
