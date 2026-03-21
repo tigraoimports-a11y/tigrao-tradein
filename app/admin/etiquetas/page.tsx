@@ -264,8 +264,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
       <script>
-        JsBarcode('#bc1','${et1.codigo_barras}',{format:'CODE128',width:1,height:18,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
-        JsBarcode('#bc2','${et2.codigo_barras}',{format:'CODE128',width:1,height:18,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
+        JsBarcode('#bc1','${et1.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
+        JsBarcode('#bc2','${et2.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -499,8 +499,8 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     const barcodeScripts = pares.map((par, idx) => {
       const et1 = par[0];
       const et2 = par[1] || par[0];
-      return `JsBarcode('#bc-${idx}-1','${et1.codigo_barras}',{format:'CODE128',width:1.2,height:14,displayValue:true,fontSize:5,margin:0,textMargin:0.5});
-JsBarcode('#bc-${idx}-2','${et2.codigo_barras}',{format:'CODE128',width:1.2,height:14,displayValue:true,fontSize:5,margin:0,textMargin:0.5});`;
+      return `JsBarcode('#bc-${idx}-1','${et1.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
+JsBarcode('#bc-${idx}-2','${et2.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});`;
     }).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
