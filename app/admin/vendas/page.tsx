@@ -1701,20 +1701,24 @@ export default function VendasPage() {
 
                                     {/* Produto na troca */}
                                     {(() => {
-                                      const vx = v as unknown as Record<string, unknown>;
-                                      const temInfoTroca = vx.troca_produto || vx.produto_na_troca;
-                                      if (!temInfoTroca) return null;
+                                      const vx = v as unknown as Record<string, string | number | null>;
+                                      const tProd = vx.troca_produto ? String(vx.troca_produto) : "";
+                                      const tCor = vx.troca_cor ? String(vx.troca_cor) : "";
+                                      const tBat = vx.troca_bateria ? String(vx.troca_bateria) : "";
+                                      const tObs = vx.troca_obs ? String(vx.troca_obs) : "";
+                                      const tValor = vx.produto_na_troca ? Number(vx.produto_na_troca) : 0;
+                                      if (!tProd && !tValor) return null;
                                       return (
                                         <div className="space-y-2">
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 Produto na Troca</h4>
                                           <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                            {vx.troca_produto && <p><strong>Modelo:</strong> {String(vx.troca_produto)}</p>}
-                                            {vx.troca_cor && <p><strong>Cor:</strong> {String(vx.troca_cor)}</p>}
-                                            {vx.troca_bateria && <p><strong>Bateria:</strong> {String(vx.troca_bateria)}%</p>}
+                                            {tProd && <p><strong>Modelo:</strong> {tProd}</p>}
+                                            {tCor && <p><strong>Cor:</strong> {tCor}</p>}
+                                            {tBat && <p><strong>Bateria:</strong> {tBat}%</p>}
                                             {v.serial_no && <p><strong>Serial No.:</strong> {v.serial_no}</p>}
                                             {v.imei && <p><strong>IMEI:</strong> {v.imei}</p>}
-                                            {vx.produto_na_troca && <p><strong>Valor da troca:</strong> R$ {Number(vx.produto_na_troca).toLocaleString("pt-BR")}</p>}
-                                            {vx.troca_obs && <p><strong>Obs:</strong> {String(vx.troca_obs)}</p>}
+                                            {tValor > 0 && <p><strong>Valor da troca:</strong> R$ {tValor.toLocaleString("pt-BR")}</p>}
+                                            {tObs && <p><strong>Obs:</strong> {tObs}</p>}
                                           </div>
                                         </div>
                                       );
