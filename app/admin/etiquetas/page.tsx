@@ -223,6 +223,9 @@ export default function EtiquetasPage() {
     const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["29x30"];
     const w = tamanho.width;
     const h = tamanho.height;
+    // Barcode: mais largo horizontalmente, mais baixo verticalmente
+    const bcWidth = w > 50 ? 1.8 : 1.5;
+    const bcHeight = w > 50 ? 18 : 12;
     const win = window.open("", "_blank", "width=400,height=300");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
@@ -231,12 +234,12 @@ export default function EtiquetasPage() {
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{width:${w}mm;font-family:Arial,sans-serif;overflow:hidden}
-        .etiqueta{width:${w}mm;height:${h}mm;padding:1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
-        .marca{font-size:4pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
+        .etiqueta{width:${w}mm;height:${h}mm;padding:1mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
+        .marca{font-size:3.5pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
         .produto{font-size:${h > 30 ? 7 : 5}pt;font-weight:bold;line-height:1.1;text-align:center}
         .cor{font-size:${h > 30 ? 6 : 4}pt;color:#555;text-align:center}
-        .barcode-area{text-align:center}
-        svg{max-width:100%}
+        .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
+        svg{width:90%!important;height:auto!important}
         @page{size:${w}mm ${h}mm;margin:0}
       </style></head><body>
       <div class="etiqueta">
@@ -248,7 +251,7 @@ export default function EtiquetasPage() {
         <div class="barcode-area"><svg id="bc"></svg></div>
       </div>
       <script>
-        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:${w > 50 ? 1.5 : 1},height:${h > 30 ? 22 : 14},displayValue:true,fontSize:${h > 30 ? 8 : 6},margin:0,textMargin:1});
+        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:${bcWidth},height:${bcHeight},displayValue:true,fontSize:6,margin:0,textMargin:1});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -327,20 +330,17 @@ export default function EtiquetasPage() {
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.QR_CODE,
         ],
         verbose: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       });
       scannerInstanceRef.current = scanner;
       await scanner.start(
         { facingMode: "environment" },
         {
-          fps: 15,
-          qrbox: (vw: number, vh: number) => {
-            // Área retangular larga para capturar barcode 1D
-            const w = Math.min(vw - 40, 400);
-            const h = Math.min(Math.floor(w * 0.35), vh - 40);
-            return { width: w, height: h };
-          },
+          fps: 20,
+          // Sem qrbox = escaneia o frame inteiro (mais chance de ler)
           aspectRatio: 1.0,
           disableFlip: false,
         },
@@ -454,6 +454,8 @@ export default function EtiquetasPage() {
     const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["29x30"];
     const w = tamanho.width;
     const h = tamanho.height;
+    const bcWidth = w > 50 ? 1.8 : 1.5;
+    const bcHeight = w > 50 ? 18 : 12;
     const win = window.open("", "_blank", "width=800,height=600");
     if (!win) return;
 
@@ -469,7 +471,7 @@ export default function EtiquetasPage() {
     `).join("");
 
     const barcodeScripts = lista.map((et) =>
-      `JsBarcode('#bc-${et.codigo_barras}','${et.codigo_barras}',{format:'CODE128',width:${w > 50 ? 1.5 : 1},height:${h > 30 ? 22 : 14},displayValue:true,fontSize:${h > 30 ? 8 : 6},margin:0,textMargin:1});`
+      `JsBarcode('#bc-${et.codigo_barras}','${et.codigo_barras}',{format:'CODE128',width:${bcWidth},height:${bcHeight},displayValue:true,fontSize:6,margin:0,textMargin:1});`
     ).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
@@ -478,14 +480,14 @@ export default function EtiquetasPage() {
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{width:${w}mm;font-family:Arial,sans-serif}
-        .etiqueta{width:${w}mm;height:${h}mm;padding:1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
+        .etiqueta{width:${w}mm;height:${h}mm;padding:1mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always;margin-bottom:3mm}
         .etiqueta:last-child{page-break-after:auto}
-        .marca{font-size:4pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
+        .marca{font-size:3.5pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
         .produto{font-size:${h > 30 ? 7 : 5}pt;font-weight:bold;line-height:1.1;text-align:center}
         .cor{font-size:${h > 30 ? 6 : 4}pt;color:#555;text-align:center}
-        .barcode-area{text-align:center}
-        svg{max-width:100%}
-        @page{size:${w}mm ${h}mm;margin:0}
+        .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
+        svg{width:90%!important;height:auto!important}
+        @page{size:${w}mm ${h + 3}mm;margin:0}
       </style></head><body>
       ${etiquetasHtml}
       <script>
