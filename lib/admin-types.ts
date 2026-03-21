@@ -2,7 +2,7 @@
 // Tipos do sistema administrativo TigrãoImports
 // ============================================
 
-export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO";
+export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO" | "ANDRE" | "NICOLAS" | "BIANCA" | "DIRECT" | "STORY" | "WHATSAPP";
 export type TipoVenda = "VENDA" | "UPGRADE" | "ATACADO";
 export type Banco = "ITAU" | "INFINITE" | "MERCADO_PAGO" | "ESPECIE";
 export type FormaPagamento = "PIX" | "CARTAO" | "ESPECIE" | "DINHEIRO" | "FIADO";
