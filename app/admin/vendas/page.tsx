@@ -1142,7 +1142,7 @@ export default function VendasPage() {
                 </>
               )}
             </div>
-            {temTroca && <p className="text-xs text-[#2ECC71]">O produto na troca sera adicionado ao estoque como SEMINOVO automaticamente</p>}
+            {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
           </div>
 
           {/* Botão Adicionar Produto ao Carrinho */}
