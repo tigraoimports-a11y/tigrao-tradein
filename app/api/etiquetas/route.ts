@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, data });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "Erro desconhecido";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = e instanceof Error ? e.message : (e as any)?.message || JSON.stringify(e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
