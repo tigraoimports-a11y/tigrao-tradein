@@ -64,9 +64,17 @@ export async function POST(req: NextRequest) {
   const estoqueId = body._estoque_id;
   delete body._estoque_id;
 
+  // Se tem estoque_id, copiar IMEI do estoque para a venda (se existir)
+  let imeiFromEstoque: string | null = null;
+  if (estoqueId && !body.imei) {
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei").eq("id", estoqueId).single();
+    if (estoqueItem?.imei) imeiFromEstoque = estoqueItem.imei;
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
+    ...(imeiFromEstoque ? { imei: imeiFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

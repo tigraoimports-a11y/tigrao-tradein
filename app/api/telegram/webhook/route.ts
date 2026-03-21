@@ -1326,6 +1326,99 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "/origens": {
+        // Ranking mensal de origens de venda
+        const args = text.split(" ").slice(1);
+        const hojeOrigens = hojeISO();
+        const mesOrigens = args[0] && /^\d{4}-\d{2}$/.test(args[0])
+          ? args[0]
+          : `${hojeOrigens.slice(0, 7)}`;
+
+        const [yearOrig, monthOrig] = mesOrigens.split("-").map(Number);
+        const inicioMesOrig = `${mesOrigens}-01`;
+        const ultimoDiaOrig = new Date(yearOrig, monthOrig, 0).getDate();
+        const fimMesOrig = `${mesOrigens}-${String(ultimoDiaOrig).padStart(2, "0")}`;
+
+        const MESES_NOME_TG: Record<string, string> = {
+          "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
+          "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto",
+          "09": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro",
+        };
+        const mesNomeOrig = `${MESES_NOME_TG[String(monthOrig).padStart(2, "0")] || monthOrig}/${yearOrig}`;
+
+        const { data: vendasOrigens } = await supabase
+          .from("vendas")
+          .select("origem, preco_vendido, lucro, margem_pct")
+          .gte("data", inicioMesOrig)
+          .lte("data", fimMesOrig)
+          .neq("status_pagamento", "CANCELADO");
+
+        const rowsOrig = (vendasOrigens ?? []) as { origem: string; preco_vendido: number; lucro: number; margem_pct: number }[];
+
+        if (rowsOrig.length === 0) {
+          await sendTelegramMessage(`📊 Nenhuma venda registrada em ${mesNomeOrig}.`, chatId);
+          break;
+        }
+
+        // Agrupar
+        const porOrig: Record<string, { qty: number; receita: number; lucro: number; margemSum: number }> = {};
+        let totalOrigQty = 0;
+        let totalOrigReceita = 0;
+
+        for (const v of rowsOrig) {
+          const o = v.origem || "OUTROS";
+          if (!porOrig[o]) porOrig[o] = { qty: 0, receita: 0, lucro: 0, margemSum: 0 };
+          porOrig[o].qty++;
+          porOrig[o].receita += Number(v.preco_vendido || 0);
+          porOrig[o].lucro += Number(v.lucro || 0);
+          porOrig[o].margemSum += Number(v.margem_pct || 0);
+          totalOrigQty++;
+          totalOrigReceita += Number(v.preco_vendido || 0);
+        }
+
+        const rankingOrig = Object.entries(porOrig)
+          .sort((a, b) => b[1].receita - a[1].receita);
+
+        const medals = ["🥇", "🥈", "🥉"];
+        const origLines: string[] = [
+          `📊 <b>RANKING DE ORIGENS — ${mesNomeOrig}</b>`,
+          ``,
+        ];
+
+        rankingOrig.forEach(([origem, dados], idx) => {
+          const medal = idx < 3 ? medals[idx] : `${idx + 1}️⃣`;
+          const share = totalOrigReceita > 0 ? ((dados.receita / totalOrigReceita) * 100).toFixed(0) : "0";
+          origLines.push(`${medal} ${origem}: <b>${dados.qty}</b> vendas | ${fmtBRL(dados.receita)} | ${share}%`);
+        });
+
+        origLines.push(``);
+        origLines.push(`💰 <b>Total:</b> ${totalOrigQty} vendas | ${fmtBRL(totalOrigReceita)}`);
+
+        // Melhor margem
+        const melhorMargemOrig = rankingOrig.reduce<{ nome: string; margem: number } | null>((best, [nome, dados]) => {
+          const margem = dados.receita > 0 ? (dados.lucro / dados.receita) * 100 : 0;
+          if (!best || margem > best.margem) return { nome, margem };
+          return best;
+        }, null);
+
+        // Maior ticket
+        const maiorTicketOrig = rankingOrig.reduce<{ nome: string; ticket: number } | null>((best, [nome, dados]) => {
+          const ticket = dados.qty > 0 ? dados.receita / dados.qty : 0;
+          if (!best || ticket > best.ticket) return { nome, ticket };
+          return best;
+        }, null);
+
+        if (melhorMargemOrig) {
+          origLines.push(`📈 Melhor margem: ${melhorMargemOrig.nome} (${melhorMargemOrig.margem.toFixed(1)}%)`);
+        }
+        if (maiorTicketOrig) {
+          origLines.push(`🎯 Maior ticket: ${maiorTicketOrig.nome} (${fmtBRL(maiorTicketOrig.ticket)})`);
+        }
+
+        await sendTelegramMessage(origLines.join("\n"), chatId);
+        break;
+      }
+
       case "/debug": {
         const hDbg = hojeISO();
         const dDbg = new Date(hDbg + "T12:00:00");

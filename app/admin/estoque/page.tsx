@@ -22,6 +22,12 @@ interface ProdutoEstoque {
   data_compra: string | null;
   cliente: string | null;
   fornecedor: string | null;
+  imei: string | null;
+}
+
+interface ImeiSearchResult {
+  estoque: ProdutoEstoque[];
+  vendas: { id: string; produto: string; cliente: string; data: string; preco_vendido: number; fornecedor: string | null; imei: string | null; [key: string]: unknown }[];
 }
 
 interface Fornecedor {
@@ -115,6 +121,27 @@ export default function EstoquePage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
+
+  // IMEI search
+  const [imeiSearch, setImeiSearch] = useState("");
+  const [imeiResult, setImeiResult] = useState<ImeiSearchResult | null>(null);
+  const [imeiSearching, setImeiSearching] = useState(false);
+  const [showImeiSearch, setShowImeiSearch] = useState(false);
+
+  const handleImeiSearch = async () => {
+    if (!imeiSearch.trim()) return;
+    setImeiSearching(true);
+    try {
+      const res = await fetch(`/api/estoque?imei=${encodeURIComponent(imeiSearch.trim())}`, {
+        headers: { "x-admin-password": password, "x-admin-user": userName },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setImeiResult(json);
+      }
+    } catch { /* ignore */ }
+    setImeiSearching(false);
+  };
 
   // Categorias dinâmicas
   const [categoriasState, setCategoriasState] = useState<Categoria[]>(() => getCategoriasEstoque());
@@ -231,6 +258,7 @@ export default function EstoquePage() {
         bateria: p.bateria || null,
         cliente: p.cliente || null,
         fornecedor: p.fornecedor || null,
+        imei: null,
       }),
     });
     const json = await res.json();
@@ -245,7 +273,7 @@ export default function EstoquePage() {
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
-    bateria: "", cliente: "", fornecedor: "",
+    bateria: "", cliente: "", fornecedor: "", imei: "",
   });
 
   // Campos estruturados por categoria
@@ -379,12 +407,13 @@ export default function EstoquePage() {
         cor: form.cor || null, observacao: form.observacao || null,
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
+        imei: form.imei || null,
       }),
     });
     const json = await res.json();
     if (json.ok) {
       setMsg("Produto adicionado!");
-      setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "" }));
+      setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       fetchEstoque();
     } else { setMsg("Erro: " + json.error); }
   };
@@ -430,7 +459,7 @@ export default function EstoquePage() {
     if (filterCat && p.categoria !== filterCat) return false;
     if (search) {
       const s = search.toLowerCase();
-      if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s))) return false;
+      if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s)) && !(p.imei?.toLowerCase().includes(s))) return false;
     }
     return true;
   });
@@ -461,6 +490,99 @@ export default function EstoquePage() {
   return (
     <div className="space-y-6">
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+
+      {/* IMEI Search */}
+      <div className="flex gap-2 items-center">
+        <button
+          onClick={() => { setShowImeiSearch(!showImeiSearch); if (showImeiSearch) { setImeiResult(null); setImeiSearch(""); } }}
+          className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${showImeiSearch ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}
+        >
+          IMEI
+        </button>
+        {showImeiSearch && (
+          <>
+            <input
+              value={imeiSearch}
+              onChange={(e) => setImeiSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleImeiSearch()}
+              placeholder="Buscar por IMEI..."
+              className="flex-1 px-4 py-2.5 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E] transition-colors"
+              autoFocus
+            />
+            <button
+              onClick={handleImeiSearch}
+              disabled={imeiSearching}
+              className="px-4 py-2.5 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            >
+              {imeiSearching ? "..." : "Buscar"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* IMEI Search Results */}
+      {imeiResult && (
+        <div className="bg-white border border-[#E8740E] rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-[#1D1D1F]">Resultado IMEI: {imeiSearch}</h3>
+            <button onClick={() => { setImeiResult(null); setImeiSearch(""); setShowImeiSearch(false); }} className="text-[#86868B] hover:text-red-500 text-sm">Fechar</button>
+          </div>
+
+          {imeiResult.estoque.length === 0 && imeiResult.vendas.length === 0 ? (
+            <p className="text-[#86868B] text-sm">Nenhum registro encontrado para este IMEI.</p>
+          ) : (
+            <div className="space-y-3">
+              {/* Estoque entries */}
+              {imeiResult.estoque.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 p-3 bg-[#F5F5F7] rounded-xl">
+                  <span className="text-lg">📦</span>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-[#1D1D1F]">{item.produto} {item.cor || ""}</p>
+                    <p className="text-xs text-[#86868B]">
+                      {item.fornecedor ? `Comprado de ${item.fornecedor}` : "Fornecedor n/a"}
+                      {item.data_compra ? ` em ${item.data_compra}` : ""}
+                      {item.custo_unitario ? ` por R$ ${Math.round(item.custo_unitario).toLocaleString("pt-BR")}` : ""}
+                    </p>
+                    <p className="text-xs text-[#86868B]">IMEI: {item.imei} | Status: {item.status} | Tipo: {item.tipo}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Vendas entries */}
+              {imeiResult.vendas.map((venda) => (
+                <div key={venda.id} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
+                  <span className="text-lg">💰</span>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-[#1D1D1F]">{venda.produto}</p>
+                    <p className="text-xs text-[#86868B]">
+                      Vendido para {venda.cliente || "N/A"}
+                      {venda.data ? ` em ${venda.data}` : ""}
+                      {venda.preco_vendido ? ` por R$ ${Math.round(venda.preco_vendido).toLocaleString("pt-BR")}` : ""}
+                    </p>
+                    <p className="text-xs text-[#86868B]">IMEI: {venda.imei}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Timeline summary */}
+              {(imeiResult.estoque.length > 0 || imeiResult.vendas.length > 0) && (
+                <div className="p-3 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl">
+                  <p className="text-xs text-white/60 mb-1">Rastreamento</p>
+                  <p className="text-white text-sm">
+                    {imeiResult.estoque.map((e) =>
+                      `${e.fornecedor || "?"} ${e.data_compra ? `(${e.data_compra})` : ""} → R$ ${Math.round(e.custo_unitario || 0).toLocaleString("pt-BR")}`
+                    ).join(" | ")}
+                    {imeiResult.estoque.length > 0 && imeiResult.vendas.length > 0 && " → "}
+                    {imeiResult.vendas.map((v) =>
+                      `Vendido para ${v.cliente || "?"} ${v.data ? `(${v.data})` : ""} → R$ ${Math.round(v.preco_vendido || 0).toLocaleString("pt-BR")}`
+                    ).join(" | ")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {estoque.length === 0 && !loading && (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-8 text-center shadow-sm">
@@ -699,6 +821,12 @@ export default function EstoquePage() {
             </div>
           )}
 
+          {/* IMEI */}
+          <div>
+            <p className={labelCls}>IMEI</p>
+            <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Numero do IMEI (opcional)" className={inputCls} />
+          </div>
+
           {/* Row: Cor, Qtd, Custo, Fornecedor */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls} /></div>
@@ -833,6 +961,7 @@ export default function EstoquePage() {
                                       </td>
                                       <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
                                         <span className="text-[#86868B]">• {p.cor || "—"}</span>
+                                        {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>IMEI</span>}
                                       </td>
                                       {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
                                       {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}

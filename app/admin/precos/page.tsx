@@ -714,13 +714,253 @@ function PrecosContent() {
   );
 }
 
+// ═══════════ SVG Line Chart Component ═══════════
+interface ChartDataset {
+  supplier: string;
+  color: string;
+  prices: (number | null)[];
+}
+
+function LineChart({ labels, datasets, height = 250 }: { labels: string[]; datasets: ChartDataset[]; height?: number }) {
+  if (!labels.length || !datasets.length) return <p className="text-[#86868B] text-sm text-center py-8">Sem dados para o periodo selecionado.</p>;
+
+  const padding = { top: 20, right: 20, bottom: 40, left: 70 };
+  const width = 600;
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+
+  // Calculate Y range from all values
+  const allVals = datasets.flatMap((d) => d.prices.filter((p): p is number => p !== null));
+  if (allVals.length === 0) return <p className="text-[#86868B] text-sm text-center py-8">Sem dados para o periodo selecionado.</p>;
+
+  const minVal = Math.min(...allVals) * 0.9;
+  const maxVal = Math.max(...allVals) * 1.1;
+  const range = maxVal - minVal || 1;
+
+  const xStep = labels.length > 1 ? chartW / (labels.length - 1) : chartW;
+
+  function toX(i: number) { return padding.left + (labels.length > 1 ? i * xStep : chartW / 2); }
+  function toY(v: number) { return padding.top + chartH - ((v - minVal) / range) * chartH; }
+
+  // Y-axis ticks
+  const yTicks = 5;
+  const yTickValues = Array.from({ length: yTicks }, (_, i) => Math.round(minVal + (range * i) / (yTicks - 1)));
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full max-w-[600px] mx-auto" style={{ minWidth: 400 }}>
+        {/* Grid lines */}
+        {yTickValues.map((v, i) => (
+          <g key={i}>
+            <line x1={padding.left} y1={toY(v)} x2={width - padding.right} y2={toY(v)} stroke="#E8E8ED" strokeWidth={1} strokeDasharray="4,4" />
+            <text x={padding.left - 8} y={toY(v) + 4} textAnchor="end" fontSize={10} fill="#86868B">
+              {`R$ ${(v / 1000).toFixed(1)}k`}
+            </text>
+          </g>
+        ))}
+
+        {/* X labels */}
+        {labels.map((label, i) => (
+          <text key={i} x={toX(i)} y={height - 8} textAnchor="middle" fontSize={10} fill="#86868B">{label}</text>
+        ))}
+
+        {/* Data lines */}
+        {datasets.map((ds) => {
+          const points = ds.prices.map((p, i) => p !== null ? { x: toX(i), y: toY(p), val: p } : null).filter(Boolean) as { x: number; y: number; val: number }[];
+          if (points.length < 1) return null;
+
+          const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+          return (
+            <g key={ds.supplier}>
+              <path d={pathD} fill="none" stroke={ds.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+              {points.map((p, i) => (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y} r={4} fill={ds.color} stroke="white" strokeWidth={2} />
+                  <title>{`${ds.supplier}: R$ ${p.val.toLocaleString("pt-BR")}`}</title>
+                </g>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Legend */}
+      <div className="flex gap-4 justify-center flex-wrap mt-2">
+        {datasets.map((ds) => (
+          <div key={ds.supplier} className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ds.color }} />
+            <span className="text-xs text-[#86868B]">{ds.supplier}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════ Historico de Precos ═══════════
+interface HistoricoData {
+  labels: string[];
+  datasets: ChartDataset[];
+  products: string[];
+  suppliers: string[];
+  stats: { current: number; lowest: number; highest: number; avg: number; trend: string };
+  details: { data: string; fornecedor: string; produto: string; cor: string | null; custo: number; qnt: number }[];
+}
+
+function HistoricoPrecos() {
+  const { password } = useAdmin();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<HistoricoData | null>(null);
+  const [produto, setProduto] = useState("");
+  const [fornecedor, setFornecedor] = useState("");
+  const [meses, setMeses] = useState<3 | 6>(3);
+
+  const fetchHistorico = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ meses: String(meses) });
+      if (produto) params.set("produto", produto);
+      if (fornecedor) params.set("fornecedor", fornecedor);
+
+      const res = await fetch(`/api/admin/historico-precos?${params}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [password, produto, fornecedor, meses]);
+
+  useEffect(() => {
+    if (password) fetchHistorico();
+  }, [password, fetchHistorico]);
+
+  const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+  const trendIcon = data?.stats.trend === "up" ? "\u2191" : data?.stats.trend === "down" ? "\u2193" : "\u2192";
+  const trendColor = data?.stats.trend === "up" ? "text-red-500" : data?.stats.trend === "down" ? "text-green-600" : "text-[#86868B]";
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-[#1D1D1F]">Historico de Precos por Fornecedor</h2>
+        <p className="text-[#86868B] text-xs">Evolucao dos custos de compra ao longo do tempo.</p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-end">
+        <div className="min-w-[200px] flex-1">
+          <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Produto</p>
+          <input
+            value={produto}
+            onChange={(e) => setProduto(e.target.value)}
+            placeholder="Buscar produto... (vazio = todos)"
+            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]"
+          />
+        </div>
+        <div className="min-w-[160px]">
+          <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Fornecedor</p>
+          <select
+            value={fornecedor}
+            onChange={(e) => setFornecedor(e.target.value)}
+            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]"
+          >
+            <option value="">Todos</option>
+            {data?.suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Periodo</p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setMeses(3)}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${meses === 3 ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}
+            >
+              3 meses
+            </button>
+            <button
+              onClick={() => setMeses(6)}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${meses === 6 ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}
+            >
+              6 meses
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {loading && <div className="py-8 text-center text-[#86868B]">Carregando...</div>}
+
+      {data && !loading && (
+        <>
+          {/* Stats cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {[
+              { label: "Preco Atual", value: fmt(data.stats.current), color: "#1D1D1F" },
+              { label: "Menor Preco", value: fmt(data.stats.lowest), color: "#2ECC71" },
+              { label: "Maior Preco", value: fmt(data.stats.highest), color: "#E74C3C" },
+              { label: "Media", value: fmt(data.stats.avg), color: "#3498DB" },
+              { label: "Tendencia", value: trendIcon, color: "" },
+            ].map((s) => (
+              <div key={s.label} className="bg-white border border-[#D2D2D7] rounded-2xl p-3 shadow-sm">
+                <p className="text-[#86868B] text-[10px] uppercase tracking-wider">{s.label}</p>
+                <p className={`text-lg font-bold ${s.label === "Tendencia" ? trendColor : ""}`} style={s.color ? { color: s.color } : undefined}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart */}
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+            <h3 className="font-semibold text-sm text-[#1D1D1F] mb-3">Evolucao de Precos</h3>
+            <LineChart labels={data.labels} datasets={data.datasets} />
+          </div>
+
+          {/* Detail table */}
+          {data.details.length > 0 && (
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                <h3 className="font-semibold text-[#1D1D1F] text-sm">Compras Detalhadas ({data.details.length})</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#F5F5F7]">
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Data</th>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Fornecedor</th>
+                      <th className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Produto</th>
+                      <th className="px-4 py-2 text-right text-[#86868B] text-xs uppercase tracking-wider font-medium">Custo</th>
+                      <th className="px-4 py-2 text-right text-[#86868B] text-xs uppercase tracking-wider font-medium">Qtd</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.details.slice(0, 50).map((d, i) => (
+                      <tr key={i} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
+                        <td className="px-4 py-2.5 text-[#86868B]">{d.data}</td>
+                        <td className="px-4 py-2.5 font-medium">{d.fornecedor}</td>
+                        <td className="px-4 py-2.5">{d.produto}{d.cor ? ` ${d.cor}` : ""}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold">{fmt(d.custo)}</td>
+                        <td className="px-4 py-2.5 text-right text-[#86868B]">{d.qnt}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPrecosPage() {
-  const [modo, setModo] = useState<"valores" | "usados">("valores");
+  const [modo, setModo] = useState<"valores" | "usados" | "historico">("valores");
 
   return (
     <div className="space-y-4">
       {/* Seletor de modo */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <button
           onClick={() => setModo("valores")}
           className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
@@ -741,6 +981,16 @@ export default function AdminPrecosPage() {
         >
           Avaliacao dos Usados
         </button>
+        <button
+          onClick={() => setModo("historico")}
+          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+            modo === "historico"
+              ? "bg-[#E8740E] text-white"
+              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}
+        >
+          Historico de Precos
+        </button>
       </div>
 
       {modo === "valores" && <PrecosContent />}
@@ -749,6 +999,7 @@ export default function AdminPrecosPage() {
           <UsadosContent />
         </Suspense>
       )}
+      {modo === "historico" && <HistoricoPrecos />}
     </div>
   );
 }

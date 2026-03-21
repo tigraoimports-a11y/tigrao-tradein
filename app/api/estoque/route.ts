@@ -22,6 +22,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const categoria = searchParams.get("categoria");
   const action = searchParams.get("action");
+  const imeiSearch = searchParams.get("imei");
+
+  // Buscar por IMEI
+  if (imeiSearch) {
+    const { data: estoqueItems } = await supabase
+      .from("estoque")
+      .select("*")
+      .ilike("imei", `%${imeiSearch}%`);
+
+    const { data: vendaItems } = await supabase
+      .from("vendas")
+      .select("*")
+      .ilike("imei", `%${imeiSearch}%`);
+
+    return NextResponse.json({ estoque: estoqueItems ?? [], vendas: vendaItems ?? [] });
+  }
 
   // Buscar último log para desfazer
   if (action === "last_log") {

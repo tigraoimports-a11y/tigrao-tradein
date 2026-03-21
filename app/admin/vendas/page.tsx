@@ -26,6 +26,8 @@ export default function VendasPage() {
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
+  const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
   // Filtros de data para histórico
   const now = new Date();
@@ -301,6 +303,7 @@ export default function VendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Venda registrada!");
+      setDuplicadoInfo(null);
       // Salvar dados do cliente para "+1 Produto" antes de limpar tudo
       setLastClienteData({ cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo });
       // Limpar TODOS os campos
@@ -404,6 +407,82 @@ export default function VendasPage() {
     }
   };
 
+  // ── Duplicar Venda ──
+  const handleDuplicar = (v: Venda) => {
+    setForm({
+      data: new Date().toISOString().split("T")[0], // hoje
+      cliente: v.cliente,
+      cpf: "",
+      cnpj: "",
+      email: "",
+      endereco: "",
+      pessoa: "PF",
+      origem: v.origem || "ANUNCIO",
+      tipo: v.tipo || "VENDA",
+      produto: v.produto,
+      fornecedor: v.fornecedor || "",
+      custo: "",
+      preco_vendido: "", // limpar para novo preço
+      valor_comprovante_input: "",
+      banco: v.banco || "ITAU",
+      forma: v.forma || "",
+      qnt_parcelas: String(v.qnt_parcelas || ""),
+      bandeira: v.bandeira || "",
+      local: v.local || "",
+      produto_na_troca: "",
+      entrada_pix: "",
+      banco_pix: v.banco_pix || "ITAU",
+      entrada_especie: "",
+      banco_2nd: v.banco_2nd || "",
+      banco_alt: v.banco_alt || "",
+      parc_alt: String(v.parc_alt || ""),
+      band_alt: v.band_alt || "",
+      sinal_antecipado: "",
+      banco_sinal: "",
+      troca_produto: "",
+      troca_cor: "",
+      troca_bateria: "",
+      troca_obs: "",
+    });
+    setCatSel("");
+    setEstoqueId("");
+    setProdutoManual(true); // produto duplicado vai como manual
+    const [y, m, d] = (v.data || "").split("-");
+    setDuplicadoInfo({ data: d && m ? `${d}/${m}` : v.data, cliente: v.cliente });
+    setTab("nova");
+    setMsg("");
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // ── Clientes Recorrentes ──
+  const clientesRecorrentes = (() => {
+    if (!form.cliente || form.cliente.length < 2) return [];
+    const term = form.cliente.toLowerCase();
+    // Agrupar vendas por nome do cliente
+    const map = new Map<string, { cliente: string; ultimaData: string; ultimoProduto: string; qtd: number; origem: string; tipo: string; forma: string; banco: string }>();
+    for (const v of vendas) {
+      const nome = v.cliente?.toLowerCase();
+      if (!nome || !nome.includes(term)) continue;
+      const existing = map.get(nome);
+      if (!existing || (v.data || "") > (existing.ultimaData || "")) {
+        map.set(nome, {
+          cliente: v.cliente,
+          ultimaData: v.data,
+          ultimoProduto: v.produto,
+          qtd: (existing?.qtd || 0) + 1,
+          origem: v.origem,
+          tipo: v.tipo,
+          forma: v.forma,
+          banco: v.banco,
+        });
+      } else {
+        existing.qtd += 1;
+      }
+    }
+    return Array.from(map.values()).slice(0, 5);
+  })();
+
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
   const selectCls = inputCls;
@@ -468,6 +547,21 @@ export default function VendasPage() {
             </button>
           </div>
 
+          {/* Indicador de venda duplicada */}
+          {duplicadoInfo && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+              <span className="text-xs text-blue-700">
+                📋 Baseado na venda de <strong>{duplicadoInfo.data}</strong> para <strong>{duplicadoInfo.cliente}</strong>
+              </span>
+              <button
+                onClick={() => setDuplicadoInfo(null)}
+                className="text-xs text-blue-400 hover:text-blue-600 ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Modal para colar texto do formulário */}
           {showPasteModal && (
             <div className="border border-[#E8740E] bg-[#FFF8F0] rounded-xl p-4 space-y-3">
@@ -517,7 +611,33 @@ export default function VendasPage() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} /></div>
+                <div className="relative"><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => { set("cliente", e.target.value); setShowClienteSuggestions(true); }} onFocus={() => setShowClienteSuggestions(true)} onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} />
+                  {/* Dropdown Clientes Recorrentes */}
+                  {showClienteSuggestions && clientesRecorrentes.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                      <div className="px-3 py-1.5 bg-[#F5F5F7] text-[10px] font-bold text-[#86868B] uppercase">Clientes recorrentes</div>
+                      {clientesRecorrentes.map((c, i) => (
+                        <button
+                          key={i}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            set("cliente", c.cliente);
+                            set("origem", c.origem);
+                            set("tipo", c.tipo);
+                            set("forma", c.forma);
+                            set("banco", c.banco);
+                            setShowClienteSuggestions(false);
+                            setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
+                        >
+                          <span className="text-sm font-medium text-[#1D1D1F]">{c.cliente}</span>
+                          <span className="block text-[10px] text-[#86868B]">{c.qtd} compra{c.qtd > 1 ? "s" : ""} — Ultimo: {c.ultimoProduto}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {form.pessoa === "PJ" ? (
                   <div><p className={labelCls}>CNPJ</p><input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputCls} /></div>
                 ) : (
@@ -1181,6 +1301,15 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDuplicar(v);
+                                          }}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
+                                        >
+                                          📋 Duplicar
+                                        </button>
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();

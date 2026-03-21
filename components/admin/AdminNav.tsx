@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
   { href: "/admin/simulacoes", label: "Simulacoes", icon: "📱", roles: ["admin"] },
   { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
+  { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque"] },
   { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
   { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
   { href: "/admin/precos", label: "Precos", icon: "🏷️", roles: ["admin"] },

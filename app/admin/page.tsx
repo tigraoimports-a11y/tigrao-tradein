@@ -291,6 +291,242 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Ranking de Origens */}
+      <OrigensRanking password={password} />
+    </div>
+  );
+}
+
+// ============================================
+// OrigensRanking — Ranking mensal de origens
+// ============================================
+
+const ORIGEM_EMOJI: Record<string, string> = {
+  "ANUNCIO": "📣",
+  "RECOMPRA": "🔄",
+  "INDICACAO": "🤝",
+  "ATACADO": "📦",
+  "OUTROS": "📋",
+};
+
+const ORIGEM_COLORS: Record<string, string> = {
+  "ANUNCIO": "#4A90D9",
+  "RECOMPRA": "#4CAF50",
+  "INDICACAO": "#E8740E",
+  "ATACADO": "#9B59B6",
+  "OUTROS": "#999999",
+};
+
+interface OrigemData {
+  origem: string;
+  qty: number;
+  receita: number;
+  lucro: number;
+  margem: number;
+  ticket: number;
+  share: number;
+  deltaQty: number;
+  deltaReceita: number;
+  deltaLucro: number;
+}
+
+interface OrigensResponse {
+  mes: string;
+  mesAnterior: string;
+  totalQty: number;
+  totalReceita: number;
+  totalLucro: number;
+  ranking: OrigemData[];
+  melhorMargem: { origem: string; margem: number } | null;
+  maiorTicket: { origem: string; ticket: number } | null;
+}
+
+function OrigensRanking({ password }: { password: string }) {
+  const [data, setData] = useState<OrigensResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [mes, setMes] = useState(() => {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  const fetchOrigens = useCallback(async (m: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/relatorio-origens?mes=${m}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }, [password]);
+
+  useEffect(() => {
+    fetchOrigens(mes);
+  }, [mes, fetchOrigens]);
+
+  const MESES_NOME: Record<string, string> = {
+    "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
+    "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto",
+    "09": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro",
+  };
+
+  const mesLabel = mes.split("-")[1];
+  const anoLabel = mes.split("-")[0];
+  const mesNome = `${MESES_NOME[mesLabel] || mesLabel}/${anoLabel}`;
+
+  // Gerar opções de meses (últimos 6 meses)
+  const mesesOptions: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    mesesOptions.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const maxReceita = data?.ranking?.[0]?.receita || 1;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider">
+          Ranking de Origens — {mesNome}
+        </h2>
+        <select
+          value={mes}
+          onChange={(e) => setMes(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-xs text-[#1D1D1F] bg-white focus:outline-none focus:border-[#E8740E]"
+        >
+          {mesesOptions.map((m) => {
+            const [y, mo] = m.split("-");
+            return (
+              <option key={m} value={m}>
+                {MESES_NOME[mo] || mo}/{y}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+
+      {loading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
+
+      {!loading && data && data.ranking.length === 0 && (
+        <p className="text-xs text-[#86868B] text-center py-4">Nenhuma venda no periodo selecionado.</p>
+      )}
+
+      {!loading && data && data.ranking.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm space-y-4">
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[#86868B] border-b border-[#D2D2D7]">
+                  <th className="text-left py-2 font-semibold">#</th>
+                  <th className="text-left py-2 font-semibold">Origem</th>
+                  <th className="text-right py-2 font-semibold">Vendas</th>
+                  <th className="text-right py-2 font-semibold">Faturamento</th>
+                  <th className="text-right py-2 font-semibold">Lucro</th>
+                  <th className="text-right py-2 font-semibold">Margem</th>
+                  <th className="text-right py-2 font-semibold">Ticket</th>
+                  <th className="text-right py-2 font-semibold">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.ranking.map((item, idx) => {
+                  const medals = ["🥇", "🥈", "🥉"];
+                  const medal = idx < 3 ? medals[idx] : `${idx + 1}`;
+                  const emoji = ORIGEM_EMOJI[item.origem] || "📋";
+                  const barColor = ORIGEM_COLORS[item.origem] || "#999";
+
+                  return (
+                    <tr key={item.origem} className="border-b border-[#F5F5F7] last:border-0">
+                      <td className="py-2.5">{medal}</td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span>{emoji}</span>
+                          <span className="font-medium text-[#1D1D1F]">{item.origem}</span>
+                        </div>
+                      </td>
+                      <td className="text-right py-2.5 font-medium text-[#1D1D1F]">
+                        {item.qty}
+                        {item.deltaQty !== 0 && (
+                          <span className={`ml-1 text-[10px] ${item.deltaQty > 0 ? "text-green-600" : "text-red-500"}`}>
+                            {item.deltaQty > 0 ? "+" : ""}{item.deltaQty}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right py-2.5 font-medium text-[#1D1D1F]">{fmt(item.receita)}</td>
+                      <td className="text-right py-2.5 font-medium text-green-700">{fmt(item.lucro)}</td>
+                      <td className="text-right py-2.5 text-[#6E6E73]">{item.margem.toFixed(1)}%</td>
+                      <td className="text-right py-2.5 text-[#6E6E73]">{fmt(item.ticket)}</td>
+                      <td className="text-right py-2.5 text-[#6E6E73]">{item.share.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[#D2D2D7]">
+                  <td colSpan={2} className="py-2 font-bold text-[#1D1D1F]">TOTAL</td>
+                  <td className="text-right py-2 font-bold text-[#1D1D1F]">{data.totalQty}</td>
+                  <td className="text-right py-2 font-bold text-[#1D1D1F]">{fmt(data.totalReceita)}</td>
+                  <td className="text-right py-2 font-bold text-green-700">{fmt(data.totalLucro)}</td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Bar Chart */}
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">Distribuicao de Faturamento</p>
+            {data.ranking.map((item) => {
+              const barColor = ORIGEM_COLORS[item.origem] || "#999";
+              const widthPct = maxReceita > 0 ? (item.receita / maxReceita) * 100 : 0;
+              const emoji = ORIGEM_EMOJI[item.origem] || "📋";
+
+              return (
+                <div key={item.origem} className="flex items-center gap-2">
+                  <div className="w-20 text-xs text-[#1D1D1F] font-medium flex items-center gap-1 shrink-0">
+                    <span>{emoji}</span>
+                    <span className="truncate">{item.origem}</span>
+                  </div>
+                  <div className="flex-1 bg-[#F5F5F7] rounded-full h-5 relative overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${widthPct}%`, backgroundColor: barColor }}
+                    />
+                    <span className="absolute right-2 top-0 h-full flex items-center text-[10px] font-semibold text-[#1D1D1F]">
+                      {fmt(item.receita)} ({item.share.toFixed(0)}%)
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Destaques */}
+          {(data.melhorMargem || data.maiorTicket) && (
+            <div className="flex gap-3 pt-2 border-t border-[#F5F5F7]">
+              {data.melhorMargem && (
+                <div className="flex-1 bg-green-50 rounded-xl p-3">
+                  <p className="text-[10px] text-green-600 font-semibold uppercase">Melhor Margem</p>
+                  <p className="text-sm font-bold text-green-800">{data.melhorMargem.origem} ({data.melhorMargem.margem}%)</p>
+                </div>
+              )}
+              {data.maiorTicket && (
+                <div className="flex-1 bg-orange-50 rounded-xl p-3">
+                  <p className="text-[10px] text-orange-600 font-semibold uppercase">Maior Ticket</p>
+                  <p className="text-sm font-bold text-orange-800">{data.maiorTicket.origem} ({fmt(data.maiorTicket.ticket)})</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
