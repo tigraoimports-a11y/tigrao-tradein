@@ -13,16 +13,24 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const id = formData.get("id") as string | null;
+    const produto_id = formData.get("produto_id") as string | null;
+    const variacao_id = formData.get("variacao_id") as string | null;
 
-    if (!file || !id) {
-      return NextResponse.json({ error: "Missing file or id" }, { status: 400 });
+    // Backwards compat: also accept "id" field (legacy)
+    const legacyId = formData.get("id") as string | null;
+
+    if (!file) {
+      return NextResponse.json({ error: "Missing file" }, { status: 400 });
+    }
+
+    if (!produto_id && !variacao_id && !legacyId) {
+      return NextResponse.json({ error: "Missing produto_id or variacao_id" }, { status: 400 });
     }
 
     // Validate type
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: `Tipo de arquivo invalido. Aceitos: JPEG, PNG, WebP` },
+        { error: "Tipo de arquivo invalido. Aceitos: JPEG, PNG, WebP" },
         { status: 400 }
       );
     }
@@ -30,23 +38,41 @@ export async function POST(req: NextRequest) {
     // Validate size
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: `Arquivo muito grande. Maximo: 5MB` },
+        { error: "Arquivo muito grande. Maximo: 5MB" },
         { status: 400 }
       );
     }
 
     const { supabase } = await import("@/lib/supabase");
 
-    // Check if product already has an image — delete old file if so
+    // Determine target table and id
+    let table: string;
+    let targetId: string;
+    let imageField = "imagem_url";
+
+    if (produto_id) {
+      table = "loja_produtos";
+      targetId = produto_id;
+    } else if (variacao_id) {
+      table = "loja_variacoes";
+      targetId = variacao_id;
+    } else {
+      // Legacy: update precos table
+      table = "precos";
+      targetId = legacyId!;
+      imageField = "image_url";
+    }
+
+    // Check if record already has an image — delete old file if so
     const { data: existing } = await supabase
-      .from("precos")
-      .select("image_url")
-      .eq("id", id)
+      .from(table)
+      .select(imageField)
+      .eq("id", targetId)
       .single();
 
-    if (existing?.image_url) {
-      // Extract path from public URL
-      const oldPath = extractStoragePath(existing.image_url);
+    const existingUrl = (existing as Record<string, string> | null)?.[imageField];
+    if (existingUrl) {
+      const oldPath = extractStoragePath(existingUrl);
       if (oldPath) {
         await supabase.storage.from("product-images").remove([oldPath]);
       }
@@ -54,7 +80,8 @@ export async function POST(req: NextRequest) {
 
     // Upload new file
     const ext = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
-    const path = `produto-${id}-${Date.now()}.${ext}`;
+    const prefix = variacao_id ? "var" : "prod";
+    const path = `${prefix}-${targetId}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage
@@ -75,11 +102,11 @@ export async function POST(req: NextRequest) {
 
     const publicUrl = urlData.publicUrl;
 
-    // Update precos table
+    // Update record
     const { error: updateError } = await supabase
-      .from("precos")
-      .update({ image_url: publicUrl })
-      .eq("id", id);
+      .from(table)
+      .update({ [imageField]: publicUrl })
+      .eq("id", targetId);
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
@@ -93,7 +120,6 @@ export async function POST(req: NextRequest) {
 }
 
 function extractStoragePath(publicUrl: string): string | null {
-  // Public URL format: https://<project>.supabase.co/storage/v1/object/public/product-images/<path>
   const match = publicUrl.match(/\/product-images\/(.+)$/);
   return match ? match[1] : null;
 }
