@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     banner_image_url: null,
     accent_color: "#E8740E",
     whatsapp_numero: "5521999999999",
+    tema: "tigrao",
   };
 
   return NextResponse.json({ produtos: produtosRes.data ?? [], config });
@@ -84,7 +85,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const { supabase } = await import("@/lib/supabase");
 
-  const allowedFields = ["banner_titulo", "banner_subtitulo", "banner_image_url", "accent_color", "whatsapp_numero"];
+  const allowedFields = ["banner_titulo", "banner_subtitulo", "banner_image_url", "accent_color", "whatsapp_numero", "tema"];
   const update: Record<string, unknown> = {};
   for (const key of allowedFields) {
     if (body[key] !== undefined) update[key] = body[key];

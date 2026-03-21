@@ -248,14 +248,17 @@ function buildGroupedResponse(
   const categorias = CATEGORIAS_ORDEM.filter((c) => categoriasPresentes.includes(c));
 
   // Config defaults
-  const config = mostruarioConfig ?? {
+  const rawConfig = mostruarioConfig ?? {
     banner_titulo: "Produtos Apple Originais",
     banner_subtitulo: "Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple",
     banner_image_url: null,
     accent_color: "#E8740E",
     whatsapp_numero: "5521999999999",
     manutencao: false,
+    tema: "tigrao",
   };
+  // Ensure tema field always present
+  const config = { ...rawConfig, tema: (rawConfig as Record<string, unknown>).tema ?? "tigrao" };
 
   return NextResponse.json(
     { produtos, categorias, config },

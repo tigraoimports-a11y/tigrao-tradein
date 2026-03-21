@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { TEMAS, TEMA_KEYS, getTemaKey } from "@/lib/temas";
+import type { TemaKey } from "@/lib/temas";
 
 /* ── Types ── */
 
@@ -25,6 +27,7 @@ interface MostruarioConfig {
   banner_image_url: string | null;
   accent_color: string;
   whatsapp_numero: string;
+  tema: string;
 }
 
 /* ── Category config ── */
@@ -67,6 +70,7 @@ export default function MostruarioPage() {
     banner_image_url: null,
     accent_color: "#E8740E",
     whatsapp_numero: "5521999999999",
+    tema: "tigrao",
   });
   const [activeTab, setActiveTab] = useState<string>("");
   const [toast, setToast] = useState<string | null>(null);
@@ -343,6 +347,51 @@ export default function MostruarioPage() {
                   className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
                   placeholder="5521999999999"
                 />
+              </div>
+            </div>
+
+            {/* ── Theme selector ── */}
+            <div>
+              <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-2">
+                Tema do Mostruario
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {TEMA_KEYS.map((key) => {
+                  const t = TEMAS[key];
+                  const isActive = getTemaKey(config.tema) === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setConfig({ ...config, tema: key });
+                      }}
+                      className={`relative p-3 rounded-xl border-2 text-left transition-all ${
+                        isActive
+                          ? "border-[#E8740E] shadow-md"
+                          : "border-[#E8E8ED] hover:border-[#D2D2D7]"
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="absolute top-2 right-2 text-[10px] font-bold text-[#E8740E] uppercase">
+                          Ativo
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-lg">{t.preview}</span>
+                        <span className="text-xs font-bold text-[#1D1D1F]">{t.nome}</span>
+                      </div>
+                      <p className="text-[10px] text-[#86868B] leading-snug mb-2">{t.descricao}</p>
+                      {/* Mini color bar preview */}
+                      <div className="flex gap-1 h-4 rounded overflow-hidden">
+                        <div className="flex-1 rounded-sm" style={{ backgroundColor: t.heroBg }} />
+                        <div className="flex-1 rounded-sm" style={{ backgroundColor: t.accent }} />
+                        <div className="flex-1 rounded-sm" style={{ backgroundColor: t.bg }} />
+                        <div className="flex-1 rounded-sm" style={{ backgroundColor: t.btnComprar }} />
+                        <div className="flex-1 rounded-sm" style={{ backgroundColor: t.cardBg, border: `1px solid ${t.cardBorder}` }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

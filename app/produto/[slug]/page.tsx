@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { getTema, temaCSSVars } from "@/lib/temas";
 
 /* ── Types ── */
 
@@ -22,6 +23,16 @@ interface ProdutoLoja {
   imagem: string | null;
   destaque?: boolean;
   ordem?: number;
+}
+
+interface LojaConfig {
+  banner_titulo: string;
+  banner_subtitulo: string;
+  banner_image_url: string | null;
+  accent_color: string;
+  whatsapp_numero: string;
+  manutencao?: boolean;
+  tema?: string;
 }
 
 /* ── Category emoji ── */
@@ -67,8 +78,6 @@ function productSlug(nome: string): string {
     .replace(/[^a-z0-9-]/g, "");
 }
 
-const WHATSAPP_NUMBER = "5521999999999";
-
 /* ══════════════════════════════════════════════ */
 /* ── Product Detail Page                      ── */
 /* ══════════════════════════════════════════════ */
@@ -78,12 +87,24 @@ export default function ProdutoPage() {
   const slug = params.slug as string;
 
   const [produtos, setProdutos] = useState<ProdutoLoja[]>([]);
+  const [config, setConfig] = useState<LojaConfig>({
+    banner_titulo: "Produtos Apple Originais",
+    banner_subtitulo: "",
+    banner_image_url: null,
+    accent_color: "#E8740E",
+    whatsapp_numero: "5521999999999",
+    tema: "tigrao",
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const [selectedStorage, setSelectedStorage] = useState<string | null>(null);
   const [selectedCor, setSelectedCor] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState(1);
+
+  const tema = useMemo(() => getTema(config.tema), [config.tema]);
+  const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
+  const whatsappNumber = config.whatsapp_numero || "5521999999999";
 
   /* ── Fetch all products and find current one ── */
   useEffect(() => {
@@ -93,6 +114,7 @@ export default function ProdutoPage() {
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
         setProdutos(data.produtos ?? []);
+        if (data.config) setConfig(data.config);
       } catch {
         setError(true);
       } finally {
@@ -149,17 +171,17 @@ export default function ProdutoPage() {
 
     const message = `Ola! 😊 Vi no site e quero comprar:\n\n📱 ${produto.nome}${storageText}${corText}${precoText}${qtyText}\n\nAguardo retorno!`;
 
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
-  }, [produto, selectedStorage, selectedCor, preco, quantidade]);
+  }, [produto, selectedStorage, selectedCor, preco, quantidade, whatsappNumber]);
 
   /* ── Loading / Error ── */
   if (loading) {
     return (
-      <div className="min-h-dvh bg-white flex items-center justify-center">
+      <div style={{ backgroundColor: tema.bg, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block w-8 h-8 border-[3px] border-[#E8E8ED] border-t-[#E8740E] rounded-full animate-spin" />
-          <p className="mt-4 text-[15px] text-[#86868B]">Carregando produto...</p>
+          <div className="inline-block w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: tema.cardBorder, borderTopColor: tema.accent }} />
+          <p className="mt-4 text-[15px]" style={{ color: tema.textMuted }}>Carregando produto...</p>
         </div>
       </div>
     );
@@ -167,18 +189,19 @@ export default function ProdutoPage() {
 
   if (error || !produto) {
     return (
-      <div className="min-h-dvh bg-white flex items-center justify-center">
+      <div style={{ backgroundColor: tema.bg, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh flex items-center justify-center">
         <div className="text-center px-4">
           <p className="text-[48px]">😿</p>
-          <p className="mt-4 text-[17px] text-[#1D1D1F] font-medium">
+          <p className="mt-4 text-[17px] font-medium">
             Produto nao encontrado
           </p>
-          <p className="mt-1 text-[15px] text-[#86868B]">
+          <p className="mt-1 text-[15px]" style={{ color: tema.textMuted }}>
             O produto pode ter sido removido ou o link esta incorreto
           </p>
           <Link
             href="/"
-            className="inline-block mt-6 px-6 py-2.5 rounded-full bg-[#E8740E] text-white text-[14px] font-semibold hover:bg-[#D06A0D] transition-colors"
+            style={{ backgroundColor: tema.accent }}
+            className="inline-block mt-6 px-6 py-2.5 rounded-full text-white text-[14px] font-semibold transition-colors"
           >
             Voltar para a loja
           </Link>
@@ -192,28 +215,29 @@ export default function ProdutoPage() {
   const inStock = currentVariant?.em_estoque ?? false;
 
   return (
-    <div className="min-h-dvh bg-white">
+    <div style={{ backgroundColor: tema.bg, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-[#E8E8ED]">
+      <header style={{ backgroundColor: tema.headerBg, borderColor: tema.cardBorder }} className="sticky top-0 z-50 backdrop-blur-xl border-b">
         <div className="max-w-[1280px] mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <span className="text-2xl">🐯</span>
-            <span className="text-[17px] font-bold text-[#1D1D1F] tracking-tight">
+            <span className="text-[17px] font-bold tracking-tight">
               TigraoImports
             </span>
           </Link>
           <div className="flex items-center gap-3">
             <Link
               href="/troca"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] text-[13px] font-medium text-[#1D1D1F] hover:bg-[#E8E8ED] transition-colors"
+              style={{ backgroundColor: tema.bgSecondary, color: tema.text }}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors"
             >
               🔄 Simular Troca
             </Link>
             <a
-              href={`https://wa.me/${WHATSAPP_NUMBER}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-full hover:bg-[#F5F5F7] transition-colors"
+              className="p-2 rounded-full transition-colors"
               aria-label="WhatsApp"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="#25D366">
@@ -226,26 +250,27 @@ export default function ProdutoPage() {
 
       <main className="max-w-[1280px] mx-auto px-4 py-6">
         {/* ── Breadcrumb ── */}
-        <nav className="flex items-center gap-1.5 text-[13px] text-[#86868B] mb-6">
-          <Link href="/" className="hover:text-[#E8740E] transition-colors">
+        <nav className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: tema.textMuted }}>
+          <Link href="/" className="transition-colors" style={{ color: tema.textMuted }}>
             Home
           </Link>
           <span>/</span>
           <Link
             href={`/?cat=${produto.categoria}`}
-            className="hover:text-[#E8740E] transition-colors"
+            className="transition-colors"
+            style={{ color: tema.textMuted }}
           >
             {categoryLabel}
           </Link>
           <span>/</span>
-          <span className="text-[#1D1D1F] font-medium truncate">
+          <span className="font-medium truncate" style={{ color: tema.text }}>
             {produto.nome}
           </span>
         </nav>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
           {/* ── Left: Product Image ── */}
-          <div className="aspect-square rounded-3xl bg-gradient-to-br from-[#F5F5F7] to-[#E8E8ED] flex items-center justify-center overflow-hidden">
+          <div className="aspect-square rounded-3xl flex items-center justify-center overflow-hidden" style={{ background: `linear-gradient(to bottom right, ${tema.bgSecondary}, ${tema.cardBorder})` }}>
             {produto.imagem ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -263,7 +288,7 @@ export default function ProdutoPage() {
           {/* ── Right: Product Info ── */}
           <div className="flex flex-col">
             {/* Name */}
-            <h1 className="text-[24px] sm:text-[28px] font-bold text-[#1D1D1F] leading-tight">
+            <h1 className="text-[24px] sm:text-[28px] font-bold leading-tight">
               {produto.nome}
             </h1>
 
@@ -271,20 +296,20 @@ export default function ProdutoPage() {
             <div className="mt-4">
               {preco > 0 ? (
                 <>
-                  <p className="text-[28px] sm:text-[32px] font-bold text-[#1D1D1F]">
-                    {formatBRL(preco)} <span className="text-[16px] font-normal text-[#86868B]">a vista</span>
+                  <p className="text-[28px] sm:text-[32px] font-bold">
+                    {formatBRL(preco)} <span className="text-[16px] font-normal" style={{ color: tema.textMuted }}>a vista</span>
                   </p>
-                  <p className="mt-1 text-[15px] text-[#6E6E73]">
+                  <p className="mt-1 text-[15px]" style={{ color: tema.textMuted }}>
                     ou {formatBRLDecimal(total12)} em ate 12x de {formatBRL(parcela12)}
                   </p>
                   {parcela18 > 0 && (
-                    <p className="text-[13px] text-[#86868B]">
+                    <p className="text-[13px]" style={{ color: tema.textMuted }}>
                       ou 18x de {formatBRL(parcela18)}
                     </p>
                   )}
                 </>
               ) : (
-                <p className="text-[20px] font-semibold text-[#E8740E]">
+                <p className="text-[20px] font-semibold" style={{ color: tema.accent }}>
                   Consulte o preco via WhatsApp
                 </p>
               )}
@@ -292,7 +317,7 @@ export default function ProdutoPage() {
 
             {/* Description */}
             {produto.descricao && produto.descricao !== "Novo | Lacrado | 1 ano de garantia Apple | Nota Fiscal" && (
-              <p className="mt-3 text-[14px] text-[#6E6E73] leading-relaxed">
+              <p className="mt-3 text-[14px] leading-relaxed" style={{ color: tema.textMuted }}>
                 {produto.descricao}
               </p>
             )}
@@ -305,7 +330,8 @@ export default function ProdutoPage() {
               ].map((tag) => (
                 <span
                   key={tag.text}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#F5F5F7] text-[12px] text-[#6E6E73] font-medium"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-medium"
+                  style={{ backgroundColor: tema.bgSecondary, color: tema.textMuted }}
                 >
                   {tag.icon} {tag.text}
                 </span>
@@ -315,7 +341,7 @@ export default function ProdutoPage() {
             {/* Storage selector */}
             {produto.storages.length > 1 && (
               <div className="mt-6">
-                <p className="text-[13px] font-semibold text-[#1D1D1F] mb-2">
+                <p className="text-[13px] font-semibold mb-2">
                   Armazenamento
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -326,15 +352,16 @@ export default function ProdutoPage() {
                         setSelectedStorage(s.storage);
                         setQuantidade(1);
                       }}
-                      className={`px-4 py-2.5 rounded-xl text-[14px] font-medium border transition-all min-w-[80px] ${
+                      style={
                         selectedStorage === s.storage
-                          ? "border-[#E8740E] bg-[#E8740E]/5 text-[#E8740E]"
-                          : "border-[#E8E8ED] bg-white text-[#1D1D1F] hover:border-[#D2D2D7]"
-                      }`}
+                          ? { borderColor: tema.accent, backgroundColor: tema.accentLight, color: tema.accent }
+                          : { borderColor: tema.cardBorder, backgroundColor: tema.cardBg, color: tema.text }
+                      }
+                      className="px-4 py-2.5 rounded-xl text-[14px] font-medium border transition-all min-w-[80px]"
                     >
                       <span className="block">{s.storage || "Unico"}</span>
                       {s.preco > 0 && (
-                        <span className="block text-[11px] text-[#86868B] mt-0.5">
+                        <span className="block text-[11px] mt-0.5" style={{ color: tema.textMuted }}>
                           {formatBRL(s.preco)}
                         </span>
                       )}
@@ -347,7 +374,7 @@ export default function ProdutoPage() {
             {/* Color selector */}
             {currentVariant && currentVariant.cores.length > 0 && (
               <div className="mt-5">
-                <p className="text-[13px] font-semibold text-[#1D1D1F] mb-2">
+                <p className="text-[13px] font-semibold mb-2">
                   Cor{selectedCor ? `: ${selectedCor}` : ""}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -356,11 +383,12 @@ export default function ProdutoPage() {
                       key={cor}
                       onClick={() => setSelectedCor(cor)}
                       title={cor}
-                      className={`px-4 py-2 rounded-xl text-[13px] font-medium border transition-all ${
+                      style={
                         selectedCor === cor
-                          ? "border-[#E8740E] bg-[#E8740E]/5 text-[#E8740E]"
-                          : "border-[#E8E8ED] bg-white text-[#1D1D1F] hover:border-[#D2D2D7]"
-                      }`}
+                          ? { borderColor: tema.accent, backgroundColor: tema.accentLight, color: tema.accent }
+                          : { borderColor: tema.cardBorder, backgroundColor: tema.cardBg, color: tema.text }
+                      }
+                      className="px-4 py-2 rounded-xl text-[13px] font-medium border transition-all"
                     >
                       {cor}
                     </button>
@@ -371,23 +399,23 @@ export default function ProdutoPage() {
 
             {/* Quantity */}
             <div className="mt-5">
-              <p className="text-[13px] font-semibold text-[#1D1D1F] mb-2">
+              <p className="text-[13px] font-semibold mb-2">
                 Quantidade
               </p>
-              <div className="inline-flex items-center border border-[#E8E8ED] rounded-xl overflow-hidden">
+              <div className="inline-flex items-center border rounded-xl overflow-hidden" style={{ borderColor: tema.cardBorder }}>
                 <button
                   onClick={() => setQuantidade(Math.max(1, quantidade - 1))}
-                  className="w-11 h-11 flex items-center justify-center text-[18px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                  className="w-11 h-11 flex items-center justify-center text-[18px] transition-colors"
                   disabled={quantidade <= 1}
                 >
                   -
                 </button>
-                <span className="w-12 h-11 flex items-center justify-center text-[15px] font-medium text-[#1D1D1F] border-x border-[#E8E8ED]">
+                <span className="w-12 h-11 flex items-center justify-center text-[15px] font-medium border-x" style={{ borderColor: tema.cardBorder }}>
                   {quantidade}
                 </span>
                 <button
                   onClick={() => setQuantidade(quantidade + 1)}
-                  className="w-11 h-11 flex items-center justify-center text-[18px] text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                  className="w-11 h-11 flex items-center justify-center text-[18px] transition-colors"
                 >
                   +
                 </button>
@@ -413,21 +441,24 @@ export default function ProdutoPage() {
             <div className="mt-6 space-y-3">
               <button
                 onClick={handleWhatsApp}
-                className="w-full py-3.5 rounded-2xl bg-[#34C759] text-white text-[16px] font-semibold hover:bg-[#2DB84E] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                style={{ backgroundColor: tema.btnComprar }}
+                className="w-full py-3.5 rounded-2xl text-white text-[16px] font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               >
                 Quero esse! 💬
               </button>
 
               <Link
                 href="/troca"
-                className="w-full py-3 rounded-2xl border border-[#E8740E] text-[#E8740E] text-[14px] font-semibold hover:bg-[#E8740E]/5 transition-colors flex items-center justify-center gap-2"
+                style={{ borderColor: tema.accent, color: tema.accent }}
+                className="w-full py-3 rounded-2xl border text-[14px] font-semibold transition-colors flex items-center justify-center gap-2"
               >
                 🔄 Simular troca com meu usado
               </Link>
 
               <Link
                 href="/"
-                className="w-full py-3 rounded-2xl border border-[#E8E8ED] text-[#86868B] text-[14px] font-medium hover:bg-[#F5F5F7] transition-colors flex items-center justify-center gap-2"
+                style={{ borderColor: tema.cardBorder, color: tema.textMuted }}
+                className="w-full py-3 rounded-2xl border text-[14px] font-medium transition-colors flex items-center justify-center gap-2"
               >
                 ← Voltar para a loja
               </Link>
@@ -444,14 +475,15 @@ export default function ProdutoPage() {
           ].map((item) => (
             <div
               key={item.title}
-              className="flex items-start gap-3 p-4 rounded-2xl bg-[#F5F5F7]"
+              className="flex items-start gap-3 p-4 rounded-2xl"
+              style={{ backgroundColor: tema.bgSecondary }}
             >
               <span className="text-[24px]">{item.icon}</span>
               <div>
-                <p className="text-[14px] font-semibold text-[#1D1D1F]">
+                <p className="text-[14px] font-semibold">
                   {item.title}
                 </p>
-                <p className="text-[13px] text-[#86868B]">{item.desc}</p>
+                <p className="text-[13px]" style={{ color: tema.textMuted }}>{item.desc}</p>
               </div>
             </div>
           ))}
@@ -459,13 +491,13 @@ export default function ProdutoPage() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="bg-[#F5F5F7] border-t border-[#E8E8ED] mt-12">
+      <footer style={{ backgroundColor: tema.bgSecondary, borderColor: tema.cardBorder }} className="border-t mt-12">
         <div className="max-w-[1280px] mx-auto px-4 py-8 text-center space-y-3">
           <div className="flex items-center justify-center gap-2">
             <span className="text-xl">🐯</span>
-            <span className="text-[15px] font-bold text-[#1D1D1F]">TigraoImports</span>
+            <span className="text-[15px] font-bold">TigraoImports</span>
           </div>
-          <p className="text-[13px] text-[#86868B]">
+          <p className="text-[13px]" style={{ color: tema.textMuted }}>
             Barra da Tijuca, Rio de Janeiro
           </p>
           <div className="flex items-center justify-center gap-4">
@@ -473,12 +505,13 @@ export default function ProdutoPage() {
               href="https://instagram.com/tigraoimports"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] text-[#E8740E] font-medium hover:underline"
+              style={{ color: tema.accent }}
+              className="text-[13px] font-medium hover:underline"
             >
               @tigraoimports
             </a>
             <a
-              href={`https://wa.me/${WHATSAPP_NUMBER}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[13px] text-[#25D366] font-medium hover:underline"
@@ -486,32 +519,33 @@ export default function ProdutoPage() {
               WhatsApp
             </a>
           </div>
-          <p className="text-[12px] text-[#AEAEB2]">
+          <p className="text-[12px]" style={{ color: tema.textMuted, opacity: 0.6 }}>
             Produtos lacrados com garantia Apple e Nota Fiscal
           </p>
         </div>
       </footer>
 
       {/* ── Mobile sticky buy bar ── */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-t border-[#E8E8ED] px-4 py-3">
+      <div style={{ backgroundColor: tema.headerBg, borderColor: tema.cardBorder }} className="sm:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
             {preco > 0 ? (
               <>
-                <p className="text-[17px] font-bold text-[#1D1D1F] truncate">
+                <p className="text-[17px] font-bold truncate">
                   {formatBRL(preco)}
                 </p>
-                <p className="text-[11px] text-[#86868B]">
+                <p className="text-[11px]" style={{ color: tema.textMuted }}>
                   ou 12x de {formatBRL(parcela12)}
                 </p>
               </>
             ) : (
-              <p className="text-[15px] font-semibold text-[#E8740E]">Consulte</p>
+              <p className="text-[15px] font-semibold" style={{ color: tema.accent }}>Consulte</p>
             )}
           </div>
           <button
             onClick={handleWhatsApp}
-            className="px-6 py-3 rounded-2xl bg-[#34C759] text-white text-[15px] font-semibold hover:bg-[#2DB84E] active:scale-[0.98] transition-all shrink-0"
+            style={{ backgroundColor: tema.btnComprar }}
+            className="px-6 py-3 rounded-2xl text-white text-[15px] font-semibold active:scale-[0.98] transition-all shrink-0"
           >
             Comprar
           </button>
