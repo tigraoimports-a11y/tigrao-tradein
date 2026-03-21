@@ -19,10 +19,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/simulacoes", label: "Simulacoes", icon: "📱", roles: ["admin"] },
   { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
   { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
-  { href: "/admin/usados", label: "Avaliacao Usados", icon: "🔄", roles: ["admin"] },
   { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
-  { href: "/admin/precos", label: "Alteracao de Precos", icon: "🏷️", roles: ["admin"] },
-  { href: "/admin/etiquetas", label: "Etiquetas", icon: "📡", roles: ["admin", "estoque"] },
+  { href: "/admin/precos", label: "Precos", icon: "🏷️", roles: ["admin"] },
 ];
 
 export default function AdminNav({ userRole }: { userRole: string }) {

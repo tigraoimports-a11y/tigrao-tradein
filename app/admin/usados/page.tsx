@@ -112,7 +112,7 @@ const DEFAULT_EXCLUIDOS = [
   "iPhone 12 Mini", "iPhone 13 Mini", "iPhone SE",
 ];
 
-export default function UsadosPage() {
+export function UsadosContent() {
   const { password } = useAdmin();
   const [valores, setValores] = useState<ValorUsado[]>([]);
   const [descontos, setDescontos] = useState<DescontoCondicao[]>([]);
@@ -420,4 +420,8 @@ export default function UsadosPage() {
       )}
     </div>
   );
+}
+
+export default function UsadosPage() {
+  return <UsadosContent />;
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
+
+const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
 interface ProdutoEstoque {
   id: string;
@@ -101,8 +103,8 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
@@ -497,6 +499,7 @@ export default function EstoquePage() {
             { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
             { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
             { key: "novo", label: "Adicionar", color: "" },
+            { key: "etiquetas", label: "Etiquetas", color: "" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
               tab === t.key
@@ -924,6 +927,13 @@ export default function EstoquePage() {
             ))
           )}
         </div>
+      )}
+
+      {/* ═══════════ TAB: ETIQUETAS ═══════════ */}
+      {tab === "etiquetas" && (
+        <Suspense fallback={<div className="text-center py-8 text-gray-400">Carregando...</div>}>
+          <EtiquetasContent embedded />
+        </Suspense>
       )}
     </div>
   );

@@ -76,7 +76,7 @@ function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean, in
   }, [onScan, enabled, inputRef]);
 }
 
-export default function EtiquetasPage() {
+export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const { password } = useAdmin();
   const [tab, setTab] = useState<"gerar" | "bipar" | "historico">("gerar");
@@ -527,19 +527,21 @@ export default function EtiquetasPage() {
   const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/admin")} className="text-gray-400 hover:text-gray-600 text-sm">&larr; Voltar</button>
-            <h1 className="text-xl font-bold text-gray-900">Etiquetas & Scanner</h1>
+    <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
+      {/* Header — só mostra quando não está embedded */}
+      {!embedded && (
+        <div className="bg-white border-b">
+          <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.push("/admin")} className="text-gray-400 hover:text-gray-600 text-sm">&larr; Voltar</button>
+              <h1 className="text-xl font-bold text-gray-900">Etiquetas & Scanner</h1>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs */}
-      <div className="max-w-4xl mx-auto px-4 pt-4">
+      <div className={embedded ? "" : "max-w-4xl mx-auto px-4 pt-4"}>
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
           {([
             { key: "gerar", label: "Gerar Etiqueta", icon: "🏷️" },
@@ -557,7 +559,7 @@ export default function EtiquetasPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className={embedded ? "py-4" : "max-w-4xl mx-auto px-4 py-6"}>
 
         {/* ═══════════ TAB: GERAR ETIQUETA ═══════════ */}
         {tab === "gerar" && !etiquetaGerada && !successMsg && (
@@ -1072,4 +1074,8 @@ export default function EtiquetasPage() {
       )}
     </div>
   );
+}
+
+export default function EtiquetasPage() {
+  return <EtiquetasContent />;
 }

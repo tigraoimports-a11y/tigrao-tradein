@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
+
+const UsadosContent = lazy(() => import("@/app/admin/usados/page").then(m => ({ default: m.UsadosContent })));
 
 interface PrecoProduto {
   id?: string;
@@ -43,7 +45,7 @@ function applyOrder(rows: PrecoProduto[], catKey: string): PrecoProduto[] {
   });
 }
 
-export default function AdminPrecosPage() {
+function PrecosContent() {
   const { password } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PrecoProduto[] | null>(null);
@@ -707,6 +709,45 @@ export default function AdminPrecosPage() {
           </div>
           );
         })
+      )}
+    </div>
+  );
+}
+
+export default function AdminPrecosPage() {
+  const [modo, setModo] = useState<"valores" | "usados">("valores");
+
+  return (
+    <div className="space-y-4">
+      {/* Seletor de modo */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => setModo("valores")}
+          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+            modo === "valores"
+              ? "bg-[#E8740E] text-white"
+              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}
+        >
+          Alteracao de Valores
+        </button>
+        <button
+          onClick={() => setModo("usados")}
+          className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+            modo === "usados"
+              ? "bg-[#E8740E] text-white"
+              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}
+        >
+          Avaliacao dos Usados
+        </button>
+      </div>
+
+      {modo === "valores" && <PrecosContent />}
+      {modo === "usados" && (
+        <Suspense fallback={<div className="text-center py-8 text-gray-400">Carregando...</div>}>
+          <UsadosContent />
+        </Suspense>
       )}
     </div>
   );
