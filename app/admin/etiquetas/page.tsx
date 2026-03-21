@@ -210,9 +210,11 @@ export default function EtiquetasPage() {
     }
   }
 
-  // ── Imprimir Etiqueta ──
+  // ── Imprimir Etiqueta (sem custo/fornecedor — dados ficam só no sistema) ──
   function handlePrint(etiqueta: Etiqueta) {
-    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["62x29"];
+    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["29x30"];
+    const w = tamanho.width;
+    const h = tamanho.height;
     const win = window.open("", "_blank", "width=400,height=300");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
@@ -220,31 +222,25 @@ export default function EtiquetasPage() {
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{width:${tamanho.width}mm;height:${tamanho.height}mm;font-family:Arial,sans-serif;overflow:hidden}
-        .etiqueta{width:${tamanho.width}mm;height:${tamanho.height}mm;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;border:0.3mm solid #000}
-        .header{display:flex;justify-content:space-between;align-items:center}
-        .marca{font-size:${tamanho.height > 30 ? 7 : 5}pt;font-weight:bold}
-        .codigo-texto{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#555}
-        .produto{font-size:${tamanho.height > 30 ? 8 : 6}pt;font-weight:bold;line-height:1.2}
-        .detalhe{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#333}
+        body{width:${w}mm;font-family:Arial,sans-serif;overflow:hidden}
+        .etiqueta{width:${w}mm;height:${h}mm;padding:1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
+        .marca{font-size:4pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
+        .produto{font-size:${h > 30 ? 7 : 5}pt;font-weight:bold;line-height:1.1;text-align:center}
+        .cor{font-size:${h > 30 ? 6 : 4}pt;color:#555;text-align:center}
         .barcode-area{text-align:center}
         svg{max-width:100%}
-        @page{size:${tamanho.width}mm ${tamanho.height}mm;margin:0}
+        @page{size:${w}mm ${h}mm;margin:0}
       </style></head><body>
       <div class="etiqueta">
-        <div class="header">
-          <span class="marca">TIGRAO IMPORTS</span>
-          <span class="codigo-texto">${etiqueta.codigo_barras}</span>
-        </div>
+        <div class="marca">TIGRAO IMPORTS</div>
         <div>
           <div class="produto">${etiqueta.produto}</div>
-          ${etiqueta.fornecedor ? `<div class="detalhe">Forn: ${etiqueta.fornecedor}</div>` : ""}
-          <div class="detalhe">Custo: R$ ${Number(etiqueta.custo_unitario).toLocaleString("pt-BR")}</div>
+          ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
         </div>
         <div class="barcode-area"><svg id="bc"></svg></div>
       </div>
       <script>
-        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:${tamanho.width > 50 ? 1.8 : 1.3},height:${tamanho.height > 30 ? 28 : 20},displayValue:false,margin:0});
+        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:${w > 50 ? 1.5 : 1},height:${h > 30 ? 22 : 14},displayValue:true,fontSize:${h > 30 ? 8 : 6},margin:0,textMargin:1});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -350,31 +346,29 @@ export default function EtiquetasPage() {
     }
   }
 
-  // ── Imprimir múltiplas etiquetas em uma página ──
+  // ── Imprimir múltiplas etiquetas (cada uma em página separada → etiquetadora corta entre elas) ──
   function handlePrintBatch() {
     const lista = etiquetas.filter((e) => selecionadas.has(e.id));
     if (lista.length === 0) return;
-    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["62x29"];
+    const tamanho = TAMANHOS_ETIQUETA[tamanhoEtiqueta] || TAMANHOS_ETIQUETA["29x30"];
+    const w = tamanho.width;
+    const h = tamanho.height;
     const win = window.open("", "_blank", "width=800,height=600");
     if (!win) return;
 
     const etiquetasHtml = lista.map((et) => `
       <div class="etiqueta">
-        <div class="header">
-          <span class="marca">TIGRAO IMPORTS</span>
-          <span class="codigo-texto">${et.codigo_barras}</span>
-        </div>
+        <div class="marca">TIGRAO IMPORTS</div>
         <div>
           <div class="produto">${et.produto}</div>
-          ${et.fornecedor ? `<div class="detalhe">Forn: ${et.fornecedor}</div>` : ""}
-          <div class="detalhe">Custo: R$ ${Number(et.custo_unitario).toLocaleString("pt-BR")}</div>
+          ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
         </div>
         <div class="barcode-area"><svg id="bc-${et.codigo_barras}"></svg></div>
       </div>
     `).join("");
 
     const barcodeScripts = lista.map((et) =>
-      `JsBarcode('#bc-${et.codigo_barras}','${et.codigo_barras}',{format:'CODE128',width:${tamanho.width > 50 ? 1.8 : 1.3},height:${tamanho.height > 30 ? 28 : 20},displayValue:false,margin:0});`
+      `JsBarcode('#bc-${et.codigo_barras}','${et.codigo_barras}',{format:'CODE128',width:${w > 50 ? 1.5 : 1},height:${h > 30 ? 22 : 14},displayValue:true,fontSize:${h > 30 ? 8 : 6},margin:0,textMargin:1});`
     ).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
@@ -382,19 +376,17 @@ export default function EtiquetasPage() {
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Arial,sans-serif;padding:5mm}
-        .etiquetas{display:flex;flex-wrap:wrap;gap:3mm}
-        .etiqueta{width:${tamanho.width}mm;height:${tamanho.height}mm;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;border:0.3mm solid #000;page-break-inside:avoid}
-        .header{display:flex;justify-content:space-between;align-items:center}
-        .marca{font-size:${tamanho.height > 30 ? 7 : 5}pt;font-weight:bold}
-        .codigo-texto{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#555}
-        .produto{font-size:${tamanho.height > 30 ? 8 : 6}pt;font-weight:bold;line-height:1.2}
-        .detalhe{font-size:${tamanho.height > 30 ? 6 : 5}pt;color:#333}
+        body{width:${w}mm;font-family:Arial,sans-serif}
+        .etiqueta{width:${w}mm;height:${h}mm;padding:1.5mm;display:flex;flex-direction:column;justify-content:space-between;page-break-after:always}
+        .etiqueta:last-child{page-break-after:auto}
+        .marca{font-size:4pt;font-weight:bold;text-align:center;letter-spacing:0.5pt}
+        .produto{font-size:${h > 30 ? 7 : 5}pt;font-weight:bold;line-height:1.1;text-align:center}
+        .cor{font-size:${h > 30 ? 6 : 4}pt;color:#555;text-align:center}
         .barcode-area{text-align:center}
         svg{max-width:100%}
-        @media print{body{padding:0}.etiquetas{gap:0}}
+        @page{size:${w}mm ${h}mm;margin:0}
       </style></head><body>
-      <div class="etiquetas">${etiquetasHtml}</div>
+      ${etiquetasHtml}
       <script>
         ${barcodeScripts}
         window.onload=()=>{window.print();window.close()};
