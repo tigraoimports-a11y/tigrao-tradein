@@ -490,12 +490,8 @@ export default function EstoquePage() {
 
       {/* Botão Gerar Etiqueta */}
       <button
-        onClick={() => setTab("etiquetas")}
-        className={`w-full py-3 rounded-xl text-base font-bold transition-colors flex items-center justify-center gap-2 ${
-          tab === "etiquetas"
-            ? "bg-green-600 text-white shadow-lg"
-            : "bg-green-500 hover:bg-green-600 text-white shadow-md"
-        }`}
+        onClick={() => window.location.href = "/admin/etiquetas"}
+        className="w-1/2 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white shadow-md"
       >
         🏷️ Gerar Etiqueta
       </button>
