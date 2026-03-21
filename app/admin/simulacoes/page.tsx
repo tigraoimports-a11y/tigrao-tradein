@@ -48,6 +48,7 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [modalRow, setModalRow] = useState<SimulacaoRow | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -336,8 +337,8 @@ export default function AdminPage() {
                   </tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
-                      <td className="px-4 py-3">
+                    <tr key={row.id} onClick={() => setModalRow(row)} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(row.id)}
@@ -350,7 +351,7 @@ export default function AdminPage() {
                           className="w-4 h-4 accent-[#E8740E] cursor-pointer"
                         />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col gap-1 items-start">
                           <button
                             onClick={() => {
@@ -389,7 +390,7 @@ export default function AdminPage() {
                       </td>
                       <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
                       <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <a href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline whitespace-nowrap">{row.whatsapp}</a>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -412,7 +413,7 @@ export default function AdminPage() {
                           {row.status === "GOSTEI" ? "Fechou" : "Saiu"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <button
                           disabled={deleting === row.id}
                           onClick={async () => {
@@ -521,6 +522,127 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {modalRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setModalRow(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <button
+              onClick={() => setModalRow(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] transition-colors text-sm font-bold"
+            >
+              X
+            </button>
+
+            <div className="p-6 space-y-5">
+              {/* Header */}
+              <div>
+                <h2 className="text-lg font-bold text-[#1D1D1F] pr-8">Detalhes da Simulacao</h2>
+                <p className="text-xs text-[#86868B] mt-1">{fmtDate(modalRow.created_at)}</p>
+              </div>
+
+              {/* Status badge */}
+              <div>
+                <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${modalRow.status === "GOSTEI" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                  {modalRow.status === "GOSTEI" ? "Fechou pedido" : "Saiu sem fechar"}
+                </span>
+                {modalRow.vendedor && (
+                  <span className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700">{modalRow.vendedor}</span>
+                )}
+              </div>
+
+              {/* Customer info */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Cliente</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-[#86868B]">Nome:</span>
+                    <p className="text-[#1D1D1F] font-medium">{modalRow.nome}</p>
+                  </div>
+                  <div>
+                    <span className="text-[#86868B]">WhatsApp:</span>
+                    <p className="text-[#1D1D1F] font-medium">{modalRow.whatsapp}</p>
+                  </div>
+                  {modalRow.instagram && (
+                    <div className="col-span-2">
+                      <span className="text-[#86868B]">Instagram:</span>
+                      <p className="text-[#1D1D1F] font-medium">{modalRow.instagram}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* New product */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto Novo</h3>
+                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_novo} {modalRow.storage_novo}</p>
+                <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
+              </div>
+
+              {/* Used device */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca</h3>
+                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}</p>
+                {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
+                  <div className="text-xs text-[#6E6E73] space-y-0.5">
+                    {modalRow.condicao_linhas.map((linha, i) => (
+                      <p key={i}>{linha}</p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
+              </div>
+
+              {/* Financial summary */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Resumo Financeiro</h3>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#86868B]">Diferenca PIX:</span>
+                  <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
+                </div>
+                {modalRow.forma_pagamento && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#86868B]">Forma de pagamento:</span>
+                    <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    const num = modalRow.whatsapp.replace(/\D/g, "");
+                    const full = num.startsWith("55") ? num : `55${num}`;
+                    const msg = `Ola ${modalRow.nome}! Vi que voce fez uma simulacao de troca no nosso site. O ${modalRow.modelo_novo} ${modalRow.storage_novo} esta disponivel! Seu ${modalRow.modelo_usado} foi avaliado em ${fmt(modalRow.avaliacao_usado)}. Gostaria de continuar?`;
+                    window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Chamar no WhatsApp
+                </button>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      recover: "true",
+                      modelo_usado: modalRow.modelo_usado,
+                      storage_usado: modalRow.storage_usado,
+                      modelo_novo: modalRow.modelo_novo,
+                      storage_novo: modalRow.storage_novo,
+                    });
+                    window.open(`/troca?${params.toString()}`, "_blank");
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Recuperar Carrinho
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
