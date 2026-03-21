@@ -349,6 +349,10 @@ export default function VendasPage() {
       banco_sinal: prodFields.banco_sinal || null,
       serial_no: prodFields.serial_no || null,
       imei: prodFields.imei || null,
+      troca_produto: prodFields.troca_produto || null,
+      troca_cor: prodFields.troca_cor || null,
+      troca_bateria: prodFields.troca_bateria || null,
+      troca_obs: prodFields.troca_obs || null,
       status_pagamento: "AGUARDANDO",
     };
 
@@ -1558,13 +1562,14 @@ export default function VendasPage() {
                                             e.stopPropagation();
                                             try {
                                               const hoje = new Date().toLocaleDateString("pt-BR");
+                                              const vx = v as unknown as Record<string, unknown>;
                                               const res = await fetch("/api/admin/contrato", {
                                                 method: "POST",
                                                 headers: { "Content-Type": "application/json" },
                                                 body: JSON.stringify({
                                                   clienteNome: v.cliente,
-                                                  clienteTelefone: "",
-                                                  aparelhoModelo: "Aparelho na troca",
+                                                  clienteTelefone: "—",
+                                                  aparelhoModelo: (vx.troca_produto as string) || "Aparelho na troca",
                                                   aparelhoStorage: "",
                                                   aparelhoIMEI: v.imei || undefined,
                                                   condicao: "Conforme avaliação presencial",

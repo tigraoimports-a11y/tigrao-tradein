@@ -7,12 +7,15 @@ export async function POST(req: NextRequest) {
     const body: ContratoData = await req.json();
 
     // Validação mínima
-    if (!body.clienteNome || !body.clienteTelefone || !body.aparelhoModelo || !body.novoModelo) {
+    if (!body.clienteNome || !body.novoModelo) {
       return NextResponse.json(
-        { error: "Campos obrigatórios: clienteNome, clienteTelefone, aparelhoModelo, novoModelo" },
+        { error: "Campos obrigatórios: clienteNome, novoModelo" },
         { status: 400 }
       );
     }
+    // Garantir defaults para campos opcionais
+    if (!body.clienteTelefone) body.clienteTelefone = "—";
+    if (!body.aparelhoModelo) body.aparelhoModelo = "Aparelho na troca";
 
     const pdfBuffer = await gerarContratoPDF(body);
 
