@@ -278,7 +278,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         var canvas = document.getElementById('qr');
         var size = 150;
         canvas.width = size; canvas.height = size;
-        canvas.style.width = '15mm'; canvas.style.height = '15mm';
+        canvas.style.width = '10mm'; canvas.style.height = '10mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
@@ -511,7 +511,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
         var canvas = document.getElementById('qr-${idx}');
         var size = 150;
         canvas.width = size; canvas.height = size;
-        canvas.style.width = '15mm'; canvas.style.height = '15mm';
+        canvas.style.width = '10mm'; canvas.style.height = '10mm';
         var ctx = canvas.getContext('2d');
         var cells = qr.getModuleCount();
         var cellSize = size / cells;
