@@ -19,11 +19,23 @@ interface ProdutoLoja {
   storages: StorageVariant[];
   descricao: string;
   imagem: string | null;
+  destaque?: boolean;
+  ordem?: number;
+}
+
+interface LojaConfig {
+  banner_titulo: string;
+  banner_subtitulo: string;
+  banner_image_url: string | null;
+  accent_color: string;
+  whatsapp_numero: string;
+  manutencao?: boolean;
 }
 
 interface LojaResponse {
   produtos: ProdutoLoja[];
   categorias: string[];
+  config?: LojaConfig;
 }
 
 /* ── Category config ── */
@@ -83,11 +95,25 @@ function SearchIcon({ className }: { className?: string }) {
 export default function LojaPage() {
   const [produtos, setProdutos] = useState<ProdutoLoja[]>([]);
   const [categorias, setCategorias] = useState<string[]>([]);
+  const [config, setConfig] = useState<LojaConfig>({
+    banner_titulo: "Produtos Apple Originais",
+    banner_subtitulo: "Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple",
+    banner_image_url: null,
+    accent_color: "#E8740E",
+    whatsapp_numero: "5521999999999",
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [activeCategory, setActiveCategory] = useState("TODOS");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+
+  const whatsappUrl = `https://wa.me/${config.whatsapp_numero}`;
+
+  /* ── Destaques ── */
+  const destaques = useMemo(() => {
+    return produtos.filter((p) => p.destaque);
+  }, [produtos]);
 
   /* ── Fetch products ── */
   useEffect(() => {
@@ -98,6 +124,7 @@ export default function LojaPage() {
         const data: LojaResponse = await res.json();
         setProdutos(data.produtos ?? []);
         setCategorias(data.categorias ?? []);
+        if (data.config) setConfig(data.config);
       } catch {
         setError(true);
       } finally {
@@ -134,6 +161,37 @@ export default function LojaPage() {
     return tabs;
   }, [categorias]);
 
+  /* ── Modo Manutenção ── */
+  if (!loading && config.manutencao) {
+    return (
+      <div className="min-h-dvh bg-[#F5F5F7] flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <div className="text-8xl mb-6">🔧</div>
+          <h1 className="text-2xl font-bold text-[#1D1D1F] mb-3">Estamos realizando melhorias</h1>
+          <p className="text-[#86868B] text-base mb-8">
+            Nosso site está em manutenção para ficar ainda melhor. Voltaremos em breve!
+          </p>
+          <div className="flex flex-col gap-3">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#25D366] text-white font-semibold hover:bg-[#20BD5A] transition-colors"
+            >
+              💬 Fale conosco no WhatsApp
+            </a>
+            <Link
+              href="/troca"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#D06A0D] transition-colors"
+            >
+              🔄 Simulador de Troca
+            </Link>
+          </div>
+          <p className="text-xs text-[#C7C7CC] mt-8">TigrãoImports — Barra da Tijuca, RJ 🐯</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-white">
       {/* ── Header ── */}
@@ -161,7 +219,7 @@ export default function LojaPage() {
               🔄 Simular Troca
             </Link>
             <a
-              href="https://wa.me/5521999999999"
+              href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-full hover:bg-[#F5F5F7] transition-colors"
@@ -206,10 +264,10 @@ export default function LojaPage() {
       <section className="relative overflow-hidden bg-gradient-to-b from-[#1D1D1F] to-[#0A0A0A] text-white">
         <div className="max-w-[1280px] mx-auto px-4 py-12 sm:py-16 text-center relative z-10">
           <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight leading-tight">
-            Produtos Apple Originais
+            {config.banner_titulo}
           </h1>
           <p className="mt-3 text-[15px] sm:text-[17px] text-white/70 max-w-lg mx-auto">
-            Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple
+            {config.banner_subtitulo}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             <Link
@@ -219,7 +277,7 @@ export default function LojaPage() {
               🔄 Simular Troca
             </Link>
             <a
-              href="https://wa.me/5521999999999"
+              href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 text-white text-[14px] font-semibold hover:bg-white/20 transition-colors"
@@ -252,6 +310,20 @@ export default function LojaPage() {
           </div>
         </div>
       </nav>
+
+      {/* ── Destaques ── */}
+      {!loading && !error && destaques.length > 0 && activeCategory === "TODOS" && !searchQuery && (
+        <section className="max-w-[1280px] mx-auto px-4 pt-8 pb-2">
+          <h2 className="text-[20px] sm:text-[24px] font-bold text-[#1D1D1F] mb-4">
+            Destaques
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {destaques.map((produto) => (
+              <ProductCard key={`destaque-${produto.id}`} produto={produto} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Products Grid ── */}
       <main className="max-w-[1280px] mx-auto px-4 py-8">
@@ -338,7 +410,7 @@ export default function LojaPage() {
                 @tigraoimports
               </a>
               <a
-                href="https://wa.me/5521999999999"
+                href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[13px] text-[#25D366] font-medium hover:underline"
@@ -367,7 +439,7 @@ export default function LojaPage() {
           <span className="text-[10px] font-medium">Troca</span>
         </Link>
         <a
-          href="https://wa.me/5521999999999"
+          href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex flex-col items-center gap-0.5 text-[#86868B]"
@@ -399,11 +471,20 @@ function ProductCard({ produto }: { produto: ProdutoLoja }) {
       href={`/produto/${slug}`}
       className="group block bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden hover:shadow-lg hover:border-[#D2D2D7] transition-all duration-200"
     >
-      {/* Image placeholder */}
-      <div className="relative aspect-square bg-gradient-to-br from-[#F5F5F7] to-[#E8E8ED] flex items-center justify-center">
-        <span className="text-[56px] sm:text-[64px] opacity-80 group-hover:scale-110 transition-transform duration-200">
-          {getCategoryEmoji(produto.categoria)}
-        </span>
+      {/* Image / placeholder */}
+      <div className="relative aspect-square bg-gradient-to-br from-[#F5F5F7] to-[#E8E8ED] flex items-center justify-center overflow-hidden">
+        {produto.imagem ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={produto.imagem}
+            alt={produto.nome}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          />
+        ) : (
+          <span className="text-[56px] sm:text-[64px] opacity-80 group-hover:scale-110 transition-transform duration-200">
+            {getCategoryEmoji(produto.categoria)}
+          </span>
+        )}
 
         <div className="absolute top-2 right-2">
           {inStock ? (

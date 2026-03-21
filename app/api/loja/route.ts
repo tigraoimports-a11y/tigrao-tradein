@@ -18,6 +18,8 @@ interface ProdutoLoja {
   storages: StorageVariant[];
   descricao: string;
   imagem: string | null;
+  destaque: boolean;
+  ordem: number;
 }
 
 // Backwards-compatible flat export (used by existing code)
@@ -59,10 +61,10 @@ export async function GET(req: NextRequest) {
     const { data: estoque, error: estoqueErr } = await estoqueQuery;
     if (estoqueErr) throw estoqueErr;
 
-    // Buscar preços públicos da tabela precos
+    // Buscar preços públicos da tabela precos (com campos mostruario)
     const { data: precos, error: precosErr } = await supabase
       .from("precos")
-      .select("modelo, armazenamento, preco_pix, status, categoria")
+      .select("modelo, armazenamento, preco_pix, status, categoria, image_url, descricao, ordem, visivel, destaque")
       .neq("status", "esgotado");
     if (precosErr) throw precosErr;
 
@@ -75,7 +77,18 @@ export async function GET(req: NextRequest) {
 
     // ── Novo formato agrupado ──
     if (format === "grouped") {
-      return buildGroupedResponse(estoque ?? [], precosMap);
+      // Fetch mostruario config
+      let mostruarioConfig = null;
+      try {
+        const { data: cfgData } = await supabase
+          .from("mostruario_config")
+          .select("*")
+          .limit(1)
+          .single();
+        mostruarioConfig = cfgData;
+      } catch { /* table may not exist yet */ }
+
+      return buildGroupedResponse(estoque ?? [], precosMap, precos ?? [], mostruarioConfig);
     }
 
     // ── Formato flat (retrocompatível) ──
@@ -93,10 +106,54 @@ export async function GET(req: NextRequest) {
 
 // ── Novo formato: agrupado por produto ──
 
+interface PrecosRow {
+  modelo: string;
+  armazenamento: string;
+  preco_pix: number;
+  status: string;
+  categoria: string | null;
+  image_url?: string | null;
+  descricao?: string | null;
+  ordem?: number | null;
+  visivel?: boolean | null;
+  destaque?: boolean | null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildGroupedResponse(
   estoque: { id: string; produto: string; categoria: string; cor: string | null; qnt: number; custo_unitario: number; tipo: string }[],
   precosMap: Map<string, number>,
+  precosRows: PrecosRow[],
+  mostruarioConfig: Record<string, unknown> | null,
 ) {
+  // Build showcase metadata map from precos rows (keyed by normalized modelo)
+  const showcaseMap = new Map<string, { image_url: string | null; descricao: string | null; ordem: number; visivel: boolean; destaque: boolean }>();
+  for (const p of precosRows) {
+    const key = normalize(p.modelo);
+    // Use first non-null image_url found for a model, lowest ordem, etc.
+    if (!showcaseMap.has(key)) {
+      showcaseMap.set(key, {
+        image_url: p.image_url ?? null,
+        descricao: p.descricao ?? null,
+        ordem: p.ordem ?? 999,
+        visivel: p.visivel !== false,
+        destaque: p.destaque === true,
+      });
+    } else {
+      const existing = showcaseMap.get(key)!;
+      // Use image if current doesnt have one
+      if (!existing.image_url && p.image_url) existing.image_url = p.image_url;
+      // Use description if current doesnt have one
+      if (!existing.descricao && p.descricao) existing.descricao = p.descricao;
+      // Use lowest ordem
+      if ((p.ordem ?? 999) < existing.ordem) existing.ordem = p.ordem ?? 999;
+      // If any variant is invisible, mark whole product invisible
+      if (p.visivel === false) existing.visivel = false;
+      // If any variant is destaque, mark product as destaque
+      if (p.destaque === true) existing.destaque = true;
+    }
+  }
+
   // Agrupar por modelo (produto sem storage)
   const grupoMap = new Map<string, {
     categoria: string;
@@ -159,31 +216,49 @@ function buildGroupedResponse(
     }
     storages.sort((a, b) => parseStorageSize(a.storage) - parseStorageSize(b.storage));
 
+    const showcase = showcaseMap.get(modeloNorm);
+
+    // Filter out invisible products
+    if (showcase && !showcase.visivel) continue;
+
     produtos.push({
       id: grupo.firstId,
       nome,
       categoria: grupo.categoria,
       storages,
-      descricao: "Novo | Lacrado | 1 ano de garantia Apple | Nota Fiscal",
-      imagem: null,
+      descricao: showcase?.descricao || "Novo | Lacrado | 1 ano de garantia Apple | Nota Fiscal",
+      imagem: showcase?.image_url ?? null,
+      destaque: showcase?.destaque ?? false,
+      ordem: showcase?.ordem ?? 999,
     });
   }
 
-  // Ordenar por categoria e nome
+  // Ordenar por categoria, depois ordem ASC, depois nome
   produtos.sort((a, b) => {
     const catA = CATEGORIAS_ORDEM.indexOf(a.categoria);
     const catB = CATEGORIAS_ORDEM.indexOf(b.categoria);
     const orderA = catA === -1 ? 999 : catA;
     const orderB = catB === -1 ? 999 : catB;
     if (orderA !== orderB) return orderA - orderB;
+    if (a.ordem !== b.ordem) return a.ordem - b.ordem;
     return a.nome.localeCompare(b.nome, "pt-BR");
   });
 
   const categoriasPresentes = [...new Set(produtos.map((p) => p.categoria))];
   const categorias = CATEGORIAS_ORDEM.filter((c) => categoriasPresentes.includes(c));
 
+  // Config defaults
+  const config = mostruarioConfig ?? {
+    banner_titulo: "Produtos Apple Originais",
+    banner_subtitulo: "Nota fiscal no seu nome | Lacrados | 1 ano garantia Apple",
+    banner_image_url: null,
+    accent_color: "#E8740E",
+    whatsapp_numero: "5521999999999",
+    manutencao: false,
+  };
+
   return NextResponse.json(
-    { produtos, categorias },
+    { produtos, categorias, config },
     { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
   );
 }
