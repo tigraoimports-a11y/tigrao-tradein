@@ -896,19 +896,32 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
 
             {/* Campos únicos (quando qty = 1) */}
             {parseInt(quantidade) <= 1 && (
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className={labelCls}>Cor</p>
-                  <input type="text" placeholder="Ex: Preto" value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls} />
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className={labelCls}>Cor</p>
+                    <input type="text" placeholder="Ex: Preto" value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Serial No.</p>
+                    <input type="text" placeholder="C39XXXXX..." value={itensEtiqueta[0]?.serial_no || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: e.target.value, imei: itensEtiqueta[0]?.imei || "" }])} className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>IMEI</p>
+                    <input type="text" placeholder="35XXXXXX..." value={itensEtiqueta[0]?.imei || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: itensEtiqueta[0]?.serial_no || "", imei: e.target.value }])} className={inputCls} />
+                  </div>
                 </div>
-                <div>
-                  <p className={labelCls}>Serial No.</p>
-                  <input type="text" placeholder="C39XXXXX..." value={itensEtiqueta[0]?.serial_no || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: e.target.value, imei: itensEtiqueta[0]?.imei || "" }])} className={inputCls} />
-                </div>
-                <div>
-                  <p className={labelCls}>IMEI</p>
-                  <input type="text" placeholder="35XXXXXX..." value={itensEtiqueta[0]?.imei || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: itensEtiqueta[0]?.serial_no || "", imei: e.target.value }])} className={inputCls} />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentItem = itensEtiqueta[0] || { cor: cor || "", serial_no: "", imei: "" };
+                    setItensEtiqueta([currentItem, { cor: currentItem.cor || cor || "", serial_no: "", imei: "" }]);
+                    setQuantidade("2");
+                  }}
+                  className="w-full py-2 rounded-xl text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
+                >
+                  📋 Duplicar etiqueta (mesmo produto, outro Serial/IMEI)
+                </button>
               </div>
             )}
 
