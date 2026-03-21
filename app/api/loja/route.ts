@@ -136,6 +136,9 @@ export async function GET(req: NextRequest) {
     };
     const config = { ...rawConfig, tema: (rawConfig as Record<string, unknown>).tema ?? "tigrao" };
 
+    // Strip whatsapp_numero from public API response — showcase should not expose contact info
+    const { whatsapp_numero: _unused, ...publicConfig } = config as Record<string, unknown>;
+
     // ── Grouped format (new default) ──
     if (format === "grouped" || !format) {
       const categoriasOutput = categorias.map((c) => ({
@@ -145,7 +148,7 @@ export async function GET(req: NextRequest) {
       }));
 
       return NextResponse.json(
-        { produtos, categorias: categoriasOutput, config },
+        { produtos, categorias: categoriasOutput, config: publicConfig },
         { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
       );
     }

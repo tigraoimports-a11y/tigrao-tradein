@@ -198,7 +198,7 @@ export default function MostruarioPage() {
         <p className="text-[#86868B] text-xs">Gerencie categorias, produtos e variacoes do mostruario independente.</p>
       </div>
 
-      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} />
+      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} onToggleManutencao={async () => { const newVal = !config.manutencao; setConfig({ ...config, manutencao: newVal }); await apiCall("PATCH", { action: "update_config", manutencao: newVal }); showToast(newVal ? "Mostruario DESATIVADO (manutencao ativa)" : "Mostruario ATIVADO"); }} />
 
       <div className="flex gap-6">
         <div className="w-56 shrink-0 space-y-2">
@@ -270,7 +270,7 @@ export default function MostruarioPage() {
 }
 
 /* ── Config Section ── */
-function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfig, savingConfig }: { config: MostruarioConfig; setConfig: (c: MostruarioConfig) => void; configOpen: boolean; setConfigOpen: (v: boolean) => void; saveConfig: () => void; savingConfig: boolean }) {
+function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfig, savingConfig, onToggleManutencao }: { config: MostruarioConfig; setConfig: (c: MostruarioConfig) => void; configOpen: boolean; setConfigOpen: (v: boolean) => void; saveConfig: () => void; savingConfig: boolean; onToggleManutencao: () => void }) {
   return (
     <div className="bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden">
       <button onClick={() => setConfigOpen(!configOpen)} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#F5F5F7] transition-colors">
@@ -292,7 +292,7 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
             <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">WhatsApp Numero</label><input value={config.whatsapp_numero} onChange={(e) => setConfig({ ...config, whatsapp_numero: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="5521999999999" /></div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setConfig({ ...config, manutencao: !config.manutencao })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${config.manutencao ? "bg-[#FF3B30]/10 text-[#FF3B30]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+            <button onClick={onToggleManutencao} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${config.manutencao ? "bg-[#FF3B30]/10 text-[#FF3B30]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
               <span>{config.manutencao ? "🔧" : "✅"}</span> Modo Manutencao: {config.manutencao ? "ATIVO" : "Desativado"}
             </button>
           </div>
