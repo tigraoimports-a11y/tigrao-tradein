@@ -218,54 +218,33 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  // ── Imprimir Etiqueta (Brother 29mm — 2 etiquetas por fita, lado a lado) ──
+  // ── Imprimir Etiqueta individual (Brother 29mm — 1 etiqueta por fita, compacta) ──
   function handlePrint(etiqueta: Etiqueta) {
-    // Imprime como par: 2 etiquetas iguais lado a lado na fita de 29mm
-    handlePrintDupla([etiqueta, etiqueta]);
-  }
-
-  // ── Imprimir 2 etiquetas lado a lado na fita de 29mm ──
-  function handlePrintDupla(par: Etiqueta[]) {
-    const win = window.open("", "_blank", "width=600,height=300");
+    const win = window.open("", "_blank", "width=400,height=300");
     if (!win) return;
-    const et1 = par[0];
-    const et2 = par[1] || par[0]; // se só tem 1, duplica
-
     win.document.write(`<!DOCTYPE html><html><head>
-      <title>Etiqueta ${et1.codigo_barras}</title>
+      <title>Etiqueta ${etiqueta.codigo_barras}</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:Arial,sans-serif;overflow:hidden;width:29mm}
-        .page{width:29mm;display:flex;flex-direction:column}
-        .etiqueta{width:29mm;height:40mm;padding:1.5mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between}
-        .divider{width:29mm;border-top:0.3mm dashed #aaa;margin:0}
-        .marca{font-size:3pt;font-weight:bold;text-align:center;letter-spacing:0.3pt}
-        .produto{font-size:4.5pt;font-weight:bold;line-height:1.15;text-align:center;overflow:hidden;max-height:4mm}
-        .cor{font-size:3.5pt;color:#555;text-align:center}
-        .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
-        svg{width:95%!important;height:auto!important}
-        @page{size:29mm 83mm;margin:0}
+        .etiqueta{width:29mm;padding:2mm 1.5mm;display:flex;flex-direction:column;align-items:center;gap:1mm}
+        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.5pt}
+        .produto{font-size:5pt;font-weight:bold;line-height:1.2;text-align:center}
+        .cor{font-size:4pt;color:#555;text-align:center}
+        .barcode-area{text-align:center;width:100%}
+        svg{width:90%!important;height:auto!important}
+        @page{size:29mm auto;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
-      <div class="page">
-        <div class="etiqueta">
-          <div class="marca">TIGRAO IMPORTS</div>
-          <div class="produto">${et1.produto}</div>
-          ${et1.cor ? `<div class="cor">${et1.cor}</div>` : ""}
-          <div class="barcode-area"><svg id="bc1"></svg></div>
-        </div>
-        <div class="divider"></div>
-        <div class="etiqueta">
-          <div class="marca">TIGRAO IMPORTS</div>
-          <div class="produto">${et2.produto}</div>
-          ${et2.cor ? `<div class="cor">${et2.cor}</div>` : ""}
-          <div class="barcode-area"><svg id="bc2"></svg></div>
-        </div>
+      <div class="etiqueta">
+        <div class="marca">TIGRAO IMPORTS</div>
+        <div class="produto">${etiqueta.produto}</div>
+        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+        <div class="barcode-area"><svg id="bc"></svg></div>
       </div>
       <script>
-        JsBarcode('#bc1','${et1.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
-        JsBarcode('#bc2','${et2.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
+        JsBarcode('#bc','${etiqueta.codigo_barras}',{format:'CODE128',width:1.5,height:22,displayValue:true,fontSize:6,margin:1,textMargin:1});
         window.onload=()=>{window.print();window.close()};
       <\/script></body></html>`);
     win.document.close();
@@ -465,62 +444,38 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   function handlePrintBatch() {
     const lista = etiquetas.filter((e) => selecionadas.has(e.id));
     if (lista.length === 0) return;
-    const win = window.open("", "_blank", "width=800,height=600");
+    const win = window.open("", "_blank", "width=400,height=600");
     if (!win) return;
 
-    // Agrupar em pares de 2
-    const pares: Etiqueta[][] = [];
-    for (let i = 0; i < lista.length; i += 2) {
-      pares.push(lista.slice(i, i + 2));
-    }
+    const etiquetasHtml = lista.map((et, idx) => `
+      <div class="etiqueta" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
+        <div class="marca">TIGRAO IMPORTS</div>
+        <div class="produto">${et.produto}</div>
+        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+        <div class="barcode-area"><svg id="bc-${idx}"></svg></div>
+      </div>
+    `).join("");
 
-    const pagesHtml = pares.map((par, idx) => {
-      const et1 = par[0];
-      const et2 = par[1] || par[0];
-      return `
-        <div class="page" ${idx < pares.length - 1 ? 'style="page-break-after:always"' : ''}>
-          <div class="etiqueta">
-            <div class="marca">TIGRAO IMPORTS</div>
-            <div class="produto">${et1.produto}</div>
-            ${et1.cor ? `<div class="cor">${et1.cor}</div>` : ""}
-            <div class="barcode-area"><svg id="bc-${idx}-1"></svg></div>
-          </div>
-          <div class="divider"></div>
-          <div class="etiqueta">
-            <div class="marca">TIGRAO IMPORTS</div>
-            <div class="produto">${et2.produto}</div>
-            ${et2.cor ? `<div class="cor">${et2.cor}</div>` : ""}
-            <div class="barcode-area"><svg id="bc-${idx}-2"></svg></div>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    const barcodeScripts = pares.map((par, idx) => {
-      const et1 = par[0];
-      const et2 = par[1] || par[0];
-      return `JsBarcode('#bc-${idx}-1','${et1.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});
-JsBarcode('#bc-${idx}-2','${et2.codigo_barras}',{format:'CODE128',width:1.5,height:20,displayValue:true,fontSize:6,margin:1,textMargin:1});`;
-    }).join("\n");
+    const barcodeScripts = lista.map((et, idx) =>
+      `JsBarcode('#bc-${idx}','${et.codigo_barras}',{format:'CODE128',width:1.5,height:22,displayValue:true,fontSize:6,margin:1,textMargin:1});`
+    ).join("\n");
 
     win.document.write(`<!DOCTYPE html><html><head>
-      <title>Imprimir ${lista.length} Etiquetas (${pares.length} fitas)</title>
+      <title>Imprimir ${lista.length} Etiquetas</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:Arial,sans-serif;width:29mm}
-        .page{width:29mm;display:flex;flex-direction:column}
-        .etiqueta{width:29mm;height:40mm;padding:1.5mm 1.5mm;display:flex;flex-direction:column;justify-content:space-between}
-        .divider{width:29mm;border-top:0.3mm dashed #aaa;margin:0}
-        .marca{font-size:3pt;font-weight:bold;text-align:center;letter-spacing:0.3pt}
-        .produto{font-size:4.5pt;font-weight:bold;line-height:1.15;text-align:center;overflow:hidden;max-height:4mm}
-        .cor{font-size:3.5pt;color:#555;text-align:center}
-        .barcode-area{text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
-        svg{width:95%!important;height:auto!important}
-        @page{size:29mm 83mm;margin:0}
+        .etiqueta{width:29mm;padding:2mm 1.5mm;display:flex;flex-direction:column;align-items:center;gap:1mm}
+        .marca{font-size:4pt;font-weight:bold;letter-spacing:0.5pt}
+        .produto{font-size:5pt;font-weight:bold;line-height:1.2;text-align:center}
+        .cor{font-size:4pt;color:#555;text-align:center}
+        .barcode-area{text-align:center;width:100%}
+        svg{width:90%!important;height:auto!important}
+        @page{size:29mm auto;margin:0}
         @media print{body{-webkit-print-color-adjust:exact}}
       </style></head><body>
-      ${pagesHtml}
+      ${etiquetasHtml}
       <script>
         ${barcodeScripts}
         window.onload=()=>{window.print();window.close()};
