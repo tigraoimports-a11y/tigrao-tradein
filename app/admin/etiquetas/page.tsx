@@ -254,6 +254,29 @@ export default function EtiquetasPage() {
     win.document.close();
   }
 
+  // ── Beep sonoro para feedback de scan ──
+  const playBeep = useCallback((sucesso: boolean) => {
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (sucesso) {
+        osc.frequency.value = 1200;
+        gain.gain.value = 0.3;
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } else {
+        osc.frequency.value = 400;
+        gain.gain.value = 0.3;
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      }
+      osc.onended = () => ctx.close();
+    } catch {}
+  }, []);
+
   // ── Scanner: processar código ──
   const handleScan = useCallback(async (codigo: string) => {
     if (modalScan || scanLoading) return;
@@ -267,18 +290,21 @@ export default function EtiquetasPage() {
       const etiqueta = Array.isArray(data) ? data[0] : null;
 
       if (!etiqueta) {
+        playBeep(false);
         setScanResult({ tipo: "erro", mensagem: `Codigo "${codigo}" nao encontrado no sistema.` });
         setScanLoading(false);
         return;
       }
 
+      playBeep(true);
       setModalScan(etiqueta);
     } catch {
+      playBeep(false);
       setScanResult({ tipo: "erro", mensagem: "Erro ao buscar produto." });
     } finally {
       setScanLoading(false);
     }
-  }, [modalScan, scanLoading, headers]);
+  }, [modalScan, scanLoading, headers, playBeep]);
 
   // Ativar scanner global na aba "bipar"
   useGlobalScanner(handleScan, tab === "bipar", scanInputRef);
@@ -295,17 +321,33 @@ export default function EtiquetasPage() {
     if (cameraAtiva) return;
     setCameraAtiva(true);
     try {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode("camera-scanner");
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("camera-scanner", {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+        ],
+        verbose: false,
+      });
       scannerInstanceRef.current = scanner;
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 2.0 },
+        {
+          fps: 15,
+          qrbox: (vw: number, vh: number) => {
+            // Área retangular larga para capturar barcode 1D
+            const w = Math.min(vw - 40, 400);
+            const h = Math.min(Math.floor(w * 0.35), vh - 40);
+            return { width: w, height: h };
+          },
+          aspectRatio: 1.0,
+          disableFlip: false,
+        },
         (decodedText: string) => {
           const codigo = decodedText.trim().toUpperCase();
           if (codigo.length >= 4) {
             handleScan(codigo);
-            // Parar câmera após leitura bem sucedida
             scanner.stop().then(() => {
               scanner.clear();
               scannerInstanceRef.current = null;
@@ -313,7 +355,7 @@ export default function EtiquetasPage() {
             }).catch(() => {});
           }
         },
-        () => {} // ignora erros de frame sem código
+        () => {}
       );
     } catch {
       setCameraAtiva(false);
