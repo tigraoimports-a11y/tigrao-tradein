@@ -846,7 +846,35 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                 <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Dados individuais por etiqueta</p>
                 {itensEtiqueta.map((item, idx) => (
                   <div key={idx} className="bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-[#1D1D1F]">Etiqueta {idx + 1}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-[#1D1D1F]">Etiqueta {idx + 1}</p>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItensEtiqueta(prev => {
+                              const newItems = [...prev];
+                              newItems.splice(idx + 1, 0, { cor: item.cor, serial_no: "", imei: "" });
+                              return newItems;
+                            });
+                            setQuantidade(String(itensEtiqueta.length + 1));
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold text-blue-600 hover:bg-blue-50 border border-blue-200"
+                          title="Duplicar (mesma cor, serial/IMEI vazios)"
+                        >📋 Duplicar</button>
+                        {itensEtiqueta.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItensEtiqueta(prev => prev.filter((_, i) => i !== idx));
+                              setQuantidade(String(itensEtiqueta.length - 1));
+                            }}
+                            className="px-2 py-0.5 rounded text-[10px] font-semibold text-red-500 hover:bg-red-50 border border-red-200"
+                            title="Remover"
+                          >✕</button>
+                        )}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <p className="text-[10px] text-[#86868B]">Cor</p>
