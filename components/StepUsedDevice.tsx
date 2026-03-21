@@ -54,6 +54,7 @@ export default function StepUsedDevice({
   const [screenScratch, setScreenScratch] = useState<"none" | "one" | "multiple" | null>(null);
   const [sideScratch, setSideScratch] = useState<"none" | "one" | "multiple" | null>(null);
   const [peeling, setPeeling] = useState<"none" | "light" | "heavy" | null>(null);
+  const [partsReplaced, setPartsReplaced] = useState<"no" | "apple" | "thirdParty" | null>(null);
   const [hasWarranty, setHasWarranty] = useState<boolean | null>(null);
   const [warrantyMonth, setWarrantyMonth] = useState<number | null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
@@ -99,6 +100,7 @@ export default function StepUsedDevice({
     peeling: peeling ?? "none",
     battery: battery ?? 100,
     hasDamage: hasDamage === true,
+    partsReplaced: partsReplaced ?? "no",
     hasWarranty: hasWarranty === true,
     warrantyMonth: hasWarranty ? warrantyMonth : null,
     warrantyYear: hasWarranty ? warrantyYear : null,
@@ -111,10 +113,10 @@ export default function StepUsedDevice({
   );
 
   const tradeInValue = useMemo(() => {
-    if (baseValue === null || hasDamage !== false) return 0;
+    if (baseValue === null || hasDamage !== false || partsReplaced === "thirdParty") return 0;
     return calculateTradeInValue(baseValue, iphoneCondition, modelDiscount, warrantyBonuses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, hasWarranty, warrantyMonth, warrantyYear, modelDiscount, hasOriginalBox]);
+  }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, modelDiscount, hasOriginalBox]);
 
   const isExcluded = excludedModels.some((m) =>
     model.toLowerCase().includes(m.toLowerCase())
@@ -126,7 +128,8 @@ export default function StepUsedDevice({
   const allConditionsFilled = screenScratch !== null && sideScratch !== null && peeling !== null && batteryFilled;
 
   const warrantyFilled = hasWarranty === false || (hasWarranty === true && warrantyMonth !== null);
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && allConditionsFilled && warrantyFilled && hasOriginalBox !== null;
+  const partsReplacedOk = partsReplaced === "no" || partsReplaced === "apple";
+  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && partsReplacedOk && allConditionsFilled && warrantyFilled && hasOriginalBox !== null;
 
   function handleLineChange(l: string) {
     setLine(l);
@@ -335,8 +338,44 @@ export default function StepUsedDevice({
           </Section>
           )}
 
-          {/* Garantia Apple */}
+          {/* Pecas trocadas */}
           {peeling !== null && (
+          <Section title="O aparelho ja teve alguma peca trocada?">
+            <div className="grid grid-cols-1 gap-2">
+              <SelectButton
+                selected={partsReplaced === "no"}
+                onClick={() => setPartsReplaced("no")}
+                variant="success"
+              >
+                Nao
+              </SelectButton>
+              <SelectButton
+                selected={partsReplaced === "apple"}
+                onClick={() => setPartsReplaced("apple")}
+                variant="success"
+              >
+                Sim, na Apple (autorizada)
+              </SelectButton>
+              <SelectButton
+                selected={partsReplaced === "thirdParty"}
+                onClick={() => setPartsReplaced("thirdParty")}
+                variant="error"
+              >
+                Sim, fora da Apple
+              </SelectButton>
+            </div>
+            {partsReplaced === "thirdParty" && (
+              <div className="mt-4 bg-[#FFF5F5] border border-[#FF3B30]/20 rounded-2xl p-4 text-center">
+                <p className="text-[15px] font-semibold text-[#FF3B30]">
+                  Infelizmente nao aceitamos aparelhos com pecas trocadas fora da rede autorizada Apple.
+                </p>
+              </div>
+            )}
+          </Section>
+          )}
+
+          {/* Garantia Apple */}
+          {partsReplacedOk && (
           <Section title="Ainda esta na garantia Apple de 12 meses?">
             <div className="flex gap-2">
               <SelectButton

@@ -67,6 +67,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     peeling: "none",
     battery: 100,
     hasDamage: false,
+    partsReplaced: "no",
     hasWarranty: false,
     warrantyMonth: null,
     warrantyYear: null,
@@ -80,7 +81,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   const [usedStorage2, setUsedStorage2] = useState("");
   const [condition2, setCondition2] = useState<AnyConditionData>({
     screenScratch: "none", sideScratch: "none", peeling: "none",
-    battery: 100, hasDamage: false, hasWarranty: false,
+    battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false,
     warrantyMonth: null, warrantyYear: null, hasOriginalBox: false,
   } as ConditionData);
   const [tradeInValue2, setTradeInValue2] = useState(0);
@@ -181,8 +182,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
     setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
     setHasSecondDevice(false);
-    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
-    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
+    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
+    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram("");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
