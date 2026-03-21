@@ -442,6 +442,46 @@ export default function VendasPage() {
     setProdutosCarrinho(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Edit product from cart — load back into form
+  const handleEditFromCart = (index: number) => {
+    const p = produtosCarrinho[index];
+    setForm(f => ({
+      ...f,
+      produto: p.produto,
+      fornecedor: p.fornecedor,
+      custo: p.custo,
+      preco_vendido: p.preco_vendido,
+      forma: p.forma,
+      banco: p.banco,
+      banco_pix: p.banco_pix,
+      qnt_parcelas: p.qnt_parcelas,
+      bandeira: p.bandeira,
+      valor_comprovante_input: p.valor_comprovante_input,
+      entrada_pix: p.entrada_pix,
+      entrada_especie: p.entrada_especie,
+      produto_na_troca: p.produto_na_troca,
+      troca_produto: p.troca_produto,
+      troca_cor: p.troca_cor,
+      troca_bateria: p.troca_bateria,
+      troca_obs: p.troca_obs,
+      local: p.local,
+      serial_no: p.serial_no,
+      imei: p.imei,
+      banco_2nd: p.banco_2nd,
+      banco_alt: p.banco_alt,
+      parc_alt: p.parc_alt,
+      band_alt: p.band_alt,
+      sinal_antecipado: p.sinal_antecipado,
+      banco_sinal: p.banco_sinal,
+    }));
+    if (p._catSel) setCatSel(p._catSel);
+    if (p._estoqueId) setEstoqueId(p._estoqueId);
+    setProdutoManual(!!p._produtoManual);
+    // Remove from cart (will be re-added when user clicks "Adicionar")
+    setProdutosCarrinho(prev => prev.filter((_, i) => i !== index));
+    setMsg(`Editando produto: ${p.produto}. Faça as alterações e adicione de volta ao carrinho.`);
+  };
+
   const handleSubmit = async () => {
     if (!form.cliente) {
       setMsg("Preencha o nome do cliente");
@@ -846,12 +886,22 @@ export default function VendasPage() {
                         {p.imei && ` | IMEI: ${p.imei}`}
                       </span>
                     </div>
-                    <button
-                      onClick={() => handleRemoveFromCart(i)}
-                      className="ml-3 px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    >
-                      ✕
-                    </button>
+                    <div className="ml-3 flex gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => handleEditFromCart(i)}
+                        className="px-2 py-1 rounded-lg text-xs text-blue-500 hover:bg-blue-50 transition-colors"
+                        title="Editar produto"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleRemoveFromCart(i)}
+                        className="px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors"
+                        title="Remover produto"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 );
               })}
