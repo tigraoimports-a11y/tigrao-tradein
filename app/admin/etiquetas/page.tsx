@@ -90,10 +90,14 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   const [custoUnitario, setCustoUnitario] = useState("");
   const [fornecedor, setFornecedor] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [serialNo, setSerialNo] = useState("");
-  const [imeiNo, setImeiNo] = useState("");
   const [tamanhoEtiqueta, setTamanhoEtiqueta] = useState("29x30");
   const [quantidade, setQuantidade] = useState("1");
+  // Campos individuais por etiqueta (quando qty > 1)
+  interface ItemEtiqueta { cor: string; serial_no: string; imei: string }
+  const [itensEtiqueta, setItensEtiqueta] = useState<ItemEtiqueta[]>([]);
+  const updateItem = (idx: number, field: keyof ItemEtiqueta, value: string) => {
+    setItensEtiqueta(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
   const [produtoLivre, setProdutoLivre] = useState("");
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
 
@@ -197,21 +201,26 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     try {
       const qty = Math.max(1, parseInt(quantidade) || 1);
       let lastEtiqueta: Etiqueta | null = null;
+      const custoNum = parseFloat(custoUnitario.replace(/\./g, "").replace(",", ".")) || 0;
 
       for (let i = 0; i < qty; i++) {
+        // Usar dados individuais se disponíveis, senão usar o campo geral
+        const itemData = itensEtiqueta[i] || { cor: cor || "", serial_no: "", imei: "" };
+        const itemCor = itemData.cor || cor || null;
+
         const res = await fetch("/api/etiquetas", {
           method: "POST",
           headers: headers(),
           body: JSON.stringify({
             categoria,
             produto: nomeProduto,
-            cor: cor || null,
+            cor: itemCor,
             armazenamento: null,
-            custo_unitario: parseFloat(custoUnitario.replace(/\./g, "").replace(",", ".")) || 0,
+            custo_unitario: custoNum,
             fornecedor: fornecedor || null,
             observacao: observacao || null,
-            serial_no: serialNo || null,
-            imei: imeiNo || null,
+            serial_no: itemData.serial_no || null,
+            imei: itemData.imei || null,
           }),
         });
         const json = await res.json();
@@ -463,8 +472,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
     setSuccessMsg("");
     setCustoUnitario("");
     setObservacao("");
-    setSerialNo("");
-    setImeiNo("");
+    setItensEtiqueta([]);
     setQuantidade("1");
   }
 
@@ -796,11 +804,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                   </div>
                 )}
 
-                {/* Cor */}
-                <div>
-                  <p className={labelCls}>Cor</p>
-                  <input value={cor} onChange={(e) => setCor(e.target.value)} placeholder="Ex: Preto, Natural, Prata..." className={inputCls} />
-                </div>
+                {/* Cor movida pra seção de dados por etiqueta */}
               </>
             )}
 
@@ -819,23 +823,66 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
               </div>
               <div>
                 <p className={labelCls}>Quantidade</p>
-                <input type="number" min="1" max="50" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} className={inputCls} />
+                <input type="number" min="1" max="20" value={quantidade} onChange={(e) => {
+                  const val = e.target.value;
+                  setQuantidade(val);
+                  const qty = Math.max(1, parseInt(val) || 1);
+                  if (qty > 1) {
+                    setItensEtiqueta(prev => {
+                      const items = [...prev];
+                      while (items.length < qty) items.push({ cor: cor || "", serial_no: "", imei: "" });
+                      return items.slice(0, qty);
+                    });
+                  } else {
+                    setItensEtiqueta([]);
+                  }
+                }} className={inputCls} />
               </div>
             </div>
 
-            {/* Tamanho fixo: Brother QL-820NWB 62mm contínuo */}
+            {/* Campos individuais por etiqueta (quando qty > 1) */}
+            {parseInt(quantidade) > 1 && itensEtiqueta.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Dados individuais por etiqueta</p>
+                {itensEtiqueta.map((item, idx) => (
+                  <div key={idx} className="bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-bold text-[#1D1D1F]">Etiqueta {idx + 1}</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[10px] text-[#86868B]">Cor</p>
+                        <input type="text" placeholder="Cor" value={item.cor} onChange={(e) => updateItem(idx, "cor", e.target.value)} className={inputCls} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#86868B]">Serial No.</p>
+                        <input type="text" placeholder="C39XXXXX..." value={item.serial_no} onChange={(e) => updateItem(idx, "serial_no", e.target.value)} className={inputCls} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#86868B]">IMEI</p>
+                        <input type="text" placeholder="35XXXXXX..." value={item.imei} onChange={(e) => updateItem(idx, "imei", e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Serial No. e IMEI */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className={labelCls}>Serial No.</p>
-                <input type="text" placeholder="Ex: C39XXXXX..." value={serialNo} onChange={(e) => setSerialNo(e.target.value)} className={inputCls} />
+            {/* Campos únicos (quando qty = 1) */}
+            {parseInt(quantidade) <= 1 && (
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className={labelCls}>Cor</p>
+                  <input type="text" placeholder="Ex: Preto" value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <p className={labelCls}>Serial No.</p>
+                  <input type="text" placeholder="C39XXXXX..." value={itensEtiqueta[0]?.serial_no || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: e.target.value, imei: itensEtiqueta[0]?.imei || "" }])} className={inputCls} />
+                </div>
+                <div>
+                  <p className={labelCls}>IMEI</p>
+                  <input type="text" placeholder="35XXXXXX..." value={itensEtiqueta[0]?.imei || ""} onChange={(e) => setItensEtiqueta([{ cor: cor, serial_no: itensEtiqueta[0]?.serial_no || "", imei: e.target.value }])} className={inputCls} />
+                </div>
               </div>
-              <div>
-                <p className={labelCls}>IMEI</p>
-                <input type="text" placeholder="Ex: 35XXXXXXXXXXXXX" value={imeiNo} onChange={(e) => setImeiNo(e.target.value)} className={inputCls} />
-              </div>
-            </div>
+            )}
 
             {/* Observação */}
             <div>
