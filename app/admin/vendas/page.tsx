@@ -315,23 +315,26 @@ export default function VendasPage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg("Venda registrada!");
       setDuplicadoInfo(null);
-      // Salvar dados do cliente para "+1 Produto" antes de limpar tudo
-      setLastClienteData({ cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo });
-      // Limpar TODOS os campos
-      setForm({
-        data: new Date().toISOString().split("T")[0],
-        cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
-        custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
-        qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
-        entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-        parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
+      // Salvar dados do cliente para "+1 Produto"
+      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
+      setLastClienteData(clienteInfo);
+      // Limpar apenas produto e pagamento — manter dados do cliente
+      setForm(f => ({
+        ...f,
+        produto: "", fornecedor: "",
+        custo: "", preco_vendido: "", valor_comprovante_input: "",
+        banco: "ITAU", forma: "", qnt_parcelas: "", bandeira: "",
+        local: "", produto_na_troca: "",
+        entrada_pix: "", banco_pix: "ITAU", entrada_especie: "",
+        banco_2nd: "", banco_alt: "", parc_alt: "", band_alt: "",
+        sinal_antecipado: "", banco_sinal: "",
         troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
-      });
+      }));
       setCatSel("");
       setEstoqueId("");
       setProdutoManual(false);
+      setMsg(`✅ Venda registrada! Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulário.`);
       fetchVendas();
       fetchEstoque();
     } else {
@@ -768,7 +771,31 @@ export default function VendasPage() {
               </div>
             )}
 
-            {/* +1 Produto — mesmo cliente, outro produto */}
+            {/* Limpar formulário — aparece quando tem cliente preenchido após uma venda */}
+            {lastClienteData && form.cliente && (
+              <button
+                onClick={() => {
+                  setForm({
+                    data: new Date().toISOString().split("T")[0],
+                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+                    custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+                    qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+                  });
+                  setLastClienteData(null);
+                  setCatSel("");
+                  setEstoqueId("");
+                  setProdutoManual(false);
+                  setMsg("");
+                }}
+                className="w-full py-2 rounded-xl text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+              >
+                ✕ Limpar formulário (outro cliente)
+              </button>
+            )}
+            {/* +1 Produto — mesmo cliente, outro produto (quando cliente foi limpo) */}
             {lastClienteData && !form.cliente && (
               <button
                 onClick={() => {
