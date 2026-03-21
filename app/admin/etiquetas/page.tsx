@@ -98,28 +98,37 @@ export default function EtiquetasPage() {
   const isStructured = STRUCTURED_CATS.includes(categoria);
 
   // ── Produtos do estoque (para selecionar variações reais) ──
-  interface EstoqueItem { id: string; produto: string; categoria: string; cor: string | null; custo: number }
+  interface EstoqueItem { id: string; produto: string; categoria: string; cor: string | null; custo: number; tipo?: string; qnt?: number }
   const [estoqueProdutos, setEstoqueProdutos] = useState<EstoqueItem[]>([]);
   const [produtoEstoque, setProdutoEstoque] = useState("");
-  const [useEstoque, setUseEstoque] = useState(true); // true = selecionar do estoque, false = digitação livre
+  const [useEstoque, setUseEstoque] = useState(true);
+  const [filtroTipo, setFiltroTipo] = useState<"NOVO" | "SEMINOVO" | "">("NOVO"); // Padrão: só lacrados
 
-  // Buscar produtos do estoque quando categoria muda
+  // Buscar TODOS os produtos do estoque (sem filtro de categoria — para pegar tudo)
   useEffect(() => {
-    if (!categoria || !password) return;
-    fetch(`/api/estoque?categoria=${categoria}`, { headers: { "x-admin-password": password } })
+    if (!password) return;
+    fetch("/api/estoque", { headers: { "x-admin-password": password } })
       .then((r) => r.ok ? r.json() : { data: [] })
       .then((json) => {
         const items = (json.data || []) as EstoqueItem[];
         setEstoqueProdutos(items);
       })
       .catch(() => setEstoqueProdutos([]));
-  }, [categoria, password]);
+  }, [password]);
 
-  // Produtos únicos do estoque para a categoria selecionada
-  const produtosUnicos = [...new Map(estoqueProdutos.map((p) => [p.produto, p])).values()];
-  // Cores disponíveis para o produto selecionado
-  const coresDoEstoque = estoqueProdutos.filter((p) => p.produto === produtoEstoque).map((p) => p.cor).filter(Boolean) as string[];
-  const coresUnicas = [...new Set(coresDoEstoque)];
+  // Filtrar por categoria selecionada + tipo (NOVO/SEMINOVO) + qnt > 0
+  const produtosFiltrados = estoqueProdutos
+    .filter((p) => !categoria || p.categoria === categoria)
+    .filter((p) => !filtroTipo || p.tipo === filtroTipo)
+    .filter((p) => (p.qnt || 0) > 0);
+
+  // Produtos únicos, ordenados alfabeticamente
+  const produtosUnicos = [...new Map(produtosFiltrados.map((p) => [p.produto, p])).values()]
+    .sort((a, b) => a.produto.localeCompare(b.produto));
+
+  // Cores disponíveis para o produto selecionado (dentro do filtro)
+  const coresDoEstoque = produtosFiltrados.filter((p) => p.produto === produtoEstoque).map((p) => p.cor).filter(Boolean) as string[];
+  const coresUnicas = [...new Set(coresDoEstoque)].sort();
 
   // Buscar fornecedores do banco
   useEffect(() => {
@@ -484,15 +493,29 @@ export default function EtiquetasPage() {
             {/* ── Modo Estoque: selecionar produto existente ── */}
             {categoria && useEstoque && (
               <>
+                {/* Filtro: Lacrado ou Seminovo */}
+                <div className="flex gap-2">
+                  {([
+                    { value: "NOVO" as const, label: "🔒 Lacrados", desc: "Produtos novos" },
+                    { value: "SEMINOVO" as const, label: "📱 Seminovos", desc: "Produtos usados" },
+                    { value: "" as const, label: "📋 Todos", desc: "Todos os tipos" },
+                  ]).map((opt) => (
+                    <button key={opt.value} onClick={() => { setFiltroTipo(opt.value); setProdutoEstoque(""); setCor(""); }}
+                      className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all ${filtroTipo === opt.value ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div>
-                  <p className={labelCls}>Produto *</p>
+                  <p className={labelCls}>Produto * <span className="text-gray-400 font-normal">({produtosUnicos.length} disponíveis)</span></p>
                   {produtosUnicos.length > 0 ? (
                     <select value={produtoEstoque} onChange={(e) => { setProdutoEstoque(e.target.value); setCor(""); }} className={inputCls}>
                       <option value="">Selecione o produto...</option>
                       {produtosUnicos.map((p) => <option key={p.id} value={p.produto}>{p.produto}</option>)}
                     </select>
                   ) : (
-                    <p className="text-sm text-gray-400 italic">Nenhum produto nesta categoria no estoque.</p>
+                    <p className="text-sm text-gray-400 italic">Nenhum produto {filtroTipo === "NOVO" ? "lacrado" : filtroTipo === "SEMINOVO" ? "seminovo" : ""} nesta categoria.</p>
                   )}
                 </div>
 
