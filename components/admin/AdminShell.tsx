@@ -14,12 +14,16 @@ interface AdminContextType {
   password: string;
   user: UserInfo | null;
   logout: () => void;
+  darkMode: boolean;
+  toggleDark: () => void;
 }
 
 const AdminContext = createContext<AdminContextType>({
   password: "",
   user: null,
   logout: () => {},
+  darkMode: false,
+  toggleDark: () => {},
 });
 
 export function useAdmin() {
@@ -34,18 +38,29 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     const savedPw = localStorage.getItem("admin_pw");
     const savedUser = localStorage.getItem("admin_user");
+    const savedDark = localStorage.getItem("admin_dark");
     if (savedPw && savedUser) {
       try {
         setPassword(savedPw);
         setUser(JSON.parse(savedUser));
       } catch { /* ignore */ }
     }
+    if (savedDark === "true") setDarkMode(true);
     setReady(true);
   }, []);
+
+  const toggleDark = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      localStorage.setItem("admin_dark", String(next));
+      return next;
+    });
+  };
 
   const handleLogin = async () => {
     setError("");
@@ -146,16 +161,53 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     );
   }
 
+  // Dark mode CSS variables
+  const darkStyles = darkMode ? {
+    "--admin-bg": "#0A0A0A",
+    "--admin-bg2": "#141414",
+    "--admin-border": "#2A2A2A",
+    "--admin-text": "#F5F5F5",
+    "--admin-text2": "#999",
+    "--admin-card": "#1A1A1A",
+    "--admin-input-bg": "#1A1A1A",
+    "--admin-accent": "#E8740E",
+  } as React.CSSProperties : {};
+
   return (
-    <AdminContext.Provider value={{ password, user, logout }}>
-      <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] overflow-x-hidden">
+    <AdminContext.Provider value={{ password, user, logout, darkMode, toggleDark }}>
+      <div
+        className={`min-h-screen overflow-x-hidden transition-colors duration-300 ${darkMode ? "admin-dark" : ""}`}
+        style={{
+          background: darkMode ? "#0A0A0A" : "#F5F5F7",
+          color: darkMode ? "#F5F5F5" : "#1D1D1F",
+          ...darkStyles,
+        }}
+      >
         {/* Sidebar Navigation */}
         <AdminNav userRole={user.role} />
 
         {/* Main content area — offset by sidebar width */}
         <div className="lg:ml-[220px] min-h-screen flex flex-col">
           {/* Top bar */}
-          <div className="bg-white border-b border-[#D2D2D7] px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30">
+          <div
+            className="px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30 border-b transition-colors duration-300"
+            style={{
+              background: darkMode ? "#141414" : "white",
+              borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+            }}
+          >
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleDark}
+              className="px-2 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs border transition-colors"
+              style={{
+                color: darkMode ? "#F5A623" : "#86868B",
+                borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+              }}
+              title={darkMode ? "Modo claro" : "Modo escuro"}
+            >
+              {darkMode ? "☀️ Claro" : "🌙 Escuro"}
+            </button>
             <button
               onClick={async () => {
                 const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password } });
@@ -167,16 +219,25 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   alert(json.error || "Nada para desfazer");
                 }
               }}
-              className="px-2 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+              className="px-2 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs border transition-colors"
+              style={{
+                color: darkMode ? "#999" : "#86868B",
+                borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+              }}
             >
               Desfazer
             </button>
-            <span className="text-xs sm:text-sm text-[#86868B] hidden sm:inline">
-              {user.nome} <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-[#F5F5F7]">{user.role}</span>
+            <span className="text-xs sm:text-sm hidden sm:inline" style={{ color: darkMode ? "#999" : "#86868B" }}>
+              {user.nome} <span className="text-[10px] px-1.5 py-0.5 rounded-lg" style={{ background: darkMode ? "#2A2A2A" : "#F5F5F7" }}>{user.role}</span>
             </span>
             <button
               onClick={logout}
-              className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-xs sm:text-sm hover:border-[#E74C3C] hover:text-[#E74C3C] transition-colors"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl border text-xs sm:text-sm transition-colors"
+              style={{
+                background: darkMode ? "#1A1A1A" : "white",
+                borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+                color: darkMode ? "#999" : "#86868B",
+              }}
             >
               Sair
             </button>
@@ -188,6 +249,41 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
+
+      {/* Global dark mode styles for child components */}
+      {darkMode && (
+        <style jsx global>{`
+          .admin-dark .bg-white { background: #1A1A1A !important; }
+          .admin-dark .bg-\\[\\#F5F5F7\\] { background: #0A0A0A !important; }
+          .admin-dark .bg-\\[\\#FAFAFA\\] { background: #141414 !important; }
+          .admin-dark .border-\\[\\#D2D2D7\\] { border-color: #2A2A2A !important; }
+          .admin-dark .border-\\[\\#E5E5EA\\] { border-color: #2A2A2A !important; }
+          .admin-dark .border-\\[\\#E8E8ED\\] { border-color: #2A2A2A !important; }
+          .admin-dark .bg-\\[\\#FFF5EB\\] { background: #2A1A08 !important; }
+          .admin-dark .bg-\\[\\#FFF5EB\\]\\/50 { background: rgba(42,26,8,0.5) !important; }
+          .admin-dark .hover\\:bg-\\[\\#F5F5F7\\]:hover { background: #1E1E1E !important; }
+          .admin-dark .hover\\:text-\\[\\#1D1D1F\\]:hover { color: #F5F5F5 !important; }
+          .admin-dark .text-\\[\\#6E6E73\\] { color: #888 !important; }
+          .admin-dark .text-\\[\\#1D1D1F\\] { color: #F5F5F5 !important; }
+          .admin-dark .text-\\[\\#86868B\\] { color: #999 !important; }
+          .admin-dark .text-\\[\\#6E6E73\\] { color: #888 !important; }
+          .admin-dark input, .admin-dark select, .admin-dark textarea {
+            background: #1A1A1A !important;
+            color: #F5F5F5 !important;
+            border-color: #2A2A2A !important;
+          }
+          .admin-dark input::placeholder, .admin-dark textarea::placeholder {
+            color: #666 !important;
+          }
+          .admin-dark .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.3) !important; }
+          .admin-dark table th { background: #141414 !important; color: #999 !important; border-color: #2A2A2A !important; }
+          .admin-dark table td { border-color: #2A2A2A !important; color: #DDD !important; }
+          .admin-dark table tr:hover td { background: #1E1E1E !important; }
+          .admin-dark .rounded-2xl, .admin-dark .rounded-xl { border-color: #2A2A2A; }
+          .admin-dark h1, .admin-dark h2, .admin-dark h3, .admin-dark h4 { color: #F5F5F5 !important; }
+          .admin-dark p { color: #CCC; }
+        `}</style>
+      )}
     </AdminContext.Provider>
   );
 }
