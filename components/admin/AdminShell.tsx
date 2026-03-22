@@ -135,10 +135,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     setInputSenha("");
   };
 
-  if (!ready) return null;
-
   // Hooks devem ser chamados ANTES de qualquer return condicional
   const { isOnline } = useOnlineStatus();
+
+  if (!ready) return null;
 
   // Login screen
   if (!user) {
