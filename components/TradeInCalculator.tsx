@@ -11,6 +11,7 @@ import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
 import StepClientData from "./StepClientData";
 import StepQuote from "./StepQuote";
+import ExitIntentPopup from "./ExitIntentPopup";
 
 interface UsedData {
   usedValues: UsedDeviceValue[];
@@ -330,6 +331,15 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           <p className="text-[11px] mt-1" style={{ color: tema.textDim }}>Produtos lacrados com garantia Apple e Nota Fiscal</p>
         </footer>
       </div>
+
+      {/* Exit intent popup — only shows once per session, after step 1 */}
+      <ExitIntentPopup
+        step={step}
+        clienteNome={clienteNome}
+        usedModel={usedModel ? `${usedModel} ${usedStorage}` : undefined}
+        newModel={newModel ? `${newModel} ${newStorage}` : undefined}
+        tradeInValue={totalTradeInValue}
+      />
     </main>
   );
 }
