@@ -32,20 +32,31 @@ function formatBRL(value: number): string {
 }
 
 const WHATSAPP_VENDEDOR = "5521995618747";
-const BARRA_LAT = -23.0003;
-const BARRA_LNG = -43.3650;
-const RAIO_EXPRESSA_KM = 70;
 
-// Haversine distance in km
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+type EntregaTipo = "retirada" | "combinar" | "";
+
+// Gera próximos 7 dias úteis para agendamento
+function getProximosDiasUteis(n: number): { label: string; value: string }[] {
+  const dias: { label: string; value: string }[] = [];
+  const hoje = new Date();
+  let d = new Date(hoje);
+  d.setDate(d.getDate() + 1); // começa amanhã
+  const fmt = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  while (dias.length < n) {
+    const dow = d.getDay();
+    if (dow !== 0) { // exclui domingo
+      dias.push({ label: fmt.format(d), value: d.toISOString().split("T")[0] });
+    }
+    d = new Date(d); d.setDate(d.getDate() + 1);
+  }
+  return dias;
 }
 
-type EntregaTipo = "retirada" | "expressa" | "sedex" | "";
+const HORARIOS_DISPONIVEIS = [
+  "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+  "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
+  "16:00", "16:30", "17:00", "17:30", "18:00",
+];
 
 /* ══════════════════════════════════════════════ */
 /* ── Product Detail Page                      ── */
@@ -69,10 +80,9 @@ export default function ProdutoPage() {
 
   // Entrega
   const [entrega, setEntrega] = useState<EntregaTipo>("");
-  const [cep, setCep] = useState("");
-  const [cepInfo, setCepInfo] = useState<{ cidade: string; uf: string; distancia: number } | null>(null);
-  const [cepLoading, setCepLoading] = useState(false);
-  const [cepError, setCepError] = useState("");
+  const [dataRetirada, setDataRetirada] = useState("");
+  const [horarioRetirada, setHorarioRetirada] = useState("");
+  const diasUteis = useMemo(() => getProximosDiasUteis(7), []);
 
   // Modal nome
   const [showNomeModal, setShowNomeModal] = useState(false);
@@ -124,39 +134,6 @@ export default function ProdutoPage() {
   const quote = useMemo(() => calculateQuote(0, preco), [preco]);
   const currentImage = currentVariacao?.imagem || produto?.imagem || null;
 
-  // CEP lookup
-  async function consultarCEP() {
-    const cleanCep = cep.replace(/\D/g, "");
-    if (cleanCep.length !== 8) { setCepError("CEP invalido (8 digitos)"); return; }
-    setCepLoading(true); setCepError(""); setCepInfo(null);
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-      const data = await res.json();
-      if (data.erro) { setCepError("CEP nao encontrado"); setCepLoading(false); return; }
-
-      // Approximate geocoding from state capitals (rough but free)
-      const coords = await getApproxCoords(cleanCep);
-      const dist = coords ? haversine(BARRA_LAT, BARRA_LNG, coords.lat, coords.lng) : 999;
-
-      setCepInfo({ cidade: `${data.localidade}/${data.uf}`, uf: data.uf, distancia: Math.round(dist) });
-      if (dist <= RAIO_EXPRESSA_KM) setEntrega("expressa");
-      else setEntrega("sedex");
-    } catch { setCepError("Erro ao consultar CEP"); } finally { setCepLoading(false); }
-  }
-
-  // Simple coords lookup from CEP prefix (RJ area codes)
-  async function getApproxCoords(cleanCep: string): Promise<{ lat: number; lng: number } | null> {
-    // Try nominatim for Brazilian CEPs
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cleanCep}&country=BR&format=json&limit=1`, {
-        headers: { "User-Agent": "TigraoImports/1.0" },
-      });
-      const data = await res.json();
-      if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    } catch { /* fallback */ }
-    return null;
-  }
-
   // Build WhatsApp message
   function buildPedidoMsg(): string {
     const corAttr = currentVariacao?.atributos?.cor || "";
@@ -171,9 +148,12 @@ export default function ProdutoPage() {
     }
 
     let entregaTexto = "";
-    if (entrega === "retirada") entregaTexto = "Retirada no escritorio (Barra da Tijuca)";
-    else if (entrega === "expressa") entregaTexto = `Entrega expressa - ${cepInfo?.cidade || ""} (CEP: ${cep})`;
-    else if (entrega === "sedex") entregaTexto = `Envio SEDEX - ${cepInfo?.cidade || ""} (CEP: ${cep})`;
+    if (entrega === "retirada") {
+      const diaLabel = diasUteis.find(d => d.value === dataRetirada)?.label || dataRetirada;
+      entregaTexto = `Retirar no escritorio (Barra da Tijuca) — ${diaLabel} as ${horarioRetirada}`;
+    } else if (entrega === "combinar") {
+      entregaTexto = "Combinar entrega em shopping proximo";
+    }
 
     return `Ola! Quero fechar um pedido! 🐯
 
@@ -259,7 +239,8 @@ Poderia me ajudar?`;
   }
 
   const emoji = produto.categoriaEmoji || "📦";
-  const canOrder = preco > 0 && entrega !== "" && parcelaSel !== "";
+  const retiradaCompleta = entrega === "retirada" ? (dataRetirada !== "" && horarioRetirada !== "") : true;
+  const canOrder = preco > 0 && entrega !== "" && parcelaSel !== "" && retiradaCompleta;
 
   return (
     <div style={{ backgroundColor: tema.bg, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh">
@@ -373,51 +354,52 @@ Poderia me ajudar?`;
 
             {/* ── Entrega ── */}
             <div className="mt-5">
-              <p className="text-[13px] font-semibold mb-2">Entrega</p>
+              <p className="text-[13px] font-semibold mb-2">Como deseja receber?</p>
               <div className="space-y-2">
-                <button onClick={() => { setEntrega("retirada"); setCepInfo(null); setCep(""); }}
+                {/* Opção 1: Retirar no escritório */}
+                <button onClick={() => setEntrega("retirada")}
                   style={entrega === "retirada" ? { borderColor: tema.accent, backgroundColor: tema.accentLight } : { borderColor: tema.cardBorder, backgroundColor: tema.cardBg }}
                   className="w-full text-left px-4 py-3 rounded-xl border transition-all">
-                  <span className="text-[14px] font-medium" style={{ color: entrega === "retirada" ? tema.accent : tema.text }}>📍 Retirar no escritorio</span>
-                  <span className="block text-[12px] mt-0.5" style={{ color: tema.textMuted }}>Barra da Tijuca, RJ — agendar data e horario</span>
+                  <span className="text-[14px] font-medium" style={{ color: entrega === "retirada" ? tema.accent : tema.text }}>📍 Retirar no escritorio (Barra da Tijuca)</span>
+                  <span className="block text-[12px] mt-0.5" style={{ color: tema.textMuted }}>Agende data e horario para retirada</span>
                 </button>
 
-                <div className="rounded-xl border overflow-hidden" style={{ borderColor: entrega === "expressa" || entrega === "sedex" ? tema.accent : tema.cardBorder, backgroundColor: tema.cardBg }}>
-                  <div className="px-4 py-3">
-                    <span className="text-[14px] font-medium" style={{ color: tema.text }}>🚚 Receber em casa</span>
-                    <div className="mt-2 flex gap-2">
-                      <input value={cep} onChange={(e) => setCep(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                        placeholder="Digite seu CEP" onKeyDown={(e) => e.key === "Enter" && consultarCEP()}
-                        className="flex-1 px-3 py-2 rounded-lg text-[13px] border focus:outline-none"
-                        style={{ borderColor: tema.cardBorder, backgroundColor: tema.bg, color: tema.text }} />
-                      <button onClick={consultarCEP} disabled={cepLoading}
-                        className="px-4 py-2 rounded-lg text-[13px] font-medium text-white"
-                        style={{ backgroundColor: tema.accent }}>
-                        {cepLoading ? "..." : "Consultar"}
-                      </button>
+                {/* Agendamento expandido */}
+                {entrega === "retirada" && (
+                  <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: tema.accent, backgroundColor: tema.cardBg }}>
+                    <div>
+                      <label className="text-[12px] font-medium block mb-1" style={{ color: tema.textMuted }}>DATA</label>
+                      <select value={dataRetirada} onChange={(e) => setDataRetirada(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-lg text-[14px] border focus:outline-none capitalize"
+                        style={{ borderColor: tema.cardBorder, backgroundColor: tema.bg, color: tema.text }}>
+                        <option value="">Selecione o dia...</option>
+                        {diasUteis.map((d) => (
+                          <option key={d.value} value={d.value} className="capitalize">{d.label}</option>
+                        ))}
+                      </select>
                     </div>
-                    {cepError && <p className="text-[12px] mt-1 text-red-500">{cepError}</p>}
-                    {cepInfo && (
-                      <div className="mt-2 space-y-1.5">
-                        <p className="text-[12px]" style={{ color: tema.textMuted }}>{cepInfo.cidade} — {cepInfo.distancia} km</p>
-                        {cepInfo.distancia <= RAIO_EXPRESSA_KM && (
-                          <button onClick={() => setEntrega("expressa")}
-                            style={entrega === "expressa" ? { borderColor: tema.accent, backgroundColor: tema.accentLight } : { borderColor: tema.cardBorder }}
-                            className="w-full text-left px-3 py-2 rounded-lg border transition-all">
-                            <span className="text-[13px] font-medium" style={{ color: entrega === "expressa" ? tema.accent : tema.text }}>⚡ Entrega expressa</span>
-                            <span className="block text-[11px]" style={{ color: tema.textMuted }}>Entregamos em algumas horas!</span>
+                    <div>
+                      <label className="text-[12px] font-medium block mb-1" style={{ color: tema.textMuted }}>HORARIO</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {HORARIOS_DISPONIVEIS.map((h) => (
+                          <button key={h} onClick={() => setHorarioRetirada(h)}
+                            style={horarioRetirada === h ? { borderColor: tema.accent, backgroundColor: tema.accentLight, color: tema.accent } : { borderColor: tema.cardBorder, color: tema.text }}
+                            className="px-2 py-2 rounded-lg border text-[13px] font-medium transition-all">
+                            {h}
                           </button>
-                        )}
-                        <button onClick={() => setEntrega("sedex")}
-                          style={entrega === "sedex" ? { borderColor: tema.accent, backgroundColor: tema.accentLight } : { borderColor: tema.cardBorder }}
-                          className="w-full text-left px-3 py-2 rounded-lg border transition-all">
-                          <span className="text-[13px] font-medium" style={{ color: entrega === "sedex" ? tema.accent : tema.text }}>📦 Envio SEDEX</span>
-                          <span className="block text-[11px]" style={{ color: tema.textMuted }}>Envio pelos Correios para todo Brasil</span>
-                        </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Opção 2: Combinar entrega em shopping */}
+                <button onClick={() => { setEntrega("combinar"); setDataRetirada(""); setHorarioRetirada(""); }}
+                  style={entrega === "combinar" ? { borderColor: tema.accent, backgroundColor: tema.accentLight } : { borderColor: tema.cardBorder, backgroundColor: tema.cardBg }}
+                  className="w-full text-left px-4 py-3 rounded-xl border transition-all">
+                  <span className="text-[14px] font-medium" style={{ color: entrega === "combinar" ? tema.accent : tema.text }}>🤝 Combinar entrega</span>
+                  <span className="block text-[12px] mt-0.5" style={{ color: tema.textMuted }}>Encontro em shopping proximo a voce — combinaremos via WhatsApp</span>
+                </button>
               </div>
             </div>
 
