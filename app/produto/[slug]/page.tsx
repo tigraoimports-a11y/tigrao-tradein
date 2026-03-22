@@ -84,10 +84,13 @@ export default function ProdutoPage() {
   const [horarioRetirada, setHorarioRetirada] = useState("");
   const diasUteis = useMemo(() => getProximosDiasUteis(7), []);
 
-  // Modal nome
+  // Modal nome e origem
   const [showNomeModal, setShowNomeModal] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
+  const [origemCliente, setOrigemCliente] = useState("");
   const [pendingAction, setPendingAction] = useState<"pedido" | "duvida" | "">("");
+
+  const ORIGENS = ["Instagram (Story)", "Instagram (Direct)", "WhatsApp", "Indicação de amigo", "Google", "Outro"];
 
   const tema = useMemo(() => getTema(config.tema), [config.tema]);
   const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
@@ -155,23 +158,34 @@ export default function ProdutoPage() {
       entregaTexto = "Combinar entrega em shopping proximo";
     }
 
-    return `Ola! Quero fechar um pedido! 🐯
+    const pedidoId = `TG-${new Date().toISOString().slice(0,10).replace(/-/g, "")}-${String(Math.floor(Math.random()*900)+100)}`;
+    const pixValor = formatBRL(preco * quantidade);
+    const parceladoInfo = parcelaSel !== "pix" ? pagamentoTexto : "";
 
-*Nome:* ${nomeCliente}
+    return `Ola! Vi no site da TigraoImports e quero garantir meu pedido! 🐯
 
-*PEDIDO — TigraoImports*
----
-*Produto:* ${produto?.nome}
-${varInfo ? `*Variacao:* ${varInfo}` : ""}
-${corAttr ? `*Cor:* ${corAttr}` : ""}
-${storageAttr ? `*Armazenamento:* ${storageAttr}` : ""}
-*Quantidade:* ${quantidade}
-*Preco unitario:* ${formatBRL(preco)}
-${quantidade > 1 ? `*Total:* ${formatBRL(preco * quantidade)}` : ""}
+*👤 Nome:* ${nomeCliente}
+${origemCliente ? `*📲 Como nos conheceu:* ${origemCliente}` : ""}
 
-*Forma de pagamento:* ${pagamentoTexto}
+————————————————————
+📋 *PEDIDO ${pedidoId} — TigraoImports*
+————————————————————
 
-*Entrega:* ${entregaTexto}
+📱 *Produto:* ${produto?.nome}
+${corAttr ? `🎨 *Cor:* ${corAttr}` : ""}
+${storageAttr ? `💾 *Armazenamento:* ${storageAttr}` : ""}
+${quantidade > 1 ? `*Quantidade:* ${quantidade}` : ""}
+🔒 Lacrado | Garantia Apple 1 ano | NF no nome
+
+————————————————————
+
+💰 *Preco PIX:* ${pixValor}
+${parceladoInfo ? `💳 *Parcelado:* ${parceladoInfo}` : `💳 *Forma:* PIX a vista`}
+
+📍 *Entrega:* ${entregaTexto}
+
+————————————————————
+⏱ _Valores validos por 24 horas_
 
 Quero finalizar meu pedido!`.replace(/\n{3,}/g, "\n\n");
   }
@@ -469,19 +483,30 @@ Poderia me ajudar?`;
       </div>
       <div className="sm:hidden h-20" />
 
-      {/* ── Modal: Nome do Cliente ── */}
+      {/* ── Modal: Nome e Origem do Cliente ── */}
       {showNomeModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowNomeModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[16px] font-bold text-[#1D1D1F] mb-1">
               {pendingAction === "pedido" ? "Finalizar Pedido" : "Tirar Duvidas"}
             </h3>
-            <p className="text-[13px] text-[#86868B] mb-4">Informe seu nome para continuarmos no WhatsApp</p>
+            <p className="text-[13px] text-[#86868B] mb-4">Preencha para continuarmos no WhatsApp</p>
             <input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && nomeCliente.trim() && confirmAction()}
               placeholder="Nome e sobrenome" autoFocus
-              className="w-full px-4 py-3 rounded-xl border border-[#D2D2D7] text-[15px] text-[#1D1D1F] focus:outline-none focus:border-[#E8740E]" />
-            <div className="flex gap-2 mt-4">
+              className="w-full px-4 py-3 rounded-xl border border-[#D2D2D7] text-[15px] text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] mb-3" />
+            <p className="text-[12px] font-semibold text-[#86868B] mb-2">COMO NOS CONHECEU?</p>
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {ORIGENS.map((o) => (
+                <button key={o} onClick={() => setOrigemCliente(o)}
+                  className="px-3 py-2 rounded-lg text-[12px] font-medium border transition-all"
+                  style={origemCliente === o
+                    ? { borderColor: "#E8740E", backgroundColor: "#FFF3E8", color: "#E8740E" }
+                    : { borderColor: "#D2D2D7", color: "#86868B" }}>
+                  {o}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
               <button onClick={() => setShowNomeModal(false)} className="flex-1 py-3 rounded-xl text-[14px] font-medium text-[#86868B] bg-[#F5F5F7]">Cancelar</button>
               <button onClick={confirmAction} disabled={!nomeCliente.trim()}
                 className="flex-[2] py-3 rounded-xl text-[14px] font-semibold text-white bg-[#E8740E] disabled:opacity-50">

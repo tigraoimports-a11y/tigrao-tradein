@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { UsedDeviceValue } from "@/lib/types";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
@@ -196,8 +196,16 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Auto-scroll para a seção quando ela aparece
+    const timer = setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
   return (
-    <div className="animate-fadeIn">
+    <div className="animate-fadeIn" ref={ref}>
       <label className="block text-[14px] font-bold mb-3 text-center" style={{ color: "var(--ti-text)" }}>{title}</label>
       {children}
     </div>
