@@ -414,7 +414,21 @@ export default function EstoquePage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg("Produto adicionado!");
+      // Verificar se produto existe no mostruário
+      try {
+        const lojaRes = await fetch("/api/loja?format=grouped");
+        const lojaData = await lojaRes.json();
+        const lojaProdutos = lojaData.produtos || [];
+        const prodNome = form.produto.toLowerCase();
+        const existeNoMostruario = lojaProdutos.some((p: { nome: string }) => prodNome.includes(p.nome.toLowerCase()) || p.nome.toLowerCase().includes(prodNome));
+        if (!existeNoMostruario) {
+          setMsg(`Produto adicionado! 💡 "${form.produto}" nao esta no mostruario. Deseja publicar no site? Va em Mostruario > + Novo Produto`);
+        } else {
+          setMsg("Produto adicionado!");
+        }
+      } catch {
+        setMsg("Produto adicionado!");
+      }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       fetchEstoque();
     } else { setMsg("Erro: " + json.error); }

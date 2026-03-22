@@ -77,7 +77,45 @@ export async function POST(req: NextRequest) {
     console.error("Telegram notification failed:", err);
   }
 
-  return NextResponse.json({ ok: true });
+  // ── Sincronizar com Mostruário ──
+  // Buscar variações do mostruário que correspondem a este modelo+armazenamento
+  let syncCount = 0;
+  try {
+    // Buscar todas as variações que contenham o modelo no nome do produto pai
+    const { data: lojaProds } = await supabase
+      .from("loja_produtos")
+      .select("id, nome")
+      .ilike("nome", `%${modelo.replace(/iPhone /i, "").trim()}%`);
+
+    if (lojaProds && lojaProds.length > 0) {
+      for (const prod of lojaProds) {
+        // Buscar variações deste produto que tenham o armazenamento correspondente
+        const { data: vars } = await supabase
+          .from("loja_variacoes")
+          .select("id, nome, atributos, preco")
+          .eq("produto_id", prod.id);
+
+        if (vars) {
+          for (const v of vars) {
+            const attrs = v.atributos as Record<string, string> | null;
+            const varStorage = attrs?.armazenamento || attrs?.storage || "";
+            // Match por armazenamento OU pelo nome da variação conter o armazenamento
+            if (varStorage === armazenamento || v.nome.includes(armazenamento)) {
+              if (Number(v.preco) !== Number(preco_pix)) {
+                await supabase.from("loja_variacoes").update({ preco: Number(preco_pix) }).eq("id", v.id);
+                syncCount++;
+              }
+            }
+          }
+        }
+      }
+    }
+    if (syncCount > 0) console.log(`Mostruario sync: ${syncCount} variacoes atualizadas para ${modelo} ${armazenamento}`);
+  } catch (err) {
+    console.error("Erro ao sincronizar com mostruario:", err);
+  }
+
+  return NextResponse.json({ ok: true, mostruario_sync: syncCount });
 }
 
 // PUT — importa todos os produtos do Google Sheets para o Supabase (só iPhones)

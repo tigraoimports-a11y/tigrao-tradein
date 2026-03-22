@@ -251,6 +251,36 @@ export async function PATCH(req: NextRequest) {
       }
     }
   }
+
+  // ── Sincronizar com Mostruário: estoque zerou ou voltou ──
+  if (fields.qnt !== undefined) {
+    const newQnt = Number(fields.qnt);
+    const prodNome = antes?.produto || "";
+    try {
+      // Buscar produtos do mostruário que correspondem
+      const { data: lojaProds } = await supabase
+        .from("loja_produtos")
+        .select("id, nome")
+        .ilike("nome", `%${prodNome.replace(/iPhone |MacBook |iPad |Apple Watch |AirPods /gi, "").split(" ")[0]}%`);
+
+      if (lojaProds) {
+        for (const prod of lojaProds) {
+          if (prodNome.toLowerCase().includes(prod.nome.toLowerCase().split(" ").slice(-2).join(" ").toLowerCase()) ||
+              prod.nome.toLowerCase().includes(prodNome.toLowerCase().split(" ").slice(-2).join(" ").toLowerCase())) {
+            // Atualizar status no precos também
+            if (newQnt === 0) {
+              await supabase.from("precos").update({ status: "esgotado" }).ilike("modelo", `%${prodNome}%`);
+            } else if (Number(antes?.qnt || 0) === 0 && newQnt > 0) {
+              await supabase.from("precos").update({ status: "ativo" }).ilike("modelo", `%${prodNome}%`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao sincronizar estoque->mostruario:", err);
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
 
