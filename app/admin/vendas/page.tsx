@@ -1392,7 +1392,37 @@ export default function VendasPage() {
               )}
 
               {form.forma === "LINK" && (
-                <div><p className={labelCls}>Parcelas no Link</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
+                <>
+                  <div><p className={labelCls}>Parcelas no Link</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
+                  {taxa > 0 && (
+                    <>
+                      <div><p className={labelCls}>Valor no Link (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
+                        const comp = e.target.value;
+                        set("valor_comprovante_input", comp);
+                        if (produtosCarrinho.length === 0) {
+                          const compVal = parseFloat(comp) || 0;
+                          if (compVal > 0 && taxa > 0) {
+                            const liquidoLink = calcularLiquido(compVal, taxa);
+                            const totalLiq = Math.round(liquidoLink + entradaPix + entradaEspecie + valorTroca);
+                            setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                          }
+                        }
+                      }} placeholder="Valor total do link" className={inputCls} /></div>
+                      <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                        <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                          <>
+                            <span>Liquido: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
+                            {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
+                            {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
+                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
               )}
             </div>
 
