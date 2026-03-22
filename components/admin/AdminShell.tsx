@@ -137,6 +137,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
   if (!ready) return null;
 
+  // Hooks devem ser chamados ANTES de qualquer return condicional
+  const { isOnline } = useOnlineStatus();
+
   // Login screen
   if (!user) {
     return (
@@ -180,8 +183,6 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       </div>
     );
   }
-
-  const { isOnline } = useOnlineStatus();
 
   // Dark mode CSS variables
   const darkStyles = darkMode ? {
