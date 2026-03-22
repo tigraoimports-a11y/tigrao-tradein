@@ -51,18 +51,18 @@ export async function GET(req: NextRequest) {
       supabase
         .from("loja_categorias")
         .select("*")
-        .eq("visivel", true)
+        .neq("visivel", false)
         .order("ordem", { ascending: true }),
       supabase
         .from("loja_produtos")
         .select("*")
-        .eq("visivel", true)
+        .neq("visivel", false)
         .order("ordem", { ascending: true })
         .order("nome"),
       supabase
         .from("loja_variacoes")
         .select("*")
-        .eq("visivel", true)
+        .neq("visivel", false)
         .order("ordem", { ascending: true })
         .order("nome"),
       supabase

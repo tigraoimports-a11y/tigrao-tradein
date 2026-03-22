@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("loja_categorias")
-      .insert({ nome, slug, emoji: emoji || "📦", ordem: nextOrdem })
+      .insert({ nome, slug, emoji: emoji || "📦", ordem: nextOrdem, visivel: true })
       .select()
       .single();
 
@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
       nome,
       slug,
       ordem: nextOrdem,
+      visivel: true,
     };
     if (categoria_id) row.categoria_id = categoria_id;
     if (descricao) row.descricao = descricao;
