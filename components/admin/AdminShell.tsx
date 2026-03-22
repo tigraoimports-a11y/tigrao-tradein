@@ -45,16 +45,28 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    const savedPw = localStorage.getItem("admin_pw");
-    const savedUser = localStorage.getItem("admin_user");
-    const savedDark = localStorage.getItem("admin_dark");
-    if (savedPw && savedUser) {
-      try {
-        setPassword(savedPw);
-        setUser(JSON.parse(savedUser));
-      } catch { /* ignore */ }
+    try {
+      const savedPw = localStorage.getItem("admin_pw");
+      const savedUser = localStorage.getItem("admin_user");
+      const savedDark = localStorage.getItem("admin_dark");
+      if (savedPw && savedUser) {
+        const parsed = JSON.parse(savedUser);
+        // Validar que o user tem os campos necessários
+        if (parsed && parsed.id && parsed.nome && parsed.login && parsed.role) {
+          setPassword(savedPw);
+          setUser(parsed);
+        } else {
+          // Dados corrompidos — limpar
+          localStorage.removeItem("admin_pw");
+          localStorage.removeItem("admin_user");
+        }
+      }
+      if (savedDark === "true") setDarkMode(true);
+    } catch {
+      // Qualquer erro ao ler localStorage — limpar tudo e começar fresh
+      localStorage.removeItem("admin_pw");
+      localStorage.removeItem("admin_user");
     }
-    if (savedDark === "true") setDarkMode(true);
     setReady(true);
   }, []);
 
