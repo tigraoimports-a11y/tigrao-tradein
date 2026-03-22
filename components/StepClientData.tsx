@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 const ORIGENS = [
-  "Anuncio", "Story", "Direct",
-  "WhatsApp", "Indicacao", "Ja sou cliente",
+  "Anúncio", "Story", "Direct",
+  "WhatsApp", "Indicação", "Já sou cliente",
 ];
 
 interface StepClientDataProps {
@@ -28,8 +28,8 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
 
   return (
     <div className="space-y-8">
-      <h2 className="text-[20px] font-bold" style={{ color: "var(--ti-text)" }}>Quase la! Seus dados para contato</h2>
-      <p className="text-[14px] -mt-4" style={{ color: "var(--ti-muted)" }}>Seus dados ficam salvos apenas para que possamos entrar em contato com sua cotacao.</p>
+      <h2 className="text-[20px] font-bold" style={{ color: "var(--ti-text)" }}>Quase lá! Seus dados para contato</h2>
+      <p className="text-[14px] -mt-4" style={{ color: "var(--ti-muted)" }}>Seus dados ficam salvos apenas para que possamos entrar em contato com sua cotação.</p>
 
       <div className="animate-fadeIn">
         <label className="block text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: "var(--ti-muted)" }}>Seu nome *</label>
@@ -71,7 +71,7 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
           <button onClick={() => onNext({ clienteNome: nome.trim(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: origem })}
             className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "var(--ti-accent)" }}>
-            Ver minha cotacao
+            Ver minha cotação
           </button>
         )}
         <button onClick={onBack} className="w-full py-3 rounded-2xl text-[15px] font-medium transition-all duration-200"

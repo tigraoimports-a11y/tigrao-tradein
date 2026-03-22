@@ -65,12 +65,12 @@ export default function StepQuote(p: StepQuoteProps) {
   let usadoSec: string;
   if (hasSecond && condition2) {
     const cL2 = getAnyConditionLines(deviceType2 ?? "iphone", condition2);
-    usadoSec = `*PRODUTO 1 na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliacao: ${f2(tradeInValue1??0)}\n\n*PRODUTO 2 na troca:*\n${usedModel2} ${usedStorage2}\n${cL2.join("\n")}\nAvaliacao: ${f2(tradeInValue2??0)}\n\n*Total avaliacao: ${f2(tradeInValue)}*`;
+    usadoSec = `*PRODUTO 1 na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliação: ${f2(tradeInValue1??0)}\n\n*PRODUTO 2 na troca:*\n${usedModel2} ${usedStorage2}\n${cL2.join("\n")}\nAvaliação: ${f2(tradeInValue2??0)}\n\n*Total avaliação: ${f2(tradeInValue)}*`;
   } else {
-    usadoSec = `*Seu aparelho na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliacao do usado: ${f2(tradeInValue)}`;
+    usadoSec = `*Seu aparelho na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliação do usado: ${f2(tradeInValue)}`;
   }
 
-  const waMsg = `Ola! Vi meu orcamento no site e quero fechar!\n\n*Nome:* ${clienteNome}\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORCAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferenca no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orcamento: ${validadeHoras} horas_\n\nQuero fechar o pedido!`;
+  const waMsg = `Ola! Vi meu orçamento no site e quero fechar!\n\n*Nome:* ${clienteNome}\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_\n\nQuero fechar o pedido!`;
   const waUrl = getWhatsAppUrl(whatsappNumero, waMsg);
   const condLines = getAnyConditionLines(deviceType, condition);
 
@@ -85,9 +85,9 @@ export default function StepQuote(p: StepQuoteProps) {
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="text-center mb-2">
-        <h2 className="text-[28px] font-bold" style={{ color: "var(--ti-text)" }}>Sua Cotacao</h2>
+        <h2 className="text-[28px] font-bold" style={{ color: "var(--ti-text)" }}>Sua Cotação</h2>
         <div className="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-1.5" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
-          <span className="text-[11px] font-medium" style={{ color: "var(--ti-accent)" }}>Valido por</span>
+          <span className="text-[11px] font-medium" style={{ color: "var(--ti-accent)" }}>Válido por</span>
           <span className="text-[14px] font-bold font-mono" style={{ color: "var(--ti-accent)" }}>{countdown}</span>
         </div>
       </div>
@@ -106,22 +106,22 @@ export default function StepQuote(p: StepQuoteProps) {
           <div>
             <p className="text-[18px] font-semibold" style={{ color: "var(--ti-text)" }}>{usedModel} {usedStorage}</p>
             <div className="mt-1 space-y-0.5">{condLines.map((l, i) => <p key={i} className="text-[13px]" style={{ color: "var(--ti-muted)" }}>{l}</p>)}</div>
-            {hasSecond && tradeInValue1 !== undefined && <p className="text-[13px] font-medium mt-1" style={{ color: "var(--ti-success)" }}>Avaliacao: {formatBRL(tradeInValue1)}</p>}
+            {hasSecond && tradeInValue1 !== undefined && <p className="text-[13px] font-medium mt-1" style={{ color: "var(--ti-success)" }}>Avaliação: {formatBRL(tradeInValue1)}</p>}
           </div>
           {hasSecond && condition2 && (
             <div className="pt-3" style={{ borderTop: "1px solid var(--ti-card-border)" }}>
               <p className="text-[18px] font-semibold" style={{ color: "var(--ti-text)" }}>{usedModel2} {usedStorage2}</p>
               <div className="mt-1 space-y-0.5">{getAnyConditionLines(deviceType2 ?? "iphone", condition2).map((l, i) => <p key={i} className="text-[13px]" style={{ color: "var(--ti-muted)" }}>{l}</p>)}</div>
-              {tradeInValue2 !== undefined && <p className="text-[13px] font-medium mt-1" style={{ color: "var(--ti-success)" }}>Avaliacao: {formatBRL(tradeInValue2)}</p>}
+              {tradeInValue2 !== undefined && <p className="text-[13px] font-medium mt-1" style={{ color: "var(--ti-success)" }}>Avaliação: {formatBRL(tradeInValue2)}</p>}
             </div>
           )}
         </div>
-        {hasSecond && <p className="text-[15px] font-bold mt-3" style={{ color: "var(--ti-success)" }}>Avaliacao total: {formatBRL(tradeInValue)}</p>}
+        {hasSecond && <p className="text-[15px] font-bold mt-3" style={{ color: "var(--ti-success)" }}>Avaliação total: {formatBRL(tradeInValue)}</p>}
       </div>
 
       {/* Pagamento */}
       <div className="rounded-2xl p-5 space-y-5" style={cardStyle}>
-        <p className="text-[11px] font-semibold tracking-wider uppercase text-center" style={{ color: "var(--ti-muted)" }}>Voce paga apenas a diferenca</p>
+        <p className="text-[11px] font-semibold tracking-wider uppercase text-center" style={{ color: "var(--ti-muted)" }}>Você paga apenas a diferença</p>
 
         <div className="rounded-2xl p-5 text-center" style={{ backgroundColor: "var(--ti-success-light)", border: "1px solid var(--ti-success)" }}>
           <p className="text-[12px] font-semibold mb-1" style={{ color: "var(--ti-success)" }}>PIX / A vista</p>
@@ -198,7 +198,7 @@ export default function StepQuote(p: StepQuoteProps) {
         <button onClick={() => setShowFeedback(true)}
           className="w-full py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
           style={{ color: "var(--ti-muted)", backgroundColor: "var(--ti-btn-bg)", border: "1px solid var(--ti-btn-border)" }}>
-          Nao gostei. Sair
+          Não gostei. Sair
         </button>
       ) : (
         <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={cardStyle}>
@@ -222,7 +222,7 @@ export default function StepQuote(p: StepQuoteProps) {
               Cancelar
             </button>
             <button disabled={sairLoading} onClick={async () => {
-              setSairLoading(true); await salvarLead({ ...leadBase, status: "SAIR", motivoSaida: motivo || "Nao informado" }); setSairLoading(false); onReset();
+              setSairLoading(true); await salvarLead({ ...leadBase, status: "SAIR", motivoSaida: motivo || "Não informado" }); setSairLoading(false); onReset();
             }} className="flex-[2] py-3 rounded-xl text-[13px] font-semibold text-white transition-all disabled:opacity-60"
               style={{ backgroundColor: "var(--ti-error)" }}>
               {sairLoading ? "Salvando..." : "Confirmar e sair"}

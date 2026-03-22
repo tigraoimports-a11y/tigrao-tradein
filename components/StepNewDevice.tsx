@@ -42,7 +42,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack }
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <h2 className="text-[22px] font-bold leading-tight" style={{ color: "var(--ti-text)" }}>Agora me diz, qual modelo voce quer comprar?</h2>
+        <h2 className="text-[22px] font-bold leading-tight" style={{ color: "var(--ti-text)" }}>Agora me diz, qual modelo você quer comprar?</h2>
       </div>
 
       <Sec title="Linha do iPhone novo"><div className="grid grid-cols-3 gap-2">
@@ -135,7 +135,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack }
           <button onClick={() => onNext({ newModel: model, newStorage: storage, newPrice: price })}
             className="flex-[2] py-4 rounded-2xl text-[15px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "var(--ti-accent)" }}>
-            Ver cotacao
+            Ver cotação
           </button>
         )}
       </div>
