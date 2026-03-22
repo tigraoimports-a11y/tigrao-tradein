@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+
+const SalesMap = dynamic(() => import("@/components/admin/SalesMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+      <div className="h-[460px] flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#E8740E] border-t-transparent rounded-full animate-spin" />
+      </div>
+    </div>
+  ),
+});
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -11,6 +23,8 @@ interface GeoData {
   receita: number;
   lucro: number;
   ticket: number;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 interface ClienteData {
@@ -139,6 +153,9 @@ export default function MapaVendasPage() {
         <KPICard label="Lucro" value={fmt(data.totalLucro)} />
         <KPICard label="Ticket Medio" value={fmt(data.ticketMedio)} accent />
       </div>
+
+      {/* Sales Map */}
+      <SalesMap bairros={data.bairros} />
 
       {/* Top Bairros */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
