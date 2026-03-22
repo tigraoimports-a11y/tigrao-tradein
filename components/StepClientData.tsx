@@ -10,11 +10,15 @@ const ORIGENS = [
 interface StepClientDataProps {
   onNext: (data: { clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string }) => void;
   onBack: () => void;
+  initialNome?: string;
+  initialWhatsApp?: string;
+  initialInstagram?: string;
+  initialOrigem?: string;
 }
 
-export default function StepClientData({ onNext, onBack }: StepClientDataProps) {
-  const [nome, setNome] = useState(""); const [whatsapp, setWhatsapp] = useState("");
-  const [instagram, setInstagram] = useState(""); const [origem, setOrigem] = useState("");
+export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, initialInstagram, initialOrigem }: StepClientDataProps) {
+  const [nome, setNome] = useState(initialNome || ""); const [whatsapp, setWhatsapp] = useState(initialWhatsApp || "");
+  const [instagram, setInstagram] = useState(initialInstagram || ""); const [origem, setOrigem] = useState(initialOrigem || "");
   const canProceed = nome.trim() !== "" && whatsapp.trim() !== "";
 
   const inputStyle: React.CSSProperties = {

@@ -103,6 +103,24 @@ export default function LojaPage() {
   const [activeCategory, setActiveCategory] = useState("TODOS");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+
+  // Carregar wishlist do localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tigrao_wishlist");
+      if (saved) setWishlist(new Set(JSON.parse(saved)));
+    } catch { /* silent */ }
+  }, []);
+
+  function toggleWish(id: string) {
+    setWishlist(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem("tigrao_wishlist", JSON.stringify([...next]));
+      return next;
+    });
+  }
 
   const tema = useMemo(() => getTema(config.tema), [config.tema]);
   const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
@@ -242,7 +260,7 @@ export default function LojaPage() {
           <h2 className="text-[20px] sm:text-[24px] font-bold mb-4">Destaques</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {destaques.map((produto) => (
-              <ProductCard key={`destaque-${produto.id}`} produto={produto} tema={tema} />
+              <ProductCard key={`destaque-${produto.id}`} produto={produto} tema={tema} isWished={wishlist.has(produto.id)} onToggleWish={() => toggleWish(produto.id)} />
             ))}
           </div>
         </section>
@@ -277,7 +295,7 @@ export default function LojaPage() {
         {!loading && !error && filtered.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((produto) => (
-              <ProductCard key={produto.id} produto={produto} tema={tema} />
+              <ProductCard key={produto.id} produto={produto} tema={tema} isWished={wishlist.has(produto.id)} onToggleWish={() => toggleWish(produto.id)} />
             ))}
           </div>
         )}
@@ -307,7 +325,12 @@ export default function LojaPage() {
             {(config.footer_frete_gratis_acima ?? 1500) > 0 && (
               <p className="text-[13px]" style={{ color: tema.textMuted }}>📦 Frete gratis em pedidos acima de R$ {(config.footer_frete_gratis_acima ?? 1500).toLocaleString("pt-BR")}</p>
             )}
-            <p className="text-[12px] mt-4" style={{ color: tema.textMuted, opacity: 0.6 }}>{config.footer_texto || "Produtos lacrados com garantia Apple e Nota Fiscal"}</p>
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold" style={{ backgroundColor: `${tema.accent}15`, color: tema.accent, border: `1px solid ${tema.accent}30` }}>
+                ✅ Loja Verificada
+              </span>
+            </div>
+            <p className="text-[12px] mt-3" style={{ color: tema.textMuted, opacity: 0.6 }}>{config.footer_texto || "Produtos lacrados com garantia Apple e Nota Fiscal"}</p>
           </div>
         </div>
       </footer>
@@ -326,7 +349,7 @@ export default function LojaPage() {
 /* ── Product Card                             ── */
 /* ══════════════════════════════════════════════ */
 
-function ProductCard({ produto, tema }: { produto: ProdutoLoja; tema: Tema }) {
+function ProductCard({ produto, tema, isWished, onToggleWish }: { produto: ProdutoLoja; tema: Tema; isWished?: boolean; onToggleWish?: () => void }) {
   const minPreco = getMinPreco(produto);
   const parcela12 = minPreco > 0 ? Math.round((minPreco * 1.13) / 12) : 0;
   const hasVariacoes = produto.variacoes.length > 0;
@@ -353,6 +376,18 @@ function ProductCard({ produto, tema }: { produto: ProdutoLoja; tema: Tema }) {
           <span className="text-[56px] sm:text-[64px] opacity-80 group-hover:scale-110 transition-transform duration-200">
             {produto.categoriaEmoji || "📦"}
           </span>
+        )}
+        {/* Badges */}
+        <div className="absolute top-2 left-2 flex gap-1">
+          {produto.destaque && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8740E] text-white shadow-sm">DESTAQUE</span>}
+        </div>
+        {/* Wishlist */}
+        {onToggleWish && (
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWish(); }}
+            className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm transition-all"
+            style={{ backgroundColor: isWished ? "#E8740E" : "rgba(0,0,0,0.3)" }}>
+            <span className="text-[14px]">{isWished ? "🧡" : "🤍"}</span>
+          </button>
         )}
       </div>
 

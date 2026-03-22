@@ -286,7 +286,9 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 3 && (
-            <StepClientData onNext={handleStep3Complete} onBack={() => setStep(2)} />
+            <StepClientData onNext={handleStep3Complete} onBack={() => setStep(2)}
+              initialNome={clienteNome} initialWhatsApp={clienteWhatsApp}
+              initialInstagram={clienteInstagram} initialOrigem={clienteOrigem} />
           )}
 
           {step === 4 && (
