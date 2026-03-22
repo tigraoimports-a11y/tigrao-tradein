@@ -53,6 +53,7 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "funil">("simulacoes");
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -171,8 +172,15 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      {/* Refresh button */}
-      <div className="flex justify-end">
+      {/* Main tabs: Simulações / Funil */}
+      <div className="flex gap-2 items-center">
+        {(["simulacoes", "funil"] as const).map((t) => (
+          <button key={t} onClick={() => setMainTab(t)}
+            className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+            {t === "simulacoes" ? "Simulações" : "Funil de Conversão"}
+          </button>
+        ))}
+        <div className="flex-1" />
         <button
           onClick={handleRefresh}
           disabled={refreshing}
@@ -181,6 +189,15 @@ export default function AdminPage() {
           {refreshing ? "↻ Atualizando..." : "↻ Atualizar"}
         </button>
       </div>
+
+      {/* Funil tab — iframe to analytics page */}
+      {mainTab === "funil" && (
+        <iframe src="/admin/analytics" className="w-full border-0 rounded-2xl" style={{ height: "calc(100vh - 180px)" }} />
+      )}
+
+      {/* Simulações tab — existing content */}
+      {mainTab === "simulacoes" && (<>
+      {/* Refresh button - moved to tabs row */}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -643,6 +660,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }

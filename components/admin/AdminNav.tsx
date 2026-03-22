@@ -26,7 +26,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/mostruario", label: "Mostruario", icon: "🖼️", roles: ["admin"] },
   { href: "/admin/conciliacao", label: "Conciliacao", icon: "🔍", roles: ["admin"] },
   { href: "/admin/agendamento-precos", label: "Agendar Precos", icon: "📅", roles: ["admin"] },
-  { href: "/admin/analytics", label: "Funil", icon: "📈", roles: ["admin"] },
 ];
 
 export default function AdminNav({ userRole }: { userRole: string }) {

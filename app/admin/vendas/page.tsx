@@ -54,6 +54,7 @@ export default function VendasPage() {
     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
     // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
     // Serial e IMEI
     serial_no: "", imei: "",
   });
@@ -1190,9 +1191,42 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
                   <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} className={inputCls} /></div>
                   <div><p className={labelCls}>Bateria %</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="92" className={inputCls} /></div>
+                  <div><p className={labelCls}>Grade</p>
+                    <select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={inputCls}>
+                      <option value="">Selecione...</option>
+                      <option value="A+">A+ (Excelente)</option>
+                      <option value="A">A (Ótimo)</option>
+                      <option value="B">B (Bom)</option>
+                      <option value="C">C (Regular)</option>
+                    </select>
+                  </div>
+                  <div><p className={labelCls}>Caixa original</p>
+                    <select value={form.troca_caixa} onChange={(e) => set("troca_caixa", e.target.value)} className={inputCls}>
+                      <option value="">Selecione...</option>
+                      <option value="SIM">Sim</option>
+                      <option value="NAO">Não</option>
+                    </select>
+                  </div>
+                  <div><p className={labelCls}>Cabo original</p>
+                    <select value={form.troca_cabo} onChange={(e) => set("troca_cabo", e.target.value)} className={inputCls}>
+                      <option value="">Selecione...</option>
+                      <option value="SIM">Sim</option>
+                      <option value="NAO">Não</option>
+                    </select>
+                  </div>
+                  {/* Fonte original — só para iPad e MacBook */}
+                  {(form.troca_produto.toUpperCase().includes("IPAD") || form.troca_produto.toUpperCase().includes("MACBOOK") || form.troca_produto.toUpperCase().includes("MAC")) && (
+                    <div><p className={labelCls}>Fonte original</p>
+                      <select value={form.troca_fonte} onChange={(e) => set("troca_fonte", e.target.value)} className={inputCls}>
+                        <option value="">Selecione...</option>
+                        <option value="SIM">Sim</option>
+                        <option value="NAO">Não</option>
+                      </select>
+                    </div>
+                  )}
                   <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
                   <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
-                  <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Grade, caixa, detalhes..." className={inputCls} /></div>
+                  <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
                 </>
               )}
             </div>
