@@ -17,6 +17,7 @@ interface ClienteData {
   nome: string;
   compras: number;
   total: number;
+  lucro: number;
   ultimaCompra: string;
 }
 
