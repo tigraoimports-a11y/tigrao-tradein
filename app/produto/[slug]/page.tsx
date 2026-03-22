@@ -278,37 +278,38 @@ export default function ProdutoPage() {
     const pixValor = formatBRL(preco * quantidade);
     const parceladoInfo = parcelaSel !== "pix" ? pagamentoTexto : "";
 
-    return `Ola! Vi no site da TigraoImports e quero garantir meu pedido! 🐯
+    return `Ola! Vi no site da TigraoImports e quero garantir meu pedido!
 
-*👤 Nome:* ${nomeCliente}
-${origemCliente ? `*📲 Como nos conheceu:* ${origemCliente}` : ""}
+*Nome:* ${nomeCliente}
+${origemCliente ? `*Como nos conheceu:* ${origemCliente}` : ""}
 
-————————————————————
-📋 *PEDIDO ${pedidoId} — TigraoImports*
-————————————————————
+---
+*PEDIDO ${pedidoId}*
+*TigraoImports*
+---
 
-📱 *Produto:* ${produto?.nome}
-${corAttr ? `🎨 *Cor:* ${corAttr}` : ""}
-${storageAttr ? `💾 *Armazenamento:* ${storageAttr}` : ""}
+*Produto:* ${produto?.nome}
+${corAttr ? `*Cor:* ${corAttr}` : ""}
+${storageAttr ? `*Armazenamento:* ${storageAttr}` : ""}
 ${quantidade > 1 ? `*Quantidade:* ${quantidade}` : ""}
-🔒 Lacrado | Garantia Apple 1 ano | NF no nome
+Lacrado | Garantia Apple 1 ano | NF no nome
 
-————————————————————
+---
 
-💰 *Preco PIX:* ${pixValor}
-${parceladoInfo ? `💳 *Parcelado:* ${parceladoInfo}` : `💳 *Forma:* PIX a vista`}
+*Preco PIX:* ${pixValor}
+${parceladoInfo ? `*Parcelado:* ${parceladoInfo}` : `*Forma:* PIX a vista`}
 
-📍 *Entrega:* ${entregaTexto}
+*Entrega:* ${entregaTexto}
 
-————————————————————
-⏱ _Valores validos por 24 horas_
+---
+_Valores validos por 24 horas_
 
 Quero finalizar meu pedido!`.replace(/\n{3,}/g, "\n\n");
   }
 
   function buildDuvidaMsg(): string {
     const varInfo = currentVariacao?.nome || "";
-    return `Ola! Quero tirar duvidas sobre um produto 🐯
+    return `Ola! Quero tirar duvidas sobre um produto.
 
 *Produto:* ${produto?.nome}${varInfo ? ` (${varInfo})` : ""}
 *Preco:* ${formatBRL(preco)}
