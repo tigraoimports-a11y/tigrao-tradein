@@ -235,8 +235,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
         {step === 1.5 && (
           <div className="space-y-6 py-6">
             <div className="text-center">
-              <p className="text-[15px] text-[#86868B] mb-1">Avaliacao do seu aparelho:</p>
-              <p className="text-3xl font-bold text-[#2ECC71]">{formatBRL(tradeInValue)}</p>
+              <p className="text-[15px] text-[#86868B] mb-1">Aparelho avaliado com sucesso!</p>
               <p className="text-xs text-[#86868B] mt-1">{usedModel} {usedStorage}</p>
             </div>
             <div className="bg-[#F5F5F7] rounded-2xl p-6 text-center space-y-4">
@@ -245,15 +244,15 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => setStep(1.7)}
-                  className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
+                  className="px-6 py-3 rounded-xl bg-white border border-[#D2D2D7] text-[#1D1D1F] font-semibold hover:bg-[#F5F5F7] transition-colors"
                 >
-                  Sim, adicionar outro aparelho
+                  Adicionar outro usado
                 </button>
                 <button
                   onClick={() => setStep(2)}
-                  className="px-6 py-3 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] font-semibold hover:bg-[#E8E8ED] transition-colors"
+                  className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
                 >
-                  Nao, continuar com 1
+                  Nao, continuar com apenas um
                 </button>
               </div>
             </div>

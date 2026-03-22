@@ -41,7 +41,10 @@ export default function StepNewDevice({
   const [modelB, setModelB] = useState("");
   const [storageB, setStorageB] = useState("");
 
-  const allModels = useMemo(() => getUniqueModels(products), [products]);
+  const allModels = useMemo(
+    () => getUniqueModels(products).filter((m) => /^iPhone \d/i.test(m)),
+    [products]
+  );
 
   const lines = useMemo(() => {
     const lineSet = new Set<string>();
