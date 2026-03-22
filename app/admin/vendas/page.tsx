@@ -658,6 +658,10 @@ export default function VendasPage() {
       troca_cor: "",
       troca_bateria: "",
       troca_obs: "",
+      troca_grade: "",
+      troca_caixa: "",
+      troca_cabo: "",
+      troca_fonte: "",
       serial_no: "",
       imei: v.imei || "",
     });
@@ -1025,6 +1029,7 @@ export default function VendasPage() {
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", sinal_antecipado: "", banco_sinal: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
                   });
                   setLastClienteData(null);
