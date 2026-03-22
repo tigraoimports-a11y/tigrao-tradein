@@ -7,7 +7,7 @@ export interface UserInfo {
   id: string;
   nome: string;
   login: string;
-  role: "admin" | "estoque";
+  role: "admin" | "estoque" | "vendedor" | "visualizador";
 }
 
 interface AdminContextType {
@@ -16,6 +16,8 @@ interface AdminContextType {
   logout: () => void;
   darkMode: boolean;
   toggleDark: () => void;
+  /** Returns headers object with auth + user info for API calls */
+  apiHeaders: (extra?: Record<string, string>) => Record<string, string>;
 }
 
 const AdminContext = createContext<AdminContextType>({
@@ -24,6 +26,7 @@ const AdminContext = createContext<AdminContextType>({
   logout: () => {},
   darkMode: false,
   toggleDark: () => {},
+  apiHeaders: () => ({}),
 });
 
 export function useAdmin() {
@@ -174,7 +177,19 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   } as React.CSSProperties : {};
 
   return (
-    <AdminContext.Provider value={{ password, user, logout, darkMode, toggleDark }}>
+    <AdminContext.Provider value={{
+      password,
+      user,
+      logout,
+      darkMode,
+      toggleDark,
+      apiHeaders: (extra?: Record<string, string>) => ({
+        "x-admin-password": password,
+        "x-admin-user": user?.nome || "sistema",
+        "x-admin-role": user?.role || "admin",
+        ...extra,
+      }),
+    }}>
       <div
         className={`min-h-screen overflow-x-hidden transition-colors duration-300 ${darkMode ? "admin-dark" : ""}`}
         style={{

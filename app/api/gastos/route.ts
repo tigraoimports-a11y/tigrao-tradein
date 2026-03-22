@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
+import { hasPermission } from "@/lib/permissions";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
   return pw === process.env.ADMIN_PASSWORD;
+}
+
+function getUsuario(req: NextRequest): string {
+  return req.headers.get("x-admin-user") || "sistema";
+}
+
+function getRole(req: NextRequest): string {
+  return req.headers.get("x-admin-role") || "admin";
 }
 
 export async function GET(req: NextRequest) {
@@ -24,10 +34,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "gastos.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
 
   const body = await req.json();
   const { data, error } = await supabase.from("gastos").insert(body).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const valor = body.valor ? `R$ ${Number(body.valor).toLocaleString("pt-BR")}` : "";
+  await logActivity(usuario, "Registrou gasto", `${body.descricao || "?"} ${valor}`, "gastos", data?.id);
+
   return NextResponse.json({ ok: true, data });
 }
 

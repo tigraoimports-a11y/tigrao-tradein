@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity-log";
+import { hasPermission } from "@/lib/permissions";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
+}
+
+function getUsuario(req: NextRequest): string {
+  return req.headers.get("x-admin-user") || "sistema";
+}
+
+function getRole(req: NextRequest): string {
+  return req.headers.get("x-admin-role") || "admin";
 }
 
 // GET — lista todos os preços
@@ -24,6 +34,9 @@ export async function GET(req: NextRequest) {
 // POST — upsert de um produto (modelo + armazenamento + preco_pix + status + categoria)
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "precos.write")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
 
   const body = await req.json();
   const { modelo, armazenamento, preco_pix, status, categoria } = body;
@@ -47,6 +60,8 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logActivity(usuario, "Alterou preco", `${modelo} ${armazenamento} -> R$ ${Number(preco_pix).toLocaleString("pt-BR")}`, "precos");
 
   // Notificar design via Telegram
   try {

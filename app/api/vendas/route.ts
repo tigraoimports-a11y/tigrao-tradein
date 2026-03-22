@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { sendPaymentNotification } from "@/lib/telegram";
+import { logActivity } from "@/lib/activity-log";
+import { hasPermission } from "@/lib/permissions";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
   return pw === process.env.ADMIN_PASSWORD;
 }
 
+function getUsuario(req: NextRequest): string {
+  return req.headers.get("x-admin-user") || "sistema";
+}
+
+function getRole(req: NextRequest): string {
+  return req.headers.get("x-admin-role") || "admin";
+}
+
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "vendas.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
@@ -25,6 +37,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
 
   const body = await req.json();
 
@@ -91,6 +106,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Log da venda
+  await logActivity(
+    usuario,
+    "Registrou venda",
+    `${body.cliente || "?"} - ${body.produto || "?"}`,
+    "vendas",
+    data?.id
+  );
+
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
   if (seminovoData && seminovoData.produto) {
@@ -115,6 +139,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const body = await req.json();
 
@@ -149,6 +175,9 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
 
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -158,6 +187,14 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logActivity(
+    usuario,
+    "Excluiu venda",
+    `${venda?.cliente || "?"} - ${venda?.produto || "?"}`,
+    "vendas",
+    id
+  );
 
   // Devolver ao estoque se a venda veio de produto cadastrado
   if (venda && venda.estoque_id) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
+import { hasPermission } from "@/lib/permissions";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -7,6 +9,10 @@ function auth(req: NextRequest) {
 
 function getUsuario(req: NextRequest): string {
   return req.headers.get("x-admin-user") || "sistema";
+}
+
+function getRole(req: NextRequest): string {
+  return req.headers.get("x-admin-role") || "admin";
 }
 
 async function logEstoque(usuario: string, acao: string, produtoId: string | null, produtoNome: string, campo: string, valorAnterior: string, valorNovo: string) {
@@ -83,6 +89,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const body = await req.json();
 
@@ -198,11 +206,16 @@ export async function POST(req: NextRequest) {
     updated_at: new Date().toISOString(),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logActivity(getUsuario(req), "Adicionou ao estoque", produtoNome, "estoque", data?.id);
+
   return NextResponse.json({ ok: true, data });
 }
 
 export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const { id, ...fields } = await req.json();
@@ -286,6 +299,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const { id } = await req.json();
@@ -299,5 +314,8 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabase.from("estoque").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logActivity(usuario, "Removeu do estoque", antes?.produto || "?", "estoque", id);
+
   return NextResponse.json({ ok: true });
 }

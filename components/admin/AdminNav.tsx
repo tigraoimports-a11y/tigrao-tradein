@@ -25,14 +25,14 @@ function isGroup(entry: NavEntry): entry is NavGroup {
 }
 
 const NAV: NavEntry[] = [
-  { href: "/admin", label: "Dashboard", icon: "📊", roles: ["admin"] },
+  { href: "/admin", label: "Dashboard", icon: "📊", roles: ["admin", "vendedor", "visualizador"] },
 
   // Financeiro
   {
-    label: "Financeiro", icon: "💰", roles: ["admin"],
+    label: "Financeiro", icon: "💰", roles: ["admin", "vendedor"],
     items: [
-      { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin"] },
-      { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin"] },
+      { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin", "vendedor", "visualizador"] },
+      { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin", "vendedor"] },
       { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
       { href: "/admin/recebiveis", label: "Recebíveis", icon: "💳", roles: ["admin"] },
       { href: "/admin/conciliacao", label: "Conciliação", icon: "🔍", roles: ["admin"] },
@@ -41,9 +41,9 @@ const NAV: NavEntry[] = [
 
   // Produtos
   {
-    label: "Produtos", icon: "📦", roles: ["admin", "estoque"],
+    label: "Produtos", icon: "📦", roles: ["admin", "estoque", "vendedor", "visualizador"],
     items: [
-      { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque"] },
+      { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque", "vendedor", "visualizador"] },
       { href: "/admin/precos", label: "Preços", icon: "🏷️", roles: ["admin"] },
       { href: "/admin/agendamento-precos", label: "Agendar Preços", icon: "📅", roles: ["admin"] },
       { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
@@ -53,9 +53,9 @@ const NAV: NavEntry[] = [
 
   // Operacional
   {
-    label: "Operacional", icon: "🚚", roles: ["admin", "estoque"],
+    label: "Operacional", icon: "🚚", roles: ["admin", "estoque", "vendedor"],
     items: [
-      { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque"] },
+      { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque", "vendedor"] },
       { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "🏷️", roles: ["admin", "estoque"] },
     ],
@@ -67,6 +67,15 @@ const NAV: NavEntry[] = [
     items: [
       { href: "/admin/mostruario", label: "Mostruário", icon: "🖼️", roles: ["admin"] },
       { href: "/admin/simulacoes", label: "Simulações", icon: "📱", roles: ["admin"] },
+    ],
+  },
+
+  // Sistema
+  {
+    label: "Sistema", icon: "⚙️", roles: ["admin"],
+    items: [
+      { href: "/admin/log", label: "Log de Atividades", icon: "📋", roles: ["admin"] },
+      { href: "/admin/usuarios", label: "Usuários", icon: "👥", roles: ["admin"] },
     ],
   },
 ];
