@@ -65,6 +65,7 @@ interface MostruarioConfig {
   mostrar_simular_troca: boolean;
   mostrar_parcelas_card: boolean;
   parcelas_card_qtd: number;
+  banners: { titulo: string; subtitulo: string; imagem_url: string; link: string }[];
 }
 
 /* ── Constants ── */
@@ -108,6 +109,7 @@ export default function MostruarioPage() {
     mostrar_simular_troca: true,
     mostrar_parcelas_card: true,
     parcelas_card_qtd: 12,
+    banners: [],
   });
 
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -377,6 +379,30 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
                   </select>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ── Banners Carrossel ── */}
+          <div className="border-t border-[#E8E8ED] pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase">Banners Carrossel</p>
+              <button onClick={() => setConfig({ ...config, banners: [...(config.banners || []), { titulo: "", subtitulo: "", imagem_url: "", link: "" }] })}
+                className="text-xs font-semibold text-[#E8740E]">+ Adicionar Banner</button>
+            </div>
+            {(config.banners || []).length === 0 && <p className="text-xs text-[#86868B]">Nenhum banner — o hero padrao sera exibido</p>}
+            <div className="space-y-3">
+              {(config.banners || []).map((b, i) => (
+                <div key={i} className="p-3 rounded-xl border border-[#E8E8ED] bg-[#FAFAFA] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#86868B]">Banner {i + 1}</span>
+                    <button onClick={() => { const nb = [...config.banners]; nb.splice(i, 1); setConfig({ ...config, banners: nb }); }} className="text-xs text-red-500 font-medium">Remover</button>
+                  </div>
+                  <input value={b.titulo} onChange={(e) => { const nb = [...config.banners]; nb[i] = { ...nb[i], titulo: e.target.value }; setConfig({ ...config, banners: nb }); }} placeholder="Titulo do banner" className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" />
+                  <input value={b.subtitulo} onChange={(e) => { const nb = [...config.banners]; nb[i] = { ...nb[i], subtitulo: e.target.value }; setConfig({ ...config, banners: nb }); }} placeholder="Subtitulo" className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" />
+                  <input value={b.imagem_url} onChange={(e) => { const nb = [...config.banners]; nb[i] = { ...nb[i], imagem_url: e.target.value }; setConfig({ ...config, banners: nb }); }} placeholder="URL da imagem de fundo (opcional)" className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" />
+                  <input value={b.link} onChange={(e) => { const nb = [...config.banners]; nb[i] = { ...nb[i], link: e.target.value }; setConfig({ ...config, banners: nb }); }} placeholder="Link (ex: /troca ou /produto/iphone-17)" className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" />
+                </div>
+              ))}
             </div>
           </div>
 

@@ -54,6 +54,7 @@ interface LojaConfig {
   mostrar_simular_troca?: boolean;
   mostrar_parcelas_card?: boolean;
   parcelas_card_qtd?: number;
+  banners?: { titulo: string; subtitulo: string; imagem_url: string; link: string }[];
 }
 
 interface LojaResponse {
@@ -104,6 +105,15 @@ export default function LojaPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+  const [bannerIdx, setBannerIdx] = useState(0);
+  const banners = config.banners || [];
+
+  // Auto-play banners
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const id = setInterval(() => setBannerIdx(i => (i + 1) % banners.length), 5000);
+    return () => clearInterval(id);
+  }, [banners.length]);
 
   // Carregar wishlist do localStorage
   useEffect(() => {
@@ -223,16 +233,46 @@ export default function LojaPage() {
         )}
       </header>
 
-      {/* ── Hero ── */}
-      <section className="relative overflow-hidden" style={{ background: `linear-gradient(to bottom, ${tema.heroBg}, ${tema.heroBg})`, color: tema.heroText }}>
-        <div className="max-w-[1280px] mx-auto px-4 py-12 sm:py-16 text-center relative z-10">
-          <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight leading-tight">{config.banner_titulo}</h1>
-          <p className="mt-3 text-[15px] sm:text-[17px] max-w-lg mx-auto" style={{ opacity: 0.7 }}>{config.banner_subtitulo}</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <Link href="/troca" style={{ backgroundColor: tema.accent }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-[14px] font-semibold transition-colors">🔄 Simular Troca</Link>
+      {/* ── Hero / Banner Carrossel ── */}
+      <section className="relative overflow-hidden" style={{ color: tema.heroText }}>
+        {banners.length > 0 ? (
+          <div className="relative">
+            {banners.map((b, i) => (
+              <div key={i} className={`transition-opacity duration-700 ${i === bannerIdx ? "opacity-100" : "opacity-0 absolute inset-0"}`}
+                style={{ background: b.imagem_url ? `url(${b.imagem_url}) center/cover` : `linear-gradient(to bottom, ${tema.heroBg}, ${tema.heroBg})` }}>
+                <div className="bg-black/30" style={{ background: b.imagem_url ? "rgba(0,0,0,0.4)" : "transparent" }}>
+                  <div className="max-w-[1280px] mx-auto px-4 py-12 sm:py-16 text-center relative z-10">
+                    <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight leading-tight text-white">{b.titulo || config.banner_titulo}</h1>
+                    <p className="mt-3 text-[15px] sm:text-[17px] max-w-lg mx-auto text-white/70">{b.subtitulo || config.banner_subtitulo}</p>
+                    {b.link && (
+                      <div className="mt-6"><Link href={b.link} style={{ backgroundColor: tema.accent }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-[14px] font-semibold">Ver mais</Link></div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {/* Dots */}
+            {banners.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                {banners.map((_, i) => (
+                  <button key={i} onClick={() => setBannerIdx(i)}
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${i === bannerIdx ? "bg-white scale-110" : "bg-white/40"}`} />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2" style={{ backgroundColor: tema.accent, opacity: 0.1 }} />
+        ) : (
+          <div style={{ background: `linear-gradient(to bottom, ${tema.heroBg}, ${tema.heroBg})` }}>
+            <div className="max-w-[1280px] mx-auto px-4 py-12 sm:py-16 text-center relative z-10">
+              <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight leading-tight">{config.banner_titulo}</h1>
+              <p className="mt-3 text-[15px] sm:text-[17px] max-w-lg mx-auto" style={{ opacity: 0.7 }}>{config.banner_subtitulo}</p>
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {config.mostrar_simular_troca !== false && <Link href="/troca" style={{ backgroundColor: tema.accent }} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-[14px] font-semibold transition-colors">🔄 Simular Troca</Link>}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none" style={{ backgroundColor: tema.accent, opacity: 0.1 }} />
       </section>
 
       {/* ── Categories ── */}
@@ -300,6 +340,20 @@ export default function LojaPage() {
           </div>
         )}
       </main>
+
+      {/* ── Instagram CTA ── */}
+      {config.footer_instagram && (
+        <section className="max-w-[1280px] mx-auto px-4 py-8">
+          <div className="rounded-2xl p-6 text-center" style={{ background: `linear-gradient(135deg, #833AB4, #E1306C, #F77737)` }}>
+            <p className="text-white text-[24px] font-bold">Siga-nos no Instagram</p>
+            <p className="text-white/80 text-[14px] mt-1">Novidades, promocoes e bastidores</p>
+            <a href={`https://instagram.com/${(config.footer_instagram || "").replace("@", "")}`} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 mt-4 px-6 py-2.5 rounded-full bg-white text-[#E1306C] text-[14px] font-bold hover:scale-105 transition-transform">
+              📸 {config.footer_instagram}
+            </a>
+          </div>
+        </section>
+      )}
 
       {/* ── Footer ── */}
       <footer style={{ backgroundColor: tema.bgSecondary, borderColor: tema.cardBorder }} className="border-t">

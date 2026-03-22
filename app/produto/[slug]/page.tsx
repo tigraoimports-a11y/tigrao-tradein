@@ -87,6 +87,8 @@ export default function ProdutoPage() {
 
   const [selectedVariacao, setSelectedVariacao] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState(1);
+  const [avisarWhatsApp, setAvisarWhatsApp] = useState("");
+  const [avisarEnviado, setAvisarEnviado] = useState(false);
   const [parcelaSel, setParcelaSel] = useState("pix");
 
   // Entrega
@@ -124,6 +126,18 @@ export default function ProdutoPage() {
   }, []);
 
   const produto = useMemo(() => produtos.find((p) => p.slug === slug) || null, [produtos, slug]);
+
+  // Registrar visualização
+  useEffect(() => {
+    if (produto) {
+      const viewedKey = `tigrao_viewed_${produto.slug}`;
+      if (!sessionStorage.getItem(viewedKey)) {
+        sessionStorage.setItem(viewedKey, "1");
+        fetch("/api/views", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ produto_slug: produto.slug, produto_nome: produto.nome }) }).catch(() => {});
+      }
+    }
+  }, [produto]);
 
   useEffect(() => {
     if (produto && produto.variacoes.length > 0 && !selectedVariacao) {
@@ -370,7 +384,25 @@ Poderia me ajudar?`;
                   </p>
                 </>
               ) : (
-                <p className="text-[20px] font-semibold" style={{ color: tema.accent }}>Consulte o preco</p>
+                <>
+                  <p className="text-[20px] font-semibold" style={{ color: tema.accent }}>Consulte o preco</p>
+                  {!avisarEnviado ? (
+                    <div className="mt-3 flex gap-2">
+                      <input value={avisarWhatsApp} onChange={(e) => setAvisarWhatsApp(e.target.value)} placeholder="Seu WhatsApp"
+                        className="flex-1 px-3 py-2 rounded-lg text-[13px] border" style={{ borderColor: tema.cardBorder, backgroundColor: tema.bg, color: tema.text }} />
+                      <button onClick={async () => {
+                        if (!avisarWhatsApp.trim()) return;
+                        await fetch("/api/notificacoes", { method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ produto_slug: slug, produto_nome: produto?.nome, whatsapp: avisarWhatsApp }) });
+                        setAvisarEnviado(true);
+                      }} className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white" style={{ backgroundColor: tema.accent }}>
+                        Avise-me
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[13px] text-green-600 font-medium">Pronto! Avisaremos quando disponivel.</p>
+                  )}
+                </>
               )}
             </div>
 
