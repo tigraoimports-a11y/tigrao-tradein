@@ -20,14 +20,13 @@ const VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:    "5521967442665",
   nicolas:  "5521995618747",
   bianca:   "5521972461357",
-  anuncio:  "5521995618747", // Meta Ads
-  direct:   "5521995618747", // Instagram Direct
-  story:    "5521995618747", // Instagram Stories
-  whatsapp: "5521995618747", // WhatsApp orgânico
+  anuncio:  "5521995618747",
+  direct:   "5521995618747",
+  story:    "5521995618747",
+  whatsapp: "5521995618747",
 };
 
 export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor?: string | null }) {
-  // Lê ?ref= diretamente da URL como fallback caso o prop do servidor não chegue
   const [vendedor] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const ref = new URLSearchParams(window.location.search).get("ref")?.toLowerCase();
@@ -75,7 +74,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   } as ConditionData);
   const [tradeInValue, setTradeInValue] = useState(0);
 
-  // Segundo aparelho usado (opcional)
   const [deviceType2, setDeviceType2] = useState<DeviceType>("iphone");
   const [usedModel2, setUsedModel2] = useState("");
   const [usedStorage2, setUsedStorage2] = useState("");
@@ -90,11 +88,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   const [clienteNome, setClienteNome] = useState("");
   const [clienteWhatsApp, setClienteWhatsApp] = useState("");
   const [clienteInstagram, setClienteInstagram] = useState("");
+  const [clienteOrigem, setClienteOrigem] = useState("");
   const [newModel, setNewModel] = useState("");
   const [newStorage, setNewStorage] = useState("");
   const [newPrice, setNewPrice] = useState(0);
 
-  // Valor total da troca (1 ou 2 aparelhos)
   const totalTradeInValue = tradeInValue + (hasSecondDevice ? tradeInValue2 : 0);
 
   useEffect(() => {
@@ -130,16 +128,13 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     deviceType: DeviceType;
   }) {
     if (step === 1) {
-      // Primeiro aparelho
       setDeviceType(data.deviceType);
       setUsedModel(data.usedModel);
       setUsedStorage(data.usedStorage);
       setCondition(data.condition);
       setTradeInValue(data.tradeInValue);
-      // Vai para step 1.5 (perguntar se quer adicionar segundo)
       setStep(1.5);
     } else {
-      // Segundo aparelho (step === 1.7)
       setDeviceType2(data.deviceType);
       setUsedModel2(data.usedModel);
       setUsedStorage2(data.usedStorage);
@@ -167,11 +162,22 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     clienteNome: string;
     clienteWhatsApp: string;
     clienteInstagram: string;
+    clienteOrigem: string;
   }) {
     setClienteNome(data.clienteNome);
     setClienteWhatsApp(data.clienteWhatsApp);
     setClienteInstagram(data.clienteInstagram);
+    setClienteOrigem(data.clienteOrigem);
     setStep(4);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Voltar para step 2 mantendo dados do usado (COTAR OUTRO MODELO)
+  function handleCotarOutro() {
+    setNewModel("");
+    setNewStorage("");
+    setNewPrice(0);
+    setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -184,7 +190,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
     setHasSecondDevice(false);
     setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
-    setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram("");
+    setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram(""); setClienteOrigem("");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -192,8 +198,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-8 h-8 border-[3px] border-[#0071E3] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[13px] text-[#86868B]">Carregando...</p>
+        <div className="w-8 h-8 border-[3px] border-[#E8740E] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[13px] text-[#888]">Carregando...</p>
       </div>
     );
   }
@@ -201,10 +207,10 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
   if (error) {
     return (
       <div className="text-center py-20">
-        <p className="text-[#FF3B30] text-[15px] mb-4">{error}</p>
+        <p className="text-[#E74C3C] text-[15px] mb-4">{error}</p>
         <button
           onClick={() => window.location.reload()}
-          className="px-6 py-3 rounded-xl bg-[#F5F5F7] text-[#1D1D1F] text-[15px] font-medium hover:bg-[#E8E8ED] transition-colors"
+          className="px-6 py-3 rounded-xl bg-[#141414] border border-[#2A2A2A] text-[#F5F5F5] text-[15px] font-medium hover:bg-[#1A1A1A] transition-colors"
         >
           Tentar novamente
         </button>
@@ -235,16 +241,16 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
         {step === 1.5 && (
           <div className="space-y-6 py-6">
             <div className="text-center">
-              <p className="text-[15px] text-[#86868B] mb-1">Aparelho avaliado com sucesso!</p>
-              <p className="text-xs text-[#86868B] mt-1">{usedModel} {usedStorage}</p>
+              <p className="text-[15px] text-[#888] mb-1">Aparelho avaliado com sucesso!</p>
+              <p className="text-xs text-[#555] mt-1">{usedModel} {usedStorage}</p>
             </div>
-            <div className="bg-[#F5F5F7] rounded-2xl p-6 text-center space-y-4">
-              <p className="text-[15px] font-semibold text-[#1D1D1F]">Deseja adicionar mais um aparelho na troca?</p>
-              <p className="text-[13px] text-[#86868B]">Voce pode dar ate 2 aparelhos usados para comprar 1 novo</p>
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-6 text-center space-y-4">
+              <p className="text-[15px] font-semibold text-[#F5F5F5]">Deseja adicionar mais um aparelho na troca?</p>
+              <p className="text-[13px] text-[#888]">Voce pode dar ate 2 aparelhos usados para comprar 1 novo</p>
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => setStep(1.7)}
-                  className="px-6 py-3 rounded-xl bg-white border border-[#D2D2D7] text-[#1D1D1F] font-semibold hover:bg-[#F5F5F7] transition-colors"
+                  className="px-6 py-3 rounded-xl bg-[#141414] border border-[#2A2A2A] text-[#F5F5F5] font-semibold hover:bg-[#1A1A1A] transition-colors"
                 >
                   Adicionar outro usado
                 </button>
@@ -264,7 +270,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
             <div className="bg-[#2ECC71]/10 border border-[#2ECC71]/30 rounded-xl px-4 py-3 mb-4">
               <p className="text-xs text-[#2ECC71] font-medium">1o aparelho: {usedModel} {usedStorage} — {formatBRL(tradeInValue)}</p>
             </div>
-            <p className="text-[17px] font-bold text-[#1D1D1F] mb-4">Agora avalie o 2o aparelho:</p>
+            <p className="text-[17px] font-bold text-[#F5F5F5] mb-4">Agora avalie o 2o aparelho:</p>
             <StepUsedDevice
               key={resetKey + 100}
               usedValues={usedData.usedValues}
@@ -315,10 +321,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp }: { vendedor
             clienteNome={clienteNome}
             clienteWhatsApp={clienteWhatsApp}
             clienteInstagram={clienteInstagram}
+            clienteOrigem={clienteOrigem}
             whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}
             validadeHoras={config.validadeHoras}
             vendedor={vendedor}
             onReset={handleReset}
+            onCotarOutro={handleCotarOutro}
           />
         )}
       </div>

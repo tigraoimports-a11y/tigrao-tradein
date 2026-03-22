@@ -16,10 +16,10 @@ export default function StepBar({ current }: { current: number }) {
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold transition-all duration-300 ${
                 current > step.num
-                  ? "bg-[#34C759] text-white"
+                  ? "bg-[#2ECC71] text-white"
                   : current === step.num
-                  ? "bg-[#0071E3] text-white"
-                  : "bg-[#F5F5F7] text-[#86868B]"
+                  ? "bg-[#E8740E] text-white"
+                  : "bg-[#141414] text-[#555] border border-[#2A2A2A]"
               }`}
             >
               {current > step.num ? (
@@ -32,7 +32,7 @@ export default function StepBar({ current }: { current: number }) {
             </div>
             <span
               className={`text-[11px] mt-1.5 font-medium transition-colors ${
-                current >= step.num ? "text-[#1D1D1F]" : "text-[#86868B]"
+                current >= step.num ? "text-[#F5F5F5]" : "text-[#555]"
               }`}
             >
               {step.label}
@@ -41,7 +41,7 @@ export default function StepBar({ current }: { current: number }) {
           {i < STEPS.length - 1 && (
             <div
               className={`flex-1 h-[2px] mx-3 mt-[-16px] rounded transition-colors duration-300 ${
-                current > step.num ? "bg-[#34C759]" : "bg-[#E8E8ED]"
+                current > step.num ? "bg-[#2ECC71]" : "bg-[#2A2A2A]"
               }`}
             />
           )}

@@ -5,14 +5,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   const vendedor = params.ref?.toLowerCase() || null;
 
   return (
-    <main className="min-h-dvh flex flex-col items-center px-4 py-8">
+    <main className="min-h-dvh flex flex-col items-center px-4 py-8 bg-[#0A0A0A]">
       <div className="w-full max-w-[440px]">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-[32px] font-bold tracking-tight text-[#1D1D1F]">
+          <h1 className="text-[32px] font-bold tracking-tight text-[#F5F5F5]">
             Trade-In
           </h1>
-          <p className="text-[15px] text-[#86868B] mt-1">
+          <p className="text-[15px] text-[#888] mt-1">
             Simule o valor da sua troca
           </p>
         </div>
@@ -21,13 +21,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
 
         {/* Footer */}
         <footer className="text-center mt-12 mb-6">
-          <p className="text-[13px] font-medium text-[#1D1D1F]">
+          <p className="text-[13px] font-medium text-[#F5F5F5]">
             TigraoImports
           </p>
-          <p className="text-[12px] text-[#86868B] mt-0.5">
+          <p className="text-[12px] text-[#888] mt-0.5">
             Barra da Tijuca, Rio de Janeiro
           </p>
-          <p className="text-[11px] text-[#86868B] mt-1">
+          <p className="text-[11px] text-[#555] mt-1">
             Produtos lacrados com garantia Apple e Nota Fiscal
           </p>
         </footer>

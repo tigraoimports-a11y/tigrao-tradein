@@ -35,7 +35,6 @@ export default function StepNewDevice({
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
 
-  // Compare states
   const [compareMode, setCompareMode] = useState(false);
   const [lineB, setLineB] = useState("");
   const [modelB, setModelB] = useState("");
@@ -67,7 +66,6 @@ export default function StepNewDevice({
     [products, model, storage]
   );
 
-  // Compare model B
   const modelsInLineB = useMemo(
     () => allModels.filter((m) => getLineFromModel(m) === lineB),
     [allModels, lineB]
@@ -81,34 +79,11 @@ export default function StepNewDevice({
     [products, modelB, storageB]
   );
 
-  function handleLineChange(l: string) {
-    setLine(l);
-    setModel("");
-    setStorage("");
-  }
-
-  function handleModelChange(m: string) {
-    setModel(m);
-    setStorage("");
-  }
-
-  function handleLineBChange(l: string) {
-    setLineB(l);
-    setModelB("");
-    setStorageB("");
-  }
-
-  function handleModelBChange(m: string) {
-    setModelB(m);
-    setStorageB("");
-  }
-
-  function cancelCompare() {
-    setCompareMode(false);
-    setLineB("");
-    setModelB("");
-    setStorageB("");
-  }
+  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); }
+  function handleLineBChange(l: string) { setLineB(l); setModelB(""); setStorageB(""); }
+  function handleModelBChange(m: string) { setModelB(m); setStorageB(""); }
+  function cancelCompare() { setCompareMode(false); setLineB(""); setModelB(""); setStorageB(""); }
 
   const canProceed = model && storage && price !== null;
   const bothSelected = canProceed && modelB && storageB && priceB !== null;
@@ -119,39 +94,27 @@ export default function StepNewDevice({
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="text-center">
-        <h2 className="text-[22px] font-bold text-[#1D1D1F] leading-tight">
-          Agora me diz, qual modelo você quer comprar?
+        <h2 className="text-[22px] font-bold text-[#F5F5F5] leading-tight">
+          Agora me diz, qual modelo voce quer comprar?
         </h2>
       </div>
 
-      {/* Linha */}
       <Section title="Linha do iPhone novo">
         <div className="grid grid-cols-3 gap-2">
           {lines.map((l) => (
-            <SelectButton
-              key={l}
-              selected={line === l}
-              onClick={() => handleLineChange(l)}
-            >
+            <SelectButton key={l} selected={line === l} onClick={() => handleLineChange(l)}>
               iPhone {l}
             </SelectButton>
           ))}
         </div>
       </Section>
 
-      {/* Modelo */}
       {line && modelsInLine.length > 0 && (
         <Section title="Modelo">
           <div className="grid grid-cols-1 gap-2">
             {modelsInLine.map((m) => (
-              <SelectButton
-                key={m}
-                selected={model === m}
-                onClick={() => handleModelChange(m)}
-                className="text-left"
-              >
+              <SelectButton key={m} selected={model === m} onClick={() => handleModelChange(m)} className="text-left">
                 {m}
               </SelectButton>
             ))}
@@ -159,7 +122,6 @@ export default function StepNewDevice({
         </Section>
       )}
 
-      {/* Storage com preço */}
       {model && storages.length > 0 && (
         <Section title="Armazenamento">
           <div className="flex gap-2 flex-wrap">
@@ -169,15 +131,15 @@ export default function StepNewDevice({
                 <button
                   key={s}
                   onClick={() => setStorage(s)}
-                  className={`flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1 ${
+                  className={`flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1 border ${
                     storage === s
-                      ? "bg-[#0071E3] text-white shadow-sm"
-                      : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"
+                      ? "bg-[#1E1208] text-[#E8740E] border-[#E8740E]"
+                      : "bg-[#141414] text-[#F5F5F5] border-[#2A2A2A] hover:bg-[#1A1A1A]"
                   }`}
                 >
                   <span className="font-semibold">{s}</span>
                   {p && (
-                    <span className={`text-[12px] font-normal ${storage === s ? "text-white/70" : "text-[#86868B]"}`}>
+                    <span className={`text-[12px] font-normal ${storage === s ? "text-[#E8740E]/70" : "text-[#888]"}`}>
                       {formatBRL(p)}
                     </span>
                   )}
@@ -188,27 +150,22 @@ export default function StepNewDevice({
         </Section>
       )}
 
-      {/* Botão comparar */}
       {canProceed && !compareMode && (
         <button
           onClick={() => setCompareMode(true)}
-          className="w-full py-3 rounded-2xl text-[14px] font-medium text-[#0071E3] bg-[#0071E3]/8 hover:bg-[#0071E3]/15 transition-all duration-200 border border-[#0071E3]/20"
+          className="w-full py-3 rounded-2xl text-[14px] font-medium text-[#E8740E] bg-[#E8740E]/8 hover:bg-[#E8740E]/15 transition-all duration-200 border border-[#E8740E]/20"
         >
           Comparar com outro modelo
         </button>
       )}
 
-      {/* Seletor modelo B */}
       {compareMode && (
-        <div className="border border-[#D2D2D7] rounded-2xl p-4 space-y-5 animate-fadeIn">
+        <div className="border border-[#2A2A2A] rounded-2xl p-4 space-y-5 animate-fadeIn bg-[#141414]">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B]">
+            <p className="text-[11px] font-semibold tracking-wider uppercase text-[#888]">
               Segundo modelo
             </p>
-            <button
-              onClick={cancelCompare}
-              className="text-[12px] text-[#86868B] hover:text-[#E74C3C] transition-colors"
-            >
+            <button onClick={cancelCompare} className="text-[12px] text-[#888] hover:text-[#E74C3C] transition-colors">
               Cancelar
             </button>
           </div>
@@ -244,15 +201,15 @@ export default function StepNewDevice({
                     <button
                       key={s}
                       onClick={() => setStorageB(s)}
-                      className={`flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1 ${
+                      className={`flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 flex flex-col items-center gap-1 border ${
                         storageB === s
-                          ? "bg-[#0071E3] text-white shadow-sm"
-                          : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"
+                          ? "bg-[#1E1208] text-[#E8740E] border-[#E8740E]"
+                          : "bg-[#141414] text-[#F5F5F5] border-[#2A2A2A] hover:bg-[#1A1A1A]"
                       }`}
                     >
                       <span className="font-semibold">{s}</span>
                       {p && (
-                        <span className={`text-[12px] font-normal ${storageB === s ? "text-white/70" : "text-[#86868B]"}`}>
+                        <span className={`text-[12px] font-normal ${storageB === s ? "text-[#E8740E]/70" : "text-[#888]"}`}>
                           {formatBRL(p)}
                         </span>
                       )}
@@ -265,7 +222,6 @@ export default function StepNewDevice({
         </div>
       )}
 
-      {/* Comparação lado a lado */}
       {bothSelected && diffA !== null && diffB !== null && (() => {
         const quoteA = calculateQuote(tradeInValue, price!);
         const quoteB = calculateQuote(tradeInValue, priceB!);
@@ -273,55 +229,53 @@ export default function StepNewDevice({
 
         return (
         <div className="animate-fadeIn">
-          <p className="text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3">
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-[#888] mb-3">
             Comparacao
           </p>
           <div className="grid grid-cols-2 gap-3">
-            {/* Card A */}
-            <div className="bg-[#F5F5F7] rounded-2xl p-4 flex flex-col gap-2">
-              <p className="text-[13px] font-semibold text-[#1D1D1F] leading-tight">{model}</p>
-              <p className="text-[12px] text-[#86868B]">{storage}</p>
-              <p className="text-[15px] font-bold text-[#1D1D1F]">{fmt(price!)}</p>
-              <div className="border-t border-[#D2D2D7] pt-2 mt-1 space-y-1">
-                <p className="text-[11px] text-[#86868B]">Voce paga:</p>
-                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffA)} <span className="text-[11px] font-normal">PIX</span></p>
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 flex flex-col gap-2">
+              <p className="text-[13px] font-semibold text-[#F5F5F5] leading-tight">{model}</p>
+              <p className="text-[12px] text-[#888]">{storage}</p>
+              <p className="text-[15px] font-bold text-[#F5F5F5]">{fmt(price!)}</p>
+              <div className="border-t border-[#2A2A2A] pt-2 mt-1 space-y-1">
+                <p className="text-[11px] text-[#888]">Voce paga:</p>
+                <p className="text-[16px] font-bold text-[#2ECC71]">{fmt(diffA)} <span className="text-[11px] font-normal">PIX</span></p>
                 {[6, 12, 21].map(n => {
                   const inst = getInst(quoteA, n);
                   return inst ? (
-                    <p key={n} className="text-[11px] text-[#6E6E73]">
-                      {n}x de <span className="font-semibold text-[#1D1D1F]">{fmt(inst.valorParcela)}</span>
+                    <p key={n} className="text-[11px] text-[#888]">
+                      {n}x de <span className="font-semibold text-[#F5F5F5]">{fmt(inst.valorParcela)}</span>
                     </p>
                   ) : null;
                 })}
               </div>
               <button
                 onClick={() => { cancelCompare(); onNext({ newModel: model, newStorage: storage, newPrice: price! }); }}
-                className="mt-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] transition-all"
+                className="mt-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-all"
               >
                 Escolher este
               </button>
             </div>
 
-            {/* Card B */}
-            <div className="bg-[#F5F5F7] rounded-2xl p-4 flex flex-col gap-2">
-              <p className="text-[13px] font-semibold text-[#1D1D1F] leading-tight">{modelB}</p>
-              <p className="text-[12px] text-[#86868B]">{storageB}</p>
-              <p className="text-[15px] font-bold text-[#1D1D1F]">{fmt(priceB!)}</p>
-              <div className="border-t border-[#D2D2D7] pt-2 mt-1 space-y-1">
-                <p className="text-[11px] text-[#86868B]">Voce paga:</p>
-                <p className="text-[16px] font-bold text-[#34C759]">{fmt(diffB)} <span className="text-[11px] font-normal">PIX</span></p>
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 flex flex-col gap-2">
+              <p className="text-[13px] font-semibold text-[#F5F5F5] leading-tight">{modelB}</p>
+              <p className="text-[12px] text-[#888]">{storageB}</p>
+              <p className="text-[15px] font-bold text-[#F5F5F5]">{fmt(priceB!)}</p>
+              <div className="border-t border-[#2A2A2A] pt-2 mt-1 space-y-1">
+                <p className="text-[11px] text-[#888]">Voce paga:</p>
+                <p className="text-[16px] font-bold text-[#2ECC71]">{fmt(diffB)} <span className="text-[11px] font-normal">PIX</span></p>
                 {[6, 12, 21].map(n => {
                   const inst = getInst(quoteB, n);
                   return inst ? (
-                    <p key={n} className="text-[11px] text-[#6E6E73]">
-                      {n}x de <span className="font-semibold text-[#1D1D1F]">{fmt(inst.valorParcela)}</span>
+                    <p key={n} className="text-[11px] text-[#888]">
+                      {n}x de <span className="font-semibold text-[#F5F5F5]">{fmt(inst.valorParcela)}</span>
                     </p>
                   ) : null;
                 })}
               </div>
               <button
                 onClick={() => { cancelCompare(); onNext({ newModel: modelB, newStorage: storageB, newPrice: priceB! }); }}
-                className="mt-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] transition-all"
+                className="mt-1 py-2.5 rounded-xl text-[13px] font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-all"
               >
                 Escolher este
               </button>
@@ -331,24 +285,17 @@ export default function StepNewDevice({
         );
       })()}
 
-      {/* Botões */}
       <div className="flex gap-3">
         <button
           onClick={onBack}
-          className="flex-1 py-4 rounded-2xl text-[15px] font-semibold text-[#6E6E73] bg-[#F5F5F7] hover:bg-[#E8E8ED] transition-all duration-200"
+          className="flex-1 py-4 rounded-2xl text-[15px] font-semibold text-[#888] bg-[#141414] border border-[#2A2A2A] hover:bg-[#1A1A1A] transition-all duration-200"
         >
           Voltar
         </button>
         {canProceed && !compareMode && (
           <button
-            onClick={() =>
-              onNext({
-                newModel: model,
-                newStorage: storage,
-                newPrice: price,
-              })
-            }
-            className="flex-[2] py-4 rounded-2xl text-[15px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] transition-all duration-200 active:scale-[0.98]"
+            onClick={() => onNext({ newModel: model, newStorage: storage, newPrice: price })}
+            className="flex-[2] py-4 rounded-2xl text-[15px] font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-all duration-200 active:scale-[0.98]"
           >
             Ver cotacao
           </button>
@@ -361,7 +308,7 @@ export default function StepNewDevice({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="animate-fadeIn">
-      <label className="block text-[11px] font-semibold tracking-wider uppercase text-[#86868B] mb-3">
+      <label className="block text-[11px] font-semibold tracking-wider uppercase text-[#888] mb-3">
         {title}
       </label>
       {children}
@@ -383,10 +330,10 @@ function SelectButton({
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 ${
+      className={`px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 border ${
         selected
-          ? "bg-[#0071E3] text-white shadow-sm"
-          : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"
+          ? "bg-[#1E1208] text-[#E8740E] border-[#E8740E]"
+          : "bg-[#141414] text-[#F5F5F5] border-[#2A2A2A] hover:bg-[#1A1A1A]"
       } ${className}`}
     >
       {children}

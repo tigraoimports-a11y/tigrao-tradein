@@ -49,7 +49,6 @@ export default function StepUsedDevice({
   const [storage, setStorage] = useState("");
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
 
-  // iPhone condition fields
   const [battery, setBattery] = useState<number | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none" | "one" | "multiple" | null>(null);
   const [sideScratch, setSideScratch] = useState<"none" | "one" | "multiple" | null>(null);
@@ -60,7 +59,6 @@ export default function StepUsedDevice({
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean | null>(null);
 
-  // Filter to iPhone models only
   const filteredUsedValues = useMemo(() => {
     return usedValues.filter((v) => v.modelo.startsWith("iPhone"));
   }, [usedValues]);
@@ -93,7 +91,6 @@ export default function StepUsedDevice({
     [filteredUsedValues, model, storage]
   );
 
-  // Build condition object
   const iphoneCondition: ConditionData = {
     screenScratch: screenScratch ?? "none",
     sideScratch: sideScratch ?? "none",
@@ -122,84 +119,58 @@ export default function StepUsedDevice({
     model.toLowerCase().includes(m.toLowerCase())
   );
 
-  // Validation: all fields required
   const batteryFilled = battery !== null && battery >= 1 && battery <= 100;
-
   const allConditionsFilled = screenScratch !== null && sideScratch !== null && peeling !== null && batteryFilled;
-
   const warrantyFilled = hasWarranty === false || (hasWarranty === true && warrantyMonth !== null);
   const partsReplacedOk = partsReplaced === "no" || partsReplaced === "apple";
   const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && partsReplacedOk && allConditionsFilled && warrantyFilled && hasOriginalBox !== null;
 
   function handleLineChange(l: string) {
-    setLine(l);
-    setModel("");
-    setStorage("");
-    setHasDamage(null);
+    setLine(l); setModel(""); setStorage(""); setHasDamage(null);
   }
 
   function handleModelChange(m: string) {
-    setModel(m);
-    setStorage("");
-    setHasDamage(null);
+    setModel(m); setStorage(""); setHasDamage(null);
   }
 
   return (
     <div className="space-y-8">
-      {/* Titulo principal */}
-      <h2 className="text-[20px] font-bold text-[#1D1D1F]">
+      <h2 className="text-[20px] font-bold text-[#F5F5F5]">
         Qual é o modelo do seu usado?
       </h2>
 
-      {/* Linha */}
       <Section title="Linha do seu iPhone">
         <div className="grid grid-cols-3 gap-2">
           {lines.map((l) => (
-            <SelectButton
-              key={l}
-              selected={line === l}
-              onClick={() => handleLineChange(l)}
-            >
+            <SelectButton key={l} selected={line === l} onClick={() => handleLineChange(l)}>
               {`iPhone ${l}`}
             </SelectButton>
           ))}
         </div>
       </Section>
 
-      {/* Modelo dentro da linha */}
       {line && modelsInLine.length > 0 && (
         <Section title="Modelo">
           <div className="grid grid-cols-1 gap-2">
             {modelsInLine.map((m) => (
-              <SelectButton
-                key={m}
-                selected={model === m}
-                onClick={() => handleModelChange(m)}
-                className="text-left"
-              >
+              <SelectButton key={m} selected={model === m} onClick={() => handleModelChange(m)} className="text-left">
                 {m}
               </SelectButton>
             ))}
           </div>
           {isExcluded && (
-            <p className="mt-3 text-[13px] text-[#FF3B30] font-medium">
+            <p className="mt-3 text-[13px] text-[#E74C3C] font-medium">
               Este modelo nao e aceito no programa de trade-in.
             </p>
           )}
         </Section>
       )}
 
-      {/* Storage */}
       {model && !isExcluded && storages.length > 0 && (
         <Section title="Armazenamento">
           <div className="flex gap-2 flex-wrap">
             {storages.map((s) => (
-              <SelectButton
-                key={s}
-                selected={storage === s}
-                onClick={() => setStorage(s)}
-                className="flex-1 min-w-[80px]"
-              >
+              <SelectButton key={s} selected={storage === s} onClick={() => setStorage(s)} className="flex-1 min-w-[80px]">
                 {s}
               </SelectButton>
             ))}
@@ -207,30 +178,19 @@ export default function StepUsedDevice({
         </Section>
       )}
 
-      {/* Dano / Defeito - BLOQUEIO */}
       {model && storage && !isExcluded && (
         <Section title="O aparelho esta trincado, quebrado ou com defeito?">
           <div className="flex gap-2">
-            <SelectButton
-              selected={hasDamage === false}
-              onClick={() => setHasDamage(false)}
-              className="flex-1"
-              variant="success"
-            >
+            <SelectButton selected={hasDamage === false} onClick={() => setHasDamage(false)} className="flex-1" variant="success">
               Nao
             </SelectButton>
-            <SelectButton
-              selected={hasDamage === true}
-              onClick={() => setHasDamage(true)}
-              className="flex-1"
-              variant="error"
-            >
+            <SelectButton selected={hasDamage === true} onClick={() => setHasDamage(true)} className="flex-1" variant="error">
               Sim
             </SelectButton>
           </div>
           {hasDamage === true && (
-            <div className="mt-4 bg-[#FFF5F5] border border-[#FF3B30]/20 rounded-2xl p-4 text-center">
-              <p className="text-[15px] font-semibold text-[#FF3B30]">
+            <div className="mt-4 bg-[#E74C3C]/10 border border-[#E74C3C]/30 rounded-2xl p-4 text-center">
+              <p className="text-[15px] font-semibold text-[#E74C3C]">
                 Infelizmente nao aceitamos aparelhos com tela trincada, quebrada ou com defeito na troca.
               </p>
             </div>
@@ -238,12 +198,10 @@ export default function StepUsedDevice({
         </Section>
       )}
 
-      {/* Condicao - so aparece se NAO tem dano */}
       {model && storage && !isExcluded && hasDamage === false && (
         <>
-          {/* Bateria */}
           <Section title="Saude da bateria">
-            <div className="bg-[#F5F5F7] rounded-2xl p-4 space-y-3">
+            <div className="bg-[#141414] border border-[#2A2A2A] rounded-2xl p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <input
@@ -258,38 +216,31 @@ export default function StepUsedDevice({
                       setBattery(val);
                     }}
                     placeholder="Ex: 87"
-                    className="w-full px-4 py-3 pr-10 rounded-xl border border-[#D2D2D7] bg-white text-[20px] font-bold text-center text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20"
+                    className="w-full px-4 py-3 pr-10 rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] text-[20px] font-bold text-center text-[#F5F5F5] focus:outline-none focus:border-[#E8740E] focus:ring-2 focus:ring-[#E8740E]/20"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold text-[#86868B]">%</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold text-[#888]">%</span>
                 </div>
               </div>
-              {/* Passo a passo */}
-              <div className="bg-white rounded-xl p-3 border border-[#E5E5EA]">
-                <p className="text-[12px] font-semibold text-[#1D1D1F] mb-1.5">
+              <div className="bg-[#0A0A0A] rounded-xl p-3 border border-[#2A2A2A]">
+                <p className="text-[12px] font-semibold text-[#F5F5F5] mb-1.5">
                   Como descobrir a saude da bateria:
                 </p>
-                <div className="text-[11px] text-[#6E6E73] space-y-1">
-                  <p>1. Abra <strong>Ajustes</strong> no seu iPhone</p>
-                  <p>2. Toque em <strong>Bateria</strong></p>
-                  <p>3. Toque em <strong>Saude e Carregamento da Bateria</strong></p>
-                  <p>4. Veja o valor em <strong>Capacidade Maxima</strong></p>
+                <div className="text-[11px] text-[#888] space-y-1">
+                  <p>1. Abra <strong className="text-[#F5F5F5]">Ajustes</strong> no seu iPhone</p>
+                  <p>2. Toque em <strong className="text-[#F5F5F5]">Bateria</strong></p>
+                  <p>3. Toque em <strong className="text-[#F5F5F5]">Saude e Carregamento da Bateria</strong></p>
+                  <p>4. Veja o valor em <strong className="text-[#F5F5F5]">Capacidade Maxima</strong></p>
                 </div>
               </div>
             </div>
           </Section>
 
-          {/* Riscos na tela */}
           {batteryFilled && (
           <Section title="Riscos na tela">
             <div className="flex gap-2">
               {([["none", "Nenhum"], ["one", "1 risco"], ["multiple", "2 ou mais"]] as const).map(
                 ([val, label]) => (
-                  <SelectButton
-                    key={val}
-                    selected={screenScratch === val}
-                    onClick={() => setScreenScratch(val)}
-                    className="flex-1"
-                  >
+                  <SelectButton key={val} selected={screenScratch === val} onClick={() => setScreenScratch(val)} className="flex-1">
                     {label}
                   </SelectButton>
                 )
@@ -298,18 +249,12 @@ export default function StepUsedDevice({
           </Section>
           )}
 
-          {/* Riscos laterais */}
           {screenScratch !== null && (
           <Section title="Riscos laterais">
             <div className="flex gap-2">
               {([["none", "Nenhum"], ["one", "1 risco"], ["multiple", "2 ou mais"]] as const).map(
                 ([val, label]) => (
-                  <SelectButton
-                    key={val}
-                    selected={sideScratch === val}
-                    onClick={() => setSideScratch(val)}
-                    className="flex-1"
-                  >
+                  <SelectButton key={val} selected={sideScratch === val} onClick={() => setSideScratch(val)} className="flex-1">
                     {label}
                   </SelectButton>
                 )
@@ -318,18 +263,12 @@ export default function StepUsedDevice({
           </Section>
           )}
 
-          {/* Descascado/Amassado */}
           {sideScratch !== null && (
           <Section title="Descascado / Amassado">
             <div className="flex gap-2">
               {([["none", "Nao"], ["light", "Leve"], ["heavy", "Forte"]] as const).map(
                 ([val, label]) => (
-                  <SelectButton
-                    key={val}
-                    selected={peeling === val}
-                    onClick={() => setPeeling(val)}
-                    className="flex-1"
-                  >
+                  <SelectButton key={val} selected={peeling === val} onClick={() => setPeeling(val)} className="flex-1">
                     {label}
                   </SelectButton>
                 )
@@ -338,35 +277,22 @@ export default function StepUsedDevice({
           </Section>
           )}
 
-          {/* Pecas trocadas */}
           {peeling !== null && (
           <Section title="O aparelho ja teve alguma peca trocada?">
             <div className="grid grid-cols-1 gap-2">
-              <SelectButton
-                selected={partsReplaced === "no"}
-                onClick={() => setPartsReplaced("no")}
-                variant="success"
-              >
+              <SelectButton selected={partsReplaced === "no"} onClick={() => setPartsReplaced("no")} variant="success">
                 Nao
               </SelectButton>
-              <SelectButton
-                selected={partsReplaced === "apple"}
-                onClick={() => setPartsReplaced("apple")}
-                variant="success"
-              >
+              <SelectButton selected={partsReplaced === "apple"} onClick={() => setPartsReplaced("apple")} variant="success">
                 Sim, na Apple (autorizada)
               </SelectButton>
-              <SelectButton
-                selected={partsReplaced === "thirdParty"}
-                onClick={() => setPartsReplaced("thirdParty")}
-                variant="error"
-              >
+              <SelectButton selected={partsReplaced === "thirdParty"} onClick={() => setPartsReplaced("thirdParty")} variant="error">
                 Sim, fora da Apple
               </SelectButton>
             </div>
             {partsReplaced === "thirdParty" && (
-              <div className="mt-4 bg-[#FFF5F5] border border-[#FF3B30]/20 rounded-2xl p-4 text-center">
-                <p className="text-[15px] font-semibold text-[#FF3B30]">
+              <div className="mt-4 bg-[#E74C3C]/10 border border-[#E74C3C]/30 rounded-2xl p-4 text-center">
+                <p className="text-[15px] font-semibold text-[#E74C3C]">
                   Infelizmente nao aceitamos aparelhos com pecas trocadas fora da rede autorizada Apple.
                 </p>
               </div>
@@ -374,53 +300,31 @@ export default function StepUsedDevice({
           </Section>
           )}
 
-          {/* Garantia Apple */}
           {partsReplacedOk && (
           <Section title="Ainda esta na garantia Apple de 12 meses?">
             <div className="flex gap-2">
-              <SelectButton
-                selected={hasWarranty === false}
-                onClick={() => { setHasWarranty(false); setWarrantyMonth(null); }}
-                className="flex-1"
-              >
+              <SelectButton selected={hasWarranty === false} onClick={() => { setHasWarranty(false); setWarrantyMonth(null); }} className="flex-1">
                 Nao
               </SelectButton>
-              <SelectButton
-                selected={hasWarranty === true}
-                onClick={() => setHasWarranty(true)}
-                className="flex-1"
-                variant="success"
-              >
+              <SelectButton selected={hasWarranty === true} onClick={() => setHasWarranty(true)} className="flex-1" variant="success">
                 Sim
               </SelectButton>
             </div>
           </Section>
           )}
 
-          {/* Garantia mes/ano */}
           {hasWarranty === true && (
             <Section title="Ate qual mes vai a garantia do seu aparelho?">
               <div className="flex gap-2 mb-3">
                 {[new Date().getFullYear(), new Date().getFullYear() + 1].map((y) => (
-                  <SelectButton
-                    key={y}
-                    selected={warrantyYear === y}
-                    onClick={() => setWarrantyYear(y)}
-                    className="flex-1"
-                    variant="success"
-                  >
+                  <SelectButton key={y} selected={warrantyYear === y} onClick={() => setWarrantyYear(y)} className="flex-1" variant="success">
                     {y}
                   </SelectButton>
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {MONTHS.map((m, i) => (
-                  <SelectButton
-                    key={i}
-                    selected={warrantyMonth === i + 1}
-                    onClick={() => setWarrantyMonth(i + 1)}
-                    variant="success"
-                  >
+                  <SelectButton key={i} selected={warrantyMonth === i + 1} onClick={() => setWarrantyMonth(i + 1)} variant="success">
                     {m}
                   </SelectButton>
                 ))}
@@ -428,23 +332,13 @@ export default function StepUsedDevice({
             </Section>
           )}
 
-          {/* Caixa original */}
           {warrantyFilled && (
           <Section title="Ainda tem a caixa original do aparelho?">
             <div className="flex gap-2">
-              <SelectButton
-                selected={hasOriginalBox === true}
-                onClick={() => setHasOriginalBox(true)}
-                className="flex-1"
-                variant="success"
-              >
+              <SelectButton selected={hasOriginalBox === true} onClick={() => setHasOriginalBox(true)} className="flex-1" variant="success">
                 Sim
               </SelectButton>
-              <SelectButton
-                selected={hasOriginalBox === false}
-                onClick={() => setHasOriginalBox(false)}
-                className="flex-1"
-              >
+              <SelectButton selected={hasOriginalBox === false} onClick={() => setHasOriginalBox(false)} className="flex-1">
                 Nao
               </SelectButton>
             </div>
@@ -453,13 +347,12 @@ export default function StepUsedDevice({
         </>
       )}
 
-      {/* Botao proximo */}
       {canProceed && (
         <button
           onClick={() =>
             onNext({ usedModel: model, usedStorage: storage, condition: iphoneCondition, tradeInValue, deviceType: "iphone" })
           }
-          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] transition-all duration-200 active:scale-[0.98]"
+          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white bg-[#E8740E] hover:bg-[#F5A623] transition-all duration-200 active:scale-[0.98]"
         >
           Continuar
         </button>
@@ -468,12 +361,10 @@ export default function StepUsedDevice({
   );
 }
 
-// Reusable components
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="animate-fadeIn">
-      <label className="block text-[14px] font-bold text-[#1D1D1F] mb-3 text-center">
+      <label className="block text-[14px] font-bold text-[#F5F5F5] mb-3 text-center">
         {title}
       </label>
       {children}
@@ -495,9 +386,9 @@ function SelectButton({
   variant?: "default" | "success" | "error";
 }) {
   const selectedColors = {
-    default: "bg-[#0071E3] text-white shadow-sm",
-    success: "bg-[#34C759] text-white shadow-sm",
-    error: "bg-[#FF3B30] text-white shadow-sm",
+    default: "bg-[#1E1208] text-[#E8740E] border border-[#E8740E]",
+    success: "bg-[#2ECC71]/15 text-[#2ECC71] border border-[#2ECC71]/50",
+    error: "bg-[#E74C3C]/15 text-[#E74C3C] border border-[#E74C3C]/50",
   };
 
   return (
@@ -506,7 +397,7 @@ function SelectButton({
       className={`px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 ${
         selected
           ? selectedColors[variant]
-          : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"
+          : "bg-[#141414] text-[#F5F5F5] border border-[#2A2A2A] hover:bg-[#1A1A1A]"
       } ${className}`}
     >
       {children}
