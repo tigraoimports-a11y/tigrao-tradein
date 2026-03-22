@@ -1715,32 +1715,63 @@ export default function VendasPage() {
                 </div>
                 <div className="flex gap-3 items-center text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
-                  {tab === "andamento" && selecionadas.size > 0 && (
-                    <button
-                      disabled={finalizandoLote}
-                      onClick={async () => {
-                        if (!confirm(`Finalizar ${selecionadas.size} venda(s) selecionada(s)?`)) return;
-                        setFinalizandoLote(true);
-                        let ok = 0;
-                        for (const id of selecionadas) {
-                          try {
-                            await fetch("/api/vendas", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
-                              body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
-                            });
-                            ok++;
-                          } catch {}
-                        }
-                        setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
-                        setSelecionadas(new Set());
-                        setFinalizandoLote(false);
-                        setMsg(`${ok} venda(s) finalizada(s) com sucesso!`);
-                      }}
-                      className="px-4 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
-                    >
-                      {finalizandoLote ? "Finalizando..." : `✅ Finalizar ${selecionadas.size} selecionada(s)`}
-                    </button>
+                  {selecionadas.size > 0 && (
+                    <div className="flex gap-2">
+                      {tab === "andamento" && (
+                        <button
+                          disabled={finalizandoLote}
+                          onClick={async () => {
+                            if (!confirm(`Finalizar ${selecionadas.size} venda(s) selecionada(s)?`)) return;
+                            setFinalizandoLote(true);
+                            let ok = 0;
+                            for (const id of selecionadas) {
+                              try {
+                                await fetch("/api/vendas", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
+                                });
+                                ok++;
+                              } catch {}
+                            }
+                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
+                            setSelecionadas(new Set());
+                            setFinalizandoLote(false);
+                            setMsg(`${ok} venda(s) finalizada(s) com sucesso!`);
+                          }}
+                          className="px-4 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
+                        >
+                          {finalizandoLote ? "Finalizando..." : `✅ Finalizar ${selecionadas.size} selecionada(s)`}
+                        </button>
+                      )}
+                      {(tab === "finalizadas" || tab === "hoje") && (
+                        <button
+                          disabled={finalizandoLote}
+                          onClick={async () => {
+                            if (!confirm(`Mover ${selecionadas.size} venda(s) para Pendentes?`)) return;
+                            setFinalizandoLote(true);
+                            let ok = 0;
+                            for (const id of selecionadas) {
+                              try {
+                                await fetch("/api/vendas", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  body: JSON.stringify({ id, status_pagamento: "AGUARDANDO" }),
+                                });
+                                ok++;
+                              } catch {}
+                            }
+                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+                            setSelecionadas(new Set());
+                            setFinalizandoLote(false);
+                            setMsg(`${ok} venda(s) movida(s) para Pendentes!`);
+                          }}
+                          className="px-4 py-1.5 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition-colors"
+                        >
+                          {finalizandoLote ? "Movendo..." : `⏳ Mover ${selecionadas.size} para Pendentes`}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {(tab === "finalizadas" || tab === "hoje") && filtered.length > 0 && (
                     <>
@@ -1757,7 +1788,7 @@ export default function VendasPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                        {tab === "andamento" && (
+                        {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
                           <th className="px-3 py-3 w-8">
                             <input
                               type="checkbox"
@@ -1804,7 +1835,7 @@ export default function VendasPage() {
                               className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
-                              {tab === "andamento" && (
+                              {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
                                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                                   <input
                                     type="checkbox"
