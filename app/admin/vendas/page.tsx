@@ -76,7 +76,27 @@ export default function VendasPage() {
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
     // Serial e IMEI
     serial_no: "", imei: "",
+    // CEP e endereço
+    cep: "", bairro: "", cidade: "", uf: "",
   });
+
+  // CEP auto-fill
+  const [cepLoading, setCepLoading] = useState(false);
+  const fetchCep = useCallback(async (cep: string) => {
+    const clean = cep.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.erro) {
+          setForm((f) => ({ ...f, bairro: data.bairro || "", cidade: data.localidade || "", uf: data.uf || "" }));
+        }
+      }
+    } catch { /* ignore */ }
+    setCepLoading(false);
+  }, []);
 
   // Carrinho de produtos (multi-produto na mesma venda)
   // Payment fields are GLOBAL (in form state), not per-product
@@ -428,6 +448,11 @@ export default function VendasPage() {
       cnpj: form.cnpj || null,
       email: form.email || null,
       endereco: form.endereco || null,
+      cep: form.cep?.replace(/\D/g, "") || null,
+      bairro: form.bairro || null,
+      cidade: form.cidade || null,
+      uf: form.uf || null,
+      local: form.local || null,
       origem: form.tipo === "ATACADO" ? "ATACADO" : form.origem,
       tipo: gTemTroca ? "UPGRADE" : form.tipo,
       produto: prodFields.produto,
@@ -440,7 +465,6 @@ export default function VendasPage() {
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
-      local: form.local || null,
       produto_na_troca: gTemTroca ? String(gValorTroca) : null,
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
@@ -531,7 +555,6 @@ export default function VendasPage() {
       fornecedor: p.fornecedor,
       custo: p.custo,
       preco_vendido: p.preco_vendido,
-      local: p.local,
       serial_no: p.serial_no,
       imei: p.imei,
     }));
@@ -749,6 +772,10 @@ export default function VendasPage() {
       troca_fonte: "",
       serial_no: "",
       imei: v.imei || "",
+      cep: "",
+      bairro: "",
+      cidade: "",
+      uf: "",
     });
     setCatSel("");
     setEstoqueId("");
@@ -1020,6 +1047,37 @@ export default function VendasPage() {
               {form.pessoa === "PJ" && (
                 <div><p className={labelCls}>Endereço</p><input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereço completo" className={inputCls} /></div>
               )}
+
+              {/* CEP + Local */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
+                  <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option>
+                </select></div>
+                <div>
+                  <p className={labelCls}>CEP</p>
+                  <input
+                    value={form.cep}
+                    onChange={(e) => {
+                      let v = e.target.value.replace(/\D/g, "").slice(0, 8);
+                      if (v.length > 5) v = v.slice(0, 5) + "-" + v.slice(5);
+                      set("cep", v);
+                      if (v.replace(/\D/g, "").length === 8) fetchCep(v);
+                    }}
+                    placeholder="00000-000"
+                    className={inputCls}
+                    maxLength={9}
+                  />
+                </div>
+                {(form.bairro || form.cidade || form.uf || cepLoading) && (
+                  <div className="flex items-end">
+                    {cepLoading ? (
+                      <p className="text-xs text-[#86868B] py-2">Buscando CEP...</p>
+                    ) : (
+                      <p className="text-xs text-[#1D1D1F] py-2">{form.bairro}{form.bairro && form.cidade ? " — " : ""}{form.cidade}{form.uf ? `/${form.uf}` : ""}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1198,6 +1256,7 @@ export default function VendasPage() {
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
+                    cep: "", bairro: "", cidade: "", uf: "",
                   });
                   setLastClienteData(null);
                   setCatSel("");
@@ -1233,12 +1292,9 @@ export default function VendasPage() {
           </div>
 
           {/* Row 3: Valores */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div><p className={labelCls}>Custo (R$)</p><input type="number" value={form.custo} onChange={(e) => set("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
             <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="number" value={form.preco_vendido} onChange={(e) => set("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
-            <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
-              <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option>
-            </select></div>
           </div>
 
           {/* FORMA DE PAGAMENTO */}
@@ -1547,7 +1603,7 @@ export default function VendasPage() {
             {form.cliente && (
               <button
                 onClick={() => {
-                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ" }));
+                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
                   setLastClienteData(null);
                 }}
                 className="px-4 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
@@ -16,6 +16,9 @@ export default function GastosPage() {
   const [tab, setTab] = useTabParam<"novo" | "historico">("novo", GASTOS_TABS);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string | boolean>>({});
+  const [editSaving, setEditSaving] = useState(false);
 
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
@@ -79,6 +82,53 @@ export default function GastosPage() {
     }
     setSaving(false);
   };
+
+  const startEdit = (g: Gasto) => {
+    setEditingId(g.id);
+    setEditForm({
+      data: g.data,
+      hora: g.hora || "",
+      descricao: g.descricao || "",
+      valor: String(g.valor),
+      categoria: g.categoria,
+      tipo: g.tipo,
+      banco: g.banco || "ITAU",
+      observacao: g.observacao || "",
+      is_dep_esp: g.is_dep_esp,
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId) return;
+    setEditSaving(true);
+    const payload = {
+      id: editingId,
+      data: editForm.data,
+      hora: editForm.hora || null,
+      tipo: editForm.tipo,
+      categoria: editForm.categoria,
+      descricao: editForm.descricao || null,
+      valor: parseFloat(editForm.valor as string),
+      banco: editForm.banco || null,
+      observacao: editForm.observacao || null,
+      is_dep_esp: editForm.is_dep_esp,
+    };
+    const res = await fetch("/api/gastos", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      setEditingId(null);
+      fetchGastos();
+    } else {
+      alert("Erro: " + json.error);
+    }
+    setEditSaving(false);
+  };
+
+  const editSet = (field: string, value: string | boolean) => setEditForm((f) => ({ ...f, [field]: value }));
 
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
@@ -166,21 +216,59 @@ export default function GastosPage() {
                   ) : gastos.length === 0 ? (
                     <tr><td colSpan={7} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
                   ) : gastos.map((g) => (
-                    <tr key={g.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
-                      <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
-                      <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${g.tipo === "SAIDA" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>{g.tipo}</span></td>
-                      <td className="px-4 py-3 text-xs">{g.categoria}</td>
-                      <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
-                      <td className={`px-4 py-3 font-bold ${g.tipo === "SAIDA" ? "text-red-500" : "text-green-600"}`}>{fmt(g.valor)}</td>
-                      <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={async () => {
-                          if (!confirm("Excluir?")) return;
-                          await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: g.id }) });
-                          setGastos((prev) => prev.filter((r) => r.id !== g.id));
-                        }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={g.id}>
+                      <tr className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
+                        <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
+                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${g.tipo === "SAIDA" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>{g.tipo}</span></td>
+                        <td className="px-4 py-3 text-xs">{g.categoria}</td>
+                        <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
+                        <td className={`px-4 py-3 font-bold ${g.tipo === "SAIDA" ? "text-red-500" : "text-green-600"}`}>{fmt(g.valor)}</td>
+                        <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
+                        <td className="px-4 py-3 flex gap-2">
+                          <button onClick={() => startEdit(g)} className="text-[#86868B] hover:text-[#E8740E] text-xs" title="Editar">✏️</button>
+                          <button onClick={async () => {
+                            if (!confirm("Excluir?")) return;
+                            await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: g.id }) });
+                            setGastos((prev) => prev.filter((r) => r.id !== g.id));
+                          }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
+                        </td>
+                      </tr>
+                      {editingId === g.id && (
+                        <tr className="border-b border-[#E8740E] bg-[#FFF8F0]">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div><p className={labelCls}>Data</p><input type="date" value={editForm.data as string} onChange={(e) => editSet("data", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Horario</p><input type="time" value={editForm.hora as string} onChange={(e) => editSet("hora", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Tipo</p><select value={editForm.tipo as string} onChange={(e) => editSet("tipo", e.target.value)} className={inputCls}>
+                                  <option>SAIDA</option><option>ENTRADA</option>
+                                </select></div>
+                                <div><p className={labelCls}>Categoria</p><select value={editForm.categoria as string} onChange={(e) => editSet("categoria", e.target.value)} className={inputCls}>
+                                  {CATEGORIAS_GASTO.map((c) => <option key={c}>{c}</option>)}
+                                </select></div>
+                                <div><p className={labelCls}>Valor (R$)</p><input type="number" value={editForm.valor as string} onChange={(e) => editSet("valor", e.target.value)} className={inputCls} /></div>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div><p className={labelCls}>Descricao</p><input value={editForm.descricao as string} onChange={(e) => editSet("descricao", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Banco</p><select value={editForm.banco as string} onChange={(e) => editSet("banco", e.target.value)} className={inputCls}>
+                                  <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option><option>ESPECIE</option>
+                                </select></div>
+                                <div><p className={labelCls}>Observacao</p><input value={editForm.observacao as string} onChange={(e) => editSet("observacao", e.target.value)} className={inputCls} /></div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-2 text-sm text-[#86868B]">
+                                  <input type="checkbox" checked={editForm.is_dep_esp as boolean} onChange={(e) => editSet("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
+                                  Deposito de especie
+                                </label>
+                                <div className="flex-1" />
+                                <button onClick={() => setEditingId(null)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
+                                <button onClick={handleEditSave} disabled={editSaving} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">{editSaving ? "Salvando..." : "Salvar"}</button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

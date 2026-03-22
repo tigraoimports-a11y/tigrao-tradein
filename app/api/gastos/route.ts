@@ -53,6 +53,26 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, data });
 }
 
+export async function PATCH(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = getRole(req);
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "gastos.create", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
+
+  const body = await req.json();
+  const { id, ...fields } = body;
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const { data, error } = await supabase.from("gastos").update(fields).eq("id", id).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const valor = fields.valor ? `R$ ${Number(fields.valor).toLocaleString("pt-BR")}` : "";
+  await logActivity(usuario, "Editou gasto", `${fields.descricao || "?"} ${valor}`, "gastos", id);
+
+  return NextResponse.json({ ok: true, data });
+}
+
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

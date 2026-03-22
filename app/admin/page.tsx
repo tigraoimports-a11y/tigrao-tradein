@@ -276,6 +276,55 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Projeção do Mês */}
+      {(() => {
+        const now = new Date();
+        const diaAtual = now.getDate();
+        const totalDiasMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const diasRestantes = totalDiasMes - diaAtual;
+        const mediaDiaria = diaAtual > 0 ? lucroMes / diaAtual : 0;
+        const projecaoFimMes = lucroMes + (mediaDiaria * diasRestantes);
+        const pctProgresso = projecaoFimMes > 0 ? Math.min((lucroMes / projecaoFimMes) * 100, 100) : 0;
+        const onTrack = mediaDiaria >= (lucroMes / diaAtual); // always true by definition, but useful if target exists
+        const barColor = mediaDiaria > 0 ? "bg-green-500" : "bg-orange-500";
+
+        return (
+          <div>
+            <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Projecao do Mes</h2>
+            <div className="bg-white rounded-2xl border border-[#D2D2D7] p-5 shadow-sm space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs text-[#86868B]">Lucro ate hoje</p>
+                  <p className="text-lg font-bold text-green-700">{fmt(lucroMes)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#86868B]">Media diaria</p>
+                  <p className="text-lg font-bold text-[#1D1D1F]">{fmt(mediaDiaria)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#86868B]">Projecao fim do mes</p>
+                  <p className="text-lg font-bold text-blue-700">{fmt(projecaoFimMes)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#86868B]">Dias restantes</p>
+                  <p className="text-lg font-bold text-[#1D1D1F]">{diasRestantes}</p>
+                </div>
+              </div>
+              {/* Barra de progresso */}
+              <div>
+                <div className="flex justify-between text-[10px] text-[#86868B] mb-1">
+                  <span>Dia {diaAtual} de {totalDiasMes}</span>
+                  <span>{pctProgresso.toFixed(0)}% do projetado</span>
+                </div>
+                <div className="w-full h-2.5 bg-[#F5F5F7] rounded-full overflow-hidden">
+                  <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pctProgresso}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tipos de Venda */}
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Tipos de Venda</h2>
