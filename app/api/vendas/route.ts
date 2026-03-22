@@ -17,10 +17,15 @@ function getRole(req: NextRequest): string {
   return req.headers.get("x-admin-role") || "admin";
 }
 
+function getPermissoes(req: NextRequest): string[] {
+  try { return JSON.parse(req.headers.get("x-admin-permissoes") || "[]"); } catch { return []; }
+}
+
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "vendas.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "vendas.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
@@ -43,7 +48,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "vendas.create", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const body = await req.json();
@@ -194,7 +200,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "vendas.create", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const { id } = await req.json();

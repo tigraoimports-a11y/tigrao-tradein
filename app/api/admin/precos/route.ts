@@ -14,6 +14,10 @@ function getRole(req: NextRequest): string {
   return req.headers.get("x-admin-role") || "admin";
 }
 
+function getPermissoes(req: NextRequest): string[] {
+  try { return JSON.parse(req.headers.get("x-admin-permissoes") || "[]"); } catch { return []; }
+}
+
 // GET — lista todos os preços
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,7 +39,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "precos.write")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "precos.write", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const body = await req.json();

@@ -22,14 +22,14 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("usuarios")
-    .select("id, nome, login, role, ativo, created_at")
+    .select("id, nome, login, role, ativo, permissoes, created_at")
     .order("nome");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data: data ?? [] });
 }
 
-// PATCH — alterar role ou ativo de um usuario
+// PATCH — alterar role, ativo, ou permissoes de um usuario
 export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
@@ -41,17 +41,18 @@ export async function PATCH(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Only allow updating role and ativo
+  // Only allow updating role, ativo, and permissoes
   const allowed: Record<string, unknown> = {};
   if (fields.role !== undefined) allowed.role = fields.role;
   if (fields.ativo !== undefined) allowed.ativo = fields.ativo;
+  if (fields.permissoes !== undefined) allowed.permissoes = fields.permissoes;
 
   if (Object.keys(allowed).length === 0) {
     return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
   }
 
   // Get current user info for logging
-  const { data: antes } = await supabase.from("usuarios").select("nome, role, ativo").eq("id", id).single();
+  const { data: antes } = await supabase.from("usuarios").select("nome, role, ativo, permissoes").eq("id", id).single();
 
   const { error } = await supabase.from("usuarios").update(allowed).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -59,8 +60,15 @@ export async function PATCH(req: NextRequest) {
   const changes: string[] = [];
   if (fields.role !== undefined && antes?.role !== fields.role) changes.push(`role: ${antes?.role} -> ${fields.role}`);
   if (fields.ativo !== undefined && antes?.ativo !== fields.ativo) changes.push(`ativo: ${antes?.ativo} -> ${fields.ativo}`);
+  if (fields.permissoes !== undefined) {
+    const before = (antes?.permissoes as string[] ?? []).sort().join(",");
+    const after = (fields.permissoes as string[]).sort().join(",");
+    if (before !== after) changes.push(`permissoes atualizadas`);
+  }
 
-  await logActivity(usuario, "Alterou usuario", `${antes?.nome || "?"}: ${changes.join(", ")}`, "usuarios", id);
+  if (changes.length > 0) {
+    await logActivity(usuario, "Alterou usuario", `${antes?.nome || "?"}: ${changes.join(", ")}`, "usuarios", id);
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -83,9 +91,10 @@ export async function POST(req: NextRequest) {
     nome,
     login: login.toLowerCase().trim(),
     senha,
-    role: newRole || "visualizador",
+    role: newRole || "equipe",
     ativo: true,
-  }).select("id, nome, login, role, ativo, created_at").single();
+    permissoes: [],
+  }).select("id, nome, login, role, ativo, permissoes, created_at").single();
 
   if (error) {
     if (error.message.includes("duplicate") || error.message.includes("unique")) {
@@ -94,7 +103,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await logActivity(usuario, "Criou usuario", `${nome} (${newRole || "visualizador"})`, "usuarios", data?.id);
+  await logActivity(usuario, "Criou usuario", `${nome} (${newRole || "equipe"})`, "usuarios", data?.id);
 
   return NextResponse.json({ ok: true, data });
 }

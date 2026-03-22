@@ -5,7 +5,7 @@ export async function POST(req: NextRequest) {
   const { login, senha } = await req.json();
 
   if (!login || !senha) {
-    return NextResponse.json({ error: "Login e senha obrigatórios" }, { status: 400 });
+    return NextResponse.json({ error: "Login e senha obrigatorios" }, { status: 400 });
   }
 
   const { data: user } = await supabase
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       nome: user.nome,
       login: user.login,
       role: user.role,
+      permissoes: user.permissoes ?? [],
     },
     apiToken,
   });

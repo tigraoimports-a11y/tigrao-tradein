@@ -15,6 +15,10 @@ function getRole(req: NextRequest): string {
   return req.headers.get("x-admin-role") || "admin";
 }
 
+function getPermissoes(req: NextRequest): string[] {
+  try { return JSON.parse(req.headers.get("x-admin-permissoes") || "[]"); } catch { return []; }
+}
+
 async function logEstoque(usuario: string, acao: string, produtoId: string | null, produtoNome: string, campo: string, valorAnterior: string, valorNovo: string) {
   await supabase.from("estoque_log").insert({
     usuario, acao, produto_id: produtoId, produto_nome: produtoNome, campo,
@@ -90,7 +94,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "estoque.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const body = await req.json();
 
@@ -215,7 +220,8 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "estoque.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const { id, ...fields } = await req.json();
@@ -300,7 +306,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
-  if (!hasPermission(role, "estoque.read")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const permissoes = getPermissoes(req);
+  if (!hasPermission(role, "estoque.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
   const { id } = await req.json();

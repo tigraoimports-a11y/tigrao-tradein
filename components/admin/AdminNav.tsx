@@ -4,17 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+
 interface NavItem {
   href: string;
   label: string;
   icon: string;
-  roles: string[];
+  pageKey: string; // granular permission key
 }
 
 interface NavGroup {
   label: string;
   icon: string;
-  roles: string[];
   items: NavItem[];
 }
 
@@ -25,76 +25,80 @@ function isGroup(entry: NavEntry): entry is NavGroup {
 }
 
 const NAV: NavEntry[] = [
-  { href: "/admin", label: "Dashboard", icon: "📊", roles: ["admin", "vendedor", "visualizador"] },
+  { href: "/admin", label: "Dashboard", icon: "\u{1F4CA}", pageKey: "dashboard" },
 
   // Financeiro
   {
-    label: "Financeiro", icon: "💰", roles: ["admin", "vendedor"],
+    label: "Financeiro", icon: "\u{1F4B0}",
     items: [
-      { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin", "vendedor", "visualizador"] },
-      { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin", "vendedor"] },
-      { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
-      { href: "/admin/recebiveis", label: "Recebíveis", icon: "💳", roles: ["admin"] },
-      { href: "/admin/conciliacao", label: "Conciliação", icon: "🔍", roles: ["admin"] },
+      { href: "/admin/vendas", label: "Vendas", icon: "\u{1F4B0}", pageKey: "vendas_ver" },
+      { href: "/admin/gastos", label: "Gastos", icon: "\u{1F4E4}", pageKey: "gastos" },
+      { href: "/admin/saldos", label: "Saldos", icon: "\u{1F3E6}", pageKey: "saldos" },
+      { href: "/admin/recebiveis", label: "Recebiveis", icon: "\u{1F4B3}", pageKey: "recebiveis" },
+      { href: "/admin/conciliacao", label: "Conciliacao", icon: "\u{1F50D}", pageKey: "conciliacao" },
     ],
   },
 
   // Produtos
   {
-    label: "Produtos", icon: "📦", roles: ["admin", "estoque", "vendedor", "visualizador"],
+    label: "Produtos", icon: "\u{1F4E6}",
     items: [
-      { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque", "vendedor", "visualizador"] },
-      { href: "/admin/precos", label: "Preços", icon: "🏷️", roles: ["admin"] },
-      { href: "/admin/agendamento-precos", label: "Agendar Preços", icon: "📅", roles: ["admin"] },
-      { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
-      { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
+      { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
+      { href: "/admin/precos", label: "Precos", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
+      { href: "/admin/agendamento-precos", label: "Agendar Precos", icon: "\u{1F4C5}", pageKey: "agendamento_precos" },
+      { href: "/admin/fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
+      { href: "/admin/importar", label: "Importar", icon: "\u{1F4E5}", pageKey: "importar" },
     ],
   },
 
   // Operacional
   {
-    label: "Operacional", icon: "🚚", roles: ["admin", "estoque", "vendedor"],
+    label: "Operacional", icon: "\u{1F69A}",
     items: [
-      { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque", "vendedor"] },
-      { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
-      { href: "/admin/etiquetas", label: "Etiquetas", icon: "🏷️", roles: ["admin", "estoque"] },
+      { href: "/admin/entregas", label: "Entregas", icon: "\u{1F69A}", pageKey: "entregas" },
+      { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
+      { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
     ],
   },
 
   // Site
   {
-    label: "Site", icon: "🌐", roles: ["admin"],
+    label: "Site", icon: "\u{1F310}",
     items: [
-      { href: "/admin/mostruario", label: "Mostruário", icon: "🖼️", roles: ["admin"] },
-      { href: "/admin/simulacoes", label: "Simulações", icon: "📱", roles: ["admin"] },
+      { href: "/admin/mostruario", label: "Mostruario", icon: "\u{1F5BC}\uFE0F", pageKey: "mostruario" },
+      { href: "/admin/simulacoes", label: "Simulacoes", icon: "\u{1F4F1}", pageKey: "simulacoes" },
     ],
   },
 
   // Analytics
   {
-    label: "Analytics", icon: "📊", roles: ["admin"],
+    label: "Analytics", icon: "\u{1F4CA}",
     items: [
-      { href: "/admin/analytics", label: "Funil Trade-In", icon: "📈", roles: ["admin"] },
-      { href: "/admin/mapa-vendas", label: "Mapa de Vendas", icon: "🗺️", roles: ["admin"] },
+      { href: "/admin/analytics", label: "Funil Trade-In", icon: "\u{1F4C8}", pageKey: "funil_tradein" },
+      { href: "/admin/mapa-vendas", label: "Mapa de Vendas", icon: "\u{1F5FA}\uFE0F", pageKey: "mapa_vendas" },
     ],
   },
 
   // Sistema
   {
-    label: "Sistema", icon: "⚙️", roles: ["admin"],
+    label: "Sistema", icon: "\u2699\uFE0F",
     items: [
-      { href: "/admin/log", label: "Log de Atividades", icon: "📋", roles: ["admin"] },
-      { href: "/admin/usuarios", label: "Usuários", icon: "👥", roles: ["admin"] },
+      { href: "/admin/log", label: "Log de Atividades", icon: "\u{1F4CB}", pageKey: "log" },
+      { href: "/admin/usuarios", label: "Usuarios", icon: "\u{1F465}", pageKey: "usuarios" },
     ],
   },
 ];
 
-export default function AdminNav({ userRole }: { userRole: string }) {
+interface AdminNavProps {
+  userRole: string;
+  userPermissoes?: string[];
+}
+
+export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
-    // Auto-open the group that contains the current page
     const s = new Set<string>();
     for (const entry of NAV) {
       if (isGroup(entry) && entry.items.some((i) => pathname === i.href || pathname?.startsWith(i.href + "/"))) {
@@ -103,6 +107,14 @@ export default function AdminNav({ userRole }: { userRole: string }) {
     }
     return s;
   });
+
+  const isAdmin = userRole === "admin";
+  const perms = userPermissoes ?? [];
+
+  function canSee(pageKey: string): boolean {
+    if (isAdmin) return true;
+    return perms.includes(pageKey);
+  }
 
   function toggleGroup(label: string) {
     setOpenGroups((prev) => {
@@ -115,7 +127,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
 
   function renderItem(item: NavItem) {
     const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href + "/"));
-    if (!item.roles.includes(userRole)) return null;
+    if (!canSee(item.pageKey)) return null;
     return (
       <Link
         key={item.href}
@@ -135,15 +147,13 @@ export default function AdminNav({ userRole }: { userRole: string }) {
   }
 
   function renderGroup(group: NavGroup) {
-    const visibleItems = group.items.filter((i) => i.roles.includes(userRole));
+    const visibleItems = group.items.filter((i) => canSee(i.pageKey));
     if (visibleItems.length === 0) return null;
-    if (!group.roles.some((r) => r === userRole)) return null;
 
     const isOpen = openGroups.has(group.label);
     const hasActive = visibleItems.some((i) => pathname === i.href || pathname?.startsWith(i.href + "/"));
 
     if (collapsed) {
-      // When collapsed, show first item's icon as representative
       return visibleItems.map((item) => renderItem(item));
     }
 
@@ -159,7 +169,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
         >
           <span className="text-base shrink-0">{group.icon}</span>
           <span className="truncate flex-1 text-left">{group.label}</span>
-          <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>▶</span>
+          <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>&#9654;</span>
         </button>
         {isOpen && (
           <div className="ml-3 border-l border-[#E8E8ED] pl-1 mt-0.5">
@@ -177,7 +187,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
         onClick={() => setMobileOpen(!mobileOpen)}
         className="lg:hidden print:hidden fixed bottom-4 left-4 z-50 w-12 h-12 rounded-full bg-[#E8740E] text-white shadow-lg flex items-center justify-center text-xl hover:bg-[#D06A0D] transition-colors"
       >
-        {mobileOpen ? "✕" : "☰"}
+        {mobileOpen ? "\u2715" : "\u2630"}
       </button>
 
       {/* Mobile overlay */}
@@ -196,10 +206,10 @@ export default function AdminNav({ userRole }: { userRole: string }) {
       >
         {/* Logo area */}
         <div className="px-3 py-4 border-b border-[#E8E8ED] flex items-center gap-2">
-          <span className="text-2xl shrink-0">🐯</span>
+          <span className="text-2xl shrink-0">&#x1F42F;</span>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#1D1D1F] truncate">TigrãoImports</p>
+              <p className="text-sm font-bold text-[#1D1D1F] truncate">TigraoImports</p>
               <p className="text-[10px] text-[#86868B]">Painel Admin</p>
             </div>
           )}
@@ -215,7 +225,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex items-center justify-center py-3 border-t border-[#E8E8ED] text-[#86868B] hover:text-[#1D1D1F] transition-colors text-xs"
         >
-          {collapsed ? "→" : "← Recolher"}
+          {collapsed ? "\u2192" : "\u2190 Recolher"}
         </button>
       </aside>
     </>

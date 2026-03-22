@@ -8,7 +8,8 @@ export interface UserInfo {
   id: string;
   nome: string;
   login: string;
-  role: "admin" | "estoque" | "vendedor" | "visualizador";
+  role: "admin" | "equipe" | "estoque" | "vendedor" | "visualizador";
+  permissoes?: string[];
 }
 
 interface AdminContextType {
@@ -207,6 +208,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         "x-admin-password": password,
         "x-admin-user": user?.nome || "sistema",
         "x-admin-role": user?.role || "admin",
+        "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
         ...extra,
       }),
     }}>
@@ -219,7 +221,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         }}
       >
         {/* Sidebar Navigation */}
-        <AdminNav userRole={user.role} />
+        <AdminNav userRole={user.role} userPermissoes={user.permissoes} />
 
         {/* Main content area — offset by sidebar width */}
         <div className="lg:ml-[220px] print:ml-0 min-h-screen flex flex-col">
