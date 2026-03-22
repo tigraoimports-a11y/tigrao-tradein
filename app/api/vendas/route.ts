@@ -25,10 +25,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const search = searchParams.get("search");
 
   let query = supabase.from("vendas").select("*").order("data", { ascending: false });
-  if (from) query = query.gte("data", from);
-  if (to) query = query.lte("data", to);
+  if (search) {
+    query = query.ilike("cliente", `%${search}%`);
+  } else {
+    if (from) query = query.gte("data", from);
+    if (to) query = query.lte("data", to);
+  }
 
   const { data, error } = await query.limit(1000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -114,6 +119,19 @@ export async function POST(req: NextRequest) {
     "vendas",
     data?.id
   );
+
+  // Notificação Telegram — fire-and-forget (não bloqueia resposta)
+  sendSaleNotification({
+    produto: body.produto,
+    cor: body.cor,
+    cliente: body.cliente,
+    preco_vendido: body.preco_vendido,
+    custo: body.custo,
+    lucro: body.lucro,
+    banco: body.banco,
+    forma: body.forma,
+    vendedor: usuario,
+  }).catch(() => {});
 
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)

@@ -35,6 +35,19 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
+  // Client history state
+  const [clienteHistorico, setClienteHistorico] = useState<{
+    nome: string;
+    totalCompras: number;
+    totalGasto: number;
+    ultimaCompraData: string;
+    ultimaCompraProduto: string;
+    fezTroca: boolean;
+    clienteDesde: string;
+  } | null>(null);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const clienteHistoricoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Filtros de data para histórico
   const now = new Date();
   const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
@@ -181,6 +194,59 @@ export default function VendasPage() {
   }, [password, filtroAno, filtroMes, filtroDia]);
 
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
+
+  // Fetch client history when client name changes (3+ chars, debounced)
+  const fetchClienteHistorico = useCallback(async (nome: string) => {
+    if (!nome || nome.length < 3 || !password) {
+      setClienteHistorico(null);
+      return;
+    }
+    setLoadingHistorico(true);
+    try {
+      const res = await fetch(`/api/vendas?search=${encodeURIComponent(nome)}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const allVendas = (json.data ?? []) as Venda[];
+        // Filter for exact-ish match (case insensitive contains)
+        const matched = allVendas.filter((v: Venda) =>
+          v.cliente?.toLowerCase().includes(nome.toLowerCase())
+        );
+        if (matched.length > 0) {
+          const sorted = [...matched].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+          const oldest = [...matched].sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+          const totalGasto = matched.reduce((sum: number, v: Venda) => sum + (v.preco_vendido || 0), 0);
+          const fezTroca = matched.some((v: Venda) => v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0);
+          setClienteHistorico({
+            nome: sorted[0].cliente,
+            totalCompras: matched.length,
+            totalGasto,
+            ultimaCompraData: sorted[0].data,
+            ultimaCompraProduto: sorted[0].produto,
+            fezTroca,
+            clienteDesde: oldest[0].data,
+          });
+        } else {
+          setClienteHistorico(null);
+        }
+      }
+    } catch { /* ignore */ }
+    setLoadingHistorico(false);
+  }, [password]);
+
+  // Debounce client history search
+  useEffect(() => {
+    if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current);
+    if (form.cliente.length >= 3) {
+      clienteHistoricoTimer.current = setTimeout(() => {
+        fetchClienteHistorico(form.cliente);
+      }, 500);
+    } else {
+      setClienteHistorico(null);
+    }
+    return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
+  }, [form.cliente, fetchClienteHistorico]);
 
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
@@ -990,6 +1056,30 @@ export default function VendasPage() {
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
               </div>
+
+              {/* Historico do Cliente */}
+              {(clienteHistorico || loadingHistorico) && form.cliente.length >= 3 && (
+                <div className="bg-[#F5F5F7] border border-[#E0E0E5] rounded-xl px-4 py-3">
+                  {loadingHistorico ? (
+                    <p className="text-[11px] text-[#86868B]">Buscando historico...</p>
+                  ) : clienteHistorico && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-[#1D1D1F]">
+                        {clienteHistorico.nome}
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-[#E8740E]/10 text-[#E8740E] text-[10px] font-semibold">
+                          {clienteHistorico.totalCompras} compra{clienteHistorico.totalCompras > 1 ? "s" : ""}
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-[#86868B]">
+                        <span>Total gasto: <strong className="text-[#1D1D1F]">{fmt(clienteHistorico.totalGasto)}</strong></span>
+                        <span>Ultima compra: <strong className="text-[#1D1D1F]">{(() => { const [y, m, d] = (clienteHistorico.ultimaCompraData || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.ultimaCompraData; })()} — {clienteHistorico.ultimaCompraProduto}</strong></span>
+                        <span>Ja fez troca: <strong className={clienteHistorico.fezTroca ? "text-purple-600" : "text-[#1D1D1F]"}>{clienteHistorico.fezTroca ? "Sim" : "Nao"}</strong></span>
+                        <span>Cliente desde: <strong className="text-[#1D1D1F]">{(() => { const [y, m, d] = (clienteHistorico.clienteDesde || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.clienteDesde; })()}</strong></span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Endereço — só PJ */}
               {form.pessoa === "PJ" && (
@@ -1911,6 +2001,51 @@ export default function VendasPage() {
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
+
+                                    {/* Split de Pagamento Visual */}
+                                    {(() => {
+                                      const pixVal = v.entrada_pix || 0;
+                                      const especieVal = v.entrada_especie || 0;
+                                      const trocaVal = v.produto_na_troca ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+                                      const totalVenda = v.preco_vendido || 0;
+                                      // Cartao = total minus other payment methods
+                                      const cartaoVal = Math.max(0, totalVenda - pixVal - especieVal - trocaVal);
+                                      const parts = [
+                                        { label: "PIX", value: pixVal, color: "bg-green-500", textColor: "text-green-600" },
+                                        { label: "Cartao", value: cartaoVal, color: "bg-blue-500", textColor: "text-blue-600" },
+                                        { label: "Especie", value: especieVal, color: "bg-[#E8740E]", textColor: "text-[#E8740E]" },
+                                        { label: "Troca", value: trocaVal, color: "bg-purple-500", textColor: "text-purple-600" },
+                                      ].filter(p => p.value > 0);
+                                      if (parts.length < 2) return null;
+                                      return (
+                                        <div className="md:col-span-3 space-y-2">
+                                          <h4 className="text-xs font-bold text-[#86868B] uppercase">Composicao do Pagamento</h4>
+                                          {/* Stacked bar */}
+                                          <div className="flex h-5 rounded-lg overflow-hidden w-full max-w-[300px]" title={parts.map(p => `${p.label}: ${fmt(p.value)} (${totalVenda > 0 ? Math.round((p.value / totalVenda) * 100) : 0}%)`).join(" | ")}>
+                                            {parts.map((p, i) => (
+                                              <div
+                                                key={i}
+                                                className={`${p.color} relative group flex items-center justify-center transition-all`}
+                                                style={{ width: `${totalVenda > 0 ? (p.value / totalVenda) * 100 : 0}%` }}
+                                              >
+                                                {(p.value / totalVenda) * 100 >= 15 && (
+                                                  <span className="text-white text-[9px] font-bold">{Math.round((p.value / totalVenda) * 100)}%</span>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                          {/* Legend */}
+                                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-[#86868B]">
+                                            {parts.map((p, i) => (
+                                              <span key={i}>
+                                                <span className={`inline-block w-2 h-2 rounded-sm ${p.color} mr-1`}></span>
+                                                {p.label}: <strong className={p.textColor}>{fmt(p.value)}</strong> ({Math.round((p.value / totalVenda) * 100)}%)
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Produto na troca */}
                                     {(() => {
