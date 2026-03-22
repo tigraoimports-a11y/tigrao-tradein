@@ -5,6 +5,7 @@ import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
 import type { ConditionData, ModelDiscounts, WarrantyBonuses, AnyConditionData, DeviceType } from "@/lib/calculations";
 import { formatBRL } from "@/lib/calculations";
 import { getTemaTI, temaTICSSVars } from "@/lib/temas-tradein";
+import { useTradeInAnalytics } from "@/lib/useTradeInAnalytics";
 import StepBar from "./StepBar";
 import StepUsedDevice from "./StepUsedDevice";
 import StepNewDevice from "./StepNewDevice";
@@ -56,10 +57,18 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     return () => clearInterval(id);
   }, [temaParam, temaDia, temaNoite]);
 
+  const { trackStep, trackComplete, trackAction } = useTradeInAnalytics();
+
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Track step views
+  useEffect(() => {
+    const mappedStep = step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4;
+    trackStep(mappedStep);
+  }, [step, trackStep]);
 
   const [products, setProducts] = useState<NewProduct[]>([]);
   const [usedData, setUsedData] = useState<UsedData>({
@@ -145,6 +154,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   function handleStep1Complete(data: {
     usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
   }) {
+    trackComplete(1);
     if (step === 1) {
       setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
       setCondition(data.condition); setTradeInValue(data.tradeInValue); setStep(1.5);
@@ -156,17 +166,20 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   }
 
   function handleStep2Complete(data: { newModel: string; newStorage: string; newPrice: number }) {
+    trackComplete(2);
     setNewModel(data.newModel); setNewStorage(data.newStorage); setNewPrice(data.newPrice);
     setStep(3); window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleStep3Complete(data: { clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string }) {
+    trackComplete(3);
     setClienteNome(data.clienteNome); setClienteWhatsApp(data.clienteWhatsApp);
     setClienteInstagram(data.clienteInstagram); setClienteOrigem(data.clienteOrigem);
     setStep(4); window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleCotarOutro() {
+    trackAction("quote_cotar_outro");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
     setStep(2); window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -303,6 +316,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}
               validadeHoras={config.validadeHoras} vendedor={vendedor}
               onReset={handleReset} onCotarOutro={handleCotarOutro}
+              onTrackAction={trackAction}
             />
           )}
         </div>

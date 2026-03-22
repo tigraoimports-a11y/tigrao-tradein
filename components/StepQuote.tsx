@@ -17,6 +17,7 @@ interface StepQuoteProps {
   clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string;
   whatsappNumero: string; validadeHoras: number; vendedor?: string | null;
   onReset: () => void; onCotarOutro: () => void;
+  onTrackAction?: (action: string) => void;
 }
 
 async function salvarLead(lead: LeadSaiu & { formaPagamento?: string; origem?: string; motivoSaida?: string }) {
@@ -42,7 +43,7 @@ function useCountdown(hours: number) {
 export default function StepQuote(p: StepQuoteProps) {
   const { newModel, newStorage, newPrice, usedModel, usedStorage, condition, deviceType, tradeInValue,
     usedModel2, usedStorage2, condition2, deviceType2, tradeInValue1, tradeInValue2,
-    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, onReset, onCotarOutro } = p;
+    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, onReset, onCotarOutro, onTrackAction } = p;
 
   const hasSecond = !!(usedModel2 && usedStorage2);
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
@@ -182,7 +183,7 @@ export default function StepQuote(p: StepQuoteProps) {
       </div>
 
       {/* CTA */}
-      <button onClick={() => { window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); }}
+      <button onClick={() => { onTrackAction?.("quote_whatsapp"); window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); }}
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
         style={{ backgroundColor: "var(--ti-cta-bg)", color: "var(--ti-cta-text)" }}>
         Gostei da proposta. Quero comprar!
@@ -222,7 +223,7 @@ export default function StepQuote(p: StepQuoteProps) {
               Cancelar
             </button>
             <button disabled={sairLoading} onClick={async () => {
-              setSairLoading(true); await salvarLead({ ...leadBase, status: "SAIR", motivoSaida: motivo || "Não informado" }); setSairLoading(false); onReset();
+              onTrackAction?.("quote_exit"); setSairLoading(true); await salvarLead({ ...leadBase, status: "SAIR", motivoSaida: motivo || "Não informado" }); setSairLoading(false); onReset();
             }} className="flex-[2] py-3 rounded-xl text-[13px] font-semibold text-white transition-all disabled:opacity-60"
               style={{ backgroundColor: "var(--ti-error)" }}>
               {sairLoading ? "Salvando..." : "Confirmar e sair"}
