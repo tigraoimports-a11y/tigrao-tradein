@@ -283,7 +283,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
       {/* Global dark mode styles for child components */}
       {darkMode && (
-        <style jsx global>{`
+        <style dangerouslySetInnerHTML={{ __html: `
           .admin-dark .bg-white { background: #1A1A1A !important; }
           .admin-dark .bg-\\[\\#F5F5F7\\] { background: #0A0A0A !important; }
           .admin-dark .bg-\\[\\#FAFAFA\\] { background: #141414 !important; }
@@ -294,7 +294,6 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           .admin-dark .bg-\\[\\#FFF5EB\\]\\/50 { background: rgba(42,26,8,0.5) !important; }
           .admin-dark .hover\\:bg-\\[\\#F5F5F7\\]:hover { background: #1E1E1E !important; }
           .admin-dark .hover\\:text-\\[\\#1D1D1F\\]:hover { color: #F5F5F5 !important; }
-          .admin-dark .text-\\[\\#6E6E73\\] { color: #888 !important; }
           .admin-dark .text-\\[\\#1D1D1F\\] { color: #F5F5F5 !important; }
           .admin-dark .text-\\[\\#86868B\\] { color: #999 !important; }
           .admin-dark .text-\\[\\#6E6E73\\] { color: #888 !important; }
@@ -313,7 +312,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           .admin-dark .rounded-2xl, .admin-dark .rounded-xl { border-color: #2A2A2A; }
           .admin-dark h1, .admin-dark h2, .admin-dark h3, .admin-dark h4 { color: #F5F5F5 !important; }
           .admin-dark p { color: #CCC; }
-        `}</style>
+        ` }} />
       )}
     </AdminContext.Provider>
   );
