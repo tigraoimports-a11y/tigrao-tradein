@@ -79,34 +79,15 @@ export default function VendasPage() {
   });
 
   // Carrinho de produtos (multi-produto na mesma venda)
+  // Payment fields are GLOBAL (in form state), not per-product
   interface ProdutoCarrinho {
     produto: string;
     fornecedor: string;
     custo: string;
     preco_vendido: string;
-    forma: string;
-    banco: string;
-    banco_pix: string;
-    qnt_parcelas: string;
-    bandeira: string;
-    valor_comprovante_input: string;
-    entrada_pix: string;
-    entrada_especie: string;
-    produto_na_troca: string;
-    troca_produto: string;
-    troca_cor: string;
-    troca_bateria: string;
-    troca_obs: string;
     local: string;
     serial_no: string;
     imei: string;
-    banco_2nd: string;
-    banco_alt: string;
-    parc_alt: string;
-    band_alt: string;
-    comp_alt: string;
-    sinal_antecipado: string;
-    banco_sinal: string;
     _estoqueId: string;
     _catSel: string;
     _produtoManual: boolean;
@@ -408,42 +389,37 @@ export default function VendasPage() {
   const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK";
 
-  // Helper: build payload from product fields (used for both single and multi-product)
+  // Helper: build payload from product fields + global payment (from form state)
+  // Payment info is GLOBAL for the entire sale — copied to each product record
   const buildPayload = (prodFields: {
     produto: string; fornecedor: string; custo: string; preco_vendido: string;
-    forma: string; banco: string; banco_pix: string; qnt_parcelas: string;
-    bandeira: string; valor_comprovante_input: string; entrada_pix: string;
-    entrada_especie: string; produto_na_troca: string; troca_produto: string;
-    troca_cor: string; troca_bateria: string; troca_obs: string; local: string;
-    serial_no: string; imei: string; banco_2nd: string; banco_alt: string;
-    parc_alt: string; band_alt: string; comp_alt: string; sinal_antecipado: string; banco_sinal: string;
-    _estoqueId?: string;
+    local: string; serial_no: string; imei: string; _estoqueId?: string;
   }) => {
     const pCusto = parseFloat(prodFields.custo) || 0;
-    const pValorTroca = parseFloat(prodFields.produto_na_troca) || 0;
-    const pEntradaPix = parseFloat(prodFields.entrada_pix) || 0;
-    const pEntradaEspecie = parseFloat(prodFields.entrada_especie) || 0;
-    const pParcelas = parseInt(prodFields.qnt_parcelas) || 0;
-    const pTemTroca = pValorTroca > 0;
-    const pTemEntradaPix = pEntradaPix > 0;
+    const pPrecoVendido = parseFloat(prodFields.preco_vendido) || 0;
 
-    const pTaxa = prodFields.forma === "CARTAO"
-      ? getTaxa(prodFields.banco, prodFields.bandeira || null, pParcelas, prodFields.forma)
-      : prodFields.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, pParcelas, "CARTAO") : 0;
-    const pValorCartao = (parseFloat(prodFields.preco_vendido) || 0) - pValorTroca - pEntradaPix - pEntradaEspecie;
-    const pParteCartao = Math.max(0, pValorCartao);
-    const pValorComprovanteInput = parseFloat(prodFields.valor_comprovante_input) || 0;
-    const pComprovante = pTaxa > 0 ? calcularBruto(pParteCartao > 0 ? pParteCartao : (parseFloat(prodFields.preco_vendido) || 0), pTaxa) : (parseFloat(prodFields.preco_vendido) || 0);
-    const pValorLiquido = pTaxa > 0
-      ? calcularLiquido(pValorComprovanteInput > 0 ? pValorComprovanteInput : pComprovante || pParteCartao, pTaxa)
-      : pParteCartao;
-    const pTotalRealRecebido = pValorLiquido + pEntradaPix + pEntradaEspecie + pValorTroca;
+    // Global payment fields from form
+    const gForma = form.forma;
+    const gBanco = form.banco;
+    const gBancoPix = form.banco_pix;
+    const gParcelas = parseInt(form.qnt_parcelas) || 0;
+    const gBandeira = form.bandeira;
+    const gValorComprovanteInput = parseFloat(form.valor_comprovante_input) || 0;
+    const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+    const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
+    const gValorTroca = parseFloat(form.produto_na_troca) || 0;
+    const gTemTroca = gValorTroca > 0;
+    const gTemEntradaPix = gEntradaPix > 0;
 
-    let pBanco = prodFields.banco;
-    if (prodFields.forma === "LINK") pBanco = "MERCADO_PAGO";
-    if (prodFields.forma === "PIX") pBanco = prodFields.banco_pix || "ITAU";
-    if (prodFields.forma === "ESPECIE") pBanco = "ESPECIE";
-    if (!prodFields.forma) pBanco = "ITAU";
+    const gTaxa = gForma === "CARTAO"
+      ? getTaxa(gBanco, gBandeira || null, gParcelas, gForma)
+      : gForma === "LINK" ? getTaxa("MERCADO_PAGO", null, gParcelas, "CARTAO") : 0;
+
+    let pBancoFinal = gBanco;
+    if (gForma === "LINK") pBancoFinal = "MERCADO_PAGO";
+    if (gForma === "PIX") pBancoFinal = gBancoPix || "ITAU";
+    if (gForma === "ESPECIE") pBancoFinal = "ESPECIE";
+    if (!gForma) pBancoFinal = "ITAU";
 
     const payload: Record<string, unknown> = {
       data: form.data,
@@ -453,35 +429,35 @@ export default function VendasPage() {
       email: form.email || null,
       endereco: form.endereco || null,
       origem: form.tipo === "ATACADO" ? "ATACADO" : form.origem,
-      tipo: pTemTroca ? "UPGRADE" : form.tipo,
+      tipo: gTemTroca ? "UPGRADE" : form.tipo,
       produto: prodFields.produto,
       fornecedor: prodFields.fornecedor || null,
       custo: pCusto,
-      preco_vendido: Math.round(pTotalRealRecebido),
-      banco: pBanco,
-      forma: !prodFields.forma ? "PIX" : prodFields.forma === "LINK" ? "CARTAO" : prodFields.forma === "ESPECIE" ? "ESPECIE" : prodFields.forma,
-      recebimento: !prodFields.forma ? "D+0" : prodFields.forma === "PIX" || prodFields.forma === "ESPECIE" ? "D+0" : prodFields.forma === "LINK" ? "D+0" : "D+1",
-      qnt_parcelas: pParcelas || null,
-      bandeira: prodFields.bandeira || null,
-      valor_comprovante: pValorComprovanteInput || pComprovante || null,
+      preco_vendido: pPrecoVendido,
+      banco: pBancoFinal,
+      forma: !gForma ? "PIX" : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "ESPECIE" : gForma,
+      recebimento: !gForma ? "D+0" : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : "D+1",
+      qnt_parcelas: gParcelas || null,
+      bandeira: gBandeira || null,
+      valor_comprovante: gValorComprovanteInput || null,
       local: prodFields.local || null,
-      produto_na_troca: pTemTroca ? String(pValorTroca) : null,
-      entrada_pix: pEntradaPix,
-      banco_pix: pTemEntradaPix ? (prodFields.banco_pix || "ITAU") : null,
-      entrada_especie: pEntradaEspecie,
-      banco_2nd: prodFields.banco_2nd || null,
-      banco_alt: prodFields.banco_alt || null,
-      parc_alt: parseInt(prodFields.parc_alt) || null,
-      band_alt: prodFields.band_alt || null,
-      comp_alt: parseFloat(prodFields.comp_alt) || null,
-      sinal_antecipado: parseFloat(prodFields.sinal_antecipado) || 0,
-      banco_sinal: prodFields.banco_sinal || null,
+      produto_na_troca: gTemTroca ? String(gValorTroca) : null,
+      entrada_pix: gEntradaPix,
+      banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
+      entrada_especie: gEntradaEspecie,
+      banco_2nd: form.banco_2nd || null,
+      banco_alt: form.banco_alt || null,
+      parc_alt: parseInt(form.parc_alt) || null,
+      band_alt: form.band_alt || null,
+      comp_alt: parseFloat(form.comp_alt) || null,
+      sinal_antecipado: parseFloat(form.sinal_antecipado) || 0,
+      banco_sinal: form.banco_sinal || null,
       serial_no: prodFields.serial_no || null,
       imei: prodFields.imei || null,
-      troca_produto: prodFields.troca_produto || null,
-      troca_cor: prodFields.troca_cor || null,
-      troca_bateria: prodFields.troca_bateria || null,
-      troca_obs: prodFields.troca_obs || null,
+      troca_produto: form.troca_produto || null,
+      troca_cor: form.troca_cor || null,
+      troca_bateria: form.troca_bateria || null,
+      troca_obs: form.troca_obs || null,
       status_pagamento: "AGUARDANDO",
     };
 
@@ -489,65 +465,40 @@ export default function VendasPage() {
       payload._estoque_id = prodFields._estoqueId;
     }
 
-    if (pTemTroca && prodFields.troca_produto) {
+    if (gTemTroca && form.troca_produto) {
       payload._seminovo = {
-        produto: prodFields.troca_produto,
-        valor: pValorTroca,
-        cor: prodFields.troca_cor || null,
-        bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
-        observacao: prodFields.troca_obs || null,
+        produto: form.troca_produto,
+        valor: gValorTroca,
+        cor: form.troca_cor || null,
+        bateria: form.troca_bateria ? parseInt(form.troca_bateria as string) : null,
+        observacao: form.troca_obs || null,
       };
     }
 
     return payload;
   };
 
-  // Helper: extract current product fields from form
-  const getCurrentProductFields = () => ({
+  // Helper: extract current product fields from form (only product-specific, not payment)
+  const getCurrentProductFields = (): ProdutoCarrinho => ({
     produto: form.produto,
     fornecedor: form.fornecedor,
     custo: form.custo,
     preco_vendido: form.preco_vendido,
-    forma: form.forma,
-    banco: form.banco,
-    banco_pix: form.banco_pix,
-    qnt_parcelas: form.qnt_parcelas,
-    bandeira: form.bandeira,
-    valor_comprovante_input: form.valor_comprovante_input,
-    entrada_pix: form.entrada_pix,
-    entrada_especie: form.entrada_especie,
-    produto_na_troca: form.produto_na_troca,
-    troca_produto: form.troca_produto,
-    troca_cor: form.troca_cor,
-    troca_bateria: form.troca_bateria,
-    troca_obs: form.troca_obs,
     local: form.local,
     serial_no: form.serial_no,
     imei: form.imei,
-    banco_2nd: form.banco_2nd,
-    banco_alt: form.banco_alt,
-    parc_alt: form.parc_alt,
-    band_alt: form.band_alt,
-    comp_alt: form.comp_alt,
-    sinal_antecipado: form.sinal_antecipado,
-    banco_sinal: form.banco_sinal,
     _estoqueId: estoqueId,
     _catSel: catSel,
     _produtoManual: produtoManual,
   });
 
-  // Helper: clear product fields in form
+  // Helper: clear product fields in form (keeps payment fields intact for multi-product)
   const clearProductFields = () => {
     setForm(f => ({
       ...f,
       produto: "", fornecedor: "",
-      custo: "", preco_vendido: "", valor_comprovante_input: "",
-      banco: "ITAU", forma: "", qnt_parcelas: "", bandeira: "",
-      local: "", produto_na_troca: "",
-      entrada_pix: "", banco_pix: "ITAU", entrada_especie: "",
-      banco_2nd: "", banco_alt: "", parc_alt: "", band_alt: "", comp_alt: "",
-      sinal_antecipado: "", banco_sinal: "",
-      troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+      custo: "", preco_vendido: "",
+      local: "",
       serial_no: "", imei: "",
     }));
     setCatSel("");
@@ -572,7 +523,7 @@ export default function VendasPage() {
     setProdutosCarrinho(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Edit product from cart — load back into form
+  // Edit product from cart — load product fields back into form (payment stays global)
   const handleEditFromCart = (index: number) => {
     const p = produtosCarrinho[index];
     setForm(f => ({
@@ -581,29 +532,9 @@ export default function VendasPage() {
       fornecedor: p.fornecedor,
       custo: p.custo,
       preco_vendido: p.preco_vendido,
-      forma: p.forma,
-      banco: p.banco,
-      banco_pix: p.banco_pix,
-      qnt_parcelas: p.qnt_parcelas,
-      bandeira: p.bandeira,
-      valor_comprovante_input: p.valor_comprovante_input,
-      entrada_pix: p.entrada_pix,
-      entrada_especie: p.entrada_especie,
-      produto_na_troca: p.produto_na_troca,
-      troca_produto: p.troca_produto,
-      troca_cor: p.troca_cor,
-      troca_bateria: p.troca_bateria,
-      troca_obs: p.troca_obs,
       local: p.local,
       serial_no: p.serial_no,
       imei: p.imei,
-      banco_2nd: p.banco_2nd,
-      banco_alt: p.banco_alt,
-      parc_alt: p.parc_alt,
-      band_alt: p.band_alt,
-      comp_alt: p.comp_alt,
-      sinal_antecipado: p.sinal_antecipado,
-      banco_sinal: p.banco_sinal,
     }));
     if (p._catSel) setCatSel(p._catSel);
     if (p._estoqueId) setEstoqueId(p._estoqueId);
@@ -1098,13 +1029,16 @@ export default function VendasPage() {
             <div className="space-y-2">
               <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produtos no carrinho ({produtosCarrinho.length})</p>
               {produtosCarrinho.map((p, i) => {
-                const pForma = p.forma === "CARTAO" ? `Cartao ${p.banco} ${p.qnt_parcelas}x` : p.forma === "LINK" ? `Link MP ${p.qnt_parcelas}x` : p.forma === "PIX" ? `PIX ${p.banco_pix}` : p.forma || "PIX";
+                const pCusto = parseFloat(p.custo) || 0;
+                const pVendido = parseFloat(p.preco_vendido) || 0;
+                const pLucro = pVendido - pCusto;
                 return (
                   <div key={i} className="flex items-center justify-between px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-[#1D1D1F] truncate block">{p.produto}</span>
                       <span className="text-[10px] text-[#86868B]">
-                        {fmt(parseFloat(p.custo) || 0)} custo | {fmt(parseFloat(p.preco_vendido) || 0)} vendido | {pForma}
+                        {fmt(pCusto)} custo | {fmt(pVendido)} vendido | Lucro: <strong className={pLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(pLucro)}</strong>
+                        {p.fornecedor && ` | ${p.fornecedor}`}
                         {p.serial_no && ` | SN: ${p.serial_no}`}
                         {p.imei && ` | IMEI: ${p.imei}`}
                       </span>
@@ -1128,6 +1062,22 @@ export default function VendasPage() {
                   </div>
                 );
               })}
+
+              {/* Cart summary — totals across all cart products */}
+              {(() => {
+                const cartTotalCusto = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
+                const cartTotalVendido = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0);
+                const cartTotalLucro = cartTotalVendido - cartTotalCusto;
+                const cartMargem = cartTotalVendido > 0 ? (cartTotalLucro / cartTotalVendido) * 100 : 0;
+                return (
+                  <div className="px-4 py-2.5 bg-[#1E1208] rounded-xl flex flex-wrap items-center gap-3 text-xs text-white/80">
+                    <span>Total custo: <strong className="text-white">{fmt(cartTotalCusto)}</strong></span>
+                    <span>Total vendido: <strong className="text-white">{fmt(cartTotalVendido)}</strong></span>
+                    <span>Lucro: <strong className={cartTotalLucro >= 0 ? "text-green-400" : "text-red-400"}>{fmt(cartTotalLucro)}</strong></span>
+                    <span>Margem: <strong className={cartMargem >= 0 ? "text-green-400" : "text-red-400"}>{cartMargem.toFixed(1)}%</strong></span>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -1498,38 +1448,77 @@ export default function VendasPage() {
             </button>
           )}
 
-          {/* Preview */}
-          <div className="p-4 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl text-white">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-              <div>
-                <p className="text-xs text-white/60">Lucro</p>
-                <p className={`text-lg font-bold ${lucro >= 0 ? "text-green-400" : "text-red-400"}`}>{fmt(lucro)}</p>
+          {/* Preview — combined totals for all products (cart + current form) */}
+          {(() => {
+            // Aggregate all products: cart + current form product (if any)
+            const allProds = [...produtosCarrinho];
+            if (form.produto && form.custo) {
+              allProds.push(getCurrentProductFields());
+            }
+            const totalCusto = allProds.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
+            const totalVendido = allProds.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0);
+            const totalLucroAll = totalVendido - totalCusto;
+            const totalMargemAll = totalVendido > 0 ? (totalLucroAll / totalVendido) * 100 : 0;
+
+            // Conferencia: comprovante + pix + especie + troca should roughly match total vendido
+            const gComprovante = parseFloat(form.valor_comprovante_input) || 0;
+            const gPix = parseFloat(form.entrada_pix) || 0;
+            const gEspecie = parseFloat(form.entrada_especie) || 0;
+            const gTroca = parseFloat(form.produto_na_troca) || 0;
+            const somaFormas = gComprovante + gPix + gEspecie + gTroca;
+            // Only check conferencia if at least one payment field is filled
+            const temConferencia = somaFormas > 0 && totalVendido > 0;
+            const diffConferencia = Math.abs(somaFormas - totalVendido);
+            const confOk = diffConferencia <= Math.max(totalVendido * 0.02, 50); // 2% tolerance or R$50
+
+            return (
+              <div className="p-4 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl text-white">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                  <div>
+                    <p className="text-xs text-white/60">{allProds.length > 1 ? "Lucro Total" : "Lucro"}</p>
+                    <p className={`text-lg font-bold ${totalLucroAll >= 0 ? "text-green-400" : "text-red-400"}`}>{fmt(totalLucroAll)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/60">Margem</p>
+                    <p className={`text-lg font-bold ${totalMargemAll >= 0 ? "text-green-400" : "text-red-400"}`}>{totalMargemAll.toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/60">Recebimento</p>
+                    <p className="text-lg font-bold text-[#F5A623]">{recebimento}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/60">Taxa</p>
+                    <p className="text-lg font-bold text-white">{taxa > 0 ? `${taxa.toFixed(2)}%` : "—"}</p>
+                  </div>
+                  {temTroca && <div>
+                    <p className="text-xs text-white/60">Troca</p>
+                    <p className="text-lg font-bold text-[#2ECC71]">{fmt(valorTroca)}</p>
+                  </div>}
+                </div>
+                {allProds.length > 1 && (
+                  <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 text-center">
+                    <span>Total vendido: <strong className="text-white">{fmt(totalVendido)}</strong></span>
+                    <span className="mx-2">|</span>
+                    <span>Total custo: <strong className="text-white">{fmt(totalCusto)}</strong></span>
+                    <span className="mx-2">|</span>
+                    <span>{allProds.length} produtos</span>
+                  </div>
+                )}
+                {(temTroca || temEntradaPix) && (
+                  <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 text-center">
+                    {temTroca && <span>Troca: {fmt(valorTroca)} </span>}
+                    {temEntradaPix && <span>+ PIX: {fmt(entradaPix)} ({form.banco_pix}) </span>}
+                    {temCartao && valorCartao > 0 && <span>+ {form.forma === "LINK" ? "Link MP" : `Cartao ${form.banco}`}: {fmt(valorCartao)}</span>}
+                  </div>
+                )}
+                {temConferencia && (
+                  <div className={`mt-2 pt-2 border-t border-white/10 text-xs text-center ${confOk ? "text-green-400" : "text-yellow-400"}`}>
+                    {confOk ? "Conferencia OK" : `Conferencia: soma formas (${fmt(somaFormas)}) != total vendido (${fmt(totalVendido)}) — diferenca: ${fmt(diffConferencia)}`}
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-xs text-white/60">Margem</p>
-                <p className={`text-lg font-bold ${margem >= 0 ? "text-green-400" : "text-red-400"}`}>{margem.toFixed(1)}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-white/60">Recebimento</p>
-                <p className="text-lg font-bold text-[#F5A623]">{recebimento}</p>
-              </div>
-              <div>
-                <p className="text-xs text-white/60">Taxa</p>
-                <p className="text-lg font-bold text-white">{taxa > 0 ? `${taxa.toFixed(2)}%` : "—"}</p>
-              </div>
-              {temTroca && <div>
-                <p className="text-xs text-white/60">Troca</p>
-                <p className="text-lg font-bold text-[#2ECC71]">{fmt(valorTroca)}</p>
-              </div>}
-            </div>
-            {(temTroca || temEntradaPix) && (
-              <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 text-center">
-                {temTroca && <span>Troca: {fmt(valorTroca)} </span>}
-                {temEntradaPix && <span>+ PIX: {fmt(entradaPix)} ({form.banco_pix}) </span>}
-                {temCartao && valorCartao > 0 && <span>+ {form.forma === "LINK" ? "Link MP" : `Cartao ${form.banco}`}: {fmt(valorCartao)}</span>}
-              </div>
-            )}
-          </div>
+            );
+          })()}
 
           <div className="flex gap-3">
             <button
