@@ -92,7 +92,16 @@ export async function POST(req: NextRequest) {
     const { nome, emoji } = body;
     if (!nome) return NextResponse.json({ error: "Missing nome" }, { status: 400 });
 
-    const slug = slugify(nome);
+    let slug = slugify(nome);
+
+    // Ensure unique slug
+    const { data: existing } = await supabase
+      .from("loja_categorias")
+      .select("slug")
+      .eq("slug", slug);
+    if (existing && existing.length > 0) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
 
     // Get max ordem
     const { data: maxData } = await supabase
@@ -108,7 +117,10 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("Erro ao criar categoria:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ ok: true, data });
   }
 
