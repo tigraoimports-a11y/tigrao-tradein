@@ -1084,6 +1084,16 @@ export default function VendasPage() {
                       set("cep", v);
                       if (v.replace(/\D/g, "").length === 8) fetchCep(v);
                     }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 8);
+                      if (pasted.length > 0) {
+                        let v = pasted;
+                        if (v.length > 5) v = v.slice(0, 5) + "-" + v.slice(5);
+                        set("cep", v);
+                        if (pasted.length === 8) fetchCep(pasted);
+                      }
+                    }}
                     placeholder="00000-000"
                     className={inputCls}
                     maxLength={9}
