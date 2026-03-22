@@ -5,8 +5,8 @@ import { useAdmin } from "@/components/admin/AdminShell";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
-interface LocalData {
-  local: string;
+interface GeoData {
+  nome: string;
   qty: number;
   receita: number;
   lucro: number;
@@ -32,22 +32,23 @@ interface MapaData {
   totalReceita: number;
   totalLucro: number;
   ticketMedio: number;
-  locais: LocalData[];
+  bairros: GeoData[];
+  cidades: GeoData[];
+  estados: GeoData[];
   topClientes: ClienteData[];
   porDiaSemana: DiaSemanaData[];
 }
 
 type RangeOption = "7" | "30" | "90" | "all";
 
-const LOCAL_COLORS: Record<string, string> = {
-  RETIRADA: "#2ECC71",
-  ENTREGA: "#3B82F6",
-  CORREIO: "#8B5CF6",
-  "NAO INFORMADO": "#94A3B8",
-};
+const BAR_COLORS = [
+  "#E8740E", "#F5A623", "#3B82F6", "#2ECC71", "#8B5CF6",
+  "#EC4899", "#14B8A6", "#F59E0B", "#6366F1", "#EF4444",
+  "#06B6D4", "#84CC16", "#D946EF", "#0EA5E9", "#F97316",
+];
 
-function getLocalColor(local: string): string {
-  return LOCAL_COLORS[local] || "#E8740E";
+function getBarColor(index: number): string {
+  return BAR_COLORS[index % BAR_COLORS.length];
 }
 
 export default function MapaVendasPage() {
@@ -91,7 +92,9 @@ export default function MapaVendasPage() {
     );
   }
 
-  const maxLocalReceita = Math.max(...data.locais.map((l) => l.receita), 1);
+  const topBairros = data.bairros.slice(0, 15);
+  const maxBairroQty = Math.max(...topBairros.map((b) => b.qty), 1);
+  const maxCidadeQty = Math.max(...data.cidades.map((c) => c.qty), 1);
   const maxDiaVendas = Math.max(...data.porDiaSemana.map((d) => d.vendas), 1);
 
   return (
@@ -103,7 +106,7 @@ export default function MapaVendasPage() {
             Mapa de Vendas
           </h1>
           <p className="text-sm text-[#86868B] mt-0.5">
-            Analise de vendas por local, cliente e dia da semana
+            Distribuicao geografica das vendas por bairro, cidade e estado
           </p>
         </div>
         <div className="flex gap-2">
@@ -137,87 +140,137 @@ export default function MapaVendasPage() {
         <KPICard label="Ticket Medio" value={fmt(data.ticketMedio)} accent />
       </div>
 
-      {/* Region Breakdown */}
+      {/* Top Bairros */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
         <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
-          Vendas por Local
+          Top Bairros
         </h2>
         <p className="text-xs text-[#86868B] mb-4">
-          Distribuicao por tipo de entrega/retirada
+          Top 15 bairros por numero de vendas
         </p>
 
-        {/* Bar chart */}
-        <div className="space-y-3 mb-6">
-          {data.locais.map((l) => {
-            const pct = (l.receita / maxLocalReceita) * 100;
-            const color = getLocalColor(l.local);
-            return (
-              <div key={l.local}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
-                    <span className="text-sm font-medium text-[#1D1D1F]">
-                      {l.local}
+        {topBairros.length === 0 ? (
+          <p className="text-sm text-[#86868B] text-center py-8">
+            Nenhum dado de bairro disponivel
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {topBairros.map((b, i) => {
+              const pct = (b.qty / maxBairroQty) * 100;
+              const color = getBarColor(i);
+              return (
+                <div key={b.nome}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-[#1D1D1F] truncate max-w-[60%]">
+                      {b.nome}
                     </span>
-                  </div>
-                  <span className="text-xs text-[#86868B]">
-                    {l.qty} vendas
-                  </span>
-                </div>
-                <div className="h-7 bg-[#F5F5F7] rounded-lg overflow-hidden relative">
-                  <div
-                    className="h-full rounded-lg transition-all duration-500"
-                    style={{
-                      width: `${Math.max(pct, 3)}%`,
-                      backgroundColor: color,
-                      opacity: 0.8,
-                    }}
-                  />
-                  <span className="absolute inset-0 flex items-center pl-3 text-xs font-semibold text-white mix-blend-difference">
-                    {fmt(l.receita)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#E8E8ED]">
-                <th className="text-left py-2 text-[#86868B] font-medium text-xs">Local</th>
-                <th className="text-right py-2 text-[#86868B] font-medium text-xs">Vendas</th>
-                <th className="text-right py-2 text-[#86868B] font-medium text-xs">Faturamento</th>
-                <th className="text-right py-2 text-[#86868B] font-medium text-xs">Lucro</th>
-                <th className="text-right py-2 text-[#86868B] font-medium text-xs">Ticket Medio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.locais.map((l) => (
-                <tr key={l.local} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA]">
-                  <td className="py-2.5 font-medium text-[#1D1D1F]">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: getLocalColor(l.local) }}
-                      />
-                      {l.local}
+                    <div className="flex items-center gap-3 text-xs text-[#86868B] shrink-0">
+                      <span>{b.qty} vendas</span>
+                      <span className="font-medium text-[#1D1D1F]">{fmt(b.receita)}</span>
                     </div>
-                  </td>
-                  <td className="py-2.5 text-right text-[#6E6E73]">{l.qty}</td>
-                  <td className="py-2.5 text-right font-medium text-[#1D1D1F]">{fmt(l.receita)}</td>
-                  <td className="py-2.5 text-right text-[#2ECC71]">{fmt(l.lucro)}</td>
-                  <td className="py-2.5 text-right text-[#6E6E73]">{fmt(l.ticket)}</td>
+                  </div>
+                  <div className="h-6 bg-[#F5F5F7] rounded-lg overflow-hidden">
+                    <div
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{
+                        width: `${Math.max(pct, 3)}%`,
+                        backgroundColor: color,
+                        opacity: 0.8,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Top Cidades */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+          Top Cidades
+        </h2>
+        <p className="text-xs text-[#86868B] mb-4">
+          Top 10 cidades por numero de vendas
+        </p>
+
+        {data.cidades.length === 0 ? (
+          <p className="text-sm text-[#86868B] text-center py-8">
+            Nenhum dado de cidade disponivel
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {data.cidades.map((c, i) => {
+              const pct = (c.qty / maxCidadeQty) * 100;
+              const color = getBarColor(i);
+              return (
+                <div key={c.nome}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-[#1D1D1F] truncate max-w-[60%]">
+                      {c.nome}
+                    </span>
+                    <div className="flex items-center gap-3 text-xs text-[#86868B] shrink-0">
+                      <span>{c.qty} vendas</span>
+                      <span className="font-medium text-[#1D1D1F]">{fmt(c.receita)}</span>
+                    </div>
+                  </div>
+                  <div className="h-6 bg-[#F5F5F7] rounded-lg overflow-hidden">
+                    <div
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{
+                        width: `${Math.max(pct, 3)}%`,
+                        backgroundColor: color,
+                        opacity: 0.8,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Vendas por Estado */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-[#1D1D1F] mb-1">
+          Vendas por Estado
+        </h2>
+        <p className="text-xs text-[#86868B] mb-4">
+          Distribuicao por UF
+        </p>
+
+        {data.estados.length === 0 ? (
+          <p className="text-sm text-[#86868B] text-center py-8">
+            Nenhum dado de estado disponivel
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#E8E8ED]">
+                  <th className="text-left py-2 text-[#86868B] font-medium text-xs">UF</th>
+                  <th className="text-right py-2 text-[#86868B] font-medium text-xs">Vendas</th>
+                  <th className="text-right py-2 text-[#86868B] font-medium text-xs">Faturamento</th>
+                  <th className="text-right py-2 text-[#86868B] font-medium text-xs">Lucro</th>
+                  <th className="text-right py-2 text-[#86868B] font-medium text-xs">Ticket Medio</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.estados.map((e) => (
+                  <tr key={e.nome} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA]">
+                    <td className="py-2.5 font-medium text-[#1D1D1F]">{e.nome}</td>
+                    <td className="py-2.5 text-right text-[#6E6E73]">{e.qty}</td>
+                    <td className="py-2.5 text-right font-medium text-[#1D1D1F]">{fmt(e.receita)}</td>
+                    <td className="py-2.5 text-right text-[#2ECC71]">{fmt(e.lucro)}</td>
+                    <td className="py-2.5 text-right text-[#6E6E73]">{fmt(e.ticket)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Day of Week Analysis */}
@@ -292,7 +345,7 @@ export default function MapaVendasPage() {
                   <tr key={c.nome} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA]">
                     <td className="py-2.5 text-[#86868B]">
                       {i < 3 ? (
-                        <span className="text-base">{["🥇", "🥈", "🥉"][i]}</span>
+                        <span className="text-base">{["\u{1F947}", "\u{1F948}", "\u{1F949}"][i]}</span>
                       ) : (
                         <span className="text-xs">{i + 1}</span>
                       )}
@@ -320,7 +373,7 @@ export default function MapaVendasPage() {
 }
 
 function formatDate(d: string): string {
-  if (!d) return "—";
+  if (!d) return "\u2014";
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 }

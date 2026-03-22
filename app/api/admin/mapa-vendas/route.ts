@@ -1,4 +1,4 @@
-// app/api/admin/mapa-vendas/route.ts — Sales heatmap analytics data
+// app/api/admin/mapa-vendas/route.ts — Sales geography analytics
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabase
       .from("vendas")
-      .select("id, data, created_at, cliente, local, preco_vendido, custo, lucro, origem, forma, produto")
+      .select("id, data, cliente, preco_vendido, custo, lucro, bairro, cidade, uf")
       .neq("status_pagamento", "CANCELADO")
       .order("data", { ascending: false });
 
@@ -41,38 +41,78 @@ export async function GET(req: NextRequest) {
     const rows = (vendas ?? []) as {
       id: string;
       data: string;
-      created_at: string;
       cliente: string;
-      local: string | null;
       preco_vendido: number;
       custo: number;
       lucro: number;
-      origem: string;
-      forma: string;
-      produto: string;
+      bairro: string | null;
+      cidade: string | null;
+      uf: string | null;
     }[];
 
-    // 1. Group by local (delivery type)
-    const porLocal: Record<string, { qty: number; receita: number; lucro: number }> = {};
+    // --- Aggregate by bairro (top 20) ---
+    const porBairro: Record<string, { qty: number; receita: number; lucro: number }> = {};
     for (const v of rows) {
-      const loc = v.local || "NAO INFORMADO";
-      if (!porLocal[loc]) porLocal[loc] = { qty: 0, receita: 0, lucro: 0 };
-      porLocal[loc].qty++;
-      porLocal[loc].receita += Number(v.preco_vendido || 0);
-      porLocal[loc].lucro += Number(v.lucro || 0);
+      const b = (v.bairro || "").trim() || "Nao informado";
+      if (!porBairro[b]) porBairro[b] = { qty: 0, receita: 0, lucro: 0 };
+      porBairro[b].qty++;
+      porBairro[b].receita += Number(v.preco_vendido || 0);
+      porBairro[b].lucro += Number(v.lucro || 0);
     }
 
-    const locais = Object.entries(porLocal)
-      .map(([local, d]) => ({
-        local,
+    const bairros = Object.entries(porBairro)
+      .map(([nome, d]) => ({
+        nome,
         qty: d.qty,
         receita: d.receita,
         lucro: d.lucro,
         ticket: d.qty > 0 ? Math.round(d.receita / d.qty) : 0,
       }))
-      .sort((a, b) => b.receita - a.receita);
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 20);
 
-    // 2. Top clients by volume
+    // --- Aggregate by cidade (top 10) ---
+    const porCidade: Record<string, { qty: number; receita: number; lucro: number }> = {};
+    for (const v of rows) {
+      const c = (v.cidade || "").trim() || "Nao informado";
+      if (!porCidade[c]) porCidade[c] = { qty: 0, receita: 0, lucro: 0 };
+      porCidade[c].qty++;
+      porCidade[c].receita += Number(v.preco_vendido || 0);
+      porCidade[c].lucro += Number(v.lucro || 0);
+    }
+
+    const cidades = Object.entries(porCidade)
+      .map(([nome, d]) => ({
+        nome,
+        qty: d.qty,
+        receita: d.receita,
+        lucro: d.lucro,
+        ticket: d.qty > 0 ? Math.round(d.receita / d.qty) : 0,
+      }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 10);
+
+    // --- Aggregate by UF ---
+    const porUF: Record<string, { qty: number; receita: number; lucro: number }> = {};
+    for (const v of rows) {
+      const u = (v.uf || "").trim().toUpperCase() || "N/A";
+      if (!porUF[u]) porUF[u] = { qty: 0, receita: 0, lucro: 0 };
+      porUF[u].qty++;
+      porUF[u].receita += Number(v.preco_vendido || 0);
+      porUF[u].lucro += Number(v.lucro || 0);
+    }
+
+    const estados = Object.entries(porUF)
+      .map(([nome, d]) => ({
+        nome,
+        qty: d.qty,
+        receita: d.receita,
+        lucro: d.lucro,
+        ticket: d.qty > 0 ? Math.round(d.receita / d.qty) : 0,
+      }))
+      .sort((a, b) => b.qty - a.qty);
+
+    // --- Top clients by volume ---
     const porCliente: Record<string, { qty: number; total: number; lucro: number; lastDate: string }> = {};
     for (const v of rows) {
       const cli = (v.cliente || "").trim().toUpperCase();
@@ -95,12 +135,11 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
 
-    // 3. Day of week analysis
-    const diasSemana = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat
+    // --- Day of week analysis ---
+    const diasSemana = [0, 0, 0, 0, 0, 0, 0];
     const receitaDia = [0, 0, 0, 0, 0, 0, 0];
     for (const v of rows) {
       if (!v.data) continue;
-      // Parse YYYY-MM-DD as local date
       const [y, m, d] = v.data.split("-").map(Number);
       const dow = new Date(y, m - 1, d).getDay();
       diasSemana[dow]++;
@@ -114,7 +153,7 @@ export async function GET(req: NextRequest) {
       receita: receitaDia[i],
     }));
 
-    // 4. Totals
+    // --- Totals ---
     const totalVendas = rows.length;
     const totalReceita = rows.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
     const totalLucro = rows.reduce((s, v) => s + Number(v.lucro || 0), 0);
@@ -125,7 +164,9 @@ export async function GET(req: NextRequest) {
       totalReceita,
       totalLucro,
       ticketMedio,
-      locais,
+      bairros,
+      cidades,
+      estados,
       topClientes,
       porDiaSemana,
     });
