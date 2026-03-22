@@ -14,11 +14,12 @@ interface StepUsedDeviceProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   warrantyBonuses?: WarrantyBonuses;
   onNext: (data: { usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
+  onTrackQuestion?: (step: number, question: string) => void;
 }
 
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, onNext }: StepUsedDeviceProps) {
+export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, onNext, onTrackQuestion }: StepUsedDeviceProps) {
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
@@ -67,8 +68,9 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const partsOk = partsReplaced === "no" || partsReplaced === "apple";
   const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && partsOk && allCond && warrantyFilled && hasOriginalBox !== null;
 
-  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); }
+  const tq = (q: string) => onTrackQuestion?.(1, q);
+  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
 
   return (
     <div className="space-y-8">
@@ -92,7 +94,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       {model && !isExcluded && storages.length > 0 && (
         <Section title="Armazenamento">
           <div className="flex gap-2 flex-wrap">
-            {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => setStorage(s)} className="flex-1 min-w-[80px]">{s}</Btn>)}
+            {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => { setStorage(s); tq("storage"); }} className="flex-1 min-w-[80px]">{s}</Btn>)}
           </div>
         </Section>
       )}
@@ -100,8 +102,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       {model && storage && !isExcluded && (
         <Section title="O aparelho está trincado, quebrado ou com defeito?">
           <div className="flex gap-2">
-            <Btn sel={hasDamage===false} onClick={() => setHasDamage(false)} className="flex-1" variant="success">Não</Btn>
-            <Btn sel={hasDamage===true} onClick={() => setHasDamage(true)} className="flex-1" variant="error">Sim</Btn>
+            <Btn sel={hasDamage===false} onClick={() => { setHasDamage(false); tq("damage"); }} className="flex-1" variant="success">Não</Btn>
+            <Btn sel={hasDamage===true} onClick={() => { setHasDamage(true); tq("damage"); }} className="flex-1" variant="error">Sim</Btn>
           </div>
           {hasDamage === true && (
             <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
@@ -117,7 +119,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
                 <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""} placeholder="Ex: 87"
-                  onChange={(e) => { const r = e.target.value.replace(/\D/g, ""); if (r === "") { setBattery(null); return; } setBattery(Math.min(100, Number(r))); }}
+                  onChange={(e) => { const r = e.target.value.replace(/\D/g, ""); if (r === "") { setBattery(null); return; } setBattery(Math.min(100, Number(r))); tq("battery"); }}
                   className="w-full px-4 py-3 pr-10 rounded-xl text-[20px] font-bold text-center focus:outline-none transition-colors"
                   style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
                 />
@@ -136,23 +138,23 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
           </Section>
 
           {batteryFilled && <Section title="Riscos na tela"><div className="flex gap-2">
-            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={screenScratch===v} onClick={() => setScreenScratch(v)} className="flex-1">{l}</Btn>)}
+            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={screenScratch===v} onClick={() => { setScreenScratch(v); tq("screenScratch"); }} className="flex-1">{l}</Btn>)}
           </div></Section>}
 
           {screenScratch !== null && <Section title="Riscos laterais"><div className="flex gap-2">
-            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={sideScratch===v} onClick={() => setSideScratch(v)} className="flex-1">{l}</Btn>)}
+            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={sideScratch===v} onClick={() => { setSideScratch(v); tq("sideScratch"); }} className="flex-1">{l}</Btn>)}
           </div></Section>}
 
           {sideScratch !== null && <Section title="Descascado / Amassado"><div className="flex gap-2">
-            {([["none","Não"],["light","Leve"],["heavy","Forte"]] as const).map(([v,l]) => <Btn key={v} sel={peeling===v} onClick={() => setPeeling(v)} className="flex-1">{l}</Btn>)}
+            {([["none","Não"],["light","Leve"],["heavy","Forte"]] as const).map(([v,l]) => <Btn key={v} sel={peeling===v} onClick={() => { setPeeling(v); tq("peeling"); }} className="flex-1">{l}</Btn>)}
           </div></Section>}
 
           {peeling !== null && (
           <Section title="O aparelho já teve alguma peça trocada?">
             <div className="grid grid-cols-1 gap-2">
-              <Btn sel={partsReplaced==="no"} onClick={() => setPartsReplaced("no")} variant="success">Não</Btn>
-              <Btn sel={partsReplaced==="apple"} onClick={() => setPartsReplaced("apple")} variant="success">Sim, na Apple (autorizada)</Btn>
-              <Btn sel={partsReplaced==="thirdParty"} onClick={() => setPartsReplaced("thirdParty")} variant="error">Sim, fora da Apple</Btn>
+              <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">Não</Btn>
+              <Btn sel={partsReplaced==="apple"} onClick={() => { setPartsReplaced("apple"); tq("partsReplaced"); }} variant="success">Sim, na Apple (autorizada)</Btn>
+              <Btn sel={partsReplaced==="thirdParty"} onClick={() => { setPartsReplaced("thirdParty"); tq("partsReplaced"); }} variant="error">Sim, fora da Apple</Btn>
             </div>
             {partsReplaced === "apple" && (
               <div className="mt-3">
@@ -172,8 +174,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
           {partsOk && (
           <Section title="Ainda está na garantia Apple de 12 meses?"><div className="flex gap-2">
-            <Btn sel={hasWarranty===false} onClick={() => { setHasWarranty(false); setWarrantyMonth(null); }} className="flex-1">Não</Btn>
-            <Btn sel={hasWarranty===true} onClick={() => setHasWarranty(true)} className="flex-1" variant="success">Sim</Btn>
+            <Btn sel={hasWarranty===false} onClick={() => { setHasWarranty(false); setWarrantyMonth(null); tq("warranty"); }} className="flex-1">Não</Btn>
+            <Btn sel={hasWarranty===true} onClick={() => { setHasWarranty(true); tq("warranty"); }} className="flex-1" variant="success">Sim</Btn>
           </div></Section>)}
 
           {hasWarranty === true && (
@@ -189,8 +191,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
           {warrantyFilled && (
           <Section title="Ainda tem a caixa original do aparelho?"><div className="flex gap-2">
-            <Btn sel={hasOriginalBox===true} onClick={() => setHasOriginalBox(true)} className="flex-1" variant="success">Sim</Btn>
-            <Btn sel={hasOriginalBox===false} onClick={() => setHasOriginalBox(false)} className="flex-1">Não</Btn>
+            <Btn sel={hasOriginalBox===true} onClick={() => { setHasOriginalBox(true); tq("originalBox"); }} className="flex-1" variant="success">Sim</Btn>
+            <Btn sel={hasOriginalBox===false} onClick={() => { setHasOriginalBox(false); tq("originalBox"); }} className="flex-1">Não</Btn>
           </div></Section>)}
         </>
       )}

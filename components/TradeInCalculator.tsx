@@ -57,7 +57,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     return () => clearInterval(id);
   }, [temaParam, temaDia, temaNoite]);
 
-  const { trackStep, trackComplete, trackAction } = useTradeInAnalytics();
+  const { trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
 
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
@@ -245,6 +245,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               modelDiscounts={usedData.modelDiscounts}
               warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
               onNext={handleStep1Complete}
+              onTrackQuestion={trackQuestion}
             />
           )}
 
@@ -290,6 +291,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
                 modelDiscounts={usedData.modelDiscounts}
                 warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
                 onNext={handleStep1Complete}
+                onTrackQuestion={trackQuestion}
               />
             </div>
           )}
