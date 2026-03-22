@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
 
   // Build date filter
   let dateFilter: string | null = null;
-  if (range !== "all") {
+  if (range === "month") {
+    const now = new Date();
+    dateFilter = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  } else if (range !== "all") {
     const days = parseInt(range, 10) || 30;
     const since = new Date();
     since.setDate(since.getDate() - days);

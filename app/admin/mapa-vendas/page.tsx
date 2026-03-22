@@ -39,7 +39,7 @@ interface MapaData {
   porDiaSemana: DiaSemanaData[];
 }
 
-type RangeOption = "7" | "30" | "90" | "all";
+type RangeOption = "7" | "month" | "30" | "90" | "all";
 
 const BAR_COLORS = [
   "#E8740E", "#F5A623", "#3B82F6", "#2ECC71", "#8B5CF6",
@@ -110,7 +110,7 @@ export default function MapaVendasPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {(["7", "30", "90", "all"] as const).map((r) => (
+          {(["7", "month", "30", "90", "all"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -120,7 +120,7 @@ export default function MapaVendasPage() {
                   : "bg-white border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E] hover:text-[#E8740E]"
               }`}
             >
-              {r === "7" ? "7 dias" : r === "30" ? "30 dias" : r === "90" ? "90 dias" : "Tudo"}
+              {r === "7" ? "7 dias" : r === "month" ? "Este mes" : r === "30" ? "30 dias" : r === "90" ? "90 dias" : "Tudo"}
             </button>
           ))}
           <button
