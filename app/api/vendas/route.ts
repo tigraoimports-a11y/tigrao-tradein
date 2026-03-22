@@ -34,7 +34,13 @@ export async function GET(req: NextRequest) {
 
   let query = supabase.from("vendas").select("*").order("data", { ascending: false });
   if (search) {
-    query = query.ilike("cliente", `%${search}%`);
+    // Se parece CPF (só números e pontos/traço), busca por CPF; senão busca por nome
+    const cleanSearch = search.replace(/[\.\-\/\s]/g, "");
+    if (/^\d{3,}$/.test(cleanSearch)) {
+      query = query.ilike("cpf", `%${cleanSearch}%`);
+    } else {
+      query = query.ilike("cliente", `%${search}%`);
+    }
   } else {
     if (from) query = query.gte("data", from);
     if (to) query = query.lte("data", to);

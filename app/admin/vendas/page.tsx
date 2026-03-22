@@ -53,6 +53,7 @@ export default function VendasPage() {
   const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
   const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [filtroDia, setFiltroDia] = useState("");
+  const [filtroCpf, setFiltroCpf] = useState("");
   const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
 
   // Admin não precisa de senha extra
@@ -178,22 +179,28 @@ export default function VendasPage() {
   const fetchVendas = useCallback(async () => {
     setLoading(true);
     try {
-      // Construir filtro de data
-      const from = filtroDia
-        ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
-        : `${filtroAno}-${filtroMes}-01`;
-      const to = filtroDia
-        ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
-        : `${filtroAno}-${filtroMes}-31`;
-      const params = new URLSearchParams({ from, to });
-      const res = await fetch(`/api/vendas?${params}`, { headers: { "x-admin-password": password } });
+      let url: string;
+      if (filtroCpf.replace(/\D/g, "").length >= 3) {
+        // Buscar por CPF
+        url = `/api/vendas?search=${encodeURIComponent(filtroCpf)}`;
+      } else {
+        // Construir filtro de data
+        const from = filtroDia
+          ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
+          : `${filtroAno}-${filtroMes}-01`;
+        const to = filtroDia
+          ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
+          : `${filtroAno}-${filtroMes}-31`;
+        url = `/api/vendas?from=${from}&to=${to}`;
+      }
+      const res = await fetch(url, { headers: { "x-admin-password": password } });
       if (res.ok) {
         const json = await res.json();
         setVendas(json.data ?? []);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, filtroAno, filtroMes, filtroDia]);
+  }, [password, filtroAno, filtroMes, filtroDia, filtroCpf]);
 
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
@@ -838,9 +845,23 @@ export default function VendasPage() {
           ))}
         </div>
 
-        {/* Filtros de data — só no histórico e em andamento */}
+        {/* Filtros — só no histórico e em andamento */}
         {(tab === "andamento" || tab === "finalizadas") && (
-          <div className="flex gap-1.5 items-center ml-auto">
+          <div className="flex gap-1.5 items-center ml-auto flex-wrap">
+            <input
+              type="text"
+              placeholder="Buscar CPF..."
+              value={filtroCpf}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, "").slice(0, 11);
+                const formatted = v.length > 9 ? `${v.slice(0,3)}.${v.slice(3,6)}.${v.slice(6,9)}-${v.slice(9)}` : v.length > 6 ? `${v.slice(0,3)}.${v.slice(3,6)}.${v.slice(6)}` : v.length > 3 ? `${v.slice(0,3)}.${v.slice(3)}` : v;
+                setFiltroCpf(formatted);
+              }}
+              className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white w-[130px] placeholder:text-[#86868B]"
+            />
+            {filtroCpf && (
+              <button onClick={() => setFiltroCpf("")} className="text-xs text-red-500 hover:text-red-700">Limpar</button>
+            )}
             <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
               {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
