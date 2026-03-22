@@ -1801,7 +1801,7 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-orange-50" : ""}`}
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
                               {tab === "andamento" && (
