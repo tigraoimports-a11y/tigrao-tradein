@@ -9,6 +9,7 @@ export interface ConditionData {
   battery: number;
   hasDamage: boolean;
   partsReplaced: "no" | "apple" | "thirdParty";
+  partsReplacedDetail?: string;
   hasWarranty: boolean;
   warrantyMonth: number | null; // 1-12
   warrantyYear: number | null;  // ex: 2026, 2027
@@ -260,7 +261,7 @@ export function getConditionLines(condition: ConditionData): string[] {
   else if (condition.peeling === "light") lines.push("Marcas de uso leves");
   else lines.push("Marcas de uso fortes");
 
-  if (condition.partsReplaced === "apple") lines.push("Peca trocada na Apple (autorizada)");
+  if (condition.partsReplaced === "apple") lines.push(`Peca trocada na Apple (autorizada)${condition.partsReplacedDetail ? `: ${condition.partsReplacedDetail}` : ""}`);
   else if (condition.partsReplaced === "no") lines.push("Sem pecas trocadas");
 
   lines.push(condition.hasOriginalBox ? "Tem a caixa original" : "Sem caixa original");

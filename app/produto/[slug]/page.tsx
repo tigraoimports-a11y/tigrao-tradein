@@ -32,6 +32,17 @@ function formatBRL(value: number): string {
 }
 
 const WHATSAPP_VENDEDOR = "5521995618747";
+const BARRA_LAT = -23.0003;
+const BARRA_LNG = -43.3650;
+const RAIO_EXPRESSA_KM = 70;
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
 type EntregaTipo = "retirada" | "combinar" | "";
 
@@ -82,6 +93,10 @@ export default function ProdutoPage() {
   const [entrega, setEntrega] = useState<EntregaTipo>("");
   const [dataRetirada, setDataRetirada] = useState("");
   const [horarioRetirada, setHorarioRetirada] = useState("");
+  const [cep, setCep] = useState("");
+  const [cepInfo, setCepInfo] = useState<{ bairro: string; cidade: string; uf: string; distancia: number } | null>(null);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
   const diasUteis = useMemo(() => getProximosDiasUteis(7), []);
 
   // Modal nome e origem
@@ -137,6 +152,30 @@ export default function ProdutoPage() {
   const quote = useMemo(() => calculateQuote(0, preco), [preco]);
   const currentImage = currentVariacao?.imagem || produto?.imagem || null;
 
+  // CEP lookup para combinar entrega
+  async function consultarCEP() {
+    const cleanCep = cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) { setCepError("CEP invalido (8 digitos)"); return; }
+    setCepLoading(true); setCepError(""); setCepInfo(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await res.json();
+      if (data.erro) { setCepError("CEP nao encontrado"); setCepLoading(false); return; }
+
+      // Geocoding para calcular distância
+      let dist = 999;
+      try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cleanCep}&country=BR&format=json&limit=1`, {
+          headers: { "User-Agent": "TigraoImports/1.0" },
+        });
+        const geoData = await geoRes.json();
+        if (geoData.length > 0) dist = Math.round(haversine(BARRA_LAT, BARRA_LNG, parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)));
+      } catch { /* fallback */ }
+
+      setCepInfo({ bairro: data.bairro || "", cidade: data.localidade, uf: data.uf, distancia: dist });
+    } catch { setCepError("Erro ao consultar CEP"); } finally { setCepLoading(false); }
+  }
+
   // Build WhatsApp message
   function buildPedidoMsg(): string {
     const corAttr = currentVariacao?.atributos?.cor || "";
@@ -155,7 +194,8 @@ export default function ProdutoPage() {
       const diaLabel = diasUteis.find(d => d.value === dataRetirada)?.label || dataRetirada;
       entregaTexto = `Retirar no escritorio (Barra da Tijuca) — ${diaLabel} as ${horarioRetirada}`;
     } else if (entrega === "combinar") {
-      entregaTexto = "Combinar entrega em shopping proximo";
+      const localInfo = cepInfo ? `${cepInfo.bairro ? cepInfo.bairro + ", " : ""}${cepInfo.cidade}/${cepInfo.uf} (${cepInfo.distancia} km)` : "";
+      entregaTexto = `Combinar entrega em shopping proximo — ${localInfo}`;
     }
 
     const pedidoId = `TG-${new Date().toISOString().slice(0,10).replace(/-/g, "")}-${String(Math.floor(Math.random()*900)+100)}`;
@@ -414,6 +454,37 @@ Poderia me ajudar?`;
                   <span className="text-[14px] font-medium" style={{ color: entrega === "combinar" ? tema.accent : tema.text }}>🤝 Combinar entrega</span>
                   <span className="block text-[12px] mt-0.5" style={{ color: tema.textMuted }}>Encontro em shopping proximo a voce — combinaremos via WhatsApp</span>
                 </button>
+
+                {/* CEP expandido para combinar entrega */}
+                {entrega === "combinar" && (
+                  <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: tema.accent, backgroundColor: tema.cardBg }}>
+                    <p className="text-[12px] font-medium" style={{ color: tema.textMuted }}>Informe seu CEP para verificarmos a regiao</p>
+                    <div className="flex gap-2">
+                      <input value={cep} onChange={(e) => setCep(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                        placeholder="Digite seu CEP" onKeyDown={(e) => e.key === "Enter" && consultarCEP()}
+                        className="flex-1 px-3 py-2.5 rounded-lg text-[14px] border focus:outline-none"
+                        style={{ borderColor: tema.cardBorder, backgroundColor: tema.bg, color: tema.text }} />
+                      <button onClick={consultarCEP} disabled={cepLoading}
+                        className="px-4 py-2.5 rounded-lg text-[13px] font-semibold text-white"
+                        style={{ backgroundColor: tema.accent }}>
+                        {cepLoading ? "..." : "Consultar"}
+                      </button>
+                    </div>
+                    {cepError && <p className="text-[12px] text-red-500">{cepError}</p>}
+                    {cepInfo && (
+                      <div className="rounded-lg p-3" style={{ backgroundColor: cepInfo.distancia <= RAIO_EXPRESSA_KM ? "#2ECC7115" : "#E8740E15" }}>
+                        <p className="text-[13px] font-medium" style={{ color: tema.text }}>
+                          📍 {cepInfo.bairro ? `${cepInfo.bairro}, ` : ""}{cepInfo.cidade}/{cepInfo.uf}
+                        </p>
+                        <p className="text-[12px] mt-1" style={{ color: tema.textMuted }}>
+                          {cepInfo.distancia <= RAIO_EXPRESSA_KM
+                            ? `✅ Dentro da area de entrega expressa (${cepInfo.distancia} km) — combinaremos um shopping proximo!`
+                            : `📦 Fora da area expressa (${cepInfo.distancia} km) — podemos combinar envio`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -430,7 +501,7 @@ Poderia me ajudar?`;
                 Tirar Duvidas no WhatsApp
               </button>
               <Link href="/troca"
-                style={{ borderColor: tema.cardBorder, color: tema.textMuted }}
+                style={{ borderColor: tema.accent, color: tema.accent }}
                 className="w-full py-3 rounded-2xl border text-[14px] font-medium transition-colors flex items-center justify-center gap-2">
                 🔄 Simular troca com meu usado
               </Link>
@@ -441,7 +512,7 @@ Poderia me ajudar?`;
         {/* Additional Info */}
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { icon: "🚚", title: "Entrega rapida", desc: "Expressa na regiao ou SEDEX" },
+            { icon: "🚚", title: "Entrega expressa", desc: "Em ate 2 horas no RJ" },
             { icon: "🔒", title: "Compra segura", desc: "Produto lacrado de fabrica" },
             { icon: "🛡️", title: "Garantia Apple", desc: "1 ano de garantia oficial" },
           ].map((item) => (

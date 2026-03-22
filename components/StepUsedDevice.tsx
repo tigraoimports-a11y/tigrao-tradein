@@ -28,6 +28,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [sideScratch, setSideScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [peeling, setPeeling] = useState<"none"|"light"|"heavy"|null>(null);
   const [partsReplaced, setPartsReplaced] = useState<"no"|"apple"|"thirdParty"|null>(null);
+  const [partsReplacedDetail, setPartsReplacedDetail] = useState("");
   const [hasWarranty, setHasWarranty] = useState<boolean|null>(null);
   const [warrantyMonth, setWarrantyMonth] = useState<number|null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
@@ -47,6 +48,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const cond: ConditionData = {
     screenScratch: screenScratch ?? "none", sideScratch: sideScratch ?? "none", peeling: peeling ?? "none",
     battery: battery ?? 100, hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
+    partsReplacedDetail: partsReplaced === "apple" ? partsReplacedDetail : "",
     hasWarranty: hasWarranty === true, warrantyMonth: hasWarranty ? warrantyMonth : null,
     warrantyYear: hasWarranty ? warrantyYear : null, hasOriginalBox: hasOriginalBox === true,
   };
@@ -152,6 +154,15 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
               <Btn sel={partsReplaced==="apple"} onClick={() => setPartsReplaced("apple")} variant="success">Sim, na Apple (autorizada)</Btn>
               <Btn sel={partsReplaced==="thirdParty"} onClick={() => setPartsReplaced("thirdParty")} variant="error">Sim, fora da Apple</Btn>
             </div>
+            {partsReplaced === "apple" && (
+              <div className="mt-3">
+                <label className="block text-[12px] font-semibold mb-1.5 text-center" style={{ color: "var(--ti-muted)" }}>Qual peca foi trocada?</label>
+                <input type="text" value={partsReplacedDetail} onChange={(e) => setPartsReplacedDetail(e.target.value)}
+                  placeholder="Ex: Tela, Bateria, Alto-falante..."
+                  className="w-full px-4 py-3 rounded-2xl text-[14px] text-center focus:outline-none"
+                  style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-success)", color: "var(--ti-text)" }} />
+              </div>
+            )}
             {partsReplaced === "thirdParty" && (
               <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
                 <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>Infelizmente nao aceitamos aparelhos com pecas trocadas fora da rede autorizada Apple.</p>
