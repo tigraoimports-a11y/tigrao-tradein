@@ -73,13 +73,14 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.receita - a.receita);
 
     // 2. Top clients by volume
-    const porCliente: Record<string, { qty: number; total: number; lastDate: string }> = {};
+    const porCliente: Record<string, { qty: number; total: number; lucro: number; lastDate: string }> = {};
     for (const v of rows) {
       const cli = (v.cliente || "").trim().toUpperCase();
       if (!cli) continue;
-      if (!porCliente[cli]) porCliente[cli] = { qty: 0, total: 0, lastDate: "" };
+      if (!porCliente[cli]) porCliente[cli] = { qty: 0, total: 0, lucro: 0, lastDate: "" };
       porCliente[cli].qty++;
       porCliente[cli].total += Number(v.preco_vendido || 0);
+      porCliente[cli].lucro += Number(v.lucro || 0);
       if (v.data > porCliente[cli].lastDate) porCliente[cli].lastDate = v.data;
     }
 
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest) {
         nome,
         compras: d.qty,
         total: d.total,
+        lucro: d.lucro,
         ultimaCompra: d.lastDate,
       }))
       .sort((a, b) => b.total - a.total)

@@ -282,6 +282,7 @@ export default function MapaVendasPage() {
                   <th className="text-left py-2 text-[#86868B] font-medium text-xs">Cliente</th>
                   <th className="text-right py-2 text-[#86868B] font-medium text-xs">Compras</th>
                   <th className="text-right py-2 text-[#86868B] font-medium text-xs">Total Gasto</th>
+                  <th className="text-right py-2 text-[#86868B] font-medium text-xs">Lucro</th>
                   <th className="text-right py-2 text-[#86868B] font-medium text-xs">Ultima Compra</th>
                 </tr>
               </thead>
@@ -302,6 +303,7 @@ export default function MapaVendasPage() {
                       </span>
                     </td>
                     <td className="py-2.5 text-right font-medium text-[#1D1D1F]">{fmt(c.total)}</td>
+                    <td className="py-2.5 text-right font-medium text-[#2ECC71]">{fmt(c.lucro)}</td>
                     <td className="py-2.5 text-right text-[#6E6E73] text-xs">
                       {formatDate(c.ultimaCompra)}
                     </td>
