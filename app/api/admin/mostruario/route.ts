@@ -288,7 +288,7 @@ export async function PATCH(req: NextRequest) {
 
   // ── Update Config ──
   if (action === "update_config") {
-    const allowedFields = ["banner_titulo", "banner_subtitulo", "banner_image_url", "accent_color", "whatsapp_numero", "tema", "manutencao"];
+    const allowedFields = ["banner_titulo", "banner_subtitulo", "banner_image_url", "accent_color", "whatsapp_numero", "tema", "tema_tradein", "tema_tradein_noite", "manutencao"];
     const update: Record<string, unknown> = {};
     for (const key of allowedFields) {
       if (body[key] !== undefined) update[key] = body[key];

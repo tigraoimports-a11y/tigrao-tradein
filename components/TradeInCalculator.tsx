@@ -112,10 +112,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   useEffect(() => {
     async function load() {
       try {
-        const [prodRes, usedRes, configRes] = await Promise.all([
+        const [prodRes, usedRes, configRes, lojaRes] = await Promise.all([
           fetch("/api/produtos"),
           fetch("/api/usados"),
           fetch("/api/config"),
+          fetch("/api/loja?format=grouped").catch(() => null),
         ]);
         const [prodData, usedResData, configData] = await Promise.all([
           prodRes.json(),
@@ -125,9 +126,13 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         setProducts(prodData);
         setUsedData(usedResData);
         setConfig(configData);
-        // Load theme config from admin
-        if (configData.temaTradein) setTemaDia(configData.temaTradein);
-        if (configData.temaTradeinNoite) setTemaNoite(configData.temaTradeinNoite);
+        // Load theme config from mostruario_config (Supabase)
+        try {
+          const lojaData = lojaRes ? await lojaRes.json() : null;
+          const lojaCfg = lojaData?.config;
+          if (lojaCfg?.tema_tradein) setTemaDia(lojaCfg.tema_tradein);
+          if (lojaCfg?.tema_tradein_noite) setTemaNoite(lojaCfg.tema_tradein_noite);
+        } catch { /* ignore */ }
       } catch {
         setError("Erro ao carregar dados. Tente novamente.");
       } finally {
