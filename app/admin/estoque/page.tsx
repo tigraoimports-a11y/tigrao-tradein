@@ -109,8 +109,10 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
+  const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
@@ -630,6 +632,7 @@ export default function EstoquePage() {
             { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
             { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
             { key: "novo", label: "Adicionar", color: "" },
+            { key: "historico", label: "Historico", color: "" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
               tab === t.key
@@ -1067,11 +1070,81 @@ export default function EstoquePage() {
         </div>
       )}
 
+      {/* ═══════════ TAB: HISTORICO ═══════════ */}
+      {tab === "historico" && (
+        <HistoricoTab password={password} logs={historicoLogs} setLogs={setHistoricoLogs} loading={historicoLoading} setLoading={setHistoricoLoading} />
+      )}
+
       {/* ═══════════ TAB: ETIQUETAS ═══════════ */}
       {tab === "etiquetas" && (
         <Suspense fallback={<div className="text-center py-8 text-gray-400">Carregando...</div>}>
           <EtiquetasContent embedded />
         </Suspense>
+      )}
+    </div>
+  );
+}
+
+/* ── Histórico de Movimentações ── */
+type LogEntry = { id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string };
+
+function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
+  password: string; logs: LogEntry[]; setLogs: (l: LogEntry[]) => void; loading: boolean; setLoading: (b: boolean) => void;
+}) {
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/estoque?action=historico&limit=200", { headers: { "x-admin-password": password } });
+      const data = await res.json();
+      setLogs(data.logs ?? []);
+    } catch { /* silent */ }
+    setLoading(false);
+  }, [password, setLogs, setLoading]);
+
+  useEffect(() => { if (logs.length === 0) fetchLogs(); }, [fetchLogs, logs.length]);
+
+  const ACAO_EMOJI: Record<string, string> = { alteracao: "✏️", exclusao: "🗑️", entrada: "📥", saida: "📤", criacao: "➕" };
+
+  if (loading) return <div className="text-center py-8 text-gray-400">Carregando historico...</div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[#86868B] uppercase">{logs.length} movimentacoes</h3>
+        <button onClick={fetchLogs} className="px-3 py-1.5 rounded-lg bg-[#E8740E] text-white text-xs font-semibold">🔄 Atualizar</button>
+      </div>
+      {logs.length === 0 ? (
+        <p className="text-center text-[#86868B] py-8">Nenhuma movimentacao registrada</p>
+      ) : (
+        <div className="bg-white rounded-2xl border border-[#D2D2D7] overflow-hidden">
+          <div className="divide-y divide-[#F5F5F7]">
+            {logs.map((log) => (
+              <div key={log.id} className="px-4 py-3 flex items-start gap-3">
+                <span className="text-lg mt-0.5">{ACAO_EMOJI[log.acao] || "📋"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-[#1D1D1F]">{log.produto_nome}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F5F7] text-[#86868B] font-medium uppercase">{log.acao}</span>
+                  </div>
+                  {log.campo && (
+                    <p className="text-xs text-[#86868B] mt-0.5">
+                      <span className="font-medium">{log.campo}:</span>{" "}
+                      {log.valor_anterior && <span className="line-through text-red-400">{log.valor_anterior}</span>}
+                      {log.valor_anterior && log.valor_novo && " → "}
+                      {log.valor_novo && <span className="text-green-600 font-medium">{log.valor_novo}</span>}
+                    </p>
+                  )}
+                  {log.detalhes && <p className="text-[11px] text-[#86868B] mt-0.5">{log.detalhes}</p>}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-[#86868B]">{new Date(log.created_at).toLocaleDateString("pt-BR")}</p>
+                  <p className="text-[10px] text-[#86868B]">{new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  <p className="text-[10px] font-medium text-[#E8740E] mt-0.5">{log.usuario}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

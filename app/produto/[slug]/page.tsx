@@ -152,6 +152,17 @@ export default function ProdutoPage() {
   const quote = useMemo(() => calculateQuote(0, preco), [preco]);
   const currentImage = currentVariacao?.imagem || produto?.imagem || null;
 
+  // Galeria: coletar todas as imagens únicas (produto + variações)
+  const allImages = useMemo(() => {
+    if (!produto) return [];
+    const imgs: string[] = [];
+    if (produto.imagem) imgs.push(produto.imagem);
+    produto.variacoes.forEach(v => { if (v.imagem && !imgs.includes(v.imagem)) imgs.push(v.imagem); });
+    return imgs;
+  }, [produto]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const activeGalleryImage = allImages.length > 0 ? allImages[galleryIndex] || allImages[0] : currentImage;
+
   // CEP lookup para combinar entrega
   async function consultarCEP() {
     const cleanCep = cep.replace(/\D/g, "");
@@ -318,13 +329,28 @@ Poderia me ajudar?`;
         </nav>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-          {/* Left: Image */}
-          <div className="aspect-square rounded-3xl flex items-center justify-center overflow-hidden" style={{ background: `linear-gradient(to bottom right, ${tema.bgSecondary}, ${tema.cardBorder})` }}>
-            {currentImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={currentImage} alt={produto.nome} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-[120px] sm:text-[160px] opacity-80">{emoji}</span>
+          {/* Left: Image Gallery */}
+          <div>
+            <div className="aspect-square rounded-3xl flex items-center justify-center overflow-hidden" style={{ background: `linear-gradient(to bottom right, ${tema.bgSecondary}, ${tema.cardBorder})` }}>
+              {activeGalleryImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={activeGalleryImage} alt={produto.nome} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[120px] sm:text-[160px] opacity-80">{emoji}</span>
+              )}
+            </div>
+            {/* Thumbnails */}
+            {allImages.length > 1 && (
+              <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                {allImages.map((img, i) => (
+                  <button key={i} onClick={() => setGalleryIndex(i)}
+                    className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all"
+                    style={{ borderColor: galleryIndex === i ? tema.accent : tema.cardBorder }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 

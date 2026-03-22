@@ -39,6 +39,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ estoque: estoqueItems ?? [], vendas: vendaItems ?? [] });
   }
 
+  // Historico de movimentações
+  if (action === "historico") {
+    const limit = parseInt(searchParams.get("limit") || "100");
+    const { data } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(limit);
+    return NextResponse.json({ logs: data ?? [] });
+  }
+
   // Buscar último log para desfazer
   if (action === "last_log") {
     const { data } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(1).single();
