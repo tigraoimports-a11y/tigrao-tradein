@@ -440,7 +440,7 @@ export default function VendasPage() {
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
-      local: prodFields.local || null,
+      local: form.local || null,
       produto_na_troca: gTemTroca ? String(gValorTroca) : null,
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
@@ -498,7 +498,6 @@ export default function VendasPage() {
       ...f,
       produto: "", fornecedor: "",
       custo: "", preco_vendido: "",
-      local: "",
       serial_no: "", imei: "",
     }));
     setCatSel("");
@@ -1630,11 +1629,14 @@ export default function VendasPage() {
                         if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
                         if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
                         if (v.forma === "CARTAO" && v.qnt_parcelas) {
-                          pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}`);
+                          pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
                         } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
                           pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
                         } else if (!temEntrada && !valorTrocaV) {
                           pagParts.push(`${v.forma} ${v.banco}`);
+                        }
+                        if (v.banco_alt) {
+                          pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);
                         }
 
                         return (
@@ -1721,6 +1723,11 @@ export default function VendasPage() {
                                                   entrada_pix: parseFloat(ef.entrada_pix) || 0,
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
+                                                  valor_comprovante: parseFloat(ef.valor_comprovante) || null,
+                                                  banco_alt: ef.banco_alt || null,
+                                                  parc_alt: parseInt(ef.parc_alt) || null,
+                                                  band_alt: ef.band_alt || null,
+                                                  comp_alt: parseFloat(ef.comp_alt) || null,
                                                 };
                                                 const res = await fetch("/api/vendas", {
                                                   method: "PATCH",
@@ -1840,6 +1847,36 @@ export default function VendasPage() {
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Valor Troca</span>
                                             <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                        </div>
+                                        {/* 2o Cartao — edição */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Banco</span>
+                                            <select value={ef.banco_alt} onChange={e => setEf("banco_alt", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="">—</option>
+                                              <option value="ITAU">ITAU</option>
+                                              <option value="INFINITE">INFINITE</option>
+                                              <option value="MERCADO_PAGO">MERCADO PAGO</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Parcelas</span>
+                                            <input type="number" value={ef.parc_alt} onChange={e => setEf("parc_alt", e.target.value)} placeholder="—" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Bandeira</span>
+                                            <select value={ef.band_alt} onChange={e => setEf("band_alt", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                              <option value="">—</option>
+                                              <option value="VISA">VISA</option>
+                                              <option value="MASTERCARD">MASTERCARD</option>
+                                              <option value="ELO">ELO</option>
+                                              <option value="AMEX">AMEX</option>
+                                            </select>
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Comprovante</span>
+                                            <input type="number" value={ef.comp_alt} onChange={e => setEf("comp_alt", e.target.value)} placeholder="R$" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
                                           </label>
                                         </div>
                                         {/* Valor no Comprovante — edição */}
@@ -1963,8 +2000,12 @@ export default function VendasPage() {
                                               entrada_pix: String(v.entrada_pix || 0),
                                               entrada_especie: String(v.entrada_especie || 0),
                                               banco_pix: v.banco_pix || "",
-                                              valor_comprovante: "",
+                                              valor_comprovante: String(v.valor_comprovante || ""),
                                               produto_na_troca: String(v.produto_na_troca || 0),
+                                              banco_alt: v.banco_alt || "",
+                                              parc_alt: String(v.parc_alt || ""),
+                                              band_alt: v.band_alt || "",
+                                              comp_alt: String(v.comp_alt || ""),
                                             });
                                             setEditingId(v.id);
                                           }}

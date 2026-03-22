@@ -43,7 +43,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#E8740E" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         {/* Google Analytics */}
         {gaId && (
           <>
@@ -61,6 +61,11 @@ export default function RootLayout({
           <noscript><img height="1" width="1" style={{ display: "none" }} src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`} alt="" /></noscript>
         )}
         {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js')})}`
+          }}
+        />
       </body>
     </html>
   );

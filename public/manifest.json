@@ -1,24 +1,15 @@
 {
-  "name": "TigraoImports",
-  "short_name": "Tigrao",
-  "description": "Produtos Apple originais com garantia e nota fiscal",
-  "start_url": "/",
+  "name": "TigrãoImports",
+  "short_name": "Tigrão",
+  "description": "Sistema de gestão TigrãoImports — Vendas, Estoque, Trade-In",
+  "start_url": "/admin",
   "display": "standalone",
-  "background_color": "#FFFFFF",
+  "background_color": "#0A0A0A",
   "theme_color": "#E8740E",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
