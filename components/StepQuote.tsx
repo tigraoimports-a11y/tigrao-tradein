@@ -17,6 +17,7 @@ interface StepQuoteProps {
   clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string;
   whatsappNumero: string; validadeHoras: number; vendedor?: string | null;
   onReset: () => void; onCotarOutro: () => void;
+  onGoToStep?: (step: number) => void;
   onTrackAction?: (action: string) => void;
 }
 
@@ -43,7 +44,7 @@ function useCountdown(hours: number) {
 export default function StepQuote(p: StepQuoteProps) {
   const { newModel, newStorage, newPrice, usedModel, usedStorage, condition, deviceType, tradeInValue,
     usedModel2, usedStorage2, condition2, deviceType2, tradeInValue1, tradeInValue2,
-    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, onReset, onCotarOutro, onTrackAction } = p;
+    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, onReset, onCotarOutro, onGoToStep, onTrackAction } = p;
 
   const hasSecond = !!(usedModel2 && usedStorage2);
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
@@ -194,6 +195,30 @@ export default function StepQuote(p: StepQuoteProps) {
         style={{ color: "var(--ti-accent)", backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
         Cotar outro modelo
       </button>
+
+      {/* Edit buttons */}
+      {onGoToStep && (
+        <div className="rounded-2xl p-4 space-y-2" style={cardStyle}>
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-center mb-2" style={{ color: "var(--ti-muted)" }}>Editar informacoes</p>
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={() => { onTrackAction?.("edit_used"); onGoToStep(1); }}
+              className="py-2.5 rounded-xl text-[12px] font-medium transition-all duration-200 active:scale-[0.98]"
+              style={{ color: "var(--ti-muted)", backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+              Aparelho usado
+            </button>
+            <button onClick={() => { onTrackAction?.("edit_new"); onGoToStep(2); }}
+              className="py-2.5 rounded-xl text-[12px] font-medium transition-all duration-200 active:scale-[0.98]"
+              style={{ color: "var(--ti-muted)", backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+              Aparelho novo
+            </button>
+            <button onClick={() => { onTrackAction?.("edit_client"); onGoToStep(3); }}
+              className="py-2.5 rounded-xl text-[12px] font-medium transition-all duration-200 active:scale-[0.98]"
+              style={{ color: "var(--ti-muted)", backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+              Dados pessoais
+            </button>
+          </div>
+        </div>
+      )}
 
       {!showFeedback ? (
         <button onClick={() => setShowFeedback(true)}

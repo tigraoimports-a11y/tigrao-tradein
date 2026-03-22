@@ -83,9 +83,9 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     multiplier21: 1.21,
     validadeHoras: 24,
     whatsappNumero: "5521967442665",
-    bonusGarantiaAte3m: 200,
-    bonusGarantia3a6m: 300,
-    bonusGarantia6mMais: 400,
+    bonusGarantiaAte3m: 0.03,
+    bonusGarantia3a6m: 0.05,
+    bonusGarantia6mMais: 0.07,
   });
 
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
@@ -177,6 +177,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     setClienteNome(data.clienteNome); setClienteWhatsApp(data.clienteWhatsApp);
     setClienteInstagram(data.clienteInstagram); setClienteOrigem(data.clienteOrigem);
     setStep(4); window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleGoToStep(targetStep: number) {
+    trackAction(`quote_edit_step_${targetStep}`);
+    setStep(targetStep);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleCotarOutro() {
@@ -319,6 +325,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}
               validadeHoras={config.validadeHoras} vendedor={vendedor}
               onReset={handleReset} onCotarOutro={handleCotarOutro}
+              onGoToStep={handleGoToStep}
               onTrackAction={trackAction}
             />
           )}

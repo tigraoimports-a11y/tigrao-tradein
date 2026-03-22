@@ -123,29 +123,32 @@ function applyBatteryDiscount(battery: number, tiers: BatteryTier[]): number {
 
 
 export interface WarrantyBonuses {
-  ate3m: number;   // bonus para ate 3 meses restantes
-  de3a6m: number;  // bonus para 3 a 6 meses restantes
-  acima6m: number; // bonus para 6 meses ou mais
+  ate3m: number;   // percentual para ate 3 meses restantes (ex: 0.03 = 3%)
+  de3a6m: number;  // percentual para 3 a 6 meses restantes (ex: 0.05 = 5%)
+  acima6m: number; // percentual para 6 meses ou mais (ex: 0.07 = 7%)
 }
 
 const DEFAULT_WARRANTY_BONUSES: WarrantyBonuses = {
-  ate3m: 200,
-  de3a6m: 300,
-  acima6m: 400,
+  ate3m: 0.03,
+  de3a6m: 0.05,
+  acima6m: 0.07,
 };
 
 /**
  * Calcula bonus de garantia Apple baseado no mes informado.
- * Os valores de bonus sao configurados via Google Sheets (aba Configuracoes).
+ * O bonus e um percentual do valor base do modelo.
+ * Ex: iPhone 14 128GB base R$2.300, garantia >6m => bonus = 2300 * 0.07 = R$161
  */
 export function calculateWarrantyBonus(
   warrantyMonth: number | null,
   bonuses?: WarrantyBonuses,
-  warrantyYear?: number | null
+  warrantyYear?: number | null,
+  baseValue?: number
 ): number {
   if (warrantyMonth === null) return 0;
 
   const b = bonuses || DEFAULT_WARRANTY_BONUSES;
+  const base = baseValue || 0;
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -157,9 +160,9 @@ export function calculateWarrantyBonus(
   const diffMonths = (targetYear - currentYear) * 12 + (warrantyMonth - currentMonth);
 
   if (diffMonths <= 0) return 0; // garantia ja vencida ou vence esse mes
-  if (diffMonths <= 3) return b.ate3m;
-  if (diffMonths <= 6) return b.de3a6m;
-  return b.acima6m;
+  if (diffMonths <= 3) return Math.round(base * b.ate3m);
+  if (diffMonths <= 6) return Math.round(base * b.de3a6m);
+  return Math.round(base * b.acima6m);
 }
 
 /**
@@ -209,7 +212,7 @@ export function calculateTradeInValue(
 
   // Usa bonus de garantia especifico do modelo (se tiver), senao usa o global
   const effectiveBonuses = d.warrantyBonuses || warrantyBonuses;
-  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses, condition.warrantyYear);
+  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses, condition.warrantyYear, baseValue);
 
   // Desconto por não ter caixa original: -R$ 100
   if (!condition.hasOriginalBox) {
@@ -310,7 +313,7 @@ export function calculateIPadTradeInValue(
   value += DEFAULT_IPAD_DISCOUNTS.peeling[condition.peeling];
   value += applyBatteryDiscount(condition.battery, DEFAULT_IPAD_DISCOUNTS.batteryTiers);
 
-  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear);
+  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear, baseValue);
 
   if (condition.hasApplePencil) {
     value += DEFAULT_IPAD_DISCOUNTS.applePencilBonus;
@@ -388,7 +391,7 @@ export function calculateMacBookTradeInValue(
     value += DEFAULT_MACBOOK_DISCOUNTS.chargerMissing;
   }
 
-  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear);
+  value += calculateWarrantyBonus(condition.warrantyMonth, warrantyBonuses, condition.warrantyYear, baseValue);
 
   if (!condition.hasOriginalBox) {
     value -= 100;

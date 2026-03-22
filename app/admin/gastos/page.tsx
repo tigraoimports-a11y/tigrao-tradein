@@ -19,6 +19,7 @@ export default function GastosPage() {
 
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
+    horario: new Date().toTimeString().slice(0, 5),
     tipo: "SAIDA",
     categoria: "OUTROS",
     descricao: "",
@@ -53,6 +54,7 @@ export default function GastosPage() {
     setMsg("");
     const payload = {
       data: form.data,
+      hora: form.horario || null,
       tipo: form.tipo,
       categoria: form.categoria,
       descricao: form.descricao || null,
@@ -70,7 +72,7 @@ export default function GastosPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Gasto registrado!");
-      setForm((f) => ({ ...f, descricao: "", valor: "", observacao: "", is_dep_esp: false }));
+      setForm((f) => ({ ...f, descricao: "", valor: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
       fetchGastos();
     } else {
       setMsg("Erro: " + json.error);
@@ -101,8 +103,9 @@ export default function GastosPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
+            <div><p className={labelCls}>Horario</p><input type="time" value={form.horario} onChange={(e) => set("horario", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
               <option>SAIDA</option><option>ENTRADA</option>
             </select></div>
