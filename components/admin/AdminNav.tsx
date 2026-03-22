@@ -70,6 +70,15 @@ const NAV: NavEntry[] = [
     ],
   },
 
+  // Analytics
+  {
+    label: "Analytics", icon: "📊", roles: ["admin"],
+    items: [
+      { href: "/admin/analytics", label: "Funil Trade-In", icon: "📈", roles: ["admin"] },
+      { href: "/admin/mapa-vendas", label: "Mapa de Vendas", icon: "🗺️", roles: ["admin"] },
+    ],
+  },
+
   // Sistema
   {
     label: "Sistema", icon: "⚙️", roles: ["admin"],
@@ -181,7 +190,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-[#E8E8ED] z-40 flex flex-col transition-all duration-200 ${
+        className={`fixed top-0 left-0 h-full bg-white border-r border-[#E8E8ED] z-40 flex flex-col transition-all duration-200 print:hidden ${
           collapsed ? "w-[60px]" : "w-[220px]"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
