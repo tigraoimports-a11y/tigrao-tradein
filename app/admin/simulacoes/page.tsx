@@ -24,6 +24,7 @@ interface SimulacaoRow {
   condicao_linhas: string[] | null;
   contatado: boolean | null;
   vendedor: string | null;
+  follow_up_enviado: boolean | null;
 }
 
 const fmt = (v: number) =>
@@ -56,7 +57,8 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "funil">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil">("simulacoes");
+  const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -177,10 +179,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center">
-        {(["simulacoes", "funil"] as const).map((t) => (
+        {(["simulacoes", "followup", "funil"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulações" : "Funil de Conversão"}
+            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -196,7 +198,148 @@ export default function AdminPage() {
       {/* Funil tab — rendered inline */}
       {mainTab === "funil" && <FunnelPanel />}
 
-      {/* Simulações tab — existing content */}
+      {/* Follow-up tab */}
+      {mainTab === "followup" && (() => {
+        const followUpRows = data.filter(d => d.status === "SAIR" && !d.follow_up_enviado);
+        const sentRows = data.filter(d => d.status === "SAIR" && d.follow_up_enviado);
+
+        const buildFollowUpMsg = (row: SimulacaoRow) => {
+          const msg = [
+            `Ola! Sou consultor da TIGRAO IMPORTS`,
+            ``,
+            `Vi que voce realizou uma avaliacao de troca em nosso site.`,
+            ``,
+            `Seu aparelho: ${row.modelo_usado} ${row.storage_usado}`,
+            `Aparelho novo: ${row.modelo_novo} ${row.storage_novo}`,
+            `Sua cotacao: ${fmt(row.diferenca)}`,
+            ``,
+            `Sua cotacao ainda esta valida! Quer garantir?`,
+            ``,
+            `Estou a disposicao para qualquer duvida`,
+          ].join("\n");
+          return msg;
+        };
+
+        const handleFollowUp = async (row: SimulacaoRow) => {
+          setFollowUpLoading(row.id);
+          const num = row.whatsapp.replace(/\D/g, "");
+          const full = num.startsWith("55") ? num : `55${num}`;
+          const msg = buildFollowUpMsg(row);
+          window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
+
+          // Mark as follow_up_enviado
+          await fetch("/api/admin/followup", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ id: row.id }),
+          });
+
+          setData(prev => prev ? prev.map(r => r.id === row.id ? { ...r, follow_up_enviado: true } : r) : prev);
+          setFollowUpLoading(null);
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Pending follow-ups */}
+            <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Pendentes de Follow-up</h3>
+                  <p className="text-xs text-[#86868B] mt-0.5">Clientes que sairam sem fechar pedido</p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">{followUpRows.length} pendente{followUpRows.length !== 1 ? "s" : ""}</span>
+              </div>
+
+              {followUpRows.length === 0 ? (
+                <div className="px-5 py-10 text-center text-[#86868B]">
+                  <p className="text-sm">Nenhum follow-up pendente</p>
+                  <p className="text-xs mt-1">Todos os clientes ja foram contatados</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {["Data", "Nome", "WhatsApp", "Aparelho usado", "Produto novo", "Cotacao PIX", "Acao"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {followUpRows.map(row => (
+                        <tr key={row.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
+                          <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
+                          <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
+                          <td className="px-4 py-3">
+                            <a href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline whitespace-nowrap">{row.whatsapp}</a>
+                          </td>
+                          <td className="px-4 py-3 text-[#6E6E73] whitespace-nowrap">{row.modelo_usado} {row.storage_usado}</td>
+                          <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">{row.modelo_novo} {row.storage_novo}</td>
+                          <td className="px-4 py-3 text-[#E8740E] font-bold whitespace-nowrap">{fmt(row.diferenca)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <button
+                              disabled={followUpLoading === row.id}
+                              onClick={() => handleFollowUp(row)}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                            >
+                              {followUpLoading === row.id ? "Enviando..." : "Enviar Follow-up"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Already sent follow-ups */}
+            {sentRows.length > 0 && (
+              <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#1D1D1F]">Follow-ups Enviados</h3>
+                    <p className="text-xs text-[#86868B] mt-0.5">Clientes que ja receberam follow-up</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{sentRows.length} enviado{sentRows.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {["Data", "Nome", "WhatsApp", "Aparelho usado", "Produto novo", "Cotacao PIX", "Status"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sentRows.map(row => (
+                        <tr key={row.id} className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
+                          <td className="px-4 py-3 text-[#86868B] whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
+                          <td className="px-4 py-3 text-[#1D1D1F] font-medium whitespace-nowrap">{row.nome}</td>
+                          <td className="px-4 py-3">
+                            <a href={(() => { const n = row.whatsapp.replace(/\D/g, ""); return `https://wa.me/${n.startsWith("55") ? n : `55${n}`}`; })()} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline whitespace-nowrap">{row.whatsapp}</a>
+                          </td>
+                          <td className="px-4 py-3 text-[#6E6E73] whitespace-nowrap">{row.modelo_usado} {row.storage_usado}</td>
+                          <td className="px-4 py-3 text-[#1D1D1F] whitespace-nowrap">{row.modelo_novo} {row.storage_novo}</td>
+                          <td className="px-4 py-3 text-[#E8740E] font-bold whitespace-nowrap">{fmt(row.diferenca)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-green-100 text-green-700 text-xs font-semibold">
+                              Enviado
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Simulacoes tab — existing content */}
       {mainTab === "simulacoes" && (<>
       {/* Refresh button - moved to tabs row */}
 

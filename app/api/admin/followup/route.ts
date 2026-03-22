@@ -60,8 +60,33 @@ export async function POST(request: Request) {
 
   await supabase
     .from("simulacoes")
-    .update({ contatado: true })
+    .update({ contatado: true, follow_up_enviado: true })
     .eq("id", id);
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(request: Request) {
+  const pw = request.headers.get("x-admin-password");
+  if (pw !== process.env.ADMIN_PASSWORD) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await request.json();
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  const { supabase } = await import("@/lib/supabase");
+
+  const { error } = await supabase
+    .from("simulacoes")
+    .update({ follow_up_enviado: true })
+    .eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
