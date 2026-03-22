@@ -19,7 +19,10 @@ export async function sendTelegramMessage(
 ): Promise<boolean> {
   const token = BOT_TOKEN;
   const chat = chatId ?? GRUPO_ID;
-  if (!token || !chat) return false;
+  if (!token || !chat) {
+    console.error("[Telegram] Token ou chat_id vazio — BOT_TOKEN:", token ? "OK" : "VAZIO", "chat:", chat || "VAZIO");
+    return false;
+  }
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -31,8 +34,13 @@ export async function sendTelegramMessage(
         parse_mode: parseMode,
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[Telegram] Erro ao enviar mensagem:", res.status, body);
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error("[Telegram] Exceção ao enviar mensagem:", err);
     return false;
   }
 }

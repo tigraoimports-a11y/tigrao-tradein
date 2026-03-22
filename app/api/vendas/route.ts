@@ -187,6 +187,7 @@ export async function PATCH(req: NextRequest) {
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];
     const lucroCalc = Number(venda.preco_vendido || 0) - Number(venda.custo || 0);
+    console.log("[Vendas] Enviando notificação Telegram para venda finalizada:", venda.cliente, venda.produto);
     sendSaleNotification({
       produto: venda.produto,
       cor: venda.cor,
@@ -197,7 +198,10 @@ export async function PATCH(req: NextRequest) {
       banco: venda.banco,
       forma: venda.forma,
       vendedor: venda.vendedor || "sistema",
-    }).catch(() => {});
+    }).then(ok => {
+      if (!ok) console.error("[Vendas] Falha ao enviar notificação Telegram para:", venda.cliente);
+      else console.log("[Vendas] Notificação Telegram enviada com sucesso para:", venda.cliente);
+    }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
   }
 
   return NextResponse.json({ ok: true, updated: data });
