@@ -205,10 +205,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <AdminNav userRole={user.role} />
 
         {/* Main content area — offset by sidebar width */}
-        <div className="lg:ml-[220px] min-h-screen flex flex-col">
+        <div className="lg:ml-[220px] print:ml-0 min-h-screen flex flex-col">
           {/* Top bar */}
           <div
-            className="px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30 border-b transition-colors duration-300"
+            className="px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30 border-b transition-colors duration-300 print:hidden"
             style={{
               background: darkMode ? "#141414" : "white",
               borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",

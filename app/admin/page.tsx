@@ -182,13 +182,24 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-[#1D1D1F]">Dashboard Financeiro</h1>
           <p className="text-xs text-[#86868B]">Atualizado em {lastUpdate}</p>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] transition-colors disabled:opacity-50"
-        >
-          🔄 Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const mes = new Date().toISOString().slice(0, 7);
+              window.open(`/admin/relatorio?month=${mes}`, "_blank");
+            }}
+            className="px-3 py-2 rounded-xl bg-[#F5F5F7] text-[#1D1D1F] text-sm font-medium hover:bg-[#E8E8ED] transition-colors"
+          >
+            📄 Relatorio PDF
+          </button>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] transition-colors disabled:opacity-50"
+          >
+            🔄 Atualizar
+          </button>
+        </div>
       </div>
 
       {/* ── Mobile KPI Summary (só aparece em telas pequenas) ── */}
