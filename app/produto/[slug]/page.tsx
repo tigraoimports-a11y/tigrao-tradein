@@ -187,18 +187,69 @@ export default function ProdutoPage() {
       const data = await res.json();
       if (data.erro) { setCepError("CEP nao encontrado"); setCepLoading(false); return; }
 
-      // Geocoding para calcular distância
-      let dist = 999;
-      try {
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cleanCep}&country=BR&format=json&limit=1`, {
-          headers: { "User-Agent": "TigraoImports/1.0" },
-        });
-        const geoData = await geoRes.json();
-        if (geoData.length > 0) dist = Math.round(haversine(BARRA_LAT, BARRA_LNG, parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)));
-      } catch { /* fallback */ }
+      // Calcular distância: primeiro tenta geocodificar pela cidade, depois por CEP range
+      let dist = estimarDistanciaPorCidade(data.localidade, data.uf);
+
+      // Se não encontrou na tabela de cidades, tentar Nominatim como fallback
+      if (dist === null) {
+        try {
+          // Tentar pelo endereço completo (mais confiável que só CEP)
+          const query = encodeURIComponent(`${data.bairro || ""} ${data.localidade} ${data.uf} Brasil`);
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=br`, {
+            headers: { "User-Agent": "TigraoImports/1.0" },
+          });
+          const geoData = await geoRes.json();
+          if (geoData.length > 0) dist = Math.round(haversine(BARRA_LAT, BARRA_LNG, parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)));
+        } catch { /* fallback */ }
+      }
+
+      // Se é Rio de Janeiro e não conseguiu calcular, assumir dentro da área
+      if (dist === null && data.uf === "RJ") dist = 20;
+      if (dist === null) dist = 999;
 
       setCepInfo({ bairro: data.bairro || "", cidade: data.localidade, uf: data.uf, distancia: dist });
     } catch { setCepError("Erro ao consultar CEP"); } finally { setCepLoading(false); }
+  }
+
+  // Tabela de coordenadas das principais cidades perto da Barra da Tijuca
+  function estimarDistanciaPorCidade(cidade: string, uf: string): number | null {
+    const cidadesRJ: Record<string, [number, number]> = {
+      "Rio de Janeiro": [-22.9068, -43.1729],
+      "Niteroi": [-22.8833, -43.1036],
+      "Sao Goncalo": [-22.8269, -43.0634],
+      "Duque de Caxias": [-22.7856, -43.3117],
+      "Nova Iguacu": [-22.7592, -43.4510],
+      "Belford Roxo": [-22.7642, -43.3990],
+      "Nilopolis": [-22.8058, -43.4189],
+      "Mesquita": [-22.8025, -43.3869],
+      "Queimados": [-22.7106, -43.5531],
+      "Itaguai": [-22.8728, -43.7750],
+      "Seropedica": [-22.7444, -43.7086],
+      "Mangaratiba": [-22.9594, -44.0408],
+      "Angra dos Reis": [-23.0067, -44.3181],
+      "Volta Redonda": [-22.5231, -44.1042],
+      "Petropolis": [-22.5047, -43.1787],
+      "Teresopolis": [-22.4122, -42.9656],
+      "Marica": [-22.9194, -42.8186],
+      "Cabo Frio": [-22.8789, -42.0186],
+      "Macae": [-22.3708, -41.7869],
+      "Campos dos Goytacazes": [-21.7545, -41.3244],
+      "Resende": [-22.4686, -44.4467],
+      "Barra Mansa": [-22.5444, -44.1756],
+      "Itaborai": [-22.7447, -42.8597],
+      "Magé": [-22.6528, -43.0394],
+    };
+    // Normalizar nome da cidade (remover acentos)
+    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const cidadeNorm = norm(cidade);
+    for (const [nome, [lat, lng]] of Object.entries(cidadesRJ)) {
+      if (norm(nome) === cidadeNorm || cidadeNorm.includes(norm(nome)) || norm(nome).includes(cidadeNorm)) {
+        return Math.round(haversine(BARRA_LAT, BARRA_LNG, lat, lng));
+      }
+    }
+    // Se é do RJ mas não está na lista, estimar
+    if (uf === "RJ") return 30; // assume dentro da região
+    return null;
   }
 
   // Build WhatsApp message
