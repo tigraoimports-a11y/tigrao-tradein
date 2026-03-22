@@ -11,29 +11,145 @@ interface NavItem {
   roles: string[];
 }
 
-const NAV_ITEMS: NavItem[] = [
+interface NavGroup {
+  label: string;
+  icon: string;
+  roles: string[];
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return "items" in entry;
+}
+
+const NAV: NavEntry[] = [
   { href: "/admin", label: "Dashboard", icon: "📊", roles: ["admin"] },
-  { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin"] },
-  { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque"] },
-  { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin"] },
-  { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
-  { href: "/admin/simulacoes", label: "Simulacoes", icon: "📱", roles: ["admin"] },
-  { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
-  { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque"] },
-  { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
-  { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
-  { href: "/admin/precos", label: "Precos", icon: "🏷️", roles: ["admin"] },
-  { href: "/admin/mostruario", label: "Mostruario", icon: "🖼️", roles: ["admin"] },
-  { href: "/admin/conciliacao", label: "Conciliacao", icon: "🔍", roles: ["admin"] },
-  { href: "/admin/agendamento-precos", label: "Agendar Precos", icon: "📅", roles: ["admin"] },
+
+  // Financeiro
+  {
+    label: "Financeiro", icon: "💰", roles: ["admin"],
+    items: [
+      { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin"] },
+      { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin"] },
+      { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
+      { href: "/admin/conciliacao", label: "Conciliação", icon: "🔍", roles: ["admin"] },
+    ],
+  },
+
+  // Produtos
+  {
+    label: "Produtos", icon: "📦", roles: ["admin", "estoque"],
+    items: [
+      { href: "/admin/estoque", label: "Estoque", icon: "📦", roles: ["admin", "estoque"] },
+      { href: "/admin/precos", label: "Preços", icon: "🏷️", roles: ["admin"] },
+      { href: "/admin/agendamento-precos", label: "Agendar Preços", icon: "📅", roles: ["admin"] },
+      { href: "/admin/fornecedores", label: "Fornecedores", icon: "🤝", roles: ["admin"] },
+      { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
+    ],
+  },
+
+  // Operacional
+  {
+    label: "Operacional", icon: "🚚", roles: ["admin", "estoque"],
+    items: [
+      { href: "/admin/entregas", label: "Entregas", icon: "🚚", roles: ["admin", "estoque"] },
+      { href: "/admin/encomendas", label: "Encomendas", icon: "🛒", roles: ["admin", "estoque"] },
+      { href: "/admin/etiquetas", label: "Etiquetas", icon: "🏷️", roles: ["admin", "estoque"] },
+    ],
+  },
+
+  // Site
+  {
+    label: "Site", icon: "🌐", roles: ["admin"],
+    items: [
+      { href: "/admin/mostruario", label: "Mostruário", icon: "🖼️", roles: ["admin"] },
+      { href: "/admin/simulacoes", label: "Simulações", icon: "📱", roles: ["admin"] },
+    ],
+  },
 ];
 
 export default function AdminNav({ userRole }: { userRole: string }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    // Auto-open the group that contains the current page
+    const s = new Set<string>();
+    for (const entry of NAV) {
+      if (isGroup(entry) && entry.items.some((i) => pathname === i.href || pathname?.startsWith(i.href + "/"))) {
+        s.add(entry.label);
+      }
+    }
+    return s;
+  });
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(userRole));
+  function toggleGroup(label: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
+  function renderItem(item: NavItem) {
+    const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href + "/"));
+    if (!item.roles.includes(userRole)) return null;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => setMobileOpen(false)}
+        className={`flex items-center gap-3 px-3 py-2 mx-2 my-0.5 rounded-lg text-sm font-medium transition-colors ${
+          isActive
+            ? "bg-[#FFF5EB] text-[#E8740E] border border-[#E8740E]/20"
+            : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+        }`}
+        title={collapsed ? item.label : undefined}
+      >
+        <span className="text-base shrink-0">{item.icon}</span>
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  }
+
+  function renderGroup(group: NavGroup) {
+    const visibleItems = group.items.filter((i) => i.roles.includes(userRole));
+    if (visibleItems.length === 0) return null;
+    if (!group.roles.some((r) => r === userRole)) return null;
+
+    const isOpen = openGroups.has(group.label);
+    const hasActive = visibleItems.some((i) => pathname === i.href || pathname?.startsWith(i.href + "/"));
+
+    if (collapsed) {
+      // When collapsed, show first item's icon as representative
+      return visibleItems.map((item) => renderItem(item));
+    }
+
+    return (
+      <div key={group.label} className="my-1">
+        <button
+          onClick={() => toggleGroup(group.label)}
+          className={`flex items-center gap-3 px-3 py-2 mx-2 rounded-lg text-sm font-medium w-[calc(100%-16px)] transition-colors ${
+            hasActive && !isOpen
+              ? "text-[#E8740E] bg-[#FFF5EB]/50"
+              : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+          }`}
+        >
+          <span className="text-base shrink-0">{group.icon}</span>
+          <span className="truncate flex-1 text-left">{group.label}</span>
+          <span className={`text-[10px] transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>▶</span>
+        </button>
+        {isOpen && (
+          <div className="ml-3 border-l border-[#E8E8ED] pl-1 mt-0.5">
+            {visibleItems.map((item) => renderItem(item))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -72,25 +188,7 @@ export default function AdminNav({ userRole }: { userRole: string }) {
 
         {/* Nav items */}
         <nav className="flex-1 py-2 overflow-y-auto">
-          {visibleItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 mx-2 my-0.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-[#FFF5EB] text-[#E8740E] border border-[#E8740E]/20"
-                    : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
-                }`}
-                title={collapsed ? item.label : undefined}
-              >
-                <span className="text-base shrink-0">{item.icon}</span>
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </Link>
-            );
-          })}
+          {NAV.map((entry) => (isGroup(entry) ? renderGroup(entry) : renderItem(entry)))}
         </nav>
 
         {/* Collapse toggle (desktop only) */}
