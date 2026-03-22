@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import AdminNav from "./AdminNav";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 export interface UserInfo {
   id: string;
@@ -164,6 +165,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const { isOnline } = useOnlineStatus();
+
   // Dark mode CSS variables
   const darkStyles = darkMode ? {
     "--admin-bg": "#0A0A0A",
@@ -211,6 +214,19 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
             }}
           >
+            {/* Online/Offline indicator */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5" title={isOnline ? "Online" : "Sem conexão"}>
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: isOnline ? "#2ECC71" : "#E74C3C" }}
+              />
+              {!isOnline && (
+                <span className="text-[10px] sm:text-xs font-medium" style={{ color: "#E74C3C" }}>
+                  Offline
+                </span>
+              )}
+            </div>
+
             {/* Dark mode toggle */}
             <button
               onClick={toggleDark}

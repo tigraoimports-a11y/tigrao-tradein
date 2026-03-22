@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularBruto, calcularLiquido, calcularRecebimento } from "@/lib/taxas";
 import { useTabParam } from "@/lib/useTabParam";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
+import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -26,6 +28,10 @@ export default function VendasPage() {
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const { isOnline } = useOnlineStatus();
+  const [offlineCount, setOfflineCount] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const isSyncing = useRef(false);
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
@@ -182,6 +188,60 @@ export default function VendasPage() {
     const unlocked = sessionStorage.getItem("vendas_unlocked");
     if (unlocked === "true") setVendasUnlocked(true);
   }, [isAdmin]);
+
+  // Keep offline queue count in sync
+  useEffect(() => {
+    setOfflineCount(getQueueCount());
+  }, []);
+
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (!isOnline || !password) return;
+
+    const syncQueue = async () => {
+      const queue = getQueue();
+      if (queue.length === 0 || isSyncing.current) return;
+
+      isSyncing.current = true;
+      let synced = 0;
+      const total = queue.length;
+
+      for (let i = queue.length - 1; i >= 0; i--) {
+        setSyncStatus(`Sincronizando venda ${total - i} de ${total}...`);
+        try {
+          const res = await fetch("/api/vendas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify(queue[i].payload),
+          });
+          const json = await res.json();
+          if (json.ok) {
+            removeFromQueue(i);
+            synced++;
+          }
+        } catch {
+          // Keep in queue on failure
+        }
+      }
+
+      setOfflineCount(getQueueCount());
+      isSyncing.current = false;
+
+      if (synced > 0) {
+        setSyncStatus(`${synced} venda${synced > 1 ? "s" : ""} sincronizada${synced > 1 ? "s" : ""} com sucesso!`);
+        fetchVendas();
+        fetchEstoque();
+        setTimeout(() => setSyncStatus(null), 5000);
+      } else if (getQueueCount() > 0) {
+        setSyncStatus("Erro ao sincronizar. Tentando novamente em breve...");
+        setTimeout(() => setSyncStatus(null), 5000);
+      } else {
+        setSyncStatus(null);
+      }
+    };
+
+    syncQueue();
+  }, [isOnline, password, fetchVendas, fetchEstoque]);
 
   if (!vendasUnlocked) {
     return (
@@ -503,6 +563,26 @@ export default function VendasPage() {
     setSaving(true);
     setMsg("");
 
+    // OFFLINE MODE: save to local queue instead of posting
+    if (!isOnline) {
+      let savedCount = 0;
+      for (const prod of allProducts) {
+        const payload = buildPayload(prod);
+        addToQueue(payload);
+        savedCount++;
+      }
+      setOfflineCount(getQueueCount());
+      setDuplicadoInfo(null);
+      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
+      setLastClienteData(clienteInfo);
+      setProdutosCarrinho([]);
+      clearProductFields();
+      const plural = savedCount > 1 ? "s" : "";
+      setMsg(`Sem conexao — ${savedCount} venda${plural} salva${plural} localmente. Sera sincronizada quando a internet voltar.`);
+      setSaving(false);
+      return;
+    }
+
     let successCount = 0;
     const errors: string[] = [];
 
@@ -522,7 +602,11 @@ export default function VendasPage() {
           errors.push(`${prod.produto}: ${json.error}`);
         }
       } catch (err) {
-        errors.push(`${prod.produto}: ${err}`);
+        // Network error during online attempt — save to offline queue
+        const payload = buildPayload(prod);
+        addToQueue(payload);
+        setOfflineCount(getQueueCount());
+        errors.push(`${prod.produto}: salva offline (erro de rede)`);
       }
     }
 
@@ -533,7 +617,7 @@ export default function VendasPage() {
       setProdutosCarrinho([]);
       clearProductFields();
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`✅ ${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulário.`);
+      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulario.`);
       fetchVendas();
       fetchEstoque();
     } else {
@@ -758,6 +842,45 @@ export default function VendasPage() {
 
       {tab === "nova" ? (
         /* Form de Nova Venda */
+        <div className="space-y-4">
+          {/* Offline banner */}
+          {!isOnline && (
+            <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "#FFF3E0", border: "1px solid #E8740E" }}>
+              <span className="text-lg">📡</span>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "#E65100" }}>
+                  Modo Offline — Vendas serao salvas localmente e sincronizadas quando a conexao voltar
+                </p>
+                {offlineCount > 0 && (
+                  <p className="text-xs mt-0.5" style={{ color: "#BF360C" }}>
+                    {offlineCount} venda{offlineCount > 1 ? "s" : ""} pendente{offlineCount > 1 ? "s" : ""} de sincronizacao
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sync status banner */}
+          {syncStatus && (
+            <div
+              className="rounded-xl px-4 py-3 text-sm font-medium"
+              style={{
+                background: syncStatus.includes("sucesso") ? "#E8F5E9" : syncStatus.includes("Erro") ? "#FFEBEE" : "#E3F2FD",
+                border: `1px solid ${syncStatus.includes("sucesso") ? "#2ECC71" : syncStatus.includes("Erro") ? "#E74C3C" : "#2196F3"}`,
+                color: syncStatus.includes("sucesso") ? "#1B5E20" : syncStatus.includes("Erro") ? "#B71C1C" : "#0D47A1",
+              }}
+            >
+              {syncStatus}
+            </div>
+          )}
+
+          {/* Pending offline queue indicator (when online) */}
+          {isOnline && offlineCount > 0 && !syncStatus && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "#FFF8E1", border: "1px solid #FFC107", color: "#F57F17" }}>
+              {offlineCount} venda{offlineCount > 1 ? "s" : ""} pendente{offlineCount > 1 ? "s" : ""} de sincronizacao...
+            </div>
+          )}
+
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
@@ -1308,6 +1431,7 @@ export default function VendasPage() {
               </button>
             )}
           </div>
+        </div>
         </div>
       ) : (
         /* Vendas Em Andamento / Finalizadas */
