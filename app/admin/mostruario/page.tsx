@@ -457,6 +457,34 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+/* ── Emoji Picker Grid ── */
+const EMOJI_GRID = [
+  "📱", "💻", "🖥️", "⌨️", "🖨️", "⌚", "🎧", "🎵",
+  "📦", "🔌", "🔋", "💾", "📷", "📹", "🎮", "🕹️",
+  "📺", "💡", "🔧", "🎬", "🛒", "💎", "🎁", "🏷️",
+  "⭐", "🔥", "❤️", "💰", "🎯", "🏆", "👑", "🌟",
+];
+
+function EmojiPicker({ value, onChange }: { value: string; onChange: (emoji: string) => void }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</label>
+      <div className="grid grid-cols-8 gap-1.5">
+        {EMOJI_GRID.map((e) => (
+          <button key={e} onClick={() => onChange(e)} type="button"
+            className={`w-9 h-9 flex items-center justify-center text-lg rounded-lg transition-all ${value === e ? "bg-[#E8740E]/15 ring-2 ring-[#E8740E] scale-110" : "bg-[#F5F5F7] hover:bg-[#E8E8ED]"}`}>
+            {e}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-[10px] text-[#86868B]">Ou digite:</span>
+        <input value={value} onChange={(e) => onChange(e.target.value)} className="w-14 px-2 py-1 border border-[#D2D2D7] rounded-lg text-sm text-center" />
+      </div>
+    </div>
+  );
+}
+
 /* ── New Category Modal ── */
 function NewCategoryModal({ onClose, onSave }: { onClose: () => void; onSave: (data: { nome: string; emoji: string }) => void }) {
   const [nome, setNome] = useState("");
@@ -465,7 +493,7 @@ function NewCategoryModal({ onClose, onSave }: { onClose: () => void; onSave: (d
     <Modal title="Nova Categoria" onClose={onClose}>
       <div className="space-y-4">
         <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome</label><input value={nome} onChange={(e) => setNome(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="Ex: iPhone" autoFocus /></div>
-        <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</label><input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-20 px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm text-center" /></div>
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-[#86868B]">Cancelar</button>
           <button onClick={() => nome.trim() && onSave({ nome: nome.trim(), emoji })} disabled={!nome.trim()} className="px-5 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold disabled:opacity-50">Criar</button>
@@ -484,7 +512,7 @@ function EditCategoryModal({ categoria, onClose, onSave, onDelete }: { categoria
     <Modal title="Editar Categoria" onClose={onClose}>
       <div className="space-y-4">
         <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome</label><input value={nome} onChange={(e) => setNome(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
-        <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</label><input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-20 px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm text-center" /></div>
+        <EmojiPicker value={emoji} onChange={setEmoji} />
         <div><button onClick={() => setVisivel(!visivel)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${visivel ? "bg-[#34C759]/10 text-[#34C759]" : "bg-[#F5F5F7] text-[#AEAEB2]"}`}>{visivel ? "👁️ Visivel" : "👁️‍🗨️ Oculta"}</button></div>
         <div className="flex items-center justify-between">
           <button onClick={onDelete} className="text-xs text-[#FF3B30] font-medium hover:underline">Deletar Categoria</button>
