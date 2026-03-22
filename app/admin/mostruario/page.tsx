@@ -411,8 +411,7 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
               <span>{config.manutencao ? "🔧" : "✅"}</span> Modo Manutencao: {config.manutencao ? "ATIVO" : "Desativado"}
             </button>
           </div>
-          <div>
-            <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-2">Tema do Mostruario</label>
+          <TemaAccordion label="Alterar Tema do Mostruario" sublabel={`Ativo: ${TEMAS[getTemaKey(config.tema)]?.nome || config.tema}`}>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {TEMA_KEYS.map((key) => { const t = TEMAS[key]; const isActive = getTemaKey(config.tema) === key; return (
                 <button key={key} onClick={() => setConfig({ ...config, tema: key })} className={`relative p-3 rounded-xl border-2 text-left transition-all ${isActive ? "border-[#E8740E] shadow-md" : "border-[#E8E8ED] hover:border-[#D2D2D7]"}`}>
@@ -425,9 +424,8 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
                 </button>
               ); })}
             </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-2">Tema do Trade-In (Diurno — 5h ate 19h)</label>
+          </TemaAccordion>
+          <TemaAccordion label="Alterar Tema Trade-In (Diurno — 5h ate 19h)" sublabel={`Ativo: ${TEMAS_TRADEIN[config.tema_tradein as keyof typeof TEMAS_TRADEIN]?.nome || config.tema_tradein}`}>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {TEMA_TRADEIN_KEYS.map((key) => { const t = TEMAS_TRADEIN[key]; const isActive = config.tema_tradein === key; return (
                 <button key={key} onClick={() => setConfig({ ...config, tema_tradein: key })} className={`relative p-3 rounded-xl border-2 text-left transition-all ${isActive ? "border-[#E8740E] shadow-md" : "border-[#E8E8ED] hover:border-[#D2D2D7]"}`}>
@@ -440,9 +438,8 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
                 </button>
               ); })}
             </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-2">Tema do Trade-In (Noturno — 19h ate 5h) 🌙</label>
+          </TemaAccordion>
+          <TemaAccordion label="Alterar Tema Trade-In (Noturno — 19h ate 5h) 🌙" sublabel={`Ativo: ${TEMAS_TRADEIN[config.tema_tradein_noite as keyof typeof TEMAS_TRADEIN]?.nome || config.tema_tradein_noite}`}>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {TEMA_TRADEIN_KEYS.map((key) => { const t = TEMAS_TRADEIN[key]; const isActive = config.tema_tradein_noite === key; return (
                 <button key={key} onClick={() => setConfig({ ...config, tema_tradein_noite: key })} className={`relative p-3 rounded-xl border-2 text-left transition-all ${isActive ? "border-[#7C5CFC] shadow-md" : "border-[#E8E8ED] hover:border-[#D2D2D7]"}`}>
@@ -455,10 +452,27 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
                 </button>
               ); })}
             </div>
-          </div>
+          </TemaAccordion>
           <div className="flex justify-end"><button onClick={saveConfig} disabled={savingConfig} className="px-5 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">{savingConfig ? "Salvando..." : "Salvar Config"}</button></div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Tema Accordion (colapsável) ── */
+function TemaAccordion({ label, sublabel, children }: { label: string; sublabel: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-[#E8E8ED] rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#F5F5F7] transition-colors">
+        <div>
+          <span className="text-xs font-bold text-[#1D1D1F]">{label}</span>
+          <span className="block text-[10px] text-[#86868B] mt-0.5">{sublabel}</span>
+        </div>
+        <span className="text-[#86868B] text-sm">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && <div className="px-4 pb-4 border-t border-[#E8E8ED]">{children}</div>}
     </div>
   );
 }
