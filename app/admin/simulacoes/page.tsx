@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+
+const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
 
 interface SimulacaoRow {
   id: string;
@@ -190,10 +193,8 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Funil tab — iframe to analytics page */}
-      {mainTab === "funil" && (
-        <iframe src="/admin/analytics" className="w-full border-0 rounded-2xl" style={{ height: "calc(100vh - 180px)" }} />
-      )}
+      {/* Funil tab — rendered inline */}
+      {mainTab === "funil" && <FunnelPanel />}
 
       {/* Simulações tab — existing content */}
       {mainTab === "simulacoes" && (<>
