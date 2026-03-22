@@ -13,46 +13,42 @@ interface LogEntry {
   created_at: string;
 }
 
-const ACTION_ICONS: Record<string, string> = {
-  "Registrou venda": "💰",
-  "Excluiu venda": "🗑️",
-  "Registrou gasto": "📤",
-  "Adicionou ao estoque": "📦",
-  "Removeu do estoque": "🗑️",
-  "Alterou preco": "🏷️",
-  "Alterou usuario": "👤",
-  "Criou usuario": "👤",
+const ACTION_CONFIG: Record<string, { icon: string; color: string }> = {
+  "Registrou venda": { icon: "💰", color: "#2ECC71" },
+  "Excluiu venda": { icon: "🗑️", color: "#E74C3C" },
+  "Registrou gasto": { icon: "📤", color: "#E8740E" },
+  "Adicionou ao estoque": { icon: "📦", color: "#3498DB" },
+  "Removeu do estoque": { icon: "📦", color: "#E74C3C" },
+  "Alterou preco": { icon: "🏷️", color: "#9B59B6" },
+  "Alterou usuario": { icon: "👤", color: "#6E6E73" },
+  "Criou usuario": { icon: "👤", color: "#2ECC71" },
 };
 
-function getIcon(acao: string): string {
-  for (const [key, icon] of Object.entries(ACTION_ICONS)) {
-    if (acao.includes(key)) return icon;
+function getConfig(acao: string) {
+  for (const [key, cfg] of Object.entries(ACTION_CONFIG)) {
+    if (acao.includes(key)) return cfg;
   }
-  return "📋";
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return { icon: "📋", color: "#86868B" };
 }
 
 function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function timeAgo(iso: string): string {
-  const now = new Date();
-  const d = new Date(iso);
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (diffMin < 1) return "agora";
   if (diffMin < 60) return `${diffMin}min`;
   const diffH = Math.floor(diffMin / 60);
   if (diffH < 24) return `${diffH}h`;
-  const diffD = Math.floor(diffH / 24);
-  return `${diffD}d`;
+  return `${Math.floor(diffH / 24)}d`;
 }
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+type Periodo = "hoje" | "ontem" | "7dias" | "30dias" | "tudo";
 
 export default function LogPage() {
   const { password } = useAdmin();
@@ -61,22 +57,31 @@ export default function LogPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [periodo, setPeriodo] = useState<Periodo>("hoje");
 
-  // Filters
-  const [filtroUsuario, setFiltroUsuario] = useState("");
-  const [filtroAcao, setFiltroAcao] = useState("");
-  const [filtroFrom, setFiltroFrom] = useState("");
-  const [filtroTo, setFiltroTo] = useState("");
+  const getDateRange = useCallback((): { from: string; to: string } => {
+    const today = new Date();
+    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    switch (periodo) {
+      case "hoje": return { from: fmt(today), to: fmt(today) };
+      case "ontem": { const y = new Date(today); y.setDate(y.getDate() - 1); return { from: fmt(y), to: fmt(y) }; }
+      case "7dias": { const d = new Date(today); d.setDate(d.getDate() - 7); return { from: fmt(d), to: fmt(today) }; }
+      case "30dias": { const d = new Date(today); d.setDate(d.getDate() - 30); return { from: fmt(d), to: fmt(today) }; }
+      default: return { from: "", to: "" };
+    }
+  }, [periodo]);
 
   const fetchLog = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: "50" });
-      if (filtroUsuario) params.set("usuario", filtroUsuario);
-      if (filtroAcao) params.set("acao", filtroAcao);
-      if (filtroFrom) params.set("from", filtroFrom);
-      if (filtroTo) params.set("to", filtroTo);
-
+      const range = getDateRange();
+      if (range.from) params.set("from", range.from);
+      if (range.to) {
+        const nextDay = new Date(range.to);
+        nextDay.setDate(nextDay.getDate() + 1);
+        params.set("to", nextDay.toISOString().split("T")[0]);
+      }
       const res = await fetch(`/api/admin/log?${params}`, {
         headers: { "x-admin-password": password },
       });
@@ -88,104 +93,117 @@ export default function LogPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, page, filtroUsuario, filtroAcao, filtroFrom, filtroTo]);
+  }, [password, page, getDateRange]);
 
   useEffect(() => { fetchLog(); }, [fetchLog]);
+  useEffect(() => { setPage(1); }, [periodo]);
 
-  // Reset page when filters change
-  useEffect(() => { setPage(1); }, [filtroUsuario, filtroAcao, filtroFrom, filtroTo]);
+  // Agrupar por hora
+  const grouped = entries.reduce<Record<string, LogEntry[]>>((acc, e) => {
+    const hour = formatTime(e.created_at).split(":")[0] + ":00";
+    if (!acc[hour]) acc[hour] = [];
+    acc[hour].push(e);
+    return acc;
+  }, {});
+
+  const periodoLabel: Record<Periodo, string> = {
+    hoje: `Hoje — ${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}`,
+    ontem: "Ontem",
+    "7dias": "Últimos 7 dias",
+    "30dias": "Últimos 30 dias",
+    tudo: "Todo o histórico",
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[#1D1D1F]">Log de Atividades</h1>
-        <span className="text-xs text-[#86868B]">{total} registros</span>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold">Log de Atividades</h1>
+          <p className="text-xs text-[#86868B] mt-0.5">{periodoLabel[periodo]}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[#86868B]">{total} registros</span>
+          <button onClick={fetchLog} className="px-3 py-1.5 rounded-xl text-xs bg-[#E8740E] text-white hover:bg-[#D4680D] transition-colors">
+            Atualizar
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-2xl border border-[#E8E8ED] p-4 flex flex-wrap gap-3">
-        <div className="flex-1 min-w-[140px]">
-          <label className="text-[10px] text-[#86868B] uppercase tracking-wider font-medium">Usuario</label>
-          <input
-            type="text"
-            value={filtroUsuario}
-            onChange={(e) => setFiltroUsuario(e.target.value)}
-            placeholder="Todos"
-            className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E8E8ED] text-sm text-[#1D1D1F] focus:outline-none focus:border-[#E8740E]"
-          />
-        </div>
-        <div className="flex-1 min-w-[140px]">
-          <label className="text-[10px] text-[#86868B] uppercase tracking-wider font-medium">Acao</label>
-          <input
-            type="text"
-            value={filtroAcao}
-            onChange={(e) => setFiltroAcao(e.target.value)}
-            placeholder="Todas"
-            className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E8E8ED] text-sm text-[#1D1D1F] focus:outline-none focus:border-[#E8740E]"
-          />
-        </div>
-        <div className="flex-1 min-w-[120px]">
-          <label className="text-[10px] text-[#86868B] uppercase tracking-wider font-medium">De</label>
-          <input
-            type="date"
-            value={filtroFrom}
-            onChange={(e) => setFiltroFrom(e.target.value)}
-            className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E8E8ED] text-sm text-[#1D1D1F] focus:outline-none focus:border-[#E8740E]"
-          />
-        </div>
-        <div className="flex-1 min-w-[120px]">
-          <label className="text-[10px] text-[#86868B] uppercase tracking-wider font-medium">Ate</label>
-          <input
-            type="date"
-            value={filtroTo}
-            onChange={(e) => setFiltroTo(e.target.value)}
-            className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#E8E8ED] text-sm text-[#1D1D1F] focus:outline-none focus:border-[#E8740E]"
-          />
-        </div>
-        {(filtroUsuario || filtroAcao || filtroFrom || filtroTo) && (
+      {/* Periodo pills */}
+      <div className="flex gap-2 flex-wrap">
+        {(["hoje", "ontem", "7dias", "30dias", "tudo"] as Periodo[]).map((p) => (
           <button
-            onClick={() => { setFiltroUsuario(""); setFiltroAcao(""); setFiltroFrom(""); setFiltroTo(""); }}
-            className="self-end px-3 py-2 rounded-xl text-xs text-[#E74C3C] border border-[#E74C3C]/20 hover:bg-[#FEF2F2] transition-colors"
+            key={p}
+            onClick={() => setPeriodo(p)}
+            className={`px-4 py-2 rounded-xl text-xs font-medium transition-colors ${
+              periodo === p
+                ? "bg-[#E8740E] text-white"
+                : "bg-white border border-[#E8E8ED] text-[#6E6E73] hover:border-[#E8740E] hover:text-[#E8740E]"
+            }`}
           >
-            Limpar
+            {{ hoje: "Hoje", ontem: "Ontem", "7dias": "7 dias", "30dias": "30 dias", tudo: "Histórico" }[p]}
           </button>
-        )}
+        ))}
       </div>
 
       {/* Timeline */}
       {loading ? (
         <div className="text-center py-12 text-[#86868B] text-sm">Carregando...</div>
       ) : entries.length === 0 ? (
-        <div className="text-center py-12 text-[#86868B] text-sm">Nenhuma atividade encontrada</div>
+        <div className="text-center py-12">
+          <p className="text-2xl mb-2">📋</p>
+          <p className="text-sm text-[#86868B]">Nenhuma atividade {periodo === "hoje" ? "hoje" : "neste período"}</p>
+        </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-[#E8E8ED] divide-y divide-[#F0F0F5]">
-          {entries.map((entry) => (
-            <div key={entry.id} className="flex items-start gap-3 px-4 py-3 hover:bg-[#FAFAFA] transition-colors">
-              {/* Icon */}
-              <div className="w-9 h-9 rounded-full bg-[#F5F5F7] flex items-center justify-center text-base shrink-0 mt-0.5">
-                {getIcon(entry.acao)}
+        <div className="space-y-4">
+          {Object.entries(grouped).map(([hour, items]) => (
+            <div key={hour}>
+              {/* Hour label */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-[#86868B] bg-[#F5F5F7] px-2 py-0.5 rounded-lg">{hour}</span>
+                <div className="flex-1 h-px bg-[#E8E8ED]" />
               </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-[#1D1D1F]">{entry.usuario}</span>
-                  <span className="text-sm text-[#6E6E73]">{entry.acao}</span>
-                </div>
-                {entry.detalhes && (
-                  <p className="text-xs text-[#86868B] mt-0.5 truncate">{entry.detalhes}</p>
-                )}
-                {entry.entidade && (
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-lg bg-[#F0F0F5] text-[10px] text-[#86868B] font-medium uppercase">
-                    {entry.entidade}
-                  </span>
-                )}
-              </div>
+              {/* Entries */}
+              <div className="bg-white rounded-2xl border border-[#E8E8ED] divide-y divide-[#F0F0F5]">
+                {items.map((entry) => {
+                  const cfg = getConfig(entry.acao);
+                  return (
+                    <div key={entry.id} className="flex items-start gap-3 px-4 py-3 hover:bg-[#FAFAFA] transition-colors">
+                      {/* Icon with color bar */}
+                      <div className="relative">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0"
+                          style={{ backgroundColor: cfg.color + "15" }}
+                        >
+                          {cfg.icon}
+                        </div>
+                        <div
+                          className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white"
+                          style={{ backgroundColor: cfg.color }}
+                        />
+                      </div>
 
-              {/* Time */}
-              <div className="text-right shrink-0">
-                <span className="text-xs text-[#86868B] font-medium">{timeAgo(entry.created_at)}</span>
-                <p className="text-[10px] text-[#AEAEB2]">{formatDate(entry.created_at)} {formatTime(entry.created_at)}</p>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{entry.usuario}</span>
+                          <span className="text-sm text-[#6E6E73]">{entry.acao.toLowerCase()}</span>
+                        </div>
+                        {entry.detalhes && (
+                          <p className="text-xs text-[#86868B] mt-0.5 truncate">{entry.detalhes}</p>
+                        )}
+                      </div>
+
+                      {/* Time */}
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-medium" style={{ color: cfg.color }}>{timeAgo(entry.created_at)}</span>
+                        <p className="text-[10px] text-[#AEAEB2]">{formatTime(entry.created_at)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -200,17 +218,15 @@ export default function LogPage() {
             disabled={page === 1}
             className="px-3 py-1.5 rounded-xl text-xs border border-[#E8E8ED] text-[#6E6E73] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-30"
           >
-            Anterior
+            ← Anterior
           </button>
-          <span className="text-xs text-[#86868B]">
-            {page} / {totalPages}
-          </span>
+          <span className="text-xs text-[#86868B]">{page} / {totalPages}</span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             className="px-3 py-1.5 rounded-xl text-xs border border-[#E8E8ED] text-[#6E6E73] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors disabled:opacity-30"
           >
-            Proximo
+            Próximo →
           </button>
         </div>
       )}
