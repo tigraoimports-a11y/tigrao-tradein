@@ -65,6 +65,26 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         }
       }
       if (savedDark === "true") setDarkMode(true);
+
+      // Re-validar permissões no servidor (podem ter mudado pelo admin)
+      if (savedPw && parsed && typeof parsed === "object" && "login" in parsed) {
+        const p = parsed as UserInfo;
+        fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: p.login, senha: "" }),
+        }).catch(() => {});
+        // Buscar permissões atualizadas via GET
+        fetch("/api/auth?login=" + encodeURIComponent(p.login), {
+          headers: { "x-admin-password": savedPw },
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.user?.permissoes) {
+            const updated = { ...p, permissoes: data.user.permissoes, role: data.user.role };
+            setUser(updated);
+            localStorage.setItem("admin_user", JSON.stringify(updated));
+          }
+        }).catch(() => {});
+      }
     } catch {
       // Qualquer erro — limpar tudo e começar fresh
       try {
