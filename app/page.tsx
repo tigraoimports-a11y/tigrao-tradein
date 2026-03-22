@@ -44,6 +44,16 @@ interface LojaConfig {
   accent_color: string;
   manutencao?: boolean;
   tema?: string;
+  logo_url?: string;
+  logo_texto?: string;
+  footer_texto?: string;
+  footer_instagram?: string;
+  footer_frete_gratis_acima?: number;
+  rodape_garantia?: string;
+  meta_titulo?: string;
+  mostrar_simular_troca?: boolean;
+  mostrar_parcelas_card?: boolean;
+  parcelas_card_qtd?: number;
 }
 
 interface LojaResponse {
@@ -174,12 +184,12 @@ export default function LojaPage() {
       <header style={{ backgroundColor: tema.headerBg, borderColor: tema.cardBorder }} className="sticky top-0 z-50 backdrop-blur-xl border-b">
         <div className="max-w-[1280px] mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl">🐯</span>
-            <span style={{ color: tema.text }} className="text-[17px] font-bold tracking-tight">TigraoImports</span>
+            {config.logo_url ? <img src={config.logo_url} alt="" className="h-8 w-8 object-contain" /> : <span className="text-2xl">🐯</span>}
+            <span style={{ color: tema.text }} className="text-[17px] font-bold tracking-tight">{config.logo_texto || "TigraoImports"}</span>
           </Link>
           <div className="flex items-center gap-3">
             <button onClick={() => setShowSearch(!showSearch)} style={{ color: tema.textMuted }} className="p-2 rounded-full transition-colors" aria-label="Buscar"><SearchIcon /></button>
-            <Link href="/troca" style={{ backgroundColor: tema.bgSecondary, color: tema.text }} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors">🔄 Simular Troca</Link>
+            {config.mostrar_simular_troca !== false && <Link href="/troca" style={{ backgroundColor: tema.bgSecondary, color: tema.text }} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors">🔄 Simular Troca</Link>}
           </div>
         </div>
         {showSearch && (
@@ -276,19 +286,28 @@ export default function LojaPage() {
       {/* ── Footer ── */}
       <footer style={{ backgroundColor: tema.bgSecondary, borderColor: tema.cardBorder }} className="border-t">
         <div className="max-w-[1280px] mx-auto px-4 py-10">
-          <div className="text-center mb-8 p-6 rounded-2xl" style={{ background: `linear-gradient(to right, ${tema.accent}15, ${tema.accent}08)`, border: `1px solid ${tema.accent}30` }}>
-            <p className="text-[17px] font-semibold">Tem um iPhone usado? Simule sua troca!</p>
-            <p className="mt-1 text-[14px]" style={{ color: tema.textMuted }}>Descubra quanto vale seu aparelho na troca por um novo</p>
-            <Link href="/troca" style={{ backgroundColor: tema.accent }} className="inline-flex items-center gap-2 mt-4 px-6 py-2.5 rounded-full text-white text-[14px] font-semibold transition-colors">🔄 Simular Troca</Link>
-          </div>
-          <div className="text-center space-y-3">
-            <div className="flex items-center justify-center gap-2"><span className="text-xl">🐯</span><span className="text-[15px] font-bold">TigraoImports</span></div>
-            <p className="text-[13px]" style={{ color: tema.textMuted }}>Barra da Tijuca, Rio de Janeiro</p>
-            <div className="flex items-center justify-center gap-4">
-              <a href="https://instagram.com/tigraoimports" target="_blank" rel="noopener noreferrer" style={{ color: tema.accent }} className="text-[13px] font-medium hover:underline">@tigraoimports</a>
+          {config.mostrar_simular_troca !== false && (
+            <div className="text-center mb-8 p-6 rounded-2xl" style={{ background: `linear-gradient(to right, ${tema.accent}15, ${tema.accent}08)`, border: `1px solid ${tema.accent}30` }}>
+              <p className="text-[17px] font-semibold">Tem um iPhone usado? Simule sua troca!</p>
+              <p className="mt-1 text-[14px]" style={{ color: tema.textMuted }}>Descubra quanto vale seu aparelho na troca por um novo</p>
+              <Link href="/troca" style={{ backgroundColor: tema.accent }} className="inline-flex items-center gap-2 mt-4 px-6 py-2.5 rounded-full text-white text-[14px] font-semibold transition-colors">🔄 Simular Troca</Link>
             </div>
-            <p className="text-[13px]" style={{ color: tema.textMuted }}>📦 Frete gratis em pedidos acima de R$ 1.500</p>
-            <p className="text-[12px] mt-4" style={{ color: tema.textMuted, opacity: 0.6 }}>Produtos lacrados com garantia Apple e Nota Fiscal</p>
+          )}
+          <div className="text-center space-y-3">
+            <div className="flex items-center justify-center gap-2">
+              {config.logo_url ? <img src={config.logo_url} alt="" className="h-6 w-6 object-contain" /> : <span className="text-xl">🐯</span>}
+              <span className="text-[15px] font-bold">{config.logo_texto || "TigraoImports"}</span>
+            </div>
+            <p className="text-[13px]" style={{ color: tema.textMuted }}>{config.rodape_garantia || "Barra da Tijuca, Rio de Janeiro"}</p>
+            {config.footer_instagram && (
+              <div className="flex items-center justify-center gap-4">
+                <a href={`https://instagram.com/${(config.footer_instagram || "").replace("@", "")}`} target="_blank" rel="noopener noreferrer" style={{ color: tema.accent }} className="text-[13px] font-medium hover:underline">{config.footer_instagram}</a>
+              </div>
+            )}
+            {(config.footer_frete_gratis_acima ?? 1500) > 0 && (
+              <p className="text-[13px]" style={{ color: tema.textMuted }}>📦 Frete gratis em pedidos acima de R$ {(config.footer_frete_gratis_acima ?? 1500).toLocaleString("pt-BR")}</p>
+            )}
+            <p className="text-[12px] mt-4" style={{ color: tema.textMuted, opacity: 0.6 }}>{config.footer_texto || "Produtos lacrados com garantia Apple e Nota Fiscal"}</p>
           </div>
         </div>
       </footer>

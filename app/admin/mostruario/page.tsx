@@ -54,6 +54,17 @@ interface MostruarioConfig {
   tema_tradein: string;
   tema_tradein_noite: string;
   manutencao?: boolean;
+  // Novos campos de personalização
+  logo_url: string;
+  logo_texto: string;
+  footer_texto: string;
+  footer_instagram: string;
+  footer_frete_gratis_acima: number;
+  rodape_garantia: string;
+  meta_titulo: string;
+  mostrar_simular_troca: boolean;
+  mostrar_parcelas_card: boolean;
+  parcelas_card_qtd: number;
 }
 
 /* ── Constants ── */
@@ -87,6 +98,16 @@ export default function MostruarioPage() {
     tema_tradein: "tigrao",
     tema_tradein_noite: "tigrao",
     manutencao: false,
+    logo_url: "",
+    logo_texto: "TigraoImports",
+    footer_texto: "Produtos lacrados com garantia Apple e Nota Fiscal",
+    footer_instagram: "@tigraoimports",
+    footer_frete_gratis_acima: 1500,
+    rodape_garantia: "Barra da Tijuca, Rio de Janeiro",
+    meta_titulo: "TigraoImports",
+    mostrar_simular_troca: true,
+    mostrar_parcelas_card: true,
+    parcelas_card_qtd: 12,
   });
 
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -312,6 +333,53 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
             </div>
             <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">WhatsApp Numero</label><input value={config.whatsapp_numero} onChange={(e) => setConfig({ ...config, whatsapp_numero: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="5521999999999" /></div>
           </div>
+
+          {/* ── Logo & Header ── */}
+          <div className="border-t border-[#E8E8ED] pt-4">
+            <p className="text-[10px] font-bold text-[#86868B] uppercase mb-3">Logo e Header</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome da Loja (texto do logo)</label><input value={config.logo_texto} onChange={(e) => setConfig({ ...config, logo_texto: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">URL da Logo (imagem)</label><input value={config.logo_url} onChange={(e) => setConfig({ ...config, logo_url: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="https://exemplo.com/logo.png (deixe vazio para emoji 🐯)" /></div>
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Titulo da aba do navegador</label><input value={config.meta_titulo} onChange={(e) => setConfig({ ...config, meta_titulo: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
+              <div className="flex items-end gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={config.mostrar_simular_troca} onChange={(e) => setConfig({ ...config, mostrar_simular_troca: e.target.checked })} className="w-4 h-4 rounded accent-[#E8740E]" />
+                  <span className="text-xs text-[#1D1D1F]">Mostrar botao &quot;Simular Troca&quot;</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Rodapé ── */}
+          <div className="border-t border-[#E8E8ED] pt-4">
+            <p className="text-[10px] font-bold text-[#86868B] uppercase mb-3">Rodape</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Texto do rodape</label><input value={config.footer_texto} onChange={(e) => setConfig({ ...config, footer_texto: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Instagram</label><input value={config.footer_instagram} onChange={(e) => setConfig({ ...config, footer_instagram: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="@tigraoimports" /></div>
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Localizacao</label><input value={config.rodape_garantia} onChange={(e) => setConfig({ ...config, rodape_garantia: e.target.value })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
+              <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Frete gratis acima de (R$)</label><input type="number" value={config.footer_frete_gratis_acima} onChange={(e) => setConfig({ ...config, footer_frete_gratis_acima: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" /></div>
+            </div>
+          </div>
+
+          {/* ── Cards de produto ── */}
+          <div className="border-t border-[#E8E8ED] pt-4">
+            <p className="text-[10px] font-bold text-[#86868B] uppercase mb-3">Cards de Produto</p>
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={config.mostrar_parcelas_card} onChange={(e) => setConfig({ ...config, mostrar_parcelas_card: e.target.checked })} className="w-4 h-4 rounded accent-[#E8740E]" />
+                <span className="text-xs text-[#1D1D1F]">Mostrar parcelas no card</span>
+              </label>
+              {config.mostrar_parcelas_card && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#86868B]">em ate</span>
+                  <select value={config.parcelas_card_qtd} onChange={(e) => setConfig({ ...config, parcelas_card_qtd: parseInt(e.target.value) })} className="px-2 py-1 border border-[#D2D2D7] rounded-lg text-xs">
+                    {[3, 6, 10, 12, 18, 21].map((n) => <option key={n} value={n}>{n}x</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button onClick={onToggleManutencao} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${config.manutencao ? "bg-[#FF3B30]/10 text-[#FF3B30]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
               <span>{config.manutencao ? "🔧" : "✅"}</span> Modo Manutencao: {config.manutencao ? "ATIVO" : "Desativado"}
