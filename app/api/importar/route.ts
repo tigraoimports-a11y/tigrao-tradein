@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -18,6 +19,10 @@ export async function DELETE(req: NextRequest) {
   // Deletar todos os registros (Supabase requer um filtro, usamos id > 0 via gte)
   const { error, count } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Limpou tabela", `Tabela: ${table}, Registros removidos: ${count ?? "N/A"}`, table).catch(() => {});
+
   return NextResponse.json({ ok: true, deleted: count });
 }
 
@@ -76,6 +81,9 @@ export async function POST(req: NextRequest) {
       imported += batch.length;
     }
   }
+
+  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Importou dados", `Tabela: ${table}, Importados: ${imported}/${rows.length}`, table).catch(() => {});
 
   return NextResponse.json({ ok: true, imported, errors, total: rows.length });
 }

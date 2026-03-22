@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -87,6 +88,9 @@ export async function POST(req: NextRequest) {
         observacao: `Entrada confirmada: ${produtoNome}`,
       });
 
+      const usuarioLog = req.headers.get("x-admin-user") || usuario || "Sistema";
+      logActivity(usuarioLog, "Bipou entrada", `Produto: ${produtoNome}, Codigo: ${codigo_barras}`, "etiquetas", etiqueta.id).catch(() => {});
+
       return NextResponse.json({
         ok: true,
         acao: "ENTRADA",
@@ -154,6 +158,9 @@ export async function POST(req: NextRequest) {
         usuario: usuario || "admin",
         observacao: `Saída confirmada: ${etiqueta.produto}`,
       });
+
+      const usuarioLog = req.headers.get("x-admin-user") || usuario || "Sistema";
+      logActivity(usuarioLog, "Bipou saida", `Produto: ${etiqueta.produto}, Codigo: ${codigo_barras}`, "etiquetas", etiqueta.id).catch(() => {});
 
       return NextResponse.json({
         ok: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Gerou etiqueta", `Produto: ${produto}, Codigo: ${codigo_barras}`, "etiquetas", data?.id).catch(() => {});
+
     return NextResponse.json({ ok: true, data });
   } catch (e: unknown) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +99,9 @@ export async function DELETE(req: NextRequest) {
 
     const { error } = await supabase.from("etiquetas").delete().eq("id", id);
     if (error) throw error;
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Removeu etiqueta", `ID: ${id}`, "etiquetas", id).catch(() => {});
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {

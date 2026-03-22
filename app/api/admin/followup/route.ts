@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity-log";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
 
@@ -63,6 +64,9 @@ export async function POST(request: Request) {
     .update({ contatado: true, follow_up_enviado: true })
     .eq("id", id);
 
+  const usuario = request.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Enviou follow-up", `Simulacao ID: ${id}, Cliente: ${row.nome}`, "simulacoes", id).catch(() => {});
+
   return NextResponse.json({ ok: true });
 }
 
@@ -87,6 +91,9 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const usuario = request.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Marcou follow-up enviado", `Simulacao ID: ${id}`, "simulacoes", id).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

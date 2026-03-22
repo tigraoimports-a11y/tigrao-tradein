@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity-log";
 
 export async function DELETE(request: Request) {
   const pw = request.headers.get("x-admin-password");
@@ -21,6 +22,9 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const usuario = request.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Removeu simulacao", `ID: ${id}`, "simulacoes", id).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

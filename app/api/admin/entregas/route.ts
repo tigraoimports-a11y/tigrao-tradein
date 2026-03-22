@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -55,6 +56,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Criou entrega", `Cliente: ${cliente}, Data: ${data_entrega}`, "entrega", data?.id).catch(() => {});
+
   return NextResponse.json({ ok: true, data });
 }
 
@@ -77,6 +82,10 @@ export async function PATCH(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Atualizou entrega", `Status: ${updates.status || "atualizado"}`, "entrega", id).catch(() => {});
+
   return NextResponse.json({ ok: true, data });
 }
 
@@ -94,5 +103,9 @@ export async function DELETE(req: NextRequest) {
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  logActivity(usuario, "Removeu entrega", `ID: ${id}`, "entrega", id).catch(() => {});
+
   return NextResponse.json({ ok: true });
 }

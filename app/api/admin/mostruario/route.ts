@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity-log";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -121,6 +122,10 @@ export async function POST(req: NextRequest) {
       console.error("Erro ao criar categoria:", error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Criou categoria mostruario", `Categoria: ${nome}`, "loja_categorias", data?.id).catch(() => {});
+
     return NextResponse.json({ ok: true, data });
   }
 
@@ -167,6 +172,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Criou produto mostruario", `Produto: ${nome}`, "loja_produtos", data?.id).catch(() => {});
+
     return NextResponse.json({ ok: true, data });
   }
 
@@ -201,6 +210,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Criou variacao mostruario", `Variacao: ${nome}`, "loja_variacoes", data?.id).catch(() => {});
+
     return NextResponse.json({ ok: true, data });
   }
 
@@ -230,6 +243,10 @@ export async function PATCH(req: NextRequest) {
 
     const { error } = await supabase.from("loja_categorias").update(update).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Editou categoria mostruario", `Campos: ${Object.keys(update).join(", ")}`, "loja_categorias", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -249,6 +266,10 @@ export async function PATCH(req: NextRequest) {
 
     const { error } = await supabase.from("loja_produtos").update(update).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Editou produto mostruario", `Campos: ${Object.keys(update).filter(k => k !== "updated_at").join(", ")}`, "loja_produtos", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -268,6 +289,10 @@ export async function PATCH(req: NextRequest) {
 
     const { error } = await supabase.from("loja_variacoes").update(update).eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Editou variacao mostruario", `Campos: ${Object.keys(update).join(", ")}`, "loja_variacoes", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -282,6 +307,10 @@ export async function PATCH(req: NextRequest) {
     const results = await Promise.all(updates);
     const failed = results.find((r) => r.error);
     if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Reordenou produtos mostruario", `${items.length} produtos reordenados`, "loja_produtos").catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -296,6 +325,10 @@ export async function PATCH(req: NextRequest) {
     const results = await Promise.all(updates);
     const failed = results.find((r) => r.error);
     if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Reordenou categorias mostruario", `${items.length} categorias reordenadas`, "loja_categorias").catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -326,6 +359,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Atualizou config mostruario", `Campos: ${Object.keys(update).join(", ")}`, "mostruario_config").catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -358,6 +395,10 @@ export async function DELETE(req: NextRequest) {
 
     const { error } = await supabase.from("loja_categorias").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Removeu categoria mostruario", `ID: ${id}`, "loja_categorias", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -366,6 +407,10 @@ export async function DELETE(req: NextRequest) {
     // Variacoes cascade-delete automatically via ON DELETE CASCADE
     const { error } = await supabase.from("loja_produtos").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Removeu produto mostruario", `ID: ${id}`, "loja_produtos", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 
@@ -373,6 +418,10 @@ export async function DELETE(req: NextRequest) {
   if (action === "delete_variacao") {
     const { error } = await supabase.from("loja_variacoes").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Removeu variacao mostruario", `ID: ${id}`, "loja_variacoes", id).catch(() => {});
+
     return NextResponse.json({ ok: true });
   }
 

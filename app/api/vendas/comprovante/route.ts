@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
+
+    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    logActivity(usuario, "Enviou comprovante", `Venda ID: ${vendaId}`, "vendas", vendaId).catch(() => {});
 
     return NextResponse.json({ url: publicUrl, ok: true });
   } catch (e) {
