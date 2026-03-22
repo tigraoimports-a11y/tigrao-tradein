@@ -3,9 +3,8 @@
 import { useState } from "react";
 
 const ORIGENS = [
-  "Instagram (Story)", "Instagram (Direct)", "Instagram (Feed/Reels)",
-  "WhatsApp Nicolas", "WhatsApp Bianca", "WhatsApp Andre",
-  "Indicacao de amigo", "Google", "Outro",
+  "Anuncio", "Story", "Direct",
+  "WhatsApp", "Indicacao", "Ja sou cliente",
 ];
 
 interface StepClientDataProps {

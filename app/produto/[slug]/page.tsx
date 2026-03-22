@@ -105,7 +105,7 @@ export default function ProdutoPage() {
   const [origemCliente, setOrigemCliente] = useState("");
   const [pendingAction, setPendingAction] = useState<"pedido" | "duvida" | "">("");
 
-  const ORIGENS = ["Instagram (Story)", "Instagram (Direct)", "WhatsApp", "Indicação de amigo", "Google", "Outro"];
+  const ORIGENS = ["Anuncio", "Story", "Direct", "WhatsApp", "Indicacao", "Ja sou cliente"];
 
   const tema = useMemo(() => getTema(config.tema), [config.tema]);
   const cssVars = useMemo(() => temaCSSVars(tema), [tema]);
