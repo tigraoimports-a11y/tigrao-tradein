@@ -71,6 +71,39 @@ function fmtBRL(v: number): string {
 }
 
 /**
+ * Envia notificação de nova venda registrada para o grupo do Telegram.
+ */
+export async function sendSaleNotification(venda: {
+  produto?: string;
+  cor?: string;
+  cliente?: string;
+  preco_vendido?: number;
+  custo?: number;
+  lucro?: number;
+  banco?: string;
+  forma?: string;
+  vendedor?: string;
+}): Promise<boolean> {
+  const preco = Number(venda.preco_vendido || 0);
+  const lucro = Number(venda.lucro || 0);
+  const margem = preco > 0 ? ((lucro / preco) * 100).toFixed(1) : "0";
+
+  const lines = [
+    `💰 <b>Nova Venda Registrada!</b>`,
+    ``,
+    `📱 ${venda.produto || "—"} ${venda.cor || ""}`.trim(),
+    `👤 ${venda.cliente || "—"}`,
+    `💵 ${fmtBRL(preco)}`,
+    `📊 Lucro: ${fmtBRL(lucro)} (${margem}%)`,
+    `🏦 ${venda.banco || "—"} — ${venda.forma || "—"}`,
+    ``,
+    `Registrado por: ${venda.vendedor || "sistema"}`,
+  ];
+
+  return sendTelegramMessage(lines.join("\n"));
+}
+
+/**
  * Envia notificação de pagamento confirmado para o grupo do Telegram.
  */
 export async function sendPaymentNotification(venda: {
