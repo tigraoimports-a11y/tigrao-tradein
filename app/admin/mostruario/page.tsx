@@ -266,7 +266,23 @@ export default function MostruarioPage() {
 
       {showNewCategory && <NewCategoryModal onClose={() => setShowNewCategory(false)} onSave={async (data) => { const res = await apiCall("POST", { action: "create_categoria", ...data }); if (res.error) { showToast(`Erro: ${res.error}`); return; } setShowNewCategory(false); await fetchData(); showToast("Categoria criada!"); }} />}
       {editingCategory && <EditCategoryModal categoria={editingCategory} onClose={() => setEditingCategory(null)} onSave={async (data) => { await apiCall("PATCH", { action: "update_categoria", id: editingCategory.id, ...data }); setEditingCategory(null); await fetchData(); showToast("Categoria atualizada!"); }} onDelete={async () => { if (!confirm(`Deletar categoria "${editingCategory.nome}" e todos seus produtos?`)) return; await apiCall("DELETE", { action: "delete_categoria", id: editingCategory.id }); setEditingCategory(null); if (activeCategory === editingCategory.id) setActiveCategory(null); await fetchData(); showToast("Categoria deletada!"); }} />}
-      {showNewProduct && <NewProductModal categorias={categorias} defaultCategoryId={activeCategory} onClose={() => setShowNewProduct(false)} onSave={async (data) => { await apiCall("POST", { action: "create_produto", ...data }); setShowNewProduct(false); await fetchData(); showToast("Produto criado!"); }} />}
+      {showNewProduct && <NewProductModal categorias={categorias} defaultCategoryId={activeCategory} onClose={() => setShowNewProduct(false)} onSave={async (data) => {
+        const { variacoes, ...produtoData } = data;
+        const res = await apiCall("POST", { action: "create_produto", ...produtoData });
+        if (res.error) { showToast(`Erro: ${res.error}`); return; }
+        // Create variacoes inline if any
+        if (variacoes && variacoes.length > 0 && res.data?.id) {
+          for (const v of variacoes) {
+            const nome = v.cor ? `${v.cor} ${v.storage}` : v.storage;
+            const atributos: Record<string, string> = {};
+            if (v.cor) atributos.cor = v.cor;
+            if (v.storage) atributos.armazenamento = v.storage;
+            await apiCall("POST", { action: "create_variacao", produto_id: res.data.id, nome, atributos, preco: parseFloat(v.preco.replace(/\./g, "").replace(",", ".")) || 0 });
+          }
+        }
+        setShowNewProduct(false); await fetchData();
+        showToast(variacoes?.length ? `Produto + ${variacoes.length} variacoes criados!` : "Produto criado!");
+      }} />}
       {editingProduct && <EditProductModal produto={editingProduct} categorias={categorias} onClose={() => setEditingProduct(null)} onSave={async (data) => { await apiCall("PATCH", { action: "update_produto", id: editingProduct.id, ...data }); setEditingProduct(null); await fetchData(); showToast("Produto atualizado!"); }} />}
       {showNewVariacao && <NewVariacaoModal produtoId={showNewVariacao} onClose={() => setShowNewVariacao(null)} onSave={async (data) => { await apiCall("POST", { action: "create_variacao", ...data }); setShowNewVariacao(null); await fetchData(); showToast("Variacao criada!"); }} />}
       {editingVariacao && <EditVariacaoModal variacao={editingVariacao} onClose={() => setEditingVariacao(null)} onSave={async (data) => { await apiCall("PATCH", { action: "update_variacao", id: editingVariacao.id, ...data }); setEditingVariacao(null); await fetchData(); showToast("Variacao atualizada!"); }} />}
@@ -523,8 +539,15 @@ function EditCategoryModal({ categoria, onClose, onSave, onDelete }: { categoria
   );
 }
 
-/* ── New Product Modal ── */
-function NewProductModal({ categorias, defaultCategoryId, onClose, onSave }: { categorias: Categoria[]; defaultCategoryId: string | null; onClose: () => void; onSave: (data: { nome: string; categoria_id: string; descricao?: string; descricao_curta?: string; tags?: string[] }) => void }) {
+/* ── New Product Modal (with inline variations) ── */
+interface InlineVariacao { cor: string; storage: string; preco: string }
+
+function NewProductModal({ categorias, defaultCategoryId, onClose, onSave }: {
+  categorias: Categoria[];
+  defaultCategoryId: string | null;
+  onClose: () => void;
+  onSave: (data: { nome: string; categoria_id: string; descricao?: string; descricao_curta?: string; tags?: string[]; variacoes?: InlineVariacao[] }) => void;
+}) {
   const [nome, setNome] = useState("");
   const [categoriaId, setCategoriaId] = useState(defaultCategoryId || categorias[0]?.id || "");
   const [descricao, setDescricao] = useState("");
@@ -534,22 +557,122 @@ function NewProductModal({ categorias, defaultCategoryId, onClose, onSave }: { c
   const toggleTag = (tag: string) => setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
   const addCustomTag = () => { if (customTag.trim() && !selectedTags.includes(customTag.trim())) { setSelectedTags((prev) => [...prev, customTag.trim()]); setCustomTag(""); } };
 
+  // Cores e storages
+  const [cores, setCores] = useState<string[]>([]);
+  const [novaCor, setNovaCor] = useState("");
+  const [storages, setStorages] = useState<{ storage: string; preco: string }[]>([]);
+  const [novoStorage, setNovoStorage] = useState("");
+  const [novoPreco, setNovoPreco] = useState("");
+
+  const addCor = () => { const c = novaCor.trim(); if (c && !cores.includes(c)) { setCores([...cores, c]); setNovaCor(""); } };
+  const removeCor = (c: string) => setCores(cores.filter(x => x !== c));
+  const addStorage = () => {
+    const s = novoStorage.trim();
+    const p = novoPreco.trim();
+    if (s && p) { setStorages([...storages, { storage: s, preco: p }]); setNovoStorage(""); setNovoPreco(""); }
+  };
+  const removeStorage = (i: number) => setStorages(storages.filter((_, idx) => idx !== i));
+
+  // Build variacoes: cor × storage combinations (or just storages if no cores)
+  function buildVariacoes(): InlineVariacao[] {
+    if (storages.length === 0) return [];
+    if (cores.length === 0) {
+      return storages.map(s => ({ cor: "", storage: s.storage, preco: s.preco }));
+    }
+    const result: InlineVariacao[] = [];
+    for (const cor of cores) {
+      for (const s of storages) {
+        result.push({ cor, storage: s.storage, preco: s.preco });
+      }
+    }
+    return result;
+  }
+
+  const variacoes = buildVariacoes();
+
   return (
     <Modal title="Novo Produto" onClose={onClose}>
       <div className="space-y-4">
-        <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome do Produto</label><input value={nome} onChange={(e) => setNome(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="Ex: iPhone 16 Pro" autoFocus /></div>
+        <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome do Produto</label><input value={nome} onChange={(e) => setNome(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="Ex: iPhone 17 Pro Max" autoFocus /></div>
         <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Categoria</label><select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm bg-white">{categorias.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.nome}</option>)}</select></div>
-        <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Descricao</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm resize-none" rows={3} placeholder="Descricao detalhada..." /></div>
         <div><label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Descricao Curta</label><input value={descricaoCurta} onChange={(e) => setDescricaoCurta(e.target.value)} className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm" placeholder="Resumo para card..." /></div>
+
+        {/* Cores */}
+        <div>
+          <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Cores disponiveis</label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {cores.map((c) => (
+              <span key={c} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E8740E]/10 text-[#E8740E] text-[11px] font-medium border border-[#E8740E]/30">
+                {c}<button onClick={() => removeCor(c)} className="ml-0.5 opacity-70 hover:opacity-100">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input value={novaCor} onChange={(e) => setNovaCor(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCor())}
+              className="flex-1 px-3 py-1.5 border border-[#D2D2D7] rounded-lg text-xs" placeholder="Ex: Azul, Silver, Laranja..." />
+            <button onClick={addCor} className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] text-xs font-medium text-[#86868B] hover:bg-[#E8E8ED]">+</button>
+          </div>
+        </div>
+
+        {/* Storages + Precos */}
+        <div>
+          <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Armazenamento e Precos</label>
+          {storages.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              {storages.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 bg-[#F5F5F7] rounded-lg px-3 py-2">
+                  <span className="text-xs font-semibold text-[#1D1D1F] flex-1">{s.storage}</span>
+                  <span className="text-xs text-[#86868B]">R$ {s.preco}</span>
+                  <button onClick={() => removeStorage(i)} className="text-[#FF3B30] text-xs font-bold hover:opacity-70">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input value={novoStorage} onChange={(e) => setNovoStorage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addStorage())}
+              className="w-24 px-3 py-1.5 border border-[#D2D2D7] rounded-lg text-xs" placeholder="256GB" />
+            <div className="relative flex-1">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#86868B]">R$</span>
+              <input value={novoPreco} onChange={(e) => setNovoPreco(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addStorage())}
+                className="w-full pl-7 pr-3 py-1.5 border border-[#D2D2D7] rounded-lg text-xs" placeholder="9.999" />
+            </div>
+            <button onClick={addStorage} className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] text-xs font-medium text-[#86868B] hover:bg-[#E8E8ED]">+</button>
+          </div>
+        </div>
+
+        {/* Preview variacoes */}
+        {variacoes.length > 0 && (
+          <div>
+            <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Variacoes que serao criadas ({variacoes.length})</label>
+            <div className="bg-[#F5F5F7] rounded-lg p-2 max-h-32 overflow-y-auto space-y-0.5">
+              {variacoes.map((v, i) => (
+                <p key={i} className="text-[11px] text-[#1D1D1F]">
+                  {v.cor ? `${v.cor} — ` : ""}{v.storage} — R$ {v.preco}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tags */}
         <div>
           <label className="block text-[10px] font-bold text-[#86868B] uppercase mb-1">Tags</label>
           <div className="flex flex-wrap gap-2 mb-2">{DEFAULT_TAGS.map((tag) => <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors ${selectedTags.includes(tag) ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"}`}>{tag}</button>)}</div>
           <div className="flex flex-wrap gap-2 mb-2">{selectedTags.filter((t) => !DEFAULT_TAGS.includes(t)).map((tag) => <span key={tag} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#E8740E] text-white text-[11px] font-medium">{tag}<button onClick={() => toggleTag(tag)} className="ml-1 opacity-70 hover:opacity-100">×</button></span>)}</div>
           <div className="flex gap-2"><input value={customTag} onChange={(e) => setCustomTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCustomTag()} className="flex-1 px-3 py-1.5 border border-[#D2D2D7] rounded-lg text-xs" placeholder="Tag personalizada..." /><button onClick={addCustomTag} className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] text-xs font-medium text-[#86868B]">Adicionar</button></div>
         </div>
+
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-[#86868B]">Cancelar</button>
-          <button onClick={() => nome.trim() && categoriaId && onSave({ nome: nome.trim(), categoria_id: categoriaId, descricao: descricao || undefined, descricao_curta: descricaoCurta || undefined, tags: selectedTags.length > 0 ? selectedTags : undefined })} disabled={!nome.trim() || !categoriaId} className="px-5 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold disabled:opacity-50">Criar Produto</button>
+          <button onClick={() => nome.trim() && categoriaId && onSave({
+            nome: nome.trim(), categoria_id: categoriaId,
+            descricao: descricao || undefined, descricao_curta: descricaoCurta || undefined,
+            tags: selectedTags.length > 0 ? selectedTags : undefined,
+            variacoes: variacoes.length > 0 ? variacoes : undefined,
+          })} disabled={!nome.trim() || !categoriaId}
+            className="px-5 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold disabled:opacity-50">
+            Criar Produto{variacoes.length > 0 ? ` + ${variacoes.length} variacoes` : ""}
+          </button>
         </div>
       </div>
     </Modal>
