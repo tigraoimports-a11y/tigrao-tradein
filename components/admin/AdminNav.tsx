@@ -34,6 +34,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/vendas", label: "Vendas", icon: "💰", roles: ["admin"] },
       { href: "/admin/gastos", label: "Gastos", icon: "📤", roles: ["admin"] },
       { href: "/admin/saldos", label: "Saldos", icon: "🏦", roles: ["admin"] },
+      { href: "/admin/recebiveis", label: "Recebíveis", icon: "💳", roles: ["admin"] },
       { href: "/admin/conciliacao", label: "Conciliação", icon: "🔍", roles: ["admin"] },
     ],
   },
