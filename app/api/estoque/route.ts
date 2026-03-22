@@ -261,14 +261,20 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Registrar log para cada campo alterado
+  const alteracoes: string[] = [];
   if (antes) {
     for (const [campo, valorNovo] of Object.entries(fields)) {
       const valorAnterior = String((antes as Record<string, unknown>)[campo] ?? "");
       const novo = String(valorNovo ?? "");
       if (valorAnterior !== novo) {
         await logEstoque(usuario, "alteracao", id, antes.produto, campo, valorAnterior, novo);
+        alteracoes.push(`${campo}: ${valorAnterior} → ${novo}`);
       }
     }
+  }
+  // Log no activity_log para aparecer no painel
+  if (alteracoes.length > 0) {
+    await logActivity(usuario, "Editou estoque", `${antes?.produto || "?"}: ${alteracoes.join(", ")}`, "estoque", id).catch(() => {});
   }
 
   // ── Sincronizar com Mostruário: estoque zerou ou voltou ──
