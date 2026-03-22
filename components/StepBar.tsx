@@ -14,13 +14,12 @@ export default function StepBar({ current }: { current: number }) {
         <div key={step.num} className="flex items-center flex-1">
           <div className="flex flex-col items-center">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold transition-all duration-300 ${
-                current > step.num
-                  ? "bg-[#2ECC71] text-white"
-                  : current === step.num
-                  ? "bg-[#E8740E] text-white"
-                  : "bg-[#141414] text-[#555] border border-[#2A2A2A]"
-              }`}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold transition-all duration-300"
+              style={{
+                backgroundColor: current > step.num ? "var(--ti-success)" : current === step.num ? "var(--ti-accent)" : "var(--ti-card-bg)",
+                color: current >= step.num ? "#fff" : "var(--ti-dim)",
+                border: current < step.num ? "1px solid var(--ti-card-border)" : "none",
+              }}
             >
               {current > step.num ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -31,18 +30,16 @@ export default function StepBar({ current }: { current: number }) {
               )}
             </div>
             <span
-              className={`text-[11px] mt-1.5 font-medium transition-colors ${
-                current >= step.num ? "text-[#F5F5F5]" : "text-[#555]"
-              }`}
+              className="text-[11px] mt-1.5 font-medium transition-colors"
+              style={{ color: current >= step.num ? "var(--ti-text)" : "var(--ti-dim)" }}
             >
               {step.label}
             </span>
           </div>
           {i < STEPS.length - 1 && (
             <div
-              className={`flex-1 h-[2px] mx-3 mt-[-16px] rounded transition-colors duration-300 ${
-                current > step.num ? "bg-[#2ECC71]" : "bg-[#2A2A2A]"
-              }`}
+              className="flex-1 h-[2px] mx-3 mt-[-16px] rounded transition-colors duration-300"
+              style={{ backgroundColor: current > step.num ? "var(--ti-success)" : "var(--ti-card-border)" }}
             />
           )}
         </div>
