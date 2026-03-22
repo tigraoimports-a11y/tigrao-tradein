@@ -7,6 +7,7 @@ import { formatDateBR } from "./business-days";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
 const GRUPO_ID = process.env.TELEGRAM_CHAT_ID ?? "";
+const GRUPO_VENDAS_ID = process.env.TELEGRAM_VENDAS_CHAT_ID ?? "";
 
 /**
  * Envia mensagem para o grupo do Telegram.
@@ -100,7 +101,8 @@ export async function sendSaleNotification(venda: {
     `Registrado por: ${venda.vendedor || "sistema"}`,
   ];
 
-  return sendTelegramMessage(lines.join("\n"));
+  // Enviar pro grupo NOVAS VENDAS (se configurado), senão pro grupo padrão
+  return sendTelegramMessage(lines.join("\n"), GRUPO_VENDAS_ID || undefined);
 }
 
 /**
