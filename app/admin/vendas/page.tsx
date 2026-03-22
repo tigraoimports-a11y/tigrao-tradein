@@ -1276,11 +1276,14 @@ export default function VendasPage() {
                       <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
                         const comp = e.target.value;
                         set("valor_comprovante_input", comp);
-                        const compVal = parseFloat(comp) || 0;
-                        if (compVal > 0 && taxa > 0) {
-                          const liquidoCartao = calcularLiquido(compVal, taxa);
-                          const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
-                          setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                        // Só auto-calcular preco_vendido se NÃO tem produtos no carrinho (venda simples)
+                        if (produtosCarrinho.length === 0) {
+                          const compVal = parseFloat(comp) || 0;
+                          if (compVal > 0 && taxa > 0) {
+                            const liquidoCartao = calcularLiquido(compVal, taxa);
+                            const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
+                            setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                          }
                         }
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
@@ -1457,8 +1460,22 @@ export default function VendasPage() {
             }
             const totalCusto = allProds.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
             const totalVendido = allProds.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0);
-            const totalLucroAll = totalVendido - totalCusto;
-            const totalMargemAll = totalVendido > 0 ? (totalLucroAll / totalVendido) * 100 : 0;
+            // Se tem comprovante e taxa, calcular o líquido real
+            const gComp = parseFloat(form.valor_comprovante_input) || 0;
+            const gCompAlt = parseFloat(form.comp_alt) || 0;
+            const gPixE = parseFloat(form.entrada_pix) || 0;
+            const gEspecieE = parseFloat(form.entrada_especie) || 0;
+            const gTrocaE = parseFloat(form.produto_na_troca) || 0;
+            // Receita real = líquido cartão principal + líquido cartão alt + pix + espécie + troca
+            let receitaReal = totalVendido; // fallback: soma dos preços vendidos
+            if (gComp > 0 && taxa > 0) {
+              const liqPrincipal = calcularLiquido(gComp, taxa);
+              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+              const liqAlt = gCompAlt > 0 && taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : 0;
+              receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
+            }
+            const totalLucroAll = receitaReal - totalCusto;
+            const totalMargemAll = receitaReal > 0 ? (totalLucroAll / receitaReal) * 100 : 0;
 
             // Conferencia: comprovante + pix + especie + troca should roughly match total vendido
             const gComprovante = parseFloat(form.valor_comprovante_input) || 0;
