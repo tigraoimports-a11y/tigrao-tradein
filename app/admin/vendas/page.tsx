@@ -1726,7 +1726,7 @@ export default function VendasPage() {
                           try {
                             await fetch("/api/vendas", {
                               method: "PATCH",
-                              headers: apiHeaders(),
+                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
                               body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
                             });
                             ok++;
