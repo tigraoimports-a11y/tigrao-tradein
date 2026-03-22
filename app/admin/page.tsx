@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -292,8 +292,119 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Gráfico de Vendas — Últimos 14 dias */}
+      <VendasChart vendas={data.vendas} />
+
+      {/* Ranking de Produtos */}
+      <ProdutosRanking vendas={vendasMes} />
+
       {/* Ranking de Origens */}
       <OrigensRanking password={password} />
+    </div>
+  );
+}
+
+/* ── Gráfico de Vendas (últimos 14 dias) ── */
+function VendasChart({ vendas }: { vendas: DashData["vendas"] }) {
+  const [periodo, setPeriodo] = useState<"7d" | "14d" | "30d">("14d");
+  const dias = periodo === "7d" ? 7 : periodo === "14d" ? 14 : 30;
+
+  const chartData = useMemo(() => {
+    const hoje = new Date();
+    const result: { dia: string; faturamento: number; lucro: number; qtd: number }[] = [];
+    for (let i = dias - 1; i >= 0; i--) {
+      const d = new Date(hoje); d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      const diaVendas = vendas.filter(v => v.data === dateStr && v.status_pagamento !== "CANCELADO");
+      result.push({
+        dia: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        faturamento: diaVendas.reduce((s, v) => s + (v.preco_vendido || 0), 0),
+        lucro: diaVendas.reduce((s, v) => s + (v.lucro || 0), 0),
+        qtd: diaVendas.length,
+      });
+    }
+    return result;
+  }, [vendas, dias]);
+
+  const maxFat = Math.max(...chartData.map(d => d.faturamento), 1);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider">Evolucao de Vendas</h2>
+        <div className="flex gap-1">
+          {(["7d", "14d", "30d"] as const).map((p) => (
+            <button key={p} onClick={() => setPeriodo(p)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${periodo === p ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B]"}`}>{p === "7d" ? "7 dias" : p === "14d" ? "14 dias" : "30 dias"}</button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm overflow-x-auto">
+        <div className="flex items-end gap-1 min-w-fit" style={{ height: 160 }}>
+          {chartData.map((d, i) => (
+            <div key={i} className="flex flex-col items-center gap-1 flex-1 min-w-[28px]">
+              <span className="text-[9px] text-[#86868B] font-medium">{d.qtd > 0 ? d.qtd : ""}</span>
+              <div className="w-full flex flex-col items-center gap-[1px]" style={{ height: 120 }}>
+                <div className="w-full rounded-t-sm bg-[#E8740E] transition-all" style={{ height: `${(d.faturamento / maxFat) * 100}%`, minHeight: d.faturamento > 0 ? 4 : 0, opacity: 0.8 }} title={`Fat: ${fmt(d.faturamento)}`} />
+                <div className="w-full rounded-b-sm bg-[#2ECC71] transition-all" style={{ height: `${(d.lucro / maxFat) * 100}%`, minHeight: d.lucro > 0 ? 2 : 0, opacity: 0.7 }} title={`Lucro: ${fmt(d.lucro)}`} />
+              </div>
+              <span className="text-[8px] text-[#86868B] whitespace-nowrap">{dias <= 14 ? d.dia : (i % 3 === 0 ? d.dia : "")}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 mt-3 justify-center">
+          <span className="flex items-center gap-1 text-[10px] text-[#86868B]"><span className="w-3 h-3 rounded-sm bg-[#E8740E] opacity-80" /> Faturamento</span>
+          <span className="flex items-center gap-1 text-[10px] text-[#86868B]"><span className="w-3 h-3 rounded-sm bg-[#2ECC71] opacity-70" /> Lucro</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Ranking de Produtos Mais Vendidos ── */
+function ProdutosRanking({ vendas }: { vendas: DashData["vendas"] }) {
+  const ranking = useMemo(() => {
+    const map: Record<string, { produto: string; qtd: number; receita: number; lucro: number }> = {};
+    vendas.forEach(v => {
+      const key = v.produto || "Outros";
+      if (!map[key]) map[key] = { produto: key, qtd: 0, receita: 0, lucro: 0 };
+      map[key].qtd++;
+      map[key].receita += v.preco_vendido || 0;
+      map[key].lucro += v.lucro || 0;
+    });
+    return Object.values(map).sort((a, b) => b.receita - a.receita).slice(0, 10);
+  }, [vendas]);
+
+  if (ranking.length === 0) return null;
+
+  const maxReceita = ranking[0]?.receita || 1;
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Top Produtos do Mes</h2>
+      <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
+        <div className="space-y-2">
+          {ranking.map((r, i) => {
+            const margem = r.receita > 0 ? ((r.lucro / r.receita) * 100).toFixed(1) : "0";
+            return (
+              <div key={r.produto} className="flex items-center gap-3">
+                <span className="text-xs font-bold text-[#86868B] w-5 text-right">{i + 1}.</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-medium text-[#1D1D1F] truncate">{r.produto}</span>
+                    <span className="text-sm font-semibold text-[#1D1D1F] shrink-0 ml-2">{fmt(r.receita)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-[#F5F5F7] overflow-hidden">
+                      <div className="h-full rounded-full bg-[#E8740E]" style={{ width: `${(r.receita / maxReceita) * 100}%` }} />
+                    </div>
+                    <span className="text-[10px] text-[#86868B] shrink-0">{r.qtd}x | {margem}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
