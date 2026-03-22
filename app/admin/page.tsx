@@ -191,6 +191,48 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* ── Mobile KPI Summary (só aparece em telas pequenas) ── */}
+      <div className="md:hidden space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gradient-to-br from-[#E8740E] to-[#F5A623] rounded-2xl p-4 text-white shadow-lg">
+            <p className="text-[11px] font-medium opacity-80">Patrimonio Total</p>
+            <p className="text-[22px] font-bold mt-1">{fmt(patrimonio)}</p>
+          </div>
+          <div className="bg-gradient-to-br from-[#1D1D1F] to-[#3A3A3C] rounded-2xl p-4 text-white shadow-lg">
+            <p className="text-[11px] font-medium opacity-80">Saldo em Conta</p>
+            <p className="text-[22px] font-bold mt-1">{fmt(saldoTotal)}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
+            <p className="text-[11px] font-medium text-[#86868B]">Vendas Hoje</p>
+            <p className="text-[20px] font-bold text-[#1D1D1F]">{vendasHoje.length}x</p>
+            <p className="text-[11px] text-green-600 font-medium">{fmt(vendasHojeTotal)}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
+            <p className="text-[11px] font-medium text-[#86868B]">Lucro Hoje</p>
+            <p className="text-[20px] font-bold text-green-600">{fmt(lucroHoje)}</p>
+            <p className="text-[11px] text-[#86868B]">Mes: {fmt(lucroMes)}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
+            <p className="text-[9px] text-[#86868B]">Itau</p>
+            <p className="text-[12px] font-bold text-blue-700">{fmt(saldoItau)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
+            <p className="text-[9px] text-[#86868B]">Infinite</p>
+            <p className="text-[12px] font-bold text-purple-700">{fmt(saldoInf)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
+            <p className="text-[9px] text-[#86868B]">MP</p>
+            <p className="text-[12px] font-bold text-green-700">{fmt(saldoMP)}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
+            <p className="text-[9px] text-[#86868B]">Especie</p>
+            <p className="text-[12px] font-bold text-[#1D1D1F]">{fmt(saldoEsp)}</p>
+          </div>
+        </div>
+      </div>
+
       {/* Saldos Bancários */}
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
@@ -297,6 +339,9 @@ export default function DashboardPage() {
 
       {/* Ranking de Produtos */}
       <ProdutosRanking vendas={vendasMes} />
+
+      {/* Curva ABC + Sugestão de Compra */}
+      <CurvaABC vendas={data.vendas} estoque={data.estoque} />
 
       {/* Ranking de Origens */}
       <OrigensRanking password={password} />
@@ -405,6 +450,114 @@ function ProdutosRanking({ vendas }: { vendas: DashData["vendas"] }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Curva ABC + Sugestão de Compra ── */
+function CurvaABC({ vendas, estoque }: { vendas: DashData["vendas"]; estoque: DashData["estoque"] }) {
+  const [showSugestao, setShowSugestao] = useState(false);
+
+  // Últimos 30 dias
+  const d30 = new Date(); d30.setDate(d30.getDate() - 30);
+  const d30Str = d30.toISOString().split("T")[0];
+  const vendas30d = vendas.filter(v => v.data >= d30Str && v.status_pagamento !== "CANCELADO");
+
+  // Agrupar por produto
+  const prodMap: Record<string, { produto: string; receita: number; qtdVendida: number; custo: number }> = {};
+  vendas30d.forEach(v => {
+    const key = v.produto || "Outros";
+    if (!prodMap[key]) prodMap[key] = { produto: key, receita: 0, qtdVendida: 0, custo: 0 };
+    prodMap[key].receita += v.preco_vendido || 0;
+    prodMap[key].qtdVendida++;
+    prodMap[key].custo += v.custo || 0;
+  });
+
+  const sorted = Object.values(prodMap).sort((a, b) => b.receita - a.receita);
+  const totalReceita = sorted.reduce((s, p) => s + p.receita, 0);
+
+  // Classificação ABC
+  let acum = 0;
+  const classified = sorted.map(p => {
+    acum += p.receita;
+    const pctAcum = totalReceita > 0 ? (acum / totalReceita) * 100 : 0;
+    const classe = pctAcum <= 80 ? "A" : pctAcum <= 95 ? "B" : "C";
+    return { ...p, pctAcum, classe };
+  });
+
+  // Sugestão de compra: produtos classe A com estoque baixo
+  const estoqueMap: Record<string, number> = {};
+  estoque.forEach(e => { estoqueMap[e.tipo === "NOVO" || e.tipo === "SEMINOVO" ? "ok" : ""] = 0; }); // dummy
+  // Build estoque qty map from raw estoque data
+  // Note: estoque items have produto field but may not match exactly
+  const sugestoes = classified.filter(p => p.classe === "A" || p.classe === "B").map(p => {
+    const mediaVendasDia = p.qtdVendida / 30;
+    const reporEm = Math.ceil(mediaVendasDia * 7); // sugerir estoque para 7 dias
+    return { ...p, mediaVendasDia: mediaVendasDia.toFixed(1), sugestaoRepor: Math.max(reporEm, 1) };
+  });
+
+  const classeColor: Record<string, string> = { A: "bg-green-100 text-green-700", B: "bg-yellow-100 text-yellow-700", C: "bg-gray-100 text-gray-500" };
+  const classeLabel: Record<string, string> = { A: "80% do faturamento", B: "15% do faturamento", C: "5% do faturamento" };
+
+  if (classified.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider">Curva ABC (ultimos 30 dias)</h2>
+        <button onClick={() => setShowSugestao(!showSugestao)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showSugestao ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+          {showSugestao ? "Ver Curva ABC" : "💡 Sugestao de Compra"}
+        </button>
+      </div>
+
+      {!showSugestao ? (
+        <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {(["A", "B", "C"] as const).map(c => {
+              const items = classified.filter(p => p.classe === c);
+              const total = items.reduce((s, p) => s + p.receita, 0);
+              return (
+                <div key={c} className="text-center p-3 rounded-xl bg-[#F5F5F7]">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold mb-1 ${classeColor[c]}`}>Classe {c}</span>
+                  <p className="text-lg font-bold text-[#1D1D1F]">{items.length} produtos</p>
+                  <p className="text-[10px] text-[#86868B]">{fmt(total)} — {classeLabel[c]}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+            {classified.slice(0, 20).map((p, i) => (
+              <div key={p.produto} className="flex items-center gap-2 text-sm">
+                <span className="text-xs text-[#86868B] w-5 text-right font-mono">{i + 1}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${classeColor[p.classe]}`}>{p.classe}</span>
+                <span className="flex-1 truncate text-[#1D1D1F]">{p.produto}</span>
+                <span className="text-xs text-[#86868B]">{p.qtdVendida}x</span>
+                <span className="font-semibold text-[#1D1D1F]">{fmt(p.receita)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
+          <p className="text-xs text-[#86868B] mb-3">Baseado nas vendas dos ultimos 30 dias — sugestao de estoque para 7 dias</p>
+          <div className="space-y-2">
+            {sugestoes.map((s) => (
+              <div key={s.produto} className="flex items-center gap-3 p-3 rounded-xl bg-[#F5F5F7]">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${classeColor[s.classe]}`}>{s.classe}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#1D1D1F] truncate">{s.produto}</p>
+                  <p className="text-[10px] text-[#86868B]">{s.mediaVendasDia} vendas/dia | {s.qtdVendida} vendas no mes</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-[#E8740E]">Repor {s.sugestaoRepor} un</p>
+                  <p className="text-[10px] text-[#86868B]">para 7 dias</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/importar", label: "Importar", icon: "📥", roles: ["admin"] },
   { href: "/admin/precos", label: "Precos", icon: "🏷️", roles: ["admin"] },
   { href: "/admin/mostruario", label: "Mostruario", icon: "🖼️", roles: ["admin"] },
+  { href: "/admin/conciliacao", label: "Conciliacao", icon: "🔍", roles: ["admin"] },
 ];
 
 export default function AdminNav({ userRole }: { userRole: string }) {
