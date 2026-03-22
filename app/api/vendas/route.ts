@@ -132,18 +132,7 @@ export async function POST(req: NextRequest) {
     data?.id
   );
 
-  // Notificação Telegram — fire-and-forget (não bloqueia resposta)
-  sendSaleNotification({
-    produto: body.produto,
-    cor: body.cor,
-    cliente: body.cliente,
-    preco_vendido: body.preco_vendido,
-    custo: body.custo,
-    lucro: body.lucro,
-    banco: body.banco,
-    forma: body.forma,
-    vendedor: usuario,
-  }).catch(() => {});
+  // Notificação Telegram movida para quando a venda for FINALIZADA (PATCH)
 
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
@@ -194,10 +183,21 @@ export async function PATCH(req: NextRequest) {
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Enviar notificação no Telegram quando pagamento é confirmado
+  // Enviar notificação no Telegram quando venda é FINALIZADA
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];
-    sendPaymentNotification(venda).catch(() => {}); // fire-and-forget
+    const lucroCalc = Number(venda.preco_vendido || 0) - Number(venda.custo || 0);
+    sendSaleNotification({
+      produto: venda.produto,
+      cor: venda.cor,
+      cliente: venda.cliente,
+      preco_vendido: venda.preco_vendido,
+      custo: venda.custo,
+      lucro: lucroCalc,
+      banco: venda.banco,
+      forma: venda.forma,
+      vendedor: venda.vendedor || "sistema",
+    }).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, updated: data });
