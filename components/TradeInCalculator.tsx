@@ -36,10 +36,25 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     return vendedorProp ?? null;
   });
 
-  // Theme — from URL ?tema= or admin config
+  // Theme — from URL ?tema= or admin config with auto night mode (19h–5h)
+  const [temaDia, setTemaDia] = useState<string>("tigrao");
+  const [temaNoite, setTemaNoite] = useState<string>("tigrao");
   const [temaKey, setTemaKey] = useState<string>(temaParam || "tigrao");
   const tema = useMemo(() => getTemaTI(temaKey), [temaKey]);
   const cssVars = useMemo(() => temaTICSSVars(tema), [tema]);
+
+  // Auto switch theme based on time of day (19h–5h = night)
+  useEffect(() => {
+    if (temaParam) return; // URL override — don't auto switch
+    function pickByHour() {
+      const h = new Date().getHours();
+      const isNight = h >= 19 || h < 5;
+      setTemaKey(isNight ? temaNoite : temaDia);
+    }
+    pickByHour();
+    const id = setInterval(pickByHour, 60_000);
+    return () => clearInterval(id);
+  }, [temaParam, temaDia, temaNoite]);
 
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
@@ -110,10 +125,9 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         setProducts(prodData);
         setUsedData(usedResData);
         setConfig(configData);
-        // If config has a tema_tradein and no URL override, use it
-        if (configData.temaTradein && !temaParam) {
-          setTemaKey(configData.temaTradein);
-        }
+        // Load theme config from admin
+        if (configData.temaTradein) setTemaDia(configData.temaTradein);
+        if (configData.temaTradeinNoite) setTemaNoite(configData.temaTradeinNoite);
       } catch {
         setError("Erro ao carregar dados. Tente novamente.");
       } finally {
