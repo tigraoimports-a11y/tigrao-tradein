@@ -55,6 +55,8 @@ export default function VendasPage() {
   const [filtroDia, setFiltroDia] = useState("");
   const [filtroCpf, setFiltroCpf] = useState("");
   const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [finalizandoLote, setFinalizandoLote] = useState(false);
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
@@ -1681,8 +1683,35 @@ export default function VendasPage() {
                     <option value="cliente">👤 Cliente</option>
                   </select>
                 </div>
-                <div className="flex gap-3 text-xs text-[#86868B]">
+                <div className="flex gap-3 items-center text-xs text-[#86868B]">
                   <span>{filtered.length} vendas</span>
+                  {tab === "andamento" && selecionadas.size > 0 && (
+                    <button
+                      disabled={finalizandoLote}
+                      onClick={async () => {
+                        if (!confirm(`Finalizar ${selecionadas.size} venda(s) selecionada(s)?`)) return;
+                        setFinalizandoLote(true);
+                        let ok = 0;
+                        for (const id of selecionadas) {
+                          try {
+                            await fetch("/api/vendas", {
+                              method: "PATCH",
+                              headers: apiHeaders(),
+                              body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
+                            });
+                            ok++;
+                          } catch {}
+                        }
+                        setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
+                        setSelecionadas(new Set());
+                        setFinalizandoLote(false);
+                        setMsg(`${ok} venda(s) finalizada(s) com sucesso!`);
+                      }}
+                      className="px-4 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
+                    >
+                      {finalizandoLote ? "Finalizando..." : `✅ Finalizar ${selecionadas.size} selecionada(s)`}
+                    </button>
+                  )}
                   {(tab === "finalizadas" || tab === "hoje") && filtered.length > 0 && (
                     <>
                       <span>Vendido: <strong className="text-[#1D1D1F]">{fmt(totalVendido)}</strong></span>
@@ -1698,6 +1727,19 @@ export default function VendasPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {tab === "andamento" && (
+                          <th className="px-3 py-3 w-8">
+                            <input
+                              type="checkbox"
+                              checked={filtered.length > 0 && selecionadas.size === filtered.length}
+                              onChange={() => {
+                                if (selecionadas.size === filtered.length) setSelecionadas(new Set());
+                                else setSelecionadas(new Set(filtered.map(v => v.id)));
+                              }}
+                              className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                            />
+                          </th>
+                        )}
                         {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", "Status", ""].map((h) => (
                           <th key={h} className="px-3 py-3 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
                         ))}
@@ -1729,9 +1771,26 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""}`}
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-orange-50" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
+                              {tab === "andamento" && (
+                                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selecionadas.has(v.id)}
+                                    onChange={() => {
+                                      setSelecionadas(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(v.id)) next.delete(v.id);
+                                        else next.add(v.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                                  />
+                                </td>
+                              )}
                               <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">
                                 {(() => {
                                   const [y, m, d] = (v.data || "").split("-");
