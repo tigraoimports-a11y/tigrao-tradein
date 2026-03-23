@@ -5,6 +5,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardParcial, ReportNoite, ReportManha, Venda } from "./admin-types";
 import { proximoDiaUtil, hojeISO } from "./business-days";
+import { getTaxa, calcularLiquido } from "./taxas";
 
 function sumByBanco(vendas: Venda[], banco: string): number {
   return vendas
@@ -275,7 +276,16 @@ export async function gerarManha(
     const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
     const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
     if (recebISO === dataISO) {
-      const val = Number(v.preco_vendido);
+      // Usar valor líquido: comprovante - taxa da maquininha
+      let val: number;
+      const comprovante = Number(v.valor_comprovante || 0);
+      if (comprovante > 0) {
+        const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
+        val = calcularLiquido(comprovante, taxa);
+      } else {
+        // Fallback: se comprovante não preenchido, usa preco_vendido
+        val = Number(v.preco_vendido);
+      }
       if (v.banco === "ITAU") creditos_itau += val;
       else if (v.banco === "INFINITE") creditos_inf += val;
       else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
