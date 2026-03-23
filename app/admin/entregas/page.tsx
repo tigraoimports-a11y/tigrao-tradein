@@ -66,7 +66,7 @@ function formatDateBR(dateStr: string) {
 }
 
 export default function EntregasPage() {
-  const { password } = useAdmin();
+  const { password, apiHeaders } = useAdmin();
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -115,7 +115,7 @@ export default function EntregasPage() {
     try {
       const params = new URLSearchParams({ from, to });
       const res = await fetch(`/api/admin/entregas?${params}`, {
-        headers: { "x-admin-password": password },
+        headers: apiHeaders(),
       });
       if (res.ok) {
         const json = await res.json();
@@ -139,7 +139,7 @@ export default function EntregasPage() {
 
     const res = await fetch("/api/admin/entregas", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         ...form,
         telefone: form.telefone || null,
@@ -173,7 +173,7 @@ export default function EntregasPage() {
   const handleStatusChange = async (entrega: Entrega, newStatus: EntregaStatus) => {
     const res = await fetch("/api/admin/entregas", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ id: entrega.id, status: newStatus }),
     });
     if (res.ok) {
@@ -242,7 +242,7 @@ export default function EntregasPage() {
     if (!confirm("Remover esta entrega?")) return;
     const res = await fetch("/api/admin/entregas", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ id }),
     });
     if (res.ok) {
