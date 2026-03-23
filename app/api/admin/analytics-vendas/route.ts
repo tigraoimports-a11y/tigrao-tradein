@@ -68,12 +68,15 @@ export async function GET(req: NextRequest) {
       .neq("status_pagamento", "CANCELADO")
       .gte("data", dataInicioStr)
       .lte("data", hojeStr)
-      .order("data", { ascending: true });
+      .order("data", { ascending: true })
+      .limit(5000);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const rows = (vendas ?? []) as Venda[];
-    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} mesAtualStr=${`${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}`}`);
+    const mesAtualFilter = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}`;
+    const rowsMesAtual = rows.filter(r => r.data && r.data.startsWith(mesAtualFilter));
+    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} mesAtualFilter=${mesAtualFilter} rowsMesAtual=${rowsMesAtual.length} sample=${rows.length > 0 ? JSON.stringify({ data: rows[rows.length - 1]?.data, status: rows[rows.length - 1]?.status_pagamento }) : "none"}`);
 
     // ---------------------------------------------------------------
     // 1. COMPARATIVO MENSAL
