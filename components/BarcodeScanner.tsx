@@ -52,6 +52,27 @@ export default function BarcodeScanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const rejectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear input, show brief error, auto-dismiss, and re-focus
+  const rejectAndReset = useCallback((msg: string) => {
+    setInputValue("");
+    bufferRef.current = "";
+    setRejectMsg("❌ Código ignorado — bipe o Serial Number (S)");
+    // Re-focus input for immediate next scan
+    setTimeout(() => inputRef.current?.focus(), 50);
+    // Auto-dismiss after 2 seconds
+    if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    rejectTimerRef.current = setTimeout(() => setRejectMsg(""), 2000);
+  }, []);
+
+  // Cleanup reject timer on unmount
+  useEffect(() => {
+    return () => {
+      if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    };
+  }, []);
+
   const handleSubmit = useCallback(
     (code: string) => {
       let trimmed = code.trim().toUpperCase();
@@ -72,13 +93,13 @@ export default function BarcodeScanner({
 
       // Length validation: 10–12 chars
       if (trimmed.length < 10 || trimmed.length > 12) {
-        setRejectMsg(
+        const msg =
           trimmed.length === 15 && /^\d+$/.test(trimmed)
             ? "Isso é um IMEI, não Serial Number. Bipe o código que começa com (S)."
             : trimmed.length > 20
             ? "Código inválido (muito longo). Bipe apenas o Serial Number — código com (S)."
-            : `Código "${trimmed}" não é Serial Number Apple (deve ter 10 a 12 caracteres com letras e números).`
-        );
+            : `Código "${trimmed}" não é Serial Number Apple (deve ter 10 a 12 caracteres com letras e números).`;
+        rejectAndReset(msg);
         return;
       }
 
@@ -86,11 +107,10 @@ export default function BarcodeScanner({
       const hasLetters = /[A-Z]/.test(trimmed);
       const hasNumbers = /[0-9]/.test(trimmed);
       if (!hasLetters || !hasNumbers) {
-        if (/^\d+$/.test(trimmed)) {
-          setRejectMsg("Código só numérico detectado. Serial Number tem letras e números.");
-        } else {
-          setRejectMsg("Serial Number deve conter letras E números.");
-        }
+        const msg = /^\d+$/.test(trimmed)
+          ? "Código só numérico detectado. Serial Number tem letras e números."
+          : "Serial Number deve conter letras E números.";
+        rejectAndReset(msg);
         return;
       }
 
@@ -99,7 +119,7 @@ export default function BarcodeScanner({
       setInputValue("");
       bufferRef.current = "";
     },
-    [onScan]
+    [onScan, rejectAndReset]
   );
 
   // Global keydown listener for USB barcode scanner — always active
@@ -318,9 +338,9 @@ export default function BarcodeScanner({
         </div>
       )}
 
-      {/* Reject message */}
+      {/* Reject message (auto-dismisses after 2s) */}
       {rejectMsg && (
-        <p className="text-amber-600 text-sm bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+        <p className="text-red-400 text-sm bg-red-900/30 border border-red-700/50 px-3 py-2 rounded-lg animate-pulse">
           {rejectMsg}
         </p>
       )}
