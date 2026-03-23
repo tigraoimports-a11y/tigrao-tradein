@@ -104,6 +104,9 @@ export default function EntregasPage() {
     local_entrega: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const [showProd2, setShowProd2] = useState(false);
+  const [showProd3, setShowProd3] = useState(false);
+  const [showPagAlt, setShowPagAlt] = useState(false);
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -158,6 +161,7 @@ export default function EntregasPage() {
     if (json.ok) {
       setMsg("Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: new Date().toISOString().split("T")[0] });
+      setShowProd2(false); setShowProd3(false); setShowPagAlt(false);
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -315,20 +319,30 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
-            <div className="col-span-2">
-              <p className={labelCls}>Produto 1</p>
+            <div className="col-span-2 md:col-span-3">
+              <p className={labelCls}>Produto</p>
               <input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 17 256GB Lavanda" className={inputCls} />
             </div>
-            <div className="col-span-2">
-              <p className={labelCls}>Produto 2 (opcional)</p>
-              <input value={form.produto2} onChange={(e) => set("produto2", e.target.value)} placeholder="Segundo produto..." className={inputCls} />
-            </div>
-            {form.produto2 && (
-              <div className="col-span-2">
-                <p className={labelCls}>Produto 3 (opcional)</p>
-                <input value={form.produto3} onChange={(e) => set("produto3", e.target.value)} placeholder="Terceiro produto..." className={inputCls} />
+            {showProd2 ? (
+              <div className="col-span-2 md:col-span-3">
+                <p className={labelCls}>Produto 2</p>
+                <input value={form.produto2} onChange={(e) => set("produto2", e.target.value)} placeholder="Segundo produto..." className={inputCls} />
+              </div>
+            ) : (
+              <div className="col-span-2 md:col-span-3">
+                <button onClick={() => setShowProd2(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto 2</button>
               </div>
             )}
+            {showProd2 && (showProd3 ? (
+              <div className="col-span-2 md:col-span-3">
+                <p className={labelCls}>Produto 3</p>
+                <input value={form.produto3} onChange={(e) => set("produto3", e.target.value)} placeholder="Terceiro produto..." className={inputCls} />
+              </div>
+            ) : (
+              <div className="col-span-2 md:col-span-3">
+                <button onClick={() => setShowProd3(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto 3</button>
+              </div>
+            ))}
             <div>
               <p className={labelCls}>Tipo</p>
               <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
@@ -380,24 +394,30 @@ export default function EntregasPage() {
               </div>
             </>)}
             {/* Pagamento alternativo */}
-            <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
-              <p className="text-xs font-semibold text-[#86868B] mb-2">Pagamento alternativo (opcional)</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
-                    <option value="">— 2ª forma —</option>
-                    <option value="Pix">Pix</option>
-                    <option value="Cartao Credito">Cartão Crédito</option>
-                    <option value="Especie">Espécie</option>
-                    <option value="Link de Pagamento">Link</option>
-                    <option value="Transferencia">Transferência</option>
-                  </select>
-                </div>
-                <div>
-                  <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
+            {showPagAlt ? (
+              <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
+                <p className="text-xs font-semibold text-[#86868B] mb-2">Pagamento alternativo</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
+                      <option value="">— 2ª forma —</option>
+                      <option value="Pix">Pix</option>
+                      <option value="Cartao Credito">Cartão Crédito</option>
+                      <option value="Especie">Espécie</option>
+                      <option value="Link de Pagamento">Link</option>
+                      <option value="Transferencia">Transferência</option>
+                    </select>
+                  </div>
+                  <div>
+                    <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="col-span-2 md:col-span-3">
+                <button onClick={() => setShowPagAlt(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar pagamento alternativo</button>
+              </div>
+            )}
             <div>
               <p className={labelCls}>Vendedor</p>
               <select value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} className={inputCls}>
