@@ -271,24 +271,33 @@ export async function gerarManha(
 
   let creditos_itau = 0, creditos_inf = 0, creditos_mp = 0;
   const d1rows = (vendasD1 ?? []) as Venda[];
+  // Deduplicar comprovantes: quando 1 pagamento cobre múltiplos produtos,
+  // todas as vendas têm o mesmo valor_comprovante — contar apenas 1x
+  const comprovantesContados = new Set<string>();
 
   for (const v of d1rows) {
     const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
     const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
     if (recebISO === dataISO) {
-      // Usar valor líquido: comprovante - taxa da maquininha
-      let val: number;
       const comprovante = Number(v.valor_comprovante || 0);
       if (comprovante > 0) {
+        // Chave única: banco + cliente + comprovante + data (evita contar o mesmo comprovante 2x)
+        const chave = `${v.banco}_${v.cliente}_${comprovante}_${v.data}`;
+        if (comprovantesContados.has(chave)) continue; // Já contou esse comprovante
+        comprovantesContados.add(chave);
+
         const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
-        val = calcularLiquido(comprovante, taxa);
+        const val = calcularLiquido(comprovante, taxa);
+        if (v.banco === "ITAU") creditos_itau += val;
+        else if (v.banco === "INFINITE") creditos_inf += val;
+        else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
       } else {
         // Fallback: se comprovante não preenchido, usa preco_vendido
-        val = Number(v.preco_vendido);
+        const val = Number(v.preco_vendido);
+        if (v.banco === "ITAU") creditos_itau += val;
+        else if (v.banco === "INFINITE") creditos_inf += val;
+        else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
       }
-      if (v.banco === "ITAU") creditos_itau += val;
-      else if (v.banco === "INFINITE") creditos_inf += val;
-      else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
     }
   }
 
