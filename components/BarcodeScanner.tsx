@@ -59,11 +59,11 @@ export default function BarcodeScanner({
       if (!trimmed) return;
 
       // Apple Serial Number validation:
-      // - iPhone: 12 chars (letters + numbers mixed)
-      // - MacBook/iPad: 10 chars (letters + numbers mixed)
+      // - Novos (2021+): 10 chars alfanuméricos
+      // - Antigos: 11 ou 12 chars alfanuméricos
       // Reject: IMEI (15 digits), EID (32 digits), UPC (12-13 digits only)
       const isAppleSerial =
-        (trimmed.length === 10 || trimmed.length === 12) && // 10 or 12 chars
+        (trimmed.length >= 10 && trimmed.length <= 12) &&   // 10, 11 or 12 chars
         /[A-Z]/.test(trimmed) &&                            // must have letters
         /[0-9]/.test(trimmed);                              // must have numbers
 
@@ -75,7 +75,7 @@ export default function BarcodeScanner({
             ? "⚠️ Código inválido (muito longo). Bipe apenas o Serial Number — código com (S)."
             : /^\d+$/.test(trimmed)
             ? "⚠️ Código só numérico detectado. Serial Number tem letras e números."
-            : `⚠️ Código "${trimmed}" não é Serial Number Apple (deve ter 10 ou 12 caracteres com letras e números).`
+            : `⚠️ Código "${trimmed}" não é Serial Number Apple (deve ter 10 a 12 caracteres com letras e números).`
         );
         return;
       }
