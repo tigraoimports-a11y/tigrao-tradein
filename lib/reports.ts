@@ -256,12 +256,17 @@ export async function gerarManha(
   const esp_mp_ontem = Number(saldoOntem?.esp_mp ?? 0);
   const esp_especie_ontem = Number(saldoOntem?.esp_especie ?? 0);
 
-  // 2. Créditos D+1 de ontem que entram hoje
+  // 2. Créditos D+1 que entram hoje (lookback 4 dias para cobrir fim de semana)
+  const quatroDiasAtras = new Date(hoje);
+  quatroDiasAtras.setDate(quatroDiasAtras.getDate() - 4);
+  const quatroDiasISO = `${quatroDiasAtras.getFullYear()}-${String(quatroDiasAtras.getMonth() + 1).padStart(2, "0")}-${String(quatroDiasAtras.getDate()).padStart(2, "0")}`;
+
   const { data: vendasD1 } = await supabase
     .from("vendas")
     .select("*")
     .eq("recebimento", "D+1")
-    .eq("data", ontemISO);
+    .gte("data", quatroDiasISO)
+    .lt("data", dataISO);
 
   let creditos_itau = 0, creditos_inf = 0, creditos_mp = 0;
   const d1rows = (vendasD1 ?? []) as Venda[];
