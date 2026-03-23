@@ -37,6 +37,15 @@
       color: #888;
       margin-bottom: 32px;
     }
+    .offline-info {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 24px;
+      padding: 12px 16px;
+      background: #141414;
+      border-radius: 8px;
+      border: 1px solid #2A2A2A;
+    }
     .retry-btn {
       display: inline-block;
       padding: 14px 32px;
@@ -49,13 +58,29 @@
       cursor: pointer;
       text-decoration: none;
       transition: opacity 0.2s;
+      margin: 6px;
     }
     .retry-btn:hover { opacity: 0.9; }
     .retry-btn:active { opacity: 0.8; }
+    .retry-btn.secondary {
+      background: #222;
+      color: #E8740E;
+      border: 1px solid #E8740E;
+    }
     .brand {
       margin-top: 48px;
       font-size: 14px;
       color: #555;
+    }
+    .queue-count {
+      display: none;
+      margin-top: 16px;
+      padding: 8px 16px;
+      background: #1a2e1a;
+      border: 1px solid #2ECC71;
+      border-radius: 8px;
+      color: #2ECC71;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -63,9 +88,35 @@
   <div class="container">
     <div class="icon">📡</div>
     <h1>Você está offline</h1>
-    <p>Sem conexão com a internet. Verifique sua rede e tente novamente.</p>
-    <button class="retry-btn" onclick="window.location.reload()">Tentar novamente</button>
+    <p>Sem conexão com a internet.</p>
+    <div class="offline-info">
+      💡 Se você já acessou o sistema antes com internet, as páginas do admin podem estar no cache. Clique abaixo pra tentar acessar.
+    </div>
+    <div>
+      <button class="retry-btn" onclick="window.location.href='/admin'">Abrir Admin</button>
+      <button class="retry-btn secondary" onclick="window.location.reload()">Tentar novamente</button>
+    </div>
+    <div class="queue-count" id="queueInfo"></div>
     <div class="brand">TigrãoImports 🐯</div>
   </div>
+  <script>
+    // Check if there are pending offline sales
+    try {
+      var raw = localStorage.getItem('tigrao_offline_queue');
+      if (raw) {
+        var queue = JSON.parse(raw);
+        if (queue.length > 0) {
+          var el = document.getElementById('queueInfo');
+          el.style.display = 'block';
+          el.textContent = '📋 ' + queue.length + ' venda(s) pendente(s) na fila offline. Serão sincronizadas quando a internet voltar.';
+        }
+      }
+    } catch(e) {}
+
+    // Auto-retry when online
+    window.addEventListener('online', function() {
+      window.location.reload();
+    });
+  </script>
 </body>
 </html>
