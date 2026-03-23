@@ -595,6 +595,12 @@ export default function VendasPage() {
       return;
     }
 
+    // Validação: comprovante obrigatório para vendas no CARTÃO
+    if ((form.forma === "CARTAO" || form.forma === "LINK") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+      setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão");
+      return;
+    }
+
     setSaving(true);
     setMsg("");
 
