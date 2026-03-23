@@ -27,11 +27,17 @@ function parseCSV<T>(csv: string): T[] {
 
 function parseNumber(str: string): number {
   if (!str) return 0;
-  const cleaned = str
+  let cleaned = str
     .replace(/R\$\s*/g, "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(/,/g, ".");
+    .replace(/\s/g, "");
+  // Detectar formato: se tem ponto seguido de exatamente 2 dígitos no final (ex: "5000.00"),
+  // é formato US (ponto = decimal). Caso contrário, formato BR (ponto = milhar).
+  if (/\.\d{2}$/.test(cleaned) && !cleaned.includes(",")) {
+    // Formato US: "5000.00" → 5000
+    return parseFloat(cleaned) || 0;
+  }
+  // Formato BR: "5.000" ou "5.000,00"
+  cleaned = cleaned.replace(/\./g, "").replace(/,/g, ".");
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
 }

@@ -41,11 +41,15 @@ export async function GET() {
     // Se há dados no Supabase, usar eles
     if (dbValores.length > 0) {
       // Converter para o formato esperado pelo frontend
-      const usedValues: UsedDeviceValue[] = dbValores.map((v) => ({
-        modelo: v.modelo,
-        armazenamento: v.armazenamento,
-        valorBase: Number(v.valor_base),
-      }));
+      const usedValues: UsedDeviceValue[] = dbValores.map((v) => {
+        let val = Number(v.valor_base);
+        // Sanidade: valor base de usado nunca passa de R$ 15.000
+        if (val > 15000) {
+          console.error(`[SANIDADE] valor_base absurdo: ${v.modelo} ${v.armazenamento} = ${val}, ignorando`);
+          val = 0;
+        }
+        return { modelo: v.modelo, armazenamento: v.armazenamento, valorBase: val };
+      });
 
       const excludedModels = dbExcluidos.map((e) => e.modelo);
 
