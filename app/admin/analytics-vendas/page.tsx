@@ -488,7 +488,8 @@ export default function AnalyticsVendasPage() {
                     outerRadius={100}
                     innerRadius={55}
                     paddingAngle={2}
-                    label={({ origem, pct }) => `${origem} ${pct.toFixed(0)}%`}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    label={(props: any) => `${props.origem ?? ""} ${((props.pct as number) ?? 0).toFixed(0)}%`}
                     labelLine={{ stroke: "#D2D2D7" }}
                   >
                     {data.origemClientes.map((_, i) => (

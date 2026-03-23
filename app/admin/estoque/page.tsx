@@ -6,6 +6,9 @@ import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 
+import BarcodeScanner from "@/components/BarcodeScanner";
+import { buildProdutoName, type ProdutoSpec } from "@/lib/produto-specs";
+
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
 interface ProdutoEstoque {
@@ -109,8 +112,8 @@ export default function EstoquePage() {
   const userName = user?.nome ?? "sistema";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -1089,7 +1092,12 @@ export default function EstoquePage() {
         <HistoricoTab password={password} logs={historicoLogs} setLogs={setHistoricoLogs} loading={historicoLoading} setLoading={setHistoricoLoading} />
       )}
 
-      {/* ═══════════ TAB: ETIQUETAS ═══════════ */}
+      {/* ═══════════ TAB: SCAN (Entrada por Serial Number) ═══════════ */}
+      {tab === "scan" && (
+        <ScanEntradaTab password={password} userName={userName} onSuccess={() => { fetchEstoque(); setMsg("✅ Produto cadastrado com sucesso!"); }} />
+      )}
+
+      {/* ═══════════ TAB: ETIQUETAS (Legacy) ═══════════ */}
       {tab === "etiquetas" && (
         <Suspense fallback={<div className="text-center py-8 text-gray-400">Carregando...</div>}>
           <EtiquetasContent embedded />
@@ -1158,6 +1166,247 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Scan Entrada (Serial Number) ── */
+function ScanEntradaTab({ password, userName, onSuccess }: { password: string; userName: string; onSuccess: () => void }) {
+  const [step, setStep] = useState<"scan" | "form" | "result">("scan");
+  const [serialNo, setSerialNo] = useState("");
+  const [scanResult, setScanResult] = useState<{ found: boolean; status?: string; produto?: Record<string, unknown>; message?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [form, setForm] = useState({
+    categoria: "IPHONES", produto: "", cor: "", armazenamento: "",
+    custo_unitario: "", fornecedor: "", data_compra: new Date().toISOString().split("T")[0],
+    imei: "", imei2: "", observacao: "",
+  });
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/fornecedores", { headers: { "x-admin-password": password } })
+      .then(r => r.json()).then(d => setFornecedores(d.fornecedores ?? [])).catch(() => {});
+  }, [password]);
+
+  const handleScan = async (code: string) => {
+    setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "x-admin-password": password, "x-admin-user": userName, "Content-Type": "application/json" },
+        body: JSON.stringify({ serial_no: code }),
+      });
+      const data = await res.json();
+      setScanResult(data);
+      setSerialNo(code);
+
+      if (!data.found) {
+        // Produto novo — abrir formulário
+        setStep("form");
+      } else if (data.status === "EM_ESTOQUE") {
+        setStep("result");
+        setSuccess(`⚠️ Produto já em estoque: ${data.produto?.produto || code}`);
+      } else if (data.status === "VENDIDO") {
+        setStep("result");
+        setError(`❌ Produto já vendido: ${data.message || code}`);
+      }
+    } catch {
+      setError("Erro ao consultar. Verifique sua conexão.");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.produto && !form.armazenamento) {
+      setError("Preencha pelo menos o produto e armazenamento");
+      return;
+    }
+    setSaving(true); setError("");
+
+    // Build product name from specs
+    const produtoNome = form.produto || `${form.categoria} ${form.armazenamento}`;
+
+    try {
+      const res = await fetch("/api/scan", {
+        method: "PUT",
+        headers: { "x-admin-password": password, "x-admin-user": userName, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serial_no: serialNo,
+          imei: form.imei,
+          imei2: form.imei2,
+          categoria: form.categoria,
+          produto: produtoNome,
+          cor: form.cor,
+          armazenamento: form.armazenamento,
+          custo_unitario: form.custo_unitario ? Number(form.custo_unitario) : 0,
+          fornecedor: form.fornecedor,
+          data_compra: form.data_compra,
+          observacao: form.observacao,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        setSuccess(`✅ ${data.message}`);
+        setStep("result");
+        onSuccess();
+        // Reset for next scan
+        setTimeout(() => {
+          setStep("scan");
+          setSerialNo("");
+          setScanResult(null);
+          setSuccess("");
+          setForm(f => ({ ...f, produto: "", cor: "", armazenamento: "", custo_unitario: "", imei: "", imei2: "", observacao: "" }));
+        }, 2000);
+      } else {
+        setError(data.error || "Erro ao salvar");
+      }
+    } catch {
+      setError("Erro de conexão");
+    }
+    setSaving(false);
+  };
+
+  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wide mb-1";
+  const inputCls = "w-full px-3 py-2.5 bg-white border border-[#D2D2D7] rounded-xl text-[#1D1D1F] text-sm focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] outline-none";
+  const selectCls = inputCls + " appearance-none";
+
+  return (
+    <div className="max-w-lg mx-auto space-y-6">
+      <div className="text-center">
+        <h2 className="text-xl font-bold text-[#1D1D1F]">📦 Entrada de Produto</h2>
+        <p className="text-sm text-[#86868B] mt-1">Escaneie o Serial Number da caixa do produto</p>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">{success}</div>}
+
+      {/* STEP 1: Scan */}
+      {step === "scan" && (
+        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4">
+          <p className="text-sm text-[#86868B] text-center">Bipe com o leitor USB ou use a câmera do celular</p>
+          <BarcodeScanner onScan={handleScan} placeholder="Serial Number..." />
+        </div>
+      )}
+
+      {/* STEP 2: Formulário de Cadastro */}
+      {step === "form" && (
+        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4">
+          <div className="bg-blue-50 border border-blue-200 px-4 py-3 rounded-xl">
+            <p className="text-sm text-blue-800 font-medium">🆕 Produto novo detectado</p>
+            <p className="text-xs text-blue-600 font-mono mt-1">SN: {serialNo}</p>
+          </div>
+
+          {/* Categoria */}
+          <div>
+            <p className={labelCls}>Categoria</p>
+            <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} className={selectCls}>
+              {DEFAULT_CATEGORIAS.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+            </select>
+          </div>
+
+          {/* Produto (nome completo) */}
+          <div>
+            <p className={labelCls}>Produto (nome completo)</p>
+            <input value={form.produto} onChange={e => setForm(f => ({ ...f, produto: e.target.value }))} placeholder="Ex: IPHONE 17 PRO MAX 256GB" className={inputCls} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Armazenamento */}
+            <div>
+              <p className={labelCls}>Armazenamento</p>
+              <select value={form.armazenamento} onChange={e => setForm(f => ({ ...f, armazenamento: e.target.value }))} className={selectCls}>
+                <option value="">—</option>
+                {["64GB","128GB","256GB","512GB","1TB","2TB"].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            {/* Cor */}
+            <div>
+              <p className={labelCls}>Cor</p>
+              <input value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} placeholder="Ex: Titânio Natural" className={inputCls} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Custo */}
+            <div>
+              <p className={labelCls}>Custo (R$)</p>
+              <input type="number" value={form.custo_unitario} onChange={e => setForm(f => ({ ...f, custo_unitario: e.target.value }))} placeholder="0" className={inputCls} />
+            </div>
+            {/* Fornecedor */}
+            <div>
+              <p className={labelCls}>Fornecedor</p>
+              <select value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className={selectCls}>
+                <option value="">— Selecionar —</option>
+                {fornecedores.map(f => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* IMEI (só iPhones) */}
+          {form.categoria === "IPHONES" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className={labelCls}>IMEI</p>
+                <input value={form.imei} onChange={e => setForm(f => ({ ...f, imei: e.target.value }))} placeholder="Opcional" className={inputCls} />
+              </div>
+              <div>
+                <p className={labelCls}>IMEI 2</p>
+                <input value={form.imei2} onChange={e => setForm(f => ({ ...f, imei2: e.target.value }))} placeholder="Opcional" className={inputCls} />
+              </div>
+            </div>
+          )}
+
+          {/* Data compra */}
+          <div>
+            <p className={labelCls}>Data da Compra</p>
+            <input type="date" value={form.data_compra} onChange={e => setForm(f => ({ ...f, data_compra: e.target.value }))} className={inputCls} />
+          </div>
+
+          {/* Observação */}
+          <div>
+            <p className={labelCls}>Observação</p>
+            <input value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Opcional" className={inputCls} />
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => { setStep("scan"); setSerialNo(""); setScanResult(null); setError(""); }}
+              className="flex-1 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] font-medium hover:bg-[#F5F5F7] transition-colors"
+            >
+              ← Voltar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !form.produto}
+              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-40"
+            >
+              {saving ? "Salvando..." : "✅ Cadastrar no Estoque"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: Resultado */}
+      {step === "result" && (
+        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4 text-center">
+          {scanResult?.found && scanResult?.produto && (
+            <div className="space-y-2">
+              <p className="text-lg font-bold text-[#1D1D1F]">{String(scanResult.produto.produto || "")}</p>
+              <p className="text-sm text-[#86868B]">{String(scanResult.produto.cor || "")} — SN: {serialNo}</p>
+              <p className="text-sm text-[#86868B]">Status: <span className="font-medium">{String(scanResult.produto.status || scanResult.status || "")}</span></p>
+            </div>
+          )}
+          <button
+            onClick={() => { setStep("scan"); setSerialNo(""); setScanResult(null); setError(""); setSuccess(""); }}
+            className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors"
+          >
+            📟 Escanear outro produto
+          </button>
         </div>
       )}
     </div>
