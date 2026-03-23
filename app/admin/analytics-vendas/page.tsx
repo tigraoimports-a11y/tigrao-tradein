@@ -177,7 +177,48 @@ export default function AnalyticsVendasPage() {
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const json = await res.json();
-      setData(json);
+      // Transform API response to match frontend interface
+      const c = json.comparativo || {};
+      const ma = c.mesAtual || {};
+      const mp = c.mesAnterior || {};
+      const p = json.projecao || {};
+      const transformed: AnalyticsVendasData = {
+        kpi: {
+          vendas: ma.vendas ?? 0,
+          vendasAnterior: mp.vendas ?? 0,
+          faturamento: ma.faturamento ?? 0,
+          faturamentoAnterior: mp.faturamento ?? 0,
+          lucro: ma.lucro ?? 0,
+          lucroAnterior: mp.lucro ?? 0,
+          ticketMedio: ma.ticketMedio ?? 0,
+          ticketMedioAnterior: mp.ticketMedio ?? 0,
+        },
+        projecao: {
+          acumulado: p.lucroAcumuladoMes ?? 0,
+          projetadoRestante: (p.lucroProjetadoFimMes ?? 0) - (p.lucroAcumuladoMes ?? 0),
+          projecaoTotal: p.lucroProjetadoFimMes ?? 0,
+          mesAnteriorTotal: p.lucroMesAnteriorTotal ?? 0,
+          diario: (p.diasRestantes || []).map((d: any, i: number) => ({
+            dia: d.data ? new Date(d.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : `D${i + 1}`,
+            acumulado: i === 0 ? (p.lucroAcumuladoMes ?? 0) : null,
+            projetado: d.lucroProjetado ?? null,
+          })),
+          mediaPorDia: (p.mediasPorDiaSemana || []).map((d: any) => ({
+            dia: d.diaSemana ?? d.dia ?? "",
+            media: d.mediaLucro ?? d.media ?? 0,
+          })),
+        },
+        ranking: (json.rankingProdutos || []),
+        ticketDiario: (json.ticketMedioDiario || []).map((d: any) => ({
+          dia: d.data ? parseInt(d.data.split("-")[2]) : 0,
+          ticketAtual: d.ticketMedio ?? 0,
+          ticketAnterior: 0,
+        })),
+        margemCanal: (json.margemPorCanal || []),
+        origemClientes: (json.origemClientes || []),
+        regiao: json.vendasPorRegiao || { bairros: [], cidades: [] },
+      };
+      setData(transformed);
     } catch (err: any) {
       setError(err.message || "Erro ao carregar dados");
     }
