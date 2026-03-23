@@ -662,7 +662,7 @@ export default function VendasPage() {
       try {
         const res = await fetch("/api/vendas", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password },
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
           body: JSON.stringify(payload),
         });
         const json = await res.json();
