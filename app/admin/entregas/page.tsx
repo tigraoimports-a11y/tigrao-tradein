@@ -691,12 +691,6 @@ export default function EntregasPage() {
                     <span className="text-[#1D1D1F]">{e.vendedor}</span>
                   </div>
                 )}
-                {e.regiao && (
-                  <div className="text-sm">
-                    <span className="text-[#86868B]">Regiao: </span>
-                    <span className="text-[#1D1D1F] font-medium">{e.regiao}</span>
-                  </div>
-                )}
                 {e.observacao && (
                   <div className="text-sm p-3 bg-[#F5F5F7] rounded-lg">
                     <span className="text-[#86868B]">Obs: </span>
