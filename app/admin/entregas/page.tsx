@@ -79,7 +79,7 @@ export default function EntregasPage() {
 
   const [copied, setCopied] = useState(false);
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     cliente: "",
     telefone: "",
     endereco: "",
@@ -89,13 +89,21 @@ export default function EntregasPage() {
     entregador: "",
     observacao: "",
     produto: "",
+    produto2: "",
+    produto3: "",
     tipo: "",
     detalhes_upgrade: "",
     forma_pagamento: "",
     valor: "",
+    parcelas: "",
+    maquina: "",
+    forma_pagamento_2: "",
+    valor_2: "",
     vendedor: "",
     regiao: "",
-  });
+    local_entrega: "",
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -149,7 +157,7 @@ export default function EntregasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Entrega agendada!");
-      setForm({ cliente: "", telefone: "", endereco: "", bairro: "", data_entrega: new Date().toISOString().split("T")[0], horario: "", entregador: "", observacao: "", produto: "", tipo: "", detalhes_upgrade: "", forma_pagamento: "", valor: "", vendedor: "", regiao: "" });
+      setForm({ ...emptyForm, data_entrega: new Date().toISOString().split("T")[0] });
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -171,19 +179,40 @@ export default function EntregasPage() {
   };
 
   const buildWhatsAppText = () => {
+    const produtos = [form.produto, form.produto2, form.produto3].filter(Boolean);
+    const produtoText = produtos.length > 1
+      ? produtos.map((p, i) => `${i + 1}. ${p}`).join("\n")
+      : form.produto || "—";
+
+    // Pagamento principal
+    let pagText = `${form.forma_pagamento || "—"}`;
+    if (form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") {
+      if (form.parcelas) pagText += ` ${form.parcelas}x`;
+      if (form.maquina) pagText += ` (${form.maquina})`;
+    }
+    pagText += ` R$${form.valor || "0"}`;
+
+    // Pagamento alternativo
+    let pagAlt = "";
+    if (form.forma_pagamento_2 && form.valor_2) {
+      pagAlt = `\n💵 PAGAMENTO 2: ${form.forma_pagamento_2} R$${form.valor_2}`;
+    }
+
+    const localEntrega = form.local_entrega ? `\n🏠 LOCAL: ${form.local_entrega}` : "";
+
     const lines = [
       `🛵 ENTREGA ${form.regiao || "—"} 🛵`,
       "",
-      `⏰ HORARIO: ${form.horario || "—"}`,
-      `📍 LOCAL: ${form.endereco || "—"}`,
-      `🍎 PRODUTO: ${form.produto || "—"}`,
-      `‼️ TIPO: ${form.tipo || "—"}${form.detalhes_upgrade ? ` ${form.detalhes_upgrade}` : ""}`,
-      `💵 PAGAMENTO: ${form.forma_pagamento || "—"} R$${form.valor || "0"}`,
+      `⏰ HORÁRIO:: ${form.horario || "—"}`,
+      `📍 LOCAL: ${form.endereco || "—"}${localEntrega}`,
+      `🍎 PRODUTO: ${produtoText}`,
+      `‼️ TIPO: ${form.tipo || "—"}${form.detalhes_upgrade ? `— ${form.detalhes_upgrade}` : ""}`,
+      `💰 PAGAMENTO: ${pagText}${pagAlt}`,
       `🧑 CLIENTE: ${form.cliente || "—"}`,
       `📞 CONTATO: ${form.telefone || "—"}`,
-      `📝 Observacao: ${form.observacao || "—"}`,
+      form.observacao ? `📝 Observação: ${form.observacao}` : "",
       `💼 Vendedor: ${form.vendedor || "—"}`,
-    ];
+    ].filter(Boolean);
     return lines.join("\n");
   };
 
@@ -277,10 +306,29 @@ export default function EntregasPage() {
                 <option value="OUTRA">Outra</option>
               </select>
             </div>
+            <div>
+              <p className={labelCls}>Local de Entrega</p>
+              <select value={form.local_entrega} onChange={(e) => set("local_entrega", e.target.value)} className={inputCls}>
+                <option value="">-- Selecionar --</option>
+                <option value="RESIDÊNCIA">Residência</option>
+                <option value="SHOPPING">Shopping</option>
+                <option value="OUTRO">Outro</option>
+              </select>
+            </div>
             <div className="col-span-2">
-              <p className={labelCls}>Produto</p>
+              <p className={labelCls}>Produto 1</p>
               <input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 17 256GB Lavanda" className={inputCls} />
             </div>
+            <div className="col-span-2">
+              <p className={labelCls}>Produto 2 (opcional)</p>
+              <input value={form.produto2} onChange={(e) => set("produto2", e.target.value)} placeholder="Segundo produto..." className={inputCls} />
+            </div>
+            {form.produto2 && (
+              <div className="col-span-2">
+                <p className={labelCls}>Produto 3 (opcional)</p>
+                <input value={form.produto3} onChange={(e) => set("produto3", e.target.value)} placeholder="Terceiro produto..." className={inputCls} />
+              </div>
+            )}
             <div>
               <p className={labelCls}>Tipo</p>
               <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
@@ -302,17 +350,53 @@ export default function EntregasPage() {
               <select value={form.forma_pagamento} onChange={(e) => set("forma_pagamento", e.target.value)} className={inputCls}>
                 <option value="">-- Selecionar --</option>
                 <option value="Pix">Pix</option>
-                <option value="Cartao Credito">Cartao Credito</option>
-                <option value="Cartao Debito">Cartao Debito</option>
-                <option value="Especie">Especie</option>
+                <option value="Cartao Credito">Cartão Crédito</option>
+                <option value="Cartao Debito">Cartão Débito</option>
+                <option value="Especie">Espécie</option>
                 <option value="Link de Pagamento">Link de Pagamento</option>
-                <option value="Transferencia">Transferencia</option>
+                <option value="Transferencia">Transferência</option>
                 <option value="Definir depois">Definir depois</option>
               </select>
             </div>
             <div>
               <p className={labelCls}>Valor (R$)</p>
               <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && (<>
+              <div>
+                <p className={labelCls}>Parcelas</p>
+                <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
+                  <option value="">—</option>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,18,21].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                </select>
+              </div>
+              <div>
+                <p className={labelCls}>Máquina</p>
+                <select value={form.maquina} onChange={(e) => set("maquina", e.target.value)} className={inputCls}>
+                  <option value="">-- Selecionar --</option>
+                  <option value="ITAU">Itaú</option>
+                  <option value="INFINITE">Infinite</option>
+                </select>
+              </div>
+            </>)}
+            {/* Pagamento alternativo */}
+            <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
+              <p className="text-xs font-semibold text-[#86868B] mb-2">Pagamento alternativo (opcional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
+                    <option value="">— 2ª forma —</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartao Credito">Cartão Crédito</option>
+                    <option value="Especie">Espécie</option>
+                    <option value="Link de Pagamento">Link</option>
+                    <option value="Transferencia">Transferência</option>
+                  </select>
+                </div>
+                <div>
+                  <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
+                </div>
+              </div>
             </div>
             <div>
               <p className={labelCls}>Vendedor</p>
