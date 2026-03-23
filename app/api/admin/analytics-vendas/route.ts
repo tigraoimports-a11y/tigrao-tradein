@@ -265,29 +265,40 @@ export async function GET(req: NextRequest) {
     }
 
     // Count distinct dates per day-of-week and accumulate
-    const diasVistos: Record<number, Set<string>> = {};
-    for (let d = 0; d < 7; d++) diasVistos[d] = new Set();
+    const diasComVendas: Record<number, Set<string>> = {};
+    for (let d = 0; d < 7; d++) diasComVendas[d] = new Set();
 
     for (const v of vendasParaMedia) {
       const date = new Date(v.data + "T12:00:00");
       const dow = date.getDay();
       diaSemanaStats[dow].totalLucro += Number(v.lucro || 0);
       diaSemanaStats[dow].totalVendas++;
-      diasVistos[dow].add(v.data);
+      diasComVendas[dow].add(v.data);
     }
 
-    // Also count days without sales
-    const cursor = new Date(dataInicioMedia);
+    // Find actual data range (first and last sale dates in historical period)
+    const datasVendas = vendasParaMedia.map(v => v.data).sort();
+    const primeiraVenda = datasVendas[0];
+    const ultimaVenda = datasVendas[datasVendas.length - 1];
+
+    // Count calendar days ONLY within the actual data range (first sale → end of last month)
+    const diasCalendario: Record<number, Set<string>> = {};
+    for (let d = 0; d < 7; d++) diasCalendario[d] = new Set();
+
     const mesAtualInicioDate = new Date(mesAtualInicio + "T00:00:00");
-    while (cursor < mesAtualInicioDate) {
-      const dow = cursor.getDay();
-      const dateStr = cursor.toISOString().split("T")[0];
-      diasVistos[dow].add(dateStr);
-      cursor.setDate(cursor.getDate() + 1);
+    if (primeiraVenda) {
+      const cursor = new Date(primeiraVenda + "T00:00:00");
+      while (cursor < mesAtualInicioDate) {
+        const dow = cursor.getDay();
+        const dateStr = cursor.toISOString().split("T")[0];
+        diasCalendario[dow].add(dateStr);
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
 
     for (let d = 0; d < 7; d++) {
-      diaSemanaStats[d].dias = diasVistos[d].size || 1;
+      // Use calendar days within actual data range as denominator
+      diaSemanaStats[d].dias = diasCalendario[d].size || 1;
     }
 
     const mediasPorDiaSemana = Array.from({ length: 7 }, (_, d) => {
@@ -310,12 +321,14 @@ export async function GET(req: NextRequest) {
       weekDaysVistos[week].add(v.data);
     }
 
-    // Count all calendar days per week-of-month in the period
-    const cursor2 = new Date(dataInicioMedia);
-    while (cursor2 < mesAtualInicioDate) {
-      const week = getWeekOfMonth(cursor2.getDate());
-      weekDaysVistos[week].add(cursor2.toISOString().split("T")[0]);
-      cursor2.setDate(cursor2.getDate() + 1);
+    // Count calendar days per week-of-month ONLY within actual data range
+    if (primeiraVenda) {
+      const cursor2 = new Date(primeiraVenda + "T00:00:00");
+      while (cursor2 < mesAtualInicioDate) {
+        const week = getWeekOfMonth(cursor2.getDate());
+        weekDaysVistos[week].add(cursor2.toISOString().split("T")[0]);
+        cursor2.setDate(cursor2.getDate() + 1);
+      }
     }
 
     for (let w = 1; w <= 4; w++) {
