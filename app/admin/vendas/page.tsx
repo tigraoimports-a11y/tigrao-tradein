@@ -627,8 +627,15 @@ export default function VendasPage() {
     let successCount = 0;
     const errors: string[] = [];
 
-    for (const prod of allProducts) {
+    for (let i = 0; i < allProducts.length; i++) {
+      const prod = allProducts[i];
       const payload = buildPayload(prod);
+      // Multi-produto no mesmo cartão: comprovante só no 1º produto
+      // Os demais ficam com comprovante = 0 para não duplicar no D+1
+      if (i > 0 && allProducts.length > 1 && payload.valor_comprovante) {
+        payload.valor_comprovante = null;
+        payload.notas = ((payload.notas || "") + " [mesmo pagamento]").trim();
+      }
 
       try {
         const res = await fetch("/api/vendas", {
