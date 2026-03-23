@@ -9,22 +9,26 @@ interface BarcodeScannerProps {
   disabled?: boolean;
 }
 
+type InputMode = "none" | "keyboard" | "camera";
+
 /**
- * Barcode Scanner component — supports both USB barcode readers and camera scanning.
+ * Barcode Scanner component — supports USB barcode readers, manual text input, and camera scanning.
  *
- * USB mode: Detects fast keystrokes (< 80ms gap) typical of barcode scanners,
- * then captures the Enter key to submit.
+ * USB mode: Listens globally for fast keystrokes (< 80ms gap) typical of barcode scanners,
+ * then captures the Enter key to submit. Always active when this component is mounted.
+ *
+ * Keyboard mode: Shows a text input field for manual Serial Number entry.
  *
  * Camera mode: Uses html5-qrcode library to scan 1D/2D barcodes via device camera.
  */
 export default function BarcodeScanner({
   onScan,
-  placeholder = "Bipe ou digite o Serial Number...",
+  placeholder = "Digite o Serial Number...",
   autoFocus = true,
   disabled = false,
 }: BarcodeScannerProps) {
   const [inputValue, setInputValue] = useState("");
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("none");
   const [cameraError, setCameraError] = useState("");
   const [rejectMsg, setRejectMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,12 +37,12 @@ export default function BarcodeScanner({
   const lastKeystrokeRef = useRef<number>(0);
   const bufferRef = useRef<string>("");
 
-  // Focus input on mount
+  // Focus input when keyboard mode is activated
   useEffect(() => {
-    if (autoFocus && inputRef.current) {
+    if (inputMode === "keyboard" && autoFocus && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [autoFocus]);
+  }, [inputMode, autoFocus]);
 
   // Cleanup camera on unmount
   useEffect(() => {
@@ -63,25 +67,27 @@ export default function BarcodeScanner({
 
       if (!trimmed) return;
 
-      // Apple Serial Number validation:
-      // - Novos (2021+): 10 chars alfanuméricos
-      // - Antigos: 11 ou 12 chars alfanuméricos
-      // Reject: IMEI (15 digits), EID (32 digits), UPC (12-13 digits only)
-      const isAppleSerial =
-        (trimmed.length >= 10 && trimmed.length <= 12) &&   // 10, 11 or 12 chars
-        /[A-Z]/.test(trimmed) &&                            // must have letters
-        /[0-9]/.test(trimmed);                              // must have numbers
-
-      if (!isAppleSerial) {
+      // Length validation: 10–12 chars
+      if (trimmed.length < 10 || trimmed.length > 12) {
         setRejectMsg(
           trimmed.length === 15 && /^\d+$/.test(trimmed)
-            ? "⚠️ Isso é um IMEI, não Serial Number. Bipe o código que começa com (S)."
+            ? "Isso é um IMEI, não Serial Number. Bipe o código que começa com (S)."
             : trimmed.length > 20
-            ? "⚠️ Código inválido (muito longo). Bipe apenas o Serial Number — código com (S)."
-            : /^\d+$/.test(trimmed)
-            ? "⚠️ Código só numérico detectado. Serial Number tem letras e números."
-            : `⚠️ Código "${trimmed}" não é Serial Number Apple (deve ter 10 a 12 caracteres com letras e números).`
+            ? "Código inválido (muito longo). Bipe apenas o Serial Number — código com (S)."
+            : `Código "${trimmed}" não é Serial Number Apple (deve ter 10 a 12 caracteres com letras e números).`
         );
+        return;
+      }
+
+      // Must contain BOTH letters AND numbers
+      const hasLetters = /[A-Z]/.test(trimmed);
+      const hasNumbers = /[0-9]/.test(trimmed);
+      if (!hasLetters || !hasNumbers) {
+        if (/^\d+$/.test(trimmed)) {
+          setRejectMsg("Código só numérico detectado. Serial Number tem letras e números.");
+        } else {
+          setRejectMsg("Serial Number deve conter letras E números.");
+        }
         return;
       }
 
@@ -93,26 +99,53 @@ export default function BarcodeScanner({
     [onScan]
   );
 
-  // Detect USB barcode scanner (fast typing pattern)
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Global keydown listener for USB barcode scanner — always active
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in the manual input field
+      if (inputMode === "keyboard" && inputRef.current === document.activeElement) {
+        return;
+      }
+      // Don't intercept if typing in other input/textarea elements
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        return;
+      }
+
       const now = Date.now();
       const timeSinceLastKey = now - lastKeystrokeRef.current;
       lastKeystrokeRef.current = now;
 
       if (e.key === "Enter") {
-        e.preventDefault();
-        // If fast typing detected (scanner) or manual entry
-        const value = inputRef.current?.value || "";
-        handleSubmit(value);
+        if (bufferRef.current.length >= 5) {
+          e.preventDefault();
+          handleSubmit(bufferRef.current);
+          bufferRef.current = "";
+        }
         return;
       }
 
-      // Track if this looks like scanner input (very fast)
-      if (timeSinceLastKey < 80 && e.key.length === 1) {
-        bufferRef.current += e.key;
-      } else if (e.key.length === 1) {
-        bufferRef.current = e.key;
+      // Track fast keystrokes (USB scanner pattern)
+      if (e.key.length === 1) {
+        if (timeSinceLastKey < 80) {
+          bufferRef.current += e.key;
+        } else {
+          bufferRef.current = e.key;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [handleSubmit, inputMode]);
+
+  // Input field keydown handler
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const value = inputRef.current?.value || "";
+        handleSubmit(value);
       }
     },
     [handleSubmit]
@@ -121,7 +154,7 @@ export default function BarcodeScanner({
   // Camera scanning
   const startCamera = useCallback(async () => {
     setCameraError("");
-    setCameraOpen(true);
+    setInputMode("camera");
 
     try {
       // Dynamic import to avoid SSR issues
@@ -132,7 +165,7 @@ export default function BarcodeScanner({
 
       if (!scannerRef.current) {
         setCameraError("Erro ao inicializar scanner");
-        setCameraOpen(false);
+        setInputMode("none");
         return;
       }
 
@@ -184,7 +217,7 @@ export default function BarcodeScanner({
           ? "Permissão de câmera negada. Libere nas configurações do navegador."
           : `Erro: ${msg}`
       );
-      setCameraOpen(false);
+      setInputMode("none");
     }
   }, [handleSubmit]);
 
@@ -199,58 +232,74 @@ export default function BarcodeScanner({
       // Ignore cleanup errors
     }
     html5QrcodeRef.current = null;
-    setCameraOpen(false);
+    setInputMode("none");
   }, []);
 
   return (
     <div className="space-y-3">
-      {/* USB Scanner / Manual Input */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+      {/* Mode selection buttons — shown when no mode is active */}
+      {inputMode === "none" && (
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => setInputMode("keyboard")}
             disabled={disabled}
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-lg text-white text-lg font-mono focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] outline-none transition-colors placeholder:text-[#555]"
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] text-xs">
-            📟 USB / Enter
-          </div>
+            className="w-full py-4 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-3 text-lg font-medium"
+          >
+            <span className="text-2xl">&#x2328;&#xFE0F;</span>
+            Digitar Número de Série
+          </button>
+          <button
+            onClick={startCamera}
+            disabled={disabled}
+            className="w-full py-4 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-3 text-lg font-medium"
+          >
+            <span className="text-2xl">&#x1F4F7;</span>
+            Escanear Número de Série
+          </button>
+          <p className="text-[#555] text-xs text-center">
+            Leitor USB funciona automaticamente — basta bipar o código
+          </p>
         </div>
-        <button
-          onClick={() => handleSubmit(inputValue)}
-          disabled={disabled || inputValue.trim().length < 5}
-          className="px-4 py-3 bg-[#E8740E] text-black font-bold rounded-lg hover:bg-[#F5A623] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          OK
-        </button>
-      </div>
-
-      {/* Reject message */}
-      {rejectMsg && (
-        <p className="text-amber-600 text-sm bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-          {rejectMsg}
-        </p>
       )}
 
-      {/* Camera Toggle */}
-      {!cameraOpen ? (
-        <button
-          onClick={startCamera}
-          disabled={disabled}
-          className="w-full py-3 bg-[#1A1A1A] border border-[#333] rounded-lg text-[#888] hover:text-white hover:border-[#E8740E] transition-colors flex items-center justify-center gap-2"
-        >
-          <span className="text-xl">📸</span>
-          Abrir Câmera para Escanear
-        </button>
-      ) : (
+      {/* Keyboard / Manual Input mode */}
+      {inputMode === "keyboard" && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                disabled={disabled}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full px-4 py-3 bg-[#1A1A1A] border border-[#333] rounded-lg text-white text-lg font-mono focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] outline-none transition-colors placeholder:text-[#555]"
+              />
+            </div>
+            <button
+              onClick={() => handleSubmit(inputValue)}
+              disabled={disabled || inputValue.trim().length < 5}
+              className="px-4 py-3 bg-[#E8740E] text-black font-bold rounded-lg hover:bg-[#F5A623] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              OK
+            </button>
+          </div>
+          <button
+            onClick={() => { setInputMode("none"); setInputValue(""); setRejectMsg(""); }}
+            className="w-full py-2 bg-[#1A1A1A] border border-[#333] rounded-lg text-[#888] hover:text-white hover:border-[#555] transition-colors text-sm"
+          >
+            ← Voltar
+          </button>
+        </div>
+      )}
+
+      {/* Camera mode */}
+      {inputMode === "camera" && (
         <div className="space-y-2">
           <div
             ref={scannerRef}
@@ -261,9 +310,16 @@ export default function BarcodeScanner({
             onClick={stopCamera}
             className="w-full py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 hover:bg-red-900/50 transition-colors text-sm"
           >
-            ✕ Fechar Câmera
+            &#x2715; Fechar Câmera
           </button>
         </div>
+      )}
+
+      {/* Reject message */}
+      {rejectMsg && (
+        <p className="text-amber-600 text-sm bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+          {rejectMsg}
+        </p>
       )}
 
       {/* Camera Error */}
