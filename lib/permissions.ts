@@ -50,6 +50,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
   {
     label: "Sistema",
     pages: [
+      { key: "taxas", label: "Taxas Maquinas" },
       { key: "log", label: "Log de Atividades" },
       { key: "usuarios", label: "Usuarios" },
       { key: "importar", label: "Importar" },
@@ -81,6 +82,7 @@ const PATH_TO_KEY: Record<string, string> = {
   "/admin/usados": "tradein_config",
   "/admin/analytics": "funil_tradein",
   "/admin/mapa-vendas": "mapa_vendas",
+  "/admin/taxas": "taxas",
   "/admin/log": "log",
   "/admin/usuarios": "usuarios",
   "/admin/importar": "importar",
@@ -107,6 +109,7 @@ const KEY_TO_LEGACY: Record<string, string> = {
   tradein_config: "cotacao.read",
   funil_tradein: "analytics.read",
   mapa_vendas: "analytics.read",
+  taxas: "taxas.write",
   log: "log.read",
   usuarios: "usuarios.manage",
   importar: "importar.write",

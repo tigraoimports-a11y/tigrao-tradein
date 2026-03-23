@@ -1,10 +1,13 @@
 // ============================================
-// Motor de Taxas das Maquininhas — TigrãoImports
+// Motor de Taxas das Maquininhas — TigraoImports
 // ============================================
 
 type TaxaMap = Record<string, Record<string, number>>;
 
-// Taxas ITAÚ (%)
+// ── Hardcoded fallback values ──
+// These are always available as backup if DB is unreachable
+
+// Taxas ITAU (%)
 const TAXAS_ITAU: TaxaMap = {
   VISA: {
     debito: 1.09, "1x": 3.57, "2x": 4.01, "3x": 4.60,
@@ -53,7 +56,7 @@ const TAXAS_INFINITE: TaxaMap = {
 };
 
 // Taxas MERCADO PAGO — Link (%) — Todas as bandeiras iguais
-// Base: taxa parcelamento + 2,30% antecipação de recebíveis
+// Base: taxa parcelamento + 2,30% antecipacao de recebiveis
 // Nota: taxa real pode diferir ~0,04% do app MP por arredondamento por parcela
 const TAXAS_MP: Record<string, number> = {
   pix: 0, debito: 0,
@@ -68,11 +71,97 @@ const MAQUININHAS: Record<string, TaxaMap | Record<string, number>> = {
   MERCADO_PAGO: TAXAS_MP,
 };
 
+// ── DB-backed taxas with in-memory cache ──
+
+interface DBTaxaRow {
+  banco: string;
+  bandeira: string;
+  parcelas: string;
+  taxa_pct: number;
+}
+
+interface TaxasCache {
+  data: Record<string, TaxaMap | Record<string, number>>;
+  fetchedAt: number;
+}
+
+let _taxasCache: TaxasCache | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Retorna a taxa (%) para uma combinação banco/bandeira/parcelas.
- * Para Mercado Pago, a bandeira é ignorada (taxa igual para todas).
+ * Fetch taxas from DB (Supabase) via server-side import.
+ * Returns null if fetch fails — caller should fallback to hardcoded.
  */
-export function getTaxa(
+async function fetchTaxasFromDB(): Promise<Record<string, TaxaMap | Record<string, number>> | null> {
+  // Check cache
+  if (_taxasCache && Date.now() - _taxasCache.fetchedAt < CACHE_TTL_MS) {
+    return _taxasCache.data;
+  }
+
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    const { data, error } = await supabase
+      .from("taxas_config")
+      .select("banco, bandeira, parcelas, taxa_pct");
+
+    if (error || !data || data.length === 0) {
+      console.warn("fetchTaxasFromDB: falha ou sem dados, usando fallback hardcoded");
+      return null;
+    }
+
+    // Build nested structure
+    const result: Record<string, TaxaMap> = {};
+
+    for (const row of data as DBTaxaRow[]) {
+      if (!result[row.banco]) result[row.banco] = {};
+      if (!result[row.banco][row.bandeira]) result[row.banco][row.bandeira] = {};
+      result[row.banco][row.bandeira][row.parcelas] = Number(row.taxa_pct);
+    }
+
+    // For MERCADO_PAGO, flatten to Record<string, number> (bandeira ALL)
+    const mp = result.MERCADO_PAGO;
+    let mpFlat: Record<string, number> | undefined;
+    if (mp?.ALL) {
+      mpFlat = mp.ALL;
+    }
+
+    const final: Record<string, TaxaMap | Record<string, number>> = {};
+    for (const banco of Object.keys(result)) {
+      if (banco === "MERCADO_PAGO" && mpFlat) {
+        final[banco] = mpFlat;
+      } else {
+        final[banco] = result[banco];
+      }
+    }
+
+    // Update cache
+    _taxasCache = { data: final, fetchedAt: Date.now() };
+    return final;
+  } catch (err) {
+    console.error("fetchTaxasFromDB error:", err);
+    return null;
+  }
+}
+
+/** Invalidate the in-memory taxas cache (call after admin updates) */
+export function invalidateTaxasCache() {
+  _taxasCache = null;
+}
+
+/**
+ * Get the full taxas map — tries DB first, falls back to hardcoded.
+ * Server-side only (uses Supabase service role key).
+ */
+async function getMaquininhas(): Promise<Record<string, TaxaMap | Record<string, number>>> {
+  const dbData = await fetchTaxasFromDB();
+  if (dbData) return dbData;
+  return MAQUININHAS;
+}
+
+// ── Helper to resolve taxa from a given data source ──
+
+function resolveTaxa(
+  maquininhas: Record<string, TaxaMap | Record<string, number>>,
   banco: string,
   bandeira: string | null,
   parcelas: number | null,
@@ -86,19 +175,20 @@ export function getTaxa(
     : `${parcelas}x`;
 
   if (banco === "MERCADO_PAGO") {
-    return (TAXAS_MP as Record<string, number>)[key] ?? 0;
+    const mp = maquininhas[banco] as Record<string, number> | undefined;
+    return mp?.[key] ?? 0;
   }
 
-  const taxasBanco = MAQUININHAS[banco] as TaxaMap | undefined;
+  const taxasBanco = maquininhas[banco] as TaxaMap | undefined;
   if (!taxasBanco || !bandeira) return 0;
 
   const taxasBandeira = taxasBanco[bandeira];
   if (!taxasBandeira) return 0;
 
-  // Procurar taxa exata ou a mais próxima menor
+  // Exact match
   if (taxasBandeira[key] !== undefined) return taxasBandeira[key];
 
-  // Interpolar para parcelas intermediárias (ex: 4x no Itaú)
+  // Interpolate for intermediate installments (e.g. 4x on ITAU)
   const parcKeys = Object.keys(taxasBandeira)
     .filter((k) => k.endsWith("x"))
     .map((k) => ({ key: k, num: parseInt(k) }))
@@ -119,19 +209,52 @@ export function getTaxa(
 
   if (lower.num === upper.num) return taxasBandeira[lower.key];
 
-  // Interpolação linear
+  // Linear interpolation
   const taxaLow = taxasBandeira[lower.key];
   const taxaUp = taxasBandeira[upper.key];
   const ratio = (parc - lower.num) / (upper.num - lower.num);
   return Math.round((taxaLow + (taxaUp - taxaLow) * ratio) * 100) / 100;
 }
 
-/** Calcula o valor líquido a partir do bruto */
+/**
+ * Retorna a taxa (%) para uma combinacao banco/bandeira/parcelas.
+ * Para Mercado Pago, a bandeira e ignorada (taxa igual para todas).
+ * Uses hardcoded values (synchronous). For DB values, use getTaxaAsync.
+ */
+export function getTaxa(
+  banco: string,
+  bandeira: string | null,
+  parcelas: number | null,
+  forma: string
+): number {
+  // Try cached DB data first (synchronous — only if cache is warm)
+  if (_taxasCache && Date.now() - _taxasCache.fetchedAt < CACHE_TTL_MS) {
+    return resolveTaxa(_taxasCache.data, banco, bandeira, parcelas, forma);
+  }
+  // Fallback to hardcoded
+  return resolveTaxa(MAQUININHAS, banco, bandeira, parcelas, forma);
+}
+
+/**
+ * Async version of getTaxa — fetches from DB with fallback.
+ * Use this in server-side contexts (API routes, server components).
+ */
+export async function getTaxaAsync(
+  banco: string,
+  bandeira: string | null,
+  parcelas: number | null,
+  forma: string
+): Promise<number> {
+  const maq = await getMaquininhas();
+  return resolveTaxa(maq, banco, bandeira, parcelas, forma);
+}
+
+/** Calcula o valor liquido a partir do bruto */
 export function calcularLiquido(valorBruto: number, taxaPct: number): number {
   return Math.round(valorBruto * (1 - taxaPct / 100) * 100) / 100;
 }
 
-/** Calcula o valor bruto (comprovante) a partir do líquido */
+/** Calcula o valor bruto (comprovante) a partir do liquido */
 export function calcularBruto(valorLiquido: number, taxaPct: number): number {
   if (taxaPct >= 100) return 0;
   return Math.round((valorLiquido / (1 - taxaPct / 100)) * 100) / 100;
@@ -146,12 +269,22 @@ export function calcularRecebimento(
   if (forma === "FIADO") return "FIADO";
   if (forma === "CARTAO") {
     if (!parcelas || parcelas <= 1) return "D+1";
-    return "D+1"; // Cartão sempre D+1
+    return "D+1"; // Cartao sempre D+1
   }
   return "D+0";
 }
 
-/** Retorna todas as taxas de um banco para exibição */
+/** Retorna todas as taxas de um banco para exibicao */
 export function getTaxasBanco(banco: string): TaxaMap | Record<string, number> | null {
+  // Try cached DB data first
+  if (_taxasCache && Date.now() - _taxasCache.fetchedAt < CACHE_TTL_MS) {
+    return (_taxasCache.data[banco] as TaxaMap | Record<string, number>) ?? null;
+  }
   return (MAQUININHAS[banco] as TaxaMap | Record<string, number>) ?? null;
+}
+
+/** Async version — fetches from DB with fallback */
+export async function getTaxasBancoAsync(banco: string): Promise<TaxaMap | Record<string, number> | null> {
+  const maq = await getMaquininhas();
+  return (maq[banco] as TaxaMap | Record<string, number>) ?? null;
 }
