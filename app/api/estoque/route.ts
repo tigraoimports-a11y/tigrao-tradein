@@ -292,11 +292,41 @@ export async function PATCH(req: NextRequest) {
         for (const prod of lojaProds) {
           if (prodNome.toLowerCase().includes(prod.nome.toLowerCase().split(" ").slice(-2).join(" ").toLowerCase()) ||
               prod.nome.toLowerCase().includes(prodNome.toLowerCase().split(" ").slice(-2).join(" ").toLowerCase())) {
-            // Atualizar status no precos também
+            // Atualizar status no precos
             if (newQnt === 0) {
               await supabase.from("precos").update({ status: "esgotado" }).ilike("modelo", `%${prodNome}%`);
             } else if (Number(antes?.qnt || 0) === 0 && newQnt > 0) {
               await supabase.from("precos").update({ status: "ativo" }).ilike("modelo", `%${prodNome}%`);
+            }
+
+            // Sincronizar visibilidade no mostruário (loja_variacoes)
+            // Buscar variações desse produto que correspondem à cor/storage do estoque
+            const corEstoque = (antes?.cor || "").toLowerCase();
+            const { data: variacoes } = await supabase
+              .from("loja_variacoes")
+              .select("id, nome, atributos")
+              .eq("produto_id", prod.id);
+
+            if (variacoes) {
+              for (const v of variacoes) {
+                const attrs = v.atributos as Record<string, string> | null;
+                const corVariacao = (attrs?.cor || v.nome || "").toLowerCase();
+                // Match por cor (se houver) ou atualizar todas as variações do produto
+                const corMatch = !corEstoque || !corVariacao ||
+                  corVariacao.includes(corEstoque) || corEstoque.includes(corVariacao);
+
+                if (corMatch) {
+                  if (newQnt === 0) {
+                    // Estoque zerou → esconder variação no mostruário
+                    await supabase.from("loja_variacoes").update({ visivel: false }).eq("id", v.id);
+                    console.log(`[Sync] Mostruário: ${v.nome} → escondido (estoque zerou)`);
+                  } else if (Number(antes?.qnt || 0) === 0 && newQnt > 0) {
+                    // Estoque voltou → mostrar variação no mostruário
+                    await supabase.from("loja_variacoes").update({ visivel: true }).eq("id", v.id);
+                    console.log(`[Sync] Mostruário: ${v.nome} → visível (estoque reabastecido)`);
+                  }
+                }
+              }
             }
           }
         }
