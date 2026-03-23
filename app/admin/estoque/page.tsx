@@ -629,12 +629,12 @@ export default function EstoquePage() {
         ))}
       </div>
 
-      {/* Botão Gerar Etiqueta */}
+      {/* Botão Registrar Produto (Scan) */}
       <button
-        onClick={() => window.location.href = "/admin/etiquetas"}
-        className="w-1/2 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white shadow-md"
+        onClick={() => setTab("scan")}
+        className="w-1/2 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 bg-[#E8740E] hover:bg-[#F5A623] text-white shadow-md"
       >
-        🏷️ Gerar Etiqueta
+        📟 Registrar Produto
       </button>
 
       {/* Tabs */}
