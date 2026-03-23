@@ -140,6 +140,8 @@ export async function GET(req: NextRequest) {
       .select("id, data, cliente, preco_vendido, custo, lucro, bairro, cidade, uf, cep, tipo")
       .neq("status_pagamento", "CANCELADO")
       .neq("tipo", "ATACADO")
+      .neq("cep", "00000000")
+      .neq("cep", "00000-000")
       .order("data", { ascending: false });
 
     if (dateFilter) {
