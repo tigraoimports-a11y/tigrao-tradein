@@ -205,7 +205,7 @@ export default function EntregasPage() {
     const localEntrega = form.local_entrega ? `\n🏠 *Local:* ${form.local_entrega}` : "";
 
     const lines = [
-      `🛵 *ENTREGA ${form.regiao || "—"}* 🛵`,
+      `🛵 *ENTREGA ${form.bairro || "—"}* 🛵`,
       "",
       `⏰ *Horário:* ${form.horario || "—"}`,
       `📍 *Local:* ${form.endereco || "—"}${localEntrega}`,
@@ -297,20 +297,6 @@ export default function EntregasPage() {
               <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereco completo" className={inputCls} />
             </div>
             <div>
-              <p className={labelCls}>Regiao</p>
-              <select value={form.regiao} onChange={(e) => set("regiao", e.target.value)} className={inputCls}>
-                <option value="">-- Selecionar --</option>
-                <option value="BARRA">Barra</option>
-                <option value="RECREIO">Recreio</option>
-                <option value="JACAREPAGUA">Jacarepagua</option>
-                <option value="CENTRO">Centro</option>
-                <option value="ZONA SUL">Zona Sul</option>
-                <option value="ZONA NORTE">Zona Norte</option>
-                <option value="NITEROI">Niteroi</option>
-                <option value="OUTRA">Outra</option>
-              </select>
-            </div>
-            <div>
               <p className={labelCls}>Local de Entrega</p>
               <select value={form.local_entrega} onChange={(e) => set("local_entrega", e.target.value)} className={inputCls}>
                 <option value="">-- Selecionar --</option>
@@ -349,11 +335,9 @@ export default function EntregasPage() {
                 <option value="">-- Selecionar --</option>
                 <option value="VENDA NORMAL">Venda Normal</option>
                 <option value="UPGRADE">Upgrade</option>
-                <option value="TROCA">Troca</option>
-                <option value="ATACADO">Atacado</option>
               </select>
             </div>
-            {(form.tipo === "UPGRADE" || form.tipo === "TROCA") && (
+            {form.tipo === "UPGRADE" && (
               <div className="col-span-2 md:col-span-3">
                 <p className={labelCls}>Detalhes do upgrade/troca</p>
                 <input value={form.detalhes_upgrade} onChange={(e) => set("detalhes_upgrade", e.target.value)} placeholder="Descricao do aparelho usado" className={inputCls} />
