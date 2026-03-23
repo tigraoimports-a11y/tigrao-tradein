@@ -1047,7 +1047,7 @@ export default function EstoquePage() {
                                       <td className="px-4 py-2.5">
                                         <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${dm ? (p.status === "EM ESTOQUE" ? "bg-green-900/30 text-green-400" : p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
                                         {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
-                                          <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
+                                          <span className={`ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"}`}>Ja a caminho</span>
                                         )}
                                       </td>
                                       <td className="px-4 py-2.5">
@@ -1333,9 +1333,9 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
       {/* STEP 2: Formulário de Cadastro */}
       {step === "form" && (
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border p-6 space-y-4`}>
-          <div className={`px-4 py-3 rounded-xl ${dm ? "bg-blue-900/30 border border-blue-800" : "bg-blue-50 border border-blue-200"}`}>
-            <p className={`text-sm font-medium ${dm ? "text-blue-400" : "text-blue-800"}`}>🆕 Produto novo detectado</p>
-            <p className={`text-xs font-mono mt-1 ${dm ? "text-blue-300" : "text-blue-600"}`}>SN: {serialNo}</p>
+          <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
+            <p className={`text-sm font-medium ${dm ? "text-[#F5F5F7]" : "text-green-800"}`}>🆕 Produto novo detectado</p>
+            <p className={`text-xs font-mono mt-1 ${dm ? "text-[#A1A1A6]" : "text-green-600"}`}>SN: {serialNo}</p>
           </div>
 
           {/* Categoria */}
