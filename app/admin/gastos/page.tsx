@@ -9,7 +9,7 @@ import type { Gasto } from "@/lib/admin-types";
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function GastosPage() {
-  const { password, user } = useAdmin();
+  const { password, user, darkMode: dm } = useAdmin();
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const GASTOS_TABS = ["novo", "historico"] as const;
@@ -130,8 +130,8 @@ export default function GastosPage() {
 
   const editSet = (field: string, value: string | boolean) => setEditForm((f) => ({ ...f, [field]: value }));
 
-  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
-  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   // Totais
   const totalSaida = gastos.filter((g) => g.tipo === "SAIDA").reduce((s, g) => s + Number(g.valor), 0);
@@ -141,14 +141,14 @@ export default function GastosPage() {
     <div className="space-y-6">
       <div className="flex gap-2">
         {(["novo", "historico"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
             {t === "novo" ? "Novo Gasto" : "Historico"}
           </button>
         ))}
       </div>
 
       {tab === "novo" ? (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-6`}
           <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Gasto / Entrada</h2>
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
@@ -186,21 +186,21 @@ export default function GastosPage() {
         <div className="space-y-4">
           {/* Totais */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 shadow-sm">
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
               <p className="text-xs text-[#86868B]">Total Saidas</p>
               <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
             </div>
-            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 shadow-sm">
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
               <p className="text-xs text-[#86868B]">Total Entradas</p>
               <p className="text-xl font-bold text-green-600">{fmt(totalEntrada)}</p>
             </div>
-            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 shadow-sm">
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
               <p className="text-xs text-[#86868B]">Saldo</p>
               <p className={`text-xl font-bold ${totalEntrada - totalSaida >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(totalEntrada - totalSaida)}</p>
             </div>
           </div>
 
-          <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

@@ -12,7 +12,7 @@ interface Fornecedor {
 }
 
 export default function FornecedoresPage() {
-  const { password, user } = useAdmin();
+  const { password, user, darkMode: dm } = useAdmin();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -62,16 +62,16 @@ export default function FornecedoresPage() {
     }
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
-  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   return (
     <div className="space-y-6">
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
       {/* Formulário */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-bold text-[#1D1D1F]">Cadastrar Fornecedor</h2>
+      <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-4`}>
+        <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Cadastrar Fornecedor</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <p className={labelCls}>Nome *</p>
@@ -109,9 +109,9 @@ export default function FornecedoresPage() {
       </div>
 
       {/* Lista */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#D2D2D7] bg-[#F5F5F7]">
-          <h2 className="font-semibold text-[#1D1D1F]">Fornecedores Cadastrados ({fornecedores.length})</h2>
+      <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl shadow-sm overflow-hidden`}>
+        <div className={`px-5 py-3 border-b ${dm ? "border-[#3A3A3C] bg-[#1A1A1A]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+          <h2 className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Fornecedores Cadastrados ({fornecedores.length})</h2>
         </div>
         {loading ? (
           <div className="py-12 text-center text-[#86868B]">Carregando...</div>

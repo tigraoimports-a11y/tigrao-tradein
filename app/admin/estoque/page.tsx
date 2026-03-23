@@ -108,8 +108,22 @@ function getModeloBase(produto: string, categoria: string): string {
 }
 
 export default function EstoquePage() {
-  const { password, user } = useAdmin();
+  const { password, user, darkMode } = useAdmin();
   const userName = user?.nome ?? "sistema";
+  const dm = darkMode;
+  // Dark mode color helpers
+  const bgCard = dm ? "bg-[#1C1C1E]" : "bg-white";
+  const bgCardAlt = dm ? "bg-[#1A1A1A]" : "bg-[#F5F5F7]";
+  const bgCardHover = dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]";
+  const borderCard = dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]";
+  const borderCardAlt = dm ? "border-[#2C2C2E]" : "border-[#E8E8ED]";
+  const borderLight = dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]";
+  const textPrimary = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const textSecondary = dm ? "text-[#98989D]" : "text-[#86868B]";
+  const textMuted = dm ? "text-[#6E6E73]" : "text-[#C7C7CC]";
+  const bgSection = dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]";
+  const bgHoverBtn = dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F5F5F7]";
+  const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
   const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
@@ -499,8 +513,8 @@ export default function EstoquePage() {
   const valorSeminovos = seminovos.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
   const valorACaminho = aCaminho.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
 
-  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
-  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   const isPendenciasTab = tab === "pendencias";
 
@@ -508,13 +522,13 @@ export default function EstoquePage() {
 
   return (
     <div className="space-y-6">
-      {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
+      {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? (dm ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-700") : (dm ? "bg-green-900/30 text-green-400" : "bg-green-50 text-green-700")}`}>{msg}</div>}
 
       {/* IMEI Search */}
       <div className="flex gap-2 items-center">
         <button
           onClick={() => { setShowImeiSearch(!showImeiSearch); if (showImeiSearch) { setImeiResult(null); setImeiSearch(""); } }}
-          className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${showImeiSearch ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}
+          className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${showImeiSearch ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E] hover:text-[#E8740E]`}`}
         >
           IMEI
         </button>
@@ -525,7 +539,7 @@ export default function EstoquePage() {
               onChange={(e) => setImeiSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleImeiSearch()}
               placeholder="Buscar por IMEI..."
-              className="flex-1 px-4 py-2.5 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E] transition-colors"
+              className={`flex-1 px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "border-[#D2D2D7]"}`}
               autoFocus
             />
             <button
@@ -541,44 +555,44 @@ export default function EstoquePage() {
 
       {/* IMEI Search Results */}
       {imeiResult && (
-        <div className="bg-white border border-[#E8740E] rounded-2xl p-5 shadow-sm space-y-4">
+        <div className={`${bgCard} border border-[#E8740E] rounded-2xl p-5 shadow-sm space-y-4`}>
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-[#1D1D1F]">Resultado IMEI: {imeiSearch}</h3>
+            <h3 className={`font-bold ${textPrimary}`}>Resultado IMEI: {imeiSearch}</h3>
             <button onClick={() => { setImeiResult(null); setImeiSearch(""); setShowImeiSearch(false); }} className="text-[#86868B] hover:text-red-500 text-sm">Fechar</button>
           </div>
 
           {imeiResult.estoque.length === 0 && imeiResult.vendas.length === 0 ? (
-            <p className="text-[#86868B] text-sm">Nenhum registro encontrado para este IMEI.</p>
+            <p className={`${textSecondary} text-sm`}>Nenhum registro encontrado para este IMEI.</p>
           ) : (
             <div className="space-y-3">
               {/* Estoque entries */}
               {imeiResult.estoque.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 p-3 bg-[#F5F5F7] rounded-xl">
+                <div key={item.id} className={`flex items-center gap-3 p-3 ${bgSection} rounded-xl`}>
                   <span className="text-lg">📦</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-sm text-[#1D1D1F]">{item.produto} {item.cor || ""}</p>
-                    <p className="text-xs text-[#86868B]">
+                    <p className={`font-semibold text-sm ${textPrimary}`}>{item.produto} {item.cor || ""}</p>
+                    <p className={`text-xs ${textSecondary}`}>
                       {item.fornecedor ? `Comprado de ${item.fornecedor}` : "Fornecedor n/a"}
                       {item.data_compra ? ` em ${item.data_compra}` : ""}
                       {item.custo_unitario ? ` por R$ ${Math.round(item.custo_unitario).toLocaleString("pt-BR")}` : ""}
                     </p>
-                    <p className="text-xs text-[#86868B]">IMEI: {item.imei} | Status: {item.status} | Tipo: {item.tipo}</p>
+                    <p className={`text-xs ${textSecondary}`}>IMEI: {item.imei} | Status: {item.status} | Tipo: {item.tipo}</p>
                   </div>
                 </div>
               ))}
 
               {/* Vendas entries */}
               {imeiResult.vendas.map((venda) => (
-                <div key={venda.id} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
+                <div key={venda.id} className={`flex items-center gap-3 p-3 ${dm ? "bg-green-900/20" : "bg-green-50"} rounded-xl`}>
                   <span className="text-lg">💰</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-sm text-[#1D1D1F]">{venda.produto}</p>
-                    <p className="text-xs text-[#86868B]">
+                    <p className={`font-semibold text-sm ${textPrimary}`}>{venda.produto}</p>
+                    <p className={`text-xs ${textSecondary}`}>
                       Vendido para {venda.cliente || "N/A"}
                       {venda.data ? ` em ${venda.data}` : ""}
                       {venda.preco_vendido ? ` por R$ ${Math.round(venda.preco_vendido).toLocaleString("pt-BR")}` : ""}
                     </p>
-                    <p className="text-xs text-[#86868B]">IMEI: {venda.imei}</p>
+                    <p className={`text-xs ${textSecondary}`}>IMEI: {venda.imei}</p>
                   </div>
                 </div>
               ))}
@@ -604,8 +618,8 @@ export default function EstoquePage() {
       )}
 
       {estoque.length === 0 && !loading && (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-8 text-center shadow-sm">
-          <p className="text-[#86868B] mb-4">Estoque vazio. Importar produtos da planilha ESTOQUE 2026?</p>
+        <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 text-center shadow-sm`}>
+          <p className={`${textSecondary} mb-4`}>Estoque vazio. Importar produtos da planilha ESTOQUE 2026?</p>
           <button onClick={handleImportInitial} disabled={importingInitial} className="px-6 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
             {importingInitial ? "Importando..." : "Importar Estoque da Planilha"}
           </button>
@@ -622,8 +636,8 @@ export default function EstoquePage() {
           { label: "Pendencias", value: pendencias.length, color: "#F39C12" },
           { label: "A Caminho", value: `${aCaminho.length} (${fmt(valorACaminho)})`, color: "#3498DB" },
         ].map((kpi) => (
-          <div key={kpi.label} className="bg-white border border-[#D2D2D7] rounded-2xl p-3 shadow-sm">
-            <p className="text-[#86868B] text-[10px] uppercase tracking-wider">{kpi.label}</p>
+          <div key={kpi.label} className={`${bgCard} border ${borderCard} rounded-2xl p-3 shadow-sm`}>
+            <p className={`${textSecondary} text-[10px] uppercase tracking-wider`}>{kpi.label}</p>
             <p className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</p>
           </div>
         ))}
@@ -648,7 +662,7 @@ export default function EstoquePage() {
           { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
         ] as const).map((t) => (
           <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-            tab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+            tab === t.key ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
           }`}>{t.label}</button>
         ))}
       </div>
@@ -661,9 +675,9 @@ export default function EstoquePage() {
           <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
             tab === t.key
               ? t.color === "red" ? "bg-red-500 text-white" : "bg-yellow-500 text-white"
-              : t.color === "red" && esgotados.length > 0 ? "bg-white border border-red-300 text-red-500 hover:border-red-500"
-              : t.color === "yellow" && acabando.length > 0 ? "bg-white border border-yellow-300 text-yellow-600 hover:border-yellow-500"
-              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+              : t.color === "red" && esgotados.length > 0 ? `${bgCard} border border-red-300 text-red-500 hover:border-red-500`
+              : t.color === "yellow" && acabando.length > 0 ? `${bgCard} border border-yellow-300 text-yellow-600 hover:border-yellow-500`
+              : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
           }`}>{t.label}</button>
         ))}
       </div>
@@ -675,21 +689,21 @@ export default function EstoquePage() {
           { key: "historico", label: "📋 Histórico" },
         ] as const).map((t) => (
           <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-            tab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+            tab === t.key ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
           }`}>{t.label}</button>
         ))}
       </div>
       {/* Filtros */}
       {!["novo", "scan", "historico"].includes(tab) && (
         <div className="flex gap-2 items-center flex-wrap">
-          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs">
+          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"}`}>
             <option value="">Todas categorias</option>
             {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
           </select>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-xs w-40 focus:outline-none focus:border-[#E8740E]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-xs w-40 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "border-[#D2D2D7]"}`} />
           <button
             onClick={() => setShowNewCat(!showNewCat)}
-            className="px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+            className={`px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}
           >
             + Categoria
           </button>
@@ -699,18 +713,18 @@ export default function EstoquePage() {
 
       {/* Form criar categoria */}
       {tab !== "etiquetas" && showNewCat && (
-        <div className="bg-white border border-[#E8740E] rounded-2xl p-4 shadow-sm space-y-3">
-          <h3 className="font-semibold text-sm text-[#1D1D1F]">Nova Categoria de Estoque</h3>
+        <div className={`${bgCard} border border-[#E8740E] rounded-2xl p-4 shadow-sm space-y-3`}>
+          <h3 className={`font-semibold text-sm ${textPrimary}`}>Nova Categoria de Estoque</h3>
           <div className="flex gap-3 items-end flex-wrap">
             <div>
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Emoji</p>
+              <p className={`text-[10px] font-bold ${textSecondary} uppercase mb-1`}>Emoji</p>
               <div className="flex gap-1 flex-wrap max-w-xs">
                 {EMOJI_OPTIONS.map((e) => (
                   <button
                     key={e}
                     onClick={() => setNewCat({ ...newCat, emoji: e })}
                     className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors ${
-                      newCat.emoji === e ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] hover:bg-[#E8E8ED]"
+                      newCat.emoji === e ? "bg-[#E8740E] text-white" : `${bgSection} ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#E8E8ED]"}`
                     }`}
                   >
                     {e}
@@ -719,25 +733,25 @@ export default function EstoquePage() {
               </div>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome da Categoria</p>
+              <p className={`text-[10px] font-bold ${textSecondary} uppercase mb-1`}>Nome da Categoria</p>
               <input
                 value={newCat.label}
                 onChange={(e) => setNewCat({ ...newCat, label: e.target.value })}
                 placeholder="Ex: Samsung, Cabos, etc."
-                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                className={`w-full px-3 py-2 border rounded-lg text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"}`}
                 onKeyDown={(e) => e.key === "Enter" && handleAddCategoriaEstoque()}
               />
             </div>
             <button onClick={handleAddCategoriaEstoque} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors">Criar</button>
-            <button onClick={() => setShowNewCat(false)} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors">Cancelar</button>
+            <button onClick={() => setShowNewCat(false)} className={`px-4 py-2 rounded-xl border ${borderCard} ${textSecondary} text-sm ${bgHoverBtn} transition-colors`}>Cancelar</button>
           </div>
         </div>
       )}
 
       {tab === "novo" ? (
         /* FORMULÁRIO */
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 shadow-sm space-y-6">
-          <h2 className="text-lg font-bold text-[#1D1D1F]">Adicionar Produto</h2>
+        <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-6`}>
+          <h2 className={`text-lg font-bold ${textPrimary}`}>Adicionar Produto</h2>
 
           {/* Row 1: Categoria + Tipo */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -753,7 +767,7 @@ export default function EstoquePage() {
 
           {/* Campos específicos por categoria */}
           {form.categoria === "IPHONES" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
                 {["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "17 PRO", "17 PRO MAX"].map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
               </select></div>
@@ -764,7 +778,7 @@ export default function EstoquePage() {
           )}
 
           {form.categoria === "MACBOOK" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
                 <option value="AIR">MacBook Air</option>
                 <option value="PRO">MacBook Pro</option>
@@ -788,7 +802,7 @@ export default function EstoquePage() {
           )}
 
           {form.categoria === "MAC_MINI" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
                 {["M1", "M2", "M2 PRO", "M4", "M4 PRO"].map((c) => <option key={c}>{c}</option>)}
               </select></div>
@@ -802,7 +816,7 @@ export default function EstoquePage() {
           )}
 
           {form.categoria === "IPADS" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
                 <option value="IPAD">iPad</option>
                 <option value="MINI">iPad Mini</option>
@@ -823,7 +837,7 @@ export default function EstoquePage() {
           )}
 
           {form.categoria === "APPLE_WATCH" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
                 {["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].map((m) => <option key={m}>{m}</option>)}
               </select></div>
@@ -838,7 +852,7 @@ export default function EstoquePage() {
           )}
 
           {form.categoria === "AIRPODS" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
                 {["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].map((m) => <option key={m}>{m}</option>)}
               </select></div>
@@ -882,7 +896,7 @@ export default function EstoquePage() {
                     autoFocus
                   />
                   <button onClick={handleAddFornecedor} className="px-3 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-bold shrink-0">+</button>
-                  <button onClick={() => setShowNovoFornecedor(false)} className="px-2 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-xs shrink-0">X</button>
+                  <button onClick={() => setShowNovoFornecedor(false)} className={`px-2 py-2 rounded-xl border ${borderCard} ${textSecondary} text-xs shrink-0`}>X</button>
                 </div>
               ) : (
                 <div className="flex gap-1">
@@ -890,13 +904,13 @@ export default function EstoquePage() {
                     <option value="">— Selecionar —</option>
                     {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
                   </select>
-                  <button onClick={() => setShowNovoFornecedor(true)} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] text-xs font-bold shrink-0" title="Cadastrar novo fornecedor">+</button>
+                  <button onClick={() => setShowNovoFornecedor(true)} className={`px-3 py-2 rounded-xl border ${borderCard} ${textSecondary} hover:border-[#E8740E] hover:text-[#E8740E] text-xs font-bold shrink-0`} title="Cadastrar novo fornecedor">+</button>
                 </div>
               )}
             </div>
           </div>
           {form.tipo === "SEMINOVO" && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-[#F5F5F7] rounded-xl">
+            <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
               <div><p className={labelCls}>Cliente (comprado de)</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className={inputCls} /></div>
               <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Grade, caixa, garantia..." className={inputCls} /></div>
@@ -913,15 +927,15 @@ export default function EstoquePage() {
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : Object.keys(byCat).length === 0 ? (
-            <div className="bg-white border border-[#D2D2D7] rounded-2xl p-12 text-center shadow-sm">
-              <p className="text-[#86868B]">Nenhum produto encontrado.</p>
+            <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
+              <p className={textSecondary}>Nenhum produto encontrado.</p>
             </div>
           ) : (
             Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
-                <h2 className="text-lg font-bold text-[#1D1D1F] flex items-center gap-2">
+                <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {dynamicCatLabels[cat] || cat}
-                  <span className="text-xs font-normal text-[#86868B]">
+                  <span className={`text-xs font-normal ${textSecondary}`}>
                     {Object.values(modelos).flat().length} produtos | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
                 </h2>
@@ -947,14 +961,14 @@ export default function EstoquePage() {
                     onDragEnter={(e) => { e.stopPropagation(); dragOverCardRef.current = modelo; }}
                     onDragOver={(e) => e.preventDefault()}
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
-                    className={`bg-white border rounded-2xl overflow-hidden shadow-sm transition-opacity ${isCardDragging ? "opacity-40 border-[#E8740E]" : "border-[#D2D2D7]"}`}
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm transition-opacity ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
-                    <div className="px-5 py-2.5 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between cursor-grab active:cursor-grabbing">
+                    <div className={`px-5 py-2.5 ${bgCardAlt} border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-[#C7C7CC] text-xs select-none">⠿</span>
-                        <h3 className="font-semibold text-[#1D1D1F] text-sm">{modelo}</h3>
+                        <span className={`${textMuted} text-xs select-none`}>⠿</span>
+                        <h3 className={`font-semibold ${textPrimary} text-sm`}>{modelo}</h3>
                       </div>
-                      <span className="text-[10px] text-[#86868B]">{items.length} var. | {items.reduce((s, p) => s + p.qnt, 0)} un. | {fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                      <span className={`text-[10px] ${textSecondary}`}>{items.length} var. | {items.reduce((s, p) => s + p.qnt, 0)} un. | {fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -968,14 +982,14 @@ export default function EstoquePage() {
                             return (
                               <React.Fragment key={prodNome}>
                                 {/* Header do produto — sempre mostra */}
-                                <tr className="bg-[#FAFAFA] border-b border-[#E8E8ED]">
+                                <tr className={`${bgCardAlt} border-b ${borderCardAlt}`}>
                                   <td className="w-4"></td>
-                                  <td className="px-2 py-2.5 font-semibold text-sm text-[#1D1D1F]" colSpan={1}>{prodNome}</td>
+                                  <td className={`px-2 py-2.5 font-semibold text-sm ${textPrimary}`} colSpan={1}>{prodNome}</td>
                                   <td className="px-4 py-2 text-right">
-                                    <span className="text-xs font-bold text-[#1D1D1F]">{prodTotal} un.</span>
+                                    <span className={`text-xs font-bold ${textPrimary}`}>{prodTotal} un.</span>
                                   </td>
-                                  <td className="px-4 py-2 text-xs text-[#86868B]">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
-                                  <td className="px-4 py-2 text-xs font-semibold text-[#1D1D1F]">{fmt(prodValor)}</td>
+                                  <td className={`px-4 py-2 text-xs ${textSecondary}`}>{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                  <td className={`px-4 py-2 text-xs font-semibold ${textPrimary}`}>{fmt(prodValor)}</td>
                                   <td></td>
                                   <td></td>
                                 </tr>
@@ -991,13 +1005,13 @@ export default function EstoquePage() {
                                       onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
                                       onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                       onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      className={`border-b border-[#F5F5F7] last:border-0 transition-colors ${dragId === p.id ? "opacity-40 bg-[#FFF3E8]" : p.qnt === 0 ? "bg-red-50/50 hover:bg-[#F5F5F7]" : p.qnt === 1 ? "bg-yellow-50/50 hover:bg-[#F5F5F7]" : "hover:bg-[#F5F5F7]"}`}
+                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? (dm ? "opacity-40 bg-[#3D2A0E]" : "opacity-40 bg-[#FFF3E8]") : p.qnt === 0 ? (dm ? "bg-red-900/20 hover:bg-[#2C2C2E]" : "bg-red-50/50 hover:bg-[#F5F5F7]") : p.qnt === 1 ? (dm ? "bg-yellow-900/20 hover:bg-[#2C2C2E]" : "bg-yellow-50/50 hover:bg-[#F5F5F7]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]")}`}
                                     >
                                       <td className="pl-2 py-2.5 cursor-grab active:cursor-grabbing text-[#C7C7CC] select-none w-4">
                                         <span className="text-[10px]">⠿</span>
                                       </td>
                                       <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
-                                        <span className="text-[#86868B]">• {p.cor || "—"}</span>
+                                        <span className={textSecondary}>• {p.cor || "—"}</span>
                                         {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>IMEI</span>}
                                       </td>
                                       {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
@@ -1010,9 +1024,9 @@ export default function EstoquePage() {
                                           </div>
                                         ) : (
                                           <div className="flex items-center gap-1">
-                                            <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-red-100 hover:text-red-500 text-xs font-bold">-</button>
-                                            <span className={`font-bold min-w-[24px] text-center cursor-pointer hover:text-[#E8740E] ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : "text-[#1D1D1F]"}`} onClick={() => setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
-                                            <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className="w-5 h-5 rounded bg-[#F5F5F7] text-[#86868B] hover:bg-green-100 hover:text-green-600 text-xs font-bold">+</button>
+                                            <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-red-100 hover:text-red-500 text-xs font-bold`}>-</button>
+                                            <span className={`font-bold min-w-[24px] text-center cursor-pointer hover:text-[#E8740E] ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`} onClick={() => setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
+                                            <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-green-100 hover:text-green-600 text-xs font-bold`}>+</button>
                                           </div>
                                         )}
                                       </td>
@@ -1031,7 +1045,7 @@ export default function EstoquePage() {
                                       </td>
                                       <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
                                       <td className="px-4 py-2.5">
-                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700"}`}>{p.status}</span>
+                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${dm ? (p.status === "EM ESTOQUE" ? "bg-green-900/30 text-green-400" : p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
                                         {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
                                           <span className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-100 text-blue-700">Ja a caminho</span>
                                         )}
@@ -1065,7 +1079,7 @@ export default function EstoquePage() {
                                               const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec);
                                             }}
                                             onBlur={() => { const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec); }}
-                                            className="px-1 py-0.5 rounded border border-[#E8740E] text-[10px] bg-white"
+                                            className={`px-1 py-0.5 rounded border border-[#E8740E] text-[10px] ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`}
                                             autoFocus
                                           >
                                             <option value="">Selecionar...</option>
@@ -1116,7 +1130,7 @@ export default function EstoquePage() {
 
       {/* ═══════════ TAB: ETIQUETAS (Legacy) ═══════════ */}
       {tab === "etiquetas" && (
-        <Suspense fallback={<div className="text-center py-8 text-gray-400">Carregando...</div>}>
+        <Suspense fallback={<div className="text-center py-8 text-[#86868B]">Carregando...</div>}>
           <EtiquetasContent embedded />
         </Suspense>
       )}
@@ -1130,6 +1144,7 @@ type LogEntry = { id: string; created_at: string; usuario: string; acao: string;
 function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
   password: string; logs: LogEntry[]; setLogs: (l: LogEntry[]) => void; loading: boolean; setLoading: (b: boolean) => void;
 }) {
+  const { darkMode: dm } = useAdmin();
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
@@ -1144,7 +1159,7 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
 
   const ACAO_EMOJI: Record<string, string> = { alteracao: "✏️", exclusao: "🗑️", entrada: "📥", saida: "📤", criacao: "➕" };
 
-  if (loading) return <div className="text-center py-8 text-gray-400">Carregando historico...</div>;
+  if (loading) return <div className="text-center py-8 text-[#86868B]">Carregando historico...</div>;
 
   return (
     <div className="space-y-3">
@@ -1155,29 +1170,29 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
       {logs.length === 0 ? (
         <p className="text-center text-[#86868B] py-8">Nenhuma movimentacao registrada</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-[#D2D2D7] overflow-hidden">
-          <div className="divide-y divide-[#F5F5F7]">
+        <div className={`${dm ? "bg-[#1C1C1E]" : "bg-white"} rounded-2xl border ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"} overflow-hidden`}>
+          <div className={`divide-y ${dm ? "divide-[#2C2C2E]" : "divide-[#F5F5F7]"}`}>
             {logs.map((log) => (
               <div key={log.id} className="px-4 py-3 flex items-start gap-3">
                 <span className="text-lg mt-0.5">{ACAO_EMOJI[log.acao] || "📋"}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-[#1D1D1F]">{log.produto_nome}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F5F7] text-[#86868B] font-medium uppercase">{log.acao}</span>
+                    <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{log.produto_nome}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} font-medium uppercase`}>{log.acao}</span>
                   </div>
                   {log.campo && (
-                    <p className="text-xs text-[#86868B] mt-0.5">
+                    <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"} mt-0.5`}>
                       <span className="font-medium">{log.campo}:</span>{" "}
                       {log.valor_anterior && <span className="line-through text-red-400">{log.valor_anterior}</span>}
                       {log.valor_anterior && log.valor_novo && " → "}
-                      {log.valor_novo && <span className="text-green-600 font-medium">{log.valor_novo}</span>}
+                      {log.valor_novo && <span className={`${dm ? "text-green-400" : "text-green-600"} font-medium`}>{log.valor_novo}</span>}
                     </p>
                   )}
-                  {log.detalhes && <p className="text-[11px] text-[#86868B] mt-0.5">{log.detalhes}</p>}
+                  {log.detalhes && <p className={`text-[11px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} mt-0.5`}>{log.detalhes}</p>}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[10px] text-[#86868B]">{new Date(log.created_at).toLocaleDateString("pt-BR")}</p>
-                  <p className="text-[10px] text-[#86868B]">{new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{new Date(log.created_at).toLocaleDateString("pt-BR")}</p>
+                  <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
                   <p className="text-[10px] font-medium text-[#E8740E] mt-0.5">{log.usuario}</p>
                 </div>
               </div>
@@ -1191,6 +1206,7 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
 
 /* ── Scan Entrada (Serial Number) ── */
 function ScanEntradaTab({ password, userName, onSuccess }: { password: string; userName: string; onSuccess: () => void }) {
+  const { darkMode: dm } = useAdmin();
   const [step, setStep] = useState<"scan" | "form" | "result">("scan");
   const [serialNo, setSerialNo] = useState("");
   const [scanResult, setScanResult] = useState<{ found: boolean; status?: string; produto?: Record<string, unknown>; message?: string } | null>(null);
@@ -1222,7 +1238,12 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
       setSerialNo(code);
 
       if (!data.found) {
-        // Produto novo — abrir formulário
+        // Produto novo — abrir formulário com form resetado
+        setForm({
+          categoria: "IPHONES", produto: "", cor: "", armazenamento: "",
+          custo_unitario: "", fornecedor: "", data_compra: new Date().toISOString().split("T")[0],
+          imei: "", imei2: "", observacao: "",
+        });
         setStep("form");
       } else if (data.status === "EM_ESTOQUE") {
         setStep("result");
@@ -1287,34 +1308,34 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
     setSaving(false);
   };
 
-  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wide mb-1";
-  const inputCls = "w-full px-3 py-2.5 bg-white border border-[#D2D2D7] rounded-xl text-[#1D1D1F] text-sm focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] outline-none";
+  const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
+  const inputCls = `w-full px-3 py-2.5 border rounded-xl text-sm focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] outline-none ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
   const selectCls = inputCls + " appearance-none";
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <div className="text-center">
-        <h2 className="text-xl font-bold text-[#1D1D1F]">📦 Entrada de Produto</h2>
-        <p className="text-sm text-[#86868B] mt-1">Escaneie o Serial Number da caixa do produto</p>
+        <h2 className={`text-xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>📦 Entrada de Produto</h2>
+        <p className={`text-sm mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Escaneie o Serial Number da caixa do produto</p>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">{success}</div>}
+      {error && <div className={`px-4 py-3 rounded-xl text-sm ${dm ? "bg-red-900/30 border border-red-800 text-red-400" : "bg-red-50 border border-red-200 text-red-700"}`}>{error}</div>}
+      {success && <div className={`px-4 py-3 rounded-xl text-sm ${dm ? "bg-green-900/30 border border-green-800 text-green-400" : "bg-green-50 border border-green-200 text-green-700"}`}>{success}</div>}
 
       {/* STEP 1: Scan */}
       {step === "scan" && (
-        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4">
-          <p className="text-sm text-[#86868B] text-center">Bipe com o leitor USB ou use a câmera do celular</p>
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border p-6 space-y-4`}>
+          <p className={`text-sm text-center ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Bipe com o leitor USB ou use a câmera do celular</p>
           <BarcodeScanner onScan={handleScan} placeholder="Serial Number..." />
         </div>
       )}
 
       {/* STEP 2: Formulário de Cadastro */}
       {step === "form" && (
-        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4">
-          <div className="bg-blue-50 border border-blue-200 px-4 py-3 rounded-xl">
-            <p className="text-sm text-blue-800 font-medium">🆕 Produto novo detectado</p>
-            <p className="text-xs text-blue-600 font-mono mt-1">SN: {serialNo}</p>
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border p-6 space-y-4`}>
+          <div className={`px-4 py-3 rounded-xl ${dm ? "bg-blue-900/30 border border-blue-800" : "bg-blue-50 border border-blue-200"}`}>
+            <p className={`text-sm font-medium ${dm ? "text-blue-400" : "text-blue-800"}`}>🆕 Produto novo detectado</p>
+            <p className={`text-xs font-mono mt-1 ${dm ? "text-blue-300" : "text-blue-600"}`}>SN: {serialNo}</p>
           </div>
 
           {/* Categoria */}
@@ -1393,7 +1414,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => { setStep("scan"); setSerialNo(""); setScanResult(null); setError(""); }}
-              className="flex-1 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] font-medium hover:bg-[#F5F5F7] transition-colors"
+              className={`flex-1 py-3 rounded-xl border font-medium transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"}`}
             >
               ← Voltar
             </button>
@@ -1410,12 +1431,12 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
 
       {/* STEP 3: Resultado */}
       {step === "result" && (
-        <div className="bg-white rounded-2xl border border-[#E5E5EA] p-6 space-y-4 text-center">
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border p-6 space-y-4 text-center`}>
           {scanResult?.found && scanResult?.produto && (
             <div className="space-y-2">
-              <p className="text-lg font-bold text-[#1D1D1F]">{String(scanResult.produto.produto || "")}</p>
-              <p className="text-sm text-[#86868B]">{String(scanResult.produto.cor || "")} — SN: {serialNo}</p>
-              <p className="text-sm text-[#86868B]">Status: <span className="font-medium">{String(scanResult.produto.status || scanResult.status || "")}</span></p>
+              <p className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{String(scanResult.produto.produto || "")}</p>
+              <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{String(scanResult.produto.cor || "")} — SN: {serialNo}</p>
+              <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Status: <span className="font-medium">{String(scanResult.produto.status || scanResult.status || "")}</span></p>
             </div>
           )}
           <button

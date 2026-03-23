@@ -14,7 +14,8 @@ const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 const VENDAS_PASSWORD = "tigrao$vendas";
 
 export default function VendasPage() {
-  const { password, user } = useAdmin();
+  const { password, user, darkMode } = useAdmin();
+  const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
   const VENDAS_TABS = ["nova", "andamento", "hoje", "finalizadas"] as const;
@@ -327,11 +328,11 @@ export default function VendasPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-full max-w-sm">
-          <div className="bg-white border border-[#D2D2D7] rounded-2xl p-6 space-y-4 shadow-sm">
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 space-y-4 shadow-sm`}>
             <div className="text-center">
               <div className="text-3xl mb-2">🔒</div>
-              <h2 className="text-lg font-bold text-[#1D1D1F]">Area Restrita</h2>
-              <p className="text-[#86868B] text-xs mt-1">Digite a senha para acessar Vendas</p>
+              <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Area Restrita</h2>
+              <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Digite a senha para acessar Vendas</p>
             </div>
             <input
               type="password"
@@ -864,8 +865,8 @@ export default function VendasPage() {
     return Array.from(map.values()).slice(0, 5);
   })();
 
-  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
-  const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
   const selectCls = inputCls;
 
   return (
@@ -879,7 +880,7 @@ export default function VendasPage() {
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === now.toISOString().split("T")[0]).length, color: "bg-blue-500" },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
           ] as const).map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
           ))}
@@ -897,20 +898,20 @@ export default function VendasPage() {
                 const formatted = v.length > 9 ? `${v.slice(0,3)}.${v.slice(3,6)}.${v.slice(6,9)}-${v.slice(9)}` : v.length > 6 ? `${v.slice(0,3)}.${v.slice(3,6)}.${v.slice(6)}` : v.length > 3 ? `${v.slice(0,3)}.${v.slice(3)}` : v;
                 setFiltroCpf(formatted);
               }}
-              className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white w-[130px] placeholder:text-[#86868B]"
+              className={`px-2 py-1.5 rounded-lg border text-xs w-[130px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#D2D2D7] placeholder:text-[#86868B]"}`}
             />
             {filtroCpf && (
               <button onClick={() => setFiltroCpf("")} className="text-xs text-red-500 hover:text-red-700">Limpar</button>
             )}
-            <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+            <select value={filtroAno} onChange={(e) => setFiltroAno(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
               {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
-            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+            <select value={filtroMes} onChange={(e) => setFiltroMes(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
               {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m) => (
                 <option key={m} value={m}>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m)-1]}</option>
               ))}
             </select>
-            <select value={filtroDia} onChange={(e) => setFiltroDia(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs bg-white">
+            <select value={filtroDia} onChange={(e) => setFiltroDia(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
               <option value="">Todos os dias</option>
               {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                 <option key={d} value={String(d).padStart(2, "0")}>{d}</option>
@@ -970,7 +971,7 @@ export default function VendasPage() {
             </div>
           )}
 
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6`}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
             <button
@@ -1006,7 +1007,7 @@ export default function VendasPage() {
                 onChange={(e) => setPasteText(e.target.value)}
                 placeholder="Cole aqui o texto do formulário..."
                 rows={5}
-                className="w-full px-3 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] resize-none"
+                className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] resize-none ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
               />
               <div className="flex gap-2">
                 <button onClick={handlePasteConfirm} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors">Extrair dados</button>
@@ -1048,7 +1049,7 @@ export default function VendasPage() {
                 <div className="relative"><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => { set("cliente", e.target.value); setShowClienteSuggestions(true); }} onFocus={() => setShowClienteSuggestions(true)} onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} />
                   {/* Dropdown Clientes Recorrentes */}
                   {showClienteSuggestions && clientesRecorrentes.length > 0 && (
-                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                    <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
                       <div className="px-3 py-1.5 bg-[#F5F5F7] text-[10px] font-bold text-[#86868B] uppercase">Clientes recorrentes</div>
                       {clientesRecorrentes.map((c, i) => (
                         <button
@@ -1094,10 +1095,10 @@ export default function VendasPage() {
                         </span>
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-[#86868B]">
-                        <span>Total gasto: <strong className="text-[#1D1D1F]">{fmt(clienteHistorico.totalGasto)}</strong></span>
-                        <span>Ultima compra: <strong className="text-[#1D1D1F]">{(() => { const [y, m, d] = (clienteHistorico.ultimaCompraData || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.ultimaCompraData; })()} — {clienteHistorico.ultimaCompraProduto}</strong></span>
+                        <span>Total gasto: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(clienteHistorico.totalGasto)}</strong></span>
+                        <span>Ultima compra: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{(() => { const [y, m, d] = (clienteHistorico.ultimaCompraData || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.ultimaCompraData; })()} — {clienteHistorico.ultimaCompraProduto}</strong></span>
                         <span>Ja fez troca: <strong className={clienteHistorico.fezTroca ? "text-purple-600" : "text-[#1D1D1F]"}>{clienteHistorico.fezTroca ? "Sim" : "Nao"}</strong></span>
-                        <span>Cliente desde: <strong className="text-[#1D1D1F]">{(() => { const [y, m, d] = (clienteHistorico.clienteDesde || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.clienteDesde; })()}</strong></span>
+                        <span>Cliente desde: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{(() => { const [y, m, d] = (clienteHistorico.clienteDesde || "").split("-"); return d && m ? `${d}/${m}/${y}` : clienteHistorico.clienteDesde; })()}</strong></span>
                       </div>
                     </div>
                   )}
@@ -1345,7 +1346,7 @@ export default function VendasPage() {
                                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                       isSelected
                                         ? "bg-[#E8740E] text-white shadow-sm"
-                                        : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E] hover:bg-[#FFF8F0]"
+                                        : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] ${dm ? "hover:bg-[#2A1A0F]" : "hover:bg-[#FFF8F0]"}`
                                     }`}
                                   >
                                     {p.cor || "Sem cor"} <span className="text-[10px] opacity-70">({p.qnt})</span>
@@ -1475,7 +1476,7 @@ export default function VendasPage() {
                         <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
                           <>
-                            <span>Liquido cartao: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
                             {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                             {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
@@ -1509,7 +1510,7 @@ export default function VendasPage() {
                         <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
                           <>
-                            <span>Liquido: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            <span>Liquido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
                             {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                             {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
@@ -1558,9 +1559,9 @@ export default function VendasPage() {
               {/* Resumo misto */}
               {(entradaPix > 0 || entradaEspecie > 0) && (
                 <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
-                  {entradaPix > 0 && <span>PIX: <strong className="text-[#1D1D1F]">{fmt(entradaPix)}</strong></span>}
-                  {entradaEspecie > 0 && <span>Especie: <strong className="text-[#1D1D1F]">{fmt(entradaEspecie)}</strong></span>}
-                  {valorTroca > 0 && <span>Troca: <strong className="text-[#1D1D1F]">{fmt(valorTroca)}</strong></span>}
+                  {entradaPix > 0 && <span>PIX: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaPix)}</strong></span>}
+                  {entradaEspecie > 0 && <span>Especie: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaEspecie)}</strong></span>}
+                  {valorTroca > 0 && <span>Troca: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(valorTroca)}</strong></span>}
                   <span>Restante ({form.forma}): <strong className="text-[#E8740E]">{fmt(Math.max(0, valorCartao))}</strong></span>
                 </div>
               )}
@@ -1795,7 +1796,7 @@ export default function VendasPage() {
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
 
           return (
-            <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
               <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3">
                   <h2 className="font-bold text-[#1D1D1F]">{titulo}</h2>
@@ -1872,7 +1873,7 @@ export default function VendasPage() {
                   )}
                   {(tab === "finalizadas" || tab === "hoje") && filtered.length > 0 && (
                     <>
-                      <span>Vendido: <strong className="text-[#1D1D1F]">{fmt(totalVendido)}</strong></span>
+                      <span>Vendido: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(totalVendido)}</strong></span>
                       <span>Lucro: <strong className={totalLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(totalLucro)}</strong></span>
                     </>
                   )}
@@ -2077,23 +2078,23 @@ export default function VendasPage() {
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Cliente</span>
-                                            <input value={ef.cliente} onChange={e => setEf("cliente", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input value={ef.cliente} onChange={e => setEf("cliente", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Produto</span>
-                                            <input value={ef.produto} onChange={e => setEf("produto", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input value={ef.produto} onChange={e => setEf("produto", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Custo</span>
-                                            <input type="number" value={ef.custo} onChange={e => setEf("custo", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.custo} onChange={e => setEf("custo", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Preço Vendido</span>
-                                            <input type="number" value={ef.preco_vendido} onChange={e => setEf("preco_vendido", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.preco_vendido} onChange={e => setEf("preco_vendido", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Banco</span>
-                                            <select value={ef.banco} onChange={e => setEf("banco", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.banco} onChange={e => setEf("banco", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="ITAU">ITAU</option>
                                               <option value="INFINITE">INFINITE</option>
                                               <option value="MERCADO_PAGO">MERCADO PAGO</option>
@@ -2102,7 +2103,7 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Forma</span>
-                                            <select value={ef.forma} onChange={e => setEf("forma", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.forma} onChange={e => setEf("forma", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="PIX">PIX</option>
                                               <option value="CARTAO">CARTAO</option>
                                               <option value="ESPECIE">ESPECIE</option>
@@ -2111,7 +2112,7 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Recebimento</span>
-                                            <select value={ef.recebimento} onChange={e => setEf("recebimento", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.recebimento} onChange={e => setEf("recebimento", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="D+0">D+0</option>
                                               <option value="D+1">D+1</option>
                                               <option value="FIADO">FIADO</option>
@@ -2119,11 +2120,11 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Parcelas</span>
-                                            <input type="number" value={ef.qnt_parcelas} onChange={e => setEf("qnt_parcelas", e.target.value)} placeholder="—" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.qnt_parcelas} onChange={e => setEf("qnt_parcelas", e.target.value)} placeholder="—" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Bandeira</span>
-                                            <select value={ef.bandeira} onChange={e => setEf("bandeira", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.bandeira} onChange={e => setEf("bandeira", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="">—</option>
                                               <option value="VISA">VISA</option>
                                               <option value="MASTERCARD">MASTERCARD</option>
@@ -2133,11 +2134,11 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Entrada PIX</span>
-                                            <input type="number" value={ef.entrada_pix} onChange={e => setEf("entrada_pix", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.entrada_pix} onChange={e => setEf("entrada_pix", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Banco PIX</span>
-                                            <select value={ef.banco_pix} onChange={e => setEf("banco_pix", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.banco_pix} onChange={e => setEf("banco_pix", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="">—</option>
                                               <option value="ITAU">ITAU</option>
                                               <option value="INFINITE">INFINITE</option>
@@ -2146,18 +2147,18 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Entrada Especie</span>
-                                            <input type="number" value={ef.entrada_especie} onChange={e => setEf("entrada_especie", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.entrada_especie} onChange={e => setEf("entrada_especie", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Valor Troca</span>
-                                            <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                         </div>
                                         {/* 2o Cartao — edição */}
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Banco</span>
-                                            <select value={ef.banco_alt} onChange={e => setEf("banco_alt", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.banco_alt} onChange={e => setEf("banco_alt", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="">—</option>
                                               <option value="ITAU">ITAU</option>
                                               <option value="INFINITE">INFINITE</option>
@@ -2166,11 +2167,11 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Parcelas</span>
-                                            <input type="number" value={ef.parc_alt} onChange={e => setEf("parc_alt", e.target.value)} placeholder="—" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.parc_alt} onChange={e => setEf("parc_alt", e.target.value)} placeholder="—" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Bandeira</span>
-                                            <select value={ef.band_alt} onChange={e => setEf("band_alt", e.target.value)} className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white">
+                                            <select value={ef.band_alt} onChange={e => setEf("band_alt", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}>
                                               <option value="">—</option>
                                               <option value="VISA">VISA</option>
                                               <option value="MASTERCARD">MASTERCARD</option>
@@ -2180,7 +2181,7 @@ export default function VendasPage() {
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">2o Comprovante</span>
-                                            <input type="number" value={ef.comp_alt} onChange={e => setEf("comp_alt", e.target.value)} placeholder="R$" className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs bg-white" />
+                                            <input type="number" value={ef.comp_alt} onChange={e => setEf("comp_alt", e.target.value)} placeholder="R$" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                         </div>
                                         {/* Valor no Comprovante — edição */}
@@ -2207,14 +2208,14 @@ export default function VendasPage() {
                                                   } else {
                                                     setEf("valor_comprovante", comp);
                                                   }
-                                                }} placeholder="Valor da maquina" className="w-full px-2 py-1.5 border border-[#E8740E] rounded-lg text-xs bg-white" />
+                                                }} placeholder="Valor da maquina" className={`w-full px-2 py-1.5 border border-[#E8740E] rounded-lg text-xs ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`} />
                                               </label>
                                               <div className="col-span-1 md:col-span-3 flex items-end">
                                                 <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-[10px] text-[#86868B] flex flex-wrap gap-2 w-full">
                                                   <span>Taxa: <strong className="text-[#E8740E]">{efTaxa.toFixed(2)}%</strong></span>
                                                   {(parseFloat(ef.valor_comprovante) || 0) > 0 && (
                                                     <>
-                                                      <span>Liq: <strong className="text-[#1D1D1F]">{fmt(calcularLiquido(parseFloat(ef.valor_comprovante) || 0, efTaxa))}</strong></span>
+                                                      <span>Liq: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(ef.valor_comprovante) || 0, efTaxa))}</strong></span>
                                                       {(parseFloat(ef.entrada_pix) || 0) > 0 && <span>+ PIX: <strong>{fmt(parseFloat(ef.entrada_pix) || 0)}</strong></span>}
                                                       {(parseFloat(ef.entrada_especie) || 0) > 0 && <span>+ Esp: <strong>{fmt(parseFloat(ef.entrada_especie) || 0)}</strong></span>}
                                                       {(parseFloat(ef.produto_na_troca) || 0) > 0 && <span>+ Troca: <strong>{fmt(parseFloat(ef.produto_na_troca) || 0)}</strong></span>}

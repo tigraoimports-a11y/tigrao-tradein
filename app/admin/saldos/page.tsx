@@ -7,7 +7,7 @@ import type { SaldoBancario } from "@/lib/admin-types";
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function SaldosPage() {
-  const { password, user } = useAdmin();
+  const { password, user, darkMode: dm } = useAdmin();
   const [saldos, setSaldos] = useState<SaldoBancario[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataAtual, setDataAtual] = useState(new Date().toISOString().split("T")[0]);
@@ -96,7 +96,7 @@ export default function SaldosPage() {
     setExecutando(false);
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
 
   return (
     <div className="space-y-6">
@@ -115,22 +115,22 @@ export default function SaldosPage() {
           { label: "Mercado Pago", color: "#00B1EA", base: mp, setBase: setMp, esp: saldoHoje?.esp_mp },
           { label: "Especie", color: "#2ECC71", base: esp, setBase: setEsp, esp: saldoHoje?.esp_especie },
         ].map((bank) => (
-          <div key={bank.label} className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm">
+          <div key={bank.label} className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-5 shadow-sm`}>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bank.color }} />
-              <h3 className="font-semibold text-[#1D1D1F] text-sm">{bank.label}</h3>
+              <h3 className={`font-semibold text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{bank.label}</h3>
             </div>
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] text-[#86868B] uppercase tracking-wider mb-1">Base manha (pre-D+1)</p>
+                <p className={`text-[10px] uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Base manha (pre-D+1)</p>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs text-[#86868B]">R$</span>
+                  <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>R$</span>
                   <input type="number" value={bank.base} onChange={(e) => bank.setBase(e.target.value)} className={inputCls} />
                 </div>
               </div>
               {bank.esp !== undefined && bank.esp !== null && (
                 <div>
-                  <p className="text-[10px] text-[#86868B] uppercase tracking-wider mb-1">Fechamento noite</p>
+                  <p className={`text-[10px] uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Fechamento noite</p>
                   <p className="text-lg font-bold" style={{ color: bank.color }}>{fmt(Number(bank.esp))}</p>
                 </div>
               )}
@@ -150,9 +150,9 @@ export default function SaldosPage() {
       </div>
 
       {/* Histórico */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-[#D2D2D7]">
-          <h3 className="font-bold text-[#1D1D1F]">Historico (ultimos 7 dias)</h3>
+      <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
+        <div className={`px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+          <h3 className={`font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Historico (ultimos 7 dias)</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
