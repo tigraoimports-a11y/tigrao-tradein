@@ -9,11 +9,24 @@ function getUsuario(req: NextRequest): string {
   return req.headers.get("x-admin-user") || "sistema";
 }
 
-// GET — fetch all taxas grouped by banco
+// GET — fetch all taxas grouped by banco, or taxas_repasse if type=repasse
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { searchParams } = new URL(req.url);
+  const type = searchParams.get("type");
+
   const { supabase } = await import("@/lib/supabase");
+
+  if (type === "repasse") {
+    const { data, error } = await supabase
+      .from("taxas_repasse")
+      .select("*")
+      .order("parcelas");
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data: data ?? [] });
+  }
 
   const { data, error } = await supabase
     .from("taxas_config")
@@ -71,12 +84,50 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// PUT — bulk update multiple taxas at once
+// PUT — bulk update multiple taxas at once (machine or repasse)
 export async function PUT(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const usuario = getUsuario(req);
 
   const body = await req.json();
+
+  // Handle repasse updates
+  if (body.type === "repasse") {
+    const { updates } = body as { type: string; updates: { parcelas: string; taxa_pct: number }[] };
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return NextResponse.json({ error: "Missing updates array" }, { status: 400 });
+    }
+
+    const { supabase } = await import("@/lib/supabase");
+
+    let errorCount = 0;
+    const now = new Date().toISOString();
+
+    for (const u of updates) {
+      const { error } = await supabase
+        .from("taxas_repasse")
+        .update({
+          taxa_pct: Number(u.taxa_pct),
+          updated_at: now,
+          updated_by: usuario,
+        })
+        .eq("parcelas", u.parcelas);
+
+      if (error) errorCount++;
+    }
+
+    await logActivity(
+      usuario,
+      "Alterou taxas de repasse",
+      `${updates.length} taxas atualizadas (${errorCount} erros)`,
+      "taxas_repasse"
+    );
+
+    return NextResponse.json({ ok: true, updated: updates.length - errorCount, errors: errorCount });
+  }
+
+  // Handle machine taxas updates (existing logic)
   const { updates } = body as { updates: { banco: string; bandeira: string; parcelas: string; taxa_pct: number }[] };
 
   if (!updates || !Array.isArray(updates) || updates.length === 0) {
