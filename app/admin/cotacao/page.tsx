@@ -23,7 +23,7 @@ export default function CotacaoPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/cotacao", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/cotacao", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
       if (res.ok) {
         const json = await res.json();
         setListas(json.listas ?? []);
@@ -39,7 +39,7 @@ export default function CotacaoPage() {
   const apiPost = async (body: Record<string, unknown>) => {
     const res = await fetch("/api/cotacao", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify(body),
     });
     return res.json();

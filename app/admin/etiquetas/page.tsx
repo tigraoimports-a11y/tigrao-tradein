@@ -118,7 +118,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   // Buscar TODOS os produtos do estoque (sem filtro de categoria — para pegar tudo)
   useEffect(() => {
     if (!password) return;
-    fetch("/api/estoque", { headers: { "x-admin-password": password } })
+    fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } })
       .then((r) => r.ok ? r.json() : { data: [] })
       .then((json) => {
         const items = (json.data || []) as EstoqueItem[];
@@ -143,7 +143,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
 
   // Buscar fornecedores do banco
   useEffect(() => {
-    fetch("/api/fornecedores", { headers: { "x-admin-password": password } })
+    fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } })
       .then((r) => r.ok ? r.json() : [])
       .then((data) => setFornecedores(Array.isArray(data) ? data : data?.data || []))
       .catch(() => {});

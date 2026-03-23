@@ -129,7 +129,7 @@ export function UsadosContent() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/usados", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/admin/usados", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
       if (res.ok) {
         const json = await res.json();
         setValores(json.valores ?? []);
@@ -145,7 +145,7 @@ export function UsadosContent() {
   const apiPost = async (body: Record<string, unknown>) => {
     return fetch("/api/admin/usados", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify(body),
     });
   };
@@ -231,7 +231,7 @@ export function UsadosContent() {
               try {
                 const res = await fetch("/api/admin/usados", {
                   method: "PUT",
-                  headers: { "x-admin-password": password },
+                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
                 });
                 const json = await res.json();
                 if (json.ok) {

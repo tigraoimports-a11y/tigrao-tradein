@@ -163,7 +163,7 @@ function PrecosContent() {
     setSaving(key);
     await fetch("/api/admin/precos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({
         modelo: row.modelo,
         armazenamento: row.armazenamento,
@@ -187,7 +187,7 @@ function PrecosContent() {
     const newStatus = row.status === "esgotado" ? "ativo" : "esgotado";
     await fetch("/api/admin/precos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({
         modelo: row.modelo,
         armazenamento: row.armazenamento,
@@ -207,7 +207,7 @@ function PrecosContent() {
     if (!confirm(`Remover ${row.modelo} ${row.armazenamento}?`)) return;
     await fetch("/api/admin/precos", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({ modelo: row.modelo, armazenamento: row.armazenamento }),
     });
     setData((prev) => prev?.filter((r) =>
@@ -220,7 +220,7 @@ function PrecosContent() {
     setImportMsg("");
     const res = await fetch("/api/admin/precos", {
       method: "PUT",
-      headers: { "x-admin-password": password },
+      headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
     });
     const json = await res.json();
     if (json.ok) {
@@ -244,7 +244,7 @@ function PrecosContent() {
     setSaving("new");
     await fetch("/api/admin/precos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({
         modelo: newProd.modelo.trim(),
         armazenamento: armazenamentoFinal,
@@ -824,7 +824,7 @@ function HistoricoPrecos() {
       if (fornecedor) params.set("fornecedor", fornecedor);
 
       const res = await fetch(`/api/admin/historico-precos?${params}`, {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         const json = await res.json();

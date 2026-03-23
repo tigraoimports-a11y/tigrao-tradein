@@ -134,7 +134,7 @@ export default function MostruarioPage() {
     async (method: string, body?: unknown) => {
       const res = await fetch("/api/admin/mostruario", {
         method,
-        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       return res.json();
@@ -147,7 +147,7 @@ export default function MostruarioPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/mostruario", {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         const json = await res.json();
@@ -184,7 +184,7 @@ export default function MostruarioPage() {
         formData.append(targetType, targetId);
         const res = await fetch("/api/admin/mostruario/upload", {
           method: "POST",
-          headers: { "x-admin-password": password },
+          headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
           body: formData,
         });
         const json = await res.json();

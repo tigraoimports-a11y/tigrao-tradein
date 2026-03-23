@@ -27,11 +27,11 @@ export default function DashboardPage() {
     try {
       const hoje = new Date().toISOString().split("T")[0];
       const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
-        fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password } }),
-        fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password } }),
-        fetch("/api/vendas", { headers: { "x-admin-password": password } }),
-        fetch("/api/gastos", { headers: { "x-admin-password": password } }),
-        fetch("/api/estoque", { headers: { "x-admin-password": password } }),
+        fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch("/api/gastos", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
       ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const [saldos, saldoPrev, vendas, gastos, estoque]: any[] = await Promise.all([
@@ -678,7 +678,7 @@ function OrigensRanking({ password }: { password: string }) {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/relatorio-origens?mes=${m}`, {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         const json = await res.json();

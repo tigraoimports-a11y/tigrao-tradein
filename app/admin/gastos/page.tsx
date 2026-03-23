@@ -35,7 +35,7 @@ export default function GastosPage() {
   const fetchGastos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/gastos", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/gastos", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
       if (res.ok) {
         const json = await res.json();
         setGastos(json.data ?? []);
@@ -69,7 +69,7 @@ export default function GastosPage() {
 
     const res = await fetch("/api/gastos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify(payload),
     });
     const json = await res.json();
@@ -115,7 +115,7 @@ export default function GastosPage() {
     };
     const res = await fetch("/api/gastos", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify(payload),
     });
     const json = await res.json();
@@ -228,7 +228,7 @@ export default function GastosPage() {
                           <button onClick={() => startEdit(g)} className="text-[#86868B] hover:text-[#E8740E] text-xs" title="Editar">✏️</button>
                           <button onClick={async () => {
                             if (!confirm("Excluir?")) return;
-                            await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ id: g.id }) });
+                            await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" }, body: JSON.stringify({ id: g.id }) });
                             setGastos((prev) => prev.filter((r) => r.id !== g.id));
                           }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
                         </td>

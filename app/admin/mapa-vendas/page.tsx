@@ -75,7 +75,7 @@ export default function MapaVendasPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/mapa-vendas?range=${range}`, {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         setData(await res.json());

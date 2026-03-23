@@ -75,7 +75,7 @@ export default function RelatorioPage() {
     const to = `${month}-${String(lastDay).padStart(2, "0")}`;
 
     try {
-      const headers: Record<string, string> = { "x-admin-password": password };
+      const headers: Record<string, string> = { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" };
       const [vendasRes, gastosRes, saldoRes] = await Promise.all([
         fetch(`/api/vendas?from=${from}&to=${to}`, { headers }),
         fetch(`/api/gastos?from=${from}&to=${to}`, { headers }),

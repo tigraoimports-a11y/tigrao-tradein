@@ -341,7 +341,7 @@ export default function EstoquePage() {
 
   const fetchFornecedores = useCallback(async () => {
     try {
-      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
       if (res.ok) { const json = await res.json(); setFornecedores(json.data ?? []); }
     } catch { /* ignore */ }
   }, [password]);
@@ -352,7 +352,7 @@ export default function EstoquePage() {
     if (!novoFornecedorNome.trim()) return;
     const res = await fetch("/api/fornecedores", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({ nome: novoFornecedorNome }),
     });
     const json = await res.json();
@@ -1133,7 +1133,7 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/estoque?action=historico&limit=200", { headers: { "x-admin-password": password } });
+      const res = await fetch("/api/estoque?action=historico&limit=200", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
       const data = await res.json();
       setLogs(data.logs ?? []);
     } catch { /* silent */ }
@@ -1205,7 +1205,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
-    fetch("/api/fornecedores", { headers: { "x-admin-password": password } })
+    fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } })
       .then(r => r.json()).then(d => setFornecedores(d.data ?? d.fornecedores ?? [])).catch(() => {});
   }, [password]);
 

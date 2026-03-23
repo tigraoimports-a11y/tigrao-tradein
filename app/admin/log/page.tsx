@@ -83,7 +83,7 @@ export default function LogPage() {
         params.set("to", nextDay.toISOString().split("T")[0]);
       }
       const res = await fetch(`/api/admin/log?${params}`, {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         const json = await res.json();

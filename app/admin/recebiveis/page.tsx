@@ -166,7 +166,7 @@ export default function RecebiveisPage() {
       const fromStr = from.toISOString().split("T")[0];
       const params = new URLSearchParams({ from: fromStr });
       const res = await fetch(`/api/vendas?${params}`, {
-        headers: { "x-admin-password": password },
+        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
         const json = await res.json();
