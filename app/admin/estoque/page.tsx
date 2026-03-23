@@ -637,49 +637,65 @@ export default function EstoquePage() {
         📟 Registrar Produto
       </button>
 
-      {/* Tabs */}
-      {tab !== "etiquetas" && (
-      <div className="flex gap-2 items-center justify-between flex-wrap">
-        <div className="flex gap-2 items-center">
-          {([
-            { key: "estoque", label: `Estoque (${emEstoque.length})`, color: "" },
-            { key: "acabando", label: `Acabando (${acabando.length})`, color: "yellow" },
-            { key: "esgotados", label: `Esgotados (${esgotados.length})`, color: "red" },
-            { key: "seminovos", label: `Seminovos (${seminovos.length})`, color: "" },
-            { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
-            { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
-            { key: "novo", label: "Adicionar", color: "" },
-            { key: "scan", label: "📟 Scan", color: "" },
-            { key: "historico", label: "Historico", color: "" },
-          ] as const).map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-              tab === t.key
-                ? t.color === "red" ? "bg-red-500 text-white" : t.color === "yellow" ? "bg-yellow-500 text-white" : "bg-[#E8740E] text-white"
-                : t.color === "red" && esgotados.length > 0 ? "bg-white border border-red-300 text-red-500 hover:border-red-500"
-                : t.color === "yellow" && acabando.length > 0 ? "bg-white border border-yellow-300 text-yellow-600 hover:border-yellow-500"
-                : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
-            }`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {tab !== "novo" && (
-          <div className="flex gap-2 items-center flex-wrap">
-            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs">
-              <option value="">Todas categorias</option>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
-            </select>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-xs w-40 focus:outline-none focus:border-[#E8740E]" />
-            <button
-              onClick={() => setShowNewCat(!showNewCat)}
-              className="px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
-            >
-              + Categoria
-            </button>
-          </div>
-        )}
+      {/* Tabs organizadas em 3 linhas */}
+      {tab !== "etiquetas" && (<>
+      {/* Linha 1: Estoque / Seminovos / Pendencias / A Caminho */}
+      <div className="flex gap-2 items-center flex-wrap">
+        {([
+          { key: "estoque", label: `Estoque (${emEstoque.length})`, color: "" },
+          { key: "seminovos", label: `Seminovos (${seminovos.length})`, color: "" },
+          { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
+          { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
+        ] as const).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+            tab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}>{t.label}</button>
+        ))}
       </div>
+      {/* Linha 2: Acabando / Esgotados */}
+      <div className="flex gap-2 items-center flex-wrap">
+        {([
+          { key: "acabando", label: `Acabando (${acabando.length})`, color: "yellow" },
+          { key: "esgotados", label: `Esgotados (${esgotados.length})`, color: "red" },
+        ] as const).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+            tab === t.key
+              ? t.color === "red" ? "bg-red-500 text-white" : "bg-yellow-500 text-white"
+              : t.color === "red" && esgotados.length > 0 ? "bg-white border border-red-300 text-red-500 hover:border-red-500"
+              : t.color === "yellow" && acabando.length > 0 ? "bg-white border border-yellow-300 text-yellow-600 hover:border-yellow-500"
+              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}>{t.label}</button>
+        ))}
+      </div>
+      {/* Linha 3: Scan / Adicionar / Historico */}
+      <div className="flex gap-2 items-center flex-wrap">
+        {([
+          { key: "scan", label: "📟 Scan" },
+          { key: "novo", label: "➕ Adicionar" },
+          { key: "historico", label: "📋 Histórico" },
+        ] as const).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+            tab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+          }`}>{t.label}</button>
+        ))}
+      </div>
+      {/* Filtros */}
+      {!["novo", "scan", "historico"].includes(tab) && (
+        <div className="flex gap-2 items-center flex-wrap">
+          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-xs">
+            <option value="">Todas categorias</option>
+            {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
+          </select>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="px-3 py-1.5 rounded-lg border border-[#D2D2D7] text-xs w-40 focus:outline-none focus:border-[#E8740E]" />
+          <button
+            onClick={() => setShowNewCat(!showNewCat)}
+            className="px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+          >
+            + Categoria
+          </button>
+        </div>
       )}
+      </>)}
 
       {/* Form criar categoria */}
       {tab !== "etiquetas" && showNewCat && (
