@@ -44,9 +44,13 @@ export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const meses = Math.min(Math.max(parseInt(searchParams.get("meses") || "3", 10) || 3, 1), 24);
+  // Support both "meses" and "range" (frontend sends "range=1m")
+  const rangeParam = searchParams.get("range") || searchParams.get("meses") || "3";
+  const meses = Math.min(Math.max(parseInt(rangeParam.replace(/[^0-9]/g, "")) || 3, 1), 24);
 
-  const hoje = new Date();
+  // Use São Paulo timezone to avoid UTC date mismatches on Vercel
+  const spNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const hoje = spNow;
   const anoAtual = hoje.getFullYear();
   const mesAtual = hoje.getMonth(); // 0-indexed
   const diaAtual = hoje.getDate();
@@ -69,6 +73,7 @@ export async function GET(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const rows = (vendas ?? []) as Venda[];
+    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} mesAtualStr=${`${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}`}`);
 
     // ---------------------------------------------------------------
     // 1. COMPARATIVO MENSAL
