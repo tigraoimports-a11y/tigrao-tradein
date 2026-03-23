@@ -152,7 +152,8 @@ export function UsadosContent() {
 
   const handleSaveValor = async (v: ValorUsado) => {
     const key = `${v.modelo}|${v.armazenamento}`;
-    const newVal = parseFloat((editing[key] ?? String(v.valor_base)).replace(",", "."));
+    const raw = (editing[key] ?? String(v.valor_base)).replace(/\./g, "").replace(",", ".");
+    const newVal = parseFloat(raw);
     if (isNaN(newVal) || newVal < 0) return;
     setSaving(key);
     await apiPost({ action: "upsert_valor", modelo: v.modelo, armazenamento: v.armazenamento, valor_base: newVal });
@@ -163,7 +164,8 @@ export function UsadosContent() {
 
   const handleSaveDesconto = async (d: DescontoCondicao) => {
     const key = `${d.condicao}|${d.detalhe}`;
-    const newVal = parseFloat((editingDesc[key] ?? String(d.desconto)).replace(",", "."));
+    const raw = (editingDesc[key] ?? String(d.desconto)).replace(/\./g, "").replace(",", ".");
+    const newVal = parseFloat(raw);
     if (isNaN(newVal)) return;
     setSaving(key);
     await apiPost({ action: "upsert_desconto", condicao: d.condicao, detalhe: d.detalhe, desconto: newVal });
