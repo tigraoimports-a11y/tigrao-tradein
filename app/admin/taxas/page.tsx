@@ -31,10 +31,17 @@ const BANCO_LABELS: Record<string, string> = {
 
 const BANCO_TABS = ["INFINITE", "ITAU", "MERCADO_PAGO"] as const;
 
-// Order for parcelas display
-const PARCELAS_ORDER = [
-  "pix", "debito", "1x", "2x", "3x", "4x", "5x", "6x",
-  "7x", "8x", "9x", "10x", "11x", "12x", "18x", "21x",
+// Parcelas by banco
+const ITAU_PARCELAS = [
+  "debito", "1x", "2x", "3x", "4x", "5x", "6x",
+  "7x", "8x", "9x", "10x", "11x", "12x",
+  "13x", "14x", "15x", "16x", "17x", "18x",
+  "19x", "20x", "21x",
+];
+
+const INFINITE_MP_PARCELAS = [
+  "debito", "1x", "2x", "3x", "4x", "5x", "6x",
+  "7x", "8x", "9x", "10x", "11x", "12x",
 ];
 
 const REPASSE_PARCELAS_ORDER = [
@@ -44,13 +51,12 @@ const REPASSE_PARCELAS_ORDER = [
   "19x", "20x", "21x",
 ];
 
-function sortParcelas(a: string, b: string) {
-  const ia = PARCELAS_ORDER.indexOf(a);
-  const ib = PARCELAS_ORDER.indexOf(b);
-  if (ia === -1 && ib === -1) return a.localeCompare(b);
-  if (ia === -1) return 1;
-  if (ib === -1) return -1;
-  return ia - ib;
+// Elo/Amex on Itau max 12x
+const ELO_AMEX_MAX = 12;
+
+function getParcelasForBanco(banco: string): string[] {
+  if (banco === "ITAU") return ITAU_PARCELAS;
+  return INFINITE_MP_PARCELAS;
 }
 
 function sortRepasseParcelas(a: string, b: string) {
@@ -83,11 +89,19 @@ function isItauOnly(parcelas: string): boolean {
   return num >= 13 && num <= 21;
 }
 
-type TopTab = "maquina" | "repasse";
+// Check if parcelas num exceeds Elo/Amex max
+function isAboveEloAmexMax(parcelas: string): boolean {
+  const match = parcelas.match(/^(\d+)x$/);
+  if (!match) return false;
+  const num = parseInt(match[1], 10);
+  return num > ELO_AMEX_MAX;
+}
+
+type TopTab = "descontadas" | "embutidas";
 
 export default function TaxasPage() {
-  const { apiHeaders } = useAdmin();
-  const [topTab, setTopTab] = useState<TopTab>("maquina");
+  const { apiHeaders, darkMode } = useAdmin();
+  const [topTab, setTopTab] = useState<TopTab>("descontadas");
 
   // Machine taxas state
   const [data, setData] = useState<GroupedData>({});
@@ -219,13 +233,6 @@ export default function TaxasPage() {
     ];
   }
 
-  function getParcelasForBanco(banco: string): string[] {
-    const rows = data[banco] ?? [];
-    const set = new Set<string>();
-    for (const r of rows) set.add(r.parcelas);
-    return Array.from(set).sort(sortParcelas);
-  }
-
   function findRow(banco: string, bandeira: string, parcelas: string): TaxaRow | undefined {
     return (data[banco] ?? []).find(
       (r) => r.bandeira === bandeira && r.parcelas === parcelas
@@ -315,54 +322,82 @@ export default function TaxasPage() {
   const bandeiraGroups = getBandeiraGroups(tab);
   const parcelas = getParcelasForBanco(tab);
 
+  // Dark mode helper colors
+  const dm = darkMode;
+  const bgPage = dm ? "#0A0A0A" : "#F5F5F7";
+  const bgCard = dm ? "#1C1C1E" : "#FFFFFF";
+  const bgCardAlt = dm ? "#1A1A1A" : "#FAFAFA";
+  const bgSegmented = dm ? "#2C2C2E" : "#E8E8ED";
+  const bgSegmentedSub = dm ? "#2C2C2E" : "#F5F5F7";
+  const bgSegmentedActive = dm ? "#3A3A3C" : "#FFFFFF";
+  const textPrimary = dm ? "#F5F5F7" : "#1D1D1F";
+  const textSecondary = dm ? "#98989D" : "#86868B";
+  const textMuted = dm ? "#6E6E73" : "#6E6E73";
+  const textDisabled = dm ? "#48484A" : "#C7C7CC";
+  const borderMain = dm ? "#3A3A3C" : "#E8E8ED";
+  const borderRow = dm ? "#2C2C2E" : "#F0F0F0";
+  const bgInput = dm ? "#2C2C2E" : "#FFFFFF";
+  const bgInputEdited = dm ? "#3D2A0E" : "#FFF8F0";
+  const bgDisabledBtn = dm ? "#2C2C2E" : "#F5F5F7";
+  const bgTableHead = dm ? "#1A1A1A" : "#FAFAFA";
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1D1D1F]">Gerenciamento de Taxas</h1>
-        <p className="text-sm text-[#86868B] mt-1">
+        <h1 className="text-2xl font-bold" style={{ color: textPrimary }}>Gerenciamento de Taxas</h1>
+        <p className="text-sm mt-1" style={{ color: textSecondary }}>
           Gerencie as taxas das maquininhas e taxas de repasse
         </p>
       </div>
 
-      {/* Top-level tabs: Maquina vs Repasse */}
-      <div className="flex gap-1 bg-[#E8E8ED] rounded-xl p-1 mb-6">
+      {/* Top-level tabs: Taxas Descontadas vs Taxas Embutidas */}
+      <div
+        className="flex gap-1 rounded-xl p-1 mb-6"
+        style={{ background: bgSegmented }}
+      >
         <button
-          onClick={() => setTopTab("maquina")}
-          className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
-            topTab === "maquina"
-              ? "bg-white text-[#1D1D1F] shadow-sm"
-              : "text-[#6E6E73] hover:text-[#1D1D1F]"
-          }`}
+          onClick={() => setTopTab("descontadas")}
+          className="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all"
+          style={{
+            background: topTab === "descontadas" ? bgSegmentedActive : "transparent",
+            color: topTab === "descontadas" ? textPrimary : textMuted,
+            boxShadow: topTab === "descontadas" ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+          }}
         >
-          Taxas da Maquina
+          Taxas Descontadas
         </button>
         <button
-          onClick={() => setTopTab("repasse")}
-          className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
-            topTab === "repasse"
-              ? "bg-white text-[#1D1D1F] shadow-sm"
-              : "text-[#6E6E73] hover:text-[#1D1D1F]"
-          }`}
+          onClick={() => setTopTab("embutidas")}
+          className="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all"
+          style={{
+            background: topTab === "embutidas" ? bgSegmentedActive : "transparent",
+            color: topTab === "embutidas" ? textPrimary : textMuted,
+            boxShadow: topTab === "embutidas" ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+          }}
         >
-          Taxas de Repasse
+          Taxas Embutidas
         </button>
       </div>
 
-      {/* ========== MACHINE TAXAS TAB ========== */}
-      {topTab === "maquina" && (
+      {/* ========== TAXAS DESCONTADAS (MACHINE) TAB ========== */}
+      {topTab === "descontadas" && (
         <>
-          {/* Banco tabs */}
-          <div className="flex gap-1 bg-[#F5F5F7] rounded-xl p-1 mb-6">
+          {/* Banco sub-tabs */}
+          <div
+            className="flex gap-1 rounded-xl p-1 mb-6"
+            style={{ background: bgSegmentedSub }}
+          >
             {BANCO_TABS.map((b) => (
               <button
                 key={b}
                 onClick={() => setTab(b)}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
-                  tab === b
-                    ? "bg-white text-[#E8740E] shadow-sm"
-                    : "text-[#6E6E73] hover:text-[#1D1D1F]"
-                }`}
+                className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all"
+                style={{
+                  background: tab === b ? bgSegmentedActive : "transparent",
+                  color: tab === b ? "#E8740E" : textMuted,
+                  boxShadow: tab === b ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                }}
               >
                 {BANCO_LABELS[b]}
               </button>
@@ -370,9 +405,9 @@ export default function TaxasPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-[#86868B]">Carregando taxas...</div>
+            <div className="text-center py-12" style={{ color: textSecondary }}>Carregando taxas...</div>
           ) : parcelas.length === 0 ? (
-            <div className="text-center py-12 text-[#86868B]">
+            <div className="text-center py-12" style={{ color: textSecondary }}>
               Nenhuma taxa encontrada para {BANCO_LABELS[tab]}.
               <br />
               <span className="text-xs">Execute a migration SQL para popular os dados.</span>
@@ -380,19 +415,26 @@ export default function TaxasPage() {
           ) : (
             <>
               {/* Table */}
-              <div className="bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden shadow-sm">
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{ background: bgCard, border: `1px solid ${borderMain}` }}
+              >
                 {/* Desktop table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-[#E8E8ED] bg-[#FAFAFA]">
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                      <tr style={{ borderBottom: `1px solid ${borderMain}`, background: bgTableHead }}>
+                        <th
+                          className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                          style={{ color: textSecondary }}
+                        >
                           Parcelas
                         </th>
                         {bandeiraGroups.map((g) => (
                           <th
                             key={g.label}
-                            className="text-center py-3 px-4 text-xs font-semibold text-[#86868B] uppercase tracking-wider"
+                            className="text-center py-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                            style={{ color: textSecondary }}
                           >
                             {g.label}
                           </th>
@@ -403,17 +445,28 @@ export default function TaxasPage() {
                       {parcelas.map((p, idx) => (
                         <tr
                           key={p}
-                          className={`border-b border-[#F0F0F0] ${idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]/50"}`}
+                          style={{
+                            borderBottom: `1px solid ${borderRow}`,
+                            background: idx % 2 === 0 ? bgCard : bgCardAlt,
+                          }}
                         >
-                          <td className="py-2.5 px-4 text-sm font-medium text-[#1D1D1F]">
+                          <td className="py-2.5 px-4 text-sm font-medium" style={{ color: textPrimary }}>
                             {formatParcelas(p)}
                           </td>
                           {bandeiraGroups.map((g) => {
-                            // Use first bandeira in group as representative
+                            // Check if Elo/Amex and above max
+                            const isEloAmex = g.bandeiras.includes("ELO") || g.bandeiras.includes("AMEX");
+                            if (isEloAmex && tab === "ITAU" && isAboveEloAmexMax(p)) {
+                              return (
+                                <td key={g.label} className="py-2.5 px-4 text-center text-sm" style={{ color: textDisabled }}>
+                                  --
+                                </td>
+                              );
+                            }
                             const row = findRow(tab, g.bandeiras[0], p);
                             if (!row) {
                               return (
-                                <td key={g.label} className="py-2.5 px-4 text-center text-[#C7C7CC] text-sm">
+                                <td key={g.label} className="py-2.5 px-4 text-center text-sm" style={{ color: textDisabled }}>
                                   --
                                 </td>
                               );
@@ -430,20 +483,20 @@ export default function TaxasPage() {
                                     max="100"
                                     value={getValue(row)}
                                     onChange={(e) => {
-                                      // Update all bandeiras in the group simultaneously
                                       for (const b of g.bandeiras) {
                                         const r = findRow(tab, b, p);
                                         if (r) handleChange(r, e.target.value);
                                       }
                                     }}
-                                    className={`w-20 text-center text-sm py-1.5 px-2 rounded-lg border transition-colors
-                                      ${isEdited
-                                        ? "border-[#E8740E] bg-[#FFF8F0] text-[#E8740E] font-semibold"
-                                        : "border-[#E8E8ED] bg-white text-[#1D1D1F]"
-                                      }
-                                      focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]`}
+                                    className="w-20 text-center text-sm py-1.5 px-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]"
+                                    style={{
+                                      border: `1px solid ${isEdited ? "#E8740E" : borderMain}`,
+                                      background: isEdited ? bgInputEdited : bgInput,
+                                      color: isEdited ? "#E8740E" : textPrimary,
+                                      fontWeight: isEdited ? 600 : 400,
+                                    }}
                                   />
-                                  <span className="text-xs text-[#86868B]">%</span>
+                                  <span className="text-xs" style={{ color: textSecondary }}>%</span>
                                 </div>
                               </td>
                             );
@@ -455,21 +508,36 @@ export default function TaxasPage() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-[#F0F0F0]">
-                  {parcelas.map((p) => (
-                    <div key={p} className="px-4 py-3">
-                      <div className="text-sm font-semibold text-[#1D1D1F] mb-2">
+                <div className="md:hidden">
+                  {parcelas.map((p, idx) => (
+                    <div
+                      key={p}
+                      className="px-4 py-3"
+                      style={{
+                        borderBottom: idx < parcelas.length - 1 ? `1px solid ${borderRow}` : "none",
+                      }}
+                    >
+                      <div className="text-sm font-semibold mb-2" style={{ color: textPrimary }}>
                         {formatParcelas(p)}
                       </div>
                       <div className="flex flex-wrap gap-3">
                         {bandeiraGroups.map((g) => {
+                          const isEloAmex = g.bandeiras.includes("ELO") || g.bandeiras.includes("AMEX");
+                          if (isEloAmex && tab === "ITAU" && isAboveEloAmexMax(p)) {
+                            return (
+                              <div key={g.label} className="flex-1 min-w-[120px]">
+                                <label className="text-xs mb-1 block" style={{ color: textSecondary }}>{g.label}</label>
+                                <div className="text-sm py-2 px-3" style={{ color: textDisabled }}>--</div>
+                              </div>
+                            );
+                          }
                           const row = findRow(tab, g.bandeiras[0], p);
                           if (!row) return null;
                           const key = editKey(row.banco, row.bandeira, row.parcelas);
                           const isEdited = edits[key] !== undefined && edits[key] !== row.taxa_pct;
                           return (
                             <div key={g.label} className="flex-1 min-w-[120px]">
-                              <label className="text-xs text-[#86868B] mb-1 block">{g.label}</label>
+                              <label className="text-xs mb-1 block" style={{ color: textSecondary }}>{g.label}</label>
                               <div className="flex items-center gap-1">
                                 <input
                                   type="number"
@@ -483,14 +551,15 @@ export default function TaxasPage() {
                                       if (r) handleChange(r, e.target.value);
                                     }
                                   }}
-                                  className={`w-full text-sm py-2 px-3 rounded-lg border transition-colors
-                                    ${isEdited
-                                      ? "border-[#E8740E] bg-[#FFF8F0] text-[#E8740E] font-semibold"
-                                      : "border-[#E8E8ED] bg-white text-[#1D1D1F]"
-                                    }
-                                    focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]`}
+                                  className="w-full text-sm py-2 px-3 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]"
+                                  style={{
+                                    border: `1px solid ${isEdited ? "#E8740E" : borderMain}`,
+                                    background: isEdited ? bgInputEdited : bgInput,
+                                    color: isEdited ? "#E8740E" : textPrimary,
+                                    fontWeight: isEdited ? 600 : 400,
+                                  }}
                                 />
-                                <span className="text-xs text-[#86868B]">%</span>
+                                <span className="text-xs" style={{ color: textSecondary }}>%</span>
                               </div>
                             </div>
                           );
@@ -507,7 +576,7 @@ export default function TaxasPage() {
                   const info = getLatestUpdate(tab, g.bandeiras);
                   if (!info) return null;
                   return (
-                    <p key={g.label} className="text-xs text-[#86868B]">
+                    <p key={g.label} className="text-xs" style={{ color: textSecondary }}>
                       {g.label}: ultima atualizacao {info.date} por {info.by}
                     </p>
                   );
@@ -519,18 +588,21 @@ export default function TaxasPage() {
                 <button
                   onClick={handleSave}
                   disabled={saving || !hasChanges()}
-                  className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    hasChanges()
-                      ? "bg-[#E8740E] text-white hover:bg-[#D06A0D] shadow-sm"
-                      : "bg-[#F5F5F7] text-[#C7C7CC] cursor-not-allowed"
-                  }`}
+                  className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{
+                    background: hasChanges() ? "#E8740E" : bgDisabledBtn,
+                    color: hasChanges() ? "#FFFFFF" : textDisabled,
+                    cursor: hasChanges() ? "pointer" : "not-allowed",
+                    boxShadow: hasChanges() ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                  }}
                 >
                   {saving ? "Salvando..." : "Salvar alteracoes"}
                 </button>
                 {hasChanges() && (
                   <button
                     onClick={() => setEdits({})}
-                    className="text-sm text-[#86868B] hover:text-[#1D1D1F] transition-colors"
+                    className="text-sm transition-colors"
+                    style={{ color: textSecondary }}
                   >
                     Descartar
                   </button>
@@ -546,13 +618,13 @@ export default function TaxasPage() {
         </>
       )}
 
-      {/* ========== REPASSE TAXAS TAB ========== */}
-      {topTab === "repasse" && (
+      {/* ========== TAXAS EMBUTIDAS (REPASSE) TAB ========== */}
+      {topTab === "embutidas" && (
         <>
           {repasseLoading ? (
-            <div className="text-center py-12 text-[#86868B]">Carregando taxas de repasse...</div>
+            <div className="text-center py-12" style={{ color: textSecondary }}>Carregando taxas de repasse...</div>
           ) : sortedRepasseData.length === 0 ? (
-            <div className="text-center py-12 text-[#86868B]">
+            <div className="text-center py-12" style={{ color: textSecondary }}>
               Nenhuma taxa de repasse encontrada.
               <br />
               <span className="text-xs">Execute a migration SQL para popular a tabela taxas_repasse.</span>
@@ -560,19 +632,31 @@ export default function TaxasPage() {
           ) : (
             <>
               {/* Table */}
-              <div className="bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden shadow-sm">
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{ background: bgCard, border: `1px solid ${borderMain}` }}
+              >
                 {/* Desktop table */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-[#E8E8ED] bg-[#FAFAFA]">
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                      <tr style={{ borderBottom: `1px solid ${borderMain}`, background: bgTableHead }}>
+                        <th
+                          className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                          style={{ color: textSecondary }}
+                        >
                           Parcelas
                         </th>
-                        <th className="text-center py-3 px-4 text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                        <th
+                          className="text-center py-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                          style={{ color: textSecondary }}
+                        >
                           Taxa %
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                        <th
+                          className="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                          style={{ color: textSecondary }}
+                        >
                           Maquininha
                         </th>
                       </tr>
@@ -584,9 +668,12 @@ export default function TaxasPage() {
                         return (
                           <tr
                             key={row.parcelas}
-                            className={`border-b border-[#F0F0F0] ${idx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]/50"}`}
+                            style={{
+                              borderBottom: `1px solid ${borderRow}`,
+                              background: idx % 2 === 0 ? bgCard : bgCardAlt,
+                            }}
                           >
-                            <td className="py-2.5 px-4 text-sm font-medium text-[#1D1D1F]">
+                            <td className="py-2.5 px-4 text-sm font-medium" style={{ color: textPrimary }}>
                               {row.parcelas.toUpperCase()}
                             </td>
                             <td className="py-2.5 px-4 text-center">
@@ -598,14 +685,15 @@ export default function TaxasPage() {
                                   max="100"
                                   value={getRepasseValue(row)}
                                   onChange={(e) => handleRepasseChange(row.parcelas, e.target.value)}
-                                  className={`w-20 text-center text-sm py-1.5 px-2 rounded-lg border transition-colors
-                                    ${isEdited
-                                      ? "border-[#E8740E] bg-[#FFF8F0] text-[#E8740E] font-semibold"
-                                      : "border-[#E8E8ED] bg-white text-[#1D1D1F]"
-                                    }
-                                    focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]`}
+                                  className="w-20 text-center text-sm py-1.5 px-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]"
+                                  style={{
+                                    border: `1px solid ${isEdited ? "#E8740E" : borderMain}`,
+                                    background: isEdited ? bgInputEdited : bgInput,
+                                    color: isEdited ? "#E8740E" : textPrimary,
+                                    fontWeight: isEdited ? 600 : 400,
+                                  }}
                                 />
-                                <span className="text-xs text-[#86868B]">%</span>
+                                <span className="text-xs" style={{ color: textSecondary }}>%</span>
                               </div>
                             </td>
                             <td className="py-2.5 px-4 text-sm">
@@ -615,7 +703,7 @@ export default function TaxasPage() {
                                   Apenas Itau
                                 </span>
                               ) : (
-                                <span className="text-[#86868B]">
+                                <span style={{ color: textSecondary }}>
                                   Infinite, Itau ou Mercado Pago
                                 </span>
                               )}
@@ -628,22 +716,31 @@ export default function TaxasPage() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-[#F0F0F0]">
-                  {sortedRepasseData.map((row) => {
+                <div className="md:hidden">
+                  {sortedRepasseData.map((row, idx) => {
                     const itauOnly = isItauOnly(row.parcelas);
                     const isEdited = repasseEdits[row.parcelas] !== undefined && repasseEdits[row.parcelas] !== row.taxa_pct;
                     return (
-                      <div key={row.parcelas} className="px-4 py-3">
+                      <div
+                        key={row.parcelas}
+                        className="px-4 py-3"
+                        style={{
+                          borderBottom: idx < sortedRepasseData.length - 1 ? `1px solid ${borderRow}` : "none",
+                        }}
+                      >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-[#1D1D1F]">
+                          <span className="text-sm font-semibold" style={{ color: textPrimary }}>
                             {row.parcelas.toUpperCase()}
                           </span>
                           {itauOnly ? (
-                            <span className="text-xs font-medium text-[#E8740E] bg-[#FFF8F0] px-2 py-0.5 rounded-full">
+                            <span
+                              className="text-xs font-medium px-2 py-0.5 rounded-full"
+                              style={{ color: "#E8740E", background: bgInputEdited }}
+                            >
                               Apenas Itau
                             </span>
                           ) : (
-                            <span className="text-xs text-[#86868B]">
+                            <span className="text-xs" style={{ color: textSecondary }}>
                               Infinite, Itau ou MP
                             </span>
                           )}
@@ -656,14 +753,15 @@ export default function TaxasPage() {
                             max="100"
                             value={getRepasseValue(row)}
                             onChange={(e) => handleRepasseChange(row.parcelas, e.target.value)}
-                            className={`w-full text-sm py-2 px-3 rounded-lg border transition-colors
-                              ${isEdited
-                                ? "border-[#E8740E] bg-[#FFF8F0] text-[#E8740E] font-semibold"
-                                : "border-[#E8E8ED] bg-white text-[#1D1D1F]"
-                              }
-                              focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]`}
+                            className="w-full text-sm py-2 px-3 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]"
+                            style={{
+                              border: `1px solid ${isEdited ? "#E8740E" : borderMain}`,
+                              background: isEdited ? bgInputEdited : bgInput,
+                              color: isEdited ? "#E8740E" : textPrimary,
+                              fontWeight: isEdited ? 600 : 400,
+                            }}
                           />
-                          <span className="text-xs text-[#86868B]">%</span>
+                          <span className="text-xs" style={{ color: textSecondary }}>%</span>
                         </div>
                       </div>
                     );
@@ -676,7 +774,7 @@ export default function TaxasPage() {
                 const info = getRepasseLatestUpdate();
                 if (!info) return null;
                 return (
-                  <p className="mt-4 text-xs text-[#86868B]">
+                  <p className="mt-4 text-xs" style={{ color: textSecondary }}>
                     Ultima atualizacao {info.date} por {info.by}
                   </p>
                 );
@@ -687,18 +785,21 @@ export default function TaxasPage() {
                 <button
                   onClick={handleRepasseSave}
                   disabled={repasseSaving || !hasRepasseChanges()}
-                  className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    hasRepasseChanges()
-                      ? "bg-[#E8740E] text-white hover:bg-[#D06A0D] shadow-sm"
-                      : "bg-[#F5F5F7] text-[#C7C7CC] cursor-not-allowed"
-                  }`}
+                  className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                  style={{
+                    background: hasRepasseChanges() ? "#E8740E" : bgDisabledBtn,
+                    color: hasRepasseChanges() ? "#FFFFFF" : textDisabled,
+                    cursor: hasRepasseChanges() ? "pointer" : "not-allowed",
+                    boxShadow: hasRepasseChanges() ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+                  }}
                 >
                   {repasseSaving ? "Salvando..." : "Salvar alteracoes"}
                 </button>
                 {hasRepasseChanges() && (
                   <button
                     onClick={() => setRepasseEdits({})}
-                    className="text-sm text-[#86868B] hover:text-[#1D1D1F] transition-colors"
+                    className="text-sm transition-colors"
+                    style={{ color: textSecondary }}
                   >
                     Descartar
                   </button>
