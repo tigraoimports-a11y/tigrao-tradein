@@ -80,7 +80,23 @@ export async function POST(req: NextRequest) {
       const emoji = catEmoji[categoria || "IPHONE"] || "📱";
       // Escapar caracteres especiais para HTML
       const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const msg = `🐯 <b>ALTERAÇÃO DE PREÇO — TigrãoImports</b>\n\n${emoji} <b>${escHtml(modelo)} ${escHtml(armazenamento)}</b>\n💰 Novo preço PIX: <b>R$ ${Number(preco_pix).toLocaleString("pt-BR")}</b>\n📌 Status: ${escHtml(status ?? "ativo")}\n\n⚠️ <i>Atualizar arte do Instagram</i>`;
+      // Calcular parcelas com taxas de repasse
+      const pix = Number(preco_pix);
+      let t12 = 13, t18 = 19, t21 = 22; // fallback hardcoded
+      try {
+        const { data: repasse } = await supabase.from("taxas_repasse").select("parcelas,taxa_pct").in("parcelas", ["12x", "18x", "21x"]);
+        if (repasse && repasse.length > 0) {
+          for (const r of repasse) {
+            if (r.parcelas === "12x") t12 = Number(r.taxa_pct);
+            if (r.parcelas === "18x") t18 = Number(r.taxa_pct);
+            if (r.parcelas === "21x") t21 = Number(r.taxa_pct);
+          }
+        }
+      } catch { /* fallback to hardcoded */ }
+      const parcelas12 = Math.round((pix * (1 + t12 / 100)) / 12);
+      const parcelas18 = Math.round((pix * (1 + t18 / 100)) / 18);
+      const parcelas21 = Math.round((pix * (1 + t21 / 100)) / 21);
+      const msg = `🐯 <b>ALTERAÇÃO DE PREÇO — TigrãoImports</b>\n\n${emoji} <b>${escHtml(modelo)} ${escHtml(armazenamento)}</b>\n💰 Novo preço PIX: <b>R$ ${pix.toLocaleString("pt-BR")}</b>\n💳 12x <b>R$ ${parcelas12}</b>\n💳 18x <b>R$ ${parcelas18}</b>\n💳 21x <b>R$ ${parcelas21}</b>\n📌 Status: ${escHtml(status ?? "ativo")}\n\n⚠️ <i>Atualizar arte do Instagram</i>`;
       const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
