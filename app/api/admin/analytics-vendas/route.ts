@@ -55,8 +55,9 @@ export async function GET(req: NextRequest) {
   const mesAtual = hoje.getMonth(); // 0-indexed
   const diaAtual = hoje.getDate();
 
-  // Calculate start date: N months ago from start of current month
-  const dataInicio = new Date(anoAtual, mesAtual - meses, 1);
+  // Calculate start date: Always fetch at least 3 months for projection accuracy
+  const mesesFetch = Math.max(meses, 3);
+  const dataInicio = new Date(anoAtual, mesAtual - mesesFetch, 1);
   const dataInicioStr = dataInicio.toISOString().split("T")[0];
   const hojeStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}-${String(diaAtual).padStart(2, "0")}`;
 
