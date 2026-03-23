@@ -26,6 +26,7 @@ export default function BarcodeScanner({
   const [inputValue, setInputValue] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [rejectMsg, setRejectMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrcodeRef = useRef<unknown>(null);
@@ -53,12 +54,36 @@ export default function BarcodeScanner({
       // Clean Apple barcode prefixes: "(S) " or "(S)" from Serial Number barcodes
       trimmed = trimmed.replace(/^\(S\)\s*/i, "");
       // Remove any non-alphanumeric chars that scanners might add
-      trimmed = trimmed.replace(/^[^A-Z0-9]+/, "");
-      if (trimmed.length >= 5) {
-        onScan(trimmed);
-        setInputValue("");
-        bufferRef.current = "";
+      trimmed = trimmed.replace(/[^A-Z0-9]/g, "");
+
+      if (!trimmed) return;
+
+      // Apple Serial Number validation:
+      // - iPhone: 12 chars (letters + numbers mixed)
+      // - MacBook/iPad: 10 chars (letters + numbers mixed)
+      // Reject: IMEI (15 digits), EID (32 digits), UPC (12-13 digits only)
+      const isAppleSerial =
+        (trimmed.length === 10 || trimmed.length === 12) && // 10 or 12 chars
+        /[A-Z]/.test(trimmed) &&                            // must have letters
+        /[0-9]/.test(trimmed);                              // must have numbers
+
+      if (!isAppleSerial) {
+        setRejectMsg(
+          trimmed.length === 15 && /^\d+$/.test(trimmed)
+            ? "⚠️ Isso é um IMEI, não Serial Number. Bipe o código que começa com (S)."
+            : trimmed.length > 20
+            ? "⚠️ Código inválido (muito longo). Bipe apenas o Serial Number — código com (S)."
+            : /^\d+$/.test(trimmed)
+            ? "⚠️ Código só numérico detectado. Serial Number tem letras e números."
+            : `⚠️ Código "${trimmed}" não é Serial Number Apple (deve ter 10 ou 12 caracteres com letras e números).`
+        );
+        return;
       }
+
+      setRejectMsg("");
+      onScan(trimmed);
+      setInputValue("");
+      bufferRef.current = "";
     },
     [onScan]
   );
@@ -202,6 +227,13 @@ export default function BarcodeScanner({
           OK
         </button>
       </div>
+
+      {/* Reject message */}
+      {rejectMsg && (
+        <p className="text-amber-600 text-sm bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+          {rejectMsg}
+        </p>
+      )}
 
       {/* Camera Toggle */}
       {!cameraOpen ? (
