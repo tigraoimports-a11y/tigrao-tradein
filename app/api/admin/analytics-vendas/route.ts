@@ -62,21 +62,31 @@ export async function GET(req: NextRequest) {
 
   try {
     // Fetch all non-cancelled sales for the period
-    const { data: vendas, error } = await supabase
-      .from("vendas")
-      .select("id, data, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento")
-      .neq("status_pagamento", "CANCELADO")
-      .gte("data", dataInicioStr)
-      .lte("data", hojeStr)
-      .order("data", { ascending: true })
-      .limit(5000);
+    // Supabase has a 1000-row default limit — paginate to get all rows
+    const selectFields = "id, data, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento";
+    let allRows: Venda[] = [];
+    let offset = 0;
+    const PAGE_SIZE = 1000;
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    while (true) {
+      const { data: page, error: pageError } = await supabase
+        .from("vendas")
+        .select(selectFields)
+        .neq("status_pagamento", "CANCELADO")
+        .gte("data", dataInicioStr)
+        .lte("data", hojeStr)
+        .order("data", { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
 
-    const rows = (vendas ?? []) as Venda[];
-    const mesAtualFilter = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}`;
-    const rowsMesAtual = rows.filter(r => r.data && r.data.startsWith(mesAtualFilter));
-    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} mesAtualFilter=${mesAtualFilter} rowsMesAtual=${rowsMesAtual.length} sample=${rows.length > 0 ? JSON.stringify({ data: rows[rows.length - 1]?.data, status: rows[rows.length - 1]?.status_pagamento }) : "none"}`);
+      if (pageError) return NextResponse.json({ error: pageError.message }, { status: 500 });
+      if (!page || page.length === 0) break;
+      allRows = allRows.concat(page as Venda[]);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+
+    const rows = allRows;
+    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length}`);
 
     // ---------------------------------------------------------------
     // 1. COMPARATIVO MENSAL
