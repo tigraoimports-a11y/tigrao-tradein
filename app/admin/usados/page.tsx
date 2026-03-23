@@ -113,7 +113,7 @@ const DEFAULT_EXCLUIDOS = [
 ];
 
 export function UsadosContent() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [valores, setValores] = useState<ValorUsado[]>([]);
   const [descontos, setDescontos] = useState<DescontoCondicao[]>([]);
   const [excluidos, setExcluidos] = useState<string[]>([]);

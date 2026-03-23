@@ -7,7 +7,7 @@ import type { SaldoBancario } from "@/lib/admin-types";
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function SaldosPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [saldos, setSaldos] = useState<SaldoBancario[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataAtual, setDataAtual] = useState(new Date().toISOString().split("T")[0]);

@@ -9,7 +9,7 @@ interface Agendamento { id: string; variacao_id: string; variacao_nome: string; 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
 
 export default function AgendamentoPrecosPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [variacoes, setVariacoes] = useState<Variacao[]>([]);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(true);

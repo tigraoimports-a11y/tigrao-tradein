@@ -21,7 +21,7 @@ interface Conciliacao {
 }
 
 export default function ConciliacaoPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [saldoSistema, setSaldoSistema] = useState<SaldoRow | null>(null);
   const [itauReal, setItauReal] = useState("");

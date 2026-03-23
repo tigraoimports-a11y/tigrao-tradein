@@ -85,7 +85,7 @@ function formatBRL(value: number): string {
 /* ══════════════════════════════════════════════ */
 
 export default function MostruarioPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);

@@ -46,7 +46,7 @@ interface SaldoRow {
 }
 
 export default function RelatorioPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [saldo, setSaldo] = useState<SaldoRow | null>(null);

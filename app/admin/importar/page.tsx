@@ -5,7 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import Papa from "papaparse";
 
 export default function ImportarPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [table, setTable] = useState<"vendas" | "gastos" | "estoque">("vendas");
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);

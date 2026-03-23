@@ -17,7 +17,7 @@ interface DashData {
 }
 
 export default function DashboardPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
@@ -678,7 +678,7 @@ function OrigensRanking({ password }: { password: string }) {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/relatorio-origens?mes=${m}`, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": "sistema" },
       });
       if (res.ok) {
         const json = await res.json();

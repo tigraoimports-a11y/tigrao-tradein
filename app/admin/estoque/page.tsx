@@ -1133,7 +1133,7 @@ function HistoricoTab({ password, logs, setLogs, loading, setLoading }: {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/estoque?action=historico&limit=200", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/estoque?action=historico&limit=200", { headers: { "x-admin-password": password, "x-admin-user": "sistema" } });
       const data = await res.json();
       setLogs(data.logs ?? []);
     } catch { /* silent */ }
@@ -1205,7 +1205,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
-    fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } })
+    fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": "sistema" } })
       .then(r => r.json()).then(d => setFornecedores(d.data ?? d.fornecedores ?? [])).catch(() => {});
   }, [password]);
 

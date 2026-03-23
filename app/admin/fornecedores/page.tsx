@@ -12,7 +12,7 @@ interface Fornecedor {
 }
 
 export default function FornecedoresPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");

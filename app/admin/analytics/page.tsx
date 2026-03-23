@@ -53,7 +53,7 @@ const QUESTION_LABELS: Record<string, string> = {
 };
 
 export default function AnalyticsPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<"7d" | "30d" | "all">("7d");

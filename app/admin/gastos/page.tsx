@@ -9,7 +9,7 @@ import type { Gasto } from "@/lib/admin-types";
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function GastosPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const GASTOS_TABS = ["novo", "historico"] as const;

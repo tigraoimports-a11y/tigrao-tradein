@@ -32,7 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function EncomendasPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"lista" | "nova">("lista");

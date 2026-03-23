@@ -10,7 +10,7 @@ interface Preco { id: string; item_id: string; fornecedor: string; preco: number
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 export default function CotacaoPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [listas, setListas] = useState<Lista[]>([]);
   const [itens, setItens] = useState<Item[]>([]);
   const [precos, setPrecos] = useState<Preco[]>([]);

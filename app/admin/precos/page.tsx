@@ -46,7 +46,7 @@ function applyOrder(rows: PrecoProduto[], catKey: string): PrecoProduto[] {
 }
 
 function PrecosContent() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PrecoProduto[] | null>(null);
   const [editing, setEditing] = useState<Record<string, string>>({});
@@ -809,7 +809,7 @@ interface HistoricoData {
 }
 
 function HistoricoPrecos() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<HistoricoData | null>(null);
   const [produto, setProduto] = useState("");

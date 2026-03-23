@@ -43,7 +43,7 @@ const fmtDate = (iso: string) => {
 };
 
 export default function AdminPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SimulacaoRow[] | null>(null);
   const [tab, setTab] = useState<"todos" | "GOSTEI" | "SAIR" | "PENDENTE">("todos");

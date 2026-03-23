@@ -79,7 +79,7 @@ function useGlobalScanner(onScan: (codigo: string) => void, enabled: boolean, in
 
 export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [tab, setTab] = useState<"gerar" | "bipar" | "historico">("gerar");
 
   // ── Estado: Gerar Etiqueta ──

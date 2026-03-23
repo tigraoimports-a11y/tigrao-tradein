@@ -51,7 +51,7 @@ function todayStr() {
 type Periodo = "hoje" | "ontem" | "7dias" | "30dias" | "tudo";
 
 export default function LogPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);

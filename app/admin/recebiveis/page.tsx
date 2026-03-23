@@ -153,7 +153,7 @@ function formatDate(dateStr: string): string {
 // Page component
 // -------------------------------------------------------
 export default function RecebiveisPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
 

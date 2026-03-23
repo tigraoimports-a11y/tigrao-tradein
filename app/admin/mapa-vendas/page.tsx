@@ -66,7 +66,7 @@ function getBarColor(index: number): string {
 }
 
 export default function MapaVendasPage() {
-  const { password } = useAdmin();
+  const { password, user } = useAdmin();
   const [data, setData] = useState<MapaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeOption>("30");
