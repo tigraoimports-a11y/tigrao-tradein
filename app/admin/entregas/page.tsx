@@ -185,7 +185,7 @@ export default function EntregasPage() {
   const buildWhatsAppText = () => {
     const produtos = [form.produto, form.produto2, form.produto3].filter(Boolean);
     const produtoText = produtos.length > 1
-      ? produtos.map((p, i) => `${i + 1}. ${p}`).join("\n")
+      ? produtos.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
       : form.produto || "—";
 
     // Pagamento principal
@@ -199,23 +199,23 @@ export default function EntregasPage() {
     // Pagamento alternativo
     let pagAlt = "";
     if (form.forma_pagamento_2 && form.valor_2) {
-      pagAlt = `\n💵 PAGAMENTO 2: ${form.forma_pagamento_2} R$${form.valor_2}`;
+      pagAlt = `\n💵 *Pagamento 2:* ${form.forma_pagamento_2} R$${form.valor_2}`;
     }
 
-    const localEntrega = form.local_entrega ? `\n🏠 LOCAL: ${form.local_entrega}` : "";
+    const localEntrega = form.local_entrega ? `\n🏠 *Local:* ${form.local_entrega}` : "";
 
     const lines = [
-      `🛵 ENTREGA ${form.regiao || "—"} 🛵`,
+      `🛵 *ENTREGA ${form.regiao || "—"}* 🛵`,
       "",
-      `⏰ HORÁRIO:: ${form.horario || "—"}`,
-      `📍 LOCAL: ${form.endereco || "—"}${localEntrega}`,
-      `🍎 PRODUTO: ${produtoText}`,
-      `‼️ TIPO: ${form.tipo || "—"}${form.detalhes_upgrade ? `— ${form.detalhes_upgrade}` : ""}`,
-      `💰 PAGAMENTO: ${pagText}${pagAlt}`,
-      `🧑 CLIENTE: ${form.cliente || "—"}`,
-      `📞 CONTATO: ${form.telefone || "—"}`,
-      form.observacao ? `📝 Observação: ${form.observacao}` : "",
-      `💼 Vendedor: ${form.vendedor || "—"}`,
+      `⏰ *Horário:* ${form.horario || "—"}`,
+      `📍 *Local:* ${form.endereco || "—"}${localEntrega}`,
+      `🍎 *Produto:* ${produtoText}`,
+      `‼️ *Tipo:* ${form.tipo || "—"}${form.detalhes_upgrade ? ` — ${form.detalhes_upgrade}` : ""}`,
+      `💰 *Pagamento:* ${pagText}${pagAlt}`,
+      `🧑 *Cliente:* ${form.cliente || "—"}`,
+      `📞 *Contato:* ${form.telefone || "—"}`,
+      form.observacao ? `📝 *Observação:* ${form.observacao}` : "",
+      `💼 *Vendedor:* ${form.vendedor || "—"}`,
     ].filter(Boolean);
     return lines.join("\n");
   };
