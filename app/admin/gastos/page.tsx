@@ -186,21 +186,21 @@ export default function GastosPage() {
         <div className="space-y-4">
           {/* Totais */}
           <div className="grid grid-cols-3 gap-4">
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
               <p className="text-xs text-[#86868B]">Total Saidas</p>
               <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
             </div>
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
               <p className="text-xs text-[#86868B]">Total Entradas</p>
               <p className="text-xl font-bold text-green-600">{fmt(totalEntrada)}</p>
             </div>
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
               <p className="text-xs text-[#86868B]">Saldo</p>
               <p className={`text-xl font-bold ${totalEntrada - totalSaida >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(totalEntrada - totalSaida)}</p>
             </div>
           </div>
 
-          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
