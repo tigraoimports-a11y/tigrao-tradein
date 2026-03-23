@@ -627,15 +627,37 @@ export default function VendasPage() {
     let successCount = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < allProducts.length; i++) {
-      const prod = allProducts[i];
-      const payload = buildPayload(prod);
-      // Multi-produto no mesmo cartão: comprovante só no 1º produto
-      // Os demais ficam com comprovante = 0 para não duplicar no D+1
-      if (i > 0 && allProducts.length > 1 && payload.valor_comprovante) {
-        payload.valor_comprovante = null;
-        payload.notas = ((payload.notas || "") + " [mesmo pagamento]").trim();
+    // Multi-produto no mesmo cartão: dividir comprovante proporcionalmente
+    const payloads: Record<string, unknown>[] = [];
+    for (const prod of allProducts) {
+      payloads.push(buildPayload(prod));
+    }
+    if (payloads.length > 1) {
+      const comprovanteTotal = Number(payloads[0]?.valor_comprovante || 0);
+      if (comprovanteTotal > 0) {
+        // Calcular soma dos preco_vendido pra distribuir proporcionalmente
+        const somaVendido = payloads.reduce((s, p) => s + Number(p.preco_vendido || 0), 0);
+        if (somaVendido > 0) {
+          let comprovanteDistribuido = 0;
+          for (let i = 0; i < payloads.length; i++) {
+            const vendido = Number(payloads[i].preco_vendido || 0);
+            if (i === payloads.length - 1) {
+              // Último produto pega o restante (evita erro de arredondamento)
+              payloads[i].valor_comprovante = Math.round(comprovanteTotal - comprovanteDistribuido);
+            } else {
+              const proporcao = vendido / somaVendido;
+              const compProporcional = Math.round(comprovanteTotal * proporcao);
+              payloads[i].valor_comprovante = compProporcional;
+              comprovanteDistribuido += compProporcional;
+            }
+          }
+        }
       }
+    }
+
+    for (let i = 0; i < payloads.length; i++) {
+      const payload = payloads[i];
+      const prod = allProducts[i];
 
       try {
         const res = await fetch("/api/vendas", {
