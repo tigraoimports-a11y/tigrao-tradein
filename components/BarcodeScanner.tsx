@@ -91,7 +91,7 @@ export default function BarcodeScanner({
 
     try {
       // Dynamic import to avoid SSR issues
-      const { Html5Qrcode } = await import("html5-qrcode");
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
 
       // Wait for DOM element to be ready
       await new Promise((r) => setTimeout(r, 300));
@@ -105,15 +105,34 @@ export default function BarcodeScanner({
       const scannerId = "barcode-scanner-camera";
       scannerRef.current.id = scannerId;
 
-      const scanner = new Html5Qrcode(scannerId);
+      // Enable all 1D barcode formats used by Apple
+      const scanner = new Html5Qrcode(scannerId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ],
+        verbose: false,
+      });
       html5QrcodeRef.current = scanner;
 
       await scanner.start(
         { facingMode: "environment" }, // Back camera
         {
-          fps: 10,
-          qrbox: { width: 280, height: 120 },
-          aspectRatio: 2.0,
+          fps: 15,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            // Wider scanning area for 1D barcodes
+            const w = Math.min(viewfinderWidth * 0.9, 400);
+            const h = Math.min(viewfinderHeight * 0.3, 150);
+            return { width: Math.round(w), height: Math.round(h) };
+          },
+          aspectRatio: 1.5,
+          disableFlip: false,
         },
         (decodedText: string) => {
           // Barcode detected
