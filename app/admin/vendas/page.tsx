@@ -7,6 +7,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
+import BarcodeScanner from "@/components/BarcodeScanner";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -123,6 +124,8 @@ export default function VendasPage() {
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
 
   // Fornecedores
   interface Fornecedor { id: string; nome: string }
@@ -1173,13 +1176,72 @@ export default function VendasPage() {
 
           {/* Row 2: Produto */}
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <p className="text-sm font-bold text-[#1D1D1F]">Produto</p>
+              <button
+                onClick={() => { setScanMode(true); setProdutoManual(false); setScanMsg(""); }}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${scanMode ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
+              >
+                📟 Bipar Código
+              </button>
+              <button
+                onClick={() => { setScanMode(false); setProdutoManual(false); }}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${!scanMode && !produtoManual ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
+              >
+                📦 Selecionar Estoque
+              </button>
               <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={produtoManual} onChange={(e) => { setProdutoManual(e.target.checked); if (e.target.checked) { setEstoqueId(""); setCatSel(""); } }} className="accent-[#E8740E]" />
-                <span className="text-xs text-[#86868B]">Digitar manualmente</span>
+                <input type="checkbox" checked={produtoManual} onChange={(e) => { setProdutoManual(e.target.checked); setScanMode(false); if (e.target.checked) { setEstoqueId(""); setCatSel(""); } }} className="accent-[#E8740E]" />
+                <span className="text-xs text-[#86868B]">Manual</span>
               </label>
             </div>
+
+            {/* SCAN MODE: Bipar Serial Number */}
+            {scanMode && (
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3 border border-[#E5E5EA]">
+                <p className="text-xs text-[#86868B] text-center">Bipe o Serial Number da caixa para selecionar o produto</p>
+                {scanMsg && <div className={`text-sm px-3 py-2 rounded-lg ${scanMsg.startsWith("✅") ? "bg-green-50 text-green-700 border border-green-200" : scanMsg.startsWith("❌") ? "bg-red-50 text-red-700 border border-red-200" : "bg-blue-50 text-blue-700 border border-blue-200"}`}>{scanMsg}</div>}
+                <BarcodeScanner
+                  placeholder="Serial Number..."
+                  onScan={async (code) => {
+                    setScanMsg("🔍 Buscando...");
+                    try {
+                      const res = await fetch("/api/scan", {
+                        method: "POST",
+                        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema", "Content-Type": "application/json" },
+                        body: JSON.stringify({ serial_no: code }),
+                      });
+                      const data = await res.json();
+
+                      if (!data.found) {
+                        setScanMsg(`❌ SN "${code}" não cadastrado. Cadastre primeiro em Estoque → Scan.`);
+                        return;
+                      }
+
+                      if (data.status === "VENDIDO") {
+                        setScanMsg(`❌ Produto já vendido: ${data.message}`);
+                        return;
+                      }
+
+                      if (data.status === "EM_ESTOQUE" && data.produto) {
+                        const p = data.produto;
+                        const nome = p.cor ? `${p.produto} ${p.cor}` : p.produto;
+                        set("produto", nome);
+                        set("custo", String(p.custo_unitario || 0));
+                        if (p.fornecedor) set("fornecedor", p.fornecedor);
+                        if (p.imei) set("imei", p.imei);
+                        if (p.serial_no) set("serial_no", p.serial_no);
+                        setEstoqueId(p.estoque_id || "");
+                        setScanMsg(`✅ ${nome} — Custo: R$ ${Math.round(p.custo_unitario || 0).toLocaleString("pt-BR")}`);
+                        setScanMode(false);
+                      }
+                    } catch {
+                      setScanMsg("❌ Erro de conexão");
+                    }
+                  }}
+                />
+              </div>
+            )}
 
             {produtoManual ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
