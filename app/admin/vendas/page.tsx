@@ -981,10 +981,10 @@ export default function VendasPage() {
 
           {/* Row 1: Origem + Tipo + Data */}
           <div className="grid grid-cols-3 gap-4">
-            <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => set("origem", e.target.value)} className={selectCls}>
+            <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => { const v = e.target.value; set("origem", v); if (v === "ATACADO") { set("tipo", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } }} className={selectCls}>
               <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option><option>ANDRE</option><option>NICOLAS</option><option>BIANCA</option><option>DIRECT</option><option>STORY</option><option>WHATSAPP</option>
             </select></div>
-            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); } }} className={selectCls}>
+            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); set("local", ""); set("email", ""); set("cep", ""); } }} className={selectCls}>
               <option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
             </select></div>
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
@@ -1074,7 +1074,7 @@ export default function VendasPage() {
               {/* CEP + Local */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
-                  <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option>
+                  <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option><option>ATACADO</option>
                 </select></div>
                 <div>
                   <p className={labelCls}>CEP</p>

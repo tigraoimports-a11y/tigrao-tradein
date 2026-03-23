@@ -137,8 +137,9 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabase
       .from("vendas")
-      .select("id, data, cliente, preco_vendido, custo, lucro, bairro, cidade, uf")
+      .select("id, data, cliente, preco_vendido, custo, lucro, bairro, cidade, uf, cep, tipo")
       .neq("status_pagamento", "CANCELADO")
+      .neq("tipo", "ATACADO")
       .order("data", { ascending: false });
 
     if (dateFilter) {
