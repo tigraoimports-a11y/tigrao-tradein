@@ -150,6 +150,13 @@ export function calculateWarrantyBonus(
   const b = bonuses || DEFAULT_WARRANTY_BONUSES;
   const base = baseValue || 0;
 
+  // Protecao: se valores de bonus > 1, sao absolutos (R$), nao percentuais
+  // Ex: 200 = R$200, 0.07 = 7% do base
+  const applyBonus = (rate: number): number => {
+    if (rate > 1) return Math.round(rate); // valor absoluto em reais
+    return Math.round(base * rate);        // percentual do base
+  };
+
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
@@ -160,9 +167,9 @@ export function calculateWarrantyBonus(
   const diffMonths = (targetYear - currentYear) * 12 + (warrantyMonth - currentMonth);
 
   if (diffMonths <= 0) return 0; // garantia ja vencida ou vence esse mes
-  if (diffMonths <= 3) return Math.round(base * b.ate3m);
-  if (diffMonths <= 6) return Math.round(base * b.de3a6m);
-  return Math.round(base * b.acima6m);
+  if (diffMonths <= 3) return applyBonus(b.ate3m);
+  if (diffMonths <= 6) return applyBonus(b.de3a6m);
+  return applyBonus(b.acima6m);
 }
 
 /**

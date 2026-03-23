@@ -232,9 +232,9 @@ export function buildModelDiscountsMap(
       batteryTiers: batteryTiers.length > 0 ? batteryTiers : [{ threshold: 85, discount: -200 }],
       ...(hasWarrantyBonuses ? {
         warrantyBonuses: {
-          ate3m: garantia["Ate 3 meses"] ?? 200,
-          de3a6m: garantia["3 a 6 meses"] ?? 300,
-          acima6m: garantia["6 meses ou mais"] ?? 400,
+          ate3m: garantia["Ate 3 meses"] ?? 0.03,
+          de3a6m: garantia["3 a 6 meses"] ?? 0.05,
+          acima6m: garantia["6 meses ou mais"] ?? 0.07,
         },
       } : {}),
     };
