@@ -605,30 +605,7 @@ export default function VendasPage() {
     setSaving(true);
     setMsg("");
 
-    // OFFLINE MODE: save to local queue instead of posting
-    if (!isOnline) {
-      let savedCount = 0;
-      for (const prod of allProducts) {
-        const payload = buildPayload(prod);
-        addToQueue(payload);
-        savedCount++;
-      }
-      setOfflineCount(getQueueCount());
-      setDuplicadoInfo(null);
-      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
-      setLastClienteData(clienteInfo);
-      setProdutosCarrinho([]);
-      clearProductFields();
-      const plural = savedCount > 1 ? "s" : "";
-      setMsg(`Sem conexao — ${savedCount} venda${plural} salva${plural} localmente. Sera sincronizada quando a internet voltar.`);
-      setSaving(false);
-      return;
-    }
-
-    let successCount = 0;
-    const errors: string[] = [];
-
-    // Multi-produto no mesmo cartão: dividir comprovante proporcionalmente
+    // Build payloads for all products
     const payloads: Record<string, unknown>[] = [];
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
@@ -636,25 +613,70 @@ export default function VendasPage() {
     if (payloads.length > 1) {
       const comprovanteTotal = Number(payloads[0]?.valor_comprovante || 0);
       if (comprovanteTotal > 0) {
-        // Calcular soma dos preco_vendido pra distribuir proporcionalmente
-        const somaVendido = payloads.reduce((s, p) => s + Number(p.preco_vendido || 0), 0);
-        if (somaVendido > 0) {
+        // Calculate total custo for proportional distribution
+        const totalCusto = payloads.reduce((s, p) => s + Number(p.custo || 0), 0);
+
+        if (totalCusto > 0) {
+          // Calculate taxa from form (same for all products since payment is global)
+          const gForma = form.forma;
+          const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : form.banco;
+          const gParcelas = parseInt(form.qnt_parcelas) || 0;
+          const gBandeira = form.bandeira || null;
+          const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
+            ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+            : 0;
+
+          // Total líquido from comprovante after tax
+          const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
+
+          // Add entradas (pix, especie, troca) — these are global, added once to the total
+          const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+          const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
+          const gValorTroca = parseFloat(form.produto_na_troca) || 0;
+          const totalRecebido = totalLiquido + gEntradaPix + gEntradaEspecie + gValorTroca;
+
           let comprovanteDistribuido = 0;
+          let vendidoDistribuido = 0;
           for (let i = 0; i < payloads.length; i++) {
-            const vendido = Number(payloads[i].preco_vendido || 0);
+            const custoItem = Number(payloads[i].custo || 0);
+            const proporcao = custoItem / totalCusto;
+
             if (i === payloads.length - 1) {
-              // Último produto pega o restante (evita erro de arredondamento)
+              // Last item gets the remainder (avoids rounding errors)
               payloads[i].valor_comprovante = Math.round(comprovanteTotal - comprovanteDistribuido);
+              payloads[i].preco_vendido = Math.round(totalRecebido - vendidoDistribuido);
             } else {
-              const proporcao = vendido / somaVendido;
               const compProporcional = Math.round(comprovanteTotal * proporcao);
+              const vendidoProporcional = Math.round(totalRecebido * proporcao);
               payloads[i].valor_comprovante = compProporcional;
+              payloads[i].preco_vendido = vendidoProporcional;
               comprovanteDistribuido += compProporcional;
+              vendidoDistribuido += vendidoProporcional;
             }
           }
         }
       }
     }
+
+    // OFFLINE MODE: save to local queue instead of posting
+    if (!isOnline) {
+      for (const payload of payloads) {
+        addToQueue(payload);
+      }
+      setOfflineCount(getQueueCount());
+      setDuplicadoInfo(null);
+      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
+      setLastClienteData(clienteInfo);
+      setProdutosCarrinho([]);
+      clearProductFields();
+      const plural = payloads.length > 1 ? "s" : "";
+      setMsg(`Sem conexao — ${payloads.length} venda${plural} salva${plural} localmente. Sera sincronizada quando a internet voltar.`);
+      setSaving(false);
+      return;
+    }
+
+    let successCount = 0;
+    const errors: string[] = [];
 
     for (let i = 0; i < payloads.length; i++) {
       const payload = payloads[i];
@@ -674,7 +696,6 @@ export default function VendasPage() {
         }
       } catch (err) {
         // Network error during online attempt — save to offline queue
-        const payload = buildPayload(prod);
         addToQueue(payload);
         setOfflineCount(getQueueCount());
         errors.push(`${prod.produto}: salva offline (erro de rede)`);
