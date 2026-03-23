@@ -649,6 +649,7 @@ export default function EstoquePage() {
             { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
             { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
             { key: "novo", label: "Adicionar", color: "" },
+            { key: "scan", label: "📟 Scan", color: "" },
             { key: "historico", label: "Historico", color: "" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
