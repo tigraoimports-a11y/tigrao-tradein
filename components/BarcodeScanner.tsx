@@ -60,9 +60,12 @@ export default function BarcodeScanner({
       // Remove any non-alphanumeric chars that scanners might add
       trimmed = trimmed.replace(/[^A-Z0-9]/g, "");
       // Strip leading "S" captured from Apple box label "(S) Serial No."
-      // e.g. scanner reads "SH2LTJNWP6M" (11 chars) → "H2LTJNWP6M" (10 chars)
-      if (trimmed.length === 11 && trimmed.startsWith("S")) {
-        trimmed = trimmed.slice(1);
+      // Valid serial = 10-12 chars. If starts with S and removing it gives valid length, strip it.
+      if (trimmed.startsWith("S") && trimmed.length >= 11 && trimmed.length <= 13) {
+        const candidate = trimmed.slice(1);
+        if (candidate.length >= 10 && candidate.length <= 12 && /[A-Z]/.test(candidate) && /[0-9]/.test(candidate)) {
+          trimmed = candidate;
+        }
       }
 
       if (!trimmed) return;

@@ -1206,7 +1206,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
 
   useEffect(() => {
     fetch("/api/fornecedores", { headers: { "x-admin-password": password } })
-      .then(r => r.json()).then(d => setFornecedores(d.fornecedores ?? [])).catch(() => {});
+      .then(r => r.json()).then(d => setFornecedores(d.data ?? d.fornecedores ?? [])).catch(() => {});
   }, [password]);
 
   const handleScan = async (code: string) => {
