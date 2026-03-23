@@ -214,8 +214,18 @@ export default function AnalyticsVendasPage() {
           ticketAtual: d.ticketMedio ?? 0,
           ticketAnterior: 0,
         })),
-        margemCanal: (json.margemPorCanal || []),
-        origemClientes: (json.origemClientes || []),
+        margemCanal: (json.margemPorCanal || []).map((c: any) => ({
+          origem: c.origem || "N/A",
+          vendas: c.vendas ?? 0,
+          receita: c.receita ?? 0,
+          lucro: c.lucro ?? 0,
+          margem: c.margem ?? 0,
+        })),
+        origemClientes: (json.origemClientes || []).map((o: any) => ({
+          origem: o.origem || "N/A",
+          qtd: o.qtd ?? 0,
+          pct: o.pct ?? o.percentual ?? 0,
+        })),
         regiao: json.vendasPorRegiao || { bairros: [], cidades: [] },
       };
       setData(transformed);
