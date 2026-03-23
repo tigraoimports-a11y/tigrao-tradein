@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id } = body;
+  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id, produto, tipo, detalhes_upgrade, forma_pagamento, valor, vendedor, regiao } = body;
 
   if (!cliente || !data_entrega) {
     return NextResponse.json({ error: "Cliente e data_entrega obrigatórios" }, { status: 400 });
@@ -51,6 +51,13 @@ export async function POST(req: NextRequest) {
       entregador: entregador || null,
       observacao: observacao || null,
       venda_id: venda_id || null,
+      produto: produto || null,
+      tipo: tipo || null,
+      detalhes_upgrade: detalhes_upgrade || null,
+      forma_pagamento: forma_pagamento || null,
+      valor: valor != null ? valor : null,
+      vendedor: vendedor || null,
+      regiao: regiao || null,
     })
     .select()
     .single();

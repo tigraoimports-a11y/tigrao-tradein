@@ -17,6 +17,13 @@ interface Entrega {
   entregador: string | null;
   observacao: string | null;
   updated_at: string | null;
+  produto: string | null;
+  tipo: string | null;
+  detalhes_upgrade: string | null;
+  forma_pagamento: string | null;
+  valor: number | null;
+  vendedor: string | null;
+  regiao: string | null;
 }
 
 type EntregaStatus = Entrega["status"];
@@ -70,6 +77,8 @@ export default function EntregasPage() {
 
   const { days, from, to } = getWeekRange(weekOffset);
 
+  const [copied, setCopied] = useState(false);
+
   const [form, setForm] = useState({
     cliente: "",
     telefone: "",
@@ -79,6 +88,13 @@ export default function EntregasPage() {
     horario: "",
     entregador: "",
     observacao: "",
+    produto: "",
+    tipo: "",
+    detalhes_upgrade: "",
+    forma_pagamento: "",
+    valor: "",
+    vendedor: "",
+    regiao: "",
   });
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
@@ -121,12 +137,19 @@ export default function EntregasPage() {
         horario: form.horario || null,
         entregador: form.entregador || null,
         observacao: form.observacao || null,
+        produto: form.produto || null,
+        tipo: form.tipo || null,
+        detalhes_upgrade: form.detalhes_upgrade || null,
+        forma_pagamento: form.forma_pagamento || null,
+        valor: form.valor ? parseFloat(form.valor) : null,
+        vendedor: form.vendedor || null,
+        regiao: form.regiao || null,
       }),
     });
     const json = await res.json();
     if (json.ok) {
       setMsg("Entrega agendada!");
-      setForm({ cliente: "", telefone: "", endereco: "", bairro: "", data_entrega: new Date().toISOString().split("T")[0], horario: "", entregador: "", observacao: "" });
+      setForm({ cliente: "", telefone: "", endereco: "", bairro: "", data_entrega: new Date().toISOString().split("T")[0], horario: "", entregador: "", observacao: "", produto: "", tipo: "", detalhes_upgrade: "", forma_pagamento: "", valor: "", vendedor: "", regiao: "" });
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -144,6 +167,41 @@ export default function EntregasPage() {
     if (res.ok) {
       setEntregas((prev) => prev.map((e) => (e.id === entrega.id ? { ...e, status: newStatus } : e)));
       setSelectedEntrega(null);
+    }
+  };
+
+  const buildWhatsAppText = () => {
+    const lines = [
+      `🛵 ENTREGA ${form.regiao || "—"} 🛵`,
+      "",
+      `⏰ HORARIO: ${form.horario || "—"}`,
+      `📍 LOCAL: ${form.endereco || "—"}`,
+      `🍎 PRODUTO: ${form.produto || "—"}`,
+      `‼️ TIPO: ${form.tipo || "—"}${form.detalhes_upgrade ? ` ${form.detalhes_upgrade}` : ""}`,
+      `💵 PAGAMENTO: ${form.forma_pagamento || "—"} R$${form.valor || "0"}`,
+      `🧑 CLIENTE: ${form.cliente || "—"}`,
+      `📞 CONTATO: ${form.telefone || "—"}`,
+      `📝 Observacao: ${form.observacao || "—"}`,
+      `💼 Vendedor: ${form.vendedor || "—"}`,
+    ];
+    return lines.join("\n");
+  };
+
+  const handleCopyWhatsApp = async () => {
+    try {
+      await navigator.clipboard.writeText(buildWhatsAppText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = buildWhatsAppText();
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -206,6 +264,66 @@ export default function EntregasPage() {
               <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereco completo" className={inputCls} />
             </div>
             <div>
+              <p className={labelCls}>Regiao</p>
+              <select value={form.regiao} onChange={(e) => set("regiao", e.target.value)} className={inputCls}>
+                <option value="">-- Selecionar --</option>
+                <option value="BARRA">Barra</option>
+                <option value="RECREIO">Recreio</option>
+                <option value="JACAREPAGUA">Jacarepagua</option>
+                <option value="CENTRO">Centro</option>
+                <option value="ZONA SUL">Zona Sul</option>
+                <option value="ZONA NORTE">Zona Norte</option>
+                <option value="NITEROI">Niteroi</option>
+                <option value="OUTRA">Outra</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <p className={labelCls}>Produto</p>
+              <input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 17 256GB Lavanda" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Tipo</p>
+              <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
+                <option value="">-- Selecionar --</option>
+                <option value="VENDA NORMAL">Venda Normal</option>
+                <option value="UPGRADE">Upgrade</option>
+                <option value="TROCA">Troca</option>
+                <option value="ATACADO">Atacado</option>
+              </select>
+            </div>
+            {(form.tipo === "UPGRADE" || form.tipo === "TROCA") && (
+              <div className="col-span-2 md:col-span-3">
+                <p className={labelCls}>Detalhes do upgrade/troca</p>
+                <input value={form.detalhes_upgrade} onChange={(e) => set("detalhes_upgrade", e.target.value)} placeholder="Descricao do aparelho usado" className={inputCls} />
+              </div>
+            )}
+            <div>
+              <p className={labelCls}>Forma de Pagamento</p>
+              <select value={form.forma_pagamento} onChange={(e) => set("forma_pagamento", e.target.value)} className={inputCls}>
+                <option value="">-- Selecionar --</option>
+                <option value="Pix">Pix</option>
+                <option value="Cartao Credito">Cartao Credito</option>
+                <option value="Cartao Debito">Cartao Debito</option>
+                <option value="Especie">Especie</option>
+                <option value="Link de Pagamento">Link de Pagamento</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Definir depois">Definir depois</option>
+              </select>
+            </div>
+            <div>
+              <p className={labelCls}>Valor (R$)</p>
+              <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Vendedor</p>
+              <select value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} className={inputCls}>
+                <option value="">-- Selecionar --</option>
+                <option value="Andre">Andre</option>
+                <option value="Bianca">Bianca</option>
+                <option value="Nicolas">Nicolas</option>
+              </select>
+            </div>
+            <div>
               <p className={labelCls}>Data da Entrega</p>
               <input type="date" value={form.data_entrega} onChange={(e) => set("data_entrega", e.target.value)} className={inputCls} />
             </div>
@@ -239,13 +357,21 @@ export default function EntregasPage() {
               <input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes, instrucoes..." className={inputCls} />
             </div>
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
-          >
-            {saving ? "Salvando..." : "Agendar Entrega"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleCopyWhatsApp}
+              className="flex-1 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors text-sm"
+            >
+              {copied ? "Copiado!" : "📋 Copiar para WhatsApp"}
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            >
+              {saving ? "Salvando..." : "Agendar Entrega"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -449,6 +575,38 @@ export default function EntregasPage() {
                   <div className="text-sm">
                     <span className="text-[#86868B]">Entregador: </span>
                     <span className="text-[#1D1D1F]">{e.entregador}</span>
+                  </div>
+                )}
+                {e.produto && (
+                  <div className="text-sm">
+                    <span className="text-[#86868B]">Produto: </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.produto}</span>
+                  </div>
+                )}
+                {e.tipo && (
+                  <div className="text-sm">
+                    <span className="text-[#86868B]">Tipo: </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.tipo}</span>
+                    {e.detalhes_upgrade && <span className="text-[#86868B]"> — {e.detalhes_upgrade}</span>}
+                  </div>
+                )}
+                {e.forma_pagamento && (
+                  <div className="text-sm">
+                    <span className="text-[#86868B]">Pagamento: </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
+                    {e.valor != null && <span className="text-[#1D1D1F]"> R${e.valor}</span>}
+                  </div>
+                )}
+                {e.vendedor && (
+                  <div className="text-sm">
+                    <span className="text-[#86868B]">Vendedor: </span>
+                    <span className="text-[#1D1D1F]">{e.vendedor}</span>
+                  </div>
+                )}
+                {e.regiao && (
+                  <div className="text-sm">
+                    <span className="text-[#86868B]">Regiao: </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.regiao}</span>
                   </div>
                 )}
                 {e.observacao && (
