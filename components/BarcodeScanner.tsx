@@ -49,7 +49,11 @@ export default function BarcodeScanner({
 
   const handleSubmit = useCallback(
     (code: string) => {
-      const trimmed = code.trim().toUpperCase();
+      let trimmed = code.trim().toUpperCase();
+      // Clean Apple barcode prefixes: "(S) " or "(S)" from Serial Number barcodes
+      trimmed = trimmed.replace(/^\(S\)\s*/i, "");
+      // Remove any non-alphanumeric chars that scanners might add
+      trimmed = trimmed.replace(/^[^A-Z0-9]+/, "");
       if (trimmed.length >= 5) {
         onScan(trimmed);
         setInputValue("");
