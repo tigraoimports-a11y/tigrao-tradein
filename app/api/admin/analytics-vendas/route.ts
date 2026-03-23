@@ -352,21 +352,28 @@ export async function GET(req: NextRequest) {
 
     // Accumulated profit this month
     const lucroAcumuladoMes = vendasMesAtual.reduce((s, v) => s + Number(v.lucro || 0), 0);
+    const faturamentoAcumuladoMes = vendasMesAtual.reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+    const vendasAcumuladasMes = vendasMesAtual.length;
 
-    // Project remaining days
+    // ── PROJEÇÃO BASEADA NO MÊS ATUAL ──
+    // Simple and accurate: use current month's daily average to project remaining days
+    const mediaDiariaLucro = safeDivide(lucroAcumuladoMes, diaAtual);
+    const mediaDiariaFaturamento = safeDivide(faturamentoAcumuladoMes, diaAtual);
+    const mediaDiariaVendas = safeDivide(vendasAcumuladasMes, diaAtual);
+
     const ultimoDiaMesAtual = new Date(anoAtual, mesAtual + 1, 0).getDate();
+    const diasRestantesCount = ultimoDiaMesAtual - diaAtual;
+
     const diasRestantes: { data: string; diaSemana: string; lucroProjetado: number }[] = [];
     let lucroProjetadoRestante = 0;
 
     for (let dia = diaAtual + 1; dia <= ultimoDiaMesAtual; dia++) {
       const date = new Date(anoAtual, mesAtual, dia);
       const dow = date.getDay();
-      const week = getWeekOfMonth(dia);
       const dateStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
 
-      const baseLucro = mediasPorDiaSemana[dow].mediaLucro;
-      const multiplier = weekMultiplier[week] ?? 1;
-      const lucroProjetado = Math.round(baseLucro * multiplier);
+      // Use current month's daily average as projection per day
+      const lucroProjetado = Math.round(mediaDiariaLucro);
 
       diasRestantes.push({
         data: dateStr,
