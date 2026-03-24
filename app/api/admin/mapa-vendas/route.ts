@@ -176,6 +176,60 @@ const BAIRRO_COORDS: Record<string, { lat: number; lng: number }> = {
   // Outros bairros frequentes
   "Freguesia (Jacarepaguá)": { lat: -22.9330, lng: -43.3481 },
   "Jardim Atlântico": { lat: -22.9527, lng: -42.9835 },
+  // Bairros faltantes RJ capital
+  "Vila da Penha": { lat: -22.8410, lng: -43.3100 },
+  "Lins de Vasconcelos": { lat: -22.9002, lng: -43.2700 },
+  "Pavuna": { lat: -22.8208, lng: -43.3618 },
+  "Sampaio": { lat: -22.8995, lng: -43.2607 },
+  "Maré": { lat: -22.8557, lng: -43.2472 },
+  "Galeão": { lat: -22.8133, lng: -43.2500 },
+  "Campo dos Afonsos": { lat: -22.8782, lng: -43.3832 },
+  "Tauá": { lat: -22.8038, lng: -43.1907 },
+  "Ribeira": { lat: -22.8115, lng: -43.1880 },
+  "Humaitá": { lat: -22.9546, lng: -43.1978 },
+  "Gávea": { lat: -22.9812, lng: -43.2334 },
+  "Maracanã": { lat: -22.9116, lng: -43.2302 },
+  "Grajaú": { lat: -22.9204, lng: -43.2598 },
+  "Andaraí": { lat: -22.9232, lng: -43.2467 },
+  // São Gonçalo bairros
+  "Paraíso": { lat: -22.8278, lng: -43.0490 },
+  "Porto Novo": { lat: -22.8509, lng: -43.0734 },
+  "Antonina": { lat: -22.8170, lng: -43.0310 },
+  "Pacheco": { lat: -22.8320, lng: -43.0580 },
+  // Niterói extras
+  "Maceió": { lat: -22.8890, lng: -43.1050 },
+  // Maricá extras
+  "Cordeirinho (Ponta Negra)": { lat: -22.9350, lng: -42.8400 },
+  "Recanto de Itaipuaçu (Itaipuaçu)": { lat: -22.9520, lng: -42.9800 },
+  // Duque de Caxias extras
+  "Jardim Leal": { lat: -22.7850, lng: -43.3050 },
+  "Pilar": { lat: -22.7700, lng: -43.2950 },
+  "Parque Xerém": { lat: -22.5800, lng: -43.2950 },
+  "Chácaras Rio-Petrópolis": { lat: -22.6100, lng: -43.2700 },
+  // Nova Iguaçu extras
+  "Austin": { lat: -22.7450, lng: -43.4380 },
+  "Jardim Belo Horizonte": { lat: -22.7520, lng: -43.4600 },
+  // Outras cidades
+  "Retiro": { lat: -22.5150, lng: -44.1060 },
+  "Nogueira": { lat: -22.4800, lng: -43.1900 },
+  "Geribá": { lat: -22.7700, lng: -41.8900 },
+  "Campo Lindo": { lat: -22.7500, lng: -43.6500 },
+  "Seropédica": { lat: -22.7267, lng: -43.7094 },
+  "Saquarema": { lat: -22.9197, lng: -42.5100 },
+  "Bacaxá (Bacaxá)": { lat: -22.8800, lng: -42.5200 },
+  // Fora do RJ
+  "Goiânia": { lat: -16.6869, lng: -49.2648 },
+  "Jardim Goiás": { lat: -16.6900, lng: -49.2400 },
+  "Brasília": { lat: -15.7975, lng: -47.8919 },
+  "Setor Sudoeste": { lat: -15.8000, lng: -47.9200 },
+  "Belo Horizonte": { lat: -19.9167, lng: -43.9345 },
+  "Funcionários": { lat: -19.9300, lng: -43.9300 },
+  "Recife": { lat: -8.0476, lng: -34.8770 },
+  "Torrões": { lat: -8.0500, lng: -34.9300 },
+  "Pinheiros": { lat: -23.5614, lng: -46.6930 },
+  "Canela": { lat: -29.3656, lng: -50.8122 },
+  "Luiza Corrêa": { lat: -29.3600, lng: -50.8100 },
+  "Armação dos Búzios": { lat: -22.7488, lng: -41.8819 },
 };
 
 function normalizeBairroName(nome: string): string {
@@ -186,15 +240,66 @@ function normalizeBairroName(nome: string): string {
     .trim();
 }
 
-function findBairroCoords(nome: string): { lat: number; lng: number } | null {
+// Fallback: city center coordinates when bairro not found
+const CIDADE_COORDS: Record<string, { lat: number; lng: number }> = {
+  "rio de janeiro": { lat: -22.9068, lng: -43.1729 },
+  "niteroi": { lat: -22.8833, lng: -43.1036 },
+  "niterói": { lat: -22.8833, lng: -43.1036 },
+  "sao goncalo": { lat: -22.8268, lng: -43.0634 },
+  "são gonçalo": { lat: -22.8268, lng: -43.0634 },
+  "duque de caxias": { lat: -22.7856, lng: -43.3117 },
+  "nova iguacu": { lat: -22.7556, lng: -43.4503 },
+  "nova iguaçu": { lat: -22.7556, lng: -43.4503 },
+  "sao joao de meriti": { lat: -22.8058, lng: -43.3728 },
+  "são joão de meriti": { lat: -22.8058, lng: -43.3728 },
+  "marica": { lat: -22.9187, lng: -42.8238 },
+  "maricá": { lat: -22.9187, lng: -42.8238 },
+  "itaborai": { lat: -22.7445, lng: -42.8594 },
+  "itaboraí": { lat: -22.7445, lng: -42.8594 },
+  "petropolis": { lat: -22.5046, lng: -43.1824 },
+  "petrópolis": { lat: -22.5046, lng: -43.1824 },
+  "volta redonda": { lat: -22.5231, lng: -44.1040 },
+  "seropedica": { lat: -22.7267, lng: -43.7094 },
+  "seropédica": { lat: -22.7267, lng: -43.7094 },
+  "saquarema": { lat: -22.9197, lng: -42.5100 },
+  "goiania": { lat: -16.6869, lng: -49.2648 },
+  "goiânia": { lat: -16.6869, lng: -49.2648 },
+  "brasilia": { lat: -15.7975, lng: -47.8919 },
+  "brasília": { lat: -15.7975, lng: -47.8919 },
+  "belo horizonte": { lat: -19.9167, lng: -43.9345 },
+  "recife": { lat: -8.0476, lng: -34.8770 },
+  "sao paulo": { lat: -23.5505, lng: -46.6333 },
+  "são paulo": { lat: -23.5505, lng: -46.6333 },
+  "armacao dos buzios": { lat: -22.7488, lng: -41.8819 },
+  "canela": { lat: -29.3656, lng: -50.8122 },
+  "macae": { lat: -22.3768, lng: -41.7869 },
+  "macaé": { lat: -22.3768, lng: -41.7869 },
+  "belford roxo": { lat: -22.7644, lng: -43.3994 },
+  "mesquita": { lat: -22.8022, lng: -43.4222 },
+  "nilopolis": { lat: -22.8058, lng: -43.4187 },
+  "nilópolis": { lat: -22.8058, lng: -43.4187 },
+};
+
+function findBairroCoords(nome: string, cidade?: string): { lat: number; lng: number } | null {
   const normalized = normalizeBairroName(nome);
+  // Exact match
   for (const [key, coords] of Object.entries(BAIRRO_COORDS)) {
     if (normalizeBairroName(key) === normalized) return coords;
   }
-  // Partial match fallback
+  // Partial match
   for (const [key, coords] of Object.entries(BAIRRO_COORDS)) {
     const nk = normalizeBairroName(key);
     if (nk.includes(normalized) || normalized.includes(nk)) return coords;
+  }
+  // Fallback: use city center coordinates
+  if (cidade) {
+    const cidadeNorm = cidade.toLowerCase().trim();
+    if (CIDADE_COORDS[cidadeNorm]) return CIDADE_COORDS[cidadeNorm];
+    // Try normalized
+    const cidadeNormalized = normalizeBairroName(cidade);
+    for (const [key, coords] of Object.entries(CIDADE_COORDS)) {
+      if (normalizeBairroName(key) === cidadeNormalized) return coords;
+    }
   }
   return null;
 }
@@ -267,20 +372,23 @@ export async function GET(req: NextRequest) {
     }[];
 
     // --- Aggregate by bairro (top 20) ---
-    const porBairro: Record<string, { qty: number; receita: number; lucro: number }> = {};
+    const porBairro: Record<string, { qty: number; receita: number; lucro: number; cidade: string }> = {};
     for (const v of rows) {
       const b = (v.bairro || "").trim() || "Nao informado";
-      if (!porBairro[b]) porBairro[b] = { qty: 0, receita: 0, lucro: 0 };
+      const cidade = (v.cidade || "").trim();
+      if (!porBairro[b]) porBairro[b] = { qty: 0, receita: 0, lucro: 0, cidade };
       porBairro[b].qty++;
       porBairro[b].receita += Number(v.preco_vendido || 0);
       porBairro[b].lucro += Number(v.lucro || 0);
+      if (cidade && !porBairro[b].cidade) porBairro[b].cidade = cidade;
     }
 
     const bairros = Object.entries(porBairro)
       .map(([nome, d]) => {
-        const coords = findBairroCoords(nome);
+        const coords = findBairroCoords(nome, d.cidade);
         return {
-          nome,
+          nome: d.cidade && d.cidade !== "Rio de Janeiro" && nome !== "Nao informado"
+            ? `${nome}, ${d.cidade}` : nome,
           qty: d.qty,
           receita: d.receita,
           lucro: d.lucro,
@@ -290,7 +398,7 @@ export async function GET(req: NextRequest) {
         };
       })
       .sort((a, b) => b.qty - a.qty)
-      .slice(0, 20);
+      .slice(0, 25);
 
     // --- Aggregate by cidade (top 10) ---
     const porCidade: Record<string, { qty: number; receita: number; lucro: number }> = {};
