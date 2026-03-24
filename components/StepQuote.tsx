@@ -22,7 +22,14 @@ interface StepQuoteProps {
 }
 
 async function salvarLead(lead: LeadSaiu & { formaPagamento?: string; origem?: string; motivoSaida?: string }) {
-  try { await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lead) }); } catch { /* silent */ }
+  try {
+    const res = await fetch("/api/leads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lead) });
+    const json = await res.json();
+    if (!json.ok) console.error("[salvarLead] Erro:", json.error);
+    else console.log("[salvarLead] Simulação salva com sucesso");
+  } catch (err) {
+    console.error("[salvarLead] Erro de rede:", err);
+  }
 }
 
 function buildFormaPag(entrada: number, dif: number, parc: string, qr: QuoteResult): string {
