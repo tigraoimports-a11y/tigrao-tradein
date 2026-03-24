@@ -140,33 +140,32 @@ export default function AdminPage() {
 
     if (filterModelo && d.modelo_novo !== filterModelo) return false;
 
-    // Converter created_at para data local (YYYY-MM-DD) no fuso de São Paulo
-    const createdDate = new Date(d.created_at).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // "2026-03-24"
-    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    // Comparar datas usando timestamp em milissegundos (timezone-safe)
+    const createdMs = new Date(d.created_at).getTime();
+    const nowMs = Date.now();
+    const DAY = 86400000; // 24h em ms
+    // Início do dia atual (meia-noite local do browser)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
 
     if (filterPeriod === "hoje") {
-      if (createdDate !== todayStr) return false;
+      if (createdMs < todayMs) return false;
     } else if (filterPeriod === "ontem") {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-      if (createdDate !== yesterdayStr) return false;
+      const yesterdayMs = todayMs - DAY;
+      if (createdMs < yesterdayMs || createdMs >= todayMs) return false;
     } else if (filterPeriod === "7dias") {
-      const since = new Date();
-      since.setDate(since.getDate() - 7);
-      const sinceStr = since.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-      if (createdDate < sinceStr) return false;
+      if (createdMs < todayMs - 7 * DAY) return false;
     } else if (filterPeriod === "30dias") {
-      const since = new Date();
-      since.setDate(since.getDate() - 30);
-      const sinceStr = since.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-      if (createdDate < sinceStr) return false;
+      if (createdMs < todayMs - 30 * DAY) return false;
     } else if (filterPeriod === "mes") {
-      const mesStr = todayStr.substring(0, 7); // "2026-03"
-      if (!createdDate.startsWith(mesStr)) return false;
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      if (createdMs < monthStart.getTime()) return false;
     } else if (filterPeriod === "personalizado") {
-      if (filterFrom && createdDate < filterFrom) return false;
-      if (filterTo && createdDate > filterTo) return false;
+      if (filterFrom && createdMs < new Date(filterFrom + "T00:00:00").getTime()) return false;
+      if (filterTo && createdMs > new Date(filterTo + "T23:59:59").getTime()) return false;
     }
 
     return true;
