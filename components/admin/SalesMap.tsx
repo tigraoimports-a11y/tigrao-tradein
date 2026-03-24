@@ -56,9 +56,10 @@ export default function SalesMap({ bairros }: SalesMapProps) {
 
     mapInstanceRef.current = map;
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 18,
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 19,
+      subdomains: "abcd",
     }).addTo(map);
 
     // Filter bairros that have coordinates
@@ -158,7 +159,7 @@ export default function SalesMap({ bairros }: SalesMapProps) {
       <div
         ref={mapRef}
         className="w-full rounded-xl overflow-hidden"
-        style={{ height: "400px" }}
+        style={{ height: "500px" }}
       />
     </div>
   );
