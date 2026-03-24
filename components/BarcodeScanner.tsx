@@ -262,26 +262,21 @@ export default function BarcodeScanner({
     <div className="space-y-3">
       {/* Mode selection buttons — shown when no mode is active */}
       {inputMode === "none" && (
-        <div className="flex flex-col gap-3">
+        <div className="flex gap-2">
           <button
             onClick={() => setInputMode("keyboard")}
             disabled={disabled}
-            className="w-full py-4 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-3 text-lg font-medium"
+            className="flex-1 py-1.5 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-1.5 text-xs font-medium"
           >
-            <span className="text-2xl">&#x2328;&#xFE0F;</span>
-            Digitar Número de Série
+            ⌨️ Digitar Serial
           </button>
           <button
             onClick={startCamera}
             disabled={disabled}
-            className="w-full py-4 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-3 text-lg font-medium"
+            className="flex-1 py-1.5 bg-[#1A1A1A] border border-[#333] rounded-lg text-white hover:border-[#E8740E] hover:bg-[#1E1208] transition-colors flex items-center justify-center gap-1.5 text-xs font-medium"
           >
-            <span className="text-2xl">&#x1F4F7;</span>
-            Escanear Número de Série
+            📷 Escanear
           </button>
-          <p className="text-[#555] text-xs text-center">
-            Leitor USB funciona automaticamente — basta bipar o código
-          </p>
         </div>
       )}
 

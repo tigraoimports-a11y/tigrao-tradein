@@ -1294,15 +1294,11 @@ export default function VendasPage() {
                 📟 Bipar Código
               </button>
               <button
-                onClick={() => { setScanMode(false); setProdutoManual(false); }}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${!scanMode && !produtoManual ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                onClick={() => { setScanMode(false); setProdutoManual(true); setEstoqueId(""); setCatSel(""); }}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${produtoManual ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
               >
-                📦 Seminovos / Avulsos
+                ✏️ Digitar manual
               </button>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={produtoManual} onChange={(e) => { setProdutoManual(e.target.checked); setScanMode(false); if (e.target.checked) { setEstoqueId(""); setCatSel(""); } }} className="accent-[#E8740E]" />
-                <span className="text-xs text-[#86868B]">Digitar manual</span>
-              </label>
             </div>
 
             {/* SCAN MODE: Bipar Serial Number */}
@@ -2579,7 +2575,7 @@ export default function VendasPage() {
                                               cnpj: v.cnpj || "",
                                               email: v.email || "",
                                               endereco: v.endereco || "",
-                                              pessoa: v.pessoa || "PF",
+                                              pessoa: (v.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: v.origem || "ANUNCIO",
                                               tipo: v.tipo || "VENDA",
                                               produto: v.produto,

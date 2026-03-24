@@ -46,6 +46,15 @@ export interface Venda {
   notas: string | null;
   imei: string | null;
   serial_no: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  email: string | null;
+  endereco: string | null;
+  pessoa: string | null;
+  cep: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
 }
 
 export interface Reajuste {
