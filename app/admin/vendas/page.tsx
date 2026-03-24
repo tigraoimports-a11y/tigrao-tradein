@@ -1094,7 +1094,7 @@ export default function VendasPage() {
           {/* Row 1: Origem + Tipo + Data */}
           <div className="grid grid-cols-3 gap-4">
             <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => { const v = e.target.value; set("origem", v); if (v === "ATACADO") { set("tipo", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } }} className={selectCls}>
-              <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option><option>ANDRE</option><option>NICOLAS</option><option>BIANCA</option><option>DIRECT</option><option>STORY</option><option>WHATSAPP</option>
+              <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option><option>NAO_INFORMARAM</option>
             </select></div>
             <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); set("local", ""); set("email", ""); set("cep", ""); } }} className={selectCls}>
               <option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>

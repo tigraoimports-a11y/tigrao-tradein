@@ -124,7 +124,13 @@ export async function GET(req: NextRequest) {
 
   // Build date filter
   let dateFilter: string | null = null;
-  if (range === "month") {
+  let dateFilterTo: string | null = null;
+  if (range === "custom") {
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (from) dateFilter = from;
+    if (to) dateFilterTo = to;
+  } else if (range === "month") {
     const now = new Date();
     dateFilter = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   } else if (range !== "all") {
@@ -156,6 +162,7 @@ export async function GET(req: NextRequest) {
       if (cep === "00000000") return false;
       // Filtrar por data se necessário
       if (dateFilter && v.data < dateFilter) return false;
+      if (dateFilterTo && v.data > dateFilterTo) return false;
       return true;
     });
 

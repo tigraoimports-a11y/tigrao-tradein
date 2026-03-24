@@ -53,7 +53,7 @@ interface MapaData {
   porDiaSemana: DiaSemanaData[];
 }
 
-type RangeOption = "7" | "month" | "30" | "90" | "all";
+type RangeOption = "7" | "month" | "30" | "90" | "all" | "custom";
 
 const BAR_COLORS = [
   "#E8740E", "#F5A623", "#3B82F6", "#2ECC71", "#8B5CF6",
@@ -70,11 +70,17 @@ export default function MapaVendasPage() {
   const [data, setData] = useState<MapaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeOption>("30");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/mapa-vendas?range=${range}`, {
+      let url = `/api/admin/mapa-vendas?range=${range}`;
+      if (range === "custom" && customFrom && customTo) {
+        url = `/api/admin/mapa-vendas?range=custom&from=${customFrom}&to=${customTo}`;
+      }
+      const res = await fetch(url, {
         headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       });
       if (res.ok) {
@@ -84,7 +90,7 @@ export default function MapaVendasPage() {
       /* ignore */
     }
     setLoading(false);
-  }, [password, range]);
+  }, [password, range, customFrom, customTo]);
 
   useEffect(() => {
     if (password) fetchData();
@@ -123,8 +129,8 @@ export default function MapaVendasPage() {
             Distribuicao geografica das vendas por bairro, cidade e estado
           </p>
         </div>
-        <div className="flex gap-2">
-          {(["7", "month", "30", "90", "all"] as const).map((r) => (
+        <div className="flex flex-wrap gap-2 items-center">
+          {(["7", "month", "30", "90", "all", "custom"] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -134,7 +140,7 @@ export default function MapaVendasPage() {
                   : "bg-white border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E] hover:text-[#E8740E]"
               }`}
             >
-              {r === "7" ? "7 dias" : r === "month" ? "Este mes" : r === "30" ? "30 dias" : r === "90" ? "90 dias" : "Tudo"}
+              {r === "7" ? "7 dias" : r === "month" ? "Este mes" : r === "30" ? "30 dias" : r === "90" ? "90 dias" : r === "all" ? "Tudo" : "Personalizado"}
             </button>
           ))}
           <button
@@ -144,6 +150,14 @@ export default function MapaVendasPage() {
             Atualizar
           </button>
         </div>
+        {range === "custom" && (
+          <div className="flex gap-2 items-center mt-2">
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs border border-[#D2D2D7] focus:border-[#E8740E] focus:outline-none" />
+            <span className="text-xs text-[#86868B]">até</span>
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="px-3 py-1.5 rounded-lg text-xs border border-[#D2D2D7] focus:border-[#E8740E] focus:outline-none" />
+            <button onClick={fetchData} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">Buscar</button>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
