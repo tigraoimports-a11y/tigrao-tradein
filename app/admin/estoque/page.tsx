@@ -447,6 +447,41 @@ export default function EstoquePage() {
         setMsg("Produto adicionado!");
       }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
+      setSpec({
+        ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
+        mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
+        mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
+        ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+        aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
+        air_modelo: "AIRPODS 4",
+      });
+      fetchEstoque();
+    } else { setMsg("Erro: " + json.error); }
+  };
+
+  // Adicionar variação de cor (mesmo produto, cor diferente)
+  const handleAddVariacao = async () => {
+    if (!form.cor) { setMsg("Preencha a cor da variacao"); return; }
+    const nomeProduto = hasStructuredFields ? buildProdutoName(form.categoria) : form.produto;
+    if (!nomeProduto) { setMsg("Preencha o produto primeiro"); return; }
+    const res = await fetch("/api/estoque", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+      body: JSON.stringify({
+        produto: nomeProduto, categoria: form.categoria,
+        qnt: parseInt(form.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
+        status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+        cor: form.cor, observacao: form.observacao || null,
+        tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
+        cliente: form.cliente || null, fornecedor: form.fornecedor || null,
+        imei: form.imei || null,
+      }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      setMsg(`Variacao "${form.cor}" adicionada!`);
+      // Limpa só cor, qtd e imei para adicionar outra variação rapidamente
+      setForm((f) => ({ ...f, cor: "", qnt: "1", imei: "" }));
       fetchEstoque();
     } else { setMsg("Erro: " + json.error); }
   };
@@ -919,7 +954,10 @@ export default function EstoquePage() {
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
-          <button onClick={handleSubmit} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">Adicionar</button>
+          <div className="flex gap-2">
+            <button onClick={handleSubmit} className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">Adicionar</button>
+            <button onClick={handleAddVariacao} className={`px-4 py-3 rounded-xl border-2 border-[#E8740E] text-[#E8740E] font-semibold hover:bg-[#E8740E] hover:text-white transition-colors text-sm whitespace-nowrap`}>+ Variacao de Cor</button>
+          </div>
         </div>
       ) : (
         /* LISTA */
