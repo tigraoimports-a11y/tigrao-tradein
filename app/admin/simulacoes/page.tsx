@@ -140,32 +140,41 @@ export default function AdminPage() {
 
     if (filterModelo && d.modelo_novo !== filterModelo) return false;
 
-    // Comparar datas usando timestamp em milissegundos (timezone-safe)
-    const createdMs = new Date(d.created_at).getTime();
-    const nowMs = Date.now();
-    const DAY = 86400000; // 24h em ms
-    // Início do dia atual (meia-noite local do browser)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayMs = todayStart.getTime();
+    // Extrair data YYYY-MM-DD do created_at (suporta timestamp e date string)
+    const raw = d.created_at || "";
+    // Se for "2026-03-24T14:30:00Z" ou "2026-03-24T14:30:00+00:00" → extrair data local
+    // Se for "2026-03-24" (só data) → usar direto
+    let createdDateStr: string;
+    if (raw.includes("T") || raw.includes(" ")) {
+      // É timestamp — converter para data local do browser
+      const dt = new Date(raw);
+      createdDateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    } else {
+      createdDateStr = raw.substring(0, 10); // "2026-03-24"
+    }
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
     if (filterPeriod === "hoje") {
-      if (createdMs < todayMs) return false;
+      if (createdDateStr !== todayStr) return false;
     } else if (filterPeriod === "ontem") {
-      const yesterdayMs = todayMs - DAY;
-      if (createdMs < yesterdayMs || createdMs >= todayMs) return false;
+      const y = new Date(now); y.setDate(y.getDate() - 1);
+      const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+      if (createdDateStr !== yStr) return false;
     } else if (filterPeriod === "7dias") {
-      if (createdMs < todayMs - 7 * DAY) return false;
+      const s = new Date(now); s.setDate(s.getDate() - 7);
+      const sStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+      if (createdDateStr < sStr) return false;
     } else if (filterPeriod === "30dias") {
-      if (createdMs < todayMs - 30 * DAY) return false;
+      const s = new Date(now); s.setDate(s.getDate() - 30);
+      const sStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+      if (createdDateStr < sStr) return false;
     } else if (filterPeriod === "mes") {
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-      if (createdMs < monthStart.getTime()) return false;
+      if (!createdDateStr.startsWith(todayStr.substring(0, 7))) return false;
     } else if (filterPeriod === "personalizado") {
-      if (filterFrom && createdMs < new Date(filterFrom + "T00:00:00").getTime()) return false;
-      if (filterTo && createdMs > new Date(filterTo + "T23:59:59").getTime()) return false;
+      if (filterFrom && createdDateStr < filterFrom) return false;
+      if (filterTo && createdDateStr > filterTo) return false;
     }
 
     return true;
