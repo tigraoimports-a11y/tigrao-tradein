@@ -485,6 +485,7 @@ export default function EstoquePage() {
       });
       setVariacoes([]);
       fetchEstoque();
+      setTab("estoque"); // Voltar pra tela principal
     } else { setMsg("Erro: " + json.error); }
   };
 
