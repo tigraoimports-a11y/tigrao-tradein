@@ -136,6 +136,7 @@ export default function EstoquePage() {
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
+  const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -458,6 +459,24 @@ export default function EstoquePage() {
       } catch {
         setMsg("Produto adicionado!");
       }
+      // Criar variações de cor adicionais
+      const validVariacoes = variacoes.filter((v) => v.cor.trim());
+      for (const v of validVariacoes) {
+        await fetch("/api/estoque", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+          body: JSON.stringify({
+            produto: nomeProduto, categoria: form.categoria,
+            qnt: parseInt(v.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
+            status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+            cor: v.cor.trim(), observacao: form.observacao || null,
+            tipo: form.tipo, fornecedor: form.fornecedor || null,
+          }),
+        });
+      }
+      if (validVariacoes.length > 0) {
+        setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor!`);
+      }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       setSpec({
         ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
@@ -467,6 +486,7 @@ export default function EstoquePage() {
         aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
         air_modelo: "AIRPODS 4",
       });
+      setVariacoes([]);
       fetchEstoque();
     } else { setMsg("Erro: " + json.error); }
   };
@@ -517,7 +537,7 @@ export default function EstoquePage() {
 
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
-  const emEstoque = novos.filter((p) => p.qnt > 0);
+  const emEstoque = novos; // Mostrar todos os produtos novos, mesmo com qnt 0
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
@@ -925,9 +945,9 @@ export default function EstoquePage() {
             <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Numero do IMEI (opcional)" className={inputCls} />
           </div>
 
-          {/* Row: Cor, Qtd, Custo, Fornecedor */}
+          {/* Row: Cor + Qtd principal */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls} /></div>
+            <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver" className={inputCls} /></div>
             <div><p className={labelCls}>Quantidade</p><input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Custo unitario (R$)</p><input type="number" value={form.custo_unitario} onChange={(e) => set("custo_unitario", e.target.value)} className={inputCls} /></div>
             <div>
@@ -956,6 +976,24 @@ export default function EstoquePage() {
               )}
             </div>
           </div>
+
+          {/* Variações de cor adicionais */}
+          {variacoes.length > 0 && (
+            <div className={`p-3 rounded-xl ${bgSection} space-y-2`}>
+              <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Variacoes de cor</p>
+              {variacoes.map((v, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} />
+                  <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={`${inputCls} w-20`} />
+                  <span className={`text-xs ${textSecondary}`}>un.</span>
+                  <button onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700 text-sm font-bold">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={() => setVariacoes([...variacoes, { cor: "", qnt: "1" }])} className={`w-full py-2 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-sm font-medium transition-colors`}>
+            + Adicionar variacao de cor
+          </button>
           {form.tipo === "SEMINOVO" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
@@ -966,10 +1004,9 @@ export default function EstoquePage() {
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
-          <div className="flex gap-2">
-            <button onClick={handleSubmit} className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">Adicionar</button>
-            <button onClick={handleAddVariacao} className={`px-4 py-3 rounded-xl border-2 border-[#E8740E] text-[#E8740E] font-semibold hover:bg-[#E8740E] hover:text-white transition-colors text-sm whitespace-nowrap`}>+ Variacao de Cor</button>
-          </div>
+          <button onClick={handleSubmit} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">
+            {variacoes.length > 0 ? `Adicionar (${variacoes.length + 1} variacoes)` : "Adicionar"}
+          </button>
         </div>
       ) : (
         /* LISTA */
