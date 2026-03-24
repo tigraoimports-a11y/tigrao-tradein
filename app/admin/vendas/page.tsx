@@ -2578,21 +2578,23 @@ export default function VendasPage() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
-                                            // Buscar dados do seminovo na troca (PENDENCIA) se a venda tem produto_na_troca
+                                            // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca
                                             let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
                                             if (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0) {
                                               try {
-                                                const res = await fetch(`/api/estoque?search=${encodeURIComponent(v.cliente)}&status=PENDENTE,SEMINOVO`, {
+                                                const res = await fetch("/api/estoque", {
                                                   headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
                                                 });
                                                 if (res.ok) {
                                                   const estoqueData = await res.json();
-                                                  const items = estoqueData.estoque || estoqueData || [];
-                                                  // Buscar item da pendência que bate com o valor e data da venda
-                                                  const pendencia = items.find((p: { custo_unitario: number; data_compra: string | null; cliente: string | null; tipo: string }) =>
+                                                  const allItems = estoqueData.data || estoqueData || [];
+                                                  const firstName = v.cliente.toUpperCase().split(" ")[0];
+                                                  const trocaVal = parseFloat(String(v.produto_na_troca));
+                                                  // Buscar pendência/seminovo que bate com cliente + valor da troca
+                                                  const pendencia = allItems.find((p: { custo_unitario: number; cliente: string | null; tipo: string; produto: string; cor: string | null; bateria: number | null; observacao: string | null }) =>
                                                     (p.tipo === "PENDENCIA" || p.tipo === "SEMINOVO") &&
-                                                    (p.cliente || "").toUpperCase().includes(v.cliente.toUpperCase().split(" ")[0]) &&
-                                                    Math.abs(Number(p.custo_unitario) - parseFloat(String(v.produto_na_troca))) < 10
+                                                    (p.cliente || "").toUpperCase().includes(firstName) &&
+                                                    Math.abs(Number(p.custo_unitario) - trocaVal) < 50
                                                   );
                                                   if (pendencia) {
                                                     trocaProd = pendencia.produto || "";
