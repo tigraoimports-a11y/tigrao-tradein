@@ -24,6 +24,7 @@ export default function VendasPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
@@ -675,6 +676,35 @@ export default function VendasPage() {
       return;
     }
 
+    // MODO EDIÇÃO: atualizar venda existente via PATCH
+    if (editandoVendaId) {
+      const prod = allProducts[0]; // edição é sempre 1 produto
+      const payload = buildPayload(prod);
+      try {
+        const res = await fetch("/api/vendas", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-password": password },
+          body: JSON.stringify({ id: editandoVendaId, ...payload }),
+        });
+        const json = await res.json();
+        if (json.ok || json.data) {
+          setEditandoVendaId(null);
+          setDuplicadoInfo(null);
+          setProdutosCarrinho([]);
+          clearProductFields();
+          setMsg("Venda atualizada com sucesso!");
+          fetchVendas();
+          fetchEstoque();
+        } else {
+          setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido"));
+        }
+      } catch {
+        setMsg("Erro de rede ao atualizar venda");
+      }
+      setSaving(false);
+      return;
+    }
+
     let successCount = 0;
     const errors: string[] = [];
 
@@ -992,6 +1022,28 @@ export default function VendasPage() {
             </div>
           )}
 
+          {/* Banner de edição */}
+          {editandoVendaId && (
+            <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: "#E3F2FD", border: "1px solid #2196F3" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✏️</span>
+                <p className="text-sm font-semibold" style={{ color: "#0D47A1" }}>
+                  Editando venda de {form.cliente || "..."} — {form.produto || "..."}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setEditandoVendaId(null);
+                  setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
+                  setMsg("");
+                }}
+                className="text-xs text-red-500 hover:text-red-700 font-semibold"
+              >
+                Cancelar edicao
+              </button>
+            </div>
+          )}
+
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6`}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
@@ -1067,7 +1119,7 @@ export default function VendasPage() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="relative"><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => { set("cliente", e.target.value); setShowClienteSuggestions(true); }} onFocus={() => setShowClienteSuggestions(true)} onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} />
+                <div className="relative"><p className={labelCls}>{form.pessoa === "PJ" ? "Razão Social" : "Cliente"}</p><input value={form.cliente} onChange={(e) => { set("cliente", e.target.value.toUpperCase()); setShowClienteSuggestions(true); }} onFocus={() => setShowClienteSuggestions(true)} onBlur={() => setTimeout(() => setShowClienteSuggestions(false), 200)} placeholder={form.pessoa === "PJ" ? "Nome da empresa" : "Nome completo"} className={inputCls} />
                   {/* Dropdown Clientes Recorrentes */}
                   {showClienteSuggestions && clientesRecorrentes.length > 0 && (
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
@@ -1465,9 +1517,23 @@ export default function VendasPage() {
               </select></div>
 
               {form.forma === "PIX" && (
+                <>
                 <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                   <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                 </select></div>
+                <div><p className={labelCls}>Valor do PIX (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
+                  const v = e.target.value;
+                  set("valor_comprovante_input", v);
+                  // PIX é 100% líquido — preco_vendido = valor PIX + troca + espécie
+                  if (produtosCarrinho.length === 0) {
+                    const pixVal = parseFloat(v) || 0;
+                    if (pixVal > 0) {
+                      const totalLiq = Math.round(pixVal + (parseFloat(form.entrada_especie) || 0) + (parseFloat(form.produto_na_troca) || 0));
+                      setForm(f => ({ ...f, valor_comprovante_input: v, preco_vendido: String(totalLiq) }));
+                    }
+                  }
+                }} placeholder="Valor transferido" className={inputCls} /></div>
+                </>
               )}
 
               {form.forma === "CARTAO" && (
@@ -1972,7 +2038,7 @@ export default function VendasPage() {
               disabled={saving}
               className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
             >
-              {saving ? "Salvando..." : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -2505,27 +2571,58 @@ export default function VendasPage() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setEditForm({
+                                            // Preencher formulário Nova Venda com dados da venda para edição completa
+                                            setForm({
+                                              data: v.data || new Date().toISOString().split("T")[0],
                                               cliente: v.cliente,
+                                              cpf: v.cpf || "",
+                                              cnpj: v.cnpj || "",
+                                              email: v.email || "",
+                                              endereco: v.endereco || "",
+                                              pessoa: v.pessoa || "PF",
+                                              origem: v.origem || "ANUNCIO",
+                                              tipo: v.tipo || "VENDA",
                                               produto: v.produto,
-                                              custo: String(v.custo),
-                                              preco_vendido: String(v.preco_vendido),
-                                              banco: v.banco,
-                                              forma: v.forma,
-                                              recebimento: v.recebimento,
+                                              fornecedor: v.fornecedor || "",
+                                              custo: String(v.custo || ""),
+                                              preco_vendido: String(v.preco_vendido || ""),
+                                              valor_comprovante_input: String(v.valor_comprovante || ""),
+                                              banco: v.banco || "ITAU",
+                                              forma: v.forma || "",
                                               qnt_parcelas: String(v.qnt_parcelas || ""),
                                               bandeira: v.bandeira || "",
-                                              entrada_pix: String(v.entrada_pix || 0),
-                                              entrada_especie: String(v.entrada_especie || 0),
-                                              banco_pix: v.banco_pix || "",
-                                              valor_comprovante: String(v.valor_comprovante || ""),
-                                              produto_na_troca: String(v.produto_na_troca || 0),
+                                              local: v.local || "",
+                                              produto_na_troca: String(v.produto_na_troca || ""),
+                                              entrada_pix: String(v.entrada_pix || ""),
+                                              banco_pix: v.banco_pix || "ITAU",
+                                              entrada_especie: String(v.entrada_especie || ""),
+                                              banco_2nd: v.banco_2nd || "",
                                               banco_alt: v.banco_alt || "",
                                               parc_alt: String(v.parc_alt || ""),
                                               band_alt: v.band_alt || "",
                                               comp_alt: String(v.comp_alt || ""),
+                                              sinal_antecipado: String(v.sinal_antecipado || ""),
+                                              banco_sinal: v.banco_sinal || "",
+                                              troca_produto: "",
+                                              troca_cor: "",
+                                              troca_bateria: "",
+                                              troca_obs: "",
+                                              troca_grade: "",
+                                              troca_caixa: "",
+                                              troca_cabo: "",
+                                              troca_fonte: "",
+                                              serial_no: v.serial_no || "",
+                                              imei: v.imei || "",
+                                              cep: v.cep || "",
+                                              bairro: v.bairro || "",
+                                              cidade: v.cidade || "",
+                                              uf: v.uf || "",
                                             });
-                                            setEditingId(v.id);
+                                            setProdutoManual(true);
+                                            setProdutosCarrinho([]);
+                                            setEditandoVendaId(v.id);
+                                            setTab("nova");
+                                            window.scrollTo({ top: 0, behavior: "smooth" });
                                           }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
                                         >

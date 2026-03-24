@@ -76,8 +76,30 @@ export async function POST(req: NextRequest) {
           .from("etiquetas")
           .update({ estoque_id: estoqueRow.id })
           .eq("id", etiqueta.id);
+      } else {
+        // Auto-criar produto no estoque a partir da etiqueta
+        const { data: newEstoque } = await supabase
+          .from("estoque")
+          .insert({
+            produto: produtoNome,
+            categoria: etiqueta.categoria || "OUTROS",
+            cor: etiqueta.cor || "",
+            qnt: 1,
+            custo_unitario: etiqueta.custo_unitario || 0,
+            fornecedor: etiqueta.fornecedor || "",
+            status: "EM ESTOQUE",
+            tipo: "NOVO",
+          })
+          .select()
+          .single();
+
+        if (newEstoque) {
+          await supabase
+            .from("etiquetas")
+            .update({ estoque_id: newEstoque.id })
+            .eq("id", etiqueta.id);
+        }
       }
-      // Se não encontrar no estoque, só atualiza a etiqueta (produto pode não estar cadastrado ainda)
 
       // 3. Registrar movimentação
       await supabase.from("movimentacoes_estoque").insert({

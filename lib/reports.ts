@@ -134,15 +134,31 @@ export async function gerarNoite(
 
   const d1rows = (vendasD1 ?? []) as Venda[];
   let d1_itau = 0, d1_inf = 0, d1_mp = 0;
+  const comprovantesContadosNoite = new Set<string>();
 
   for (const v of d1rows) {
     const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
     const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
     if (recebISO === dataISO) {
-      const val = Number(v.preco_vendido);
-      if (v.banco === "ITAU") d1_itau += val;
-      else if (v.banco === "INFINITE") d1_inf += val;
-      else if (v.banco === "MERCADO_PAGO") d1_mp += val;
+      const comprovante = Number(v.valor_comprovante || 0);
+      if (comprovante > 0) {
+        const chave = `${v.banco}_${v.cliente}_${comprovante}_${v.data}`;
+        if (comprovantesContadosNoite.has(chave)) continue;
+        comprovantesContadosNoite.add(chave);
+        const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
+        const val = calcularLiquido(comprovante, taxa);
+        if (v.banco === "ITAU") d1_itau += val;
+        else if (v.banco === "INFINITE") d1_inf += val;
+        else if (v.banco === "MERCADO_PAGO") d1_mp += val;
+      } else {
+        // Fallback: preco_vendido - partes que já entraram no D+0
+        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+        if (val > 0) {
+          if (v.banco === "ITAU") d1_itau += val;
+          else if (v.banco === "INFINITE") d1_inf += val;
+          else if (v.banco === "MERCADO_PAGO") d1_mp += val;
+        }
+      }
     }
   }
 
@@ -292,11 +308,13 @@ export async function gerarManha(
         else if (v.banco === "INFINITE") creditos_inf += val;
         else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
       } else {
-        // Fallback: se comprovante não preenchido, usa preco_vendido
-        const val = Number(v.preco_vendido);
-        if (v.banco === "ITAU") creditos_itau += val;
-        else if (v.banco === "INFINITE") creditos_inf += val;
-        else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
+        // Fallback: preco_vendido - partes que já entraram no D+0 (PIX, espécie, troca)
+        const val = Number(v.preco_vendido) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+        if (val > 0) {
+          if (v.banco === "ITAU") creditos_itau += val;
+          else if (v.banco === "INFINITE") creditos_inf += val;
+          else if (v.banco === "MERCADO_PAGO") creditos_mp += val;
+        }
       }
     }
   }
