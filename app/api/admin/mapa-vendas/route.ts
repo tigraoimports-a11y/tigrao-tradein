@@ -137,24 +137,29 @@ export async function GET(req: NextRequest) {
   try {
     let query = supabase
       .from("vendas")
-      .select("id, data, cliente, preco_vendido, custo, lucro, bairro, cidade, uf, cep, tipo")
-      .neq("status_pagamento", "CANCELADO")
-      .neq("tipo", "ATACADO")
-      .neq("cep", "00000000")
-      .neq("cep", "00000-000")
+      .select("*")
       .order("data", { ascending: false });
 
-    if (dateFilter) {
-      query = query.gte("data", dateFilter);
-    }
-
-    const { data: vendas, error } = await query;
+    const { data: rawVendas, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (vendas ?? []) as {
+    // Filtrar no JS para evitar bug do .neq() excluir NULLs no Supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filteredVendas = (rawVendas ?? []).filter((v: any) => {
+      if (v.status_pagamento === "CANCELADO") return false;
+      if (v.tipo === "ATACADO") return false;
+      // Filtrar CEPs inválidos
+      const cep = (v.cep || "").replace(/\D/g, "");
+      if (cep === "00000000") return false;
+      // Filtrar por data se necessário
+      if (dateFilter && v.data < dateFilter) return false;
+      return true;
+    });
+
+    const rows = filteredVendas as {
       id: string;
       data: string;
       cliente: string;
