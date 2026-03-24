@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("vendas")
     .select("id, data, cliente, cpf, cnpj, email, pessoa, bairro, cidade, uf, cep, produto, preco_vendido, tipo, origem, serial_no, imei, forma, banco")
-    .neq("status_pagamento", "CANCELADO")
+    .or("status_pagamento.is.null,status_pagamento.neq.CANCELADO")
     .order("data", { ascending: false });
 
   // Filtrar por serial ou imei se parece código de produto
