@@ -6,6 +6,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardParcial, ReportNoite, ReportManha, Venda } from "./admin-types";
 import { proximoDiaUtil, hojeISO } from "./business-days";
 import { getTaxa, calcularLiquido } from "./taxas";
+import { recalcularSaldoDia } from "./saldos";
 
 function sumByBanco(vendas: Venda[], banco: string): number {
   return vendas
@@ -215,18 +216,8 @@ export async function gerarNoite(
     esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp;
     esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp;
 
-    // Salvar no banco
-    await supabase.from("saldos_bancarios").upsert({
-      data: dataISO,
-      itau_base,
-      inf_base,
-      mp_base,
-      esp_itau,
-      esp_inf,
-      esp_mp,
-      esp_especie,
-      manual: false,
-    }, { onConflict: "data" });
+    // Salvar no banco (via função centralizada)
+    await recalcularSaldoDia(supabase, dataISO);
   }
 
   // Totais do dia

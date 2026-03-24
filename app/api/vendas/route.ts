@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { sendPaymentNotification, sendSaleNotification } from "@/lib/telegram";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
+import { recalcularSaldoDia } from "@/lib/saldos";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -153,6 +154,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Recalcular saldos do dia automaticamente
+  if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
+
   return NextResponse.json({ ok: true, data });
 }
 
@@ -204,6 +208,10 @@ export async function PATCH(req: NextRequest) {
     }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
   }
 
+  // Recalcular saldos do dia automaticamente
+  const vendaData = data?.[0]?.data || fields.data;
+  if (vendaData) recalcularSaldoDia(supabase, vendaData).catch(() => {});
+
   return NextResponse.json({ ok: true, updated: data });
 }
 
@@ -250,6 +258,9 @@ export async function DELETE(req: NextRequest) {
       .eq("cliente", venda.cliente)
       .in("tipo", ["PENDENCIA", "SEMINOVO"]);
   }
+
+  // Recalcular saldos do dia automaticamente
+  if (venda?.data) recalcularSaldoDia(supabase, venda.data).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

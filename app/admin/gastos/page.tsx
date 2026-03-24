@@ -23,7 +23,6 @@ export default function GastosPage() {
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
     horario: new Date().toTimeString().slice(0, 5),
-    tipo: "SAIDA",
     categoria: "OUTROS",
     descricao: "",
     valor: "",
@@ -58,7 +57,7 @@ export default function GastosPage() {
     const payload = {
       data: form.data,
       hora: form.horario || null,
-      tipo: form.tipo,
+      tipo: "SAIDA",
       categoria: form.categoria,
       descricao: form.descricao || null,
       valor: parseFloat(form.valor),
@@ -91,7 +90,6 @@ export default function GastosPage() {
       descricao: g.descricao || "",
       valor: String(g.valor),
       categoria: g.categoria,
-      tipo: g.tipo,
       banco: g.banco || "ITAU",
       observacao: g.observacao || "",
       is_dep_esp: g.is_dep_esp,
@@ -105,7 +103,7 @@ export default function GastosPage() {
       id: editingId,
       data: editForm.data,
       hora: editForm.hora || null,
-      tipo: editForm.tipo,
+      tipo: "SAIDA",
       categoria: editForm.categoria,
       descricao: editForm.descricao || null,
       valor: parseFloat(editForm.valor as string),
@@ -134,8 +132,7 @@ export default function GastosPage() {
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   // Totais
-  const totalSaida = gastos.filter((g) => g.tipo === "SAIDA").reduce((s, g) => s + Number(g.valor), 0);
-  const totalEntrada = gastos.filter((g) => g.tipo === "ENTRADA").reduce((s, g) => s + Number(g.valor), 0);
+  const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
 
   return (
     <div className="space-y-6">
@@ -149,16 +146,13 @@ export default function GastosPage() {
 
       {tab === "novo" ? (
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-6`}>
-          <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Gasto / Entrada</h2>
+          <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Saída</h2>
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Horario</p><input type="time" value={form.horario} onChange={(e) => set("horario", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
-              <option>SAIDA</option><option>ENTRADA</option>
-            </select></div>
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => set("categoria", e.target.value)} className={inputCls}>
               {CATEGORIAS_GASTO.map((c) => <option key={c}>{c}</option>)}
             </select></div>
@@ -184,20 +178,10 @@ export default function GastosPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Totais */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
-              <p className="text-xs text-[#86868B]">Total Saidas</p>
-              <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
-            </div>
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
-              <p className="text-xs text-[#86868B]">Total Entradas</p>
-              <p className="text-xl font-bold text-green-600">{fmt(totalEntrada)}</p>
-            </div>
-            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
-              <p className="text-xs text-[#86868B]">Saldo</p>
-              <p className={`text-xl font-bold ${totalEntrada - totalSaida >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(totalEntrada - totalSaida)}</p>
-            </div>
+          {/* Total Saidas */}
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm inline-block`}>
+            <p className="text-xs text-[#86868B]">Total Saidas</p>
+            <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
           </div>
 
           <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -205,24 +189,23 @@ export default function GastosPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Tipo", "Categoria", "Descricao", "Valor", "Banco", ""].map((h) => (
+                    {["Data", "Categoria", "Descricao", "Valor", "Banco", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-[#86868B]">Carregando...</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Carregando...</td></tr>
                   ) : gastos.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
                   ) : gastos.map((g) => (
                     <React.Fragment key={g.id}>
                       <tr className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
                         <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
-                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${g.tipo === "SAIDA" ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>{g.tipo}</span></td>
                         <td className="px-4 py-3 text-xs">{g.categoria}</td>
                         <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
-                        <td className={`px-4 py-3 font-bold ${g.tipo === "SAIDA" ? "text-red-500" : "text-green-600"}`}>{fmt(g.valor)}</td>
+                        <td className="px-4 py-3 font-bold text-red-500">{fmt(g.valor)}</td>
                         <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
                         <td className="px-4 py-3 flex gap-2">
                           <button onClick={() => startEdit(g)} className="text-[#86868B] hover:text-[#E8740E] text-xs" title="Editar">✏️</button>
@@ -235,14 +218,11 @@ export default function GastosPage() {
                       </tr>
                       {editingId === g.id && (
                         <tr className="border-b border-[#E8740E] bg-[#FFF8F0]">
-                          <td colSpan={7} className="px-4 py-4">
+                          <td colSpan={6} className="px-4 py-4">
                             <div className="space-y-3">
-                              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div><p className={labelCls}>Data</p><input type="date" value={editForm.data as string} onChange={(e) => editSet("data", e.target.value)} className={inputCls} /></div>
                                 <div><p className={labelCls}>Horario</p><input type="time" value={editForm.hora as string} onChange={(e) => editSet("hora", e.target.value)} className={inputCls} /></div>
-                                <div><p className={labelCls}>Tipo</p><select value={editForm.tipo as string} onChange={(e) => editSet("tipo", e.target.value)} className={inputCls}>
-                                  <option>SAIDA</option><option>ENTRADA</option>
-                                </select></div>
                                 <div><p className={labelCls}>Categoria</p><select value={editForm.categoria as string} onChange={(e) => editSet("categoria", e.target.value)} className={inputCls}>
                                   {CATEGORIAS_GASTO.map((c) => <option key={c}>{c}</option>)}
                                 </select></div>

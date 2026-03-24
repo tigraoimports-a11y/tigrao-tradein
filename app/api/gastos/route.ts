@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
+import { recalcularSaldoDia } from "@/lib/saldos";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -50,6 +51,9 @@ export async function POST(req: NextRequest) {
   const valor = body.valor ? `R$ ${Number(body.valor).toLocaleString("pt-BR")}` : "";
   await logActivity(usuario, "Registrou gasto", `${body.descricao || "?"} ${valor}`, "gastos", data?.id);
 
+  // Recalcular saldos do dia automaticamente
+  if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
+
   return NextResponse.json({ ok: true, data });
 }
 
@@ -70,6 +74,9 @@ export async function PATCH(req: NextRequest) {
   const valor = fields.valor ? `R$ ${Number(fields.valor).toLocaleString("pt-BR")}` : "";
   await logActivity(usuario, "Editou gasto", `${fields.descricao || "?"} ${valor}`, "gastos", id);
 
+  // Recalcular saldos do dia automaticamente
+  if (data?.data) recalcularSaldoDia(supabase, data.data).catch(() => {});
+
   return NextResponse.json({ ok: true, data });
 }
 
@@ -79,7 +86,15 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  // Buscar data antes de excluir para recalcular saldo
+  const { data: gasto } = await supabase.from("gastos").select("data").eq("id", id).single();
+  const gastoData = gasto?.data;
+
   const { error } = await supabase.from("gastos").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Recalcular saldos do dia automaticamente
+  if (gastoData) recalcularSaldoDia(supabase, gastoData).catch(() => {});
+
   return NextResponse.json({ ok: true });
 }
