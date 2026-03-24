@@ -48,8 +48,8 @@ export default function SalesMap({ bairros }: SalesMapProps) {
     }
 
     const map = L.map(mapRef.current, {
-      center: [-23.0, -43.35],
-      zoom: 11,
+      center: [-22.9, -43.17],
+      zoom: 10,
       scrollWheelZoom: true,
       zoomControl: true,
     });

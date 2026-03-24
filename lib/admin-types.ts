@@ -141,6 +141,18 @@ export interface ReportNoite {
   // Resumo do dia
   totalVendas: number;
   lucroTotal: number;
+  // Campos extras para relatório completo
+  faturamento: number;
+  custoTotal: number;
+  margemMedia: number;
+  porOrigem: Record<string, { qty: number; receita: number }>;
+  porTipo: Record<string, { qty: number; receita: number }>;
+  upgradesHoje: number;
+  gastosDetalhados: { categoria: string; descricao: string; valor: number; banco: string }[];
+  totalGastos: number;
+  pagFornecedores: { descricao: string; valor: number; banco: string }[];
+  totalPagFornecedores: number;
+  valorEstoque: number;
 }
 
 export interface ReportManha {

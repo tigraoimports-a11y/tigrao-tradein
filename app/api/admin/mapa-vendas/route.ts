@@ -230,6 +230,14 @@ const BAIRRO_COORDS: Record<string, { lat: number; lng: number }> = {
   "Canela": { lat: -29.3656, lng: -50.8122 },
   "Luiza Corrêa": { lat: -29.3600, lng: -50.8100 },
   "Armação dos Búzios": { lat: -22.7488, lng: -41.8819 },
+  // Niterói extras 2
+  "Centro, Niterói": { lat: -22.8838, lng: -43.1037 },
+  // São Gonçalo extras
+  "Centro, São Gonçalo": { lat: -22.8269, lng: -43.0538 },
+  "Colubandê": { lat: -22.8139, lng: -43.0228 },
+  // Outras cidades Brasil
+  "Campos dos Goytacazes": { lat: -21.7543, lng: -41.3244 },
+  "Salvador": { lat: -12.9714, lng: -38.5124 },
 };
 
 function normalizeBairroName(nome: string): string {
@@ -278,6 +286,10 @@ const CIDADE_COORDS: Record<string, { lat: number; lng: number }> = {
   "mesquita": { lat: -22.8022, lng: -43.4222 },
   "nilopolis": { lat: -22.8058, lng: -43.4187 },
   "nilópolis": { lat: -22.8058, lng: -43.4187 },
+  "campos dos goytacazes": { lat: -21.7543, lng: -41.3244 },
+  "salvador": { lat: -12.9714, lng: -38.5124 },
+  "florianopolis": { lat: -27.5954, lng: -48.5480 },
+  "florianópolis": { lat: -27.5954, lng: -48.5480 },
 };
 
 function findBairroCoords(nome: string, cidade?: string): { lat: number; lng: number } | null {
