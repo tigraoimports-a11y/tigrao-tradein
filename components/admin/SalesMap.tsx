@@ -106,12 +106,18 @@ export default function SalesMap({ bairros }: SalesMapProps) {
       );
     }
 
-    // Fit bounds to markers if we have data
-    if (mappable.length > 1) {
+    // Fit bounds — focus on RJ region (filter out distant outliers for zoom)
+    const rjRegion = mappable.filter(
+      (b) => b.lat! > -24.5 && b.lat! < -21.5 && b.lng! > -44.5 && b.lng! < -42.0
+    );
+    const boundsData = rjRegion.length > 1 ? rjRegion : mappable;
+    if (boundsData.length > 1) {
       const bounds = L.latLngBounds(
-        mappable.map((b) => [b.lat!, b.lng!] as [number, number])
+        boundsData.map((b) => [b.lat!, b.lng!] as [number, number])
       );
-      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    } else {
+      map.setView([-22.95, -43.25], 10);
     }
 
     return () => {

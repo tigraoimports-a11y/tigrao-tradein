@@ -372,23 +372,25 @@ export async function GET(req: NextRequest) {
     }[];
 
     // --- Aggregate by bairro (top 20) ---
-    const porBairro: Record<string, { qty: number; receita: number; lucro: number; cidade: string }> = {};
+    // Agrupar por bairro+cidade para separar "Centro, RJ" de "Centro, Nova Iguaçu"
+    const porBairro: Record<string, { qty: number; receita: number; lucro: number; bairro: string; cidade: string }> = {};
     for (const v of rows) {
       const b = (v.bairro || "").trim() || "Nao informado";
       const cidade = (v.cidade || "").trim();
-      if (!porBairro[b]) porBairro[b] = { qty: 0, receita: 0, lucro: 0, cidade };
-      porBairro[b].qty++;
-      porBairro[b].receita += Number(v.preco_vendido || 0);
-      porBairro[b].lucro += Number(v.lucro || 0);
-      if (cidade && !porBairro[b].cidade) porBairro[b].cidade = cidade;
+      const key = b === "Nao informado" ? "Nao informado" : `${b}|${cidade || "RJ"}`;
+      if (!porBairro[key]) porBairro[key] = { qty: 0, receita: 0, lucro: 0, bairro: b, cidade };
+      porBairro[key].qty++;
+      porBairro[key].receita += Number(v.preco_vendido || 0);
+      porBairro[key].lucro += Number(v.lucro || 0);
     }
 
     const bairros = Object.entries(porBairro)
-      .map(([nome, d]) => {
-        const coords = findBairroCoords(nome, d.cidade);
+      .map(([, d]) => {
+        const coords = findBairroCoords(d.bairro, d.cidade);
+        const nome = d.cidade && d.cidade !== "Rio de Janeiro" && d.bairro !== "Nao informado"
+          ? `${d.bairro}, ${d.cidade}` : d.bairro;
         return {
-          nome: d.cidade && d.cidade !== "Rio de Janeiro" && nome !== "Nao informado"
-            ? `${nome}, ${d.cidade}` : nome,
+          nome,
           qty: d.qty,
           receita: d.receita,
           lucro: d.lucro,
@@ -398,7 +400,7 @@ export async function GET(req: NextRequest) {
         };
       })
       .sort((a, b) => b.qty - a.qty)
-      .slice(0, 25);
+      .slice(0, 30);
 
     // --- Aggregate by cidade (top 10) ---
     const porCidade: Record<string, { qty: number; receita: number; lucro: number }> = {};
