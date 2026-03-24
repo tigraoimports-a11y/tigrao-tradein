@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   // Buscar todas vendas com dados do cliente
   let query = supabase
     .from("vendas")
-    .select("id, data, cliente, cpf, cnpj, email, pessoa, bairro, cidade, uf, cep, produto, preco_vendido, tipo, origem, serial_no, imei, forma, banco, status_pagamento")
+    .select("*")
     .order("data", { ascending: false });
 
   // Filtrar por serial ou imei se parece código de produto
@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Filtrar canceladas no JS (evita problema com neq e NULL no Supabase)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendas = (rawVendas ?? []).filter(
-    (v: Record<string, unknown>) => v.status_pagamento !== "CANCELADO"
+    (v: any) => v.status_pagamento !== "CANCELADO"
   );
 
   // Agrupar por cliente
@@ -69,7 +70,8 @@ export async function GET(req: NextRequest) {
     }[];
   }>();
 
-  for (const v of vendas ?? []) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const v of vendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
     const key = nome.toUpperCase();
