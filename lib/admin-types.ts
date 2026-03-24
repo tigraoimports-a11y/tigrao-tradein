@@ -174,6 +174,25 @@ export interface ReportManha {
   // Vendas do mês até agora
   vendasMes: number;
   lucroMes: number;
+  faturamentoMes: number;
+  // Fiado pendente
+  fiadoPendente: { cliente: string; valor: number; data: string }[];
+  totalFiado: number;
+  // Estoque
+  valorEstoque: number;
+  valorACaminho: number;
+  valorPendencias: number;
+  capitalProdutos: number;
+  // Patrimônio
+  saldoBancarioTotal: number;
+  patrimonioTotal: number;
+  // É fim de semana?
+  isFimDeSemana: boolean;
+  // Créditos pendentes (para dias sem recebimento)
+  creditosPendentes_itau: number;
+  creditosPendentes_inf: number;
+  creditosPendentes_mp: number;
+  dataPendentes: string;
 }
 
 // Categorias comuns de gastos

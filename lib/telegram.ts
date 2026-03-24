@@ -175,65 +175,188 @@ export function formatParcialHTML(r: DashboardParcial): string {
  * Formata relatório /noite para Telegram HTML.
  */
 export function formatNoiteHTML(r: ReportNoite): string {
-  return [
-    `🌙 <b>FECHAMENTO DO DIA — TigrãoImports</b>`,
-    `📅 ${formatDateBR(r.data)}`,
+  const lines: string[] = [
+    `🍎 <b>FECHAMENTO DO DIA — TIGRÃO</b>`,
+    `🌙 ${formatDateBR(r.data)}`,
     ``,
-    `📊 <b>Vendas:</b> ${r.totalVendas} | Lucro: <b>${fmtBRL(r.lucroTotal)}</b>`,
+    `🛒 <b>VENDAS DE HOJE</b>`,
+    `${r.totalVendas} operações`,
+    `Faturamento: <b>${fmtBRL(r.faturamento)}</b>`,
+    `Custo: ${fmtBRL(r.custoTotal)}`,
+    `Lucro: <b>${fmtBRL(r.lucroTotal)}</b>`,
+    `Margem: <b>${r.margemMedia.toFixed(1)}%</b>`,
+  ];
+
+  // Vendas por origem
+  if (r.porOrigem && Object.keys(r.porOrigem).length > 0) {
+    lines.push(``, `📋 <b>POR ORIGEM</b>`);
+    const sorted = Object.entries(r.porOrigem).sort((a, b) => b[1].qty - a[1].qty);
+    for (const [origem, { qty, receita }] of sorted) {
+      lines.push(`  ${origem}: ${qty} vendas — ${fmtBRL(receita)}`);
+    }
+  }
+
+  // Por tipo (VENDA, UPGRADE, ATACADO)
+  if (r.porTipo && Object.keys(r.porTipo).length > 0) {
+    lines.push(``, `📊 <b>POR TIPO</b>`);
+    for (const [tipo, { qty, receita }] of Object.entries(r.porTipo)) {
+      lines.push(`  ${tipo}: ${qty} — ${fmtBRL(receita)}`);
+    }
+  }
+
+  if (r.upgradesHoje > 0) {
+    lines.push(``, `🔄 <b>Trade-In/Upgrades hoje:</b> ${r.upgradesHoje}`);
+  }
+
+  // Recebimentos hoje (D+0)
+  const totalRecebido = r.pix_itau + r.pix_inf + r.pix_mp + r.pix_esp;
+  if (totalRecebido > 0) {
+    lines.push(``, `💰 <b>RECEBIMENTOS HOJE</b>`);
+    if (r.pix_itau > 0) lines.push(`  PIX/Dinheiro Itaú: ${fmtBRL(r.pix_itau)}`);
+    if (r.pix_inf > 0) lines.push(`  PIX/Dinheiro Infinite: ${fmtBRL(r.pix_inf)}`);
+    if (r.pix_mp > 0) lines.push(`  Link Mercado Pago: ${fmtBRL(r.pix_mp)}`);
+    if (r.pix_esp > 0) lines.push(`  Espécie: ${fmtBRL(r.pix_esp)}`);
+    lines.push(`  <b>Total recebido: ${fmtBRL(totalRecebido)}</b>`);
+  }
+
+  // Créditos D+1 amanhã
+  const totalD1 = r.d1_itau + r.d1_inf + r.d1_mp;
+  if (totalD1 > 0) {
+    lines.push(``, `📅 <b>RECEBIMENTOS AMANHÃ (D+1)</b>`);
+    if (r.d1_itau > 0) lines.push(`  Crédito Itaú: ${fmtBRL(r.d1_itau)}`);
+    if (r.d1_inf > 0) lines.push(`  Crédito Infinite: ${fmtBRL(r.d1_inf)}`);
+    if (r.d1_mp > 0) lines.push(`  Crédito MP: ${fmtBRL(r.d1_mp)}`);
+    lines.push(`  <b>Total amanhã: ${fmtBRL(totalD1)}</b>`);
+  }
+
+  // Saídas/Gastos do dia
+  if (r.totalGastos > 0) {
+    lines.push(``, `💸 <b>SAÍDAS DE HOJE</b>`);
+    // Agrupar por categoria
+    const cats: Record<string, number> = {};
+    for (const g of r.gastosDetalhados) {
+      const cat = g.categoria || "OUTROS";
+      cats[cat] = (cats[cat] || 0) + Number(g.valor);
+    }
+    for (const [cat, val] of Object.entries(cats).sort((a, b) => b[1] - a[1])) {
+      lines.push(`  ${cat}: ${fmtBRL(val)}`);
+    }
+    lines.push(`  <b>Total saído: ${fmtBRL(r.totalGastos)}</b>`);
+  }
+
+  // Pagamentos a fornecedores
+  if (r.totalPagFornecedores > 0) {
+    lines.push(``, `🚚 <b>PAGO A FORNECEDOR HOJE</b>`);
+    for (const p of r.pagFornecedores) {
+      lines.push(`  ${p.descricao} — ${fmtBRL(p.valor)} (${p.banco})`);
+    }
+  }
+
+  // Saldo final
+  const saldoTotal = r.esp_itau + r.esp_inf + r.esp_mp + r.esp_especie;
+  lines.push(
     ``,
-    `🏦 <b>ITAÚ</b>`,
-    `  Base manhã: ${fmtBRL(r.itau_base)}`,
-    `  + PIX/Din: ${fmtBRL(r.pix_itau)}`,
-    `  + D+1: ${fmtBRL(r.d1_itau)}`,
-    `  + Reajustes: ${fmtBRL(r.reaj_itau)}`,
-    `  − Saídas: ${fmtBRL(r.saiu_itau)}`,
-    `  <b>= ${fmtBRL(r.esp_itau)}</b>`,
-    ``,
-    `🏦 <b>INFINITE</b>`,
-    `  Base manhã: ${fmtBRL(r.inf_base)}`,
-    `  + PIX/Din: ${fmtBRL(r.pix_inf)}`,
-    `  + D+1: ${fmtBRL(r.d1_inf)}`,
-    `  + Reajustes: ${fmtBRL(r.reaj_inf)}`,
-    `  − Saídas: ${fmtBRL(r.saiu_inf)}`,
-    `  <b>= ${fmtBRL(r.esp_inf)}</b>`,
-    ``,
-    `🏦 <b>MERCADO PAGO</b>`,
-    `  Base manhã: ${fmtBRL(r.mp_base)}`,
-    `  + PIX/Din: ${fmtBRL(r.pix_mp)}`,
-    `  + D+1: ${fmtBRL(r.d1_mp)}`,
-    `  + Reajustes: ${fmtBRL(r.reaj_mp)}`,
-    `  − Saídas: ${fmtBRL(r.saiu_mp)}`,
-    `  <b>= ${fmtBRL(r.esp_mp)}</b>`,
-    ``,
-    `💵 <b>ESPÉCIE:</b> ${fmtBRL(r.esp_especie)}`,
-  ].join("\n");
+    `✅ <b>SALDO ESPERADO NAS CONTAS</b>`,
+    `  Itaú: <b>${fmtBRL(r.esp_itau)}</b>`,
+    `  Infinite: <b>${fmtBRL(r.esp_inf)}</b>`,
+    `  Mercado Pago: <b>${fmtBRL(r.esp_mp)}</b>`,
+    `  Espécie: <b>${fmtBRL(r.esp_especie)}</b>`,
+    `  <b>Total: ${fmtBRL(saldoTotal)}</b>`,
+  );
+
+  // Estoque
+  if (r.valorEstoque > 0) {
+    lines.push(
+      ``,
+      `📦 <b>ESTOQUE</b>`,
+      `  Em estoque: <b>${fmtBRL(r.valorEstoque)}</b>`,
+      ``,
+      `💎 <b>PATRIMÔNIO TOTAL: ${fmtBRL(saldoTotal + r.valorEstoque)}</b>`,
+    );
+  }
+
+  const now = new Date();
+  const hora = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  lines.push(``, `<i>Gerado em ${formatDateBR(r.data)} às ${hora}</i>`);
+
+  return lines.join("\n");
 }
 
 /**
  * Formata relatório /manha para Telegram HTML.
  */
 export function formatManhaHTML(r: ReportManha): string {
-  return [
-    `☀️ <b>CONFERÊNCIA BANCÁRIA — TigrãoImports</b>`,
-    `📅 ${formatDateBR(r.data)}`,
+  const lines: string[] = [
+    `🍎 <b>CONFERÊNCIA BANCÁRIA — TIGRÃO</b>`,
+    `📅 Manhã de ${formatDateBR(r.data)}`,
     ``,
-    `🏦 <b>ITAÚ</b>`,
-    `  Fechamento ontem: ${fmtBRL(r.esp_itau_ontem)}`,
-    `  + D+1 entrando: ${fmtBRL(r.creditos_itau)}`,
-    `  <b>Esperado: ${fmtBRL(r.saldo_itau)}</b>`,
+  ];
+
+  // Créditos de cartão
+  lines.push(`💳 <b>CRÉDITOS DE CARTÃO</b>`);
+  if (r.isFimDeSemana) {
+    lines.push(`<i>Hoje é fim de semana — sem recebimentos bancários.</i>`);
+    const totalPend = r.creditosPendentes_itau + r.creditosPendentes_inf + r.creditosPendentes_mp;
+    if (totalPend > 0) {
+      lines.push(`Créditos pendentes p/ ${r.dataPendentes} (próx. dia útil)`);
+      lines.push(``);
+      if (r.creditosPendentes_itau > 0) lines.push(`Itaú: <b>${fmtBRL(r.creditosPendentes_itau)}</b> <i>(pendente)</i>`);
+      if (r.creditosPendentes_inf > 0) lines.push(`Infinite: <b>${fmtBRL(r.creditosPendentes_inf)}</b> <i>(pendente)</i>`);
+      if (r.creditosPendentes_mp > 0) lines.push(`Link MP: <b>${fmtBRL(r.creditosPendentes_mp)}</b> <i>(pendente)</i>`);
+      lines.push(`<b>Total pendente p/ ${r.dataPendentes}: ${fmtBRL(totalPend)}</b>`);
+    }
+  } else {
+    const totalCreditos = r.creditos_itau + r.creditos_inf + r.creditos_mp;
+    if (r.creditos_itau > 0) lines.push(`Itaú: <b>${fmtBRL(r.creditos_itau)}</b>`);
+    if (r.creditos_inf > 0) lines.push(`Infinite: <b>${fmtBRL(r.creditos_inf)}</b>`);
+    if (r.creditos_mp > 0) lines.push(`Link MP: <b>${fmtBRL(r.creditos_mp)}</b>`);
+    lines.push(`<b>Total D+1 hoje: ${fmtBRL(totalCreditos)}</b>`);
+  }
+
+  // Saldo esperado
+  lines.push(
     ``,
-    `🏦 <b>INFINITE</b>`,
-    `  Fechamento ontem: ${fmtBRL(r.esp_inf_ontem)}`,
-    `  + D+1 entrando: ${fmtBRL(r.creditos_inf)}`,
-    `  <b>Esperado: ${fmtBRL(r.saldo_inf)}</b>`,
+    `✅ <b>SALDO ESPERADO NAS CONTAS</b>`,
+    `<i>(fechamento ontem - saídas após 20:30 / sem créditos no fim de semana)</i>`,
+    `Itaú: <b>${fmtBRL(r.saldo_itau)}</b>`,
+    `Infinite: <b>${fmtBRL(r.saldo_inf)}</b>`,
+    `Mercado Pago: <b>${fmtBRL(r.saldo_mp)}</b>`,
+    `<b>Total: ${fmtBRL(r.saldoBancarioTotal)}</b>`,
+  );
+
+  // Fiado pendente
+  if (r.totalFiado > 0) {
+    lines.push(``, `📋 <b>FIADO PENDENTE</b> (${r.fiadoPendente.length} venda(s) — ${fmtBRL(r.totalFiado)})`);
+    // Agrupar por data
+    const byDate: Record<string, typeof r.fiadoPendente> = {};
+    for (const f of r.fiadoPendente) {
+      if (!byDate[f.data]) byDate[f.data] = [];
+      byDate[f.data].push(f);
+    }
+    for (const [data, items] of Object.entries(byDate).sort()) {
+      const totalDia = items.reduce((s, i) => s + i.valor, 0);
+      lines.push(`📅 ${formatDateBR(data)}: ${items.length} venda(s) — ${fmtBRL(totalDia)}`);
+      for (const i of items) {
+        lines.push(`  • ${i.cliente} — ${fmtBRL(i.valor)}`);
+      }
+    }
+  }
+
+  // Estoque
+  lines.push(
     ``,
-    `🏦 <b>MERCADO PAGO</b>`,
-    `  Fechamento ontem: ${fmtBRL(r.esp_mp_ontem)}`,
-    `  + D+1 entrando: ${fmtBRL(r.creditos_mp)}`,
-    `  <b>Esperado: ${fmtBRL(r.saldo_mp)}</b>`,
+    `📦 <b>ESTOQUE</b>`,
+    `Em estoque: <b>${fmtBRL(r.valorEstoque)}</b>`,
+    `A caminho: ${fmtBRL(r.valorACaminho)}`,
+    `Pendências: ${fmtBRL(r.valorPendencias)}`,
+    `Capital em produtos: <b>${fmtBRL(r.capitalProdutos)}</b>`,
     ``,
-    `💵 <b>ESPÉCIE:</b> ${fmtBRL(r.saldo_especie)}`,
-    ``,
-    `📈 <b>Mês atual:</b> ${r.vendasMes} vendas | Lucro: ${fmtBRL(r.lucroMes)}`,
-  ].join("\n");
+    `💎 <b>CAPITAL TOTAL: ${fmtBRL(r.patrimonioTotal)}</b>`,
+  );
+
+  const now = new Date();
+  const hora = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  lines.push(``, `<i>Gerado em ${formatDateBR(r.data)} às ${hora}</i>`);
+
+  return lines.join("\n");
 }

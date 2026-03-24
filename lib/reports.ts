@@ -223,12 +223,52 @@ export async function gerarNoite(
   // Totais do dia
   const { data: todasVendas } = await supabase
     .from("vendas")
-    .select("preco_vendido, lucro")
+    .select("preco_vendido, lucro, custo, origem, tipo, margem_pct")
     .eq("data", dataISO);
 
-  const all = (todasVendas ?? []) as { preco_vendido: number; lucro: number }[];
+  const all = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number }[];
   const totalVendas = all.length;
+  const faturamento = all.reduce((s, v) => s + Number(v.preco_vendido), 0);
+  const custoTotal = all.reduce((s, v) => s + Number(v.custo), 0);
   const lucroTotal = all.reduce((s, v) => s + Number(v.lucro), 0);
+  const margemMedia = totalVendas > 0 ? all.reduce((s, v) => s + Number(v.margem_pct), 0) / totalVendas : 0;
+
+  // Por origem
+  const porOrigem: Record<string, { qty: number; receita: number }> = {};
+  const porTipo: Record<string, { qty: number; receita: number }> = {};
+  for (const v of all) {
+    const o = v.origem || "NAO_INFORMARAM";
+    if (!porOrigem[o]) porOrigem[o] = { qty: 0, receita: 0 };
+    porOrigem[o].qty++;
+    porOrigem[o].receita += Number(v.preco_vendido);
+    const t = v.tipo || "VENDA";
+    if (!porTipo[t]) porTipo[t] = { qty: 0, receita: 0 };
+    porTipo[t].qty++;
+    porTipo[t].receita += Number(v.preco_vendido);
+  }
+  const upgradesHoje = (porTipo["UPGRADE"]?.qty || 0);
+
+  // Gastos detalhados
+  const { data: gastosAll } = await supabase
+    .from("gastos")
+    .select("categoria, descricao, valor, banco")
+    .eq("data", dataISO)
+    .eq("tipo", "SAIDA");
+
+  const gastosDetalhados = ((gastosAll ?? []) as { categoria: string; descricao: string; valor: number; banco: string }[]);
+  const totalGastos = gastosDetalhados.reduce((s, g) => s + Number(g.valor), 0);
+
+  // Pagamentos a fornecedores
+  const pagFornecedores = gastosDetalhados.filter(g => g.categoria === "FORNECEDOR");
+  const totalPagFornecedores = pagFornecedores.reduce((s, g) => s + Number(g.valor), 0);
+
+  // Valor em estoque
+  const { data: estoqueData } = await supabase
+    .from("estoque")
+    .select("custo_unitario, qnt")
+    .eq("status", "EM ESTOQUE");
+
+  const valorEstoque = (estoqueData ?? []).reduce((s, e) => s + Number(e.custo_unitario) * Number(e.qnt), 0);
 
   return {
     data: dataISO,
@@ -239,6 +279,11 @@ export async function gerarNoite(
     saiu_itau, saiu_inf, saiu_mp, saiu_esp,
     esp_itau, esp_inf, esp_mp, esp_especie,
     totalVendas, lucroTotal,
+    faturamento, custoTotal, margemMedia,
+    porOrigem, porTipo, upgradesHoje,
+    gastosDetalhados, totalGastos,
+    pagFornecedores, totalPagFornecedores,
+    valorEstoque,
   };
 }
 
@@ -328,6 +373,79 @@ export async function gerarManha(
     .lte("data", dataISO);
 
   const mesRows = (vendasMes ?? []) as { preco_vendido: number; lucro: number }[];
+  const faturamentoMes = mesRows.reduce((s, v) => s + Number(v.preco_vendido), 0);
+
+  // 5. Fiado pendente
+  const { data: fiadoData } = await supabase
+    .from("vendas")
+    .select("cliente, preco_vendido, data")
+    .eq("recebimento", "FIADO")
+    .neq("status_pagamento", "FINALIZADO");
+
+  const fiadoPendente = (fiadoData ?? []).map((v: { cliente: string; preco_vendido: number; data: string }) => ({
+    cliente: v.cliente, valor: Number(v.preco_vendido), data: v.data,
+  }));
+  const totalFiado = fiadoPendente.reduce((s, f) => s + f.valor, 0);
+
+  // 6. Estoque
+  const { data: estoqueEmEstoque } = await supabase
+    .from("estoque")
+    .select("custo_unitario, qnt")
+    .eq("status", "EM ESTOQUE");
+  const valorEstoque = (estoqueEmEstoque ?? []).reduce((s, e) => s + Number(e.custo_unitario) * Number(e.qnt), 0);
+
+  const { data: estoqueACaminho } = await supabase
+    .from("estoque")
+    .select("custo_unitario, qnt")
+    .eq("status", "A CAMINHO");
+  const valorACaminho = (estoqueACaminho ?? []).reduce((s, e) => s + Number(e.custo_unitario) * Number(e.qnt), 0);
+
+  const { data: estoquePendencias } = await supabase
+    .from("estoque")
+    .select("custo_unitario, qnt")
+    .eq("status", "PENDENCIA");
+  const valorPendencias = (estoquePendencias ?? []).reduce((s, e) => s + Number(e.custo_unitario) * Number(e.qnt), 0);
+
+  const capitalProdutos = valorEstoque + valorACaminho + valorPendencias;
+
+  // Saldo bancário total e patrimônio
+  const saldoBancarioTotal = saldo_itau + saldo_inf + saldo_mp + saldo_especie;
+  const patrimonioTotal = saldoBancarioTotal + capitalProdutos;
+
+  // Fim de semana?
+  const dayOfWeek = hoje.getDay(); // 0=Sun, 6=Sat
+  const isFimDeSemana = dayOfWeek === 0 || dayOfWeek === 6;
+
+  // Créditos pendentes (para próximo dia útil se fim de semana)
+  let creditosPendentes_itau = 0, creditosPendentes_inf = 0, creditosPendentes_mp = 0;
+  let dataPendentes = "";
+  if (isFimDeSemana) {
+    const proxDiaUtil = proximoDiaUtil(hoje);
+    dataPendentes = `${String(proxDiaUtil.getDate()).padStart(2, "0")}/${String(proxDiaUtil.getMonth() + 1).padStart(2, "0")}`;
+    // Pegar D+1 de hoje e ontem que vão pro próximo dia útil
+    const proxDiaISO = `${proxDiaUtil.getFullYear()}-${String(proxDiaUtil.getMonth() + 1).padStart(2, "0")}-${String(proxDiaUtil.getDate()).padStart(2, "0")}`;
+    const { data: vendasPendD1 } = await supabase
+      .from("vendas")
+      .select("*")
+      .eq("recebimento", "D+1")
+      .gte("data", quatroDiasISO)
+      .lte("data", dataISO);
+
+    for (const v of (vendasPendD1 ?? []) as Venda[]) {
+      const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
+      const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
+      if (recebISO === proxDiaISO) {
+        const comprovante = Number(v.valor_comprovante || 0);
+        if (comprovante > 0) {
+          const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
+          const val = calcularLiquido(comprovante, taxa);
+          if (v.banco === "ITAU") creditosPendentes_itau += val;
+          else if (v.banco === "INFINITE") creditosPendentes_inf += val;
+          else if (v.banco === "MERCADO_PAGO") creditosPendentes_mp += val;
+        }
+      }
+    }
+  }
 
   return {
     data: dataISO,
@@ -336,5 +454,11 @@ export async function gerarManha(
     saldo_itau, saldo_inf, saldo_mp, saldo_especie,
     vendasMes: mesRows.length,
     lucroMes: mesRows.reduce((s, v) => s + Number(v.lucro), 0),
+    faturamentoMes,
+    fiadoPendente, totalFiado,
+    valorEstoque, valorACaminho, valorPendencias, capitalProdutos,
+    saldoBancarioTotal, patrimonioTotal,
+    isFimDeSemana,
+    creditosPendentes_itau, creditosPendentes_inf, creditosPendentes_mp, dataPendentes,
   };
 }
