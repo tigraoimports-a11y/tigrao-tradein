@@ -140,25 +140,33 @@ export default function AdminPage() {
 
     if (filterModelo && d.modelo_novo !== filterModelo) return false;
 
-    const created = new Date(d.created_at);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Converter created_at para data local (YYYY-MM-DD) no fuso de São Paulo
+    const createdDate = new Date(d.created_at).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // "2026-03-24"
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
     if (filterPeriod === "hoje") {
-      if (created < today) return false;
+      if (createdDate !== todayStr) return false;
     } else if (filterPeriod === "ontem") {
-      const yesterday = new Date(today);
+      const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      if (created < yesterday || created >= today) return false;
+      const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      if (createdDate !== yesterdayStr) return false;
     } else if (filterPeriod === "7dias") {
-      if (created < new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) return false;
+      const since = new Date();
+      since.setDate(since.getDate() - 7);
+      const sinceStr = since.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      if (createdDate < sinceStr) return false;
     } else if (filterPeriod === "30dias") {
-      if (created < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) return false;
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const sinceStr = since.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      if (createdDate < sinceStr) return false;
     } else if (filterPeriod === "mes") {
-      if (created < new Date(now.getFullYear(), now.getMonth(), 1)) return false;
+      const mesStr = todayStr.substring(0, 7); // "2026-03"
+      if (!createdDate.startsWith(mesStr)) return false;
     } else if (filterPeriod === "personalizado") {
-      if (filterFrom && created < new Date(filterFrom + "T00:00:00")) return false;
-      if (filterTo && created > new Date(filterTo + "T23:59:59")) return false;
+      if (filterFrom && createdDate < filterFrom) return false;
+      if (filterTo && createdDate > filterTo) return false;
     }
 
     return true;
