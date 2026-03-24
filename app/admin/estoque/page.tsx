@@ -261,13 +261,56 @@ export default function EstoquePage() {
   }
 
   // Duplicar produto do estoque
+  // Parsear nome do produto para extrair specs
+  function parseProductSpecs(nome: string, cat: string) {
+    const n = (nome || "").toUpperCase();
+    const storageMatch = n.match(/(\d+(?:TB|GB))/);
+    const telaMatch = n.match(/([\d.]+[""])/);
+    const storage = storageMatch ? storageMatch[1] : "";
+    const tela = telaMatch ? telaMatch[1].replace(/[""]/g, '"') : "";
+
+    if (cat === "IPADS") {
+      const modelo = n.includes("AIR") ? "AIR" : n.includes("PRO") ? "PRO" : n.includes("MINI") ? "MINI" : "IPAD";
+      const conn = n.includes("CELL") ? "WIFI+CELL" : "WIFI";
+      return { ipad_modelo: modelo, ipad_tela: tela || "11\"", ipad_storage: storage || "128GB", ipad_conn: conn };
+    }
+    if (cat === "IPHONES") {
+      const numMatch = n.match(/IPHONE\s*(\d+)/);
+      const modelo = numMatch ? numMatch[1] : "16";
+      const linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" E") ? "E" : "";
+      return { ip_modelo: modelo, ip_linha: linha, ip_storage: storage || "128GB" };
+    }
+    if (cat === "MACBOOK") {
+      const tipo = n.includes("PRO") ? "PRO" : "AIR";
+      const chipMatch = n.match(/(M\d+(?:\s*PRO|\s*MAX)?)/i);
+      const ramMatch = n.match(/(\d+GB)\s/);
+      return { mb_modelo: tipo, mb_tela: tela || "13\"", mb_chip: chipMatch ? chipMatch[1] : "M4", mb_ram: ramMatch ? ramMatch[1] : "16GB", mb_storage: storage || "256GB" };
+    }
+    if (cat === "MAC_MINI") {
+      const chipMatch = n.match(/(M\d+(?:\s*PRO)?)/i);
+      const ramMatch = n.match(/(\d+GB)\s/);
+      return { mm_chip: chipMatch ? chipMatch[1] : "M4", mm_ram: ramMatch ? ramMatch[1] : "16GB", mm_storage: storage || "256GB" };
+    }
+    if (cat === "APPLE_WATCH") {
+      const modeloMatch = n.match(/(SERIES\s*\d+|SE|ULTRA\s*\d*)/i);
+      const tamMatch = n.match(/(\d+mm)/i);
+      const conn = n.includes("CELL") ? "GPS+CELL" : "GPS";
+      return { aw_modelo: modeloMatch ? modeloMatch[1] : "SERIES 10", aw_tamanho: tamMatch ? tamMatch[1] : "42mm", aw_conn: conn };
+    }
+    if (cat === "AIRPODS") {
+      return { air_modelo: n.trim() || "AIRPODS 4" };
+    }
+    return {};
+  }
+
   // Duplicar produto: abre form pré-preenchido com mesmas cores
   function handleDuplicarProduto(prodItems: ProdutoEstoque[]) {
     const p = prodItems[0];
+    const cat = p.categoria || "IPHONES";
     setForm((f) => ({
       ...f,
       produto: p.produto,
-      categoria: p.categoria || "IPHONES",
+      categoria: cat,
       custo_unitario: String(p.custo_unitario || ""),
       tipo: p.tipo || "NOVO",
       fornecedor: p.fornecedor || "",
@@ -276,12 +319,15 @@ export default function EstoquePage() {
       imei: "",
       observacao: "",
     }));
+    // Parsear nome do produto para preencher specs corretamente
+    const parsedSpecs = parseProductSpecs(p.produto, cat);
+    setSpec((s) => ({ ...s, ...parsedSpecs }));
     // Pré-criar variações com as mesmas cores
     setVariacoes(
       prodItems.map((item) => ({ cor: item.cor || "", qnt: String(item.qnt || 1) }))
     );
     setTab("novo");
-    setMsg("Produto duplicado! Altere o nome/memoria/custo e clique Adicionar.");
+    setMsg("Produto duplicado! Altere memoria/custo e clique Adicionar.");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
