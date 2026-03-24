@@ -307,6 +307,9 @@ export default function EstoquePage() {
   function handleDuplicarProduto(prodItems: ProdutoEstoque[]) {
     const p = prodItems[0];
     const cat = p.categoria || "IPHONES";
+    // Primeira cor vai no form principal, demais vão em variações
+    const firstItem = prodItems[0];
+    const restItems = prodItems.slice(1);
     setForm((f) => ({
       ...f,
       produto: p.produto,
@@ -314,17 +317,17 @@ export default function EstoquePage() {
       custo_unitario: String(p.custo_unitario || ""),
       tipo: p.tipo || "NOVO",
       fornecedor: p.fornecedor || "",
-      cor: "",
-      qnt: "1",
+      cor: firstItem.cor || "",
+      qnt: String(firstItem.qnt || 1),
       imei: "",
       observacao: "",
     }));
     // Parsear nome do produto para preencher specs corretamente
     const parsedSpecs = parseProductSpecs(p.produto, cat);
     setSpec((s) => ({ ...s, ...parsedSpecs }));
-    // Pré-criar variações com as mesmas cores
+    // Demais cores vão como variações
     setVariacoes(
-      prodItems.map((item) => ({ cor: item.cor || "", qnt: String(item.qnt || 1) }))
+      restItems.map((item) => ({ cor: item.cor || "", qnt: String(item.qnt || 1) }))
     );
     setTab("novo");
     setMsg("Produto duplicado! Altere memoria/custo e clique Adicionar.");
