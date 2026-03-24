@@ -40,7 +40,7 @@ const fmtDate = (d: string) => {
 };
 
 export default function ClientesPage() {
-  const { password, darkMode: dm } = useAdmin();
+  const { password, darkMode: dm, apiHeaders } = useAdmin();
   const [tab, setTab] = useState<"clientes" | "lojistas">("clientes");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -57,12 +57,13 @@ export default function ClientesPage() {
   }, [search]);
 
   const fetchClientes = useCallback(async () => {
+    if (!password) return; // aguardar autenticação
     setLoading(true);
     try {
       const params = new URLSearchParams({ tab });
       if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await fetch(`/api/admin/clientes?${params}`, {
-        headers: { "x-admin-password": password },
+        headers: apiHeaders(),
       });
       if (res.ok) {
         const json = await res.json();
@@ -71,7 +72,7 @@ export default function ClientesPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, tab, debouncedSearch]);
+  }, [password, tab, debouncedSearch, apiHeaders]);
 
   useEffect(() => { fetchClientes(); }, [fetchClientes]);
 
