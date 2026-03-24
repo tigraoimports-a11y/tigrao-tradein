@@ -26,6 +26,7 @@ interface ProdutoEstoque {
   cliente: string | null;
   fornecedor: string | null;
   imei: string | null;
+  serial_no: string | null;
 }
 
 interface ImeiSearchResult {
@@ -136,6 +137,7 @@ export default function EstoquePage() {
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
+  const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
@@ -450,6 +452,27 @@ export default function EstoquePage() {
     setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, custo_unitario: val } : p));
     const e = { ...editingCusto }; delete e[item.id]; setEditingCusto(e);
   };
+
+  // Edição genérica de campo inline
+  const startEditField = (id: string, field: string, value: string) => {
+    setEditingField((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
+  };
+  const cancelEditField = (id: string, field: string) => {
+    setEditingField((prev) => {
+      const copy = { ...prev };
+      if (copy[id]) { delete copy[id][field]; if (Object.keys(copy[id]).length === 0) delete copy[id]; }
+      return copy;
+    });
+  };
+  const saveField = async (id: string, field: string) => {
+    const val = editingField[id]?.[field] ?? "";
+    const dbVal = field === "bateria" ? (val ? parseInt(val) : null) : (val || null);
+    await apiPatch(id, { [field]: dbVal });
+    setEstoque((prev) => prev.map((p) => p.id === id ? { ...p, [field]: dbVal } : p));
+    cancelEditField(id, field);
+  };
+  const getEditVal = (id: string, field: string) => editingField[id]?.[field];
+  const isEditingField = (id: string, field: string) => editingField[id]?.[field] !== undefined;
 
   const handleSaveNome = async (ids: string[], newNome: string) => {
     if (!newNome.trim()) return;
@@ -1176,11 +1199,68 @@ export default function EstoquePage() {
                                         <span className="text-[10px]">⠿</span>
                                       </td>
                                       <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
-                                        <span className={textSecondary}>• {p.cor || "—"}</span>
+                                        {isPendenciasTab && isEditingField(p.id, "cor") ? (
+                                          <div className="flex items-center gap-1">
+                                            <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
+                                            <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                          </div>
+                                        ) : (
+                                          <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
+                                        )}
                                         {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>IMEI</span>}
+                                        {p.serial_no && <span className="ml-1.5 text-[10px] text-purple-500 font-mono" title={`SN: ${p.serial_no}`}>SN</span>}
                                       </td>
-                                      {isPendenciasTab && <td className="px-4 py-2.5 text-xs font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</td>}
-                                      {showObs && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
+                                      {isPendenciasTab && (
+                                        <td className="px-2 py-2.5 text-xs">
+                                          <div className="flex flex-col gap-1">
+                                            <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>
+                                            {/* Campos editáveis: IMEI, Serial, Obs, Bateria */}
+                                            <div className="flex flex-wrap gap-1">
+                                              {isEditingField(p.id, "imei") ? (
+                                                <div className="flex items-center gap-0.5">
+                                                  <input value={getEditVal(p.id, "imei") || ""} onChange={(e) => startEditField(p.id, "imei", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "imei"); if (e.key === "Escape") cancelEditField(p.id, "imei"); }} className="w-28 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder="IMEI" />
+                                                  <button onClick={() => saveField(p.id, "imei")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                </div>
+                                              ) : (
+                                                <button onClick={() => startEditField(p.id, "imei", p.imei || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.imei ? "bg-blue-50 text-[#0071E3]" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {p.imei ? `IMEI: ${p.imei.slice(-6)}` : "+ IMEI"}
+                                                </button>
+                                              )}
+                                              {isEditingField(p.id, "serial_no") ? (
+                                                <div className="flex items-center gap-0.5">
+                                                  <input value={getEditVal(p.id, "serial_no") || ""} onChange={(e) => startEditField(p.id, "serial_no", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "serial_no"); if (e.key === "Escape") cancelEditField(p.id, "serial_no"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder="Serial" />
+                                                  <button onClick={() => saveField(p.id, "serial_no")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                </div>
+                                              ) : (
+                                                <button onClick={() => startEditField(p.id, "serial_no", p.serial_no || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.serial_no ? "bg-purple-50 text-purple-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {p.serial_no ? `SN: ${p.serial_no.slice(-6)}` : "+ Serial"}
+                                                </button>
+                                              )}
+                                              {isEditingField(p.id, "bateria") ? (
+                                                <div className="flex items-center gap-0.5">
+                                                  <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
+                                                  <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                </div>
+                                              ) : (
+                                                <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {p.bateria ? `Bat: ${p.bateria}%` : "+ Bateria"}
+                                                </button>
+                                              )}
+                                              {isEditingField(p.id, "observacao") ? (
+                                                <div className="flex items-center gap-0.5">
+                                                  <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Obs..." />
+                                                  <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                </div>
+                                              ) : (
+                                                <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[120px] truncate`}>
+                                                  {p.observacao || "+ Obs"}
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </td>
+                                      )}
+                                      {showObs && !isPendenciasTab && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
                                       <td className="px-4 py-2.5">
                                         {isEditQnt ? (
                                           <div className="flex items-center gap-1">
