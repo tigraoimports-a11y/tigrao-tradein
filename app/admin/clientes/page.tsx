@@ -69,8 +69,10 @@ export default function ClientesPage() {
         const json = await res.json();
         setClientes(json.clientes ?? []);
         setTotals({ total: json.total, total_gasto: json.total_gasto, total_compras: json.total_compras });
+      } else {
+        console.error("Clientes API error:", res.status, await res.text().catch(() => ""));
       }
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Clientes fetch error:", err); }
     setLoading(false);
   }, [password, tab, debouncedSearch, apiHeaders]);
 
