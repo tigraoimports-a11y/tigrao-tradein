@@ -191,7 +191,7 @@ export default function StepQuote(p: StepQuoteProps) {
       </div>
 
       {/* CTA */}
-      <button onClick={() => { onTrackAction?.("quote_whatsapp"); window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); }}
+      <button onClick={() => { onTrackAction?.("quote_whatsapp"); window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" }); }}
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
         style={{ backgroundColor: "var(--ti-cta-bg)", color: "var(--ti-cta-text)" }}>
         Gostei da proposta. Quero comprar!

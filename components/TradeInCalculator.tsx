@@ -60,6 +60,10 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   const { trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
 
+  // Meta Pixel helper — dispara eventos de conversão
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fbq = (...args: any[]) => { if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq(...args); };
+
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -156,6 +160,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
   }) {
     trackComplete(1);
+    fbq("track", "ViewContent", { content_name: `${data.usedModel} ${data.usedStorage}`, content_category: "trade-in-usado" });
     if (step === 1) {
       setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
       setCondition(data.condition); setTradeInValue(data.tradeInValue); setStep(1.5);
@@ -168,12 +173,14 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   function handleStep2Complete(data: { newModel: string; newStorage: string; newPrice: number }) {
     trackComplete(2);
+    fbq("track", "AddToWishlist", { content_name: `${data.newModel} ${data.newStorage}`, value: data.newPrice, currency: "BRL" });
     setNewModel(data.newModel); setNewStorage(data.newStorage); setNewPrice(data.newPrice);
     setStep(3); window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleStep3Complete(data: { clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string }) {
     trackComplete(3);
+    fbq("track", "Lead", { content_name: "trade-in-dados-pessoais" });
     setClienteNome(data.clienteNome); setClienteWhatsApp(data.clienteWhatsApp);
     setClienteInstagram(data.clienteInstagram); setClienteOrigem(data.clienteOrigem);
     setStep(4); window.scrollTo({ top: 0, behavior: "smooth" });
