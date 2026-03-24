@@ -135,6 +135,7 @@ export default function EstoquePage() {
   const [msg, setMsg] = useState("");
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
+  const [editingNome, setEditingNome] = useState<Record<string, string>>({});
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -404,6 +405,17 @@ export default function EstoquePage() {
     await apiPatch(item.id, { custo_unitario: val });
     setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, custo_unitario: val } : p));
     const e = { ...editingCusto }; delete e[item.id]; setEditingCusto(e);
+  };
+
+  const handleSaveNome = async (ids: string[], newNome: string) => {
+    if (!newNome.trim()) return;
+    for (const id of ids) {
+      await apiPatch(id, { produto: newNome.trim() });
+    }
+    setEstoque((prev) => prev.map((p) => ids.includes(p.id) ? { ...p, produto: newNome.trim() } : p));
+    const key = ids[0];
+    const e = { ...editingNome }; delete e[key]; setEditingNome(e);
+    setMsg(`Nome atualizado para "${newNome.trim()}"`);
   };
 
   const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
@@ -1022,7 +1034,28 @@ export default function EstoquePage() {
                                 {/* Header do produto — sempre mostra */}
                                 <tr className={`${bgCardAlt} border-b ${borderCardAlt}`}>
                                   <td className="w-4"></td>
-                                  <td className={`px-2 py-2.5 font-semibold text-sm ${textPrimary}`} colSpan={1}>{prodNome}</td>
+                                  <td className={`px-2 py-2.5 font-semibold text-sm ${textPrimary}`} colSpan={1}>
+                                    {editingNome[prodItems[0]?.id] !== undefined ? (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          value={editingNome[prodItems[0].id]}
+                                          onChange={(e) => setEditingNome({ ...editingNome, [prodItems[0].id]: e.target.value })}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id]);
+                                            if (e.key === "Escape") { const en = { ...editingNome }; delete en[prodItems[0].id]; setEditingNome(en); }
+                                          }}
+                                          className="w-full px-2 py-0.5 rounded border border-[#0071E3] text-sm font-semibold"
+                                          autoFocus
+                                        />
+                                        <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
+                                      </div>
+                                    ) : (
+                                      <span className="cursor-pointer hover:text-[#E8740E] flex items-center gap-1" onClick={() => setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome })}>
+                                        {prodNome}
+                                        <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                      </span>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-2 text-right">
                                     <span className={`text-xs font-bold ${textPrimary}`}>{prodTotal} un.</span>
                                   </td>
