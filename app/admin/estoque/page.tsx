@@ -942,10 +942,8 @@ export default function EstoquePage() {
             <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Numero do IMEI (opcional)" className={inputCls} />
           </div>
 
-          {/* Row: Cor + Qtd principal */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className={labelCls}>Cor</p><input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver" className={inputCls} /></div>
-            <div><p className={labelCls}>Quantidade</p><input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={inputCls} /></div>
+          {/* Custo e Fornecedor */}
+          <div className="grid grid-cols-2 gap-4">
             <div><p className={labelCls}>Custo unitario (R$)</p><input type="number" value={form.custo_unitario} onChange={(e) => set("custo_unitario", e.target.value)} className={inputCls} /></div>
             <div>
               <p className={labelCls}>Fornecedor</p>
@@ -974,23 +972,29 @@ export default function EstoquePage() {
             </div>
           </div>
 
-          {/* Variações de cor adicionais */}
-          {variacoes.length > 0 && (
-            <div className={`p-3 rounded-xl ${bgSection} space-y-2`}>
-              <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Variacoes de cor</p>
-              {variacoes.map((v, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} />
-                  <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={`${inputCls} w-20`} />
-                  <span className={`text-xs ${textSecondary}`}>un.</span>
-                  <button onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700 text-sm font-bold">✕</button>
-                </div>
-              ))}
+          {/* Cores e Quantidades */}
+          <div className={`p-4 rounded-xl ${bgSection} space-y-3`}>
+            <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Cores e Quantidades</p>
+            {/* Primeira cor (principal) */}
+            <div className="flex items-center gap-2">
+              <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Cor (ex: Silver)" className={`${inputCls} flex-1`} />
+              <input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={`${inputCls} w-20 text-center`} placeholder="Qtd" />
+              <span className={`text-xs ${textSecondary} w-6`}>un.</span>
+              <span className="w-5"></span>
             </div>
-          )}
-          <button type="button" onClick={() => setVariacoes([...variacoes, { cor: "", qnt: "1" }])} className={`w-full py-2 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-sm font-medium transition-colors`}>
-            + Adicionar variacao de cor
-          </button>
+            {/* Cores adicionais */}
+            {variacoes.map((v, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} />
+                <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={`${inputCls} w-20 text-center`} placeholder="Qtd" />
+                <span className={`text-xs ${textSecondary} w-6`}>un.</span>
+                <button onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700 text-sm font-bold w-5">✕</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setVariacoes([...variacoes, { cor: "", qnt: "1" }])} className={`w-full py-2 rounded-lg border border-dashed ${dm ? "border-[#3A3A3C] text-[#636366] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-xs font-medium transition-colors`}>
+              + Outra cor
+            </button>
+          </div>
           {form.tipo === "SEMINOVO" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
@@ -1002,7 +1006,7 @@ export default function EstoquePage() {
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
           <button onClick={handleSubmit} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">
-            {variacoes.length > 0 ? `Adicionar (${variacoes.length + 1} variacoes)` : "Adicionar"}
+            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar"}
           </button>
         </div>
       ) : (
