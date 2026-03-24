@@ -48,8 +48,8 @@ export default function SalesMap({ bairros }: SalesMapProps) {
     }
 
     const map = L.map(mapRef.current, {
-      center: [-22.9, -43.17],
-      zoom: 10,
+      center: [-22.95, -43.25],
+      zoom: 11,
       scrollWheelZoom: true,
       zoomControl: true,
     });
@@ -115,9 +115,11 @@ export default function SalesMap({ bairros }: SalesMapProps) {
       const bounds = L.latLngBounds(
         boundsData.map((b) => [b.lat!, b.lng!] as [number, number])
       );
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
+    } else if (boundsData.length === 1) {
+      map.setView([boundsData[0].lat!, boundsData[0].lng!], 12);
     } else {
-      map.setView([-22.95, -43.25], 10);
+      map.setView([-22.95, -43.25], 11);
     }
 
     return () => {

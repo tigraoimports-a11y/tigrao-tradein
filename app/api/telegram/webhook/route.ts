@@ -812,7 +812,7 @@ export async function POST(req: NextRequest) {
           { data: vendasSemAnt },
           { data: gastosSemAnt },
         ] = await Promise.all([
-          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, status_pagamento")
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, produto, status_pagamento")
             .gte("data", inicio).lte("data", fim).neq("status_pagamento", "CANCELADO"),
           supabase.from("gastos").select("valor, tipo, categoria")
             .gte("data", inicio).lte("data", fim),
@@ -850,6 +850,28 @@ export async function POST(req: NextRequest) {
           catGastos[g.categoria] = (catGastos[g.categoria] || 0) + (g.valor || 0);
         });
 
+        // Top 5 produtos mais vendidos
+        const porProduto: Record<string, { qty: number; fat: number; lucro: number }> = {};
+        for (const v of vs) {
+          const prod = v.produto || "Desconhecido";
+          if (!porProduto[prod]) porProduto[prod] = { qty: 0, fat: 0, lucro: 0 };
+          porProduto[prod].qty++;
+          porProduto[prod].fat += (v.preco_vendido || 0);
+          porProduto[prod].lucro += (v.lucro || 0);
+        }
+        const top5Produtos = Object.entries(porProduto)
+          .sort((a, b) => b[1].qty - a[1].qty)
+          .slice(0, 5);
+
+        // Vendas por origem
+        const porOrigem: Record<string, { qty: number; lucro: number }> = {};
+        for (const v of vs) {
+          const orig = v.origem || "Não informado";
+          if (!porOrigem[orig]) porOrigem[orig] = { qty: 0, lucro: 0 };
+          porOrigem[orig].qty++;
+          porOrigem[orig].lucro += (v.lucro || 0);
+        }
+
         // Comparativo
         const fatAnt = vsAnt.reduce((s, v) => s + (v.preco_vendido || 0), 0);
         const lucroAnt = vsAnt.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -857,7 +879,7 @@ export async function POST(req: NextRequest) {
 
         const lines: string[] = [
           `📊 <b>RELATÓRIO SEMANAL — TigrãoImports</b>`,
-          `📅 ${inicio} a ${fim}`,
+          `📅 ${formatDateBR(inicio)} a ${formatDateBR(fim)}`,
           ``,
           `🛒 <b>VENDAS DA SEMANA</b>`,
           `  Quantidade: <b>${vs.length}</b>`,
@@ -875,6 +897,25 @@ export async function POST(req: NextRequest) {
           `  Faturamento/dia: ${fmtBRL(mediaDiariaFat)}`,
           `  Lucro/dia: ${fmtBRL(mediaDiariaLucro)}`,
         ];
+
+        // Top 5 produtos
+        if (top5Produtos.length > 0) {
+          lines.push(``);
+          lines.push(`🏆 <b>TOP 5 PRODUTOS</b>`);
+          top5Produtos.forEach(([nome, info], i) => {
+            lines.push(`  ${i + 1}. ${nome} — ${info.qty}x | ${fmtBRL(info.fat)} | Lucro: ${fmtBRL(info.lucro)}`);
+          });
+        }
+
+        // Vendas por origem
+        const origemEntries = Object.entries(porOrigem).sort((a, b) => b[1].qty - a[1].qty);
+        if (origemEntries.length > 0) {
+          lines.push(``);
+          lines.push(`📍 <b>VENDAS POR ORIGEM</b>`);
+          for (const [orig, info] of origemEntries) {
+            lines.push(`  • ${orig}: ${info.qty}x | Lucro: ${fmtBRL(info.lucro)}`);
+          }
+        }
 
         // Saídas por categoria
         if (Object.keys(catGastos).length > 0) {
@@ -897,6 +938,17 @@ export async function POST(req: NextRequest) {
         lines.push(`  − Gastos operacionais: ${fmtBRL(gastosSaida)}`);
         lines.push(`  <b>= Lucro líquido: ${fmtBRL(lucroSem - gastosSaida)}</b>`);
 
+        // Comparativo com semana anterior
+        lines.push(``);
+        lines.push(`📊 <b>COMPARATIVO (7 dias anteriores)</b>`);
+        lines.push(`  Vendas: ${vsAnt.length} → ${vs.length} (${vs.length - vsAnt.length >= 0 ? "+" : ""}${vs.length - vsAnt.length})`);
+        const fatDiffSem = faturamento - fatAnt;
+        const lucroDiffSem = lucroSem - lucroAnt;
+        const fatPctSem = fatAnt > 0 ? ((fatDiffSem / fatAnt) * 100).toFixed(1) : "—";
+        const lucroPctSem = lucroAnt > 0 ? ((lucroDiffSem / lucroAnt) * 100).toFixed(1) : "—";
+        lines.push(`  Faturamento: ${fatDiffSem >= 0 ? "+" : ""}${fmtBRL(fatDiffSem)} (${fatPctSem}%)`);
+        lines.push(`  Lucro: ${lucroDiffSem >= 0 ? "+" : ""}${fmtBRL(lucroDiffSem)} (${lucroPctSem}%)`);
+
         // Patrimônio
         try {
           const patrimonio = await getPatrimonio();
@@ -911,20 +963,6 @@ export async function POST(req: NextRequest) {
           lines.push(`  <b>🏆 PATRIMÔNIO TOTAL: ${fmtBRL(patrimonio.patrimonioTotal)}</b>`);
         } catch { /* ignore */ }
 
-        // Comparativo
-        if (vsAnt.length > 0) {
-          const fatDiff = faturamento - fatAnt;
-          const lucroDiff = lucroSem - lucroAnt;
-          const fatPct = fatAnt > 0 ? ((fatDiff / fatAnt) * 100).toFixed(1) : "—";
-          const lucroPct = lucroAnt > 0 ? ((lucroDiff / lucroAnt) * 100).toFixed(1) : "—";
-
-          lines.push(``);
-          lines.push(`📊 <b>COMPARATIVO (semana anterior)</b>`);
-          lines.push(`  Vendas: ${vsAnt.length} → ${vs.length} (${vs.length - vsAnt.length >= 0 ? "+" : ""}${vs.length - vsAnt.length})`);
-          lines.push(`  Faturamento: ${fatDiff >= 0 ? "+" : ""}${fmtBRL(fatDiff)} (${fatPct}%)`);
-          lines.push(`  Lucro: ${lucroDiff >= 0 ? "+" : ""}${fmtBRL(lucroDiff)} (${lucroPct}%)`);
-        }
-
         // Fiado pendente
         const fiados = await getFiadoPendente();
         if (fiados.length > 0) {
@@ -932,7 +970,7 @@ export async function POST(req: NextRequest) {
           lines.push(``);
           lines.push(`🔴 <b>FIADO PENDENTE (${fiados.length})</b>`);
           for (const f of fiados.slice(0, 10)) {
-            lines.push(`  • ${f.cliente}: ${fmtBRL(Number(f.preco_vendido || 0))} (${f.data})`);
+            lines.push(`  • ${f.cliente}: ${fmtBRL(Number(f.preco_vendido || 0))} (${formatDateBR(f.data)})`);
           }
           if (fiados.length > 10) lines.push(`  ... e mais ${fiados.length - 10}`);
           lines.push(`  <b>Total: ${fmtBRL(totalFiado)}</b>`);
@@ -960,7 +998,7 @@ export async function POST(req: NextRequest) {
           { data: vendasMesAnt },
           { data: gastosMesAnt },
         ] = await Promise.all([
-          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, cliente, status_pagamento")
+          supabase.from("vendas").select("preco_vendido, custo, lucro, tipo, origem, forma, cliente, produto, data, status_pagamento")
             .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`).neq("status_pagamento", "CANCELADO"),
           supabase.from("gastos").select("valor, tipo, categoria, descricao")
             .gte("data", `${mesAtual}-01`).lte("data", `${mesAtual}-31`),
@@ -982,13 +1020,6 @@ export async function POST(req: NextRequest) {
         const gastosSaida = gm.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
         const comprasFornecedor = gm.filter(g => g.tipo === "SAIDA" && g.categoria === "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
         const margemMedia = faturamento > 0 ? ((lucroMes / faturamento) * 100).toFixed(1) : "0";
-        const ticketMedio = vm.length > 0 ? Math.round(faturamento / vm.length) : 0;
-
-        // Por tipo
-        const upgrades = vm.filter(v => v.tipo === "UPGRADE");
-        const vendas = vm.filter(v => v.tipo === "VENDA");
-        const atacado = vm.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
-        const clienteFinal = vm.filter(v => v.origem !== "ATACADO");
 
         // Médias e projeção
         const diasUteis = Math.max(diaDoMes, 1);
@@ -1009,12 +1040,6 @@ export async function POST(req: NextRequest) {
           `  Custo: ${fmtBRL(custoTotal)}`,
           `  Lucro bruto: <b>${fmtBRL(lucroMes)}</b>`,
           `  Margem: ${margemMedia}%`,
-          `  Ticket médio: ${fmtBRL(ticketMedio)}`,
-          ``,
-          `  🔄 Upgrades: ${upgrades.length}x | ${fmtBRL(upgrades.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  🏪 Vendas: ${vendas.length}x | ${fmtBRL(vendas.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  📦 Atacado: ${atacado.length}x | ${fmtBRL(atacado.reduce((s, v) => s + (v.lucro || 0), 0))}`,
-          `  👤 Cliente final: ${clienteFinal.length}x | ${fmtBRL(clienteFinal.reduce((s, v) => s + (v.lucro || 0), 0))}`,
           ``,
           `📈 <b>MÉDIAS E PROJEÇÃO</b>`,
           `  Média diária fat: ${fmtBRL(mediaDiariaFat)}`,
@@ -1023,33 +1048,41 @@ export async function POST(req: NextRequest) {
           `  Projeção lucro mês: ${fmtBRL(projecaoLucro)}`,
         ];
 
-        // Saídas por categoria com emojis
+        // Saídas do mês por categoria (ordem definida)
         const catGastos: Record<string, number> = {};
         gm.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").forEach(g => {
           catGastos[g.categoria] = (catGastos[g.categoria] || 0) + (g.valor || 0);
         });
 
+        // Ordem preferencial de categorias
+        const catOrdem = ["SALARIO", "ANUNCIOS", "MARKETING", "GASTOS LOJA", "SISTEMAS", "CORREIOS", "MOTOBOY RJ", "MOTOBOY SP", "TRANSPORTE", "ALIMENTACAO", "DOACOES", "IMPOSTOS", "EQUIPAMENTOS", "OUTROS"];
+
         if (Object.keys(catGastos).length > 0) {
           lines.push(``);
           lines.push(`📤 <b>SAÍDAS DO MÊS</b>`);
-          for (const [cat, val] of Object.entries(catGastos).sort((a, b) => b[1] - a[1])) {
-            lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
+          // Primeiro as categorias conhecidas, na ordem
+          const catUsadas = new Set<string>();
+          for (const cat of catOrdem) {
+            if (catGastos[cat]) {
+              lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(catGastos[cat])}`);
+              catUsadas.add(cat);
+            }
           }
-          lines.push(`  <b>Total operacional: ${fmtBRL(gastosSaida)}</b>`);
+          // Depois as que sobraram
+          for (const [cat, val] of Object.entries(catGastos).sort((a, b) => b[1] - a[1])) {
+            if (!catUsadas.has(cat)) {
+              lines.push(`  ${getCatEmoji(cat)} ${cat}: ${fmtBRL(val)}`);
+            }
+          }
+          lines.push(`  ──────────────`);
+          lines.push(`  <b>Total saídas: ${fmtBRL(gastosSaida)}</b>`);
         }
 
         if (comprasFornecedor > 0) {
-          lines.push(``);
-          lines.push(`🏭 <b>Compras fornecedor:</b> ${fmtBRL(comprasFornecedor)}`);
+          lines.push(`  🏭 Compras fornecedor: ${fmtBRL(comprasFornecedor)}`);
         }
 
-        lines.push(``);
-        lines.push(`💵 <b>RESULTADO</b>`);
-        lines.push(`  Lucro bruto: ${fmtBRL(lucroMes)}`);
-        lines.push(`  − Gastos operacionais: ${fmtBRL(gastosSaida)}`);
-        lines.push(`  <b>= Lucro líquido: ${fmtBRL(lucroMes - gastosSaida)}</b>`);
-
-        // Patrimônio
+        // Patrimônio atual com detalhamento bancário
         try {
           const patrimonio = await getPatrimonio();
           lines.push(``);
@@ -1067,35 +1100,43 @@ export async function POST(req: NextRequest) {
           lines.push(`  <b>🏆 PATRIMÔNIO TOTAL: ${fmtBRL(patrimonio.patrimonioTotal)}</b>`);
         } catch { /* ignore */ }
 
-        // Comparativo com mês anterior (mesmo período)
-        if (vmAnt.length > 0) {
-          const fatAnt = vmAnt.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-          const lucroAnt = vmAnt.reduce((s, v) => s + (v.lucro || 0), 0);
-          const fatDiff = faturamento - fatAnt;
-          const lucroDiff = lucroMes - lucroAnt;
-          const fatPct = fatAnt > 0 ? ((fatDiff / fatAnt) * 100).toFixed(1) : "—";
-          const lucroPct = lucroAnt > 0 ? ((lucroDiff / lucroAnt) * 100).toFixed(1) : "—";
+        // Comparativo com mês anterior (mesmos dias)
+        const fatAntMes = vmAnt.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+        const lucroAntMes = vmAnt.reduce((s, v) => s + (v.lucro || 0), 0);
+        const gastosAntMes = gmAnt.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR").reduce((s, g) => s + (g.valor || 0), 0);
+        const nomeMesAnt = new Date(`${mesAnterior}-15`).toLocaleString("pt-BR", { month: "long" });
 
-          const nomeMesAnt = new Date(`${mesAnterior}-15`).toLocaleString("pt-BR", { month: "long" });
+        lines.push(``);
+        lines.push(`📊 <b>COMPARATIVO (vs ${nomeMesAnt}, mesmos ${diaDoMes} dias)</b>`);
+        lines.push(`  Vendas: ${vmAnt.length} → ${vm.length} (${vm.length - vmAnt.length >= 0 ? "+" : ""}${vm.length - vmAnt.length})`);
+        const fatDiffMes = faturamento - fatAntMes;
+        const lucroDiffMes = lucroMes - lucroAntMes;
+        const saidasDiffMes = gastosSaida - gastosAntMes;
+        const fatPctMes = fatAntMes > 0 ? ((fatDiffMes / fatAntMes) * 100).toFixed(1) : "—";
+        const lucroPctMes = lucroAntMes > 0 ? ((lucroDiffMes / lucroAntMes) * 100).toFixed(1) : "—";
+        lines.push(`  Fat: ${fatDiffMes >= 0 ? "+" : ""}${fmtBRL(fatDiffMes)} (${fatPctMes}%)`);
+        lines.push(`  Lucro: ${lucroDiffMes >= 0 ? "+" : ""}${fmtBRL(lucroDiffMes)} (${lucroPctMes}%)`);
+        lines.push(`  Saídas: ${saidasDiffMes >= 0 ? "+" : ""}${fmtBRL(saidasDiffMes)}`);
 
-          lines.push(``);
-          lines.push(`📊 <b>COMPARATIVO (vs ${nomeMesAnt}, mesmo período)</b>`);
-          lines.push(`  Vendas: ${vmAnt.length} → ${vm.length} (${vm.length - vmAnt.length >= 0 ? "+" : ""}${vm.length - vmAnt.length})`);
-          lines.push(`  Faturamento: ${fatDiff >= 0 ? "+" : ""}${fmtBRL(fatDiff)} (${fatPct}%)`);
-          lines.push(`  Lucro: ${lucroDiff >= 0 ? "+" : ""}${fmtBRL(lucroDiff)} (${lucroPct}%)`);
-        }
-
-        // Fiado pendente
+        // Fiado pendente agrupado por data e cliente
         const fiados = await getFiadoPendente();
         if (fiados.length > 0) {
           const totalFiado = fiados.reduce((s, f) => s + Number(f.preco_vendido || 0), 0);
           lines.push(``);
-          lines.push(`🔴 <b>FIADO PENDENTE (${fiados.length})</b>`);
-          for (const f of fiados.slice(0, 10)) {
-            lines.push(`  • ${f.cliente}: ${fmtBRL(Number(f.preco_vendido || 0))} — ${f.produto || ""}`);
+          lines.push(`🔴 <b>FIADO PENDENTE (${fiados.length}) — ${fmtBRL(totalFiado)}</b>`);
+          // Agrupar por data
+          const porData: Record<string, typeof fiados> = {};
+          for (const f of fiados) {
+            if (!porData[f.data]) porData[f.data] = [];
+            porData[f.data].push(f);
           }
-          if (fiados.length > 10) lines.push(`  ... e mais ${fiados.length - 10}`);
-          lines.push(`  <b>Total fiado: ${fmtBRL(totalFiado)}</b>`);
+          for (const [data, items] of Object.entries(porData).sort(([a], [b]) => a.localeCompare(b))) {
+            const totalData = items.reduce((s, f) => s + Number(f.preco_vendido || 0), 0);
+            lines.push(`  📅 ${formatDateBR(data)}: ${fmtBRL(totalData)}`);
+            for (const f of items) {
+              lines.push(`    • ${f.cliente} — ${fmtBRL(Number(f.preco_vendido || 0))}`);
+            }
+          }
         }
 
         await sendTelegramMessage(lines.join("\n"), chatId);

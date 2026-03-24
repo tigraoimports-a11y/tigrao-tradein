@@ -122,7 +122,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         headers: { "x-admin-password": inputSenha },
       });
       if (statsRes.ok) {
-        const fallbackUser: UserInfo = { id: "legacy", nome: inputLogin || "Admin", login: "admin", role: "admin" };
+        const fallbackUser: UserInfo = { id: "legacy", nome: inputLogin || "André", login: "admin", role: "admin" };
         setUser(fallbackUser);
         setPassword(inputSenha);
         localStorage.setItem("admin_pw", inputSenha);
