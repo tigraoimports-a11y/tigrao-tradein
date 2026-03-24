@@ -32,6 +32,7 @@ const NAV: NavEntry[] = [
     label: "Financeiro", icon: "\u{1F4B0}",
     items: [
       { href: "/admin/vendas", label: "Vendas", icon: "\u{1F4B0}", pageKey: "vendas_ver" },
+      { href: "/admin/clientes", label: "Clientes", icon: "\u{1F465}", pageKey: "clientes" },
       { href: "/admin/gastos", label: "Gastos", icon: "\u{1F4E4}", pageKey: "gastos" },
       { href: "/admin/saldos", label: "Saldos", icon: "\u{1F3E6}", pageKey: "saldos" },
       { href: "/admin/recebiveis", label: "Recebiveis", icon: "\u{1F4B3}", pageKey: "recebiveis" },
