@@ -142,7 +142,9 @@ export async function gerarNoite(
     if (recebISO === dataISO) {
       const comprovante = Number(v.valor_comprovante || 0);
       if (comprovante > 0) {
-        const chave = `${v.banco}_${v.cliente}_${comprovante}_${v.data}`;
+        // Deduplicar por ID da venda (cada registro = 1 produto/1 comprovante)
+        // Não deduplicar por valor — produtos iguais podem ter mesmo comprovante
+        const chave = v.id || `${v.banco}_${v.cliente}_${comprovante}_${v.data}_${v.produto}`;
         if (comprovantesContadosNoite.has(chave)) continue;
         comprovantesContadosNoite.add(chave);
         const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
@@ -297,9 +299,10 @@ export async function gerarManha(
     if (recebISO === dataISO) {
       const comprovante = Number(v.valor_comprovante || 0);
       if (comprovante > 0) {
-        // Chave única: banco + cliente + comprovante + data (evita contar o mesmo comprovante 2x)
-        const chave = `${v.banco}_${v.cliente}_${comprovante}_${v.data}`;
-        if (comprovantesContados.has(chave)) continue; // Já contou esse comprovante
+        // Deduplicar por ID da venda (cada registro = 1 produto/1 comprovante)
+        // Não deduplicar por valor — produtos iguais podem ter mesmo comprovante
+        const chave = v.id || `${v.banco}_${v.cliente}_${comprovante}_${v.data}_${v.produto}`;
+        if (comprovantesContados.has(chave)) continue;
         comprovantesContados.add(chave);
 
         const taxa = getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || "");
