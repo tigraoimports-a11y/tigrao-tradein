@@ -261,34 +261,28 @@ export default function EstoquePage() {
   }
 
   // Duplicar produto do estoque
-  async function handleDuplicar(p: ProdutoEstoque) {
-    const novaCor = prompt("Cor do novo produto:", p.cor || "");
-    if (novaCor === null) return; // cancelou
-    const res = await fetch("/api/estoque", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
-      body: JSON.stringify({
-        produto: p.produto,
-        categoria: p.categoria,
-        qnt: 1,
-        custo_unitario: p.custo_unitario || 0,
-        status: p.status,
-        cor: novaCor || null,
-        observacao: p.observacao || null,
-        tipo: p.tipo,
-        bateria: p.bateria || null,
-        cliente: p.cliente || null,
-        fornecedor: p.fornecedor || null,
-        imei: null,
-      }),
-    });
-    const json = await res.json();
-    if (json.ok) {
-      setMsg(`Duplicado: ${p.produto} ${novaCor || ""}`);
-      fetchEstoque();
-    } else {
-      setMsg("Erro: " + json.error);
-    }
+  // Duplicar produto: abre form pré-preenchido com mesmas cores
+  function handleDuplicarProduto(prodItems: ProdutoEstoque[]) {
+    const p = prodItems[0];
+    setForm((f) => ({
+      ...f,
+      produto: p.produto,
+      categoria: p.categoria || "IPHONES",
+      custo_unitario: String(p.custo_unitario || ""),
+      tipo: p.tipo || "NOVO",
+      fornecedor: p.fornecedor || "",
+      cor: "",
+      qnt: "1",
+      imei: "",
+      observacao: "",
+    }));
+    // Pré-criar variações com as mesmas cores
+    setVariacoes(
+      prodItems.map((item) => ({ cor: item.cor || "", qnt: String(item.qnt || 1) }))
+    );
+    setTab("novo");
+    setMsg("Produto duplicado! Altere o nome/memoria/custo e clique Adicionar.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const [form, setForm] = useState({
@@ -418,6 +412,9 @@ export default function EstoquePage() {
     const e = { ...editingNome }; delete e[key]; setEditingNome(e);
     setMsg(`Nome atualizado para "${newNome.trim()}"`);
   };
+
+  // handleDuplicar referência legada — usa handleDuplicarProduto
+  const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
     const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
@@ -1098,7 +1095,13 @@ export default function EstoquePage() {
                                   </td>
                                   <td className={`px-4 py-2 text-xs ${textSecondary}`}>{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
                                   <td className={`px-4 py-2 text-xs font-semibold ${textPrimary}`}>{fmt(prodValor)}</td>
-                                  <td></td>
+                                  <td className="px-2 py-2">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleDuplicarProduto(prodItems); }}
+                                      className={`px-2 py-1 rounded-lg text-[10px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D] hover:text-[#E8740E]" : "bg-[#F5F5F7] text-[#86868B] hover:text-[#E8740E]"} transition-colors`}
+                                      title="Duplicar produto com mesmas cores"
+                                    >📋 Duplicar</button>
+                                  </td>
                                   <td></td>
                                 </tr>
                                 {/* Linhas de cada cor */}
