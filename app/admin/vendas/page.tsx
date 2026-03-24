@@ -407,12 +407,23 @@ export default function VendasPage() {
   const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; comp?: string }) => {
     const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
     const curTaxa = taxa;
+    const curForma = form.forma;
+    const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
+    const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
+    const trc = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
+
+    if (curForma === "PIX" && compVal > 0) {
+      // PIX é 100% líquido
+      return String(Math.round(compVal + esp + trc));
+    }
     if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
-      const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
-      const trc = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
       return String(Math.round(liqCartao + pix + esp + trc));
+    }
+    // Espécie ou sem comprovante: soma tudo que entrou
+    if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
+      const total = pix + esp + trc + compVal;
+      if (total > 0) return String(Math.round(total));
     }
     return undefined;
   };
