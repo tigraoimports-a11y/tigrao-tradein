@@ -2576,8 +2576,33 @@ export default function VendasPage() {
                                         </button>
                                         )}
                                         <button
-                                          onClick={(e) => {
+                                          onClick={async (e) => {
                                             e.stopPropagation();
+                                            // Buscar dados do seminovo na troca (PENDENCIA) se a venda tem produto_na_troca
+                                            let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
+                                            if (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0) {
+                                              try {
+                                                const res = await fetch(`/api/estoque?search=${encodeURIComponent(v.cliente)}&status=PENDENTE,SEMINOVO`, {
+                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                });
+                                                if (res.ok) {
+                                                  const estoqueData = await res.json();
+                                                  const items = estoqueData.estoque || estoqueData || [];
+                                                  // Buscar item da pendência que bate com o valor e data da venda
+                                                  const pendencia = items.find((p: { custo_unitario: number; data_compra: string | null; cliente: string | null; tipo: string }) =>
+                                                    (p.tipo === "PENDENCIA" || p.tipo === "SEMINOVO") &&
+                                                    (p.cliente || "").toUpperCase().includes(v.cliente.toUpperCase().split(" ")[0]) &&
+                                                    Math.abs(Number(p.custo_unitario) - parseFloat(String(v.produto_na_troca))) < 10
+                                                  );
+                                                  if (pendencia) {
+                                                    trocaProd = pendencia.produto || "";
+                                                    trocaCor = pendencia.cor || "";
+                                                    trocaBat = String(pendencia.bateria || "");
+                                                    trocaObs = pendencia.observacao || "";
+                                                  }
+                                                }
+                                              } catch { /* ignore */ }
+                                            }
                                             // Preencher formulário Nova Venda com dados da venda para edição completa
                                             setForm({
                                               data: v.data || new Date().toISOString().split("T")[0],
@@ -2610,14 +2635,14 @@ export default function VendasPage() {
                                               comp_alt: String(v.comp_alt || ""),
                                               sinal_antecipado: String(v.sinal_antecipado || ""),
                                               banco_sinal: v.banco_sinal || "",
-                                              troca_produto: "",
-                                              troca_cor: "",
-                                              troca_bateria: "",
-                                              troca_obs: "",
-                                              troca_grade: "",
-                                              troca_caixa: "",
-                                              troca_cabo: "",
-                                              troca_fonte: "",
+                                              troca_produto: trocaProd,
+                                              troca_cor: trocaCor,
+                                              troca_bateria: trocaBat,
+                                              troca_obs: trocaObs,
+                                              troca_grade: trocaGrade,
+                                              troca_caixa: trocaCaixa,
+                                              troca_cabo: trocaCabo,
+                                              troca_fonte: trocaFonte,
                                               serial_no: v.serial_no || "",
                                               imei: v.imei || "",
                                               cep: v.cep || "",
