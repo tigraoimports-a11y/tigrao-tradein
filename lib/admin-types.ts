@@ -55,6 +55,7 @@ export interface Venda {
   bairro: string | null;
   cidade: string | null;
   uf: string | null;
+  grupo_id: string | null;
 }
 
 export interface Reajuste {

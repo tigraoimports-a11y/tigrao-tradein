@@ -25,6 +25,7 @@ export default function VendasPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
+  const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
@@ -703,33 +704,66 @@ export default function VendasPage() {
       return;
     }
 
-    // MODO EDIÇÃO: atualizar venda existente via PATCH
+    // MODO EDIÇÃO: atualizar venda(s) existente(s) via PATCH
     if (editandoVendaId) {
-      const prod = allProducts[0]; // edição é sempre 1 produto
-      const payload = buildPayload(prod);
       try {
-        const res = await fetch("/api/vendas", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", "x-admin-password": password },
-          body: JSON.stringify({ id: editandoVendaId, ...payload }),
-        });
-        const json = await res.json();
-        if (json.ok || json.data) {
-          setEditandoVendaId(null);
-          setDuplicadoInfo(null);
-          setProdutosCarrinho([]);
-          clearProductFields();
-          setMsg("Venda atualizada com sucesso!");
-          fetchVendas();
-          fetchEstoque();
+        // Edição de grupo (múltiplas vendas)
+        if (editandoGrupoIds.length > 1 && allProducts.length === editandoGrupoIds.length) {
+          let allOk = true;
+          for (let i = 0; i < editandoGrupoIds.length; i++) {
+            const payload = buildPayload(allProducts[i]);
+            const res = await fetch("/api/vendas", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", "x-admin-password": password },
+              body: JSON.stringify({ id: editandoGrupoIds[i], ...payload }),
+            });
+            const json = await res.json();
+            if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
+          }
+          if (allOk) {
+            setEditandoVendaId(null);
+            setEditandoGrupoIds([]);
+            setDuplicadoInfo(null);
+            setProdutosCarrinho([]);
+            clearProductFields();
+            setMsg(`${editandoGrupoIds.length} vendas atualizadas com sucesso!`);
+            fetchVendas();
+            fetchEstoque();
+          }
         } else {
-          setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido"));
+          // Edição simples (1 produto)
+          const prod = allProducts[0];
+          const payload = buildPayload(prod);
+          const res = await fetch("/api/vendas", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ id: editandoVendaId, ...payload }),
+          });
+          const json = await res.json();
+          if (json.ok || json.data) {
+            setEditandoVendaId(null);
+            setEditandoGrupoIds([]);
+            setDuplicadoInfo(null);
+            setProdutosCarrinho([]);
+            clearProductFields();
+            setMsg("Venda atualizada com sucesso!");
+            fetchVendas();
+            fetchEstoque();
+          } else {
+            setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido"));
+          }
         }
       } catch {
         setMsg("Erro de rede ao atualizar venda");
       }
       setSaving(false);
       return;
+    }
+
+    // Multi-produto: gerar grupo_id para vincular vendas da mesma transação
+    const grupoId = payloads.length > 1 ? crypto.randomUUID() : null;
+    if (grupoId) {
+      for (const p of payloads) p.grupo_id = grupoId;
     }
 
     let successCount = 0;
@@ -1058,12 +1092,16 @@ export default function VendasPage() {
               <div className="flex items-center gap-2">
                 <span className="text-lg">✏️</span>
                 <p className="text-sm font-semibold" style={{ color: "#0D47A1" }}>
-                  Editando venda de {form.cliente || "..."} — {form.produto || "..."}
+                  {editandoGrupoIds.length > 1
+                    ? `Editando ${editandoGrupoIds.length} produtos de ${form.cliente || "..."}`
+                    : `Editando venda de ${form.cliente || "..."} — ${form.produto || "..."}`}
                 </p>
               </div>
               <button
                 onClick={() => {
                   setEditandoVendaId(null);
+                  setEditandoGrupoIds([]);
+                  setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
                   setMsg("");
                 }}
@@ -2093,12 +2131,24 @@ export default function VendasPage() {
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
           const filtered = [...filteredRaw].sort((a, b) => {
+            // Vendas do mesmo grupo ficam juntas
+            if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
             if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
             if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
             if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
             if (ordenar === "cliente") return (a.cliente || "").localeCompare(b.cliente || "");
             return 0;
           });
+
+          // Mapa de grupo_id → vendas do mesmo grupo
+          const grupoMap = new Map<string, Venda[]>();
+          for (const v of filtered) {
+            if (v.grupo_id) {
+              const list = grupoMap.get(v.grupo_id) || [];
+              list.push(v);
+              grupoMap.set(v.grupo_id, list);
+            }
+          }
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : "Histórico de Vendas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -2220,6 +2270,9 @@ export default function VendasPage() {
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
                         const isExpanded = expandedId === v.id;
+                        const grupoItens = v.grupo_id ? grupoMap.get(v.grupo_id) : null;
+                        const isGrupo = grupoItens && grupoItens.length > 1;
+                        const isFirstInGrupo = isGrupo && grupoItens[0].id === v.id;
 
                         const pagParts: string[] = [];
                         if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
@@ -2238,7 +2291,7 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""}`}
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
                               {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
@@ -2272,7 +2325,12 @@ export default function VendasPage() {
                               <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
                               <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
                               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
-                              <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate text-xs">{v.produto}</td>
+                              <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] text-xs">
+                                <span className="truncate block">{v.produto}</span>
+                                {isFirstInGrupo && (
+                                  <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
+                                )}
+                              </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
                               <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
                               <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
@@ -2627,38 +2685,42 @@ export default function VendasPage() {
                                                 }
                                               } catch { /* ignore */ }
                                             }
+                                            // Detectar se faz parte de um grupo
+                                            const grupoVendas = v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id) : [v];
+                                            const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
+
                                             // Preencher formulário Nova Venda com dados da venda para edição completa
                                             setForm({
-                                              data: v.data || new Date().toISOString().split("T")[0],
-                                              cliente: v.cliente,
-                                              cpf: v.cpf || "",
-                                              cnpj: v.cnpj || "",
-                                              email: v.email || "",
-                                              endereco: v.endereco || "",
-                                              pessoa: (v.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
-                                              origem: v.origem || "",
-                                              tipo: v.tipo || "",
-                                              produto: v.produto,
-                                              fornecedor: v.fornecedor || "",
-                                              custo: String(v.custo || ""),
-                                              preco_vendido: String(v.preco_vendido || ""),
-                                              valor_comprovante_input: String(v.valor_comprovante || ""),
-                                              banco: v.banco || "ITAU",
-                                              forma: v.forma || "",
-                                              qnt_parcelas: String(v.qnt_parcelas || ""),
-                                              bandeira: v.bandeira || "",
-                                              local: v.local || "",
-                                              produto_na_troca: String(v.produto_na_troca || ""),
-                                              entrada_pix: String(v.entrada_pix || ""),
-                                              banco_pix: v.banco_pix || "ITAU",
-                                              entrada_especie: String(v.entrada_especie || ""),
-                                              banco_2nd: v.banco_2nd || "",
-                                              banco_alt: v.banco_alt || "",
-                                              parc_alt: String(v.parc_alt || ""),
-                                              band_alt: v.band_alt || "",
-                                              comp_alt: String(v.comp_alt || ""),
-                                              sinal_antecipado: String(v.sinal_antecipado || ""),
-                                              banco_sinal: v.banco_sinal || "",
+                                              data: primaryVenda.data || new Date().toISOString().split("T")[0],
+                                              cliente: primaryVenda.cliente,
+                                              cpf: primaryVenda.cpf || "",
+                                              cnpj: primaryVenda.cnpj || "",
+                                              email: primaryVenda.email || "",
+                                              endereco: primaryVenda.endereco || "",
+                                              pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
+                                              origem: primaryVenda.origem || "",
+                                              tipo: primaryVenda.tipo || "",
+                                              produto: grupoVendas.length > 1 ? "" : v.produto,
+                                              fornecedor: grupoVendas.length > 1 ? "" : (v.fornecedor || ""),
+                                              custo: grupoVendas.length > 1 ? "" : String(v.custo || ""),
+                                              preco_vendido: grupoVendas.length > 1 ? "" : String(v.preco_vendido || ""),
+                                              valor_comprovante_input: String(grupoVendas.reduce((s, gv) => s + (gv.valor_comprovante || 0), 0) || ""),
+                                              banco: primaryVenda.banco || "ITAU",
+                                              forma: primaryVenda.forma || "",
+                                              qnt_parcelas: String(primaryVenda.qnt_parcelas || ""),
+                                              bandeira: primaryVenda.bandeira || "",
+                                              local: primaryVenda.local || "",
+                                              produto_na_troca: String(primaryVenda.produto_na_troca || ""),
+                                              entrada_pix: String(primaryVenda.entrada_pix || ""),
+                                              banco_pix: primaryVenda.banco_pix || "ITAU",
+                                              entrada_especie: String(primaryVenda.entrada_especie || ""),
+                                              banco_2nd: primaryVenda.banco_2nd || "",
+                                              banco_alt: primaryVenda.banco_alt || "",
+                                              parc_alt: String(primaryVenda.parc_alt || ""),
+                                              band_alt: primaryVenda.band_alt || "",
+                                              comp_alt: String(primaryVenda.comp_alt || ""),
+                                              sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
+                                              banco_sinal: primaryVenda.banco_sinal || "",
                                               troca_produto: trocaProd,
                                               troca_cor: trocaCor,
                                               troca_bateria: trocaBat,
@@ -2667,16 +2729,37 @@ export default function VendasPage() {
                                               troca_caixa: trocaCaixa,
                                               troca_cabo: trocaCabo,
                                               troca_fonte: trocaFonte,
-                                              serial_no: v.serial_no || "",
-                                              imei: v.imei || "",
-                                              cep: v.cep || "",
-                                              bairro: v.bairro || "",
-                                              cidade: v.cidade || "",
-                                              uf: v.uf || "",
+                                              serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
+                                              imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
+                                              cep: primaryVenda.cep || "",
+                                              bairro: primaryVenda.bairro || "",
+                                              cidade: primaryVenda.cidade || "",
+                                              uf: primaryVenda.uf || "",
                                             });
                                             setProdutoManual(true);
-                                            setProdutosCarrinho([]);
-                                            setEditandoVendaId(v.id);
+
+                                            // Se grupo: carregar outros produtos no carrinho
+                                            if (grupoVendas.length > 1) {
+                                              const cartItems: ProdutoCarrinho[] = grupoVendas.map(gv => ({
+                                                produto: gv.produto,
+                                                fornecedor: gv.fornecedor || "",
+                                                custo: String(gv.custo || ""),
+                                                preco_vendido: String(gv.preco_vendido || ""),
+                                                local: gv.local || "",
+                                                serial_no: gv.serial_no || "",
+                                                imei: gv.imei || "",
+                                                _estoqueId: "",
+                                                _catSel: "",
+                                                _produtoManual: true,
+                                              }));
+                                              setProdutosCarrinho(cartItems);
+                                              setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
+                                              setEditandoVendaId(grupoVendas[0].id); // sinaliza modo edição
+                                            } else {
+                                              setProdutosCarrinho([]);
+                                              setEditandoGrupoIds([]);
+                                              setEditandoVendaId(v.id);
+                                            }
                                             setTab("nova");
                                             window.scrollTo({ top: 0, behavior: "smooth" });
                                           }}
