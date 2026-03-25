@@ -18,6 +18,8 @@ interface AdminContextType {
   logout: () => void;
   darkMode: boolean;
   toggleDark: () => void;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (v: boolean) => void;
   /** Returns headers object with auth + user info for API calls */
   apiHeaders: (extra?: Record<string, string>) => Record<string, string>;
 }
@@ -28,6 +30,8 @@ const AdminContext = createContext<AdminContextType>({
   logout: () => {},
   darkMode: false,
   toggleDark: () => {},
+  sidebarCollapsed: false,
+  setSidebarCollapsed: () => {},
   apiHeaders: () => ({}),
 });
 
@@ -44,6 +48,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     try {
@@ -215,6 +220,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       logout,
       darkMode,
       toggleDark,
+      sidebarCollapsed,
+      setSidebarCollapsed,
       apiHeaders: (extra?: Record<string, string>) => ({
         "x-admin-password": password,
         "x-admin-user": user?.nome || "sistema",
@@ -235,7 +242,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <AdminNav userRole={user.role} userPermissoes={user.permissoes} />
 
         {/* Main content area — offset by sidebar width */}
-        <div className="lg:ml-[220px] print:ml-0 min-h-screen flex flex-col">
+        <div className={`${sidebarCollapsed ? "lg:ml-[60px]" : "lg:ml-[220px]"} print:ml-0 min-h-screen flex flex-col transition-all duration-200`}>
           {/* Top bar */}
           <div
             className="px-3 sm:px-6 py-2.5 flex items-center justify-end shadow-sm gap-2 sticky top-0 z-30 border-b transition-colors duration-300 print:hidden"

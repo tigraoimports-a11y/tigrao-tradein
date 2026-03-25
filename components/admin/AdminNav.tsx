@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAdmin } from "./AdminShell";
 
 
 interface NavItem {
@@ -100,7 +101,7 @@ interface AdminNavProps {
 
 export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const s = new Set<string>();
