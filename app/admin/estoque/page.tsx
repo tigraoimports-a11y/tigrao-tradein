@@ -41,7 +41,7 @@ interface Fornecedor {
   observacao: string | null;
 }
 
-const DEFAULT_CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
+const DEFAULT_CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "SEMINOVOS"] as const;
 const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as const;
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -65,7 +65,7 @@ const CAT_LABELS: Record<string, string> = {
   APPLE_WATCH: "Apple Watch",
   AIRPODS: "AirPods",
   ACESSORIOS: "Acessorios",
-  OUTROS: "Outros",
+  SEMINOVOS: "Seminovos",
 };
 
 const STATUS_COLORS: Record<string, string> = {

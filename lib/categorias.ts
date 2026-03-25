@@ -29,7 +29,7 @@ export const DEFAULT_CATEGORIAS_ESTOQUE: Categoria[] = [
   { key: "APPLE_WATCH", label: "Apple Watch", emoji: "\u231A" },
   { key: "AIRPODS", label: "AirPods", emoji: "\u{1F3A7}" },
   { key: "ACESSORIOS", label: "Acess\u00F3rios", emoji: "\u{1F50C}" },
-  { key: "OUTROS", label: "Outros", emoji: "\u{1F4E6}" },
+  { key: "SEMINOVOS", label: "Seminovos", emoji: "\u{1F4F1}" },
 ];
 
 const STORAGE_KEY_PRECOS = "tigrao_custom_categorias_precos";
