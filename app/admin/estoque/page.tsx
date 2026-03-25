@@ -1320,9 +1320,9 @@ export default function EstoquePage() {
                             return (
                               <React.Fragment key={prodNome}>
                                 {/* Header do produto — sempre mostra */}
-                                <tr className={`border-b ${borderCardAlt} ${dm ? "bg-[#1C1A17]" : "bg-[#FFF8F0]"}`} style={{ borderLeft: "3px solid #E8740E" }}>
+                                <tr className={`${dm ? "bg-[#E8740E]/15" : "bg-[#E8740E]/10"}`} style={{ borderLeft: "4px solid #E8740E" }}>
                                   <td className="w-4"></td>
-                                  <td className={`px-2 py-2.5 font-semibold text-sm ${textPrimary}`} colSpan={1}>
+                                  <td className="px-2 py-3 font-bold text-[14px] text-[#E8740E]" colSpan={1}>
                                     {editingNome[prodItems[0]?.id] !== undefined ? (
                                       <div className="flex items-center gap-1">
                                         <input
