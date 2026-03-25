@@ -27,16 +27,19 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
-  const headers = { "x-admin-password": password, "Content-Type": "application/json" };
+  function getHeaders() {
+    return { "x-admin-password": password, "Content-Type": "application/json" };
+  }
 
   useEffect(() => {
-    fetchQuestions();
-  }, []);
+    if (password) fetchQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password]);
 
   async function fetchQuestions() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers });
+      const res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() });
       const json = await res.json();
       setQuestions(json.data || []);
     } catch {
@@ -50,7 +53,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     try {
       const res = await fetch("/api/admin/tradein-perguntas", {
         method: "PUT",
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({
           id: q.id,
           titulo: q.titulo,
@@ -90,7 +93,7 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     try {
       await fetch("/api/admin/tradein-perguntas", {
         method: "POST",
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({ action: "reorder", items: reorderItems }),
       });
     } catch {
