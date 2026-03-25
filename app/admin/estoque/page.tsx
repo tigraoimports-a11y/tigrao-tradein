@@ -395,7 +395,7 @@ export default function EstoquePage() {
     // IPADS
     ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
-    aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
+    aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
     // AIRPODS
     air_modelo: "AIRPODS 4",
   });
@@ -612,7 +612,7 @@ export default function EstoquePage() {
         mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
         mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
         ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
-        aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
+        aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
         air_modelo: "AIRPODS 4",
       });
       setVariacoes([]);
@@ -1046,11 +1046,11 @@ export default function EstoquePage() {
 
           {formBaseCat === "APPLE_WATCH" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                {["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].map((m) => <option key={m}>{m}</option>)}
+              <div><p className={labelCls}>Modelo</p><select value={["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                {["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].map((m) => <option key={m}>{m}</option>)}
                 <option value="__custom__">Outro (digitar)</option>
               </select>
-              {!["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].includes(spec.aw_modelo) && spec.aw_modelo !== "SE" && (
+              {!["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].includes(spec.aw_modelo) && spec.aw_modelo !== "SE 2" && (
                 <input value={spec.aw_modelo === "__custom__" ? "" : spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
               )}</div>
               <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
