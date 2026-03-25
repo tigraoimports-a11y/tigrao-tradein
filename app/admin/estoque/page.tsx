@@ -1331,10 +1331,12 @@ export default function EstoquePage() {
 
                             return (
                               <React.Fragment key={prodNome}>
-                                {/* Header do produto — sempre mostra */}
-                                <tr className={`${dm ? "bg-[#E8740E]/15" : "bg-[#E8740E]/10"}`} style={{ borderLeft: "4px solid #E8740E" }}>
-                                  <td className="w-4"></td>
-                                  <td className="px-2 py-3 font-bold text-[14px] text-[#E8740E]" colSpan={1}>
+                                {/* Espaçador entre produtos */}
+                                <tr><td colSpan={10} className="h-2"></td></tr>
+                                {/* Header do produto */}
+                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"}`}>
+                                  <td className="w-1" style={{ background: "#E8740E" }}></td>
+                                  <td className="px-3 py-3 font-bold text-[13px] text-white" colSpan={1}>
                                     {editingNome[prodItems[0]?.id] !== undefined ? (
                                       <div className="flex items-center gap-1">
                                         <input
@@ -1357,14 +1359,14 @@ export default function EstoquePage() {
                                     )}
                                   </td>
                                   <td className="px-4 py-2 text-right">
-                                    <span className={`text-xs font-bold ${textPrimary}`}>{prodTotal} un.</span>
+                                    <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
                                   </td>
-                                  <td className={`px-4 py-2 text-xs ${textSecondary}`}>{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
-                                  <td className={`px-4 py-2 text-xs font-semibold ${textPrimary}`}>{fmt(prodValor)}</td>
+                                  <td className="px-4 py-2 text-xs text-white/50">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                  <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td className="px-2 py-2">
                                     <button
                                       onClick={(e) => { e.stopPropagation(); handleDuplicarProduto(prodItems); }}
-                                      className={`px-2 py-1 rounded-lg text-[10px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D] hover:text-[#E8740E]" : "bg-[#F5F5F7] text-[#86868B] hover:text-[#E8740E]"} transition-colors`}
+                                      className="px-2 py-1 rounded-lg text-[10px] font-medium bg-white/10 text-white/70 hover:text-[#E8740E] hover:bg-white/20 transition-colors"
                                       title="Duplicar produto com mesmas cores"
                                     >📋 Duplicar</button>
                                   </td>
@@ -1382,7 +1384,7 @@ export default function EstoquePage() {
                                       onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
                                       onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                       onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? (dm ? "opacity-40 bg-[#3D2A0E]" : "opacity-40 bg-[#FFF3E8]") : p.qnt === 0 ? (dm ? "bg-red-900/20 hover:bg-[#2C2C2E]" : "bg-red-50/50 hover:bg-[#F5F5F7]") : p.qnt === 1 ? (dm ? "bg-yellow-900/20 hover:bg-[#2C2C2E]" : "bg-yellow-50/50 hover:bg-[#F5F5F7]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]")}`}
+                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? "opacity-40" : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                     >
                                       <td className="pl-2 py-2.5 cursor-grab active:cursor-grabbing text-[#C7C7CC] select-none w-4">
                                         <span className="text-[10px]">⠿</span>
