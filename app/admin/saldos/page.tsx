@@ -5,10 +5,21 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import type { SaldoBancario } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
-const fmtInput = (v: string) => {
-  const num = parseFloat(v.replace(/[^\d.,-]/g, "").replace(",", "."));
-  return isNaN(num) ? "0" : String(Math.round(num * 100) / 100);
-};
+
+// Formata número para exibição BR: 325000.50 → "325.000,50"
+function toDisplayBR(raw: string): string {
+  const num = parseFloat(raw);
+  if (isNaN(num)) return "0,00";
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Converte display BR para valor numérico: "325.000,50" → "325000.50"
+function fromDisplayBR(display: string): string {
+  const clean = display.replace(/\./g, "").replace(",", ".");
+  const num = parseFloat(clean);
+  if (isNaN(num)) return "0";
+  return String(Math.round(num * 100) / 100);
+}
 
 export default function SaldosPage() {
   const { password, user, darkMode: dm } = useAdmin();
@@ -46,12 +57,12 @@ export default function SaldosPage() {
         const s = json.data;
         setSaldoHoje(s);
         if (s) {
-          setItau(String(Math.round((s.itau_base || 0) * 100) / 100));
-          setInf(String(Math.round((s.inf_base || 0) * 100) / 100));
-          setMp(String(Math.round((s.mp_base || 0) * 100) / 100));
-          setEsp(String(Math.round((s.esp_especie || 0) * 100) / 100));
+          setItau(toDisplayBR(String(s.itau_base || 0)));
+          setInf(toDisplayBR(String(s.inf_base || 0)));
+          setMp(toDisplayBR(String(s.mp_base || 0)));
+          setEsp(toDisplayBR(String(s.esp_especie || 0)));
         } else {
-          setItau("0"); setInf("0"); setMp("0"); setEsp("0");
+          setItau("0,00"); setInf("0,00"); setMp("0,00"); setEsp("0,00");
         }
       }
     } catch { /* ignore */ }
@@ -68,10 +79,10 @@ export default function SaldosPage() {
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
       body: JSON.stringify({
         data: dataAtual,
-        itau_base: parseFloat(itau) || 0,
-        inf_base: parseFloat(inf) || 0,
-        mp_base: parseFloat(mp) || 0,
-        esp_especie: parseFloat(esp) || 0,
+        itau_base: parseFloat(fromDisplayBR(itau)) || 0,
+        inf_base: parseFloat(fromDisplayBR(inf)) || 0,
+        mp_base: parseFloat(fromDisplayBR(mp)) || 0,
+        esp_especie: parseFloat(fromDisplayBR(esp)) || 0,
       }),
     });
     const json = await res.json();
@@ -129,7 +140,10 @@ export default function SaldosPage() {
                 <p className={`text-[10px] uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Base manha (pre-D+1)</p>
                 <div className="flex items-center gap-1">
                   <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>R$</span>
-                  <input type="text" inputMode="decimal" value={bank.base} onChange={(e) => bank.setBase(e.target.value.replace(/[^\d.,-]/g, ""))} className={inputCls} />
+                  <input type="text" inputMode="decimal" value={bank.base}
+                    onChange={(e) => bank.setBase(e.target.value.replace(/[^\d.,-]/g, ""))}
+                    onBlur={() => bank.setBase(toDisplayBR(fromDisplayBR(bank.base)))}
+                    className={inputCls} />
                 </div>
               </div>
               {bank.esp !== undefined && bank.esp !== null && (
