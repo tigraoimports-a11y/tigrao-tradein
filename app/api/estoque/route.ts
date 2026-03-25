@@ -348,19 +348,26 @@ export async function DELETE(req: NextRequest) {
   if (!hasPermission(role, "estoque.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
-  const { id } = await req.json();
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const body = await req.json();
+  const ids: string[] = body.ids || (body.id ? [body.id] : []);
+  if (ids.length === 0) return NextResponse.json({ error: "id or ids required" }, { status: 400 });
 
-  // Log antes de deletar
-  const { data: antes } = await supabase.from("estoque").select("produto").eq("id", id).single();
-  if (antes) {
-    await logEstoque(usuario, "exclusao", id, antes.produto, "", "", "");
+  // Log e deletar cada item
+  const { data: antes } = await supabase.from("estoque").select("id, produto").in("id", ids);
+  const nomeMap = new Map((antes || []).map((a: { id: string; produto: string }) => [a.id, a.produto]));
+
+  for (const id of ids) {
+    const nome = nomeMap.get(id) || "?";
+    await logEstoque(usuario, "exclusao", id, nome, "", "", "");
   }
 
-  const { error } = await supabase.from("estoque").delete().eq("id", id);
+  const { error } = await supabase.from("estoque").delete().in("id", ids);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await logActivity(usuario, "Removeu do estoque", antes?.produto || "?", "estoque", id);
+  for (const id of ids) {
+    const nome = nomeMap.get(id) || "?";
+    await logActivity(usuario, "Removeu do estoque", nome, "estoque", id);
+  }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, deleted: ids.length });
 }

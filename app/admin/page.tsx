@@ -51,7 +51,7 @@ export default function DashboardPage() {
         saldoAnterior: saldoPrev?.data?.[0] || saldoPrev?.[0] || null,
         vendas: vendasArr,
         gastos: gastosArr,
-        estoque: estoqueArr.filter((e: { tipo: string }) => e.tipo === "NOVO" || e.tipo === "SEMINOVO"),
+        estoque: estoqueArr.filter((e: { tipo: string }) => e.tipo !== "PENDENCIA" && e.tipo !== "A_CAMINHO"),
         pendencias: estoqueArr.filter((e: { tipo: string }) => e.tipo === "PENDENCIA").length,
         aCaminho: estoqueArr.filter((e: { tipo: string }) => e.tipo === "A_CAMINHO"),
       });
@@ -147,13 +147,10 @@ export default function DashboardPage() {
   const saldoEsp = isManual ? espBase : (espBase + especieHoje - gastosHojeEsp - depEspHoje);
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
 
-  // Estoque
-  const estoqueNovo = data.estoque.filter(e => e.tipo === "NOVO");
-  const estoqueSemi = data.estoque.filter(e => e.tipo === "SEMINOVO");
-  const valorEstoqueNovo = estoqueNovo.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
-  const valorEstoqueSemi = estoqueSemi.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
+  // Estoque — soma TUDO (todos os tipos/categorias)
+  const valorEstoque = data.estoque.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
   const valorACaminho = data.aCaminho.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
-  const capitalProdutos = valorEstoqueNovo + valorEstoqueSemi + valorACaminho;
+  const capitalProdutos = valorEstoque + valorACaminho;
   const patrimonio = capitalProdutos + saldoTotal;
 
   // Margem média
@@ -340,8 +337,7 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Patrimônio</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="📦" title="Em Estoque" value={fmt(valorEstoqueNovo + valorEstoqueSemi)} color="text-blue-700" sub={`Novos: ${fmt(valorEstoqueNovo)} | Semi: ${fmt(valorEstoqueSemi)}`} />
-          <Card icon="🚚" title="Produtos a Caminho" value={fmt(valorACaminho)} color="text-orange-600" sub={`${data.aCaminho.reduce((s, e) => s + (e.qnt || 0), 0)} unidades`} />
+          <Card icon="📦" title="Capital em Produtos" value={fmt(capitalProdutos)} color="text-blue-700" sub={`Estoque: ${fmt(valorEstoque)} | A caminho: ${fmt(valorACaminho)}`} />
           <Card icon="⏳" title={`Vendas Pendentes (${vendasPendentes.length})`} value={fmt(valorPendente)} color="text-yellow-600" sub={vendasPendentes.slice(0, 3).map(v => v.cliente).join(" | ") || "Nenhuma"} />
           <Card icon="⚠️" title={`Pendências Troca`} value={String(data.pendencias)} color="text-red-600" sub="Aguardando devolução" />
         </div>

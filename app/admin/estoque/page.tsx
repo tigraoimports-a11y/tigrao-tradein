@@ -159,6 +159,12 @@ export default function EstoquePage() {
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showDiagnostico, setShowDiagnostico] = useState(false);
+
   // IMEI search
   const [imeiSearch, setImeiSearch] = useState("");
   const [imeiResult, setImeiResult] = useState<ImeiSearchResult | null>(null);
@@ -178,6 +184,38 @@ export default function EstoquePage() {
       }
     } catch { /* ignore */ }
     setImeiSearching(false);
+  };
+
+  // Bulk select helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Excluir ${selectedIds.size} produto(s) selecionado(s)?`)) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await fetch("/api/estoque", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setEstoque((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+        setMsg(`${selectedIds.size} produto(s) excluído(s)`);
+        setSelectedIds(new Set());
+        setSelectMode(false);
+      } else {
+        const json = await res.json();
+        setMsg("Erro: " + (json.error || "Falha ao excluir"));
+      }
+    } catch (err) { setMsg("Erro: " + String(err)); }
+    setBulkDeleting(false);
   };
 
   // Categorias dinâmicas
@@ -849,6 +887,95 @@ export default function EstoquePage() {
         ))}
       </div>
 
+      {/* Diagnóstico de valores */}
+      <div>
+        <button onClick={() => setShowDiagnostico(!showDiagnostico)} className={`text-[11px] font-medium ${textMuted} hover:text-[#E8740E] transition-colors`}>
+          {showDiagnostico ? "▼ Fechar diagnóstico" : "▶ Diagnóstico de valores"}
+        </button>
+        {showDiagnostico && (() => {
+          // Valor TOTAL de tudo no banco (todos os tipos)
+          const valorTudo = estoque.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
+          const valorPendencias = pendencias.reduce((s, p) => s + (p.qnt * (p.custo_unitario || 0)), 0);
+          // Sem custo
+          const semCusto = estoque.filter((p) => !p.custo_unitario && p.qnt > 0);
+          // Por categoria
+          const porCat: Record<string, { qnt: number; valor: number; items: number }> = {};
+          estoque.forEach((p) => {
+            if (!porCat[p.categoria]) porCat[p.categoria] = { qnt: 0, valor: 0, items: 0 };
+            porCat[p.categoria].qnt += p.qnt;
+            porCat[p.categoria].valor += p.qnt * (p.custo_unitario || 0);
+            porCat[p.categoria].items++;
+          });
+          // Por tipo
+          const porTipo: Record<string, { qnt: number; valor: number; items: number }> = {};
+          estoque.forEach((p) => {
+            const t = p.tipo || "NOVO";
+            if (!porTipo[t]) porTipo[t] = { qnt: 0, valor: 0, items: 0 };
+            porTipo[t].qnt += p.qnt;
+            porTipo[t].valor += p.qnt * (p.custo_unitario || 0);
+            porTipo[t].items++;
+          });
+          return (
+            <div className={`mt-3 ${bgCard} border ${borderCard} rounded-2xl p-4 space-y-4 text-xs`}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className={`p-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+                  <p className={`${textMuted} text-[10px] font-bold`}>DASHBOARD (Novos+Seminovos)</p>
+                  <p className={`text-lg font-bold ${textPrimary}`}>{fmt(valorEstoque)}</p>
+                  <p className={`${textMuted}`}>{emEstoque.length} SKUs, {totalUnidades} un.</p>
+                </div>
+                <div className={`p-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+                  <p className={`${textMuted} text-[10px] font-bold`}>TUDO (incluindo pendências/a caminho)</p>
+                  <p className={`text-lg font-bold text-[#E8740E]`}>{fmt(valorTudo)}</p>
+                  <p className={`${textMuted}`}>{estoque.length} SKUs, {estoque.reduce((s, p) => s + p.qnt, 0)} un.</p>
+                </div>
+                <div className={`p-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+                  <p className={`${textMuted} text-[10px] font-bold`}>PENDÊNCIAS</p>
+                  <p className={`text-lg font-bold ${textPrimary}`}>{fmt(valorPendencias)}</p>
+                  <p className={`${textMuted}`}>{pendencias.length} SKUs</p>
+                </div>
+                <div className={`p-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+                  <p className={`${textMuted} text-[10px] font-bold`}>A CAMINHO</p>
+                  <p className={`text-lg font-bold ${textPrimary}`}>{fmt(valorACaminho)}</p>
+                  <p className={`${textMuted}`}>{aCaminho.length} SKUs</p>
+                </div>
+              </div>
+
+              <div>
+                <p className={`${textSecondary} font-bold text-[10px] uppercase mb-2`}>Por Tipo</p>
+                <table className={`w-full text-xs ${dm ? "text-[#CCC]" : ""}`}>
+                  <thead><tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}><th className="text-left px-2 py-1">Tipo</th><th className="text-right px-2 py-1">SKUs</th><th className="text-right px-2 py-1">Unidades</th><th className="text-right px-2 py-1">Valor</th></tr></thead>
+                  <tbody>{Object.entries(porTipo).sort((a, b) => b[1].valor - a[1].valor).map(([tipo, d]) => (
+                    <tr key={tipo} className={`border-b ${borderLight}`}><td className="px-2 py-1 font-medium">{tipo}</td><td className="text-right px-2 py-1">{d.items}</td><td className="text-right px-2 py-1">{d.qnt}</td><td className="text-right px-2 py-1 font-semibold">{fmt(d.valor)}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+
+              <div>
+                <p className={`${textSecondary} font-bold text-[10px] uppercase mb-2`}>Por Categoria</p>
+                <table className={`w-full text-xs ${dm ? "text-[#CCC]" : ""}`}>
+                  <thead><tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}><th className="text-left px-2 py-1">Categoria</th><th className="text-right px-2 py-1">SKUs</th><th className="text-right px-2 py-1">Unidades</th><th className="text-right px-2 py-1">Valor</th></tr></thead>
+                  <tbody>{Object.entries(porCat).sort((a, b) => b[1].valor - a[1].valor).map(([cat, d]) => (
+                    <tr key={cat} className={`border-b ${borderLight}`}><td className="px-2 py-1 font-medium">{dynamicCatLabels[cat] || cat}</td><td className="text-right px-2 py-1">{d.items}</td><td className="text-right px-2 py-1">{d.qnt}</td><td className="text-right px-2 py-1 font-semibold">{fmt(d.valor)}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+
+              {semCusto.length > 0 && (
+                <div>
+                  <p className={`text-[10px] font-bold uppercase mb-2 text-red-500`}>⚠ Produtos SEM custo unitário (qnt {'>'} 0)</p>
+                  <table className={`w-full text-xs ${dm ? "text-[#CCC]" : ""}`}>
+                    <thead><tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}><th className="text-left px-2 py-1">Produto</th><th className="text-left px-2 py-1">Cor</th><th className="text-right px-2 py-1">Qnt</th><th className="text-left px-2 py-1">Tipo</th><th className="text-left px-2 py-1">Cat</th></tr></thead>
+                    <tbody>{semCusto.map((p) => (
+                      <tr key={p.id} className={`border-b ${borderLight}`}><td className="px-2 py-1">{p.produto}</td><td className="px-2 py-1">{p.cor || "—"}</td><td className="text-right px-2 py-1">{p.qnt}</td><td className="px-2 py-1">{p.tipo}</td><td className="px-2 py-1">{p.categoria}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Tabs — Segmented control Apple style */}
       {tab !== "etiquetas" && (
       <div className="space-y-3">
@@ -880,6 +1007,14 @@ export default function EstoquePage() {
           <button onClick={() => setTab("historico" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "historico" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Historico
           </button>
+          {!["novo", "scan", "historico", "etiquetas"].includes(tab) && (
+            <button
+              onClick={() => { setSelectMode(!selectMode); if (selectMode) setSelectedIds(new Set()); }}
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${selectMode ? "bg-red-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-red-500 hover:text-red-500`}`}
+            >
+              {selectMode ? "Cancelar" : "Selecionar"}
+            </button>
+          )}
 
           <div className="flex-1" />
 
@@ -1379,15 +1514,20 @@ export default function EstoquePage() {
                                   return (
                                     <tr
                                       key={p.id}
-                                      draggable
-                                      onDragStart={(e) => { e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
+                                      draggable={!selectMode}
+                                      onDragStart={(e) => { if (selectMode) return; e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
                                       onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
                                       onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                       onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? "opacity-40" : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
+                                      onClick={selectMode ? () => toggleSelect(p.id) : undefined}
+                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"} ${selectMode ? "cursor-pointer" : ""}`}
                                     >
-                                      <td className="pl-2 py-2.5 cursor-grab active:cursor-grabbing text-[#C7C7CC] select-none w-4">
-                                        <span className="text-[10px]">⠿</span>
+                                      <td className="pl-2 py-2.5 select-none w-4">
+                                        {selectMode ? (
+                                          <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
+                                        ) : (
+                                          <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
+                                        )}
                                       </td>
                                       <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
                                         {isPendenciasTab && isEditingField(p.id, "cor") ? (
@@ -1567,6 +1707,32 @@ export default function EstoquePage() {
         <Suspense fallback={<div className="text-center py-8 text-[#86868B]">Carregando...</div>}>
           <EtiquetasContent embedded />
         </Suspense>
+      )}
+
+      {/* Floating bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+          <span className={`text-sm font-semibold ${textPrimary}`}>{selectedIds.size} selecionado(s)</span>
+          <button
+            onClick={() => { setSelectedIds(new Set(filtered.map((p) => p.id))); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}
+          >
+            Selecionar todos ({filtered.length})
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+          >
+            {bulkDeleting ? "Excluindo..." : `Excluir ${selectedIds.size}`}
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
+          >
+            Cancelar
+          </button>
+        </div>
       )}
     </div>
   );
