@@ -132,7 +132,7 @@ export default function DashboardPage() {
   const pixHojeMP = vendasD0Hoje.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
   // Créditos D+1 de dias anteriores que caíram hoje (mesma lógica do /noite)
-  const d1Credits = useMemo(() => {
+  const d1Credits = (() => {
     const acc = { ITAU: 0, INFINITE: 0, MERCADO_PAGO: 0 };
     const contados = new Set<string>();
     const seteDias = new Date(hoje + "T12:00:00");
@@ -156,7 +156,7 @@ export default function DashboardPage() {
       if (banco in acc) acc[banco] += val;
     }
     return acc;
-  }, [data.vendas, hoje]);
+  })();
   const d1Itau = d1Credits.ITAU;
   const d1Inf = d1Credits.INFINITE;
   const d1MP = d1Credits.MERCADO_PAGO;
