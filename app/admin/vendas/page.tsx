@@ -129,6 +129,12 @@ export default function VendasPage() {
   const [scanMode, setScanMode] = useState(true); // Scan é o modo padrão — produto novo obrigatório bipar
   const [scanMsg, setScanMsg] = useState("");
 
+  // Nota fiscal PDF upload
+  const [notaFiscalVendaIds, setNotaFiscalVendaIds] = useState<string[]>([]);
+  const [notaFiscalFile, setNotaFiscalFile] = useState<File | null>(null);
+  const [notaFiscalUploading, setNotaFiscalUploading] = useState(false);
+  const [notaFiscalDragOver, setNotaFiscalDragOver] = useState(false);
+
   // Fornecedores
   interface Fornecedor { id: string; nome: string }
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -718,6 +724,7 @@ export default function VendasPage() {
 
     let successCount = 0;
     const errors: string[] = [];
+    const savedVendaIds: string[] = [];
 
     for (let i = 0; i < payloads.length; i++) {
       const payload = payloads[i];
@@ -732,6 +739,7 @@ export default function VendasPage() {
         const json = await res.json();
         if (json.ok) {
           successCount++;
+          if (json.data?.id) savedVendaIds.push(json.data.id);
         } else {
           errors.push(`${prod.produto}: ${json.error}`);
         }
@@ -753,6 +761,7 @@ export default function VendasPage() {
       setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulario.`);
       fetchVendas();
       fetchEstoque();
+      if (savedVendaIds.length > 0) setNotaFiscalVendaIds(savedVendaIds);
     } else {
       setMsg("Erro: " + errors.join("; "));
     }
@@ -2870,6 +2879,87 @@ export default function VendasPage() {
             </div>
           );
         })()
+      )}
+      {/* Modal Nota Fiscal PDF */}
+      {notaFiscalVendaIds.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-xl max-w-md w-full mx-4 space-y-4`}>
+            <h3 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Deseja incluir nota fiscal em PDF?</h3>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setNotaFiscalDragOver(true); }}
+              onDragLeave={() => setNotaFiscalDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setNotaFiscalDragOver(false);
+                const file = e.dataTransfer.files[0];
+                if (file?.type === "application/pdf") setNotaFiscalFile(file);
+                else setMsg("Apenas arquivos PDF sao aceitos");
+              }}
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+                notaFiscalDragOver ? "border-[#E8740E] bg-orange-50/10" : dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"
+              }`}
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = ".pdf";
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file?.type === "application/pdf") setNotaFiscalFile(file);
+                };
+                input.click();
+              }}
+            >
+              {notaFiscalFile ? (
+                <div className="space-y-1">
+                  <p className="text-2xl">📄</p>
+                  <p className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{notaFiscalFile.name}</p>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{(notaFiscalFile.size / 1024).toFixed(0)} KB</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-3xl">📎</p>
+                  <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Arraste o PDF aqui ou clique para selecionar</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                disabled={!notaFiscalFile || notaFiscalUploading}
+                onClick={async () => {
+                  if (!notaFiscalFile) return;
+                  setNotaFiscalUploading(true);
+                  try {
+                    for (const vendaId of notaFiscalVendaIds) {
+                      const fd = new FormData();
+                      fd.append("file", notaFiscalFile);
+                      fd.append("venda_id", vendaId);
+                      await fetch("/api/vendas/nota-fiscal", {
+                        method: "POST",
+                        headers: { "x-admin-user": user?.nome || "sistema" },
+                        body: fd,
+                      });
+                    }
+                    setMsg("Nota fiscal enviada com sucesso!");
+                  } catch {
+                    setMsg("Erro ao enviar nota fiscal");
+                  }
+                  setNotaFiscalUploading(false);
+                  setNotaFiscalVendaIds([]);
+                  setNotaFiscalFile(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+              >
+                {notaFiscalUploading ? "Enviando..." : "Enviar"}
+              </button>
+              <button
+                onClick={() => { setNotaFiscalVendaIds([]); setNotaFiscalFile(null); }}
+                className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#E5E5EA] text-[#1D1D1F] hover:bg-[#D2D2D7]"}`}
+              >
+                Pular
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

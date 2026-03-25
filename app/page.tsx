@@ -186,7 +186,12 @@ export default function LojaPage() {
   }, [categorias]);
 
   /* ── Modo Manutencao ── */
-  if (!loading && config.manutencao) {
+  const [isAdminPreview, setIsAdminPreview] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem("admin_pw")) setIsAdminPreview(true); } catch {}
+  }, []);
+
+  if (!loading && config.manutencao && !isAdminPreview) {
     return (
       <div style={{ backgroundColor: tema.bgSecondary, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh flex items-center justify-center p-6">
         <div className="text-center max-w-md">
@@ -208,6 +213,12 @@ export default function LojaPage() {
 
   return (
     <div style={{ backgroundColor: tema.bg, color: tema.text, ...cssVars } as React.CSSProperties} className="min-h-dvh">
+      {/* ── Banner Admin Preview ── */}
+      {config.manutencao && isAdminPreview && (
+        <div className="bg-yellow-500 text-black text-center text-xs font-semibold py-1.5 px-4">
+          🔧 Modo manutencao ativo — voce esta vendo como admin (visitantes veem pagina de manutencao)
+        </div>
+      )}
       {/* ── Header ── */}
       <header style={{ backgroundColor: tema.headerBg, borderColor: tema.cardBorder }} className="sticky top-0 z-50 backdrop-blur-xl border-b">
         <div className="max-w-[1280px] mx-auto px-4 h-14 flex items-center justify-between">

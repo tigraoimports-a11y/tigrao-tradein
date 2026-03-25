@@ -128,6 +128,22 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Tab "notas" — vendas com nota fiscal
+  if (tab === "notas") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const notasRaw = (rawVendas ?? []).filter((v: any) => v.nota_fiscal_url && v.status_pagamento !== "CANCELADO");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const notas = notasRaw.map((v: any) => ({
+      id: v.id,
+      data: v.data,
+      cliente: v.cliente,
+      produto: v.produto,
+      preco_vendido: Number(v.preco_vendido || 0),
+      nota_fiscal_url: v.nota_fiscal_url,
+    }));
+    return NextResponse.json({ notas, total: notas.length });
+  }
+
   // Filtrar por tab
   let clientes = Array.from(clienteMap.values());
   if (tab === "lojistas") {

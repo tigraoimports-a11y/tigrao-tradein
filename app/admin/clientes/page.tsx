@@ -41,10 +41,11 @@ const fmtDate = (d: string) => {
 
 export default function ClientesPage() {
   const { password, darkMode: dm, apiHeaders } = useAdmin();
-  const [tab, setTab] = useState<"clientes" | "lojistas">("clientes");
+  const [tab, setTab] = useState<"clientes" | "lojistas" | "notas">("clientes");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [notas, setNotas] = useState<{ id: string; data: string; cliente: string; produto: string; preco_vendido: number; nota_fiscal_url: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [totals, setTotals] = useState({ total: 0, total_gasto: 0, total_compras: 0 });
@@ -67,8 +68,13 @@ export default function ClientesPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        setClientes(json.clientes ?? []);
-        setTotals({ total: json.total, total_gasto: json.total_gasto, total_compras: json.total_compras });
+        if (tab === "notas") {
+          setNotas(json.notas ?? []);
+          setTotals({ total: json.total ?? 0, total_gasto: 0, total_compras: 0 });
+        } else {
+          setClientes(json.clientes ?? []);
+          setTotals({ total: json.total, total_gasto: json.total_gasto, total_compras: json.total_compras });
+        }
       } else {
         console.error("Clientes API error:", res.status, await res.text().catch(() => ""));
       }
@@ -102,13 +108,17 @@ export default function ClientesPage() {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {(["clientes", "lojistas"] as const).map((t) => (
+        {([
+          { key: "clientes" as const, label: "👤 Clientes" },
+          { key: "lojistas" as const, label: "🏪 Lojistas" },
+          { key: "notas" as const, label: "📄 Notas Fiscais" },
+        ]).map((t) => (
           <button
-            key={t}
-            onClick={() => { setTab(t); setExpandedId(null); }}
-            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}
+            key={t.key}
+            onClick={() => { setTab(t.key); setExpandedId(null); }}
+            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t.key ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}
           >
-            {t === "clientes" ? "👤 Clientes" : "🏪 Lojistas"}
+            {t.label}
           </button>
         ))}
       </div>
@@ -128,7 +138,7 @@ export default function ClientesPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {tab !== "notas" && <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={cardCls}>
           <p className={`text-xs uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
             {tab === "lojistas" ? "Total Lojistas" : "Total Clientes"}
@@ -147,10 +157,10 @@ export default function ClientesPage() {
           <p className={`text-xs uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Ticket Medio</p>
           <p className="text-2xl font-bold text-[#E8740E]">{totals.total_compras > 0 ? fmt(totals.total_gasto / totals.total_compras) : "R$ 0"}</p>
         </div>
-      </div>
+      </div>}
 
       {/* Sort */}
-      <div className="flex items-center gap-2">
+      {tab !== "notas" && <div className="flex items-center gap-2">
         <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Ordenar:</span>
         {([
           { key: "gasto", label: "Maior gasto" },
@@ -166,7 +176,44 @@ export default function ClientesPage() {
             {o.label}
           </button>
         ))}
-      </div>
+      </div>}
+
+      {/* Notas Fiscais Tab */}
+      {tab === "notas" ? (
+        <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+                  {["Data", "Cliente", "Produto", "Valor", "Nota Fiscal"].map((h) => (
+                    <th key={h} className={`px-4 py-3 text-left font-medium text-xs uppercase tracking-wider whitespace-nowrap ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} className={`px-4 py-12 text-center ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Carregando...</td></tr>
+                ) : notas.length === 0 ? (
+                  <tr><td colSpan={5} className={`px-4 py-12 text-center ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Nenhuma nota fiscal registrada</td></tr>
+                ) : notas.map((n) => (
+                  <tr key={n.id} className={`border-b transition-colors ${dm ? "border-[#2C2C2E] hover:bg-[#2C2C2E]" : "border-[#F5F5F7] hover:bg-[#FAFAFA]"}`}>
+                    <td className={`px-4 py-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{fmtDate(n.data)}</td>
+                    <td className={`px-4 py-3 font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{n.cliente}</td>
+                    <td className={`px-4 py-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{n.produto}</td>
+                    <td className="px-4 py-3 font-bold text-green-600">{fmt(n.preco_vendido)}</td>
+                    <td className="px-4 py-3">
+                      <a href={n.nota_fiscal_url} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#E8740E]/10 text-[#E8740E] text-xs font-semibold hover:bg-[#E8740E]/20 transition-colors">
+                        📄 Ver PDF
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (<>
 
       {/* Table */}
       <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -266,6 +313,7 @@ export default function ClientesPage() {
           Mostrando {sorted.length} {tab === "lojistas" ? "lojistas" : "clientes"}
         </p>
       )}
+      </>)}
     </div>
   );
 }

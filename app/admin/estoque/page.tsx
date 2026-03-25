@@ -557,7 +557,8 @@ export default function EstoquePage() {
       });
       setVariacoes([]);
       fetchEstoque();
-      setTab("estoque"); // Voltar pra tela principal
+      setFilterCat(form.categoria); // Voltar na categoria do produto cadastrado
+      setTab("estoque");
     } else { setMsg("Erro: " + json.error); }
   };
 
@@ -833,6 +834,11 @@ export default function EstoquePage() {
       {/* Filtros */}
       {!["novo", "scan", "historico"].includes(tab) && (
         <div className="flex gap-2 items-center flex-wrap">
+          {filterCat && tab === "estoque" && (
+            <button onClick={() => setFilterCat("")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E5E5EA] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}>
+              ← Categorias
+            </button>
+          )}
           <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"}`}>
             <option value="">Todas categorias</option>
             {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
@@ -1090,6 +1096,22 @@ export default function EstoquePage() {
         <div className="space-y-4">
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
+          ) : !filterCat && tab === "estoque" ? (
+            /* TELA DE CATEGORIAS */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {categoriasState.map((cat) => {
+                const count = emEstoque.filter((p) => p.categoria === cat.key).length;
+                const units = emEstoque.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
+                return (
+                  <button key={cat.key} onClick={() => setFilterCat(cat.key)}
+                    className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-md transition-all group`}>
+                    <div className="text-3xl mb-3">{cat.emoji}</div>
+                    <h3 className={`font-bold text-sm ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
+                    <p className={`text-xs ${textSecondary} mt-1`}>{count} produtos | {units} un.</p>
+                  </button>
+                );
+              })}
+            </div>
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
               <p className={textSecondary}>Nenhum produto encontrado.</p>
