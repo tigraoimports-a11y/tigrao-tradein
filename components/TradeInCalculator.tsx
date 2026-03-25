@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { NewProduct, UsedDeviceValue, AppConfig } from "@/lib/types";
+import type { NewProduct, UsedDeviceValue, AppConfig, TradeInQuestion } from "@/lib/types";
 import type { ConditionData, ModelDiscounts, WarrantyBonuses, AnyConditionData, DeviceType } from "@/lib/calculations";
 import { formatBRL } from "@/lib/calculations";
 import { getTemaTI, temaTICSSVars } from "@/lib/temas-tradein";
@@ -92,6 +92,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     bonusGarantia6mMais: 0.07,
   });
 
+  const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -126,11 +127,12 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   useEffect(() => {
     async function load() {
       try {
-        const [prodRes, usedRes, configRes, lojaRes] = await Promise.all([
+        const [prodRes, usedRes, configRes, lojaRes, questionsRes] = await Promise.all([
           fetch("/api/produtos"),
           fetch("/api/usados"),
           fetch("/api/config"),
           fetch("/api/loja?format=grouped").catch(() => null),
+          fetch("/api/tradein-perguntas?device_type=iphone").catch(() => null),
         ]);
         const [prodData, usedResData, configData] = await Promise.all([
           prodRes.json(),
@@ -140,6 +142,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         setProducts(prodData);
         setUsedData(usedResData);
         setConfig(configData);
+        // Load trade-in questions config
+        try {
+          const qData = questionsRes ? await questionsRes.json() : null;
+          if (qData?.data && qData.data.length > 0) setQuestionsConfig(qData.data);
+        } catch { /* use hardcoded fallback */ }
         // Load theme config from mostruario_config (Supabase)
         try {
           const lojaData = lojaRes ? await lojaRes.json() : null;
@@ -258,6 +265,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               excludedModels={usedData.excludedModels}
               modelDiscounts={usedData.modelDiscounts}
               warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
+              questionsConfig={questionsConfig}
               onNext={handleStep1Complete}
               onTrackQuestion={trackQuestion}
             />
@@ -304,6 +312,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
                 excludedModels={usedData.excludedModels}
                 modelDiscounts={usedData.modelDiscounts}
                 warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
+                questionsConfig={questionsConfig}
                 onNext={handleStep1Complete}
                 onTrackQuestion={trackQuestion}
               />

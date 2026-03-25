@@ -38,6 +38,29 @@ export interface DiscountRule {
   desconto: number;
 }
 
+/** Opção de resposta de uma pergunta trade-in */
+export interface TradeInQuestionOption {
+  value: string;
+  label: string;
+  discount: number;
+  variant?: "default" | "success" | "error";
+  reject?: boolean;
+  rejectMessage?: string;
+}
+
+/** Pergunta configurável do trade-in */
+export interface TradeInQuestion {
+  id: string;
+  slug: string;
+  titulo: string;
+  tipo: "yesno" | "selection" | "numeric" | "conditional_date";
+  opcoes: TradeInQuestionOption[];
+  ordem: number;
+  ativo: boolean;
+  config: Record<string, unknown>;
+  device_type: string;
+}
+
 /** Dados carregados das planilhas */
 export interface SheetData {
   newProducts: NewProduct[];

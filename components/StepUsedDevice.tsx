@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import type { UsedDeviceValue } from "@/lib/types";
+import type { UsedDeviceValue, TradeInQuestion } from "@/lib/types";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
   calculateTradeInValue, getDiscountsForModel, formatBRL,
@@ -13,13 +13,31 @@ interface StepUsedDeviceProps {
   excludedModels: string[];
   modelDiscounts?: Record<string, ModelDiscounts>;
   warrantyBonuses?: WarrantyBonuses;
+  questionsConfig?: TradeInQuestion[] | null;
   onNext: (data: { usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
 
+// Helper to get question config by slug
+function getQ(config: TradeInQuestion[] | null | undefined, slug: string): TradeInQuestion | undefined {
+  return config?.find((q) => q.slug === slug && q.ativo !== false);
+}
+function getQTitle(config: TradeInQuestion[] | null | undefined, slug: string, fallback: string): string {
+  return getQ(config, slug)?.titulo || fallback;
+}
+function getQOptions(config: TradeInQuestion[] | null | undefined, slug: string) {
+  return getQ(config, slug)?.opcoes || [];
+}
+function isQActive(config: TradeInQuestion[] | null | undefined, slug: string): boolean {
+  if (!config || config.length === 0) return true; // no config = use all defaults
+  const q = config.find((q) => q.slug === slug);
+  return q ? q.ativo : true; // not found = active by default
+}
+
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, onNext, onTrackQuestion }: StepUsedDeviceProps) {
+export default function StepUsedDevice({ usedValues, excludedModels, modelDiscounts, warrantyBonuses, questionsConfig, onNext, onTrackQuestion }: StepUsedDeviceProps) {
+  const qc = questionsConfig;
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
@@ -56,17 +74,22 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
   const md = useMemo(() => getDiscountsForModel(model, modelDiscounts), [model, modelDiscounts]);
   const tradeInValue = useMemo(() => {
-    if (baseValue === null || hasDamage !== false || partsReplaced === "thirdParty") return 0;
+    if (baseValue === null || (isQActive(qc, "hasDamage") && hasDamage !== false) || (isQActive(qc, "partsReplaced") && partsReplaced === "thirdParty")) return 0;
     return calculateTradeInValue(baseValue, cond, md, warrantyBonuses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox]);
 
   const isExcluded = excludedModels.some((m) => model.toLowerCase().includes(m.toLowerCase()));
-  const batteryFilled = battery !== null && battery >= 1 && battery <= 100;
-  const allCond = screenScratch !== null && sideScratch !== null && peeling !== null && batteryFilled;
-  const warrantyFilled = hasWarranty === false || (hasWarranty === true && warrantyMonth !== null);
-  const partsOk = partsReplaced === "no" || partsReplaced === "apple";
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && partsOk && allCond && warrantyFilled && hasOriginalBox !== null;
+  const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
+  const screenOk = !isQActive(qc, "screenScratch") || screenScratch !== null;
+  const sideOk = !isQActive(qc, "sideScratch") || sideScratch !== null;
+  const peelingOk = !isQActive(qc, "peeling") || peeling !== null;
+  const allCond = screenOk && sideOk && peelingOk && batteryFilled;
+  const damageOk = !isQActive(qc, "hasDamage") || hasDamage === false;
+  const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
+  const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
+  const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
+  const canProceed = model && storage && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
   function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
@@ -99,15 +122,22 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
         </Section>
       )}
 
-      {model && storage && !isExcluded && (
-        <Section title="O aparelho está trincado, quebrado ou com defeito?">
+      {model && storage && !isExcluded && isQActive(qc, "hasDamage") && (
+        <Section title={getQTitle(qc, "hasDamage", "O aparelho está trincado, quebrado ou com defeito?")}>
           <div className="flex gap-2">
-            <Btn sel={hasDamage===false} onClick={() => { setHasDamage(false); tq("damage"); }} className="flex-1" variant="success">Não</Btn>
-            <Btn sel={hasDamage===true} onClick={() => { setHasDamage(true); tq("damage"); }} className="flex-1" variant="error">Sim</Btn>
+            {(() => {
+              const opts = getQOptions(qc, "hasDamage");
+              const noOpt = opts.find(o => o.value === "no");
+              const yesOpt = opts.find(o => o.value === "yes");
+              return <>
+                <Btn sel={hasDamage===false} onClick={() => { setHasDamage(false); tq("damage"); }} className="flex-1" variant="success">{noOpt?.label || "Não"}</Btn>
+                <Btn sel={hasDamage===true} onClick={() => { setHasDamage(true); tq("damage"); }} className="flex-1" variant="error">{yesOpt?.label || "Sim"}</Btn>
+              </>;
+            })()}
           </div>
           {hasDamage === true && (
             <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
-              <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>Infelizmente não aceitamos aparelhos com tela trincada, quebrada ou com defeito na troca.</p>
+              <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{getQOptions(qc, "hasDamage").find(o => o.reject)?.rejectMessage || "Infelizmente não aceitamos aparelhos com tela trincada, quebrada ou com defeito na troca."}</p>
             </div>
           )}
         </Section>
@@ -115,7 +145,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
       {model && storage && !isExcluded && hasDamage === false && (
         <>
-          <Section title="Saúde da bateria">
+          <Section title={getQTitle(qc, "battery", "Saúde da bateria")}>
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
               <div className="relative">
                 <input type="tel" inputMode="numeric" pattern="[0-9]*" value={battery ?? ""} placeholder="Ex: 87"
@@ -137,49 +167,83 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             </div>
           </Section>
 
-          {batteryFilled && <Section title="Riscos na tela"><div className="flex gap-2">
-            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={screenScratch===v} onClick={() => { setScreenScratch(v); tq("screenScratch"); }} className="flex-1">{l}</Btn>)}
+          {batteryFilled && isQActive(qc, "screenScratch") && <Section title={getQTitle(qc, "screenScratch", "Riscos na tela")}><div className="flex gap-2">
+            {(() => {
+              const opts = getQOptions(qc, "screenScratch");
+              const items: [string, string][] = opts.length > 0
+                ? opts.map(o => [o.value, o.label])
+                : [["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]];
+              return items.map(([v,l]) => <Btn key={v} sel={screenScratch===v} onClick={() => { setScreenScratch(v as typeof screenScratch); tq("screenScratch"); }} className="flex-1">{l}</Btn>);
+            })()}
           </div></Section>}
 
-          {screenScratch !== null && <Section title="Riscos laterais"><div className="flex gap-2">
-            {([["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]] as const).map(([v,l]) => <Btn key={v} sel={sideScratch===v} onClick={() => { setSideScratch(v); tq("sideScratch"); }} className="flex-1">{l}</Btn>)}
+          {screenScratch !== null && isQActive(qc, "sideScratch") && <Section title={getQTitle(qc, "sideScratch", "Riscos laterais")}><div className="flex gap-2">
+            {(() => {
+              const opts = getQOptions(qc, "sideScratch");
+              const items: [string, string][] = opts.length > 0
+                ? opts.map(o => [o.value, o.label])
+                : [["none","Nenhum"],["one","1 risco"],["multiple","2 ou mais"]];
+              return items.map(([v,l]) => <Btn key={v} sel={sideScratch===v} onClick={() => { setSideScratch(v as typeof sideScratch); tq("sideScratch"); }} className="flex-1">{l}</Btn>);
+            })()}
           </div></Section>}
 
-          {sideScratch !== null && <Section title="Descascado / Amassado"><div className="flex gap-2">
-            {([["none","Não"],["light","Leve"],["heavy","Forte"]] as const).map(([v,l]) => <Btn key={v} sel={peeling===v} onClick={() => { setPeeling(v); tq("peeling"); }} className="flex-1">{l}</Btn>)}
+          {sideScratch !== null && isQActive(qc, "peeling") && <Section title={getQTitle(qc, "peeling", "Descascado / Amassado")}><div className="flex gap-2">
+            {(() => {
+              const opts = getQOptions(qc, "peeling");
+              const items: [string, string][] = opts.length > 0
+                ? opts.map(o => [o.value, o.label])
+                : [["none","Não"],["light","Leve"],["heavy","Forte"]];
+              return items.map(([v,l]) => <Btn key={v} sel={peeling===v} onClick={() => { setPeeling(v as typeof peeling); tq("peeling"); }} className="flex-1">{l}</Btn>);
+            })()}
           </div></Section>}
 
-          {peeling !== null && (
-          <Section title="O aparelho já teve alguma peça trocada?">
-            <div className="grid grid-cols-1 gap-2">
-              <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">Não</Btn>
-              <Btn sel={partsReplaced==="apple"} onClick={() => { setPartsReplaced("apple"); tq("partsReplaced"); }} variant="success">Sim, na Apple (autorizada)</Btn>
-              <Btn sel={partsReplaced==="thirdParty"} onClick={() => { setPartsReplaced("thirdParty"); tq("partsReplaced"); }} variant="error">Sim, fora da Apple</Btn>
-            </div>
-            {partsReplaced === "apple" && (
-              <div className="mt-3">
-                <label className="block text-[12px] font-semibold mb-1.5 text-center" style={{ color: "var(--ti-muted)" }}>Qual peça foi trocada?</label>
-                <input type="text" value={partsReplacedDetail} onChange={(e) => setPartsReplacedDetail(e.target.value)}
-                  placeholder="Ex: Tela, Bateria, Alto-falante..."
-                  className="w-full px-4 py-3 rounded-2xl text-[14px] text-center focus:outline-none"
-                  style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-success)", color: "var(--ti-text)" }} />
-              </div>
-            )}
-            {partsReplaced === "thirdParty" && (
-              <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
-                <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>Infelizmente não aceitamos aparelhos com peças trocadas fora da rede autorizada Apple.</p>
-              </div>
-            )}
+          {peeling !== null && isQActive(qc, "partsReplaced") && (
+          <Section title={getQTitle(qc, "partsReplaced", "O aparelho já teve alguma peça trocada?")}>
+            {(() => {
+              const opts = getQOptions(qc, "partsReplaced");
+              const noOpt = opts.find(o => o.value === "no");
+              const appleOpt = opts.find(o => o.value === "apple");
+              const tpOpt = opts.find(o => o.value === "thirdParty");
+              const partsConfig = getQ(qc, "partsReplaced")?.config || {};
+              return <>
+                <div className="grid grid-cols-1 gap-2">
+                  <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">{noOpt?.label || "Não"}</Btn>
+                  <Btn sel={partsReplaced==="apple"} onClick={() => { setPartsReplaced("apple"); tq("partsReplaced"); }} variant="success">{appleOpt?.label || "Sim, na Apple (autorizada)"}</Btn>
+                  <Btn sel={partsReplaced==="thirdParty"} onClick={() => { setPartsReplaced("thirdParty"); tq("partsReplaced"); }} variant="error">{tpOpt?.label || "Sim, fora da Apple"}</Btn>
+                </div>
+                {partsReplaced === "apple" && (
+                  <div className="mt-3">
+                    <label className="block text-[12px] font-semibold mb-1.5 text-center" style={{ color: "var(--ti-muted)" }}>Qual peça foi trocada?</label>
+                    <input type="text" value={partsReplacedDetail} onChange={(e) => setPartsReplacedDetail(e.target.value)}
+                      placeholder={(partsConfig.detailPlaceholder as string) || "Ex: Tela, Bateria, Alto-falante..."}
+                      className="w-full px-4 py-3 rounded-2xl text-[14px] text-center focus:outline-none"
+                      style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-success)", color: "var(--ti-text)" }} />
+                  </div>
+                )}
+                {partsReplaced === "thirdParty" && (
+                  <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
+                    <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{tpOpt?.rejectMessage || "Infelizmente não aceitamos aparelhos com peças trocadas fora da rede autorizada Apple."}</p>
+                  </div>
+                )}
+              </>;
+            })()}
           </Section>)}
 
-          {partsOk && (
-          <Section title="Ainda está na garantia Apple de 12 meses?"><div className="flex gap-2">
-            <Btn sel={hasWarranty===false} onClick={() => { setHasWarranty(false); setWarrantyMonth(null); tq("warranty"); }} className="flex-1">Não</Btn>
-            <Btn sel={hasWarranty===true} onClick={() => { setHasWarranty(true); tq("warranty"); }} className="flex-1" variant="success">Sim</Btn>
+          {partsOk && isQActive(qc, "hasWarranty") && (
+          <Section title={getQTitle(qc, "hasWarranty", "Ainda está na garantia Apple de 12 meses?")}><div className="flex gap-2">
+            {(() => {
+              const opts = getQOptions(qc, "hasWarranty");
+              const yesOpt = opts.find(o => o.value === "yes");
+              const noOpt = opts.find(o => o.value === "no");
+              return <>
+                <Btn sel={hasWarranty===false} onClick={() => { setHasWarranty(false); setWarrantyMonth(null); tq("warranty"); }} className="flex-1">{noOpt?.label || "Não"}</Btn>
+                <Btn sel={hasWarranty===true} onClick={() => { setHasWarranty(true); tq("warranty"); }} className="flex-1" variant="success">{yesOpt?.label || "Sim"}</Btn>
+              </>;
+            })()}
           </div></Section>)}
 
-          {hasWarranty === true && (
-            <Section title="Até qual mês vai a garantia do seu aparelho?">
+          {hasWarranty === true && isQActive(qc, "warrantyMonth") && (
+            <Section title={getQTitle(qc, "warrantyMonth", "Até qual mês vai a garantia do seu aparelho?")}>
               <div className="flex gap-2 mb-3">
                 {[new Date().getFullYear(), new Date().getFullYear()+1].map((y) => <Btn key={y} sel={warrantyYear===y} onClick={() => setWarrantyYear(y)} className="flex-1" variant="success">{y}</Btn>)}
               </div>
@@ -189,10 +253,17 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             </Section>
           )}
 
-          {warrantyFilled && (
-          <Section title="Ainda tem a caixa original do aparelho?"><div className="flex gap-2">
-            <Btn sel={hasOriginalBox===true} onClick={() => { setHasOriginalBox(true); tq("originalBox"); }} className="flex-1" variant="success">Sim</Btn>
-            <Btn sel={hasOriginalBox===false} onClick={() => { setHasOriginalBox(false); tq("originalBox"); }} className="flex-1">Não</Btn>
+          {warrantyFilled && isQActive(qc, "hasOriginalBox") && (
+          <Section title={getQTitle(qc, "hasOriginalBox", "Ainda tem a caixa original do aparelho?")}><div className="flex gap-2">
+            {(() => {
+              const opts = getQOptions(qc, "hasOriginalBox");
+              const yesOpt = opts.find(o => o.value === "yes");
+              const noOpt = opts.find(o => o.value === "no");
+              return <>
+                <Btn sel={hasOriginalBox===true} onClick={() => { setHasOriginalBox(true); tq("originalBox"); }} className="flex-1" variant="success">{yesOpt?.label || "Sim"}</Btn>
+                <Btn sel={hasOriginalBox===false} onClick={() => { setHasOriginalBox(false); tq("originalBox"); }} className="flex-1">{noOpt?.label || "Não"}</Btn>
+              </>;
+            })()}
           </div></Section>)}
         </>
       )}
