@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -9,6 +8,7 @@ function auth(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { supabase } = await import("@/lib/supabase");
   const { searchParams } = new URL(req.url);
   const deviceType = searchParams.get("device_type") || "iphone";
 
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { supabase } = await import("@/lib/supabase");
   const body = await req.json();
   const { id, ...updates } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -47,6 +48,7 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { supabase } = await import("@/lib/supabase");
   const body = await req.json();
 
   // Reorder action

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { TradeInQuestion } from "@/lib/types";
 
 // Default questions fallback (when Supabase is empty/unavailable)
@@ -137,6 +136,7 @@ export async function GET(req: NextRequest) {
   const deviceType = searchParams.get("device_type") || "iphone";
 
   try {
+    const { supabase } = await import("@/lib/supabase");
     const { data, error } = await supabase
       .from("tradein_perguntas")
       .select("*")
