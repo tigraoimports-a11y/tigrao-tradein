@@ -540,7 +540,7 @@ export default function EstoquePage() {
       }
       // Criar variações de cor adicionais
       const validVariacoes = variacoes.filter((v) => v.cor.trim());
-      const varErrors: string[] = [];
+      const varResults: string[] = [];
       for (const v of validVariacoes) {
         try {
           const vRes = await fetch("/api/estoque", {
@@ -555,16 +555,23 @@ export default function EstoquePage() {
             }),
           });
           const vJson = await vRes.json();
-          if (!vJson.ok) varErrors.push(`${v.cor}: ${vJson.error}`);
+          if (!vJson.ok) {
+            varResults.push(`❌ ${v.cor}: ${vJson.error}`);
+          } else if (vJson.merged) {
+            varResults.push(`🔄 ${v.cor}: mesclado (ja existia)`);
+          } else {
+            varResults.push(`✅ ${v.cor}: criado`);
+          }
         } catch (e) {
-          varErrors.push(`${v.cor}: ${String(e)}`);
+          varResults.push(`❌ ${v.cor}: ${String(e)}`);
         }
       }
       if (validVariacoes.length > 0) {
-        if (varErrors.length > 0) {
-          setMsg(`Produto adicionado, mas ${varErrors.length} cor(es) falharam: ${varErrors.join(", ")}`);
+        const errors = varResults.filter((r) => r.startsWith("❌"));
+        if (errors.length > 0) {
+          setMsg(`Produto adicionado. Cores: ${varResults.join(" | ")}`);
         } else {
-          setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor!`);
+          setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor! (${varResults.join(" | ")})`);
         }
       }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
