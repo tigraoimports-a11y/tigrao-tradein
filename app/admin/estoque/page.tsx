@@ -400,12 +400,15 @@ export default function EstoquePage() {
     aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
     // AIRPODS
     air_modelo: "AIRPODS 4",
+    // SEMINOVOS — subtipo define quais campos mostrar
+    semi_subtipo: "IPHONES",
   });
   const setS = (field: string, value: string) => setSpec((s) => ({ ...s, [field]: value }));
 
   // Gerar nome do produto automaticamente a partir dos campos estruturados
   const buildProdutoName = (cat: string): string => {
-    switch (getBaseCat(cat)) {
+    const effectiveCat = cat === "SEMINOVOS" ? spec.semi_subtipo : cat;
+    switch (getBaseCat(effectiveCat)) {
       case "IPHONES": {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
         return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
@@ -432,8 +435,8 @@ export default function EstoquePage() {
     }
   };
 
-  const formBaseCat = getBaseCat(form.categoria);
-  const hasStructuredFields = STRUCTURED_CATS_LIST.includes(formBaseCat);
+  const formBaseCat = form.categoria === "SEMINOVOS" ? getBaseCat(spec.semi_subtipo) : getBaseCat(form.categoria);
+  const hasStructuredFields = STRUCTURED_CATS_LIST.includes(formBaseCat) || form.categoria === "SEMINOVOS";
 
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
@@ -616,6 +619,7 @@ export default function EstoquePage() {
         ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
         aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
         air_modelo: "AIRPODS 4",
+        semi_subtipo: "IPHONES",
       });
       setVariacoes([]);
       fetchEstoque();
@@ -949,11 +953,21 @@ export default function EstoquePage() {
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => { set("categoria", e.target.value); set("produto", ""); }} className={inputCls}>
               {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
             </select></div>
-            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
-              <option value="NOVO">Novo (Lacrado)</option>
-              <option value="SEMINOVO">Seminovo</option>
-              <option value="A_CAMINHO">A Caminho</option>
-            </select></div>
+            {form.categoria === "SEMINOVOS" ? (
+              <div><p className={labelCls}>Tipo de Seminovo</p><select value={spec.semi_subtipo} onChange={(e) => setS("semi_subtipo", e.target.value)} className={inputCls}>
+                <option value="IPHONES">iPhone Seminovo</option>
+                <option value="MACBOOK">MacBook Seminovo</option>
+                <option value="IPADS">iPad Seminovo</option>
+                <option value="APPLE_WATCH">Apple Watch Seminovo</option>
+                <option value="ACESSORIOS">Acessórios Seminovo</option>
+              </select></div>
+            ) : (
+              <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
+                <option value="NOVO">Novo (Lacrado)</option>
+                <option value="SEMINOVO">Seminovo</option>
+                <option value="A_CAMINHO">A Caminho</option>
+              </select></div>
+            )}
           </div>
 
           {/* Campos específicos por categoria */}
