@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { proximoDiaUtil } from "@/lib/business-days";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -9,7 +10,7 @@ interface SaldoRow { itau_base: number; inf_base: number; mp_base: number; esp_i
 interface DashData {
   saldos: SaldoRow | null;
   saldoAnterior: SaldoRow | null;
-  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string }[];
+  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string; valor_comprovante?: number; qnt_parcelas?: number; bandeira?: string }[];
   gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string; is_dep_esp?: boolean }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
   pendencias: number;
@@ -130,6 +131,36 @@ export default function DashboardPage() {
   const pixHojeInf = vendasD0Hoje.filter(v => v.banco === "INFINITE").reduce((s, v) => s + (v.preco_vendido || 0), 0);
   const pixHojeMP = vendasD0Hoje.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
+  // Créditos D+1 de dias anteriores que caíram hoje (mesma lógica do /noite)
+  const d1Credits = useMemo(() => {
+    const acc = { ITAU: 0, INFINITE: 0, MERCADO_PAGO: 0 };
+    const contados = new Set<string>();
+    const seteDias = new Date(hoje + "T12:00:00");
+    seteDias.setDate(seteDias.getDate() - 7);
+    const seteDiasISO = `${seteDias.getFullYear()}-${String(seteDias.getMonth() + 1).padStart(2, "0")}-${String(seteDias.getDate()).padStart(2, "0")}`;
+    const d1Vendas = data.vendas.filter((v: { recebimento: string; data: string }) =>
+      v.recebimento === "D+1" && v.data && v.data < hoje && v.data >= seteDiasISO
+    );
+    for (const v of d1Vendas) {
+      const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
+      const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
+      if (recebISO !== hoje) continue;
+      const chave = v.id || `${v.banco}_${v.cliente}_${v.preco_vendido}_${v.data}_${v.produto}`;
+      if (contados.has(chave)) continue;
+      contados.add(chave);
+      const comprovante = Number(v.valor_comprovante || 0);
+      const val = comprovante > 0
+        ? comprovante * 0.98
+        : Math.max(0, (v.preco_vendido || 0) - (v.entrada_pix || 0) - (v.entrada_especie || 0) - Number(v.produto_na_troca || 0));
+      const banco = v.banco as keyof typeof acc;
+      if (banco in acc) acc[banco] += val;
+    }
+    return acc;
+  }, [data.vendas, hoje]);
+  const d1Itau = d1Credits.ITAU;
+  const d1Inf = d1Credits.INFINITE;
+  const d1MP = d1Credits.MERCADO_PAGO;
+
   // Espécie recebido hoje (entrada_especie das vendas de hoje)
   const especieHoje = vendasHoje.reduce((s, v) => s + (v.entrada_especie || 0), 0);
 
@@ -142,9 +173,9 @@ export default function DashboardPage() {
   const depEspHoje = gastosHoje.filter(g => g.is_dep_esp).reduce((s, g) => s + (g.valor || 0), 0);
 
   // Se saldos foram informados manualmente (/saldos), usar valores diretos sem recalcular
-  const saldoItau = isManual ? (s?.esp_itau || itauBase) : (itauBase - gastosHojeItau + pixHojeItau);
-  const saldoInf = isManual ? (s?.esp_inf || infBase) : (infBase - gastosHojeInf + pixHojeInf);
-  const saldoMP = isManual ? (s?.esp_mp || mpBase) : (mpBase - gastosHojeMP + pixHojeMP);
+  const saldoItau = isManual ? (s?.esp_itau || itauBase) : (itauBase + pixHojeItau + d1Itau - gastosHojeItau);
+  const saldoInf = isManual ? (s?.esp_inf || infBase) : (infBase + pixHojeInf + d1Inf - gastosHojeInf);
+  const saldoMP = isManual ? (s?.esp_mp || mpBase) : (mpBase + pixHojeMP + d1MP - gastosHojeMP);
   const saldoEsp = isManual ? espBase : (espBase + especieHoje - gastosHojeEsp - depEspHoje);
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
 
@@ -157,9 +188,9 @@ export default function DashboardPage() {
   // Margem média
   const margemMedia = totalVendidoMes > 0 ? ((lucroMes / totalVendidoMes) * 100).toFixed(1) : "0";
 
-  // D+1 previsão amanhã
-  const d1Itau = vendasHoje.filter(v => v.banco === "ITAU" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
-  const d1Inf = vendasHoje.filter(v => v.banco === "INFINITE" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  // D+1 previsão amanhã (vendas de hoje que serão creditadas amanhã)
+  const d1AmanhaItau = vendasHoje.filter(v => v.banco === "ITAU" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  const d1AmanhaInf = vendasHoje.filter(v => v.banco === "INFINITE" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
   const Card = ({ title, value, color, sub, icon }: { title: string; value: string; color: string; sub?: string; icon?: string }) => (
     <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
@@ -246,8 +277,8 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(itauBase)} | Gastos: -${fmt(gastosHojeItau)} | PIX: +${fmt(pixHojeItau)}`} />
-          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(infBase)} | Gastos: -${fmt(gastosHojeInf)} | PIX: +${fmt(pixHojeInf)}`} />
+          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={isManual ? "Informado manualmente via /saldos" : `Base: ${fmt(itauBase)} | D+0: +${fmt(pixHojeItau)} | D+1: +${fmt(d1Itau)} | Saídas: -${fmt(gastosHojeItau)}`} />
+          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={isManual ? "Informado manualmente via /saldos" : `Base: ${fmt(infBase)} | D+0: +${fmt(pixHojeInf)} | D+1: +${fmt(d1Inf)} | Saídas: -${fmt(gastosHojeInf)}`} />
           <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(mpBase)} | Gastos: -${fmt(gastosHojeMP)} | Link: +${fmt(pixHojeMP)}`} />
           <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(espBase)}`} />
         </div>
@@ -260,7 +291,7 @@ export default function DashboardPage() {
           <Card icon="📤" title={`Saídas Hoje`} value={fmt(saidasHoje)} color="text-red-600" sub={`${gastosHoje.filter(g => g.tipo === "SAIDA").length} operações`} />
           <Card icon="🛒" title="Vendas Hoje" value={fmt(vendasHojeTotal)} color="text-blue-600" sub={`${vendasHoje.length} vendas | Lucro: ${fmt(lucroHoje)}`} />
           <Card icon="✅" title="Recebido Hoje" value={fmt(vendasHojeTotal)} color="text-green-600" sub={`PIX/Dinheiro | Link MP`} />
-          <Card icon="📅" title="Previsão Amanhã" value={fmt(d1Itau + d1Inf)} color="text-[#1D1D1F]" sub={`Itaú: ${fmt(d1Itau)} | Infinite: ${fmt(d1Inf)}`} />
+          <Card icon="📅" title="Previsão Amanhã" value={fmt(d1AmanhaItau + d1AmanhaInf)} color="text-[#1D1D1F]" sub={`Itaú: ${fmt(d1AmanhaItau)} | Infinite: ${fmt(d1AmanhaInf)}`} />
         </div>
       </div>
 
