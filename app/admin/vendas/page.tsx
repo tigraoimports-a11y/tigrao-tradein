@@ -658,11 +658,18 @@ export default function VendasPage() {
           // Total líquido from comprovante after tax
           const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
 
+          // Cartão alternativo (2o cartão)
+          const gCompAlt = parseFloat(form.comp_alt) || 0;
+          const gTaxaAlt = gCompAlt > 0
+            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+            : 0;
+          const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
+
           // Add entradas (pix, especie, troca) — these are global, added once to the total
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
           const gValorTroca = parseFloat(form.produto_na_troca) || 0;
-          const totalRecebido = totalLiquido + gEntradaPix + gEntradaEspecie + gValorTroca;
+          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + gValorTroca;
 
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
@@ -709,13 +716,56 @@ export default function VendasPage() {
       try {
         // Edição de grupo (múltiplas vendas)
         if (editandoGrupoIds.length > 1 && allProducts.length === editandoGrupoIds.length) {
+          // Build payloads and redistribute valor_comprovante/preco_vendido proportionally
+          const groupPayloads: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
+          const comprovanteTotal = Number(groupPayloads[0]?.valor_comprovante || 0);
+          if (comprovanteTotal > 0) {
+            const totalCusto = groupPayloads.reduce((s, p) => s + Number(p.custo || 0), 0);
+            if (totalCusto > 0) {
+              const gForma = form.forma;
+              const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : form.banco;
+              const gParcelas = parseInt(form.qnt_parcelas) || 0;
+              const gBandeira = form.bandeira || null;
+              const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
+                ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+                : 0;
+              const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
+              const gCompAlt = parseFloat(form.comp_alt) || 0;
+              const gTaxaAlt = gCompAlt > 0
+                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+                : 0;
+              const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
+              const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+              const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
+              const gValorTroca = parseFloat(form.produto_na_troca) || 0;
+              const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + gValorTroca;
+
+              let comprovanteDistribuido = 0;
+              let vendidoDistribuido = 0;
+              for (let i = 0; i < groupPayloads.length; i++) {
+                const custoItem = Number(groupPayloads[i].custo || 0);
+                const proporcao = custoItem / totalCusto;
+                if (i === groupPayloads.length - 1) {
+                  groupPayloads[i].valor_comprovante = Math.round(comprovanteTotal - comprovanteDistribuido);
+                  groupPayloads[i].preco_vendido = Math.round(totalRecebido - vendidoDistribuido);
+                } else {
+                  const compProporcional = Math.round(comprovanteTotal * proporcao);
+                  const vendidoProporcional = Math.round(totalRecebido * proporcao);
+                  groupPayloads[i].valor_comprovante = compProporcional;
+                  groupPayloads[i].preco_vendido = vendidoProporcional;
+                  comprovanteDistribuido += compProporcional;
+                  vendidoDistribuido += vendidoProporcional;
+                }
+              }
+            }
+          }
+
           let allOk = true;
           for (let i = 0; i < editandoGrupoIds.length; i++) {
-            const payload = buildPayload(allProducts[i]);
             const res = await fetch("/api/vendas", {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "x-admin-password": password },
-              body: JSON.stringify({ id: editandoGrupoIds[i], ...payload }),
+              body: JSON.stringify({ id: editandoGrupoIds[i], ...groupPayloads[i] }),
             });
             const json = await res.json();
             if (!json.ok && !json.data) { allOk = false; setMsg("Erro ao atualizar: " + (json.error || "erro desconhecido")); break; }
@@ -2033,18 +2083,19 @@ export default function VendasPage() {
             if (gComp > 0 && taxa > 0) {
               const liqPrincipal = calcularLiquido(gComp, taxa);
               const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
-              const liqAlt = gCompAlt > 0 && taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : 0;
+              const liqAlt = gCompAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : gCompAlt) : 0;
               receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
             }
             const totalLucroAll = receitaReal - totalCusto;
             const totalMargemAll = receitaReal > 0 ? (totalLucroAll / receitaReal) * 100 : 0;
 
-            // Conferencia: comprovante + pix + especie + troca should roughly match total vendido
+            // Conferencia: comprovante + comp_alt + pix + especie + troca should roughly match total vendido
             const gComprovante = parseFloat(form.valor_comprovante_input) || 0;
+            const gCompAltConf = parseFloat(form.comp_alt) || 0;
             const gPix = parseFloat(form.entrada_pix) || 0;
             const gEspecie = parseFloat(form.entrada_especie) || 0;
             const gTroca = parseFloat(form.produto_na_troca) || 0;
-            const somaFormas = gComprovante + gPix + gEspecie + gTroca;
+            const somaFormas = gComprovante + gCompAltConf + gPix + gEspecie + gTroca;
             // Only check conferencia if at least one payment field is filled
             const temConferencia = somaFormas > 0 && totalVendido > 0;
             const diffConferencia = Math.abs(somaFormas - totalVendido);
