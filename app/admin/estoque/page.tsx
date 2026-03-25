@@ -47,8 +47,10 @@ const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as co
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
-const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"];
+const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 function getBaseCat(cat: string): string {
+  // Seminovos usa mesmos campos de iPhones
+  if (cat === "SEMINOVOS") return "IPHONES";
   if (STRUCTURED_CATS_LIST.includes(cat)) return cat;
   const sorted = [...STRUCTURED_CATS_LIST].sort((a, b) => b.length - a.length);
   for (const base of sorted) {
@@ -953,14 +955,6 @@ export default function EstoquePage() {
               <option value="A_CAMINHO">A Caminho</option>
             </select></div>
           </div>
-
-          {/* Debug: mostrar categoria base (remover depois) */}
-          {!STRUCTURED_CATS_LIST.includes(form.categoria) && formBaseCat !== form.categoria && (
-            <div className="text-[10px] text-[#86868B] px-1">Categoria base: {formBaseCat} (key: {form.categoria})</div>
-          )}
-          {!hasStructuredFields && form.categoria !== "ACESSORIOS" && form.categoria !== "OUTROS" && (
-            <div className="text-[10px] text-yellow-500 px-1">⚠ Categoria &quot;{form.categoria}&quot; nao reconhecida como derivada. Base: {formBaseCat}</div>
-          )}
 
           {/* Campos específicos por categoria */}
           {formBaseCat === "IPHONES" && (
