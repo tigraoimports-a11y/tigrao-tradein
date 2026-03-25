@@ -124,10 +124,11 @@ export default function DashboardPage() {
     espBase = prev.esp_especie || 0;
   }
 
-  // PIX recebido hoje (D+0)
-  const pixHojeItau = vendasHoje.filter(v => v.banco_pix === "ITAU" || (v.forma === "PIX" && v.banco === "ITAU")).reduce((s, v) => s + (v.entrada_pix || 0), 0);
-  const pixHojeInf = vendasHoje.filter(v => v.banco_pix === "INFINITE" || (v.forma === "PIX" && v.banco === "INFINITE")).reduce((s, v) => s + (v.entrada_pix || 0), 0);
-  const pixHojeMP = vendasHoje.filter(v => v.banco === "MERCADO_PAGO" && v.recebimento === "D+0").reduce((s, v) => s + (v.preco_vendido || 0) - (v.entrada_pix || 0), 0);
+  // Recebido hoje (D+0) — mesma lógica do relatório /noite
+  const vendasD0Hoje = vendasHoje.filter(v => v.recebimento === "D+0");
+  const pixHojeItau = vendasD0Hoje.filter(v => v.banco === "ITAU").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  const pixHojeInf = vendasD0Hoje.filter(v => v.banco === "INFINITE").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  const pixHojeMP = vendasD0Hoje.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
   // Espécie recebido hoje (entrada_especie das vendas de hoje)
   const especieHoje = vendasHoje.reduce((s, v) => s + (v.entrada_especie || 0), 0);
