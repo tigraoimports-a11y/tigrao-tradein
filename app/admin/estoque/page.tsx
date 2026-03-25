@@ -1059,16 +1059,16 @@ export default function EstoquePage() {
               <div className="w-8 h-8 rounded-full border-2 border-[#E8740E] flex items-center justify-center shrink-0" title="Cor principal">
                 <span className="text-xs">🎨</span>
               </div>
-              <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} flex-1 !min-w-[200px]`} />
-              <input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={`${inputCls} w-20 text-center`} placeholder="Qtd" />
+              <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} !w-auto flex-1`} />
+              <input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={`${inputCls} !w-20 text-center shrink-0`} placeholder="Qtd" />
               <span className={`text-xs ${textSecondary} w-6`}>un.</span>
               <span className="w-5"></span>
             </div>
             {/* Cores adicionais */}
             {variacoes.map((v, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} />
-                <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={`${inputCls} w-20 text-center`} placeholder="Qtd" />
+                <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} !w-auto flex-1`} />
+                <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={`${inputCls} !w-20 text-center shrink-0`} placeholder="Qtd" />
                 <span className={`text-xs ${textSecondary} w-6`}>un.</span>
                 <button onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700 text-sm font-bold w-5">✕</button>
               </div>
