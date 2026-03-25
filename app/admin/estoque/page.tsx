@@ -911,10 +911,14 @@ export default function EstoquePage() {
 
           {form.categoria === "MACBOOK" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Modelo</p><select value={["AIR", "PRO"].includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => setS("mb_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 <option value="AIR">MacBook Air</option>
                 <option value="PRO">MacBook Pro</option>
-              </select></div>
+                <option value="__custom__">Outro (digitar)</option>
+              </select>
+              {!["AIR", "PRO"].includes(spec.mb_modelo) && spec.mb_modelo !== "AIR" && (
+                <input value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+              )}</div>
               <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
                 {spec.mb_modelo === "AIR"
                   ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
@@ -949,12 +953,16 @@ export default function EstoquePage() {
 
           {form.categoria === "IPADS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Modelo</p><select value={["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 <option value="IPAD">iPad</option>
                 <option value="MINI">iPad Mini</option>
                 <option value="AIR">iPad Air</option>
                 <option value="PRO">iPad Pro</option>
-              </select></div>
+                <option value="__custom__">Outro (digitar)</option>
+              </select>
+              {!["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) && spec.ipad_modelo !== "IPAD" && (
+                <input value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+              )}</div>
               <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
                 {['8.3"', '10.9"', '11"', '13"'].map((t) => <option key={t} value={t}>{t}</option>)}
               </select></div>
@@ -970,9 +978,13 @@ export default function EstoquePage() {
 
           {form.categoria === "APPLE_WATCH" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Modelo</p><select value={["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 {["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].map((m) => <option key={m}>{m}</option>)}
-              </select></div>
+                <option value="__custom__">Outro (digitar)</option>
+              </select>
+              {!["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].includes(spec.aw_modelo) && spec.aw_modelo !== "SE" && (
+                <input value={spec.aw_modelo === "__custom__" ? "" : spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+              )}</div>
               <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
                 {["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"].map((t) => <option key={t}>{t}</option>)}
               </select></div>
@@ -985,9 +997,13 @@ export default function EstoquePage() {
 
           {form.categoria === "AIRPODS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Modelo</p><select value={["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].includes(spec.air_modelo) ? spec.air_modelo : "__custom__"} onChange={(e) => setS("air_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 {["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].map((m) => <option key={m}>{m}</option>)}
-              </select></div>
+                <option value="__custom__">Outro (digitar)</option>
+              </select>
+              {!["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].includes(spec.air_modelo) && spec.air_modelo !== "AIRPODS 4" && (
+                <input value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+              )}</div>
             </div>
           )}
 
@@ -1159,7 +1175,7 @@ export default function EstoquePage() {
                     onDragEnter={(e) => { e.stopPropagation(); dragOverCardRef.current = modelo; }}
                     onDragOver={(e) => e.preventDefault()}
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm transition-opacity ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
                     <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing`}>
                       <div className="flex items-center gap-3">
@@ -1337,17 +1353,15 @@ export default function EstoquePage() {
                                         )}
                                       </td>
                                       <td className="px-4 py-2.5">
-                                        <div className="flex gap-1 items-center">
+                                        <div className="flex gap-2 items-center opacity-40 group-hover/row:opacity-100 transition-opacity">
                                         {showMover && (
-                                          <button onClick={() => handleMoverParaEstoque(p)} className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
+                                          <button onClick={() => handleMoverParaEstoque(p)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
                                         )}
-                                        {/* Duplicar */}
                                         <button
                                           onClick={() => handleDuplicar(p)}
-                                          className="text-[#86868B] hover:text-[#0071E3] text-[10px] px-1"
-                                          title="Duplicar produto"
-                                        >📋</button>
-                                        {/* Alterar categoria */}
+                                          className={`p-1.5 rounded-lg ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F2F2F7]"} text-[#86868B] hover:text-[#E8740E] transition-colors`}
+                                          title="Duplicar"
+                                        ><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></button>
                                         {editingCat[p.id] !== undefined ? (
                                           <select
                                             value={editingCat[p.id]}
@@ -1365,24 +1379,24 @@ export default function EstoquePage() {
                                               const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec);
                                             }}
                                             onBlur={() => { const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec); }}
-                                            className={`px-1 py-0.5 rounded border border-[#E8740E] text-[10px] ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`}
+                                            className={`px-1.5 py-1 rounded-lg border border-[#E8740E] text-[11px] ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`}
                                             autoFocus
                                           >
-                                            <option value="">Selecionar...</option>
+                                            <option value="">Mover para...</option>
                                             {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
                                           </select>
                                         ) : (
                                           <button
                                             onClick={() => setEditingCat({ ...editingCat, [p.id]: p.categoria })}
-                                            className="text-[#86868B] hover:text-[#E8740E] text-[10px] px-1"
-                                            title="Alterar categoria"
-                                          >📁</button>
+                                            className={`p-1.5 rounded-lg ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F2F2F7]"} text-[#86868B] hover:text-[#E8740E] transition-colors`}
+                                            title="Mover categoria"
+                                          ><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg></button>
                                         )}
                                         <button onClick={async () => {
                                           if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
                                           await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
                                           setEstoque((prev) => prev.filter((r) => r.id !== p.id));
-                                        }} className="text-[#86868B] hover:text-red-500 text-xs px-1">X</button>
+                                        }} className={`p-1.5 rounded-lg ${dm ? "hover:bg-red-900/30" : "hover:bg-red-50"} text-[#86868B] hover:text-red-500 transition-colors`}><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                         </div>
                                       </td>
                                     </tr>
