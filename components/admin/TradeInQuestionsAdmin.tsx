@@ -32,34 +32,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   }
 
   useEffect(() => {
-    if (password) fetchQuestions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [password]);
-
-  async function fetchQuestions() {
-    setLoading(true);
-    try {
-      // Use admin API to get ALL questions (including inactive)
-      // Fallback to public API if admin fails
-      let res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() });
-      if (!res.ok) {
-        // Fallback: use public API (only returns active questions)
-        res = await fetch("/api/tradein-perguntas?device_type=iphone");
-      }
-      const json = await res.json();
-      if (json.error) {
-        setMsg("Erro API: " + json.error);
-      } else {
+    // Always fetch from public API (no auth needed for reading)
+    fetch("/api/tradein-perguntas?device_type=iphone")
+      .then(r => r.json())
+      .then(json => {
         setQuestions(json.data || []);
         if (!json.data || json.data.length === 0) {
-          setMsg("API retornou 0 perguntas. Status: " + res.status);
+          setMsg("Nenhuma pergunta encontrada na API.");
         }
-      }
-    } catch (err) {
-      setMsg("Erro ao carregar perguntas: " + String(err));
-    }
-    setLoading(false);
-  }
+      })
+      .catch(err => setMsg("Erro: " + String(err)))
+      .finally(() => setLoading(false));
+  }, []);
 
   async function handleSave(q: TradeInQuestion) {
     setSaving(q.id);
