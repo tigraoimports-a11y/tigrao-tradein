@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
-import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
+import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, editCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
@@ -170,6 +170,8 @@ export default function EstoquePage() {
   const [categoriasState, setCategoriasState] = useState<Categoria[]>(() => getCategoriasEstoque());
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCat, setNewCat] = useState({ label: "", emoji: "\u{1F4E6}" });
+  const [editingCatName, setEditingCatName] = useState("");
+  const [editCatLabel, setEditCatLabel] = useState("");
   const CATEGORIAS = categoriasState.map((c) => c.key);
   const catLabelsFromState: Record<string, string> = {};
   categoriasState.forEach((c) => { catLabelsFromState[c.key] = c.label; });
@@ -193,6 +195,14 @@ export default function EstoquePage() {
     const updated = removeCategoriaEstoque(key);
     setCategoriasState(updated);
     if (filterCat === key) setFilterCat("");
+  }
+
+  function handleEditCategoriaEstoque(key: string) {
+    if (!editCatLabel.trim()) return;
+    const updated = editCategoriaEstoque(key, { label: editCatLabel.trim() });
+    setCategoriasState(updated);
+    setEditingCatName("");
+    setEditCatLabel("");
   }
 
   // Drag-and-drop para reordenar
@@ -1127,16 +1137,42 @@ export default function EstoquePage() {
               {categoriasState.map((cat) => {
                 const count = emEstoque.filter((p) => p.categoria === cat.key).length;
                 const units = emEstoque.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
+                const isEditing = editingCatName === cat.key;
                 return (
-                  <button key={cat.key} onClick={() => setFilterCat(cat.key)}
-                    className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group`}>
-                    <div className="text-[40px] mb-4">{cat.emoji}</div>
-                    <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className={`text-[12px] ${textSecondary}`}>{count} produtos</span>
-                      <span className={`text-[12px] ${textMuted}`}>{units} un.</span>
+                  <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
+                    {/* Edit button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingCatName(cat.key); setEditCatLabel(cat.label); }}
+                      className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F5F5F7] text-[#86868B]"} hover:text-[#E8740E]`}
+                      title="Editar nome"
+                    >
+                      ✏️
+                    </button>
+                    <div className="cursor-pointer" onClick={() => !isEditing && setFilterCat(cat.key)}>
+                      <div className="text-[40px] mb-4">{cat.emoji}</div>
+                      {isEditing ? (
+                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            value={editCatLabel}
+                            onChange={(e) => setEditCatLabel(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleEditCategoriaEstoque(cat.key); if (e.key === "Escape") setEditingCatName(""); }}
+                            className={`w-full px-2 py-1.5 rounded-lg border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                            autoFocus
+                          />
+                          <div className="flex gap-1">
+                            <button onClick={() => handleEditCategoriaEstoque(cat.key)} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white">Salvar</button>
+                            <button onClick={() => setEditingCatName("")} className={`px-2 py-1 rounded text-[11px] ${textSecondary}`}>Cancelar</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
+                      )}
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={`text-[12px] ${textSecondary}`}>{count} produtos</span>
+                        <span className={`text-[12px] ${textMuted}`}>{units} un.</span>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

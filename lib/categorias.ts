@@ -51,11 +51,27 @@ function saveCustom(storageKey: string, cats: Categoria[]) {
 }
 
 export function getCategoriasPrecos(): Categoria[] {
-  return [...DEFAULT_CATEGORIAS_PRECOS, ...loadCustom(STORAGE_KEY_PRECOS)];
+  const custom = loadCustom(STORAGE_KEY_PRECOS);
+  const merged = DEFAULT_CATEGORIAS_PRECOS.map((def) => {
+    const override = custom.find((c) => c.key === def.key);
+    return override ? { ...def, ...override } : def;
+  });
+  const defaultKeys = new Set(DEFAULT_CATEGORIAS_PRECOS.map((c) => c.key));
+  const pureCustom = custom.filter((c) => !defaultKeys.has(c.key));
+  return [...merged, ...pureCustom];
 }
 
 export function getCategoriasEstoque(): Categoria[] {
-  return [...DEFAULT_CATEGORIAS_ESTOQUE, ...loadCustom(STORAGE_KEY_ESTOQUE)];
+  const custom = loadCustom(STORAGE_KEY_ESTOQUE);
+  // Merge: custom entries override defaults with same key
+  const merged = DEFAULT_CATEGORIAS_ESTOQUE.map((def) => {
+    const override = custom.find((c) => c.key === def.key);
+    return override ? { ...def, ...override } : def;
+  });
+  // Add purely custom categories (keys not in defaults)
+  const defaultKeys = new Set(DEFAULT_CATEGORIAS_ESTOQUE.map((c) => c.key));
+  const pureCustom = custom.filter((c) => !defaultKeys.has(c.key));
+  return [...merged, ...pureCustom];
 }
 
 export function addCategoriaPrecos(cat: Categoria): Categoria[] {
@@ -86,6 +102,50 @@ export function removeCategoriaEstoque(key: string): Categoria[] {
   const custom = loadCustom(STORAGE_KEY_ESTOQUE).filter((c) => c.key !== key);
   saveCustom(STORAGE_KEY_ESTOQUE, custom);
   return getCategoriasEstoque();
+}
+
+export function editCategoriaEstoque(key: string, updates: Partial<Pick<Categoria, "label" | "emoji">>): Categoria[] {
+  // Check if it's a default category — save override in custom list
+  const defaults = DEFAULT_CATEGORIAS_ESTOQUE;
+  const custom = loadCustom(STORAGE_KEY_ESTOQUE);
+  const isDefault = defaults.some((c) => c.key === key);
+  const customIdx = custom.findIndex((c) => c.key === key);
+
+  if (isDefault) {
+    // Store as override in custom list with special flag
+    const existing = custom.find((c) => c.key === key);
+    if (existing) {
+      Object.assign(existing, updates);
+    } else {
+      const def = defaults.find((c) => c.key === key)!;
+      custom.push({ ...def, ...updates, custom: true });
+    }
+  } else if (customIdx >= 0) {
+    custom[customIdx] = { ...custom[customIdx], ...updates };
+  }
+  saveCustom(STORAGE_KEY_ESTOQUE, custom);
+  return getCategoriasEstoque();
+}
+
+export function editCategoriaPrecos(key: string, updates: Partial<Pick<Categoria, "label" | "emoji">>): Categoria[] {
+  const defaults = DEFAULT_CATEGORIAS_PRECOS;
+  const custom = loadCustom(STORAGE_KEY_PRECOS);
+  const isDefault = defaults.some((c) => c.key === key);
+  const customIdx = custom.findIndex((c) => c.key === key);
+
+  if (isDefault) {
+    const existing = custom.find((c) => c.key === key);
+    if (existing) {
+      Object.assign(existing, updates);
+    } else {
+      const def = defaults.find((c) => c.key === key)!;
+      custom.push({ ...def, ...updates, custom: true });
+    }
+  } else if (customIdx >= 0) {
+    custom[customIdx] = { ...custom[customIdx], ...updates };
+  }
+  saveCustom(STORAGE_KEY_PRECOS, custom);
+  return getCategoriasPrecos();
 }
 
 /** Emojis populares para escolha rápida */
