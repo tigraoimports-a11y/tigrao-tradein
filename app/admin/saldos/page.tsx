@@ -5,6 +5,10 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import type { SaldoBancario } from "@/lib/admin-types";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+const fmtInput = (v: string) => {
+  const num = parseFloat(v.replace(/[^\d.,-]/g, "").replace(",", "."));
+  return isNaN(num) ? "0" : String(Math.round(num * 100) / 100);
+};
 
 export default function SaldosPage() {
   const { password, user, darkMode: dm } = useAdmin();
@@ -42,10 +46,10 @@ export default function SaldosPage() {
         const s = json.data;
         setSaldoHoje(s);
         if (s) {
-          setItau(String(s.itau_base || 0));
-          setInf(String(s.inf_base || 0));
-          setMp(String(s.mp_base || 0));
-          setEsp(String(s.esp_especie || 0));
+          setItau(String(Math.round((s.itau_base || 0) * 100) / 100));
+          setInf(String(Math.round((s.inf_base || 0) * 100) / 100));
+          setMp(String(Math.round((s.mp_base || 0) * 100) / 100));
+          setEsp(String(Math.round((s.esp_especie || 0) * 100) / 100));
         } else {
           setItau("0"); setInf("0"); setMp("0"); setEsp("0");
         }
@@ -125,7 +129,7 @@ export default function SaldosPage() {
                 <p className={`text-[10px] uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Base manha (pre-D+1)</p>
                 <div className="flex items-center gap-1">
                   <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>R$</span>
-                  <input type="number" value={bank.base} onChange={(e) => bank.setBase(e.target.value)} className={inputCls} />
+                  <input type="text" inputMode="decimal" value={bank.base} onChange={(e) => bank.setBase(e.target.value.replace(/[^\d.,-]/g, ""))} className={inputCls} />
                 </div>
               </div>
               {bank.esp !== undefined && bank.esp !== null && (
