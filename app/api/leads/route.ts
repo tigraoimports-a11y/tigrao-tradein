@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitSubmission } from "@/lib/rate-limit";
 
 async function notificarZAPI(mensagem: string) {
   const instanceId = process.env.ZAPI_INSTANCE_ID;
@@ -27,6 +28,9 @@ async function notificarZAPI(mensagem: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimitSubmission(req);
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const status: "GOSTEI" | "SAIR" = body.status ?? "SAIR";

@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchModelDiscounts, buildModelDiscountsMap } from "@/lib/sheets";
+import { rateLimitPublic } from "@/lib/rate-limit";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
   const url = process.env.SHEET_USADOS_DESCONTOS_MODELO_URL;
 
   if (!url) {

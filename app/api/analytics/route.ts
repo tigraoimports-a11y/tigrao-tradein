@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimitPublic } from "@/lib/rate-limit";
 
 // POST — insert analytics event
 export async function POST(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const { event, step, question, sessionId } = body;

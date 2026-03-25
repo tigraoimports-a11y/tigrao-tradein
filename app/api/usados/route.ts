@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimitPublic } from "@/lib/rate-limit";
 import { fetchUsedValues, fetchExcludedModels, fetchDiscountRules, fetchModelDiscounts, buildModelDiscountsMap } from "@/lib/sheets";
 import { FALLBACK_IPAD_VALUES, FALLBACK_MACBOOK_VALUES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
@@ -25,7 +26,9 @@ const FALLBACK_EXCLUDED = [
   "iPhone 12 Mini", "iPhone 13 Mini", "iPhone SE",
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
   // PRIORIDADE 1: Supabase (dados editados pelo admin)
   try {
     const [valoresRes, descontosRes, excluidosRes] = await Promise.all([

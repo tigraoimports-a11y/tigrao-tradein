@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchNewProducts } from "@/lib/sheets";
+import { rateLimitPublic } from "@/lib/rate-limit";
 import type { NewProduct } from "@/lib/types";
 
 const FALLBACK_PRODUCTS: NewProduct[] = [
@@ -10,7 +11,9 @@ const FALLBACK_PRODUCTS: NewProduct[] = [
   { modelo: "iPhone 16", armazenamento: "256GB", precoPix: 5797 },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
   // Tenta Supabase primeiro (painel de preços)
   try {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {

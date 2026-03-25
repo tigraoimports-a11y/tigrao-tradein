@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitPublic } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,9 @@ interface CategoriaRow {
 }
 
 export async function GET(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
+
   const { searchParams } = new URL(req.url);
   const format = searchParams.get("format");
 

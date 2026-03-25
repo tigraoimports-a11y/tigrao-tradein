@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimitPublic } from "@/lib/rate-limit";
 
 // POST: Registrar visualização de produto
 export async function POST(req: NextRequest) {
+  const limited = rateLimitPublic(req);
+  if (limited) return limited;
+
   try {
     const { produto_slug, produto_nome } = await req.json();
     if (!produto_slug) return NextResponse.json({ error: "produto_slug obrigatorio" }, { status: 400 });

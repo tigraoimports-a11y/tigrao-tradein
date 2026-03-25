@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitSubmission } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimitSubmission(req);
+  if (limited) return limited;
+
   try {
     const body = await req.json();
 

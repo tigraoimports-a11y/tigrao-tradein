@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimitSubmission } from "@/lib/rate-limit";
 
 // POST: Registrar interesse "Avise-me quando chegar"
 export async function POST(req: NextRequest) {
+  const limited = rateLimitSubmission(req);
+  if (limited) return limited;
+
   try {
     const { produto_slug, produto_nome, whatsapp, nome } = await req.json();
     if (!produto_slug || !whatsapp) {
