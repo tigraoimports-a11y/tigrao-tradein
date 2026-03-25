@@ -217,6 +217,25 @@ export default function EstoquePage() {
     setEditCatLabel("");
   }
 
+  // Override de títulos de cards (modelo agrupador)
+  const [cardTitleOverrides, setCardTitleOverrides] = useState(() => {
+    if (typeof window === "undefined") return {} as Record<string, string>;
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
+  });
+  const [editingCardTitle, setEditingCardTitle] = useState("");
+  const [editCardTitleValue, setEditCardTitleValue] = useState("");
+  function saveCardTitleOverride(originalTitle: string, newTitle: string) {
+    const updated = { ...cardTitleOverrides, [originalTitle]: newTitle.trim() };
+    if (!newTitle.trim() || newTitle.trim() === originalTitle) delete updated[originalTitle];
+    setCardTitleOverrides(updated);
+    localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated));
+    setEditingCardTitle("");
+    setEditCardTitleValue("");
+  }
+  function getCardTitle(modelo: string): string {
+    return cardTitleOverrides[modelo] || modelo;
+  }
+
   // Drag-and-drop para reordenar
   const dragItemRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
@@ -1244,10 +1263,31 @@ export default function EstoquePage() {
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
                     className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
-                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing`}>
+                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing group/card`}>
                       <div className="flex items-center gap-3">
                         <span className={`${textMuted} text-xs select-none opacity-40`}>⠿</span>
-                        <h3 className={`font-bold ${textPrimary} text-[15px]`}>{modelo}</h3>
+                        {editingCardTitle === modelo ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              value={editCardTitleValue}
+                              onChange={(e) => setEditCardTitleValue(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveCardTitleOverride(modelo, editCardTitleValue); if (e.key === "Escape") setEditingCardTitle(""); }}
+                              className={`px-2 py-0.5 rounded border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                              autoFocus
+                            />
+                            <button onClick={() => saveCardTitleOverride(modelo, editCardTitleValue)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                            <button onClick={() => setEditingCardTitle("")} className={`text-[10px] ${textSecondary}`}>✕</button>
+                          </div>
+                        ) : (
+                          <h3 className={`font-bold ${textPrimary} text-[15px] flex items-center gap-2`}>
+                            {getCardTitle(modelo)}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditingCardTitle(modelo); setEditCardTitleValue(getCardTitle(modelo)); }}
+                              className={`w-5 h-5 rounded flex items-center justify-center text-[10px] opacity-0 group-hover/card:opacity-100 transition-opacity ${dm ? "text-[#636366] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}
+                              title="Editar título do card"
+                            >✏️</button>
+                          </h3>
+                        )}
                       </div>
                       <div className="flex items-center gap-4">
                         <span className={`text-[11px] ${textSecondary}`}>{items.length} variantes</span>
