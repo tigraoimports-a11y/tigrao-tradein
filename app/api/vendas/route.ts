@@ -201,6 +201,8 @@ export async function PATCH(req: NextRequest) {
       lucro: lucroCalc,
       banco: venda.banco,
       forma: venda.forma,
+      qnt_parcelas: venda.qnt_parcelas,
+      bandeira: venda.bandeira,
       vendedor: venda.vendedor || "sistema",
     }).then(ok => {
       if (!ok) console.error("[Vendas] Falha ao enviar notificação Telegram para:", venda.cliente);

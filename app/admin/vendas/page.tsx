@@ -72,7 +72,7 @@ export default function VendasPage() {
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
-    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -603,6 +603,16 @@ export default function VendasPage() {
       return;
     }
 
+    if (!form.origem) {
+      setMsg("Selecione a ORIGEM da venda");
+      return;
+    }
+
+    if (!form.tipo) {
+      setMsg("Selecione o TIPO da venda");
+      return;
+    }
+
     // Collect all products: cart items + current form (if has product)
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
     if (form.produto) {
@@ -858,8 +868,8 @@ export default function VendasPage() {
       email: "",
       endereco: "",
       pessoa: "PF",
-      origem: v.origem || "ANUNCIO",
-      tipo: v.tipo || "VENDA",
+      origem: v.origem || "",
+      tipo: v.tipo || "",
       produto: v.produto,
       fornecedor: v.fornecedor || "",
       custo: "",
@@ -1111,14 +1121,8 @@ export default function VendasPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          {/* Row 1: Origem + Tipo + Data */}
+          {/* Row 1: Data */}
           <div className="grid grid-cols-3 gap-4">
-            <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => { const v = e.target.value; set("origem", v); if (v === "ATACADO") { set("tipo", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } }} className={selectCls}>
-              <option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option><option>NAO_INFORMARAM</option>
-            </select></div>
-            <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } else if (form.origem === "ATACADO") { set("origem", "ANUNCIO"); set("local", ""); set("email", ""); set("cep", ""); } }} className={selectCls}>
-              <option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
-            </select></div>
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
           </div>
 
@@ -1203,11 +1207,20 @@ export default function VendasPage() {
                 <div><p className={labelCls}>Endereço</p><input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereço completo" className={inputCls} /></div>
               )}
 
-              {/* CEP + Local */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Local + Origem + Tipo */}
+              <div className="grid grid-cols-3 gap-4">
                 <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
                   <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option><option>ATACADO</option>
                 </select></div>
+                <div><p className={labelCls}>Origem</p><select value={form.origem} onChange={(e) => { const v = e.target.value; set("origem", v); if (v === "ATACADO") { set("tipo", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } }} className={selectCls}>
+                  <option value="">—</option><option>ANUNCIO</option><option>RECOMPRA</option><option>INDICACAO</option><option>ATACADO</option><option>NAO_INFORMARAM</option>
+                </select></div>
+                <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => { set("tipo", e.target.value); if (e.target.value === "ATACADO") { set("origem", "ATACADO"); set("local", "ATACADO"); set("email", "N/A"); set("cep", "00000-000"); set("bairro", ""); set("cidade", ""); set("uf", ""); } else if (form.origem === "ATACADO") { set("origem", ""); set("local", ""); set("email", ""); set("cep", ""); } }} className={selectCls}>
+                  <option value="">—</option><option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
+                </select></div>
+              </div>
+              {/* CEP */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className={labelCls}>CEP</p>
                   <input
@@ -1468,7 +1481,7 @@ export default function VendasPage() {
                 onClick={() => {
                   setForm({
                     data: new Date().toISOString().split("T")[0],
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "ANUNCIO", tipo: "VENDA", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -2623,8 +2636,8 @@ export default function VendasPage() {
                                               email: v.email || "",
                                               endereco: v.endereco || "",
                                               pessoa: (v.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
-                                              origem: v.origem || "ANUNCIO",
-                                              tipo: v.tipo || "VENDA",
+                                              origem: v.origem || "",
+                                              tipo: v.tipo || "",
                                               produto: v.produto,
                                               fornecedor: v.fornecedor || "",
                                               custo: String(v.custo || ""),
@@ -2939,20 +2952,60 @@ export default function VendasPage() {
                         body: fd,
                       });
                     }
-                    setMsg("Nota fiscal enviada com sucesso!");
+                    setMsg("Nota fiscal salva com sucesso!");
                   } catch {
-                    setMsg("Erro ao enviar nota fiscal");
+                    setMsg("Erro ao salvar nota fiscal");
                   }
                   setNotaFiscalUploading(false);
                   setNotaFiscalVendaIds([]);
                   setNotaFiscalFile(null);
+                  // Limpar formulário completo após nota fiscal
+                  setForm({
+                    data: new Date().toISOString().split("T")[0],
+                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+                    qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    serial_no: "", imei: "",
+                    cep: "", bairro: "", cidade: "", uf: "",
+                  });
+                  setLastClienteData(null);
+                  setCatSel("");
+                  setEstoqueId("");
+                  setProdutoManual(false);
+                  setProdutosCarrinho([]);
                 }}
                 className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
               >
                 {notaFiscalUploading ? "Enviando..." : "Enviar"}
               </button>
               <button
-                onClick={() => { setNotaFiscalVendaIds([]); setNotaFiscalFile(null); }}
+                onClick={() => {
+                  setNotaFiscalVendaIds([]);
+                  setNotaFiscalFile(null);
+                  // Limpar formulário completo ao pular nota fiscal
+                  setForm({
+                    data: new Date().toISOString().split("T")[0],
+                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+                    qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    serial_no: "", imei: "",
+                    cep: "", bairro: "", cidade: "", uf: "",
+                  });
+                  setLastClienteData(null);
+                  setCatSel("");
+                  setEstoqueId("");
+                  setProdutoManual(false);
+                  setProdutosCarrinho([]);
+                  setMsg("");
+                }}
                 className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#E5E5EA] text-[#1D1D1F] hover:bg-[#D2D2D7]"}`}
               >
                 Pular

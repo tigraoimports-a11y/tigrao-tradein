@@ -91,11 +91,23 @@ export async function sendSaleNotification(venda: {
   lucro?: number;
   banco?: string;
   forma?: string;
+  qnt_parcelas?: number | null;
+  bandeira?: string | null;
   vendedor?: string;
 }): Promise<boolean> {
   const preco = Number(venda.preco_vendido || 0);
   const lucro = Number(venda.lucro || 0);
   const margem = preco > 0 ? ((lucro / preco) * 100).toFixed(1) : "0";
+
+  // Format payment method with parcelas info
+  let formaPag = venda.forma || "—";
+  const parcelas = Number(venda.qnt_parcelas || 0);
+  if (parcelas > 1) {
+    formaPag += ` ${parcelas}x`;
+    if (venda.bandeira) formaPag += ` ${venda.bandeira}`;
+  } else if (parcelas === 1 && venda.bandeira) {
+    formaPag += ` 1x ${venda.bandeira}`;
+  }
 
   const lines = [
     `💰 <b>Nova Venda Registrada!</b>`,
@@ -104,7 +116,7 @@ export async function sendSaleNotification(venda: {
     `👤 ${venda.cliente || "—"}`,
     `💵 ${fmtBRL(preco)}`,
     `📊 Lucro: ${fmtBRL(lucro)} (${margem}%)`,
-    `🏦 ${venda.banco || "—"} — ${venda.forma || "—"}`,
+    `🏦 ${venda.banco || "—"} — ${formaPag}`,
     ``,
     `Registrado por: ${venda.vendedor || "sistema"}`,
   ];
