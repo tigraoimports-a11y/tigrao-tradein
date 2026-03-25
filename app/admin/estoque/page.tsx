@@ -934,7 +934,7 @@ export default function EstoquePage() {
                 }
               </select></div>
               <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
-                {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX"].map((c) => <option key={c}>{c}</option>)}
+                {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
               </select></div>
               <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
                 {["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"].map((r) => <option key={r}>{r}</option>)}
@@ -948,7 +948,7 @@ export default function EstoquePage() {
           {form.categoria === "MAC_MINI" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
-                {["M1", "M2", "M2 PRO", "M4", "M4 PRO"].map((c) => <option key={c}>{c}</option>)}
+                {["M1", "M2", "M2 PRO", "M4", "M4 PRO", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
               </select></div>
               <div><p className={labelCls}>RAM</p><select value={spec.mm_ram} onChange={(e) => setS("mm_ram", e.target.value)} className={inputCls}>
                 {["8GB", "16GB", "24GB", "32GB", "48GB", "64GB"].map((r) => <option key={r}>{r}</option>)}
@@ -1008,13 +1008,33 @@ export default function EstoquePage() {
             <div><p className={labelCls}>Nome do Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: Cabo USB-C Lightning 1m" className={inputCls} /></div>
           )}
 
-          {/* Preview do nome gerado */}
-          {hasStructuredFields && (
-            <div className="px-4 py-3 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl">
-              <p className="text-xs text-white/60 mb-1">Nome do produto (gerado automaticamente)</p>
-              <p className="text-white font-semibold">{buildProdutoName(form.categoria)}</p>
-            </div>
-          )}
+          {/* Nome do produto — editável, pré-preenchido automaticamente */}
+          {hasStructuredFields && (() => {
+            const autoName = buildProdutoName(form.categoria);
+            // Se o campo produto está vazio ou igual ao auto-gerado anterior, atualizar
+            if (!form.produto && autoName) {
+              setTimeout(() => set("produto", autoName), 0);
+            }
+            return (
+              <div className="px-4 py-3 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-white/60">Nome do produto</p>
+                  <button
+                    type="button"
+                    onClick={() => set("produto", autoName)}
+                    className="text-[10px] text-[#E8740E] hover:text-[#F5A623] font-semibold"
+                  >
+                    Gerar automaticamente
+                  </button>
+                </div>
+                <input
+                  value={form.produto}
+                  onChange={(e) => set("produto", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white font-semibold text-sm focus:outline-none focus:border-[#E8740E]"
+                />
+              </div>
+            );
+          })()}
 
           {/* IMEI */}
           <div>
