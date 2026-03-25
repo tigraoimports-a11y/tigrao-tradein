@@ -41,9 +41,16 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
     try {
       const res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() });
       const json = await res.json();
-      setQuestions(json.data || []);
-    } catch {
-      setMsg("Erro ao carregar perguntas");
+      if (json.error) {
+        setMsg("Erro API: " + json.error);
+      } else {
+        setQuestions(json.data || []);
+        if (!json.data || json.data.length === 0) {
+          setMsg("API retornou 0 perguntas. Status: " + res.status);
+        }
+      }
+    } catch (err) {
+      setMsg("Erro ao carregar perguntas: " + String(err));
     }
     setLoading(false);
   }
