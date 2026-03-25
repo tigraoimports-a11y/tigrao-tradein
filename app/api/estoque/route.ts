@@ -166,12 +166,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, imported, merged, errors: errors.slice(0, 5), total: unique.length });
   }
 
-  // Inserir novo produto — verificar se já existe (merge por produto+cor)
+  // Inserir novo produto — verificar se já existe (merge por produto+cor+categoria)
   const produtoNome = String(body.produto || "").trim();
   const corNome = String(body.cor || "").trim() || null;
+  const categoriaNome = String(body.categoria || "").trim();
 
   if (produtoNome) {
     let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome);
+    if (categoriaNome) existQuery = existQuery.eq("categoria", categoriaNome);
     if (corNome) existQuery = existQuery.eq("cor", corNome);
     else existQuery = existQuery.is("cor", null);
     const { data: existing } = await existQuery.limit(1).single();
