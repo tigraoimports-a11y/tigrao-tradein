@@ -46,6 +46,17 @@ const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as co
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
+// Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
+const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"];
+function getBaseCat(cat: string): string {
+  if (STRUCTURED_CATS_LIST.includes(cat)) return cat;
+  const sorted = [...STRUCTURED_CATS_LIST].sort((a, b) => b.length - a.length);
+  for (const base of sorted) {
+    if (cat.startsWith(base + "_") || cat.startsWith(base)) return base;
+  }
+  return cat;
+}
+
 const CAT_LABELS: Record<string, string> = {
   IPHONES: "iPhones",
   IPADS: "iPads",
@@ -67,29 +78,30 @@ const STATUS_COLORS: Record<string, string> = {
 /** Extrai o "modelo base" de um produto para agrupar em cards */
 function getModeloBase(produto: string, categoria: string): string {
   const p = produto.toUpperCase().trim();
+  const baseCat = getBaseCat(categoria);
 
-  if (categoria === "APPLE_WATCH") {
+  if (baseCat === "APPLE_WATCH") {
     if (p.includes("ULTRA")) return "Apple Watch Ultra";
     if (p.includes("SE")) return "Apple Watch SE";
     if (p.includes("S11") || p.includes("SERIES 11")) return "Apple Watch Series 11";
     if (p.includes("S10") || p.includes("SERIES 10")) return "Apple Watch Series 10";
     return "Apple Watch";
   }
-  if (categoria === "IPHONES") {
+  if (baseCat === "IPHONES") {
     const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS)?/i);
     if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}`;
     return produto;
   }
-  if (categoria === "IPADS") {
+  if (baseCat === "IPADS") {
     if (p.includes("MINI")) return "iPad Mini";
     if (p.includes("AIR")) return "iPad Air";
     if (p.includes("PRO")) return "iPad Pro";
     return "iPad";
   }
-  if (categoria === "MAC_MINI") {
+  if (baseCat === "MAC_MINI") {
     return "Mac Mini";
   }
-  if (categoria === "MACBOOK") {
+  if (baseCat === "MACBOOK") {
     if (p.includes("AIR") && (p.includes("15") || p.includes("15\""))) return "MacBook Air 15\"";
     if (p.includes("AIR")) return "MacBook Air 13\"";
     if (p.includes("PRO") && (p.includes("16") || p.includes("16\""))) return "MacBook Pro 16\"";
@@ -97,7 +109,7 @@ function getModeloBase(produto: string, categoria: string): string {
     if (p.includes("PRO")) return "MacBook Pro";
     return "MacBook";
   }
-  if (categoria === "AIRPODS") {
+  if (baseCat === "AIRPODS") {
     if (p.includes("PRO 3")) return "AirPods Pro 3";
     if (p.includes("PRO 2")) return "AirPods Pro 2";
     if (p.includes("PRO")) return "AirPods Pro";
@@ -275,41 +287,42 @@ export default function EstoquePage() {
   // Duplicar produto do estoque
   // Parsear nome do produto para extrair specs
   function parseProductSpecs(nome: string, cat: string) {
+    const baseCat = getBaseCat(cat);
     const n = (nome || "").toUpperCase();
     const storageMatch = n.match(/(\d+(?:TB|GB))/);
     const telaMatch = n.match(/([\d.]+[""])/);
     const storage = storageMatch ? storageMatch[1] : "";
     const tela = telaMatch ? telaMatch[1].replace(/[""]/g, '"') : "";
 
-    if (cat === "IPADS") {
+    if (baseCat === "IPADS") {
       const modelo = n.includes("AIR") ? "AIR" : n.includes("PRO") ? "PRO" : n.includes("MINI") ? "MINI" : "IPAD";
       const conn = n.includes("CELL") ? "WIFI+CELL" : "WIFI";
       return { ipad_modelo: modelo, ipad_tela: tela || "11\"", ipad_storage: storage || "128GB", ipad_conn: conn };
     }
-    if (cat === "IPHONES") {
+    if (baseCat === "IPHONES") {
       const numMatch = n.match(/IPHONE\s*(\d+)/);
       const modelo = numMatch ? numMatch[1] : "16";
       const linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" E") ? "E" : "";
       return { ip_modelo: modelo, ip_linha: linha, ip_storage: storage || "128GB" };
     }
-    if (cat === "MACBOOK") {
+    if (baseCat === "MACBOOK") {
       const tipo = n.includes("PRO") ? "PRO" : "AIR";
       const chipMatch = n.match(/(M\d+(?:\s*PRO|\s*MAX)?)/i);
       const ramMatch = n.match(/(\d+GB)\s/);
       return { mb_modelo: tipo, mb_tela: tela || "13\"", mb_chip: chipMatch ? chipMatch[1] : "M4", mb_ram: ramMatch ? ramMatch[1] : "16GB", mb_storage: storage || "256GB" };
     }
-    if (cat === "MAC_MINI") {
+    if (baseCat === "MAC_MINI") {
       const chipMatch = n.match(/(M\d+(?:\s*PRO)?)/i);
       const ramMatch = n.match(/(\d+GB)\s/);
       return { mm_chip: chipMatch ? chipMatch[1] : "M4", mm_ram: ramMatch ? ramMatch[1] : "16GB", mm_storage: storage || "256GB" };
     }
-    if (cat === "APPLE_WATCH") {
+    if (baseCat === "APPLE_WATCH") {
       const modeloMatch = n.match(/(SERIES\s*\d+|SE|ULTRA\s*\d*)/i);
       const tamMatch = n.match(/(\d+mm)/i);
       const conn = n.includes("CELL") ? "GPS+CELL" : "GPS";
       return { aw_modelo: modeloMatch ? modeloMatch[1] : "SERIES 10", aw_tamanho: tamMatch ? tamMatch[1] : "42mm", aw_conn: conn };
     }
-    if (cat === "AIRPODS") {
+    if (baseCat === "AIRPODS") {
       return { air_modelo: n.trim() || "AIRPODS 4" };
     }
     return {};
@@ -371,7 +384,7 @@ export default function EstoquePage() {
 
   // Gerar nome do produto automaticamente a partir dos campos estruturados
   const buildProdutoName = (cat: string): string => {
-    switch (cat) {
+    switch (getBaseCat(cat)) {
       case "IPHONES": {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
         return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
@@ -398,8 +411,8 @@ export default function EstoquePage() {
     }
   };
 
-  // Verificar se a categoria tem campos estruturados
-  const hasStructuredFields = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"].includes(form.categoria);
+  const formBaseCat = getBaseCat(form.categoria);
+  const hasStructuredFields = STRUCTURED_CATS_LIST.includes(formBaseCat);
 
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
@@ -926,7 +939,7 @@ export default function EstoquePage() {
           </div>
 
           {/* Campos específicos por categoria */}
-          {form.categoria === "IPHONES" && (
+          {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
                 {["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E", "17", "17 AIR", "17 PRO", "17 PRO MAX"].map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
@@ -937,7 +950,7 @@ export default function EstoquePage() {
             </div>
           )}
 
-          {form.categoria === "MACBOOK" && (
+          {formBaseCat === "MACBOOK" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={["AIR", "PRO"].includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => setS("mb_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 <option value="AIR">MacBook Air</option>
@@ -965,7 +978,7 @@ export default function EstoquePage() {
             </div>
           )}
 
-          {form.categoria === "MAC_MINI" && (
+          {formBaseCat === "MAC_MINI" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Chip</p><select value={spec.mm_chip} onChange={(e) => setS("mm_chip", e.target.value)} className={inputCls}>
                 {["M1", "M2", "M2 PRO", "M4", "M4 PRO", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
@@ -979,7 +992,7 @@ export default function EstoquePage() {
             </div>
           )}
 
-          {form.categoria === "IPADS" && (
+          {formBaseCat === "IPADS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 <option value="IPAD">iPad</option>
@@ -1004,7 +1017,7 @@ export default function EstoquePage() {
             </div>
           )}
 
-          {form.categoria === "APPLE_WATCH" && (
+          {formBaseCat === "APPLE_WATCH" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 {["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"].map((m) => <option key={m}>{m}</option>)}
@@ -1023,7 +1036,7 @@ export default function EstoquePage() {
             </div>
           )}
 
-          {form.categoria === "AIRPODS" && (
+          {formBaseCat === "AIRPODS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].includes(spec.air_modelo) ? spec.air_modelo : "__custom__"} onChange={(e) => setS("air_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                 {["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].map((m) => <option key={m}>{m}</option>)}
@@ -1739,7 +1752,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
           </div>
 
           {/* IMEI (só iPhones) */}
-          {form.categoria === "IPHONES" && (
+          {getBaseCat(form.categoria) === "IPHONES" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className={labelCls}>IMEI</p>
