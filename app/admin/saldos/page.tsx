@@ -111,6 +111,15 @@ export default function SaldosPage() {
     setExecutando(false);
   };
 
+  const handleDepositar = () => {
+    const espVal = parseFloat(fromDisplayBR(esp));
+    if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
+    const itauVal = parseFloat(fromDisplayBR(itau));
+    setItau(toDisplayBR(String(itauVal + espVal)));
+    setEsp("0,00");
+    setMsg(`R$ ${toDisplayBR(String(espVal))} transferido de Especie para Itau. Clique em Salvar!`);
+  };
+
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
 
   return (
@@ -151,6 +160,11 @@ export default function SaldosPage() {
                   <p className={`text-[10px] uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Fechamento noite</p>
                   <p className="text-lg font-bold" style={{ color: bank.color }}>{fmt(Number(bank.esp))}</p>
                 </div>
+              )}
+              {bank.label === "Especie" && parseFloat(fromDisplayBR(esp)) > 0 && (
+                <button onClick={handleDepositar} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors">
+                  Depositar {esp} no Itau
+                </button>
               )}
             </div>
           </div>
