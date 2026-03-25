@@ -496,7 +496,7 @@ export default function EstoquePage() {
   };
 
   const handleSubmit = async () => {
-    const nomeProduto = hasStructuredFields ? buildProdutoName(form.categoria) : form.produto;
+    const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
@@ -565,7 +565,7 @@ export default function EstoquePage() {
   // Adicionar variação de cor (mesmo produto, cor diferente)
   const handleAddVariacao = async () => {
     if (!form.cor) { setMsg("Preencha a cor da variacao"); return; }
-    const nomeProduto = hasStructuredFields ? buildProdutoName(form.categoria) : form.produto;
+    const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o produto primeiro"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
