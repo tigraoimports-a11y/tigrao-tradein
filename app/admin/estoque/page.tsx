@@ -1263,7 +1263,19 @@ export default function EstoquePage() {
                     if (!byProduto[p.produto]) byProduto[p.produto] = [];
                     byProduto[p.produto].push(p);
                   });
-                  const produtoEntries = Object.entries(byProduto).sort(([a], [b]) => a.localeCompare(b));
+                  // Ordenar por storage (64GB < 128GB < 256GB < 512GB < 1TB < 2TB)
+                  function storageToNum(name: string): number {
+                    const m = name.match(/(\d+)\s*(GB|TB)/i);
+                    if (!m) return 0;
+                    const val = parseInt(m[1]);
+                    return m[2].toUpperCase() === "TB" ? val * 1024 : val;
+                  }
+                  const produtoEntries = Object.entries(byProduto).sort(([a], [b]) => {
+                    const sa = storageToNum(a);
+                    const sb = storageToNum(b);
+                    if (sa !== sb) return sa - sb;
+                    return a.localeCompare(b);
+                  });
                   const isCardDragging = dragCardKey === modelo;
 
                   return (
