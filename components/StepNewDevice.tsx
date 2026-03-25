@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { NewProduct } from "@/lib/types";
+import type { NewProduct, TradeInConfig } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
 import { formatBRL, calculateQuote, getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
 
@@ -15,6 +15,7 @@ interface StepNewDeviceProps {
   whatsappNumber?: string;
   condition?: AnyConditionData;
   deviceType?: DeviceType;
+  tradeinConfig?: TradeInConfig | null;
 }
 
 function getLine(m: string): string { const x = m.match(/iPhone (\d+)/); return x ? x[1] : m; }
@@ -26,13 +27,20 @@ const SEMINOVOS = [
   { modelo: "iPhone 16 Pro Max", storages: ["256GB"] },
 ];
 
-export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, whatsappNumber, condition, deviceType }: StepNewDeviceProps) {
+export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, whatsappNumber, condition, deviceType, tradeinConfig }: StepNewDeviceProps) {
   const [mode, setMode] = useState<"" | "lacrado" | "seminovo">("");
   const [line, setLine] = useState(""); const [model, setModel] = useState(""); const [storage, setStorage] = useState("");
   const [compareMode, setCompareMode] = useState(false);
   const [lineB, setLineB] = useState(""); const [modelB, setModelB] = useState(""); const [storageB, setStorageB] = useState("");
   const [semiModel, setSemiModel] = useState("");
   const [semiStorage, setSemiStorage] = useState("");
+
+  // Use config from DB or fallback to hardcoded
+  const seminovos = useMemo(() => {
+    const list = tradeinConfig?.seminovos?.filter((s) => s.ativo);
+    return list && list.length > 0 ? list : SEMINOVOS;
+  }, [tradeinConfig]);
+  const lbl = tradeinConfig?.labels || {};
 
   const allModels = useMemo(() => getUniqueModels(products).filter((m) => /^iPhone \d/i.test(m)), [products]);
   const lines = useMemo(() => { const s = new Set<string>(); allModels.forEach((m) => s.add(getLine(m))); return [...s].sort((a,b) => Number(a)-Number(b)); }, [allModels]);
@@ -84,7 +92,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <h2 className="text-[22px] font-bold leading-tight" style={{ color: "var(--ti-text)" }}>Voce deseja comprar um:</h2>
+        <h2 className="text-[22px] font-bold leading-tight" style={{ color: "var(--ti-text)" }}>{lbl.step2_titulo || "Voce deseja comprar um:"}</h2>
       </div>
 
       {/* Lacrado vs Seminovo */}
@@ -95,8 +103,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             ? { backgroundColor: "var(--ti-accent)", color: "#fff", border: "2px solid var(--ti-accent)" }
             : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "2px solid var(--ti-btn-border)" }}>
           <span className="text-[24px]">📦</span>
-          Lacrado
-          <span className="text-[11px] font-normal opacity-70">Novo, na caixa</span>
+          {lbl.lacrado_label || "Lacrado"}
+          <span className="text-[11px] font-normal opacity-70">{lbl.lacrado_desc || "Novo, na caixa"}</span>
         </button>
         <button onClick={() => selectMode("seminovo")}
           className="py-5 rounded-2xl text-[15px] font-semibold transition-all duration-200 flex flex-col items-center gap-2"
@@ -104,8 +112,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             ? { backgroundColor: "var(--ti-accent)", color: "#fff", border: "2px solid var(--ti-accent)" }
             : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "2px solid var(--ti-btn-border)" }}>
           <span className="text-[24px]">📱</span>
-          Seminovo
-          <span className="text-[11px] font-normal opacity-70">Revisado, com garantia</span>
+          {lbl.seminovo_label || "Seminovo"}
+          <span className="text-[11px] font-normal opacity-70">{lbl.seminovo_desc || "Revisado, com garantia"}</span>
         </button>
       </div>
 
@@ -200,12 +208,12 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
         <div className="space-y-5 animate-fadeIn">
           <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
             <p className="text-[13px] font-semibold mb-1" style={{ color: "var(--ti-text)" }}>Seminovos com garantia</p>
-            <p className="text-[12px]" style={{ color: "var(--ti-muted)" }}>Aparelhos revisados e em excelente estado. O valor e condicoes serao informados por WhatsApp.</p>
+            <p className="text-[12px]" style={{ color: "var(--ti-muted)" }}>{lbl.seminovo_info || "Aparelhos revisados e em excelente estado. O valor e condicoes serao informados por WhatsApp."}</p>
           </div>
 
           <Sec title="Modelo seminovo">
             <div className="grid grid-cols-1 gap-2">
-              {SEMINOVOS.map((s) => (
+              {seminovos.map((s) => (
                 <Btn key={s.modelo} sel={semiModel === s.modelo} onClick={() => { setSemiModel(s.modelo); setSemiStorage(""); }} className="text-left">
                   {s.modelo}
                 </Btn>
@@ -216,7 +224,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
           {semiModel && (
             <Sec title="Armazenamento">
               <div className="flex gap-2 flex-wrap">
-                {SEMINOVOS.find(s => s.modelo === semiModel)?.storages.map((st) => (
+                {seminovos.find(s => s.modelo === semiModel)?.storages.map((st) => (
                   <button key={st} onClick={() => setSemiStorage(st)}
                     className="flex-1 min-w-[80px] px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200"
                     style={semiStorage === st

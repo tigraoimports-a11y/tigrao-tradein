@@ -61,6 +61,21 @@ export interface TradeInQuestion {
   device_type: string;
 }
 
+/** Configuração do formulário trade-in (Supabase tradein_config) */
+export interface SeminovoOption {
+  modelo: string;
+  storages: string[];
+  ativo: boolean;
+}
+
+export interface TradeInConfig {
+  id: string;
+  seminovos: SeminovoOption[];
+  labels: Record<string, string>;
+  origens: string[];
+  updated_at: string;
+}
+
 /** Dados carregados das planilhas */
 export interface SheetData {
   newProducts: NewProduct[];

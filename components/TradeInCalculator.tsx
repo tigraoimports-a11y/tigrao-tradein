@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { NewProduct, UsedDeviceValue, AppConfig, TradeInQuestion } from "@/lib/types";
+import type { NewProduct, UsedDeviceValue, AppConfig, TradeInQuestion, TradeInConfig } from "@/lib/types";
 import type { ConditionData, ModelDiscounts, WarrantyBonuses, AnyConditionData, DeviceType } from "@/lib/calculations";
 import { formatBRL } from "@/lib/calculations";
 import { getTemaTI, temaTICSSVars } from "@/lib/temas-tradein";
@@ -93,6 +93,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   });
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
+  const [tradeinConfig, setTradeinConfig] = useState<TradeInConfig | null>(null);
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -127,12 +128,13 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   useEffect(() => {
     async function load() {
       try {
-        const [prodRes, usedRes, configRes, lojaRes, questionsRes] = await Promise.all([
+        const [prodRes, usedRes, configRes, lojaRes, questionsRes, tiConfigRes] = await Promise.all([
           fetch("/api/produtos"),
           fetch("/api/usados"),
           fetch("/api/config"),
           fetch("/api/loja?format=grouped").catch(() => null),
           fetch("/api/tradein-perguntas?device_type=iphone").catch(() => null),
+          fetch("/api/tradein-config").catch(() => null),
         ]);
         const [prodData, usedResData, configData] = await Promise.all([
           prodRes.json(),
@@ -146,6 +148,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         try {
           const qData = questionsRes ? await questionsRes.json() : null;
           if (qData?.data && qData.data.length > 0) setQuestionsConfig(qData.data);
+        } catch { /* use hardcoded fallback */ }
+        // Load trade-in form config (seminovos, labels, origens)
+        try {
+          const tiCfgData = tiConfigRes ? await tiConfigRes.json() : null;
+          if (tiCfgData?.data) setTradeinConfig(tiCfgData.data);
         } catch { /* use hardcoded fallback */ }
         // Load theme config from mostruario_config (Supabase)
         try {
@@ -320,13 +327,14 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 2 && (
-            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero} condition={condition} deviceType={deviceType} />
+            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig} />
           )}
 
           {step === 3 && (
             <StepClientData onNext={handleStep3Complete} onBack={() => setStep(2)}
               initialNome={clienteNome} initialWhatsApp={clienteWhatsApp}
-              initialInstagram={clienteInstagram} initialOrigem={clienteOrigem} />
+              initialInstagram={clienteInstagram} initialOrigem={clienteOrigem}
+              tradeinConfig={tradeinConfig} />
           )}
 
           {step === 4 && (

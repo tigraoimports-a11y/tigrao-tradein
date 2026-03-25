@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { TradeInQuestion, TradeInQuestionOption } from "@/lib/types";
+import { TradeInQuestion, TradeInQuestionOption, SeminovoOption } from "@/lib/types";
 
 interface Props {
   password: string;
@@ -150,6 +150,15 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
       <div className="text-xs text-[#86868B] px-1">
         Gerencie as perguntas do simulador de troca. Altere texto, opções, descontos e ordem. Desative perguntas que não quer exibir.
+      </div>
+
+      {/* === CONFIG SECTIONS === */}
+      <TradeInConfigAdmin password={password} />
+
+      <div className="border-t border-[#E5E5EA] my-6" />
+
+      <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider px-1 mb-2">
+        Perguntas de Avaliação do Aparelho
       </div>
 
       {questions.map((q, idx) => {
@@ -345,6 +354,342 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ============================================================
+   TradeInConfigAdmin — Seminovos, Labels, Origens
+   ============================================================ */
+
+const DEFAULT_LABELS: Record<string, string> = {
+  step1_titulo: "Qual é o modelo do seu usado?",
+  step2_titulo: "Voce deseja comprar um...",
+  lacrado_label: "Lacrado",
+  lacrado_desc: "Novo, na caixa",
+  seminovo_label: "Seminovo",
+  seminovo_desc: "Revisado, com garantia",
+  seminovo_info: "Aparelhos revisados e em excelente estado. O valor e condicoes serao informados por WhatsApp.",
+  step3_nome_label: "Seu nome",
+  step3_nome_placeholder: "Como podemos te chamar?",
+  step3_whatsapp_label: "WhatsApp com DDD",
+  step3_whatsapp_placeholder: "(21) 99999-9999",
+  step3_instagram_label: "Instagram (opcional)",
+  step3_instagram_placeholder: "@seuperfil",
+  step3_origem_label: "Como nos encontrou? (opcional)",
+};
+
+const DEFAULT_SEMINOVOS: SeminovoOption[] = [
+  { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"], ativo: true },
+  { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"], ativo: true },
+  { modelo: "iPhone 16 Pro", storages: ["128GB", "256GB"], ativo: true },
+  { modelo: "iPhone 16 Pro Max", storages: ["256GB"], ativo: true },
+];
+
+const DEFAULT_ORIGENS = ["Anúncio", "Story", "Direct", "WhatsApp", "Indicação", "Já sou cliente"];
+
+const LABEL_GROUPS: { title: string; keys: { key: string; label: string }[] }[] = [
+  {
+    title: "Etapa 1 — Aparelho Usado",
+    keys: [{ key: "step1_titulo", label: "Título da etapa" }],
+  },
+  {
+    title: "Etapa 2 — Aparelho Novo",
+    keys: [
+      { key: "step2_titulo", label: "Título da etapa" },
+      { key: "lacrado_label", label: "Label 'Lacrado'" },
+      { key: "lacrado_desc", label: "Descrição 'Lacrado'" },
+      { key: "seminovo_label", label: "Label 'Seminovo'" },
+      { key: "seminovo_desc", label: "Descrição 'Seminovo'" },
+      { key: "seminovo_info", label: "Info box Seminovo" },
+    ],
+  },
+  {
+    title: "Etapa 3 — Dados de Contato",
+    keys: [
+      { key: "step3_nome_label", label: "Label Nome" },
+      { key: "step3_nome_placeholder", label: "Placeholder Nome" },
+      { key: "step3_whatsapp_label", label: "Label WhatsApp" },
+      { key: "step3_whatsapp_placeholder", label: "Placeholder WhatsApp" },
+      { key: "step3_instagram_label", label: "Label Instagram" },
+      { key: "step3_instagram_placeholder", label: "Placeholder Instagram" },
+      { key: "step3_origem_label", label: "Label Origem" },
+    ],
+  },
+];
+
+function TradeInConfigAdmin({ password }: { password: string }) {
+  const [seminovos, setSeminovos] = useState<SeminovoOption[]>(DEFAULT_SEMINOVOS);
+  const [labels, setLabels] = useState<Record<string, string>>(DEFAULT_LABELS);
+  const [origens, setOrigens] = useState<string[]>(DEFAULT_ORIGENS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [newOrigem, setNewOrigem] = useState("");
+  const [newSemiModelo, setNewSemiModelo] = useState("");
+  const [newSemiStorage, setNewSemiStorage] = useState("");
+
+  function getHeaders() {
+    return { "x-admin-password": password, "Content-Type": "application/json" };
+  }
+
+  useEffect(() => {
+    fetch("/api/tradein-config")
+      .then((r) => r.json())
+      .then((json) => {
+        const d = json.data;
+        if (d) {
+          if (Array.isArray(d.seminovos) && d.seminovos.length > 0) setSeminovos(d.seminovos);
+          if (d.labels && Object.keys(d.labels).length > 0) setLabels({ ...DEFAULT_LABELS, ...d.labels });
+          if (Array.isArray(d.origens) && d.origens.length > 0) setOrigens(d.origens);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/tradein-config", {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify({ seminovos, labels, origens }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setMsg("Configuração salva!");
+        setTimeout(() => setMsg(""), 3000);
+      } else {
+        setMsg("Erro: " + (json.error || "Falha ao salvar"));
+      }
+    } catch {
+      setMsg("Erro de rede ao salvar");
+    }
+    setSaving(false);
+  }
+
+  function showMsg() {
+    if (!msg) return null;
+    return (
+      <div
+        className="rounded-xl px-4 py-3 text-sm font-medium"
+        style={{
+          background: msg.includes("Erro") ? "#FFEBEE" : "#E8F5E9",
+          border: `1px solid ${msg.includes("Erro") ? "#E74C3C" : "#2ECC71"}`,
+          color: msg.includes("Erro") ? "#B71C1C" : "#1B5E20",
+        }}
+      >
+        {msg}
+      </div>
+    );
+  }
+
+  if (loading) return <div className="text-center text-sm text-[#86868B] py-4">Carregando configuração...</div>;
+
+  const sectionBtn = (id: string, title: string, count?: number) => (
+    <button
+      onClick={() => setExpandedSection(expandedSection === id ? null : id)}
+      className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#D2D2D7] bg-white hover:bg-[#F5F5F7] transition-colors"
+    >
+      <span className="font-medium text-sm text-[#1D1D1F]">
+        {title}
+        {count !== undefined && (
+          <span className="ml-2 text-xs text-[#86868B]">({count})</span>
+        )}
+      </span>
+      <span className="text-[#86868B] text-xs">{expandedSection === id ? "▾" : "▸"}</span>
+    </button>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider px-1">
+        Configuração do Formulário
+      </div>
+
+      {showMsg()}
+
+      {/* === SEMINOVOS === */}
+      {sectionBtn("seminovos", "Modelos Seminovo", seminovos.filter((s) => s.ativo).length)}
+      {expandedSection === "seminovos" && (
+        <div className="border border-[#D2D2D7] rounded-xl bg-white p-4 space-y-3">
+          {seminovos.map((s, si) => (
+            <div key={si} className={`rounded-lg border border-[#E5E5EA] p-3 space-y-2 ${!s.ativo ? "opacity-50" : ""}`}>
+              <div className="flex items-center gap-2">
+                <input
+                  value={s.modelo}
+                  onChange={(e) => {
+                    const arr = [...seminovos];
+                    arr[si] = { ...arr[si], modelo: e.target.value };
+                    setSeminovos(arr);
+                  }}
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                  placeholder="Nome do modelo"
+                />
+                <button
+                  onClick={() => {
+                    const arr = [...seminovos];
+                    arr[si] = { ...arr[si], ativo: !arr[si].ativo };
+                    setSeminovos(arr);
+                  }}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${s.ativo ? "bg-[#E8740E]" : "bg-[#D2D2D7]"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${s.ativo ? "left-5" : "left-0.5"}`} />
+                </button>
+                <button
+                  onClick={() => setSeminovos(seminovos.filter((_, i) => i !== si))}
+                  className="text-red-400 hover:text-red-600 text-sm px-1"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.storages.map((st, sti) => (
+                  <span key={sti} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F5F5F7] text-xs text-[#1D1D1F]">
+                    {st}
+                    <button
+                      onClick={() => {
+                        const arr = [...seminovos];
+                        arr[si] = { ...arr[si], storages: arr[si].storages.filter((_, i) => i !== sti) };
+                        setSeminovos(arr);
+                      }}
+                      className="text-[#86868B] hover:text-red-500 text-[10px]"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+                <div className="inline-flex items-center gap-1">
+                  <input
+                    value={si === seminovos.length - 1 ? newSemiStorage : ""}
+                    onChange={(e) => setNewSemiStorage(e.target.value)}
+                    onFocus={() => setNewSemiStorage("")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newSemiStorage.trim()) {
+                        const arr = [...seminovos];
+                        arr[si] = { ...arr[si], storages: [...arr[si].storages, newSemiStorage.trim()] };
+                        setSeminovos(arr);
+                        setNewSemiStorage("");
+                      }
+                    }}
+                    placeholder="+ storage"
+                    className="w-20 px-2 py-0.5 rounded border border-dashed border-[#D2D2D7] text-xs focus:outline-none focus:border-[#E8740E]"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              value={newSemiModelo}
+              onChange={(e) => setNewSemiModelo(e.target.value)}
+              placeholder="Ex: iPhone 17 Pro"
+              className="flex-1 px-3 py-2 rounded-lg border border-dashed border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+            />
+            <button
+              onClick={() => {
+                if (newSemiModelo.trim()) {
+                  setSeminovos([...seminovos, { modelo: newSemiModelo.trim(), storages: ["128GB", "256GB"], ativo: true }]);
+                  setNewSemiModelo("");
+                }
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+            >
+              + Adicionar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === ORIGENS === */}
+      {sectionBtn("origens", "Origens de Contato", origens.length)}
+      {expandedSection === "origens" && (
+        <div className="border border-[#D2D2D7] rounded-xl bg-white p-4 space-y-2">
+          {origens.map((o, oi) => (
+            <div key={oi} className="flex items-center gap-2">
+              <input
+                value={o}
+                onChange={(e) => {
+                  const arr = [...origens];
+                  arr[oi] = e.target.value;
+                  setOrigens(arr);
+                }}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+              />
+              <button
+                onClick={() => setOrigens(origens.filter((_, i) => i !== oi))}
+                className="text-red-400 hover:text-red-600 text-sm px-2"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-1">
+            <input
+              value={newOrigem}
+              onChange={(e) => setNewOrigem(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newOrigem.trim()) {
+                  setOrigens([...origens, newOrigem.trim()]);
+                  setNewOrigem("");
+                }
+              }}
+              placeholder="Nova origem..."
+              className="flex-1 px-3 py-2 rounded-lg border border-dashed border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+            />
+            <button
+              onClick={() => {
+                if (newOrigem.trim()) {
+                  setOrigens([...origens, newOrigem.trim()]);
+                  setNewOrigem("");
+                }
+              }}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+            >
+              + Adicionar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === LABELS === */}
+      {sectionBtn("labels", "Textos do Formulário", Object.keys(labels).length)}
+      {expandedSection === "labels" && (
+        <div className="border border-[#D2D2D7] rounded-xl bg-white p-4 space-y-5">
+          {LABEL_GROUPS.map((group) => (
+            <div key={group.title}>
+              <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">
+                {group.title}
+              </div>
+              <div className="space-y-2">
+                {group.keys.map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="text-[11px] text-[#86868B] mb-0.5 block">{label}</label>
+                    <input
+                      value={labels[key] || ""}
+                      onChange={(e) => setLabels({ ...labels, [key]: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Save button */}
+      <div className="flex justify-end pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-6 py-2 rounded-xl text-sm font-semibold text-white bg-[#E8740E] hover:bg-[#D06A0D] transition-colors disabled:opacity-50"
+        >
+          {saving ? "Salvando..." : "Salvar Configuração"}
+        </button>
+      </div>
     </div>
   );
 }
