@@ -957,6 +957,14 @@ export default function EstoquePage() {
             </select></div>
           </div>
 
+          {/* Debug: mostrar categoria base (remover depois) */}
+          {!STRUCTURED_CATS_LIST.includes(form.categoria) && formBaseCat !== form.categoria && (
+            <div className="text-[10px] text-[#86868B] px-1">Categoria base: {formBaseCat} (key: {form.categoria})</div>
+          )}
+          {!hasStructuredFields && form.categoria !== "ACESSORIOS" && form.categoria !== "OUTROS" && (
+            <div className="text-[10px] text-yellow-500 px-1">⚠ Categoria &quot;{form.categoria}&quot; nao reconhecida como derivada. Base: {formBaseCat}</div>
+          )}
+
           {/* Campos específicos por categoria */}
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
