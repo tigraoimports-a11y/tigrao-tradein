@@ -668,8 +668,8 @@ export default function EstoquePage() {
 
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
-  const emEstoque = novos; // Mostrar todos os produtos novos, mesmo com qnt 0
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
+  const emEstoque = [...novos, ...seminovos]; // Mostrar novos + seminovos na aba Estoque
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
   const acabando = novos.filter((p) => p.qnt === 1);
