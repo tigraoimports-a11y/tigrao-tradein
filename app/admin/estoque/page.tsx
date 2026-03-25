@@ -540,21 +540,32 @@ export default function EstoquePage() {
       }
       // Criar variações de cor adicionais
       const validVariacoes = variacoes.filter((v) => v.cor.trim());
+      const varErrors: string[] = [];
       for (const v of validVariacoes) {
-        await fetch("/api/estoque", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
-          body: JSON.stringify({
-            produto: nomeProduto, categoria: form.categoria,
-            qnt: parseInt(v.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
-            status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
-            cor: v.cor.trim(), observacao: form.observacao || null,
-            tipo: form.tipo, fornecedor: form.fornecedor || null,
-          }),
-        });
+        try {
+          const vRes = await fetch("/api/estoque", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+            body: JSON.stringify({
+              produto: nomeProduto, categoria: form.categoria,
+              qnt: parseInt(v.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
+              status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+              cor: v.cor.trim(), observacao: form.observacao || null,
+              tipo: form.tipo, fornecedor: form.fornecedor || null,
+            }),
+          });
+          const vJson = await vRes.json();
+          if (!vJson.ok) varErrors.push(`${v.cor}: ${vJson.error}`);
+        } catch (e) {
+          varErrors.push(`${v.cor}: ${String(e)}`);
+        }
       }
       if (validVariacoes.length > 0) {
-        setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor!`);
+        if (varErrors.length > 0) {
+          setMsg(`Produto adicionado, mas ${varErrors.length} cor(es) falharam: ${varErrors.join(", ")}`);
+        } else {
+          setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor!`);
+        }
       }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       setSpec({
