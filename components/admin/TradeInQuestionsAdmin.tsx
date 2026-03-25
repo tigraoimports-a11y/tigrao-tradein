@@ -39,7 +39,13 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   async function fetchQuestions() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() });
+      // Use admin API to get ALL questions (including inactive)
+      // Fallback to public API if admin fails
+      let res = await fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() });
+      if (!res.ok) {
+        // Fallback: use public API (only returns active questions)
+        res = await fetch("/api/tradein-perguntas?device_type=iphone");
+      }
       const json = await res.json();
       if (json.error) {
         setMsg("Erro API: " + json.error);
