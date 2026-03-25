@@ -765,95 +765,80 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      {/* KPIs — Estilo Apple clean */}
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { label: "Produtos", value: totalProdutos, color: "#E8740E" },
-          { label: "Unidades", value: totalUnidades, color: "#3498DB" },
-          { label: "Valor Estoque", value: fmt(valorEstoque), color: "#2ECC71" },
-          { label: "Seminovos", value: `${seminovos.length} (${fmt(valorSeminovos)})`, color: "#9B59B6" },
-          { label: "Pendencias", value: pendencias.length, color: "#F39C12" },
-          { label: "A Caminho", value: `${aCaminho.length} (${fmt(valorACaminho)})`, color: "#3498DB" },
+          { label: "Produtos", value: totalProdutos, sub: "SKUs cadastrados" },
+          { label: "Unidades", value: totalUnidades, sub: "em estoque" },
+          { label: "Valor Total", value: fmt(valorEstoque), sub: "investido" },
+          { label: "Seminovos", value: seminovos.length, sub: fmt(valorSeminovos) },
+          { label: "Pendencias", value: pendencias.length, sub: "aguardando" },
+          { label: "A Caminho", value: aCaminho.length, sub: fmt(valorACaminho) },
         ].map((kpi) => (
-          <div key={kpi.label} className={`${bgCard} border ${borderCard} rounded-2xl p-3 shadow-sm`}>
-            <p className={`${textSecondary} text-[10px] uppercase tracking-wider`}>{kpi.label}</p>
-            <p className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</p>
+          <div key={kpi.label} className={`${bgCard} border ${borderCard} rounded-2xl p-4 hover:shadow-md transition-shadow`}>
+            <p className={`${textSecondary} text-[11px] font-medium tracking-wide`}>{kpi.label}</p>
+            <p className={`text-[22px] font-bold mt-1 ${textPrimary}`}>{kpi.value}</p>
+            <p className={`${textMuted} text-[11px] mt-0.5`}>{kpi.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Botão Registrar Produto (Scan) */}
-      <button
-        onClick={() => setTab("scan")}
-        className="w-1/2 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 bg-[#E8740E] hover:bg-[#F5A623] text-white shadow-md"
-      >
-        📟 Registrar Produto
-      </button>
-
-      {/* Tabs organizadas em 3 linhas */}
-      {tab !== "etiquetas" && (<>
-      {/* Linha 1: Estoque / Seminovos / Pendencias / A Caminho */}
-      <div className="flex gap-2 items-center flex-wrap">
-        {([
-          { key: "estoque", label: `Estoque (${emEstoque.length})`, color: "" },
-          { key: "seminovos", label: `Seminovos (${seminovos.length})`, color: "" },
-          { key: "pendencias", label: `Pendencias (${pendencias.length})`, color: "" },
-          { key: "acaminho", label: `A Caminho (${aCaminho.length})`, color: "" },
-        ] as const).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-            tab === t.key ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
-          }`}>{t.label}</button>
-        ))}
-      </div>
-      {/* Linha 2: Acabando / Esgotados */}
-      <div className="flex gap-2 items-center flex-wrap">
-        {([
-          { key: "acabando", label: `Acabando (${acabando.length})`, color: "yellow" },
-          { key: "esgotados", label: `Esgotados (${esgotados.length})`, color: "red" },
-        ] as const).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-            tab === t.key
-              ? t.color === "red" ? "bg-red-500 text-white" : "bg-yellow-500 text-white"
-              : t.color === "red" && esgotados.length > 0 ? `${bgCard} border border-red-300 text-red-500 hover:border-red-500`
-              : t.color === "yellow" && acabando.length > 0 ? `${bgCard} border border-yellow-300 text-yellow-600 hover:border-yellow-500`
-              : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
-          }`}>{t.label}</button>
-        ))}
-      </div>
-      {/* Linha 3: Scan / Adicionar / Historico */}
-      <div className="flex gap-2 items-center flex-wrap">
-        {([
-          { key: "scan", label: "📟 Scan" },
-          { key: "novo", label: "➕ Adicionar" },
-          { key: "historico", label: "📋 Histórico" },
-        ] as const).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-            tab === t.key ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`
-          }`}>{t.label}</button>
-        ))}
-      </div>
-      {/* Filtros */}
-      {!["novo", "scan", "historico"].includes(tab) && (
-        <div className="flex gap-2 items-center flex-wrap">
-          {filterCat && tab === "estoque" && (
-            <button onClick={() => setFilterCat("")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E5E5EA] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}>
-              ← Categorias
+      {/* Tabs — Segmented control Apple style */}
+      {tab !== "etiquetas" && (
+      <div className="space-y-3">
+        <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+          {([
+            { key: "estoque", label: "Estoque", count: emEstoque.length },
+            { key: "seminovos", label: "Seminovos", count: seminovos.length },
+            { key: "pendencias", label: "Pendencias", count: pendencias.length },
+            { key: "acaminho", label: "A Caminho", count: aCaminho.length },
+            { key: "acabando", label: "Acabando", count: acabando.length },
+            { key: "esgotados", label: "Esgotados", count: esgotados.length },
+          ] as const).map((t) => (
+            <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
+              className={`px-3.5 py-2 rounded-lg text-[12px] font-semibold transition-all ${
+                tab === t.key
+                  ? `${dm ? "bg-[#3A3A3C]" : "bg-white shadow-sm"} ${textPrimary}`
+                  : `${textSecondary} hover:${textPrimary}`
+              }`}>
+              {t.label}
+              {t.count > 0 && <span className={`ml-1.5 text-[10px] ${tab === t.key ? "text-[#E8740E]" : textMuted}`}>{t.count}</span>}
             </button>
-          )}
-          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2 py-1.5 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"}`}>
-            <option value="">Todas categorias</option>
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
-          </select>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-xs w-40 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "border-[#D2D2D7]"}`} />
-          <button
-            onClick={() => setShowNewCat(!showNewCat)}
-            className={`px-2 py-1.5 rounded-lg text-xs font-semibold border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}
-          >
-            + Categoria
-          </button>
+          ))}
         </div>
+
+        <div className="flex gap-2 items-center">
+          <button onClick={() => setTab("scan")} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "scan" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
+            Scan
+          </button>
+          <button onClick={() => setTab("novo" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "novo" ? "bg-[#E8740E] text-white" : "bg-[#E8740E]/10 text-[#E8740E] border border-[#E8740E]/20 hover:bg-[#E8740E] hover:text-white"}`}>
+            + Adicionar
+          </button>
+          <button onClick={() => setTab("historico" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "historico" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
+            Historico
+          </button>
+
+          <div className="flex-1" />
+
+          {/* Filtros inline */}
+          {!["novo", "scan", "historico"].includes(tab) && (<>
+            {filterCat && tab === "estoque" && (
+              <button onClick={() => setFilterCat("")} className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E5E5EA] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}>
+                ← Voltar
+              </button>
+            )}
+            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}>
+              <option value="">Todas categorias</option>
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
+            </select>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-[11px] w-44 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#E5E5EA]"}`} />
+            <button onClick={() => setShowNewCat(!showNewCat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}>
+              + Categoria
+            </button>
+          </>)}
+        </div>
+      </div>
       )}
-      </>)}
 
       {/* Form criar categoria */}
       {tab !== "etiquetas" && showNewCat && (
@@ -894,8 +879,11 @@ export default function EstoquePage() {
 
       {tab === "novo" ? (
         /* FORMULÁRIO */
-        <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-6`}>
-          <h2 className={`text-lg font-bold ${textPrimary}`}>Adicionar Produto</h2>
+        <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 shadow-sm space-y-8`}>
+          <div>
+            <h2 className={`text-[20px] font-bold ${textPrimary}`}>Adicionar Produto</h2>
+            <p className={`text-[13px] mt-1 ${textSecondary}`}>Preencha os dados do produto para cadastrar no estoque</p>
+          </div>
 
           {/* Row 1: Categoria + Tipo */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -1016,21 +1004,21 @@ export default function EstoquePage() {
               setTimeout(() => set("produto", autoName), 0);
             }
             return (
-              <div className="px-4 py-3 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl space-y-2">
+              <div className={`px-5 py-4 rounded-2xl border-2 border-[#E8740E]/30 ${dm ? "bg-[#E8740E]/10" : "bg-[#E8740E]/5"} space-y-2`}>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-white/60">Nome do produto</p>
+                  <p className={`text-[11px] font-medium ${textSecondary}`}>Nome do produto</p>
                   <button
                     type="button"
                     onClick={() => set("produto", autoName)}
-                    className="text-[10px] text-[#E8740E] hover:text-[#F5A623] font-semibold"
+                    className="text-[11px] text-[#E8740E] hover:text-[#F5A623] font-semibold"
                   >
-                    Gerar automaticamente
+                    Regenerar
                   </button>
                 </div>
                 <input
                   value={form.produto}
                   onChange={(e) => set("produto", e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white font-semibold text-sm focus:outline-none focus:border-[#E8740E]"
+                  className={`w-full px-4 py-3 rounded-xl text-[15px] font-bold focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA] text-[#1D1D1F]"} border`}
                 />
               </div>
             );
@@ -1108,8 +1096,8 @@ export default function EstoquePage() {
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
-          <button onClick={handleSubmit} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors">
-            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar"}
+          <button onClick={handleSubmit} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
+            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar ao Estoque"}
           </button>
         </div>
       ) : (
@@ -1119,16 +1107,19 @@ export default function EstoquePage() {
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : !filterCat && tab === "estoque" ? (
             /* TELA DE CATEGORIAS */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
               {categoriasState.map((cat) => {
                 const count = emEstoque.filter((p) => p.categoria === cat.key).length;
                 const units = emEstoque.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
                 return (
                   <button key={cat.key} onClick={() => setFilterCat(cat.key)}
-                    className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-md transition-all group`}>
-                    <div className="text-3xl mb-3">{cat.emoji}</div>
-                    <h3 className={`font-bold text-sm ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
-                    <p className={`text-xs ${textSecondary} mt-1`}>{count} produtos | {units} un.</p>
+                    className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group`}>
+                    <div className="text-[40px] mb-4">{cat.emoji}</div>
+                    <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className={`text-[12px] ${textSecondary}`}>{count} produtos</span>
+                      <span className={`text-[12px] ${textMuted}`}>{units} un.</span>
+                    </div>
                   </button>
                 );
               })}
@@ -1170,12 +1161,16 @@ export default function EstoquePage() {
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
                     className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm transition-opacity ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
-                    <div className={`px-5 py-2.5 ${bgCardAlt} border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`${textMuted} text-xs select-none`}>⠿</span>
-                        <h3 className={`font-semibold ${textPrimary} text-sm`}>{modelo}</h3>
+                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`${textMuted} text-xs select-none opacity-40`}>⠿</span>
+                        <h3 className={`font-bold ${textPrimary} text-[15px]`}>{modelo}</h3>
                       </div>
-                      <span className={`text-[10px] ${textSecondary}`}>{items.length} var. | {items.reduce((s, p) => s + p.qnt, 0)} un. | {fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                      <div className="flex items-center gap-4">
+                        <span className={`text-[11px] ${textSecondary}`}>{items.length} variantes</span>
+                        <span className={`text-[11px] font-medium ${textPrimary}`}>{items.reduce((s, p) => s + p.qnt, 0)} un.</span>
+                        <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                      </div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
