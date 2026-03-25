@@ -848,12 +848,9 @@ export default function EstoquePage() {
       <div className="space-y-3">
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
-            { key: "estoque", label: "Estoque", count: emEstoque.length },
-            { key: "seminovos", label: "Seminovos", count: seminovos.length },
-            { key: "pendencias", label: "Pendencias", count: pendencias.length },
-            { key: "acaminho", label: "A Caminho", count: aCaminho.length },
-            { key: "acabando", label: "Acabando", count: acabando.length },
-            { key: "esgotados", label: "Esgotados", count: esgotados.length },
+            { key: "estoque", label: "Estoque Disponível", count: emEstoque.length },
+            { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
+            { key: "pendencias", label: "Pendências", count: pendencias.length },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`px-3.5 py-2 rounded-lg text-[12px] font-semibold transition-all ${
