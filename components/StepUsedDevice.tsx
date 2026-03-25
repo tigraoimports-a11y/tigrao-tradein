@@ -23,6 +23,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
+  const [purchaseOrigin, setPurchaseOrigin] = useState<"lacrado"|"seminovo"|null>(null);
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
@@ -47,6 +48,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const baseValue = useMemo(() => (model && storage ? getUsedBaseValue(filtered, model, storage) : null), [filtered, model, storage]);
 
   const cond: ConditionData = {
+    purchaseOrigin: purchaseOrigin ?? "lacrado",
     screenScratch: screenScratch ?? "none", sideScratch: sideScratch ?? "none", peeling: peeling ?? "none",
     battery: battery ?? 100, hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
     partsReplacedDetail: partsReplaced === "apple" ? partsReplacedDetail : "",
@@ -66,11 +68,11 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const allCond = screenScratch !== null && sideScratch !== null && peeling !== null && batteryFilled;
   const warrantyFilled = hasWarranty === false || (hasWarranty === true && warrantyMonth !== null);
   const partsOk = partsReplaced === "no" || partsReplaced === "apple";
-  const canProceed = model && storage && baseValue !== null && !isExcluded && hasDamage === false && partsOk && allCond && warrantyFilled && hasOriginalBox !== null;
+  const canProceed = model && storage && baseValue !== null && !isExcluded && purchaseOrigin !== null && hasDamage === false && partsOk && allCond && warrantyFilled && hasOriginalBox !== null;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setPurchaseOrigin(null); setHasDamage(null); tq("line"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setPurchaseOrigin(null); setHasDamage(null); tq("model"); }
 
   return (
     <div className="space-y-8">
@@ -100,6 +102,15 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       )}
 
       {model && storage && !isExcluded && (
+        <Section title="Você comprou o aparelho lacrado ou seminovo?">
+          <div className="flex gap-2">
+            <Btn sel={purchaseOrigin==="lacrado"} onClick={() => { setPurchaseOrigin("lacrado"); tq("purchaseOrigin"); }} className="flex-1">Lacrado</Btn>
+            <Btn sel={purchaseOrigin==="seminovo"} onClick={() => { setPurchaseOrigin("seminovo"); tq("purchaseOrigin"); }} className="flex-1">Seminovo</Btn>
+          </div>
+        </Section>
+      )}
+
+      {model && storage && !isExcluded && purchaseOrigin !== null && (
         <Section title="O aparelho está trincado, quebrado ou com defeito?">
           <div className="flex gap-2">
             <Btn sel={hasDamage===false} onClick={() => { setHasDamage(false); tq("damage"); }} className="flex-1" variant="success">Não</Btn>
@@ -113,7 +124,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
         </Section>
       )}
 
-      {model && storage && !isExcluded && hasDamage === false && (
+      {model && storage && !isExcluded && purchaseOrigin !== null && hasDamage === false && (
         <>
           <Section title="Saúde da bateria">
             <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>

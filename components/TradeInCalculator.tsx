@@ -96,7 +96,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
   const [condition, setCondition] = useState<AnyConditionData>({
-    screenScratch: "none", sideScratch: "none", peeling: "none",
+    purchaseOrigin: "lacrado", screenScratch: "none", sideScratch: "none", peeling: "none",
     battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false,
     warrantyMonth: null, warrantyYear: null, hasOriginalBox: false,
   } as ConditionData);
@@ -106,7 +106,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   const [usedModel2, setUsedModel2] = useState("");
   const [usedStorage2, setUsedStorage2] = useState("");
   const [condition2, setCondition2] = useState<AnyConditionData>({
-    screenScratch: "none", sideScratch: "none", peeling: "none",
+    purchaseOrigin: "lacrado", screenScratch: "none", sideScratch: "none", peeling: "none",
     battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false,
     warrantyMonth: null, warrantyYear: null, hasOriginalBox: false,
   } as ConditionData);
@@ -204,8 +204,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
     setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
     setHasSecondDevice(false);
-    setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
-    setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
+    setCondition({ purchaseOrigin: "lacrado", screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
+    setCondition2({ purchaseOrigin: "lacrado", screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram(""); setClienteOrigem("");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
     window.scrollTo({ top: 0, behavior: "smooth" });

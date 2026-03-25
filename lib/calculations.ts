@@ -3,6 +3,7 @@
 export type DeviceType = "iphone" | "ipad" | "macbook";
 
 export interface ConditionData {
+  purchaseOrigin: "lacrado" | "seminovo";
   screenScratch: "none" | "one" | "multiple";
   sideScratch: "none" | "one" | "multiple";
   peeling: "none" | "light" | "heavy";
@@ -252,6 +253,8 @@ export function calculateQuote(
 export function getConditionLines(condition: ConditionData): string[] {
   const monthNames = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const lines: string[] = [];
+
+  lines.push(condition.purchaseOrigin === "lacrado" ? "Comprado lacrado" : "Comprado seminovo");
 
   if (condition.warrantyMonth !== null) {
     lines.push(`Garantia Apple ate ${monthNames[condition.warrantyMonth - 1]}`);
