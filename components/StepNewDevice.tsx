@@ -34,6 +34,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   const [lineB, setLineB] = useState(""); const [modelB, setModelB] = useState(""); const [storageB, setStorageB] = useState("");
   const [semiModel, setSemiModel] = useState("");
   const [semiStorage, setSemiStorage] = useState("");
+  const [semiNome, setSemiNome] = useState("");
+  const [semiWhatsapp, setSemiWhatsapp] = useState("");
 
   // Use config from DB or fallback to hardcoded
   const seminovos = useMemo(() => {
@@ -68,6 +70,9 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
     const lines: string[] = [];
     lines.push(`Ola! Fiz a simulacao de Trade-In no site e tenho interesse em um *${semiModel} ${semiStorage} SEMINOVO*.`);
     lines.push("");
+    if (semiNome) lines.push(`*Nome:* ${semiNome}`);
+    if (semiWhatsapp) lines.push(`*WhatsApp:* ${semiWhatsapp}`);
+    if (semiNome || semiWhatsapp) lines.push("");
     lines.push(`*MEU APARELHO ATUAL:*`);
     lines.push(`Modelo: ${usedModel || "Nao informado"} ${usedStorage || ""}`);
     lines.push(`Valor avaliado: R$ ${Math.round(tradeInValue).toLocaleString("pt-BR")}`);
@@ -245,8 +250,15 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                 <p className="text-[12px] mt-1" style={{ color: "var(--ti-accent)" }}>SEMINOVO</p>
                 <p className="text-[12px] mt-3" style={{ color: "var(--ti-muted)" }}>A cotacao sera feita por WhatsApp com base nas condicoes do seu aparelho.</p>
               </div>
+              <div className="space-y-2">
+                <input type="text" placeholder="Seu nome" value={semiNome} onChange={e => setSemiNome(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-[14px]" style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }} />
+                <input type="tel" placeholder="Seu WhatsApp" value={semiWhatsapp} onChange={e => setSemiWhatsapp(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-[14px]" style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }} />
+              </div>
               <button
                 onClick={() => {
+                  if (!semiNome.trim()) { alert("Informe seu nome"); return; }
                   const waNum = whatsappNumber || "5521995618747";
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");
