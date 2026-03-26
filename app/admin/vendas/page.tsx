@@ -78,6 +78,7 @@ export default function VendasPage() {
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+    entrada_fiado: "", data_recebimento_fiado: "",
     // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
@@ -501,6 +502,8 @@ export default function VendasPage() {
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
       entrada_especie: gEntradaEspecie,
+      entrada_fiado: parseFloat(form.entrada_fiado) || 0,
+      data_recebimento_fiado: form.data_recebimento_fiado || null,
       banco_2nd: form.banco_2nd || null,
       banco_alt: form.banco_alt || null,
       parc_alt: parseInt(form.parc_alt) || null,
@@ -968,6 +971,7 @@ export default function VendasPage() {
       entrada_pix: "",
       banco_pix: v.banco_pix || "ITAU",
       entrada_especie: "",
+      entrada_fiado: "", data_recebimento_fiado: "",
       banco_2nd: v.banco_2nd || "",
       banco_alt: v.banco_alt || "",
       parc_alt: String(v.parc_alt || ""),
@@ -1574,6 +1578,7 @@ export default function VendasPage() {
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    entrada_fiado: "", data_recebimento_fiado: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
@@ -1760,6 +1765,22 @@ export default function VendasPage() {
                 }} placeholder="0" className={inputCls} /></div>
               </div>
               )}
+
+              {/* Parte Fiado */}
+              <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-[#86868B]">
+                  <input type="checkbox" checked={parseFloat(form.entrada_fiado) > 0 || !!form.data_recebimento_fiado} onChange={(e) => {
+                    if (!e.target.checked) { setForm(f => ({ ...f, entrada_fiado: "", data_recebimento_fiado: "" })); }
+                  }} className="accent-[#E8740E]" />
+                  <span className="font-semibold">Parte Fiado?</span>
+                </label>
+                {(parseFloat(form.entrada_fiado) > 0 || !!form.data_recebimento_fiado) && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div><p className={labelCls}>Valor Fiado (R$)</p><input type="number" value={form.entrada_fiado} onChange={(e) => setForm(f => ({ ...f, entrada_fiado: e.target.value }))} placeholder="0" className={inputCls} /></div>
+                    <div><p className={labelCls}>Data de Recebimento</p><input type="date" value={form.data_recebimento_fiado} onChange={(e) => setForm(f => ({ ...f, data_recebimento_fiado: e.target.value }))} className={inputCls} /></div>
+                  </div>
+                )}
+              </div>
 
               {/* Resumo misto */}
               {(entradaPix > 0 || entradaEspecie > 0) && (
@@ -1974,6 +1995,22 @@ export default function VendasPage() {
                   }} placeholder="0" className={inputCls} /></div>
                 </div>
                 )}
+
+                {/* Parte Fiado — cart mode */}
+                <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm text-[#86868B]">
+                    <input type="checkbox" checked={parseFloat(form.entrada_fiado) > 0 || !!form.data_recebimento_fiado} onChange={(e) => {
+                      if (!e.target.checked) { setForm(f => ({ ...f, entrada_fiado: "", data_recebimento_fiado: "" })); }
+                    }} className="accent-[#E8740E]" />
+                    <span className="font-semibold">Parte Fiado?</span>
+                  </label>
+                  {(parseFloat(form.entrada_fiado) > 0 || !!form.data_recebimento_fiado) && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div><p className={labelCls}>Valor Fiado (R$)</p><input type="number" value={form.entrada_fiado} onChange={(e) => setForm(f => ({ ...f, entrada_fiado: e.target.value }))} placeholder="0" className={inputCls} /></div>
+                      <div><p className={labelCls}>Data de Recebimento</p><input type="date" value={form.data_recebimento_fiado} onChange={(e) => setForm(f => ({ ...f, data_recebimento_fiado: e.target.value }))} className={inputCls} /></div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Resumo misto */}
                 {(entradaPix > 0 || entradaEspecie > 0) && (
@@ -2490,6 +2527,8 @@ export default function VendasPage() {
                                                   parc_alt: parseInt(ef.parc_alt) || null,
                                                   band_alt: ef.band_alt || null,
                                                   comp_alt: parseFloat(ef.comp_alt) || null,
+                                                  entrada_fiado: parseFloat(ef.entrada_fiado) || 0,
+                                                  data_recebimento_fiado: ef.data_recebimento_fiado || null,
                                                 };
                                                 const res = await fetch("/api/vendas", {
                                                   method: "PATCH",
@@ -2605,6 +2644,14 @@ export default function VendasPage() {
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Entrada Especie</span>
                                             <input type="number" value={ef.entrada_especie} onChange={e => setEf("entrada_especie", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Valor Fiado</span>
+                                            <input type="number" value={ef.entrada_fiado} onChange={e => setEf("entrada_fiado", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                          </label>
+                                          <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                            <span className="text-[10px] font-bold text-[#86868B] uppercase">Data Receb. Fiado</span>
+                                            <input type="date" value={ef.data_recebimento_fiado} onChange={e => setEf("data_recebimento_fiado", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Valor Troca</span>
@@ -2805,6 +2852,8 @@ export default function VendasPage() {
                                               entrada_pix: String(primaryVenda.entrada_pix || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
+                                              entrada_fiado: String(primaryVenda.entrada_fiado || ""),
+                                              data_recebimento_fiado: primaryVenda.data_recebimento_fiado || "",
                                               banco_2nd: primaryVenda.banco_2nd || "",
                                               banco_alt: primaryVenda.banco_alt || "",
                                               parc_alt: String(primaryVenda.parc_alt || ""),
@@ -3145,6 +3194,7 @@ export default function VendasPage() {
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    entrada_fiado: "", data_recebimento_fiado: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
@@ -3172,6 +3222,7 @@ export default function VendasPage() {
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    entrada_fiado: "", data_recebimento_fiado: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",

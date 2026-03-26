@@ -193,6 +193,12 @@ export default function DashboardPage() {
   const capitalProdutos = valorEstoque + valorACaminho;
   const patrimonio = capitalProdutos + saldoTotal;
 
+  // Fiado pendente
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fiadoPendente = data.vendas.filter((v: any) => (v.entrada_fiado || 0) > 0 && !v.fiado_recebido && v.status_pagamento !== "CANCELADO");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalFiado = fiadoPendente.reduce((s: number, v: any) => s + (v.entrada_fiado || 0), 0);
+
   // Margem média
   const margemMedia = totalVendidoMes > 0 ? ((lucroMes / totalVendidoMes) * 100).toFixed(1) : "0";
 
@@ -289,6 +295,9 @@ export default function DashboardPage() {
           <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={isManual ? "Informado manualmente via /saldos" : `Base: ${fmt(infBase)} | D+0: +${fmt(pixHojeInf)} | D+1: +${fmt(d1Inf)} | Saídas: -${fmt(gastosHojeInf)}`} />
           <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(mpBase)} | Gastos: -${fmt(gastosHojeMP)} | Link: +${fmt(pixHojeMP)}`} />
           <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(espBase)}`} />
+          {totalFiado > 0 && (
+            <Card icon="📋" title="Fiado Pendente" value={fmt(totalFiado)} color="text-orange-600" sub={`${fiadoPendente.length} venda${fiadoPendente.length !== 1 ? "s" : ""} a receber`} />
+          )}
         </div>
       </div>
 
