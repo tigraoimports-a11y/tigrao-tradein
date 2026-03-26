@@ -3242,6 +3242,65 @@ export default function VendasPage() {
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* Nota Fiscal */}
+                                    <div className="space-y-2">
+                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">📄 Nota Fiscal</h4>
+                                      {v.nota_fiscal_url ? (
+                                        <div>
+                                          <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">📄 Ver Nota Fiscal (PDF)</a>
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
+                                              });
+                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
+                                            }}
+                                            className="ml-2 text-[10px] text-red-400 hover:text-red-600"
+                                          >remover</button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          <input
+                                            type="file"
+                                            accept=".pdf"
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={async (e) => {
+                                              e.stopPropagation();
+                                              const file = e.target.files?.[0];
+                                              if (!file) return;
+                                              setUploadingId(v.id + "-nf");
+                                              const formData = new FormData();
+                                              formData.append("file", file);
+                                              formData.append("venda_id", v.id);
+                                              try {
+                                                const res = await fetch("/api/vendas/nota-fiscal", {
+                                                  method: "POST",
+                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  body: formData,
+                                                });
+                                                const json = await res.json();
+                                                if (json.url) {
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: json.url } : r));
+                                                  setMsg("Nota fiscal salva!");
+                                                } else {
+                                                  setMsg("Erro: " + (json.error || "falha ao salvar NF"));
+                                                }
+                                              } catch {
+                                                setMsg("Erro ao enviar arquivo");
+                                              }
+                                              setUploadingId(null);
+                                            }}
+                                            className="text-xs"
+                                          />
+                                          {uploadingId === v.id + "-nf" && <p className="text-[10px] text-[#86868B]">Enviando...</p>}
+                                          <p className="text-[10px] text-[#86868B]">Envie PDF da nota fiscal</p>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>)}
                                 </td>
                               </tr>

@@ -46,6 +46,7 @@ export interface Venda {
   comp_alt: number | null;
   status_pagamento: string;
   comprovante_url: string | null;
+  nota_fiscal_url: string | null;
   notas: string | null;
   imei: string | null;
   serial_no: string | null;
