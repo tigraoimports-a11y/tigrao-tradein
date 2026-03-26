@@ -2302,58 +2302,61 @@ export default function VendasPage() {
               {loading ? (
                 <div className="p-8 text-center text-[#86868B]">Carregando...</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                        {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
-                          <th className="px-3 py-3 w-8">
-                            <input
-                              type="checkbox"
-                              checked={filtered.length > 0 && selecionadas.size === filtered.length}
-                              onChange={() => {
-                                if (selecionadas.size === filtered.length) setSelecionadas(new Set());
-                                else setSelecionadas(new Set(filtered.map(v => v.id)));
-                              }}
-                              className="w-4 h-4 accent-[#E8740E] cursor-pointer"
-                            />
-                          </th>
-                        )}
-                        {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", "Status", ""].map((h) => (
-                          <th key={h} className="px-3 py-3 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.length === 0 ? (
-                        <tr><td colSpan={13} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</td></tr>
-                      ) : datasOrdenadas.flatMap((dataKey) => {
-                        const vendasDoDia = vendasPorData.get(dataKey) || [];
-                        const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
-                        const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-                        const qtdDia = vendasDoDia.length;
-                        const [y, m, d] = (dataKey || "").split("-");
-                        const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
-                        const diaSemana = (() => {
-                          try {
-                            return new Date(dataKey + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long" });
-                          } catch { return ""; }
-                        })();
+                <div>
+                  {filtered.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</div>
+                  ) : datasOrdenadas.map((dataKey) => {
+                    const vendasDoDia = vendasPorData.get(dataKey) || [];
+                    const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
+                    const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+                    const qtdDia = vendasDoDia.length;
+                    const [y, m, d] = (dataKey || "").split("-");
+                    const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
+                    const diaSemana = (() => {
+                      try {
+                        return new Date(dataKey + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long" });
+                      } catch { return ""; }
+                    })();
 
-                        return [
-                          <tr key={`header-${dataKey}`} className="bg-[#E8740E]">
-                            <td colSpan={13} className="px-4 py-2.5" style={{ position: "sticky", left: 0, right: 0 }}>
-                              <div className="flex items-center gap-4 flex-wrap">
-                                <span className="text-white font-semibold text-sm">
-                                  {dataLabel} <span className="text-white/70 font-normal capitalize text-xs ml-1">{diaSemana}</span>
-                                </span>
-                                <span className="text-white/80 text-xs">{qtdDia} vendas</span>
-                                <span className="text-white/80 text-xs">Vendido: <strong className="text-white">{fmt(vendidoDia)}</strong></span>
-                                <span className="bg-white/20 px-2 py-0.5 rounded text-white font-bold text-xs">Lucro: {fmt(lucroDia)}</span>
-                              </div>
-                            </td>
-                          </tr>,
-                          ...vendasDoDia.map((v) => {
+                    return (
+                      <div key={dataKey}>
+                        {/* Header do dia — FORA da tabela para não ser cortado */}
+                        <div className="bg-[#E8740E] px-4 py-2.5 flex items-center gap-4 flex-wrap">
+                          <span className="text-white font-semibold text-sm">
+                            {dataLabel} <span className="text-white/70 font-normal capitalize text-xs ml-1">{diaSemana}</span>
+                          </span>
+                          <span className="text-white/80 text-xs">{qtdDia} vendas</span>
+                          <span className="text-white/80 text-xs">Vendido: <strong className="text-white">{fmt(vendidoDia)}</strong></span>
+                          <span className="bg-white/20 px-2 py-0.5 rounded text-white font-bold text-xs">Lucro: {fmt(lucroDia)}</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                                {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
+                                  <th className="px-3 py-2 w-8">
+                                    <input
+                                      type="checkbox"
+                                      checked={vendasDoDia.length > 0 && vendasDoDia.every(v => selecionadas.has(v.id))}
+                                      onChange={() => {
+                                        const allSel = vendasDoDia.every(v => selecionadas.has(v.id));
+                                        setSelecionadas(prev => {
+                                          const next = new Set(prev);
+                                          vendasDoDia.forEach(v => allSel ? next.delete(v.id) : next.add(v.id));
+                                          return next;
+                                        });
+                                      }}
+                                      className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                                    />
+                                  </th>
+                                )}
+                                {["Data", "Cliente", "Origem", "Tipo", "Produto", "Custo", "Vendido", "Lucro", "Margem", "Pagamento", "Status", ""].map((h) => (
+                                  <th key={h} className="px-3 py-2 text-left text-[#86868B] font-medium text-[10px] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vendasDoDia.map((v) => {
                         const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
@@ -3055,10 +3058,13 @@ export default function VendasPage() {
                             )}
                           </React.Fragment>
                         );
-                      })];
                       })}
-                    </tbody>
-                  </table>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
