@@ -104,6 +104,11 @@ export async function POST(req: NextRequest) {
     if (estoqueItem?.imei) imeiFromEstoque = estoqueItem.imei;
   }
 
+  // Garantir nome do cliente em caixa alta
+  if (body.cliente && typeof body.cliente === "string") {
+    body.cliente = body.cliente.toUpperCase();
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,

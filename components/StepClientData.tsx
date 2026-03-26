@@ -76,7 +76,7 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
 
       <div className="space-y-3 pt-2">
         {canProceed && (
-          <button onClick={() => onNext({ clienteNome: nome.trim(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: origem })}
+          <button onClick={() => onNext({ clienteNome: nome.trim().toUpperCase(), clienteWhatsApp: whatsapp.trim(), clienteInstagram: instagram.trim(), clienteOrigem: origem })}
             className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "var(--ti-accent)" }}>
             Ver minha cotação

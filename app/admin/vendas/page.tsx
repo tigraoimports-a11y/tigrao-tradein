@@ -1363,7 +1363,7 @@ export default function VendasPage() {
           {/* Campos condicionais por tipo */}
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
-              <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+              <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -2584,7 +2584,7 @@ export default function VendasPage() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm">{v.cliente}</td>
+                              <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">{v.cliente}</td>
                               <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
                               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
                               <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] text-xs">
@@ -2707,7 +2707,7 @@ export default function VendasPage() {
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Cliente</span>
-                                            <input value={ef.cliente} onChange={e => setEf("cliente", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                            <input value={ef.cliente} onChange={e => setEf("cliente", e.target.value.toUpperCase())} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
                                             <span className="text-[10px] font-bold text-[#86868B] uppercase">Produto</span>
