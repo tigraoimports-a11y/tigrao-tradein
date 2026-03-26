@@ -189,7 +189,7 @@ export default function ProdutoSpecFields({
           <div>
             <p className={labelCls}>Núcleos</p>
             <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
-              <option value="">— Opcional —</option>
+              <option value="" disabled>— Selecionar —</option>
               {MACBOOK_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
             </select>
           </div>

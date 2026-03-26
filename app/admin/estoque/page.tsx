@@ -1138,7 +1138,7 @@ export default function EstoquePage() {
                 {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
               </select></div>
               <div><p className={labelCls}>Núcleos</p><select value={spec.mb_nucleos} onChange={(e) => setS("mb_nucleos", e.target.value)} className={inputCls}>
-                <option value="">— Opcional —</option>
+                <option value="" disabled>— Selecionar —</option>
                 {["8C CPU/7C GPU", "8C CPU/8C GPU", "8C CPU/10C GPU", "10C CPU/8C GPU", "10C CPU/10C GPU", "12C CPU/16C GPU", "12C CPU/19C GPU", "14C CPU/20C GPU", "14C CPU/32C GPU", "16C CPU/40C GPU"].map((n) => <option key={n}>{n}</option>)}
               </select></div>
               <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
