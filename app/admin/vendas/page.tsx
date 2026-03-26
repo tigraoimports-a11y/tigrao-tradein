@@ -2407,6 +2407,32 @@ export default function VendasPage() {
                           {finalizandoLote ? "Finalizando..." : `✅ Finalizar ${selecionadas.size} selecionada(s)`}
                         </button>
                       )}
+                      {/* Cancelar/Excluir selecionadas — disponível em todas as tabs */}
+                      <button
+                        disabled={finalizandoLote}
+                        onClick={async () => {
+                          if (!confirm(`⚠️ EXCLUIR ${selecionadas.size} venda(s) selecionada(s)?\n\nIsso vai remover permanentemente do sistema e devolver produtos ao estoque.`)) return;
+                          setFinalizandoLote(true);
+                          let ok = 0;
+                          for (const id of selecionadas) {
+                            try {
+                              const res = await fetch("/api/vendas", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                body: JSON.stringify({ id }),
+                              });
+                              if (res.ok) ok++;
+                            } catch {}
+                          }
+                          setVendas(prev => prev.filter(v => !selecionadas.has(v.id)));
+                          setSelecionadas(new Set());
+                          setFinalizandoLote(false);
+                          setMsg(`${ok} venda(s) excluída(s) com sucesso!`);
+                        }}
+                        className="px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+                      >
+                        {finalizandoLote ? "Excluindo..." : `🗑️ Excluir ${selecionadas.size} selecionada(s)`}
+                      </button>
                       {(tab === "finalizadas" || tab === "hoje") && (
                         <button
                           disabled={finalizandoLote}
