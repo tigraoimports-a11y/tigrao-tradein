@@ -555,21 +555,31 @@ export async function POST(req: NextRequest) {
         }
         lines.push(``);
 
-        // RECEBIMENTOS HOJE (PIX/Dinheiro + Espécie)
-        const pixItau = vendasD0.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixInf = vendasD0.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixMp = vendasD0.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixEsp = vendasD0.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        // Entrada em espécie de TODAS as vendas (ex: cliente paga parte em dinheiro + parte no cartão)
+        // RECEBIMENTOS HOJE (PIX real por banco)
+        let recItau = 0, recInf = 0, recMpLink = 0;
+        for (const v of vs) {
+          if (v.forma === "PIX" && v.banco === "ITAU") recItau += Number(v.preco_vendido || 0) - Number(v.entrada_especie || 0);
+          if (v.forma === "PIX" && v.banco === "INFINITE") recInf += Number(v.preco_vendido || 0) - Number(v.entrada_especie || 0);
+          if (v.banco === "MERCADO_PAGO" && (v.forma === "CARTAO" || v.forma === "PIX")) {
+            recMpLink += Number(v.preco_vendido || 0) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+          }
+          if ((Number(v.entrada_pix) || 0) > 0) {
+            const bp = v.banco_pix || "ITAU";
+            if (bp === "ITAU") recItau += Number(v.entrada_pix);
+            else if (bp === "INFINITE") recInf += Number(v.entrada_pix);
+            else if (bp === "MERCADO_PAGO") recMpLink += Number(v.entrada_pix);
+          }
+        }
+        const pixEsp = vs.filter(v => v.forma === "ESPECIE" || v.forma === "DINHEIRO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const especieEntradas = vs.reduce((s, v) => s + Number(v.entrada_especie || 0), 0);
         const totalEspecieHoje = pixEsp + especieEntradas;
-        const totalD0 = pixItau + pixInf + pixMp + totalEspecieHoje;
+        const totalD0 = recItau + recInf + recMpLink + totalEspecieHoje;
 
         if (totalD0 > 0) {
           lines.push(`💰 <b>RECEBIMENTOS HOJE (PIX/Dinheiro)</b>`);
-          if (pixItau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(pixItau)}`);
-          if (pixInf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(pixInf)}`);
-          if (pixMp > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(pixMp)}`);
+          if (recItau > 0) lines.push(`  🏦 Itaú: ${fmtBRL(recItau)}`);
+          if (recInf > 0) lines.push(`  🏦 Infinite: ${fmtBRL(recInf)}`);
+          if (recMpLink > 0) lines.push(`  🏦 Mercado Pago: ${fmtBRL(recMpLink)}`);
           if (totalEspecieHoje > 0) lines.push(`  💵 Espécie: ${fmtBRL(totalEspecieHoje)}`);
           lines.push(`  <b>Total: ${fmtBRL(totalD0)}</b>`);
           lines.push(``);
@@ -620,13 +630,40 @@ export async function POST(req: NextRequest) {
           lines.push(``);
         }
 
-        // SALDOS BANCÁRIOS
-        lines.push(`🏦 <b>SALDOS BANCÁRIOS</b>`);
-        lines.push(`  Itaú: <b>${fmtBRL(report.esp_itau)}</b>`);
-        lines.push(`  Infinite: <b>${fmtBRL(report.esp_inf)}</b>`);
-        lines.push(`  Mercado Pago: <b>${fmtBRL(report.esp_mp)}</b>`);
-        lines.push(`  Espécie: <b>${fmtBRL(report.esp_especie)}</b>`);
-        const totalSaldos = report.esp_itau + report.esp_inf + report.esp_mp + report.esp_especie;
+        // SALDOS BANCÁRIOS (base + PIX hoje - saídas hoje)
+        const gastosItau = gs.filter(g => g.tipo === "SAIDA" && g.banco === "ITAU").reduce((s, g) => s + Number(g.valor || 0), 0);
+        const gastosInf = gs.filter(g => g.tipo === "SAIDA" && g.banco === "INFINITE").reduce((s, g) => s + Number(g.valor || 0), 0);
+        const gastosMP = gs.filter(g => g.tipo === "SAIDA" && g.banco === "MERCADO_PAGO").reduce((s, g) => s + Number(g.valor || 0), 0);
+        const gastosEsp = gs.filter(g => g.tipo === "SAIDA" && g.banco === "ESPECIE").reduce((s, g) => s + Number(g.valor || 0), 0);
+        const depEsp = gs.filter(g => (g as Record<string,unknown>).is_dep_esp).reduce((s, g) => s + Number(g.valor || 0), 0);
+
+        // PIX real por banco (mesmo cálculo do dashboard)
+        let pixRealItau = 0, pixRealInf = 0, pixRealMP = 0;
+        for (const v of vs) {
+          if (v.forma === "PIX" && v.banco === "ITAU") pixRealItau += Number(v.preco_vendido || 0) - Number(v.entrada_especie || 0);
+          if (v.forma === "PIX" && v.banco === "INFINITE") pixRealInf += Number(v.preco_vendido || 0) - Number(v.entrada_especie || 0);
+          if (v.banco === "MERCADO_PAGO" && (v.forma === "CARTAO" || v.forma === "PIX")) {
+            pixRealMP += Number(v.preco_vendido || 0) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+          }
+          if ((Number(v.entrada_pix) || 0) > 0) {
+            const bp = v.banco_pix || "ITAU";
+            if (bp === "ITAU") pixRealItau += Number(v.entrada_pix);
+            else if (bp === "INFINITE") pixRealInf += Number(v.entrada_pix);
+            else if (bp === "MERCADO_PAGO") pixRealMP += Number(v.entrada_pix);
+          }
+        }
+
+        const sItau = report.esp_itau + pixRealItau - gastosItau;
+        const sInf = report.esp_inf + pixRealInf - gastosInf;
+        const sMP = report.esp_mp + pixRealMP - gastosMP;
+        const sEsp = report.esp_especie + totalEspecieHoje - gastosEsp - depEsp;
+
+        lines.push(`🏦 <b>SALDOS BANCÁRIOS (estimado)</b>`);
+        lines.push(`  Itaú: <b>${fmtBRL(sItau)}</b>`);
+        lines.push(`  Infinite: <b>${fmtBRL(sInf)}</b>`);
+        lines.push(`  Mercado Pago: <b>${fmtBRL(sMP)}</b>`);
+        lines.push(`  Espécie: <b>${fmtBRL(sEsp)}</b>`);
+        const totalSaldos = sItau + sInf + sMP + sEsp;
         lines.push(`  <b>Total: ${fmtBRL(totalSaldos)}</b>`);
 
         const fullMsg = lines.join("\n");

@@ -218,8 +218,8 @@ export default function DashboardPage() {
   const depEspHoje = gastosHoje.filter(g => g.is_dep_esp).reduce((s, g) => s + (g.valor || 0), 0);
 
   // Saldo = base manhã + entradas do dia - saídas do dia (sempre em tempo real)
-  const saldoItau = itauBase + pixHojeItau + d1Itau - gastosHojeItau;
-  const saldoInf = infBase + pixHojeInf + d1Inf - gastosHojeInf;
+  const saldoItau = itauBase + pixHojeItau - gastosHojeItau; // D+1 já incluso na base manhã
+  const saldoInf = infBase + pixHojeInf - gastosHojeInf; // D+1 já incluso na base manhã
   const saldoMP = mpBase + pixHojeMP - gastosHojeMP; // MP sempre D+0, sem D+1
   const saldoEsp = espBase + especieHoje - gastosHojeEsp - depEspHoje;
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
@@ -328,8 +328,8 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={`Base: ${fmt(itauBase)} | PIX: +${fmt(pixHojeItau)} | D+1: +${fmt(d1Itau)} | Saídas: -${fmt(gastosHojeItau)}`} />
-          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={`Base: ${fmt(infBase)} | PIX: +${fmt(pixHojeInf)} | D+1: +${fmt(d1Inf)} | Saídas: -${fmt(gastosHojeInf)}`} />
+          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={`Base: ${fmt(itauBase)} | PIX: +${fmt(pixHojeItau)} | Saídas: -${fmt(gastosHojeItau)}`} />
+          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={`Base: ${fmt(infBase)} | PIX: +${fmt(pixHojeInf)} | Saídas: -${fmt(gastosHojeInf)}`} />
           <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={`Base: ${fmt(mpBase)} | Link: +${fmt(pixHojeMP)} | Saídas: -${fmt(gastosHojeMP)}`} />
           <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={`Base: ${fmt(espBase)} | Recebido: +${fmt(especieHoje)} | Saídas: -${fmt(gastosHojeEsp)}`} />
           {totalFiado > 0 && (
