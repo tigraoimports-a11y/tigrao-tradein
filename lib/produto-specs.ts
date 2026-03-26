@@ -40,6 +40,8 @@ export const WATCH_CORES = [
 
 export const AIRPODS_CORES = ["Midnight", "Starlight"];
 
+export const ACESSORIOS_CORES = ["Black", "White"];
+
 /** Mapa de cores por categoria para lookup rápido */
 export const CORES_POR_CATEGORIA: Record<string, string[]> = {
   IPHONES: IPHONE_CORES,
@@ -47,6 +49,7 @@ export const CORES_POR_CATEGORIA: Record<string, string[]> = {
   IPADS: IPAD_CORES,
   APPLE_WATCH: WATCH_CORES,
   AIRPODS: AIRPODS_CORES,
+  ACESSORIOS: ACESSORIOS_CORES,
 };
 
 /** Categorias onde a cor é obrigatória */
