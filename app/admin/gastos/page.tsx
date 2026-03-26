@@ -215,13 +215,29 @@ export default function GastosPage() {
                         <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
                         <td className="px-4 py-3 font-bold text-red-500">{fmt(g.valor)}</td>
                         <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
-                        <td className="px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => startEdit(g)} className="text-[#86868B] hover:text-[#E8740E] text-xs" title="Editar">✏️</button>
-                          <button onClick={async () => {
-                            if (!confirm("Excluir?")) return;
-                            await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" }, body: JSON.stringify({ id: g.id }) });
-                            setGastos((prev) => prev.filter((r) => r.id !== g.id));
-                          }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => startEdit(g)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${dm ? "bg-[#3A3A3C] text-[#F5A623] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"} hover:shadow-sm`}
+                              title="Editar"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                              Editar
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm("Excluir este gasto?")) return;
+                                await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" }, body: JSON.stringify({ id: g.id }) });
+                                setGastos((prev) => prev.filter((r) => r.id !== g.id));
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${dm ? "bg-[#3A3A3C] text-red-400 hover:bg-red-500 hover:text-white" : "bg-red-50 text-red-400 hover:bg-red-500 hover:text-white"} hover:shadow-sm`}
+                              title="Excluir"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                              Excluir
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {viewingId === g.id && editingId !== g.id && (
