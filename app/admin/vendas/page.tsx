@@ -663,10 +663,15 @@ export default function VendasPage() {
       return;
     }
 
-    // Collect all products: cart items + current form (if has product)
+    // Collect all products: cart items + current form (if has product and not already in cart)
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
-    if (form.produto) {
+    if (form.produto && produtosCarrinho.length === 0) {
+      // Modo simples: só 1 produto no form
       allProducts.push(getCurrentProductFields());
+    } else if (form.produto && produtosCarrinho.length > 0) {
+      // Modo carrinho: form.produto pode ter valor residual da edição
+      // Só adiciona se o usuário clicou em "Adicionar ao Carrinho" (nesse caso já estaria no carrinho)
+      // Não duplicar — ignorar form.produto quando já tem itens no carrinho
     }
 
     if (allProducts.length === 0) {
@@ -3003,6 +3008,8 @@ export default function VendasPage() {
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
                                               setEditandoVendaId(grupoVendas[0].id); // sinaliza modo edição
+                                              // Limpar campos de produto do form para não duplicar ao salvar
+                                              setForm(f => ({ ...f, produto: "", custo: "", preco_vendido: "", fornecedor: "", serial_no: "", imei: "", produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "" }));
                                             } else {
                                               setProdutosCarrinho([]);
                                               setEditandoGrupoIds([]);
