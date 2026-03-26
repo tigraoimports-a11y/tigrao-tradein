@@ -2926,9 +2926,12 @@ export default function VendasPage() {
                                         <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
-                                            // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca
+                                            // Detectar se faz parte de um grupo
+                                            const grupoVendas = v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id) : [v];
+                                            const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
+                                            // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca (só para venda simples)
                                             let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
-                                            if (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0) {
+                                            if (grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
                                               try {
                                                 const res = await fetch("/api/estoque", {
                                                   headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
@@ -2937,8 +2940,7 @@ export default function VendasPage() {
                                                   const estoqueData = await res.json();
                                                   const allItems = estoqueData.data || estoqueData || [];
                                                   const firstName = v.cliente.toUpperCase().split(" ")[0];
-                                                  const trocaVal = parseFloat(String(v.produto_na_troca));
-                                                  // Buscar pendência/seminovo que bate com cliente + valor da troca
+                                                  const trocaVal = parseFloat(String(primaryVenda.produto_na_troca));
                                                   const pendencia = allItems.find((p: { custo_unitario: number; cliente: string | null; tipo: string; produto: string; cor: string | null; bateria: number | null; observacao: string | null }) =>
                                                     (p.tipo === "PENDENCIA" || p.tipo === "SEMINOVO") &&
                                                     (p.cliente || "").toUpperCase().includes(firstName) &&
@@ -2953,9 +2955,6 @@ export default function VendasPage() {
                                                 }
                                               } catch { /* ignore */ }
                                             }
-                                            // Detectar se faz parte de um grupo
-                                            const grupoVendas = v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id) : [v];
-                                            const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
 
                                             // Preencher formulário Nova Venda com dados da venda para edição completa
                                             setForm({
@@ -2978,7 +2977,7 @@ export default function VendasPage() {
                                               qnt_parcelas: String(primaryVenda.qnt_parcelas || ""),
                                               bandeira: primaryVenda.bandeira || "",
                                               local: primaryVenda.local || "",
-                                              produto_na_troca: String(primaryVenda.produto_na_troca || ""),
+                                              produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || ""),
                                               entrada_pix: String(primaryVenda.entrada_pix || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
@@ -2991,14 +2990,14 @@ export default function VendasPage() {
                                               comp_alt: String(primaryVenda.comp_alt || ""),
                                               sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
                                               banco_sinal: primaryVenda.banco_sinal || "",
-                                              troca_produto: trocaProd,
-                                              troca_cor: trocaCor,
-                                              troca_bateria: trocaBat,
-                                              troca_obs: trocaObs,
-                                              troca_grade: trocaGrade,
-                                              troca_caixa: trocaCaixa,
-                                              troca_cabo: trocaCabo,
-                                              troca_fonte: trocaFonte,
+                                              troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
+                                              troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
+                                              troca_bateria: grupoVendas.length > 1 ? "" : trocaBat,
+                                              troca_obs: grupoVendas.length > 1 ? "" : trocaObs,
+                                              troca_grade: grupoVendas.length > 1 ? "" : trocaGrade,
+                                              troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
+                                              troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
+                                              troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
@@ -3034,8 +3033,7 @@ export default function VendasPage() {
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
                                               setEditandoVendaId(grupoVendas[0].id); // sinaliza modo edição
-                                              // Limpar campos de produto do form para não duplicar ao salvar
-                                              setForm(f => ({ ...f, produto: "", custo: "", preco_vendido: "", fornecedor: "", serial_no: "", imei: "", produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "" }));
+                                              // Campos de produto/troca já foram limpos no setForm acima (grupoVendas.length > 1 ? "" : ...)
                                             } else {
                                               setProdutosCarrinho([]);
                                               setEditandoGrupoIds([]);
