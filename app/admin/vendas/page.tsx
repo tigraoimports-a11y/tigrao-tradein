@@ -871,6 +871,35 @@ export default function VendasPage() {
       fetchVendas();
       fetchEstoque();
       if (savedVendaIds.length > 0) setNotaFiscalVendaIds(savedVendaIds);
+
+      // Auto-criar entrega quando local === "ENTREGA"
+      if (form.local === "ENTREGA" && savedVendaIds.length > 0) {
+        const produtos = allProducts.map(p => p.produto).join(", ");
+        const trocaProd = form.produto_na_troca || "";
+        const entregaPayload = {
+          venda_id: savedVendaIds[0],
+          cliente: form.cliente,
+          telefone: null, // preencher na página de entregas
+          endereco: form.endereco || null,
+          bairro: form.bairro || null,
+          data_entrega: form.data,
+          horario: null,
+          produto: produtos,
+          tipo: form.tipo,
+          detalhes_upgrade: trocaProd || null,
+          forma_pagamento: form.forma || null,
+          valor: allProducts.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0),
+          vendedor: user?.nome || "Tigrao",
+          regiao: form.bairro || null,
+          status: "PENDENTE",
+          observacao: null,
+        };
+        fetch("/api/admin/entregas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          body: JSON.stringify(entregaPayload),
+        }).catch(() => {}); // fire-and-forget
+      }
     } else {
       setMsg("Erro: " + errors.join("; "));
     }
