@@ -59,6 +59,10 @@ export interface Venda {
   cidade: string | null;
   uf: string | null;
   grupo_id: string | null;
+  troca_produto: string | null;
+  troca_cor: string | null;
+  troca_bateria: string | null;
+  troca_obs: string | null;
 }
 
 export interface Reajuste {

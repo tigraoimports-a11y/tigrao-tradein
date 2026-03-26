@@ -119,6 +119,16 @@ export default function VendasPage() {
     _estoqueId: string;
     _catSel: string;
     _produtoManual: boolean;
+    // Troca individual por produto
+    produto_na_troca: string;
+    troca_produto: string;
+    troca_cor: string;
+    troca_bateria: string;
+    troca_obs: string;
+    troca_grade: string;
+    troca_caixa: string;
+    troca_cabo: string;
+    troca_fonte: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -459,10 +469,7 @@ export default function VendasPage() {
 
   // Helper: build payload from product fields + global payment (from form state)
   // Payment info is GLOBAL for the entire sale — copied to each product record
-  const buildPayload = (prodFields: {
-    produto: string; fornecedor: string; custo: string; preco_vendido: string;
-    local: string; serial_no: string; imei: string; _estoqueId?: string;
-  }) => {
+  const buildPayload = (prodFields: ProdutoCarrinho) => {
     const pCusto = parseFloat(prodFields.custo) || 0;
     const pPrecoVendido = parseFloat(prodFields.preco_vendido) || 0;
 
@@ -475,8 +482,9 @@ export default function VendasPage() {
     const gValorComprovanteInput = parseFloat(form.valor_comprovante_input) || 0;
     const gEntradaPix = parseFloat(form.entrada_pix) || 0;
     const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-    const gValorTroca = parseFloat(form.produto_na_troca) || 0;
-    const gTemTroca = gValorTroca > 0;
+    // Troca individual por produto (do carrinho)
+    const pValorTroca = parseFloat(prodFields.produto_na_troca) || 0;
+    const pTemTroca = pValorTroca > 0;
     const gTemEntradaPix = gEntradaPix > 0;
 
     const gTaxa = gForma === "CARTAO"
@@ -502,7 +510,7 @@ export default function VendasPage() {
       uf: form.uf || null,
       local: form.local || null,
       origem: form.tipo === "ATACADO" ? "ATACADO" : form.origem,
-      tipo: gTemTroca ? "UPGRADE" : form.tipo,
+      tipo: pTemTroca ? "UPGRADE" : form.tipo,
       produto: prodFields.produto,
       fornecedor: prodFields.fornecedor || null,
       custo: pCusto,
@@ -513,7 +521,7 @@ export default function VendasPage() {
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
-      produto_na_troca: gTemTroca ? String(gValorTroca) : null,
+      produto_na_troca: pTemTroca ? String(pValorTroca) : null,
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
       entrada_especie: gEntradaEspecie,
@@ -540,10 +548,10 @@ export default function VendasPage() {
       banco_sinal: form.banco_sinal || null,
       serial_no: prodFields.serial_no || null,
       imei: prodFields.imei || null,
-      troca_produto: form.troca_produto || null,
-      troca_cor: form.troca_cor || null,
-      troca_bateria: form.troca_bateria || null,
-      troca_obs: form.troca_obs || null,
+      troca_produto: prodFields.troca_produto || null,
+      troca_cor: prodFields.troca_cor || null,
+      troca_bateria: prodFields.troca_bateria || null,
+      troca_obs: prodFields.troca_obs || null,
       status_pagamento: "AGUARDANDO",
     };
 
@@ -551,13 +559,13 @@ export default function VendasPage() {
       payload._estoque_id = prodFields._estoqueId;
     }
 
-    if (gTemTroca && form.troca_produto) {
+    if (pTemTroca && prodFields.troca_produto) {
       payload._seminovo = {
-        produto: form.troca_produto,
-        valor: gValorTroca,
-        cor: form.troca_cor || null,
-        bateria: form.troca_bateria ? parseInt(form.troca_bateria as string) : null,
-        observacao: form.troca_obs || null,
+        produto: prodFields.troca_produto,
+        valor: pValorTroca,
+        cor: prodFields.troca_cor || null,
+        bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
+        observacao: prodFields.troca_obs || null,
       };
     }
 
@@ -576,6 +584,15 @@ export default function VendasPage() {
     _estoqueId: estoqueId,
     _catSel: catSel,
     _produtoManual: produtoManual,
+    produto_na_troca: form.produto_na_troca,
+    troca_produto: form.troca_produto,
+    troca_cor: form.troca_cor,
+    troca_bateria: form.troca_bateria,
+    troca_obs: form.troca_obs,
+    troca_grade: form.troca_grade,
+    troca_caixa: form.troca_caixa,
+    troca_cabo: form.troca_cabo,
+    troca_fonte: form.troca_fonte,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -585,6 +602,8 @@ export default function VendasPage() {
       produto: "", fornecedor: "",
       custo: "", preco_vendido: "",
       serial_no: "", imei: "",
+      produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "",
+      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
     }));
     setCatSel("");
     setEstoqueId("");
@@ -1486,6 +1505,11 @@ export default function VendasPage() {
                         {p.serial_no && ` | SN: ${p.serial_no}`}
                         {p.imei && ` | IMEI: ${p.imei}`}
                       </span>
+                      {parseFloat(p.produto_na_troca) > 0 && (
+                        <span className="text-[10px] text-orange-600 font-medium block">
+                          Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
+                        </span>
+                      )}
                     </div>
                     <div className="ml-3 flex gap-1 flex-shrink-0">
                       <button
@@ -3020,6 +3044,15 @@ export default function VendasPage() {
                                                 _estoqueId: "",
                                                 _catSel: "",
                                                 _produtoManual: true,
+                                                produto_na_troca: String(gv.produto_na_troca || ""),
+                                                troca_produto: gv.troca_produto || "",
+                                                troca_cor: gv.troca_cor || "",
+                                                troca_bateria: gv.troca_bateria || "",
+                                                troca_obs: gv.troca_obs || "",
+                                                troca_grade: "",
+                                                troca_caixa: "",
+                                                troca_cabo: "",
+                                                troca_fonte: "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
