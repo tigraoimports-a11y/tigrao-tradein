@@ -149,6 +149,29 @@ export async function sendPaymentNotification(venda: {
 }
 
 /**
+ * Envia notificação de venda cancelada para o grupo de vendas do Telegram.
+ */
+export async function sendCancelNotification(venda: {
+  produto?: string;
+  cliente?: string;
+  preco_vendido?: number;
+  usuario?: string;
+}): Promise<boolean> {
+  const lines = [
+    `❌ <b>VENDA CANCELADA</b>`,
+    ``,
+    `📱 Produto: ${venda.produto || "—"}`,
+    `👤 Cliente: ${venda.cliente || "—"}`,
+    `💵 Valor: ${fmtBRL(Number(venda.preco_vendido || 0))}`,
+    `Motivo: Cancelamento`,
+    ``,
+    `Cancelado por: ${venda.usuario || "sistema"}`,
+  ];
+
+  return sendTelegramMessage(lines.join("\n"), GRUPO_VENDAS_ID || undefined);
+}
+
+/**
  * Formata relatório /parcial para Telegram HTML.
  */
 export function formatParcialHTML(r: DashboardParcial): string {

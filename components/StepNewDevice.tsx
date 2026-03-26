@@ -260,6 +260,25 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
               <button
                 onClick={() => {
                   if (!semiNome.trim()) { alert("Informe seu nome"); return; }
+                  // Salvar simulação seminovo no banco de dados
+                  fetch("/api/leads", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      nome: semiNome,
+                      whatsapp: semiWhatsapp || "",
+                      instagram: "",
+                      modeloNovo: `${semiModel} SEMINOVO`,
+                      storageNovo: semiStorage,
+                      precoNovo: 0,
+                      modeloUsado: usedModel || "",
+                      storageUsado: usedStorage || "",
+                      avaliacaoUsado: tradeInValue || 0,
+                      diferenca: 0,
+                      status: "GOSTEI",
+                      formaPagamento: "WhatsApp Seminovo",
+                    }),
+                  }).catch(() => {});
                   const waNum = whatsappNumber || "5521995618747";
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");

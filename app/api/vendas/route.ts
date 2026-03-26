@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { sendPaymentNotification, sendSaleNotification } from "@/lib/telegram";
+import { sendPaymentNotification, sendSaleNotification, sendCancelNotification } from "@/lib/telegram";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
 import { recalcularSaldoDia } from "@/lib/saldos";
@@ -282,6 +282,16 @@ export async function DELETE(req: NextRequest) {
     "vendas",
     id
   );
+
+  // Notificação Telegram de venda cancelada
+  if (venda) {
+    sendCancelNotification({
+      produto: venda.produto,
+      cliente: venda.cliente,
+      preco_vendido: venda.preco_vendido,
+      usuario,
+    }).catch(err => console.error("[Vendas] Erro notificação cancelamento:", err));
+  }
 
   // Devolver ao estoque se a venda veio de produto cadastrado
   if (venda && venda.estoque_id) {

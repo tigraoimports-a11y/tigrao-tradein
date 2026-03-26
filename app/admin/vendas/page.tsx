@@ -191,9 +191,8 @@ export default function VendasPage() {
       const key = `${p.categoria}__${tipo}`;
       if (!catSet.has(key)) {
         catSet.add(key);
-        const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", OUTROS: "Outros" };
-        const tipoLabel = tipo === "SEMINOVO" ? "Seminovos" : "Lacrados";
-        cats.push({ key, label: `${catLabel[p.categoria] || p.categoria} — ${tipoLabel}` });
+        const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", OUTROS: "Outros", SEMINOVOS: "Seminovos" };
+        cats.push({ key, label: catLabel[p.categoria] || p.categoria });
       }
     }
     // Ordenar: Lacrados primeiro, depois Seminovos, dentro de cada tipo por nome
@@ -426,7 +425,9 @@ export default function VendasPage() {
   const parcelas = parseInt(form.qnt_parcelas) || 0;
   const taxa = form.forma === "CARTAO"
     ? getTaxa(form.banco, form.bandeira || null, parcelas, form.forma)
-    : form.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, parcelas, "CARTAO") : 0;
+    : form.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, parcelas, "CARTAO")
+    : form.forma === "DEBITO" ? 0.75
+    : 0;
   const comprovante = taxa > 0 ? calcularBruto(valorCartao > 0 ? valorCartao : preco, taxa) : preco;
   const recebimento = form.forma ? calcularRecebimento(form.forma === "LINK" ? "CARTAO" : form.forma, parcelas || null) : "—";
 
@@ -474,7 +475,7 @@ export default function VendasPage() {
   const temTroca = valorTroca > 0;
   const temEntradaPix = entradaPix > 0;
   const temEntradaEspecie = entradaEspecie > 0;
-  const temCartao = form.forma === "CARTAO" || form.forma === "LINK";
+  const temCartao = form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO";
 
   // Helper: build payload from product fields + global payment (from form state)
   // Payment info is GLOBAL for the entire sale — copied to each product record
@@ -498,7 +499,9 @@ export default function VendasPage() {
 
     const gTaxa = gForma === "CARTAO"
       ? getTaxa(gBanco, gBandeira || null, gParcelas, gForma)
-      : gForma === "LINK" ? getTaxa("MERCADO_PAGO", null, gParcelas, "CARTAO") : 0;
+      : gForma === "LINK" ? getTaxa("MERCADO_PAGO", null, gParcelas, "CARTAO")
+      : gForma === "DEBITO" ? 0.75
+      : 0;
 
     let pBancoFinal = gBanco;
     if (gForma === "LINK") pBancoFinal = "MERCADO_PAGO";
@@ -526,7 +529,7 @@ export default function VendasPage() {
       preco_vendido: pPrecoVendido,
       banco: pBancoFinal,
       forma: !gForma ? "PIX" : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "DINHEIRO" : gForma,
-      recebimento: !gForma ? "D+0" : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : "D+1",
+      recebimento: !gForma ? "D+0" : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : gForma === "DEBITO" ? "D+1" : "D+1",
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
@@ -689,8 +692,8 @@ export default function VendasPage() {
     }
 
     // Validação: comprovante obrigatório para vendas no CARTÃO
-    if ((form.forma === "CARTAO" || form.forma === "LINK") && !(parseFloat(form.valor_comprovante_input) > 0)) {
-      setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão");
+    if ((form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+      setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão/débito");
       return;
     }
 
@@ -716,6 +719,7 @@ export default function VendasPage() {
           const gBandeira = form.bandeira || null;
           const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
             ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+            : gForma === "DEBITO" ? 0.75
             : 0;
 
           // Total líquido from comprovante after tax
@@ -792,6 +796,7 @@ export default function VendasPage() {
               const gBandeira = form.bandeira || null;
               const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
                 ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+                : gForma === "DEBITO" ? 0.75
                 : 0;
               const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
@@ -1790,6 +1795,7 @@ export default function VendasPage() {
                 <option value="">— Definir depois —</option>
                 <option value="PIX">PIX</option>
                 <option value="CARTAO">Maquina Cartao</option>
+                <option value="DEBITO">Debito</option>
                 <option value="LINK">Link Mercado Pago</option>
                 <option value="ESPECIE">Especie (Dinheiro)</option>
                 <option value="FIADO">Fiado</option>
@@ -1812,6 +1818,39 @@ export default function VendasPage() {
                     }
                   }
                 }} placeholder="Valor transferido" className={inputCls} /></div>
+                </>
+              )}
+
+              {form.forma === "DEBITO" && (
+                <>
+                  <div><p className={labelCls}>Maquina</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
+                    <option>ITAU</option><option>INFINITE</option>
+                  </select></div>
+                  <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setMoney("valor_comprovante_input", e.target.value);
+                    if (produtosCarrinho.length === 0) {
+                      const compVal = parseFloat(clean) || 0;
+                      if (compVal > 0 && taxa > 0) {
+                        const liquidoDebito = calcularLiquido(compVal, taxa);
+                        const totalLiq = Math.round(liquidoDebito + entradaPix + entradaEspecie + valorTroca);
+                        setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
+                      }
+                    }
+                  }} placeholder="Valor da maquina" className={inputCls} /></div>
+                  <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                    <span>Taxa: <strong className="text-[#E8740E]">0.75%</strong></span>
+                    <span>Recebimento: <strong className="text-blue-600">D+1</strong></span>
+                    {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                      <>
+                        <span>Liquido debito: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, 0.75))}</strong></span>
+                        {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
+                        {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
+                        {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
+                        <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, 0.75) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                      </>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -2006,6 +2045,7 @@ export default function VendasPage() {
                   <option value="">— Definir depois —</option>
                   <option value="PIX">PIX</option>
                   <option value="CARTAO">Maquina Cartao</option>
+                  <option value="DEBITO">Debito</option>
                   <option value="LINK">Link Mercado Pago</option>
                   <option value="ESPECIE">Especie (Dinheiro)</option>
                   <option value="FIADO">Fiado</option>
@@ -2015,6 +2055,30 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                   </select></div>
+                )}
+
+                {form.forma === "DEBITO" && (
+                  <>
+                    <div><p className={labelCls}>Maquina</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
+                      <option>ITAU</option><option>INFINITE</option>
+                    </select></div>
+                    <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                      setMoney("valor_comprovante_input", e.target.value);
+                    }} placeholder="Valor da maquina" className={inputCls} /></div>
+                    <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                      <span>Taxa: <strong className="text-[#E8740E]">0.75%</strong></span>
+                      <span>Recebimento: <strong className="text-blue-600">D+1</strong></span>
+                      {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                        <>
+                          <span>Liquido debito: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, 0.75))}</strong></span>
+                          {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
+                          {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
+                          {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
+                          <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, 0.75) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                        </>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {form.forma === "CARTAO" && (
@@ -2290,7 +2354,7 @@ export default function VendasPage() {
                   <div className="mt-3 pt-3 border-t border-white/20 text-xs text-white/70 text-center">
                     {temTroca && <span>Troca: {fmt(valorTroca)} </span>}
                     {temEntradaPix && <span>+ PIX: {fmt(entradaPix)} ({form.banco_pix}) </span>}
-                    {temCartao && valorCartao > 0 && <span>+ {form.forma === "LINK" ? "Link MP" : `Cartao ${form.banco}`}: {fmt(valorCartao)}</span>}
+                    {temCartao && valorCartao > 0 && <span>+ {form.forma === "LINK" ? "Link MP" : form.forma === "DEBITO" ? `Debito ${form.banco}` : `Cartao ${form.banco}`}: {fmt(valorCartao)}</span>}
                   </div>
                 )}
                 {temConferencia && (
@@ -2829,11 +2893,13 @@ export default function VendasPage() {
                                           </label>
                                         </div>
                                         {/* Valor no Comprovante — edição */}
-                                        {(ef.forma === "CARTAO" || ef.forma === "LINK") && (() => {
+                                        {(ef.forma === "CARTAO" || ef.forma === "LINK" || ef.forma === "DEBITO") && (() => {
                                           const efParcelas = parseInt(ef.qnt_parcelas) || 0;
                                           const efTaxa = ef.forma === "CARTAO"
                                             ? getTaxa(ef.banco, ef.bandeira || null, efParcelas, ef.forma)
-                                            : ef.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, efParcelas, "CARTAO") : 0;
+                                            : ef.forma === "LINK" ? getTaxa("MERCADO_PAGO", null, efParcelas, "CARTAO")
+                                            : ef.forma === "DEBITO" ? 0.75
+                                            : 0;
                                           if (efTaxa <= 0) return null;
                                           return (
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">

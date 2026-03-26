@@ -169,6 +169,7 @@ function resolveTaxa(
 ): number {
   if (forma === "PIX" || forma === "DINHEIRO") return 0;
   if (forma === "FIADO") return 0;
+  if (forma === "DEBITO") return 0.75;
 
   const key = parcelas === 0 || forma === "CARTAO" && parcelas === null
     ? "debito"
@@ -267,6 +268,7 @@ export function calcularRecebimento(
 ): string {
   if (forma === "PIX" || forma === "DINHEIRO") return "D+0";
   if (forma === "FIADO") return "FIADO";
+  if (forma === "DEBITO") return "D+1";
   if (forma === "CARTAO") {
     if (!parcelas || parcelas <= 1) return "D+1";
     return "D+1"; // Cartao sempre D+1
