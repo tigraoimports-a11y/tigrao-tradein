@@ -7,7 +7,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, type ProdutoSpec } from "@/lib/produto-specs";
 
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
@@ -427,7 +427,7 @@ export default function EstoquePage() {
   // Campos estruturados por categoria
   const [spec, setSpec] = useState({
     // IPHONES
-    ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
+    ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
     // MACBOOK
     mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
     // MAC_MINI
@@ -435,7 +435,7 @@ export default function EstoquePage() {
     // IPADS
     ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
-    aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
+    aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
     // AIRPODS
     air_modelo: "AIRPODS 4",
     // SEMINOVOS — subtipo define quais campos mostrar
@@ -652,11 +652,11 @@ export default function EstoquePage() {
       }
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       setSpec({
-        ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
+        ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
         mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
         mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
         ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
-        aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
+        aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
         air_modelo: "AIRPODS 4",
         semi_subtipo: "IPHONES",
       });
@@ -1115,6 +1115,10 @@ export default function EstoquePage() {
               <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
                 {["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
               </select></div>
+              <div><p className={labelCls}>Origem</p><select value={spec.ip_origem} onChange={(e) => setS("ip_origem", e.target.value)} className={inputCls}>
+                <option value="">— Opcional —</option>
+                {IPHONE_ORIGENS.map((o) => <option key={o}>{o}</option>)}
+              </select></div>
             </div>
           )}
 
@@ -1204,6 +1208,10 @@ export default function EstoquePage() {
               <div><p className={labelCls}>Conectividade</p><select value={spec.aw_conn} onChange={(e) => setS("aw_conn", e.target.value)} className={inputCls}>
                 <option value="GPS">GPS</option>
                 <option value="GPS+CELL">GPS + Cellular</option>
+              </select></div>
+              <div><p className={labelCls}>Pulseira</p><select value={spec.aw_pulseira} onChange={(e) => setS("aw_pulseira", e.target.value)} className={inputCls}>
+                <option value="" disabled>— Selecionar —</option>
+                {WATCH_PULSEIRAS.map((p) => <option key={p}>{p}</option>)}
               </select></div>
             </div>
           )}
@@ -1297,7 +1305,14 @@ export default function EstoquePage() {
               <div className="w-8 h-8 rounded-full border-2 border-[#E8740E] flex items-center justify-center shrink-0" title="Cor principal">
                 <span className="text-xs">🎨</span>
               </div>
-              <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} flex-1`} style={{ width: "auto" }} />
+              {CORES_POR_CATEGORIA[formBaseCat] ? (
+                <select value={form.cor} onChange={(e) => set("cor", e.target.value)} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
+                  {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
+                  {CORES_POR_CATEGORIA[formBaseCat].map((c) => <option key={c}>{c}</option>)}
+                </select>
+              ) : (
+                <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} flex-1`} style={{ width: "auto" }} />
+              )}
               <input type="number" value={form.qnt} onChange={(e) => set("qnt", e.target.value)} className={qntCls} placeholder="Qtd" />
               <span className={`text-xs ${textSecondary} w-6`}>un.</span>
               <span className="w-5"></span>
@@ -1305,7 +1320,14 @@ export default function EstoquePage() {
             {/* Cores adicionais */}
             {variacoes.map((v, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} style={{ width: "auto" }} />
+                {CORES_POR_CATEGORIA[formBaseCat] ? (
+                  <select value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
+                    {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
+                    {CORES_POR_CATEGORIA[formBaseCat].map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} style={{ width: "auto" }} />
+                )}
                 <input type="number" value={v.qnt} onChange={(e) => { const nv = [...variacoes]; nv[i].qnt = e.target.value; setVariacoes(nv); }} className={qntCls} placeholder="Qtd" />
                 <span className={`text-xs ${textSecondary} w-6`}>un.</span>
                 <button onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700 text-sm font-bold w-5">✕</button>

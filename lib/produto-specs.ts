@@ -16,6 +16,66 @@ export const CAT_LABELS: Record<string, string> = {
 
 export const STRUCTURED_CATS = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"];
 
+// ── Cores por categoria ──
+
+export const IPHONE_CORES = [
+  "Alpine Green", "Black", "Blue", "Black Titanium", "Blue Titanium",
+  "Cloud White", "Cosmic Orange", "Deep Blue", "Deep Purple", "Desert Titanium",
+  "Gold", "Graphite", "Green", "Lavender", "Light Gold",
+  "Midnight", "Midnight Green", "Mist Blue", "Natural Titanium", "Pacific Blue",
+  "Pink", "Purple", "Red", "Sage", "Sierra Blue",
+  "Silver", "Sky Blue", "Space Black", "Space Gray", "Starlight",
+  "Teal", "Ultramarine", "White", "White Titanium", "Yellow",
+];
+
+export const MACBOOK_CORES = ["Midnight", "Silver", "Starlight", "Sky Blue", "Space Black"];
+
+export const IPAD_CORES = ["Blue", "Pink", "Purple", "Silver", "Space Black", "Space Gray", "Starlight", "Yellow"];
+
+export const WATCH_CORES = [
+  "Black Titanium", "Gold", "Graphite", "Jet Black", "Midnight",
+  "Natural", "Natural Titanium", "Pink", "Red", "Rose Gold",
+  "Silver", "Slate", "Space Gray", "Starlight",
+];
+
+export const AIRPODS_CORES = ["Midnight", "Starlight"];
+
+/** Mapa de cores por categoria para lookup rápido */
+export const CORES_POR_CATEGORIA: Record<string, string[]> = {
+  IPHONES: IPHONE_CORES,
+  MACBOOK: MACBOOK_CORES,
+  IPADS: IPAD_CORES,
+  APPLE_WATCH: WATCH_CORES,
+  AIRPODS: AIRPODS_CORES,
+};
+
+/** Categorias onde a cor é obrigatória */
+export const COR_OBRIGATORIA = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"];
+
+// ── Origem iPhone ──
+
+export const IPHONE_ORIGENS = [
+  "AA (EAU) - E-sim",
+  "BE (BR) - Chip Fisico + E-sim",
+  "BR - Chip Fisico + E-sim",
+  "BZ (BR) - Chip Fisico + E-sim",
+  "CH - Chip Fisico",
+  "E (MEX) - Chip Fisico + E-sim",
+  "HN (IN) - Chip Fisico + E-sim",
+  "J (JPA) - E-sim",
+  "LL (EUA) - E-sim",
+  "LZ (CL/PY/UY) - Chip Fisico + E-sim",
+  "N (UK) - E-sim",
+  "QL (IT, PT, ES) - Chip Fisico + E-sim",
+  "VC (CAN) - E-sim",
+  "ZD (EUROPE) - Chip Fisico + E-Sim",
+  "ZP (HK/MO) - E-sim",
+];
+
+// ── Pulseira Apple Watch ──
+
+export const WATCH_PULSEIRAS = ["S/M", "M/L", "One Size"];
+
 // ── Opções por categoria ──
 
 export const IPHONE_MODELOS = ["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "17", "17 PRO", "17 PRO MAX"];
@@ -69,20 +129,20 @@ export const AIRPODS_MODELOS = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "
 // ── Interface dos specs ──
 
 export interface ProdutoSpec {
-  ip_modelo: string; ip_linha: string; ip_storage: string;
+  ip_modelo: string; ip_linha: string; ip_storage: string; ip_origem: string;
   mb_modelo: string; mb_tela: string; mb_chip: string; mb_nucleos: string; mb_ram: string; mb_storage: string;
   mm_chip: string; mm_ram: string; mm_storage: string;
   ipad_modelo: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
-  aw_modelo: string; aw_tamanho: string; aw_conn: string;
+  aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string;
   air_modelo: string;
 }
 
 export const DEFAULT_SPEC: ProdutoSpec = {
-  ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
+  ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
   mb_modelo: "AIR", mb_tela: '13"', mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
   mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
   ipad_modelo: "AIR", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
-  aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS",
+  aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
   air_modelo: "AIRPODS 4",
 };
 

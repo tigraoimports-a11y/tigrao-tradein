@@ -16,6 +16,10 @@ import {
   IPAD_TELAS,
   IPAD_STORAGES,
   AIRPODS_MODELOS,
+  CORES_POR_CATEGORIA,
+  COR_OBRIGATORIA,
+  IPHONE_ORIGENS,
+  WATCH_PULSEIRAS,
   type ProdutoSpec,
   DEFAULT_SPEC,
   buildProdutoName,
@@ -132,7 +136,14 @@ export default function ProdutoSpecFields({
         </div>
         <div>
           <p className={labelCls}>Cor</p>
-          <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul..." className={inputCls} />
+          {CORES_POR_CATEGORIA[row.categoria] ? (
+            <select value={row.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls}>
+              {COR_OBRIGATORIA.includes(row.categoria) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
+              {CORES_POR_CATEGORIA[row.categoria].map((c) => <option key={c}>{c}</option>)}
+            </select>
+          ) : row.categoria === "MAC_MINI" ? null : (
+            <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul..." className={inputCls} />
+          )}
         </div>
         <div>
           <p className={labelCls}>Fornecedor</p>
@@ -147,7 +158,7 @@ export default function ProdutoSpecFields({
 
       {/* Spec fields por categoria */}
       {row.categoria === "IPHONES" && (
-        <div className={`grid grid-cols-2 gap-3 p-3 ${bgSection} rounded-lg`}>
+        <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
           <div>
             <p className={labelCls}>Modelo</p>
             <select value={row.spec.ip_modelo} onChange={(e) => setSpec("ip_modelo", e.target.value)} className={inputCls}>
@@ -158,6 +169,13 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.ip_storage} onChange={(e) => setSpec("ip_storage", e.target.value)} className={inputCls}>
               {IPHONE_STORAGES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Origem</p>
+            <select value={row.spec.ip_origem} onChange={(e) => setSpec("ip_origem", e.target.value)} className={inputCls}>
+              <option value="">— Opcional —</option>
+              {IPHONE_ORIGENS.map((o) => <option key={o}>{o}</option>)}
             </select>
           </div>
         </div>
@@ -265,7 +283,7 @@ export default function ProdutoSpecFields({
       )}
 
       {row.categoria === "APPLE_WATCH" && (
-        <div className={`grid grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 p-3 ${bgSection} rounded-lg`}>
           <div>
             <p className={labelCls}>Modelo</p>
             <select value={row.spec.aw_modelo} onChange={(e) => setSpec("aw_modelo", e.target.value)} className={inputCls}>
@@ -283,6 +301,13 @@ export default function ProdutoSpecFields({
             <select value={row.spec.aw_conn} onChange={(e) => setSpec("aw_conn", e.target.value)} className={inputCls}>
               <option value="GPS">GPS</option>
               <option value="GPS+CELL">GPS + Cellular</option>
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Pulseira</p>
+            <select value={row.spec.aw_pulseira} onChange={(e) => setSpec("aw_pulseira", e.target.value)} className={inputCls}>
+              <option value="" disabled>— Selecionar —</option>
+              {WATCH_PULSEIRAS.map((p) => <option key={p}>{p}</option>)}
             </select>
           </div>
         </div>
