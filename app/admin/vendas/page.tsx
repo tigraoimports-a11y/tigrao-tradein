@@ -3048,7 +3048,9 @@ export default function VendasPage() {
                                         >
                                           ✏️ Editar
                                         </button>
-                                        {/* Nota Fiscal — botão inline */}
+                                      </div>
+                                      {/* Nota Fiscal — botão na fileira de status */}
+                                      <div className="flex gap-2 flex-wrap">
                                         <label
                                           onClick={(e) => e.stopPropagation()}
                                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer inline-flex items-center gap-1 ${v.nota_fiscal_url ? "text-green-600 border-green-200 hover:bg-green-50" : "text-purple-600 border-purple-200 hover:bg-purple-50"}`}
@@ -3108,6 +3110,8 @@ export default function VendasPage() {
                                             className="px-2 py-1.5 rounded-lg text-[10px] text-red-400 hover:text-red-600"
                                           >✕</button>
                                         )}
+                                      </div>
+                                      <div className="flex gap-2 flex-wrap">
                                         {v.status_pagamento === "AGUARDANDO" && (
                                           <button
                                             onClick={async (e) => {
