@@ -68,11 +68,13 @@ CREATE TABLE IF NOT EXISTS gastos (
   valor NUMERIC NOT NULL,
   banco TEXT CHECK (banco IN ('ITAU','INFINITE','MERCADO_PAGO','ESPECIE') OR banco IS NULL),
   observacao TEXT,
-  is_dep_esp BOOLEAN DEFAULT false
+  is_dep_esp BOOLEAN DEFAULT false,
+  grupo_id UUID
 );
 
 CREATE INDEX idx_gastos_data ON gastos(data);
 CREATE INDEX idx_gastos_tipo ON gastos(tipo);
+CREATE INDEX idx_gastos_grupo ON gastos(grupo_id);
 
 -- 4. SALDOS BANCÁRIOS
 CREATE TABLE IF NOT EXISTS saldos_bancarios (

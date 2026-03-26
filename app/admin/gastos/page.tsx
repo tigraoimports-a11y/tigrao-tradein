@@ -1,12 +1,84 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
-import type { Gasto } from "@/lib/admin-types";
+import type { Gasto, Banco } from "@/lib/admin-types";
 
+const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+
+type BancoValores = Record<Banco, string>;
+const emptyBancoValores = (): BancoValores => ({ ITAU: "", INFINITE: "", MERCADO_PAGO: "", ESPECIE: "" });
+
+/** Agrupa gastos por grupo_id. Gastos sem grupo ficam sozinhos. */
+interface GastoGrupo {
+  key: string; // grupo_id ou id do gasto avulso
+  grupo_id: string | null;
+  items: Gasto[];
+  totalValor: number;
+  data: string;
+  categoria: string;
+  descricao: string | null;
+  observacao: string | null;
+  hora: string | null;
+  is_dep_esp: boolean;
+  bancos: string;
+}
+
+function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
+  const grupoMap = new Map<string, Gasto[]>();
+  const avulsos: Gasto[] = [];
+
+  for (const g of gastos) {
+    if (g.grupo_id) {
+      const arr = grupoMap.get(g.grupo_id) || [];
+      arr.push(g);
+      grupoMap.set(g.grupo_id, arr);
+    } else {
+      avulsos.push(g);
+    }
+  }
+
+  const result: GastoGrupo[] = [];
+
+  for (const [grupoId, items] of grupoMap) {
+    const first = items[0];
+    result.push({
+      key: grupoId,
+      grupo_id: grupoId,
+      items,
+      totalValor: items.reduce((s, i) => s + Number(i.valor), 0),
+      data: first.data,
+      categoria: first.categoria,
+      descricao: first.descricao,
+      observacao: first.observacao,
+      hora: first.hora,
+      is_dep_esp: first.is_dep_esp,
+      bancos: items.map((i) => `${i.banco}: ${fmt(i.valor)}`).join(" | "),
+    });
+  }
+
+  for (const g of avulsos) {
+    result.push({
+      key: g.id,
+      grupo_id: null,
+      items: [g],
+      totalValor: Number(g.valor),
+      data: g.data,
+      categoria: g.categoria,
+      descricao: g.descricao,
+      observacao: g.observacao,
+      hora: g.hora,
+      is_dep_esp: g.is_dep_esp,
+      bancos: g.banco || "—",
+    });
+  }
+
+  result.sort((a, b) => b.data.localeCompare(a.data));
+  return result;
+}
 
 export default function GastosPage() {
   const { password, user, darkMode: dm } = useAdmin();
@@ -16,21 +88,33 @@ export default function GastosPage() {
   const [tab, setTab] = useTabParam<"novo" | "historico">("novo", GASTOS_TABS);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Record<string, string | boolean>>({});
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [viewingKey, setViewingKey] = useState<string | null>(null);
 
+  // Form state
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
     horario: new Date().toTimeString().slice(0, 5),
     categoria: "OUTROS",
     descricao: "",
-    valor: "",
-    banco: "ITAU",
     observacao: "",
     is_dep_esp: false,
   });
+  const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    data: "",
+    hora: "",
+    categoria: "",
+    descricao: "",
+    observacao: "",
+    is_dep_esp: false,
+  });
+  const [editBancoValores, setEditBancoValores] = useState<BancoValores>(emptyBancoValores());
+
+  const grupos = useMemo(() => agruparGastos(gastos), [gastos]);
 
   const fetchGastos = useCallback(async () => {
     setLoading(true);
@@ -47,25 +131,47 @@ export default function GastosPage() {
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
+  const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
+
+  const totalForm = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
 
   const handleSubmit = async () => {
-    if (!form.valor || !form.categoria) {
-      setMsg("Preencha valor e categoria");
+    const filled = BANCOS.filter((b) => parseFloat(bancoValores[b]) > 0);
+    if (filled.length === 0) {
+      setMsg("Preencha o valor em pelo menos um banco");
+      return;
+    }
+    if (!form.categoria) {
+      setMsg("Preencha a categoria");
       return;
     }
     setSaving(true);
     setMsg("");
-    const payload = {
+
+    const base = {
       data: form.data,
       hora: form.horario || null,
       tipo: "SAIDA",
       categoria: form.categoria,
       descricao: form.descricao || null,
-      valor: parseFloat(form.valor),
-      banco: form.banco || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
     };
+
+    let payload;
+    if (filled.length === 1) {
+      // Gasto simples — sem grupo
+      payload = { ...base, valor: parseFloat(bancoValores[filled[0]]), banco: filled[0] };
+    } else {
+      // Gasto dividido — com grupo_id
+      const grupoId = crypto.randomUUID();
+      payload = filled.map((b) => ({
+        ...base,
+        valor: parseFloat(bancoValores[b]),
+        banco: b,
+        grupo_id: grupoId,
+      }));
+    }
 
     const res = await fetch("/api/gastos", {
       method: "POST",
@@ -75,7 +181,8 @@ export default function GastosPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Gasto registrado!");
-      setForm((f) => ({ ...f, descricao: "", valor: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
+      setBancoValores(emptyBancoValores());
       fetchGastos();
     } else {
       setMsg("Erro: " + json.error);
@@ -83,36 +190,112 @@ export default function GastosPage() {
     setSaving(false);
   };
 
-  const startEdit = (g: Gasto) => {
-    setViewingId(null);
-    setEditingId(g.id);
+  const startEdit = (g: GastoGrupo) => {
+    setViewingKey(null);
+    setEditingKey(g.key);
     setEditForm({
       data: g.data,
       hora: g.hora || "",
       descricao: g.descricao || "",
-      valor: String(g.valor),
       categoria: g.categoria,
-      banco: g.banco || "ITAU",
       observacao: g.observacao || "",
       is_dep_esp: g.is_dep_esp,
     });
+    const bv = emptyBancoValores();
+    for (const item of g.items) {
+      if (item.banco) bv[item.banco as Banco] = String(item.valor);
+    }
+    setEditBancoValores(bv);
   };
 
+  const editSet = (field: string, value: string | boolean) => setEditForm((f) => ({ ...f, [field]: value }));
+  const editSetBanco = (banco: Banco, value: string) => setEditBancoValores((bv) => ({ ...bv, [banco]: value }));
+
   const handleEditSave = async () => {
-    if (!editingId) return;
+    if (!editingKey) return;
     setEditSaving(true);
-    const payload = {
-      id: editingId,
+
+    const grupo = grupos.find((g) => g.key === editingKey);
+    if (!grupo) { setEditSaving(false); return; }
+
+    const filled = BANCOS.filter((b) => parseFloat(editBancoValores[b]) > 0);
+    if (filled.length === 0) { alert("Preencha o valor em pelo menos um banco"); setEditSaving(false); return; }
+
+    const base = {
       data: editForm.data,
       hora: editForm.hora || null,
       tipo: "SAIDA",
       categoria: editForm.categoria,
       descricao: editForm.descricao || null,
-      valor: parseFloat(editForm.valor as string),
-      banco: editForm.banco || null,
       observacao: editForm.observacao || null,
       is_dep_esp: editForm.is_dep_esp,
     };
+
+    let payload;
+
+    if (grupo.grupo_id) {
+      // Era grupo — editar como grupo (deletar antigos + inserir novos)
+      if (filled.length === 1) {
+        // Reduziu para 1 banco — sem grupo_id
+        payload = {
+          grupo_id: grupo.grupo_id,
+          items: [{ ...base, valor: parseFloat(editBancoValores[filled[0]]), banco: filled[0] }],
+        };
+      } else {
+        const novoGrupoId = crypto.randomUUID();
+        payload = {
+          grupo_id: grupo.grupo_id,
+          items: filled.map((b) => ({
+            ...base,
+            valor: parseFloat(editBancoValores[b]),
+            banco: b,
+            grupo_id: novoGrupoId,
+          })),
+        };
+      }
+    } else {
+      // Era avulso
+      if (filled.length === 1) {
+        // Continua avulso — PATCH simples
+        payload = {
+          id: grupo.items[0].id,
+          ...base,
+          valor: parseFloat(editBancoValores[filled[0]]),
+          banco: filled[0],
+        };
+      } else {
+        // Virou grupo — deletar o avulso e criar novos com grupo_id
+        // Primeiro deletar o antigo
+        await fetch("/api/gastos", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          body: JSON.stringify({ id: grupo.items[0].id }),
+        });
+        // Depois criar novos
+        const novoGrupoId = crypto.randomUUID();
+        const items = filled.map((b) => ({
+          ...base,
+          valor: parseFloat(editBancoValores[b]),
+          banco: b,
+          grupo_id: novoGrupoId,
+        }));
+        const res = await fetch("/api/gastos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          body: JSON.stringify(items),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          setEditingKey(null);
+          fetchGastos();
+        } else {
+          alert("Erro: " + json.error);
+        }
+        setEditSaving(false);
+        return;
+      }
+    }
+
     const res = await fetch("/api/gastos", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
@@ -120,7 +303,7 @@ export default function GastosPage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setEditingId(null);
+      setEditingKey(null);
       fetchGastos();
     } else {
       alert("Erro: " + json.error);
@@ -128,13 +311,39 @@ export default function GastosPage() {
     setEditSaving(false);
   };
 
-  const editSet = (field: string, value: string | boolean) => setEditForm((f) => ({ ...f, [field]: value }));
+  const handleDelete = async (g: GastoGrupo) => {
+    if (!confirm("Excluir este gasto?")) return;
+    const body = g.grupo_id ? { grupo_id: g.grupo_id } : { id: g.items[0].id };
+    await fetch("/api/gastos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      body: JSON.stringify(body),
+    });
+    fetchGastos();
+  };
 
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   // Totais
   const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
+
+  const BancoInputGrid = ({ valores, onChange, cls }: { valores: BancoValores; onChange: (b: Banco, v: string) => void; cls: string }) => (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {BANCOS.map((b) => (
+        <div key={b}>
+          <p className={labelCls}>{b.replace("_", " ")}</p>
+          <input
+            type="number"
+            placeholder="0"
+            value={valores[b]}
+            onChange={(e) => onChange(b, e.target.value)}
+            className={cls}
+          />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -152,21 +361,31 @@ export default function GastosPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Horario</p><input type="time" value={form.horario} onChange={(e) => set("horario", e.target.value)} className={inputCls} /></div>
             <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => set("categoria", e.target.value)} className={inputCls}>
               {CATEGORIAS_GASTO.map((c) => <option key={c}>{c}</option>)}
             </select></div>
-            <div><p className={labelCls}>Valor (R$)</p><input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} className={inputCls} /></div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
             <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Banco</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={inputCls}>
-              <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option><option>ESPECIE</option>
-            </select></div>
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
+          </div>
+
+          {/* Distribuição por banco */}
+          <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
+              {totalForm > 0 && (
+                <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalForm)}</span>
+              )}
+            </div>
+            <BancoInputGrid valores={bancoValores} onChange={setBanco} cls={inputCls} />
+            <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+              Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
+            </p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-[#86868B]">
@@ -191,7 +410,7 @@ export default function GastosPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Categoria", "Descricao", "Valor", "Banco", ""].map((h) => (
+                    {["Data", "Categoria", "Descricao", "Valor", "Banco(s)", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -199,22 +418,31 @@ export default function GastosPage() {
                 <tbody>
                   {loading ? (
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Carregando...</td></tr>
-                  ) : gastos.length === 0 ? (
+                  ) : grupos.length === 0 ? (
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
-                  ) : gastos.map((g) => (
-                    <React.Fragment key={g.id}>
+                  ) : grupos.map((g) => (
+                    <React.Fragment key={g.key}>
                       <tr
-                        className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${viewingId === g.id ? (dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]") : ""}`}
+                        className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${viewingKey === g.key ? (dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]") : ""}`}
                         onClick={() => {
-                          if (editingId === g.id) return;
-                          setViewingId(viewingId === g.id ? null : g.id);
+                          if (editingKey === g.key) return;
+                          setViewingKey(viewingKey === g.key ? null : g.key);
                         }}
                       >
                         <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
                         <td className="px-4 py-3 text-xs">{g.categoria}</td>
                         <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
-                        <td className="px-4 py-3 font-bold text-red-500">{fmt(g.valor)}</td>
-                        <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
+                        <td className="px-4 py-3 font-bold text-red-500">{fmt(g.totalValor)}</td>
+                        <td className="px-4 py-3 text-xs">
+                          {g.items.length > 1 ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-2 h-2 rounded-full bg-[#E8740E]" />
+                              {g.items.length} bancos
+                            </span>
+                          ) : (
+                            g.items[0]?.banco || "—"
+                          )}
+                        </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <button
@@ -226,11 +454,7 @@ export default function GastosPage() {
                               Editar
                             </button>
                             <button
-                              onClick={async () => {
-                                if (!confirm("Excluir este gasto?")) return;
-                                await fetch("/api/gastos", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" }, body: JSON.stringify({ id: g.id }) });
-                                setGastos((prev) => prev.filter((r) => r.id !== g.id));
-                              }}
+                              onClick={() => handleDelete(g)}
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${dm ? "bg-[#3A3A3C] text-red-400 hover:bg-red-500 hover:text-white" : "bg-red-50 text-red-400 hover:bg-red-500 hover:text-white"} hover:shadow-sm`}
                               title="Excluir"
                             >
@@ -240,7 +464,7 @@ export default function GastosPage() {
                           </div>
                         </td>
                       </tr>
-                      {viewingId === g.id && editingId !== g.id && (
+                      {viewingKey === g.key && editingKey !== g.key && (
                         <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
                           <td colSpan={6} className="px-4 py-4">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
@@ -259,12 +483,24 @@ export default function GastosPage() {
                                 <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.categoria}</p>
                               </div>
                               <div>
-                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor</p>
-                                <p className="font-bold text-red-500">{fmt(g.valor)}</p>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor Total</p>
+                                <p className="font-bold text-red-500">{fmt(g.totalValor)}</p>
                               </div>
-                              <div>
-                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco</p>
-                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.banco || "—"}</p>
+                              <div className={g.items.length > 1 ? "col-span-2" : ""}>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                                  {g.items.length > 1 ? "Distribuição por banco" : "Banco"}
+                                </p>
+                                {g.items.length > 1 ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {g.items.map((item) => (
+                                      <span key={item.id} className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E8E8ED] text-[#1D1D1F]"}`}>
+                                        {item.banco}: {fmt(item.valor)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.items[0]?.banco || "—"}</p>
+                                )}
                               </div>
                               <div>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Descrição</p>
@@ -277,7 +513,7 @@ export default function GastosPage() {
                               {g.is_dep_esp && (
                                 <div className="col-span-2 md:col-span-3">
                                   <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
-                                    💵 Depósito de espécie
+                                    Depósito de espécie
                                   </span>
                                 </div>
                               )}
@@ -285,32 +521,33 @@ export default function GastosPage() {
                           </td>
                         </tr>
                       )}
-                      {editingId === g.id && (
+                      {editingKey === g.key && (
                         <tr className="border-b border-[#E8740E] bg-[#FFF8F0]">
                           <td colSpan={6} className="px-4 py-4">
                             <div className="space-y-3">
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div><p className={labelCls}>Data</p><input type="date" value={editForm.data as string} onChange={(e) => editSet("data", e.target.value)} className={inputCls} /></div>
-                                <div><p className={labelCls}>Horario</p><input type="time" value={editForm.hora as string} onChange={(e) => editSet("hora", e.target.value)} className={inputCls} /></div>
-                                <div><p className={labelCls}>Categoria</p><select value={editForm.categoria as string} onChange={(e) => editSet("categoria", e.target.value)} className={inputCls}>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div><p className={labelCls}>Data</p><input type="date" value={editForm.data} onChange={(e) => editSet("data", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Horario</p><input type="time" value={editForm.hora} onChange={(e) => editSet("hora", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Categoria</p><select value={editForm.categoria} onChange={(e) => editSet("categoria", e.target.value)} className={inputCls}>
                                   {CATEGORIAS_GASTO.map((c) => <option key={c}>{c}</option>)}
                                 </select></div>
-                                <div><p className={labelCls}>Valor (R$)</p><input type="number" value={editForm.valor as string} onChange={(e) => editSet("valor", e.target.value)} className={inputCls} /></div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                <div><p className={labelCls}>Descricao</p><input value={editForm.descricao as string} onChange={(e) => editSet("descricao", e.target.value)} className={inputCls} /></div>
-                                <div><p className={labelCls}>Banco</p><select value={editForm.banco as string} onChange={(e) => editSet("banco", e.target.value)} className={inputCls}>
-                                  <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option><option>ESPECIE</option>
-                                </select></div>
-                                <div><p className={labelCls}>Observacao</p><input value={editForm.observacao as string} onChange={(e) => editSet("observacao", e.target.value)} className={inputCls} /></div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div><p className={labelCls}>Descricao</p><input value={editForm.descricao} onChange={(e) => editSet("descricao", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Observacao</p><input value={editForm.observacao} onChange={(e) => editSet("observacao", e.target.value)} className={inputCls} /></div>
+                              </div>
+                              {/* Distribuição por banco na edição */}
+                              <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
+                                <BancoInputGrid valores={editBancoValores} onChange={editSetBanco} cls={inputCls} />
                               </div>
                               <div className="flex items-center gap-3">
                                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
-                                  <input type="checkbox" checked={editForm.is_dep_esp as boolean} onChange={(e) => editSet("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
+                                  <input type="checkbox" checked={editForm.is_dep_esp} onChange={(e) => editSet("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
                                   Deposito de especie
                                 </label>
                                 <div className="flex-1" />
-                                <button onClick={() => setEditingId(null)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
+                                <button onClick={() => setEditingKey(null)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
                                 <button onClick={handleEditSave} disabled={editSaving} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">{editSaving ? "Salvando..." : "Salvar"}</button>
                               </div>
                             </div>

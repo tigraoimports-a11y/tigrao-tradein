@@ -45,14 +45,21 @@ export async function POST(req: NextRequest) {
   const usuario = getUsuario(req);
 
   const body = await req.json();
-  const { data, error } = await supabase.from("gastos").insert(body).select().single();
+
+  // Suporta array (gasto dividido) ou objeto único (retrocompatível)
+  const items = Array.isArray(body) ? body : [body];
+
+  const { data, error } = await supabase.from("gastos").insert(items).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const valor = body.valor ? `R$ ${Number(body.valor).toLocaleString("pt-BR")}` : "";
-  await logActivity(usuario, "Registrou gasto", `${body.descricao || "?"} ${valor}`, "gastos", data?.id);
+  const totalValor = items.reduce((s: number, i: { valor?: number }) => s + Number(i.valor || 0), 0);
+  const desc = items[0]?.descricao || "?";
+  const bancos = items.map((i: { banco?: string }) => i.banco).filter(Boolean).join(", ");
+  await logActivity(usuario, "Registrou gasto", `${desc} R$ ${totalValor.toLocaleString("pt-BR")} (${bancos})`, "gastos", data?.[0]?.id);
 
   // Recalcular saldos do dia automaticamente
-  if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
+  const dataISO = items[0]?.data;
+  if (dataISO) recalcularSaldoDia(supabase, dataISO).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
 }
@@ -65,6 +72,25 @@ export async function PATCH(req: NextRequest) {
   const usuario = getUsuario(req);
 
   const body = await req.json();
+
+  // Se veio grupo_id, é edição de gasto dividido: apagar os antigos e inserir novos
+  if (body.grupo_id && Array.isArray(body.items)) {
+    const { error: delErr } = await supabase.from("gastos").delete().eq("grupo_id", body.grupo_id);
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+    const { data, error: insErr } = await supabase.from("gastos").insert(body.items).select();
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+    const totalValor = body.items.reduce((s: number, i: { valor?: number }) => s + Number(i.valor || 0), 0);
+    await logActivity(usuario, "Editou gasto", `${body.items[0]?.descricao || "?"} R$ ${totalValor.toLocaleString("pt-BR")}`, "gastos", body.grupo_id);
+
+    const dataISO = body.items[0]?.data;
+    if (dataISO) recalcularSaldoDia(supabase, dataISO).catch(() => {});
+
+    return NextResponse.json({ ok: true, data });
+  }
+
+  // Edição simples (gasto único, sem grupo)
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -83,7 +109,20 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await req.json();
+  const { id, grupo_id } = await req.json();
+
+  // Se tem grupo_id, excluir todos do grupo
+  if (grupo_id) {
+    const { data: grupoGastos } = await supabase.from("gastos").select("data").eq("grupo_id", grupo_id).limit(1).single();
+    const gastoData = grupoGastos?.data;
+
+    const { error } = await supabase.from("gastos").delete().eq("grupo_id", grupo_id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (gastoData) recalcularSaldoDia(supabase, gastoData).catch(() => {});
+    return NextResponse.json({ ok: true });
+  }
+
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // Buscar data antes de excluir para recalcular saldo

@@ -89,6 +89,7 @@ export interface Gasto {
   banco: Banco | null;
   observacao: string | null;
   is_dep_esp: boolean;
+  grupo_id: string | null;
 }
 
 export interface SaldoBancario {
