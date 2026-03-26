@@ -1204,6 +1204,12 @@ export default function EstoquePage() {
                       setPedidoProdutos(nv);
                     }}
                     onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
+                    onDuplicate={() => {
+                      const clone = { ...row, spec: { ...row.spec }, imei: "", serial_no: "" };
+                      const nv = [...pedidoProdutos];
+                      nv.splice(i + 1, 0, clone);
+                      setPedidoProdutos(nv);
+                    }}
                     fornecedores={fornecedores}
                     inputCls={inputCls}
                     labelCls={labelCls}

@@ -511,6 +511,12 @@ export default function GastosPage() {
                     setPedidoProdutos(next);
                   }}
                   onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
+                  onDuplicate={() => {
+                    const clone = { ...row, spec: { ...row.spec }, imei: "", serial_no: "" };
+                    const next = [...pedidoProdutos];
+                    next.splice(i + 1, 0, clone);
+                    setPedidoProdutos(next);
+                  }}
                   fornecedores={fornecedores}
                   inputCls={inputCls}
                   labelCls={labelCls}
