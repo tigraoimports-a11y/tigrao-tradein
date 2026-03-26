@@ -7,7 +7,9 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, type ProdutoSpec } from "@/lib/produto-specs";
+import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import type { Banco } from "@/lib/admin-types";
 
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
@@ -443,6 +445,15 @@ export default function EstoquePage() {
   });
   const setS = (field: string, value: string) => setSpec((s) => ({ ...s, [field]: value }));
 
+  // Estado para modo A_CAMINHO (pedido fornecedor unificado)
+  const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
+  type BancoValores = Record<Banco, string>;
+  const emptyBancoValores = (): BancoValores => ({ ITAU: "", INFINITE: "", MERCADO_PAGO: "", ESPECIE: "" });
+  const [pedidoProdutos, setPedidoProdutos] = useState<ProdutoRowState[]>([createEmptyProdutoRow()]);
+  const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
+  const [descricaoGasto, setDescricaoGasto] = useState("");
+  const totalPagamento = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
+
   // Gerar nome do produto automaticamente a partir dos campos estruturados
   const buildProdutoName = (cat: string): string => {
     const effectiveCat = cat === "SEMINOVOS" ? spec.semi_subtipo : cat;
@@ -578,6 +589,71 @@ export default function EstoquePage() {
     await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
     setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
     setMsg(`${item.produto} movido para estoque${novoTipo === "SEMINOVO" ? " (seminovo)" : ""}!`);
+  };
+
+  const handleSubmitACaminho = async () => {
+    // Validar produtos
+    if (pedidoProdutos.length === 0) { setMsg("Adicione pelo menos 1 produto"); return; }
+    const filledBancos = BANCOS.filter((b) => parseFloat(bancoValores[b]) > 0);
+    if (filledBancos.length === 0) { setMsg("Preencha o valor em pelo menos um banco"); return; }
+
+    const dataHoje = new Date().toISOString().split("T")[0];
+    const hora = new Date().toTimeString().slice(0, 5);
+
+    // Montar gastos (um por banco)
+    const base = {
+      data: dataHoje,
+      hora,
+      tipo: "SAIDA",
+      categoria: "FORNECEDOR",
+      descricao: descricaoGasto || "Compra fornecedor",
+      observacao: null,
+      is_dep_esp: false,
+    };
+
+    let gastos;
+    if (filledBancos.length === 1) {
+      gastos = { ...base, valor: parseFloat(bancoValores[filledBancos[0]]), banco: filledBancos[0] };
+    } else {
+      const grupoId = crypto.randomUUID();
+      gastos = filledBancos.map((b) => ({
+        ...base,
+        valor: parseFloat(bancoValores[b]),
+        banco: b,
+        grupo_id: grupoId,
+      }));
+    }
+
+    // Montar produtos
+    const produtos = pedidoProdutos.map((p) => {
+      const nome = p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec) : "");
+      return {
+        produto: nome,
+        categoria: p.categoria,
+        qnt: parseInt(p.qnt) || 1,
+        custo_unitario: parseFloat(p.custo_unitario) || 0,
+        cor: p.cor || null,
+        fornecedor: p.fornecedor || null,
+        imei: p.imei || null,
+        serial_no: p.serial_no || null,
+      };
+    });
+
+    const res = await fetch("/api/gastos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+      body: JSON.stringify({ gastos, produtos }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      setMsg(`Pedido registrado! ${produtos.length} produto(s) adicionados como A Caminho.`);
+      setPedidoProdutos([createEmptyProdutoRow()]);
+      setBancoValores(emptyBancoValores());
+      setDescricaoGasto("");
+      fetchEstoque();
+    } else {
+      setMsg("Erro: " + (json.error || json.estoqueError || "Falha"));
+    }
   };
 
   const handleSubmit = async () => {
@@ -1106,6 +1182,77 @@ export default function EstoquePage() {
             )}
           </div>
 
+          {/* === MODO A CAMINHO (Pedido Fornecedor Unificado) === */}
+          {form.tipo === "A_CAMINHO" && form.categoria !== "SEMINOVOS" ? (
+            <div className="space-y-6">
+              {/* Descrição do gasto */}
+              <div>
+                <p className={labelCls}>Descrição do Pedido</p>
+                <input value={descricaoGasto} onChange={(e) => setDescricaoGasto(e.target.value)} placeholder="Ex: Compra fornecedor Fulano - iPhones e MacBooks" className={inputCls} />
+              </div>
+
+              {/* Produtos */}
+              <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"} space-y-4`}>
+                <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Produtos do Pedido</p>
+                {pedidoProdutos.map((row, i) => (
+                  <ProdutoSpecFields
+                    key={i}
+                    row={row}
+                    onChange={(updated) => {
+                      const nv = [...pedidoProdutos];
+                      nv[i] = updated;
+                      setPedidoProdutos(nv);
+                    }}
+                    onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
+                    fornecedores={fornecedores}
+                    inputCls={inputCls}
+                    labelCls={labelCls}
+                    darkMode={dm}
+                    index={i}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPedidoProdutos([...pedidoProdutos, createEmptyProdutoRow()])}
+                  className={`w-full py-3 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#636366] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-sm font-semibold transition-colors`}
+                >
+                  + Adicionar Produto
+                </button>
+              </div>
+
+              {/* Pagamento */}
+              <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
+                  {totalPagamento > 0 && (
+                    <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalPagamento)}</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {BANCOS.map((b) => (
+                    <div key={b}>
+                      <p className={labelCls}>{b.replace("_", " ")}</p>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={bancoValores[b]}
+                        onChange={(e) => setBancoValores((bv) => ({ ...bv, [b]: e.target.value }))}
+                        className={inputCls}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
+                </p>
+              </div>
+
+              <button onClick={handleSubmitACaminho} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
+                Registrar Pedido
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Campos específicos por categoria */}
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
@@ -1350,6 +1497,8 @@ export default function EstoquePage() {
           <button onClick={handleSubmit} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
             {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar ao Estoque"}
           </button>
+          </>
+          )}
         </div>
       ) : (
         /* LISTA */

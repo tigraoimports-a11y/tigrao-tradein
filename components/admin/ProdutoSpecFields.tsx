@@ -67,6 +67,7 @@ interface ProdutoSpecFieldsProps {
   row: ProdutoRowState;
   onChange: (updated: ProdutoRowState) => void;
   onRemove: () => void;
+  onDuplicate?: () => void;
   fornecedores: { id: string; nome: string }[];
   inputCls: string;
   labelCls: string;
@@ -78,6 +79,7 @@ export default function ProdutoSpecFields({
   row,
   onChange,
   onRemove,
+  onDuplicate,
   fornecedores,
   inputCls,
   labelCls,
@@ -115,13 +117,24 @@ export default function ProdutoSpecFields({
         <span className={`text-xs font-bold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
           Produto {index + 1}
         </span>
-        <button
-          onClick={onRemove}
-          className="text-red-400 hover:text-red-600 text-sm font-bold transition-colors"
-          title="Remover produto"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          {onDuplicate && (
+            <button
+              onClick={onDuplicate}
+              className={`text-xs font-semibold px-2 py-1 rounded-lg transition-colors ${dm ? "text-[#E8740E] hover:bg-[#E8740E]/20" : "text-[#E8740E] hover:bg-[#E8740E]/10"}`}
+              title="Duplicar produto (limpa IMEI e Serial)"
+            >
+              Duplicar
+            </button>
+          )}
+          <button
+            onClick={onRemove}
+            className="text-red-400 hover:text-red-600 text-sm font-bold transition-colors"
+            title="Remover produto"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Categoria + Cor */}
