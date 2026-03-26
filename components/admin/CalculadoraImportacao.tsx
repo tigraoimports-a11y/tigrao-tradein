@@ -7,53 +7,22 @@ const formatBRL = (v: number) =>
 const formatUSD = (v: number) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
-// Catálogo de produtos com peso pré-cadastrado (kg)
+// Catálogo de produtos com peso pré-cadastrado (kg) — peso com caixa completa
 const PRODUTOS_PESO: { cat: string; nome: string; peso: number }[] = [
-  // iPhones
-  { cat: "iPhone", nome: "iPhone 16", peso: 0.24 },
-  { cat: "iPhone", nome: "iPhone 16 Plus", peso: 0.27 },
-  { cat: "iPhone", nome: "iPhone 16 Pro", peso: 0.26 },
-  { cat: "iPhone", nome: "iPhone 16 Pro Max", peso: 0.29 },
-  { cat: "iPhone", nome: "iPhone 17 Air", peso: 0.22 },
-  { cat: "iPhone", nome: "iPhone 17", peso: 0.24 },
-  { cat: "iPhone", nome: "iPhone 17 Pro", peso: 0.26 },
-  { cat: "iPhone", nome: "iPhone 17 Pro Max", peso: 0.29 },
-  // iPads
-  { cat: "iPad", nome: "iPad A16 10.9\"", peso: 0.48 },
-  { cat: "iPad", nome: "iPad Mini 7", peso: 0.30 },
-  { cat: "iPad", nome: "iPad Air M3 11\"", peso: 0.46 },
-  { cat: "iPad", nome: "iPad Air M3 13\"", peso: 0.62 },
-  { cat: "iPad", nome: "iPad Pro M5 11\"", peso: 0.44 },
-  { cat: "iPad", nome: "iPad Pro M5 13\"", peso: 0.58 },
-  // MacBooks
-  { cat: "MacBook", nome: "MacBook Air M4 13\"", peso: 1.24 },
-  { cat: "MacBook", nome: "MacBook Air M4 15\"", peso: 1.51 },
-  { cat: "MacBook", nome: "MacBook Air M5 13\"", peso: 1.24 },
-  { cat: "MacBook", nome: "MacBook Pro M5 14\"", peso: 1.55 },
-  { cat: "MacBook", nome: "MacBook Pro M5 16\"", peso: 2.14 },
-  // Mac Mini / Studio
-  { cat: "Mac", nome: "Mac Mini M4", peso: 0.68 },
-  { cat: "Mac", nome: "Mac Mini M4 Pro", peso: 0.73 },
-  { cat: "Mac", nome: "Mac Studio M4 Max", peso: 2.70 },
-  // Apple Watch
-  { cat: "Watch", nome: "Apple Watch SE 2 (40mm)", peso: 0.15 },
-  { cat: "Watch", nome: "Apple Watch SE 2 (44mm)", peso: 0.16 },
-  { cat: "Watch", nome: "Apple Watch S11 (42mm)", peso: 0.16 },
-  { cat: "Watch", nome: "Apple Watch S11 (46mm)", peso: 0.17 },
-  { cat: "Watch", nome: "Apple Watch Ultra 3", peso: 0.19 },
-  // AirPods
-  { cat: "AirPods", nome: "AirPods 4", peso: 0.10 },
-  { cat: "AirPods", nome: "AirPods 4 ANC", peso: 0.10 },
-  { cat: "AirPods", nome: "AirPods Pro 3", peso: 0.10 },
-  { cat: "AirPods", nome: "AirPods Max", peso: 0.40 },
-  // Acessórios
-  { cat: "Acessório", nome: "Apple Pencil Pro", peso: 0.05 },
-  { cat: "Acessório", nome: "Apple Pencil USB-C", peso: 0.05 },
-  { cat: "Acessório", nome: "Magic Keyboard Air M3 11\"", peso: 0.30 },
-  { cat: "Acessório", nome: "Magic Keyboard Air M3 13\"", peso: 0.37 },
-  { cat: "Acessório", nome: "Magic Keyboard Pro M4 11\"", peso: 0.36 },
-  { cat: "Acessório", nome: "AirTag 4 Pack", peso: 0.10 },
-  { cat: "Acessório", nome: "Magic Mouse", peso: 0.10 },
+  // MacBooks (caixa completa ~3kg)
+  { cat: "MacBook", nome: "MacBook Pro M5 14\"", peso: 3.0 },
+  { cat: "MacBook", nome: "MacBook Pro M4 Pro 14\"", peso: 3.0 },
+  { cat: "MacBook", nome: "MacBook Air M4 15\"", peso: 3.0 },
+  { cat: "MacBook", nome: "MacBook Air M5 13\"", peso: 3.0 },
+  // iPads (caixa completa ~1kg)
+  { cat: "iPad", nome: "iPad A16", peso: 1.0 },
+  { cat: "iPad", nome: "iPad Air M3 11\"", peso: 1.0 },
+  { cat: "iPad", nome: "iPad Air M3 13\"", peso: 1.0 },
+  { cat: "iPad", nome: "iPad Pro M5 11\"", peso: 1.0 },
+  { cat: "iPad", nome: "iPad Pro M5 13\"", peso: 1.0 },
+  // Mac Mini
+  { cat: "Mac", nome: "Mac Mini M4", peso: 1.06 },
+  { cat: "Mac", nome: "Mac Mini M4 Pro", peso: 2.0 },
 ];
 
 interface CalcResult {
