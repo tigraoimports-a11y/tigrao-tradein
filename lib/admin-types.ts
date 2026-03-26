@@ -33,7 +33,8 @@ export interface Venda {
   entrada_pix: number;
   entrada_especie: number;
   entrada_fiado: number;
-  data_recebimento_fiado: string | null;
+  fiado_parcelas: { valor: number; data: string; recebido: boolean }[];
+  fiado_recebido?: boolean;
   banco_pix: string | null;
   banco_2nd: string | null;
   qnt_parcelas: number | null;

@@ -226,7 +226,7 @@ export default function MostruarioPage() {
         <p className="text-[#86868B] text-xs">Gerencie categorias, produtos e variacoes do mostruario independente.</p>
       </div>
 
-      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} onToggleManutencao={async () => { const newVal = !config.manutencao; setConfig({ ...config, manutencao: newVal }); const res = await apiCall("PATCH", { action: "update_config", manutencao: newVal }); console.log("Toggle manutencao response:", res); if (res?.error) { showToast("ERRO: " + res.error); } else { showToast(newVal ? "Mostruario DESATIVADO (manutencao ativa)" : "Mostruario ATIVADO"); } }} />
+      <ConfigSection config={config} setConfig={setConfig} configOpen={configOpen} setConfigOpen={setConfigOpen} saveConfig={saveConfig} savingConfig={savingConfig} adminPassword={password} onToggleManutencao={async () => { const newVal = !config.manutencao; setConfig({ ...config, manutencao: newVal }); const res = await apiCall("PATCH", { action: "update_config", manutencao: newVal }); console.log("Toggle manutencao response:", res); if (res?.error) { showToast("ERRO: " + res.error); } else { showToast(newVal ? "Mostruario DESATIVADO (manutencao ativa)" : "Mostruario ATIVADO"); } }} />
 
       <div className="flex gap-6">
         <div className="w-56 shrink-0 space-y-2">
@@ -314,7 +314,7 @@ export default function MostruarioPage() {
 }
 
 /* ── Config Section ── */
-function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfig, savingConfig, onToggleManutencao }: { config: MostruarioConfig; setConfig: (c: MostruarioConfig) => void; configOpen: boolean; setConfigOpen: (v: boolean) => void; saveConfig: () => void; savingConfig: boolean; onToggleManutencao: () => void }) {
+function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfig, savingConfig, adminPassword, onToggleManutencao }: { config: MostruarioConfig; setConfig: (c: MostruarioConfig) => void; configOpen: boolean; setConfigOpen: (v: boolean) => void; saveConfig: () => void; savingConfig: boolean; adminPassword: string; onToggleManutencao: () => void }) {
   return (
     <div className="bg-white rounded-2xl border border-[#E8E8ED] overflow-hidden">
       <button onClick={() => setConfigOpen(!configOpen)} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#F5F5F7] transition-colors">
@@ -410,6 +410,14 @@ function ConfigSection({ config, setConfig, configOpen, setConfigOpen, saveConfi
             <button onClick={onToggleManutencao} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${config.manutencao ? "bg-[#FF3B30]/10 text-[#FF3B30]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
               <span>{config.manutencao ? "🔧" : "✅"}</span> Modo Manutencao: {config.manutencao ? "ATIVO" : "Desativado"}
             </button>
+            {config.manutencao && (
+              <button
+                onClick={() => window.open(`/?preview=${encodeURIComponent(adminPassword)}`, "_blank")}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20"
+              >
+                <span>👁</span> Preview do Site
+              </button>
+            )}
           </div>
           <TemaAccordion label="Alterar Tema do Mostruario" sublabel={`Ativo: ${TEMAS[getTemaKey(config.tema)]?.nome || config.tema}`}>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

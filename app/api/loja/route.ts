@@ -144,7 +144,11 @@ export async function GET(req: NextRequest) {
     const { whatsapp_numero: _unused, ...publicConfig } = config as Record<string, unknown>;
 
     // ── If manutencao is enabled, return empty products + maintenance flag only ──
-    if (publicConfig.manutencao) {
+    // Admin preview bypass: ?preview=ADMIN_PASSWORD allows seeing the full store
+    const previewKey = searchParams.get("preview");
+    const isPreviewBypass = previewKey === process.env.ADMIN_PASSWORD;
+
+    if (publicConfig.manutencao && !isPreviewBypass) {
       const maintenanceResponse = {
         produtos: [],
         categorias: [],

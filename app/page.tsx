@@ -144,9 +144,29 @@ export default function LojaPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/loja?format=grouped");
+        // First fetch — normal
+        let url = "/api/loja?format=grouped";
+        const res = await fetch(url);
         if (!res.ok) throw new Error("API error");
-        const data: LojaResponse = await res.json();
+        let data: LojaResponse = await res.json();
+
+        // If maintenance is on and admin is logged in, re-fetch with preview bypass
+        if (data.config?.manutencao) {
+          try {
+            // Use URL preview param first, then localStorage admin_pw
+            const urlParams = new URLSearchParams(window.location.search);
+            const pw = urlParams.get("preview") || localStorage.getItem("admin_pw");
+            if (pw) {
+              const previewRes = await fetch(`/api/loja?format=grouped&preview=${encodeURIComponent(pw)}`);
+              if (previewRes.ok) {
+                const previewData: LojaResponse = await previewRes.json();
+                // Keep manutencao flag true so banner shows, but use real products
+                data = { ...previewData, config: { ...previewData.config, manutencao: true } as LojaConfig };
+              }
+            }
+          } catch { /* fallback to maintenance view */ }
+        }
+
         setProdutos(data.produtos ?? []);
         setCategorias(data.categorias ?? []);
         if (data.config) setConfig(data.config);
@@ -188,7 +208,12 @@ export default function LojaPage() {
   /* ── Modo Manutencao ── */
   const [isAdminPreview, setIsAdminPreview] = useState(false);
   useEffect(() => {
-    try { if (localStorage.getItem("admin_pw")) setIsAdminPreview(true); } catch {}
+    try {
+      if (localStorage.getItem("admin_pw")) setIsAdminPreview(true);
+      // Also check URL ?preview= param (used from admin panel preview button)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("preview")) setIsAdminPreview(true);
+    } catch {}
   }, []);
 
   if (!loading && config.manutencao && !isAdminPreview) {
