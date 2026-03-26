@@ -19,6 +19,7 @@ export default function GastosPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string | boolean>>({});
   const [editSaving, setEditSaving] = useState(false);
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
@@ -83,6 +84,7 @@ export default function GastosPage() {
   };
 
   const startEdit = (g: Gasto) => {
+    setViewingId(null);
     setEditingId(g.id);
     setEditForm({
       data: g.data,
@@ -201,13 +203,19 @@ export default function GastosPage() {
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
                   ) : gastos.map((g) => (
                     <React.Fragment key={g.id}>
-                      <tr className="border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors">
+                      <tr
+                        className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${viewingId === g.id ? (dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]") : ""}`}
+                        onClick={() => {
+                          if (editingId === g.id) return;
+                          setViewingId(viewingId === g.id ? null : g.id);
+                        }}
+                      >
                         <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
                         <td className="px-4 py-3 text-xs">{g.categoria}</td>
                         <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
                         <td className="px-4 py-3 font-bold text-red-500">{fmt(g.valor)}</td>
                         <td className="px-4 py-3 text-xs">{g.banco || "—"}</td>
-                        <td className="px-4 py-3 flex gap-2">
+                        <td className="px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => startEdit(g)} className="text-[#86868B] hover:text-[#E8740E] text-xs" title="Editar">✏️</button>
                           <button onClick={async () => {
                             if (!confirm("Excluir?")) return;
@@ -216,6 +224,51 @@ export default function GastosPage() {
                           }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
                         </td>
                       </tr>
+                      {viewingId === g.id && editingId !== g.id && (
+                        <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data</p>
+                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.data}</p>
+                              </div>
+                              {g.hora && (
+                                <div>
+                                  <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Horário</p>
+                                  <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.hora}</p>
+                                </div>
+                              )}
+                              <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Categoria</p>
+                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.categoria}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor</p>
+                                <p className="font-bold text-red-500">{fmt(g.valor)}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco</p>
+                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.banco || "—"}</p>
+                              </div>
+                              <div>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Descrição</p>
+                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.descricao || "—"}</p>
+                              </div>
+                              <div className="col-span-2 md:col-span-3">
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observação</p>
+                                <p className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{g.observacao || "—"}</p>
+                              </div>
+                              {g.is_dep_esp && (
+                                <div className="col-span-2 md:col-span-3">
+                                  <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E]">
+                                    💵 Depósito de espécie
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {editingId === g.id && (
                         <tr className="border-b border-[#E8740E] bg-[#FFF8F0]">
                           <td colSpan={6} className="px-4 py-4">
