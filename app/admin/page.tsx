@@ -173,12 +173,11 @@ export default function DashboardPage() {
   const especieHoje = vendasHoje.reduce((s, v) => s + (v.entrada_especie || 0), 0);
 
   // Gastos por banco hoje (todos — incluindo FORNECEDOR — porque SAI da conta)
-  // Saídas por banco — exclui FORNECEDOR pois compras de estoque já estão refletidas na base manhã
-  const gastosReaisPorBanco = gastosHoje.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR");
-  const gastosHojeItau = gastosReaisPorBanco.filter(g => g.banco === "ITAU").reduce((s, g) => s + (g.valor || 0), 0);
-  const gastosHojeInf = gastosReaisPorBanco.filter(g => g.banco === "INFINITE").reduce((s, g) => s + (g.valor || 0), 0);
-  const gastosHojeMP = gastosReaisPorBanco.filter(g => g.banco === "MERCADO_PAGO").reduce((s, g) => s + (g.valor || 0), 0);
-  const gastosHojeEsp = gastosReaisPorBanco.filter(g => g.banco === "ESPECIE").reduce((s, g) => s + (g.valor || 0), 0);
+  // Saídas por banco — inclui TUDO (fornecedor + operacional) pois pagamentos acontecem após base manhã
+  const gastosHojeItau = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "ITAU").reduce((s, g) => s + (g.valor || 0), 0);
+  const gastosHojeInf = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "INFINITE").reduce((s, g) => s + (g.valor || 0), 0);
+  const gastosHojeMP = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "MERCADO_PAGO").reduce((s, g) => s + (g.valor || 0), 0);
+  const gastosHojeEsp = gastosHoje.filter(g => g.tipo === "SAIDA" && g.banco === "ESPECIE").reduce((s, g) => s + (g.valor || 0), 0);
   // Depósitos de espécie (saem do caixa espécie, entram no banco)
   const depEspHoje = gastosHoje.filter(g => g.is_dep_esp).reduce((s, g) => s + (g.valor || 0), 0);
 
