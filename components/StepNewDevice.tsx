@@ -70,9 +70,10 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
     const lines: string[] = [];
     lines.push(`Ola! Fiz a simulacao de Trade-In no site e tenho interesse em um *${semiModel} ${semiStorage} SEMINOVO*.`);
     lines.push("");
-    if (semiNome) lines.push(`*Nome:* ${semiNome}`);
-    if (semiWhatsapp) lines.push(`*WhatsApp:* ${semiWhatsapp}`);
-    if (semiNome || semiWhatsapp) lines.push("");
+    lines.push(`*DADOS DO CLIENTE:*`);
+    lines.push(`Nome: ${semiNome || "Nao informado"}`);
+    lines.push(`WhatsApp: ${semiWhatsapp || "Nao informado"}`);
+    lines.push("");
     lines.push(`*MEU APARELHO ATUAL:*`);
     lines.push(`Modelo: ${usedModel || "Nao informado"} ${usedStorage || ""}`);
     lines.push(`Valor avaliado: R$ ${Math.round(tradeInValue).toLocaleString("pt-BR")}`);

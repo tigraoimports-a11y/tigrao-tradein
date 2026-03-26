@@ -159,6 +159,31 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Auto-criar entrega quando local é ENTREGA
+  if (data && (body.local || "").toUpperCase() === "ENTREGA") {
+    try {
+      await supabase.from("entregas").insert({
+        venda_id: data.id,
+        cliente: body.cliente || "",
+        telefone: null,
+        endereco: body.endereco || null,
+        bairro: body.bairro || null,
+        data_entrega: body.data || new Date().toISOString().split("T")[0],
+        horario: null,
+        status: "PENDENTE",
+        entregador: null,
+        observacao: null,
+        produto: body.produto || "",
+        tipo: body.tipo || "VENDA",
+        forma_pagamento: body.forma || "PIX",
+        valor: body.preco_vendido || 0,
+        vendedor: usuario || "sistema",
+        regiao: body.bairro || null,
+        detalhes_upgrade: (seminovoData?.produto) ? `Troca: ${seminovoData.produto} (R$ ${seminovoData.valor || 0})` : null,
+      });
+    } catch { /* ignore entrega creation error */ }
+  }
+
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
 

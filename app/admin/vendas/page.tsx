@@ -2587,10 +2587,13 @@ export default function VendasPage() {
                               <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">{v.cliente}</td>
                               <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
                               <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
-                              <td className="px-3 py-2.5 whitespace-nowrap max-w-[180px] text-xs">
-                                <span className="truncate block">{v.produto}</span>
+                              <td className="px-3 py-2.5 max-w-[220px] text-xs">
+                                <span className="truncate block whitespace-nowrap">{v.produto}</span>
                                 {isFirstInGrupo && (
                                   <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E]">📦 {grupoItens.length} itens</span>
+                                )}
+                                {v.troca_produto && (
+                                  <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {v.troca_produto}</span>
                                 )}
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
