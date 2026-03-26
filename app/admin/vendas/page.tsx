@@ -516,7 +516,7 @@ export default function VendasPage() {
       custo: pCusto,
       preco_vendido: pPrecoVendido,
       banco: pBancoFinal,
-      forma: !gForma ? "PIX" : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "ESPECIE" : gForma,
+      forma: !gForma ? "PIX" : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "DINHEIRO" : gForma,
       recebimento: !gForma ? "D+0" : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : "D+1",
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
