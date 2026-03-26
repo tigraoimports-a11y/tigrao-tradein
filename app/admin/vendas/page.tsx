@@ -106,6 +106,15 @@ export default function VendasPage() {
     setCepLoading(false);
   }, []);
 
+  // Helpers: uppercase text + formatar moeda
+  const setFormUpper = (field: string, val: string) => setForm(f => ({ ...f, [field]: val.toUpperCase() }));
+  const fmtMoney = (v: string) => {
+    const num = v.replace(/\D/g, "");
+    if (!num) return "";
+    return Number(num).toLocaleString("pt-BR");
+  };
+  const parseMoney = (v: string) => v.replace(/\./g, "").replace(",", ".");
+
   // Carrinho de produtos (multi-produto na mesma venda)
   // Payment fields are GLOBAL (in form state), not per-product
   interface ProdutoCarrinho {
@@ -1791,15 +1800,15 @@ export default function VendasPage() {
                 <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                   <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                 </select></div>
-                <div><p className={labelCls}>Valor do PIX (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
-                  const v = e.target.value;
-                  set("valor_comprovante_input", v);
+                <div><p className={labelCls}>Valor do PIX (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                  const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                  setMoney("valor_comprovante_input", e.target.value);
                   // PIX é 100% líquido — preco_vendido = valor PIX + troca + espécie
                   if (produtosCarrinho.length === 0) {
-                    const pixVal = parseFloat(v) || 0;
+                    const pixVal = parseFloat(clean) || 0;
                     if (pixVal > 0) {
                       const totalLiq = Math.round(pixVal + (parseFloat(form.entrada_especie) || 0) + (parseFloat(form.produto_na_troca) || 0));
-                      setForm(f => ({ ...f, valor_comprovante_input: v, preco_vendido: String(totalLiq) }));
+                      setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
                     }
                   }
                 }} placeholder="Valor transferido" className={inputCls} /></div>
@@ -1817,16 +1826,16 @@ export default function VendasPage() {
                   </select></div>
                   {taxa > 0 && (
                     <>
-                      <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
-                        const comp = e.target.value;
-                        set("valor_comprovante_input", comp);
+                      <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                        const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                        setMoney("valor_comprovante_input", e.target.value);
                         // Só auto-calcular preco_vendido se NÃO tem produtos no carrinho (venda simples)
                         if (produtosCarrinho.length === 0) {
-                          const compVal = parseFloat(comp) || 0;
+                          const compVal = parseFloat(clean) || 0;
                           if (compVal > 0 && taxa > 0) {
                             const liquidoCartao = calcularLiquido(compVal, taxa);
                             const totalLiq = Math.round(liquidoCartao + entradaPix + entradaEspecie + valorTroca);
-                            setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                            setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
                           }
                         }
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
@@ -1852,15 +1861,15 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Parcelas no Link</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
                   {taxa > 0 && (
                     <>
-                      <div><p className={labelCls}>Valor no Link (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
-                        const comp = e.target.value;
-                        set("valor_comprovante_input", comp);
+                      <div><p className={labelCls}>Valor no Link (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                        const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                        setMoney("valor_comprovante_input", e.target.value);
                         if (produtosCarrinho.length === 0) {
-                          const compVal = parseFloat(comp) || 0;
+                          const compVal = parseFloat(clean) || 0;
                           if (compVal > 0 && taxa > 0) {
                             const liquidoLink = calcularLiquido(compVal, taxa);
                             const totalLiq = Math.round(liquidoLink + entradaPix + entradaEspecie + valorTroca);
-                            setForm(f => ({ ...f, valor_comprovante_input: comp, preco_vendido: String(totalLiq) }));
+                            setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
                           }
                         }
                       }} placeholder="Valor total do link" className={inputCls} /></div>
@@ -1890,10 +1899,10 @@ export default function VendasPage() {
               {/* Entrada PIX */}
               {form.forma !== "PIX" && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => {
-                  const v = e.target.value;
-                  const newVendido = recalcVendido({ pix: v });
-                  setForm(f => ({ ...f, entrada_pix: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+                <div><p className={labelCls}>Entrada PIX (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix)} onChange={(e) => {
+                  const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                  const newVendido = recalcVendido({ pix: clean });
+                  setForm(f => ({ ...f, entrada_pix: clean, ...(newVendido ? { preco_vendido: newVendido } : {}), ...(parseFloat(clean) > 0 && !f.banco_pix ? { banco_pix: "ITAU" } : {}) }));
                 }} placeholder="0" className={inputCls} /></div>
                 {entradaPix > 0 && (
                   <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
@@ -1906,10 +1915,10 @@ export default function VendasPage() {
               {/* Entrada Especie */}
               {form.forma !== "ESPECIE" && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Entrada Especie (R$)</p><input type="number" value={form.entrada_especie} onChange={(e) => {
-                  const v = e.target.value;
-                  const newVendido = recalcVendido({ especie: v });
-                  setForm(f => ({ ...f, entrada_especie: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+                <div><p className={labelCls}>Entrada Especie (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_especie)} onChange={(e) => {
+                  const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                  const newVendido = recalcVendido({ especie: clean });
+                  setForm(f => ({ ...f, entrada_especie: clean, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
                 }} placeholder="0" className={inputCls} /></div>
               </div>
               )}
@@ -1925,7 +1934,7 @@ export default function VendasPage() {
                 </label>
                 {parseFloat(form.entrada_fiado) > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className={labelCls}>Valor Total Fiado (R$)</p><input type="number" value={form.entrada_fiado} onChange={(e) => setForm(f => ({ ...f, entrada_fiado: e.target.value }))} placeholder="0" className={inputCls} /></div>
+                    <div><p className={labelCls}>Valor Total Fiado (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_fiado)} onChange={(e) => { setMoney("entrada_fiado", e.target.value); }} placeholder="0" className={inputCls} /></div>
                     <div><p className={labelCls}>Nº Parcelas</p><select value={form.fiado_qnt_parcelas || "1"} onChange={(e) => setForm(f => ({ ...f, fiado_qnt_parcelas: e.target.value }))} className={selectCls}>
                       {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x de R$ {((parseFloat(form.entrada_fiado)||0)/n).toFixed(0)}</option>)}
                     </select></div>
@@ -2019,9 +2028,8 @@ export default function VendasPage() {
                     </select></div>
                     {taxa > 0 && (
                       <>
-                        <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
-                          const comp = e.target.value;
-                          set("valor_comprovante_input", comp);
+                        <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                          setMoney("valor_comprovante_input", e.target.value);
                         }} placeholder="Valor da maquina" className={inputCls} /></div>
                         <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                           <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
@@ -2045,9 +2053,8 @@ export default function VendasPage() {
                     <div><p className={labelCls}>Parcelas no Link</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
                     {taxa > 0 && (
                       <>
-                        <div><p className={labelCls}>Valor no Link (R$)</p><input type="number" value={form.valor_comprovante_input} onChange={(e) => {
-                          const comp = e.target.value;
-                          set("valor_comprovante_input", comp);
+                        <div><p className={labelCls}>Valor no Link (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                          setMoney("valor_comprovante_input", e.target.value);
                         }} placeholder="Valor total do link" className={inputCls} /></div>
                         <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                           <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
@@ -2075,9 +2082,9 @@ export default function VendasPage() {
                 {/* Entrada PIX */}
                 {form.forma !== "PIX" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div><p className={labelCls}>Entrada PIX (R$)</p><input type="number" value={form.entrada_pix} onChange={(e) => {
-                    const v = e.target.value;
-                    setForm(f => ({ ...f, entrada_pix: v }));
+                  <div><p className={labelCls}>Entrada PIX (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setForm(f => ({ ...f, entrada_pix: clean, ...(parseFloat(clean) > 0 && !f.banco_pix ? { banco_pix: "ITAU" } : {}) }));
                   }} placeholder="0" className={inputCls} /></div>
                   {entradaPix > 0 && (
                     <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
@@ -2090,9 +2097,8 @@ export default function VendasPage() {
                 {/* Entrada Especie */}
                 {form.forma !== "ESPECIE" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div><p className={labelCls}>Entrada Especie (R$)</p><input type="number" value={form.entrada_especie} onChange={(e) => {
-                    const v = e.target.value;
-                    setForm(f => ({ ...f, entrada_especie: v }));
+                  <div><p className={labelCls}>Entrada Especie (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_especie)} onChange={(e) => {
+                    setMoney("entrada_especie", e.target.value);
                   }} placeholder="0" className={inputCls} /></div>
                 </div>
                 )}
@@ -2108,7 +2114,7 @@ export default function VendasPage() {
                   </label>
                   {parseFloat(form.entrada_fiado) > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div><p className={labelCls}>Valor Total Fiado (R$)</p><input type="number" value={form.entrada_fiado} onChange={(e) => setForm(f => ({ ...f, entrada_fiado: e.target.value }))} placeholder="0" className={inputCls} /></div>
+                      <div><p className={labelCls}>Valor Total Fiado (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_fiado)} onChange={(e) => { setMoney("entrada_fiado", e.target.value); }} placeholder="0" className={inputCls} /></div>
                       <div><p className={labelCls}>Nº Parcelas</p><select value={form.fiado_qnt_parcelas || "1"} onChange={(e) => setForm(f => ({ ...f, fiado_qnt_parcelas: e.target.value }))} className={selectCls}>
                         {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}x de R$ {((parseFloat(form.entrada_fiado)||0)/n).toFixed(0)}</option>)}
                       </select></div>
@@ -2165,10 +2171,10 @@ export default function VendasPage() {
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => {
-                const v = e.target.value;
-                const newVendido = recalcVendido({ troca: v });
-                setForm(f => ({ ...f, produto_na_troca: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+              <div><p className={labelCls}>Valor da troca (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.produto_na_troca)} onChange={(e) => {
+                const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                const newVendido = recalcVendido({ troca: clean });
+                setForm(f => ({ ...f, produto_na_troca: clean, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
               }} placeholder="0" className={inputCls} /></div>
               {temTroca && (
                 <>

@@ -77,6 +77,8 @@ const NAV: NavEntry[] = [
   {
     label: "Analytics", icon: "\u{1F4CA}",
     items: [
+      { href: "/admin/relatorios", label: "Relatorios", icon: "\u{1F4CB}", pageKey: "relatorios" },
+      { href: "/admin/rastreio", label: "Rastreio Produto", icon: "\u{1F50D}", pageKey: "rastreio" },
       { href: "/admin/analytics-vendas", label: "Analytics Vendas", icon: "\u{1F4CA}", pageKey: "analytics_vendas" },
       { href: "/admin/analytics", label: "Funil Trade-In", icon: "\u{1F4C8}", pageKey: "funil_tradein" },
       { href: "/admin/mapa-vendas", label: "Mapa de Vendas", icon: "\u{1F5FA}\uFE0F", pageKey: "mapa_vendas" },
