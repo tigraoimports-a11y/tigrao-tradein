@@ -33,7 +33,7 @@ const IPHONE_MODELOS_FULL = [
   "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E",
   "17", "17 AIR", "17 PRO", "17 PRO MAX",
 ];
-const MACBOOK_CHIPS_FULL = ["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"];
+const MACBOOK_CHIPS_FULL = ["A18 PRO", "M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"];
 const WATCH_MODELOS_FULL = ["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"];
 const WATCH_TAMANHOS = ["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"];
 
@@ -201,12 +201,13 @@ export default function ProdutoSpecFields({
             <select value={row.spec.mb_modelo} onChange={(e) => setSpec("mb_modelo", e.target.value)} className={inputCls}>
               <option value="AIR">MacBook Air</option>
               <option value="PRO">MacBook Pro</option>
+              <option value="NEO">MacBook Neo</option>
             </select>
           </div>
           <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
-              {(row.spec.mb_modelo === "AIR" ? ['13"', '15"'] : ['14"', '16"']).map((t) => (
+              {(row.spec.mb_modelo === "AIR" ? ['13"', '15"'] : row.spec.mb_modelo === "NEO" ? ['13"'] : ['14"', '16"']).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>

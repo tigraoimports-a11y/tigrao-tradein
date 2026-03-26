@@ -106,6 +106,7 @@ function getModeloBase(produto: string, categoria: string): string {
     return "Mac Mini";
   }
   if (baseCat === "MACBOOK") {
+    if (p.includes("NEO")) return "MacBook Neo 13\"";
     if (p.includes("AIR") && (p.includes("15") || p.includes("15\""))) return "MacBook Air 15\"";
     if (p.includes("AIR")) return "MacBook Air 13\"";
     if (p.includes("PRO") && (p.includes("16") || p.includes("16\""))) return "MacBook Pro 16\"";
