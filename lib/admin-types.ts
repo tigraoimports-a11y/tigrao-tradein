@@ -90,6 +90,18 @@ export interface Gasto {
   observacao: string | null;
   is_dep_esp: boolean;
   grupo_id: string | null;
+  pedido_fornecedor_id: string | null;
+}
+
+export interface PedidoFornecedorItem {
+  categoria: string;
+  produto: string;
+  cor: string;
+  qnt: number;
+  custo_unitario: number;
+  fornecedor: string;
+  imei: string | null;
+  serial_no: string | null;
 }
 
 export interface SaldoBancario {

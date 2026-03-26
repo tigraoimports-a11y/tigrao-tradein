@@ -84,6 +84,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Acao nao pode ser desfeita" }, { status: 400 });
   }
 
+  // Buscar por pedido_fornecedor_id (usado pelo histórico de gastos)
+  const pedidoFornecedorId = searchParams.get("pedido_fornecedor_id");
+  if (pedidoFornecedorId) {
+    const { data, error } = await supabase
+      .from("estoque")
+      .select("*")
+      .eq("pedido_fornecedor_id", pedidoFornecedorId)
+      .order("produto");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  }
+
   let query = supabase.from("estoque").select("*").order("categoria").order("produto");
   if (categoria) query = query.eq("categoria", categoria);
 

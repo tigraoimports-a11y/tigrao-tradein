@@ -5,6 +5,8 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
+import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import { STRUCTURED_CATS, buildProdutoName } from "@/lib/produto-specs";
 
 const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -12,10 +14,10 @@ const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 type BancoValores = Record<Banco, string>;
 const emptyBancoValores = (): BancoValores => ({ ITAU: "", INFINITE: "", MERCADO_PAGO: "", ESPECIE: "" });
 
-/** Agrupa gastos por grupo_id. Gastos sem grupo ficam sozinhos. */
 interface GastoGrupo {
-  key: string; // grupo_id ou id do gasto avulso
+  key: string;
   grupo_id: string | null;
+  pedido_fornecedor_id: string | null;
   items: Gasto[];
   totalValor: number;
   data: string;
@@ -48,6 +50,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
     result.push({
       key: grupoId,
       grupo_id: grupoId,
+      pedido_fornecedor_id: first.pedido_fornecedor_id || null,
       items,
       totalValor: items.reduce((s, i) => s + Number(i.valor), 0),
       data: first.data,
@@ -64,6 +67,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
     result.push({
       key: g.id,
       grupo_id: null,
+      pedido_fornecedor_id: g.pedido_fornecedor_id || null,
       items: [g],
       totalValor: Number(g.valor),
       data: g.data,
@@ -80,6 +84,56 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
   return result;
 }
 
+// Componente para mostrar produtos vinculados no histórico
+function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornecedorId: string; password: string; dm: boolean }) {
+  const [produtos, setProdutos] = useState<{ id: string; produto: string; cor: string; qnt: number; custo_unitario: number; status: string; fornecedor: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/estoque?pedido_fornecedor_id=${pedidoFornecedorId}`, {
+          headers: { "x-admin-password": password },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setProdutos(json.data ?? []);
+        }
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
+  }, [pedidoFornecedorId, password]);
+
+  if (loading) return <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Carregando produtos...</p>;
+  if (produtos.length === 0) return null;
+
+  return (
+    <div className="col-span-2 md:col-span-3 mt-2">
+      <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+        Produtos do pedido ({produtos.length})
+      </p>
+      <div className="space-y-1.5">
+        {produtos.map((p) => (
+          <div key={p.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                {p.status}
+              </span>
+              <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                {p.produto}{p.cor ? ` — ${p.cor}` : ""}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>x{p.qnt}</span>
+              <span className="font-bold text-[#E8740E]">{fmt(p.custo_unitario)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function GastosPage() {
   const { password, user, darkMode: dm } = useAdmin();
   const [gastos, setGastos] = useState<Gasto[]>([]);
@@ -92,6 +146,9 @@ export default function GastosPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [viewingKey, setViewingKey] = useState<string | null>(null);
 
+  // Fornecedores
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+
   // Form state
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
@@ -102,6 +159,9 @@ export default function GastosPage() {
     is_dep_esp: false,
   });
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
+
+  // Produtos do pedido fornecedor
+  const [pedidoProdutos, setPedidoProdutos] = useState<ProdutoRowState[]>([]);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -128,12 +188,28 @@ export default function GastosPage() {
     setLoading(false);
   }, [password]);
 
+  // Buscar fornecedores
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setFornecedores(json.data ?? []);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [password]);
+
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
 
   const totalForm = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
+  const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
+
+  const isFornecedor = form.categoria === "FORNECEDOR";
 
   const handleSubmit = async () => {
     const filled = BANCOS.filter((b) => parseFloat(bancoValores[b]) > 0);
@@ -158,19 +234,39 @@ export default function GastosPage() {
       is_dep_esp: form.is_dep_esp,
     };
 
-    let payload;
+    // Montar gastos (single ou multi-banco)
+    let gastoItems;
     if (filled.length === 1) {
-      // Gasto simples — sem grupo
-      payload = { ...base, valor: parseFloat(bancoValores[filled[0]]), banco: filled[0] };
+      gastoItems = { ...base, valor: parseFloat(bancoValores[filled[0]]), banco: filled[0] };
     } else {
-      // Gasto dividido — com grupo_id
       const grupoId = crypto.randomUUID();
-      payload = filled.map((b) => ({
+      gastoItems = filled.map((b) => ({
         ...base,
         valor: parseFloat(bancoValores[b]),
         banco: b,
         grupo_id: grupoId,
       }));
+    }
+
+    // Se tem produtos de fornecedor, enviar no formato especial
+    let payload;
+    if (isFornecedor && pedidoProdutos.length > 0) {
+      const produtos = pedidoProdutos.map((p) => {
+        const nome = p.produto || (STRUCTURED_CATS.includes(p.categoria) ? buildProdutoName(p.categoria, p.spec) : "");
+        return {
+          produto: nome,
+          categoria: p.categoria,
+          qnt: parseInt(p.qnt) || 1,
+          custo_unitario: parseFloat(p.custo_unitario) || 0,
+          cor: p.cor || null,
+          fornecedor: p.fornecedor || null,
+          imei: p.imei || null,
+          serial_no: p.serial_no || null,
+        };
+      });
+      payload = { gastos: gastoItems, produtos };
+    } else {
+      payload = gastoItems;
     }
 
     const res = await fetch("/api/gastos", {
@@ -180,9 +276,13 @@ export default function GastosPage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg("Gasto registrado!");
+      const prodMsg = isFornecedor && pedidoProdutos.length > 0
+        ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
+        : "";
+      setMsg(`Gasto registrado!${prodMsg}`);
       setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
       setBancoValores(emptyBancoValores());
+      setPedidoProdutos([]);
       fetchGastos();
     } else {
       setMsg("Erro: " + json.error);
@@ -234,9 +334,7 @@ export default function GastosPage() {
     let payload;
 
     if (grupo.grupo_id) {
-      // Era grupo — editar como grupo (deletar antigos + inserir novos)
       if (filled.length === 1) {
-        // Reduziu para 1 banco — sem grupo_id
         payload = {
           grupo_id: grupo.grupo_id,
           items: [{ ...base, valor: parseFloat(editBancoValores[filled[0]]), banco: filled[0] }],
@@ -254,9 +352,7 @@ export default function GastosPage() {
         };
       }
     } else {
-      // Era avulso
       if (filled.length === 1) {
-        // Continua avulso — PATCH simples
         payload = {
           id: grupo.items[0].id,
           ...base,
@@ -264,14 +360,11 @@ export default function GastosPage() {
           banco: filled[0],
         };
       } else {
-        // Virou grupo — deletar o avulso e criar novos com grupo_id
-        // Primeiro deletar o antigo
         await fetch("/api/gastos", {
           method: "DELETE",
           headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
           body: JSON.stringify({ id: grupo.items[0].id }),
         });
-        // Depois criar novos
         const novoGrupoId = crypto.randomUUID();
         const items = filled.map((b) => ({
           ...base,
@@ -312,8 +405,17 @@ export default function GastosPage() {
   };
 
   const handleDelete = async (g: GastoGrupo) => {
-    if (!confirm("Excluir este gasto?")) return;
-    const body = g.grupo_id ? { grupo_id: g.grupo_id } : { id: g.items[0].id };
+    const hasProdutos = !!g.pedido_fornecedor_id;
+    const confirmMsg = hasProdutos
+      ? "Excluir este gasto e os produtos A CAMINHO vinculados?"
+      : "Excluir este gasto?";
+    if (!confirm(confirmMsg)) return;
+
+    const body: Record<string, string> = {};
+    if (g.grupo_id) body.grupo_id = g.grupo_id;
+    else body.id = g.items[0].id;
+    if (g.pedido_fornecedor_id) body.pedido_fornecedor_id = g.pedido_fornecedor_id;
+
     await fetch("/api/gastos", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -325,7 +427,6 @@ export default function GastosPage() {
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
-  // Totais
   const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
 
   const BancoInputGrid = ({ valores, onChange, cls }: { valores: BancoValores; onChange: (b: Banco, v: string) => void; cls: string }) => (
@@ -333,13 +434,7 @@ export default function GastosPage() {
       {BANCOS.map((b) => (
         <div key={b}>
           <p className={labelCls}>{b.replace("_", " ")}</p>
-          <input
-            type="number"
-            placeholder="0"
-            value={valores[b]}
-            onChange={(e) => onChange(b, e.target.value)}
-            className={cls}
-          />
+          <input type="number" placeholder="0" value={valores[b]} onChange={(e) => onChange(b, e.target.value)} className={cls} />
         </div>
       ))}
     </div>
@@ -357,7 +452,7 @@ export default function GastosPage() {
 
       {tab === "novo" ? (
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-6`}>
-          <h2 className="text-lg font-bold text-[#1D1D1F]">Registrar Saída</h2>
+          <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Registrar Saída</h2>
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -388,18 +483,63 @@ export default function GastosPage() {
             </p>
           </div>
 
+          {/* Seção de produtos do pedido — só aparece para FORNECEDOR */}
+          {isFornecedor && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF8F0]"} space-y-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Produtos do Pedido</p>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    Cadastre os produtos comprados. Eles entram no estoque como &quot;A Caminho&quot;.
+                  </p>
+                </div>
+                {pedidoProdutos.length > 0 && totalProdutos > 0 && (
+                  <div className="text-right">
+                    <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Custo total produtos</p>
+                    <p className="text-sm font-bold text-[#E8740E]">{fmt(totalProdutos)}</p>
+                  </div>
+                )}
+              </div>
+
+              {pedidoProdutos.map((row, i) => (
+                <ProdutoSpecFields
+                  key={i}
+                  row={row}
+                  onChange={(updated) => {
+                    const next = [...pedidoProdutos];
+                    next[i] = updated;
+                    setPedidoProdutos(next);
+                  }}
+                  onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
+                  fornecedores={fornecedores}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                  darkMode={dm}
+                  index={i}
+                />
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setPedidoProdutos([...pedidoProdutos, createEmptyProdutoRow()])}
+                className={`w-full py-3 rounded-xl border-2 border-dashed font-semibold text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}
+              >
+                + Adicionar Produto
+              </button>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 text-sm text-[#86868B]">
             <input type="checkbox" checked={form.is_dep_esp} onChange={(e) => set("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
             Deposito de especie (sai do caixa, entra no banco)
           </label>
 
           <button onClick={handleSubmit} disabled={saving} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
-            {saving ? "Salvando..." : "Registrar"}
+            {saving ? "Salvando..." : isFornecedor && pedidoProdutos.length > 0 ? `Registrar Gasto + ${pedidoProdutos.length} Produto(s)` : "Registrar"}
           </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Total Saidas */}
           <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm inline-block`}>
             <p className="text-xs text-[#86868B]">Total Saidas</p>
             <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
@@ -430,7 +570,14 @@ export default function GastosPage() {
                         }}
                       >
                         <td className="px-4 py-3 text-xs text-[#86868B]">{g.data}</td>
-                        <td className="px-4 py-3 text-xs">{g.categoria}</td>
+                        <td className="px-4 py-3 text-xs">
+                          <span className="flex items-center gap-1">
+                            {g.categoria}
+                            {g.pedido_fornecedor_id && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-blue-500" title="Pedido com produtos" />
+                            )}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 max-w-[200px] truncate">{g.descricao || "—"}</td>
                         <td className="px-4 py-3 font-bold text-red-500">{fmt(g.totalValor)}</td>
                         <td className="px-4 py-3 text-xs">
@@ -517,6 +664,10 @@ export default function GastosPage() {
                                   </span>
                                 </div>
                               )}
+                              {/* Produtos vinculados */}
+                              {g.pedido_fornecedor_id && (
+                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} />
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -536,7 +687,6 @@ export default function GastosPage() {
                                 <div><p className={labelCls}>Descricao</p><input value={editForm.descricao} onChange={(e) => editSet("descricao", e.target.value)} className={inputCls} /></div>
                                 <div><p className={labelCls}>Observacao</p><input value={editForm.observacao} onChange={(e) => editSet("observacao", e.target.value)} className={inputCls} /></div>
                               </div>
-                              {/* Distribuição por banco na edição */}
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
                                 <BancoInputGrid valores={editBancoValores} onChange={editSetBanco} cls={inputCls} />

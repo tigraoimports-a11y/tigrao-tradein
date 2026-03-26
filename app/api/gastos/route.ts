@@ -47,19 +47,77 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  // Suporta array (gasto dividido) ou objeto único (retrocompatível)
-  const items = Array.isArray(body) ? body : [body];
+  // Novo formato: { gastos: [...], produtos: [...] } para pedido fornecedor
+  // Formato antigo: array de gastos ou objeto único (retrocompatível)
+  const hasProdutos = body.gastos && Array.isArray(body.produtos);
+  const gastoItems = hasProdutos
+    ? (Array.isArray(body.gastos) ? body.gastos : [body.gastos])
+    : (Array.isArray(body) ? body : [body]);
 
-  const { data, error } = await supabase.from("gastos").insert(items).select();
+  // Se tem produtos, gerar pedido_fornecedor_id e injetar nos gastos
+  let pedidoFornecedorId: string | null = null;
+  if (hasProdutos && body.produtos.length > 0) {
+    pedidoFornecedorId = crypto.randomUUID();
+    for (const item of gastoItems) {
+      item.pedido_fornecedor_id = pedidoFornecedorId;
+    }
+  }
+
+  // Inserir gastos
+  const { data, error } = await supabase.from("gastos").insert(gastoItems).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const totalValor = items.reduce((s: number, i: { valor?: number }) => s + Number(i.valor || 0), 0);
-  const desc = items[0]?.descricao || "?";
-  const bancos = items.map((i: { banco?: string }) => i.banco).filter(Boolean).join(", ");
+  // Log de atividade do gasto
+  const totalValor = gastoItems.reduce((s: number, i: { valor?: number }) => s + Number(i.valor || 0), 0);
+  const desc = gastoItems[0]?.descricao || "?";
+  const bancos = gastoItems.map((i: { banco?: string }) => i.banco).filter(Boolean).join(", ");
   await logActivity(usuario, "Registrou gasto", `${desc} R$ ${totalValor.toLocaleString("pt-BR")} (${bancos})`, "gastos", data?.[0]?.id);
 
+  // Inserir produtos no estoque (se pedido fornecedor)
+  if (pedidoFornecedorId && hasProdutos && body.produtos.length > 0) {
+    const dataCompra = gastoItems[0]?.data || new Date().toISOString().split("T")[0];
+    const estoqueItems = body.produtos.map((p: {
+      produto: string;
+      categoria: string;
+      qnt: number;
+      custo_unitario: number;
+      cor?: string;
+      fornecedor?: string;
+      imei?: string;
+      serial_no?: string;
+    }) => ({
+      produto: p.produto,
+      categoria: p.categoria,
+      qnt: p.qnt,
+      custo_unitario: p.custo_unitario,
+      cor: p.cor || null,
+      fornecedor: p.fornecedor || null,
+      imei: p.imei || null,
+      serial_no: p.serial_no || null,
+      status: "A CAMINHO",
+      tipo: "A_CAMINHO",
+      data_compra: dataCompra,
+      pedido_fornecedor_id: pedidoFornecedorId,
+    }));
+
+    const { error: estErr } = await supabase.from("estoque").insert(estoqueItems);
+    if (estErr) {
+      // Gasto já foi criado, logar erro mas não falhar
+      console.error("Erro ao inserir produtos no estoque:", estErr.message);
+      return NextResponse.json({ ok: true, data, estoqueError: estErr.message });
+    }
+
+    await logActivity(
+      usuario,
+      "Pedido fornecedor",
+      `${body.produtos.length} produto(s) adicionados como A CAMINHO — ${desc}`,
+      "estoque",
+      pedidoFornecedorId
+    );
+  }
+
   // Recalcular saldos do dia automaticamente
-  const dataISO = items[0]?.data;
+  const dataISO = gastoItems[0]?.data;
   if (dataISO) recalcularSaldoDia(supabase, dataISO).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
@@ -110,7 +168,16 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, grupo_id } = await req.json();
+  const { id, grupo_id, pedido_fornecedor_id } = await req.json();
+
+  // Se tem pedido_fornecedor_id, excluir produtos A CAMINHO vinculados
+  if (pedido_fornecedor_id) {
+    await supabase
+      .from("estoque")
+      .delete()
+      .eq("pedido_fornecedor_id", pedido_fornecedor_id)
+      .eq("status", "A CAMINHO");
+  }
 
   // Se tem grupo_id, excluir todos do grupo
   if (grupo_id) {
@@ -127,8 +194,17 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // Buscar data antes de excluir para recalcular saldo
-  const { data: gasto } = await supabase.from("gastos").select("data").eq("id", id).single();
+  const { data: gasto } = await supabase.from("gastos").select("data, pedido_fornecedor_id").eq("id", id).single();
   const gastoData = gasto?.data;
+
+  // Se gasto individual tem pedido_fornecedor_id, limpar produtos A CAMINHO
+  if (gasto?.pedido_fornecedor_id) {
+    await supabase
+      .from("estoque")
+      .delete()
+      .eq("pedido_fornecedor_id", gasto.pedido_fornecedor_id)
+      .eq("status", "A CAMINHO");
+  }
 
   const { error } = await supabase.from("gastos").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
