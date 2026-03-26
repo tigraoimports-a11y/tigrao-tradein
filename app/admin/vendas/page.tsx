@@ -3049,66 +3049,82 @@ export default function VendasPage() {
                                           ✏️ Editar
                                         </button>
                                       </div>
-                                      {/* Nota Fiscal — botão na fileira de status */}
-                                      <div className="flex gap-2 flex-wrap">
-                                        <label
-                                          onClick={(e) => e.stopPropagation()}
-                                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer inline-flex items-center gap-1 ${v.nota_fiscal_url ? "text-green-600 border-green-200 hover:bg-green-50" : "text-purple-600 border-purple-200 hover:bg-purple-50"}`}
-                                        >
-                                          {v.nota_fiscal_url ? (
-                                            <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                                      {/* Nota Fiscal — drop zone + botão */}
+                                      <div className="flex gap-2 flex-wrap items-center">
+                                        {v.nota_fiscal_url ? (
+                                          <>
+                                            <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-green-600 border border-green-200 hover:bg-green-50 transition-colors inline-flex items-center gap-1">
                                               📄 Ver NF
                                             </a>
-                                          ) : (
-                                            <>
-                                              📄 Anexar NF
-                                              <input
-                                                type="file"
-                                                accept=".pdf"
-                                                className="hidden"
-                                                onChange={async (e) => {
-                                                  e.stopPropagation();
-                                                  const file = e.target.files?.[0];
-                                                  if (!file) return;
-                                                  setUploadingId(v.id + "-nf");
-                                                  const formData = new FormData();
-                                                  formData.append("file", file);
-                                                  formData.append("venda_id", v.id);
-                                                  try {
-                                                    const res = await fetch("/api/vendas/nota-fiscal", {
-                                                      method: "POST",
-                                                      headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
-                                                      body: formData,
-                                                    });
-                                                    const json = await res.json();
-                                                    if (json.url) {
-                                                      setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: json.url } : r));
-                                                      setMsg("Nota fiscal salva!");
-                                                    } else {
-                                                      setMsg("Erro: " + (json.error || "falha ao salvar NF"));
-                                                    }
-                                                  } catch { setMsg("Erro ao enviar arquivo"); }
-                                                  setUploadingId(null);
-                                                }}
-                                              />
-                                            </>
-                                          )}
-                                          {uploadingId === v.id + "-nf" && <span className="text-[10px]">...</span>}
-                                        </label>
-                                        {v.nota_fiscal_url && (
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              if (!confirm("Remover nota fiscal?")) return;
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
-                                                body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
+                                            <button
+                                              onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (!confirm("Remover nota fiscal?")) return;
+                                                await fetch("/api/vendas", {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
+                                                });
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
+                                              }}
+                                              className="px-2 py-1.5 rounded-lg text-[10px] text-red-400 hover:text-red-600"
+                                            >✕</button>
+                                          </>
+                                        ) : (
+                                          <label
+                                            onClick={(e) => e.stopPropagation()}
+                                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("ring-2", "ring-purple-400", "bg-purple-50"); }}
+                                            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("ring-2", "ring-purple-400", "bg-purple-50"); }}
+                                            onDrop={async (e) => {
+                                              e.preventDefault(); e.stopPropagation();
+                                              e.currentTarget.classList.remove("ring-2", "ring-purple-400", "bg-purple-50");
+                                              const file = e.dataTransfer.files?.[0];
+                                              if (!file || !file.name.toLowerCase().endsWith(".pdf")) { setMsg("Apenas arquivos PDF"); return; }
+                                              setUploadingId(v.id + "-nf");
+                                              const formData = new FormData();
+                                              formData.append("file", file);
+                                              formData.append("venda_id", v.id);
+                                              try {
+                                                const res = await fetch("/api/vendas/nota-fiscal", {
+                                                  method: "POST",
+                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  body: formData,
+                                                });
+                                                const json = await res.json();
+                                                if (json.url) {
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: json.url } : r));
+                                                  setMsg("Nota fiscal salva!");
+                                                } else { setMsg("Erro: " + (json.error || "falha")); }
+                                              } catch { setMsg("Erro ao enviar"); }
+                                              setUploadingId(null);
                                             }}
-                                            className="px-2 py-1.5 rounded-lg text-[10px] text-red-400 hover:text-red-600"
-                                          >✕</button>
+                                            className="px-4 py-2 rounded-lg text-xs font-semibold text-purple-600 border-2 border-dashed border-purple-300 hover:bg-purple-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                          >
+                                            {uploadingId === v.id + "-nf" ? "⏳ Enviando..." : "📄 Anexar NF (arraste PDF aqui)"}
+                                            <input type="file" accept=".pdf" className="hidden" onChange={async (e) => {
+                                              e.stopPropagation();
+                                              const file = e.target.files?.[0];
+                                              if (!file) return;
+                                              setUploadingId(v.id + "-nf");
+                                              const formData = new FormData();
+                                              formData.append("file", file);
+                                              formData.append("venda_id", v.id);
+                                              try {
+                                                const res = await fetch("/api/vendas/nota-fiscal", {
+                                                  method: "POST",
+                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  body: formData,
+                                                });
+                                                const json = await res.json();
+                                                if (json.url) {
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: json.url } : r));
+                                                  setMsg("Nota fiscal salva!");
+                                                } else { setMsg("Erro: " + (json.error || "falha")); }
+                                              } catch { setMsg("Erro ao enviar"); }
+                                              setUploadingId(null);
+                                            }} />
+                                          </label>
                                         )}
                                       </div>
                                       <div className="flex gap-2 flex-wrap">
