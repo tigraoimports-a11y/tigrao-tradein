@@ -1972,63 +1972,7 @@ export default function VendasPage() {
           </div>
           )}
 
-          {/* PRODUTO NA TROCA — inline only for single product (no cart) */}
-          {produtosCarrinho.length === 0 && (
-          <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-            <p className="text-sm font-bold text-[#1D1D1F]">Cliente deu produto na troca?</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => {
-                const v = e.target.value;
-                const newVendido = recalcVendido({ troca: v });
-                setForm(f => ({ ...f, produto_na_troca: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
-              }} placeholder="0" className={inputCls} /></div>
-              {temTroca && (
-                <>
-                  <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
-                  <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} className={inputCls} /></div>
-                  <div><p className={labelCls}>Bateria %</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="92" className={inputCls} /></div>
-                  <div><p className={labelCls}>Grade</p>
-                    <select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={inputCls}>
-                      <option value="">Selecione...</option>
-                      <option value="A+">A+ (Excelente)</option>
-                      <option value="A">A (Ótimo)</option>
-                      <option value="B">B (Bom)</option>
-                      <option value="C">C (Regular)</option>
-                    </select>
-                  </div>
-                  <div><p className={labelCls}>Caixa original</p>
-                    <select value={form.troca_caixa} onChange={(e) => set("troca_caixa", e.target.value)} className={inputCls}>
-                      <option value="">Selecione...</option>
-                      <option value="SIM">Sim</option>
-                      <option value="NAO">Não</option>
-                    </select>
-                  </div>
-                  <div><p className={labelCls}>Cabo original</p>
-                    <select value={form.troca_cabo} onChange={(e) => set("troca_cabo", e.target.value)} className={inputCls}>
-                      <option value="">Selecione...</option>
-                      <option value="SIM">Sim</option>
-                      <option value="NAO">Não</option>
-                    </select>
-                  </div>
-                  {/* Fonte original — só para iPad e MacBook */}
-                  {(form.troca_produto.toUpperCase().includes("IPAD") || form.troca_produto.toUpperCase().includes("MACBOOK") || form.troca_produto.toUpperCase().includes("MAC")) && (
-                    <div><p className={labelCls}>Fonte original</p>
-                      <select value={form.troca_fonte} onChange={(e) => set("troca_fonte", e.target.value)} className={inputCls}>
-                        <option value="">Selecione...</option>
-                        <option value="SIM">Sim</option>
-                        <option value="NAO">Não</option>
-                      </select>
-                    </div>
-                  )}
-                  <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                  <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
-                  <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
-                </>
-              )}
-            </div>
-            {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
-          </div>
-          )}
+          {/* Seção de troca movida para antes do botão "Adicionar ao Carrinho" */}
 
           {/* ===== PAGAMENTO + TROCA SEPARADOS (cart mode: produtosCarrinho >= 1) ===== */}
           {produtosCarrinho.length > 0 && (
@@ -2208,38 +2152,39 @@ export default function VendasPage() {
               )}
             </div>
 
-            {/* PRODUTO NA TROCA — cart mode */}
-            <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-              <p className="text-sm font-bold text-[#1D1D1F]">Cliente deu produto na troca?</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => {
-                  const v = e.target.value;
-                  const newVendido = recalcVendido({ troca: v });
-                  setForm(f => ({ ...f, produto_na_troca: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
-                }} placeholder="0" className={inputCls} /></div>
-                {temTroca && (
-                  <>
-                    <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
-                    <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} placeholder="Ex: Titânio Natural" className={inputCls} /></div>
-                    <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
-                    <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
-                      <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
-                    </select></div>
-                    <div className="flex gap-3 items-center">
-                      <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_caixa === "SIM"} onChange={(e) => set("troca_caixa", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Caixa</label>
-                      <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo === "SIM"} onChange={(e) => set("troca_cabo", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
-                      <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte === "SIM"} onChange={(e) => set("troca_fonte", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
-                    </div>
-                    <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                    <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
-                    <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
-                  </>
-                )}
-              </div>
-              {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
-            </div>
           </div>
           )}
+
+          {/* PRODUTO NA TROCA — sempre junto ao produto atual (antes do botão Adicionar) */}
+          <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+            <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div><p className={labelCls}>Valor da troca (R$)</p><input type="number" value={form.produto_na_troca} onChange={(e) => {
+                const v = e.target.value;
+                const newVendido = recalcVendido({ troca: v });
+                setForm(f => ({ ...f, produto_na_troca: v, ...(newVendido ? { preco_vendido: newVendido } : {}) }));
+              }} placeholder="0" className={inputCls} /></div>
+              {temTroca && (
+                <>
+                  <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
+                  <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} placeholder="Ex: Titânio Natural" className={inputCls} /></div>
+                  <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
+                  <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
+                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
+                  </select></div>
+                  <div className="flex gap-3 items-center">
+                    <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_caixa === "SIM"} onChange={(e) => set("troca_caixa", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Caixa</label>
+                    <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo === "SIM"} onChange={(e) => set("troca_cabo", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
+                    <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte === "SIM"} onChange={(e) => set("troca_fonte", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
+                  </div>
+                  <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
+                  <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
+                  <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
+                </>
+              )}
+            </div>
+            {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
+          </div>
 
           {/* Botão Adicionar Produto ao Carrinho — sempre visível quando tem cliente */}
           {form.cliente && (
