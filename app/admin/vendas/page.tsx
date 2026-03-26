@@ -714,11 +714,12 @@ export default function VendasPage() {
             : 0;
           const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
 
-          // Add entradas (pix, especie, troca) — these are global, added once to the total
+          // Add entradas (pix, especie) — these are global
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-          const gValorTroca = parseFloat(form.produto_na_troca) || 0;
-          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + gValorTroca;
+          // Trocas são por produto — somar todas as trocas de todos os produtos
+          const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
+          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
@@ -786,8 +787,8 @@ export default function VendasPage() {
               const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
               const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-              const gValorTroca = parseFloat(form.produto_na_troca) || 0;
-              const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + gValorTroca;
+              const totalTrocas = groupPayloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
+              const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
               let comprovanteDistribuido = 0;
               let vendidoDistribuido = 0;
@@ -2271,7 +2272,7 @@ export default function VendasPage() {
             const gCompAlt = parseFloat(form.comp_alt) || 0;
             const gPixE = parseFloat(form.entrada_pix) || 0;
             const gEspecieE = parseFloat(form.entrada_especie) || 0;
-            const gTrocaE = parseFloat(form.produto_na_troca) || 0;
+            const gTrocaE = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
             // Receita real = líquido cartão principal + líquido cartão alt + pix + espécie + troca
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
@@ -2288,7 +2289,7 @@ export default function VendasPage() {
             const gCompAltConf = parseFloat(form.comp_alt) || 0;
             const gPix = parseFloat(form.entrada_pix) || 0;
             const gEspecie = parseFloat(form.entrada_especie) || 0;
-            const gTroca = parseFloat(form.produto_na_troca) || 0;
+            const gTroca = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
             const somaFormas = gComprovante + gCompAltConf + gPix + gEspecie + gTroca;
             // Only check conferencia if at least one payment field is filled
             const temConferencia = somaFormas > 0 && totalVendido > 0;
