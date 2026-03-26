@@ -180,11 +180,11 @@ export default function DashboardPage() {
   // Depósitos de espécie (saem do caixa espécie, entram no banco)
   const depEspHoje = gastosHoje.filter(g => g.is_dep_esp).reduce((s, g) => s + (g.valor || 0), 0);
 
-  // Se saldos foram informados manualmente (/saldos), usar valores diretos sem recalcular
-  const saldoItau = isManual ? (s?.esp_itau || itauBase) : (itauBase + pixHojeItau + d1Itau - gastosHojeItau);
-  const saldoInf = isManual ? (s?.esp_inf || infBase) : (infBase + pixHojeInf + d1Inf - gastosHojeInf);
-  const saldoMP = isManual ? (s?.esp_mp || mpBase) : (mpBase + pixHojeMP + d1MP - gastosHojeMP);
-  const saldoEsp = isManual ? espBase : (espBase + especieHoje - gastosHojeEsp - depEspHoje);
+  // Saldo = base manhã + entradas do dia - saídas do dia (sempre em tempo real)
+  const saldoItau = itauBase + pixHojeItau + d1Itau - gastosHojeItau;
+  const saldoInf = infBase + pixHojeInf + d1Inf - gastosHojeInf;
+  const saldoMP = mpBase + pixHojeMP + d1MP - gastosHojeMP;
+  const saldoEsp = espBase + especieHoje - gastosHojeEsp - depEspHoje;
   const saldoTotal = saldoItau + saldoInf + saldoMP + saldoEsp;
 
   // Estoque — soma TUDO (todos os tipos/categorias)
@@ -291,10 +291,10 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={isManual ? "Informado manualmente via /saldos" : `Base: ${fmt(itauBase)} | D+0: +${fmt(pixHojeItau)} | D+1: +${fmt(d1Itau)} | Saídas: -${fmt(gastosHojeItau)}`} />
-          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={isManual ? "Informado manualmente via /saldos" : `Base: ${fmt(infBase)} | D+0: +${fmt(pixHojeInf)} | D+1: +${fmt(d1Inf)} | Saídas: -${fmt(gastosHojeInf)}`} />
-          <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(mpBase)} | Gastos: -${fmt(gastosHojeMP)} | Link: +${fmt(pixHojeMP)}`} />
-          <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={isManual ? "Informado manualmente via /saldos" : `Manhã: ${fmt(espBase)}`} />
+          <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={`Base: ${fmt(itauBase)} | PIX: +${fmt(pixHojeItau)} | D+1: +${fmt(d1Itau)} | Saídas: -${fmt(gastosHojeItau)}`} />
+          <Card icon="💳" title="Saldo Infinite (atual)" value={fmt(saldoInf)} color="text-purple-700" sub={`Base: ${fmt(infBase)} | PIX: +${fmt(pixHojeInf)} | D+1: +${fmt(d1Inf)} | Saídas: -${fmt(gastosHojeInf)}`} />
+          <Card icon="💚" title="Mercado Pago (atual)" value={fmt(saldoMP)} color="text-green-700" sub={`Base: ${fmt(mpBase)} | Link: +${fmt(pixHojeMP)} | D+1: +${fmt(d1MP)} | Saídas: -${fmt(gastosHojeMP)}`} />
+          <Card icon="💵" title="Dinheiro em Espécie" value={fmt(saldoEsp)} color="text-[#1D1D1F]" sub={`Base: ${fmt(espBase)} | Recebido: +${fmt(especieHoje)} | Saídas: -${fmt(gastosHojeEsp)}`} />
           {totalFiado > 0 && (
             <Card icon="📋" title="Fiado Pendente" value={fmt(totalFiado)} color="text-orange-600" sub={`${fiadoPendente.length} venda${fiadoPendente.length !== 1 ? "s" : ""} a receber`} />
           )}
