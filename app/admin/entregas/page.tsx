@@ -28,11 +28,11 @@ interface Entrega {
 
 type EntregaStatus = Entrega["status"];
 
-const STATUS_CONFIG: Record<EntregaStatus, { label: string; color: string; bg: string; border: string; icon: string }> = {
-  PENDENTE: { label: "Pendente", color: "text-yellow-700", bg: "bg-yellow-100", border: "border-yellow-300", icon: "🟡" },
-  SAIU: { label: "Saiu p/ Entrega", color: "text-blue-700", bg: "bg-blue-100", border: "border-blue-300", icon: "🔵" },
-  ENTREGUE: { label: "Entregue", color: "text-green-700", bg: "bg-green-100", border: "border-green-300", icon: "🟢" },
-  CANCELADA: { label: "Cancelada", color: "text-red-600", bg: "bg-red-100", border: "border-red-300", icon: "🔴" },
+const STATUS_CONFIG: Record<EntregaStatus, { label: string; color: string; colorDark: string; bg: string; bgDark: string; border: string; borderDark: string; icon: string }> = {
+  PENDENTE: { label: "Pendente", color: "text-yellow-700", colorDark: "text-yellow-300", bg: "bg-yellow-100", bgDark: "bg-yellow-900/30", border: "border-yellow-300", borderDark: "border-yellow-600", icon: "🟡" },
+  SAIU: { label: "Saiu p/ Entrega", color: "text-blue-700", colorDark: "text-blue-300", bg: "bg-blue-100", bgDark: "bg-blue-900/30", border: "border-blue-300", borderDark: "border-blue-600", icon: "🔵" },
+  ENTREGUE: { label: "Entregue", color: "text-green-700", colorDark: "text-green-300", bg: "bg-green-100", bgDark: "bg-green-900/30", border: "border-green-300", borderDark: "border-green-600", icon: "🟢" },
+  CANCELADA: { label: "Cancelada", color: "text-red-600", colorDark: "text-red-400", bg: "bg-red-100", bgDark: "bg-red-900/30", border: "border-red-300", borderDark: "border-red-600", icon: "🔴" },
 };
 
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
@@ -66,7 +66,7 @@ function formatDateBR(dateStr: string) {
 }
 
 export default function EntregasPage() {
-  const { password, apiHeaders } = useAdmin();
+  const { password, apiHeaders, darkMode: dm } = useAdmin();
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -526,14 +526,14 @@ export default function EntregasPage() {
                         <button
                           key={e.id}
                           onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${sc.border} ${sc.bg}`}
+                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
                         >
                           <div className="flex items-center gap-1 mb-0.5">
                             <span className="text-[10px]">{sc.icon}</span>
-                            {e.horario && <span className="text-[10px] font-bold text-[#1D1D1F]">{e.horario}</span>}
+                            {e.horario && <span className={`text-[10px] font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
                           </div>
-                          <p className="text-xs font-semibold text-[#1D1D1F] truncate">{e.cliente}</p>
-                          {e.bairro && <p className="text-[10px] text-[#86868B] truncate">{e.bairro}</p>}
+                          <p className={`text-xs font-semibold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</p>
+                          {e.bairro && <p className={`text-[10px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.bairro}</p>}
                         </button>
                       );
                     })}
@@ -573,12 +573,12 @@ export default function EntregasPage() {
                         <button
                           key={e.id}
                           onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all ${sc.border} ${sc.bg}`}
+                          className={`w-full text-left p-3 rounded-lg border transition-all ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
                               <span>{sc.icon}</span>
-                              <span className="text-sm font-semibold text-[#1D1D1F]">{e.cliente}</span>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</span>
                             </div>
                             {e.horario && <span className="text-xs font-bold text-[#1D1D1F]">{e.horario}</span>}
                           </div>
@@ -624,18 +624,18 @@ export default function EntregasPage() {
         const sc = STATUS_CONFIG[e.status];
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEntrega(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={(ev) => ev.stopPropagation()}>
+            <div className={`rounded-2xl w-full max-w-md shadow-xl ${dm ? "bg-[#1C1C1E]" : "bg-white"}`} onClick={(ev) => ev.stopPropagation()}>
               {/* Header */}
-              <div className={`px-5 py-4 rounded-t-2xl ${sc.bg} border-b ${sc.border}`}>
+              <div className={`px-5 py-4 rounded-t-2xl border-b ${dm ? `${sc.bgDark} ${sc.borderDark}` : `${sc.bg} ${sc.border}`}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{sc.icon}</span>
                     <div>
-                      <h3 className="text-base font-bold text-[#1D1D1F]">{e.cliente}</h3>
-                      <p className="text-xs text-[#86868B]">{formatDateBR(e.data_entrega)} {e.horario ? `- ${e.horario}` : ""}</p>
+                      <h3 className={`text-base font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</h3>
+                      <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{formatDateBR(e.data_entrega)} {e.horario ? `- ${e.horario}` : ""}</p>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedEntrega(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-lg">X</button>
+                  <button onClick={() => setSelectedEntrega(null)} className={`text-lg ${dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}>X</button>
                 </div>
               </div>
 
