@@ -429,7 +429,7 @@ export default function EstoquePage() {
     // IPHONES
     ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
     // MACBOOK
-    mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
+    mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
     // MAC_MINI
     mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
     // IPADS
@@ -653,7 +653,7 @@ export default function EstoquePage() {
       setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
       setSpec({
         ip_modelo: "16", ip_linha: "", ip_storage: "128GB",
-        mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_ram: "16GB", mb_storage: "256GB",
+        mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
         mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
         ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
         aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS",
@@ -1136,6 +1136,10 @@ export default function EstoquePage() {
               </select></div>
               <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
                 {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
+              </select></div>
+              <div><p className={labelCls}>Núcleos</p><select value={spec.mb_nucleos} onChange={(e) => setS("mb_nucleos", e.target.value)} className={inputCls}>
+                <option value="">— Opcional —</option>
+                {["8C CPU/7C GPU", "8C CPU/8C GPU", "8C CPU/10C GPU", "10C CPU/8C GPU", "10C CPU/10C GPU", "12C CPU/16C GPU", "12C CPU/19C GPU", "14C CPU/20C GPU", "14C CPU/32C GPU", "16C CPU/40C GPU"].map((n) => <option key={n}>{n}</option>)}
               </select></div>
               <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
                 {["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"].map((r) => <option key={r}>{r}</option>)}

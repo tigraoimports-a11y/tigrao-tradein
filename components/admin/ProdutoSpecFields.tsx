@@ -7,6 +7,7 @@ import {
   STRUCTURED_CATS,
   IPHONE_STORAGES,
   MACBOOK_CHIPS,
+  MACBOOK_NUCLEOS,
   MACBOOK_RAMS,
   MACBOOK_STORAGES,
   MAC_MINI_CHIPS,
@@ -183,6 +184,13 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Chip</p>
             <select value={row.spec.mb_chip} onChange={(e) => setSpec("mb_chip", e.target.value)} className={inputCls}>
               {MACBOOK_CHIPS_FULL.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Núcleos</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Opcional —</option>
+              {MACBOOK_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
             </select>
           </div>
           <div>
