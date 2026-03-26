@@ -134,10 +134,46 @@ export default function DashboardPage() {
   }
 
   // Recebido hoje (D+0) — mesma lógica do relatório /noite
-  const vendasD0Hoje = vendasHoje.filter(v => v.recebimento === "D+0");
-  const pixHojeItau = vendasD0Hoje.filter(v => v.banco === "ITAU").reduce((s, v) => s + (v.preco_vendido || 0), 0);
-  const pixHojeInf = vendasD0Hoje.filter(v => v.banco === "INFINITE").reduce((s, v) => s + (v.preco_vendido || 0), 0);
-  const pixHojeMP = vendasD0Hoje.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  // Calcular PIX real por banco: soma apenas o que efetivamente entra em cada conta
+  const pixHojeItau = (() => {
+    let total = 0;
+    for (const v of vendasHoje) {
+      // PIX direto no Itaú (forma=PIX, banco=ITAU)
+      if (v.forma === "PIX" && v.banco === "ITAU") {
+        total += (v.preco_vendido || 0) - (v.entrada_especie || 0);
+      }
+      // Entrada PIX mista destinada ao Itaú
+      if ((v.entrada_pix || 0) > 0 && (v.banco_pix || "ITAU") === "ITAU") {
+        total += v.entrada_pix;
+      }
+    }
+    return total;
+  })();
+  const pixHojeInf = (() => {
+    let total = 0;
+    for (const v of vendasHoje) {
+      if (v.forma === "PIX" && v.banco === "INFINITE") {
+        total += (v.preco_vendido || 0) - (v.entrada_especie || 0);
+      }
+      if ((v.entrada_pix || 0) > 0 && v.banco_pix === "INFINITE") {
+        total += v.entrada_pix;
+      }
+    }
+    return total;
+  })();
+  const pixHojeMP = (() => {
+    let total = 0;
+    for (const v of vendasHoje) {
+      // Link MP (forma=CARTAO, banco=MERCADO_PAGO) — MP é D+0
+      if (v.banco === "MERCADO_PAGO" && (v.forma === "CARTAO" || v.forma === "PIX")) {
+        total += (v.preco_vendido || 0) - (v.entrada_pix || 0) - (v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+      }
+      if ((v.entrada_pix || 0) > 0 && v.banco_pix === "MERCADO_PAGO") {
+        total += v.entrada_pix;
+      }
+    }
+    return total;
+  })();
 
   // Créditos D+1 de dias anteriores que caíram hoje (mesma lógica do /noite)
   const d1Credits = (() => {
