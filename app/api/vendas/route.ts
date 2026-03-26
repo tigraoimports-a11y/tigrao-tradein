@@ -230,6 +230,9 @@ export async function DELETE(req: NextRequest) {
   // Buscar venda antes de deletar (para limpar seminovo se houver)
   const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
 
+  // Apagar entrega vinculada (se existir)
+  await supabase.from("entregas").delete().eq("venda_id", id);
+
   const { error } = await supabase.from("vendas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
