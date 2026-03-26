@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
 
   // Descontar do estoque se veio de um produto cadastrado
   if (estoqueId) {
-    const { data: item } = await supabase.from("estoque").select("qnt").eq("id", estoqueId).single();
+    const { data: item } = await supabase.from("estoque").select("qnt,produto").eq("id", estoqueId).single();
     if (item) {
       const novaQnt = Math.max(0, Number(item.qnt) - 1);
       await supabase.from("estoque").update({
@@ -126,13 +126,21 @@ export async function POST(req: NextRequest) {
         status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
         updated_at: new Date().toISOString(),
       }).eq("id", estoqueId);
+      // Log remoção automática do estoque
+      await logActivity(
+        usuario,
+        "Removeu do estoque (auto)",
+        `${item.produto || body.produto || "?"} — restam ${novaQnt} un.`,
+        "estoque",
+        estoqueId
+      );
     }
   }
 
   // Log da venda
   await logActivity(
     usuario,
-    "Registrou venda",
+    estoqueId ? "Registrou venda" : "Registrou venda (manual)",
     `${body.cliente || "?"} - ${body.produto || "?"}`,
     "vendas",
     data?.id
