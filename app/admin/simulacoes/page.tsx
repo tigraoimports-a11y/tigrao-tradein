@@ -255,7 +255,7 @@ export default function AdminPage() {
           // Mark as follow_up_enviado
           await fetch("/api/admin/followup", {
             method: "PATCH",
-            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
             body: JSON.stringify({ id: row.id }),
           });
 
@@ -476,7 +476,7 @@ export default function AdminPage() {
                   await Promise.all([...selected].map((id) =>
                     fetch("/api/admin/simulacoes", {
                       method: "DELETE",
-                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                       body: JSON.stringify({ id }),
                     })
                   ));
@@ -544,7 +544,7 @@ export default function AdminPage() {
                               setData((prev) => prev ? prev.map((r) => r.id === row.id ? { ...r, contatado: true } : r) : prev);
                               fetch("/api/admin/contatar", {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                 body: JSON.stringify({ id: row.id }),
                               });
                               const num = row.whatsapp.replace(/\D/g, "");
@@ -607,7 +607,7 @@ export default function AdminPage() {
                             setDeleting(row.id);
                             await fetch("/api/admin/simulacoes", {
                               method: "DELETE",
-                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                               body: JSON.stringify({ id: row.id }),
                             });
                             setData((prev) => prev ? prev.filter((r) => r.id !== row.id) : prev);

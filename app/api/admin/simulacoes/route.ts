@@ -23,7 +23,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const usuario = request.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = request.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Removeu simulacao", `ID: ${id}`, "simulacoes", id).catch(() => {});
 
   return NextResponse.json({ ok: true });

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
-    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
     logActivity(usuario, "Gerou etiqueta", `Produto: ${produto}, Codigo: ${codigo_barras}`, "etiquetas", data?.id).catch(() => {});
 
     return NextResponse.json({ ok: true, data });
@@ -100,7 +100,7 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase.from("etiquetas").delete().eq("id", id);
     if (error) throw error;
 
-    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
     logActivity(usuario, "Removeu etiqueta", `ID: ${id}`, "etiquetas", id).catch(() => {});
 
     return NextResponse.json({ ok: true });

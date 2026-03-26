@@ -40,7 +40,7 @@ export default function RecebiveisPage() {
   const fetchVendas = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,7 +91,7 @@ export default function RecebiveisPage() {
       const allRecebido = parcelas.every(p => p.recebido);
       const res = await fetch("/api/vendas", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
         body: JSON.stringify({ id: row.venda.id, fiado_parcelas: parcelas, ...(allRecebido ? { fiado_recebido: true } : {}) }),
       });
       if ((await res.json()).ok) {

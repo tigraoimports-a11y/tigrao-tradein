@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase.from("encomendas").insert({ ...body, updated_at: new Date().toISOString() }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Criou encomenda", `Cliente: ${body.cliente || "N/A"}, Produto: ${body.produto || "N/A"}`, "encomendas", data?.id).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
   const { error } = await supabase.from("encomendas").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Atualizou encomenda", `Campos: ${Object.keys(fields).join(", ")}`, "encomendas", id).catch(() => {});
 
   return NextResponse.json({ ok: true });
@@ -45,7 +45,7 @@ export async function DELETE(req: NextRequest) {
   const { error } = await supabase.from("encomendas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Removeu encomenda", `ID: ${id}`, "encomendas", id).catch(() => {});
 
   return NextResponse.json({ ok: true });

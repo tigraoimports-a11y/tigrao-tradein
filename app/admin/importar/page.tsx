@@ -29,7 +29,7 @@ export default function ImportarPage() {
 
       const importRes = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
         body: JSON.stringify(body),
       });
       const json = await importRes.json();
@@ -98,7 +98,7 @@ export default function ImportarPage() {
     if (jsonDirect) {
       const res = await fetch("/api/importar", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
         body: JSON.stringify({ table, rows, autoStatus: false }),
       });
       const json = await res.json();
@@ -314,7 +314,7 @@ export default function ImportarPage() {
     const rowsToSend = table === "vendas" ? validRows : mapped;
     const res = await fetch("/api/importar", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({ table, rows: rowsToSend, autoStatus: table === "vendas" }),
     });
     const json = await res.json();
@@ -343,7 +343,7 @@ export default function ImportarPage() {
                 try {
                   const res = await fetch("/api/importar", {
                     method: "DELETE",
-                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                     body: JSON.stringify({ table: t }),
                   });
                   const json = await res.json();
@@ -398,7 +398,7 @@ export default function ImportarPage() {
                 const data = await res.json();
                 const importRes = await fetch("/api/estoque", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                   body: JSON.stringify({ action: "import", rows: data }),
                 });
                 const json = await importRes.json();

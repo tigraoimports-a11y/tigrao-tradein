@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
     logActivity(usuario, "Enviou nota fiscal", `Venda ID: ${vendaId}`, "vendas", vendaId).catch(() => {});
 
     return NextResponse.json({ url: publicUrl, ok: true });

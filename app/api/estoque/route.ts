@@ -8,7 +8,8 @@ function auth(req: NextRequest) {
 }
 
 function getUsuario(req: NextRequest): string {
-  return req.headers.get("x-admin-user") || "sistema";
+  const raw = req.headers.get("x-admin-user") || "sistema";
+  try { return decodeURIComponent(raw); } catch { return raw; }
 }
 
 function getRole(req: NextRequest): string {
@@ -214,7 +215,7 @@ export async function POST(req: NextRequest) {
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await logActivity(getUsuario(req), "Adicionou ao estoque", produtoNome, "estoque", data?.id);
+  await logActivity(getUsuario(req), "Adicionou ao estoque", `${produtoNome}. Quantidade: ${parseInt(body.qnt) || 0}`, "estoque", data?.id);
 
   return NextResponse.json({ ok: true, data });
 }

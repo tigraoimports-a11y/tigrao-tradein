@@ -37,7 +37,7 @@ export default function RastreioPage() {
     try {
       const [eRes, vRes] = await Promise.all([
         fetch("/api/estoque", { headers: { "x-admin-password": password } }),
-        fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
       ]);
 
       let estoqueMatches: EstoqueItem[] = [];

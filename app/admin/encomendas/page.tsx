@@ -49,7 +49,7 @@ export default function EncomendasPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/encomendas", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/encomendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) { const json = await res.json(); setEncomendas(json.data ?? []); }
     } catch { /* ignore */ }
     setLoading(false);
@@ -64,7 +64,7 @@ export default function EncomendasPage() {
     setSaving(true); setMsg("");
     const res = await fetch("/api/encomendas", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({
         cliente: form.cliente, whatsapp: form.whatsapp || null, data: form.data,
         produto: form.produto, cor: form.cor || null,
@@ -88,7 +88,7 @@ export default function EncomendasPage() {
   const handleStatusChange = async (enc: Encomenda, newStatus: string) => {
     await fetch("/api/encomendas", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({ id: enc.id, status: newStatus }),
     });
     setEncomendas((prev) => prev.map((e) => e.id === enc.id ? { ...e, status: newStatus } : e));
@@ -209,7 +209,7 @@ export default function EncomendasPage() {
                     <td className="px-4 py-3">
                       <button onClick={async () => {
                         if (!confirm(`Excluir encomenda de ${enc.cliente}?`)) return;
-                        await fetch("/api/encomendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" }, body: JSON.stringify({ id: enc.id }) });
+                        await fetch("/api/encomendas", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") }, body: JSON.stringify({ id: enc.id }) });
                         setEncomendas((prev) => prev.filter((e) => e.id !== enc.id));
                       }} className="text-[#86868B] hover:text-red-500 text-xs">X</button>
                     </td>

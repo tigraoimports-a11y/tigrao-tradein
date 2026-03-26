@@ -20,7 +20,7 @@ export async function DELETE(req: NextRequest) {
   const { error, count } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Limpou tabela", `Tabela: ${table}, Registros removidos: ${count ?? "N/A"}`, table).catch(() => {});
 
   return NextResponse.json({ ok: true, deleted: count });
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Importou dados", `Tabela: ${table}, Importados: ${imported}/${rows.length}`, table).catch(() => {});
 
   return NextResponse.json({ ok: true, imported, errors, total: rows.length });

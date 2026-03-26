@@ -119,7 +119,7 @@ export default function GastosPage() {
   const fetchGastos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/gastos", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/gastos", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setGastos(json.data ?? []);
@@ -175,7 +175,7 @@ export default function GastosPage() {
 
     const res = await fetch("/api/gastos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify(payload),
     });
     const json = await res.json();
@@ -268,7 +268,7 @@ export default function GastosPage() {
         // Primeiro deletar o antigo
         await fetch("/api/gastos", {
           method: "DELETE",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
           body: JSON.stringify({ id: grupo.items[0].id }),
         });
         // Depois criar novos
@@ -281,7 +281,7 @@ export default function GastosPage() {
         }));
         const res = await fetch("/api/gastos", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
           body: JSON.stringify(items),
         });
         const json = await res.json();
@@ -298,7 +298,7 @@ export default function GastosPage() {
 
     const res = await fetch("/api/gastos", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify(payload),
     });
     const json = await res.json();
@@ -316,7 +316,7 @@ export default function GastosPage() {
     const body = g.grupo_id ? { grupo_id: g.grupo_id } : { id: g.items[0].id };
     await fetch("/api/gastos", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify(body),
     });
     fetchGastos();

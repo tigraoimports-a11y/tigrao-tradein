@@ -62,7 +62,7 @@ export default function AnalyticsPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/analytics?range=${range}`, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
         const json = await res.json();

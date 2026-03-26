@@ -42,7 +42,7 @@ export default function UsuariosPage() {
   const headers = useCallback(() => ({
     "Content-Type": "application/json",
     "x-admin-password": password,
-    "x-admin-user": user?.nome || "sistema",
+    "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
     "x-admin-role": user?.role || "admin",
   }), [password, user]);
 

@@ -224,7 +224,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       setSidebarCollapsed,
       apiHeaders: (extra?: Record<string, string>) => ({
         "x-admin-password": password,
-        "x-admin-user": user?.nome || "sistema",
+        "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
         "x-admin-role": user?.role || "admin",
         "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
         ...extra,

@@ -21,7 +21,7 @@ export default function FornecedoresPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) { const json = await res.json(); setFornecedores(json.data ?? []); }
     } catch { /* ignore */ }
     setLoading(false);
@@ -33,7 +33,7 @@ export default function FornecedoresPage() {
     if (!form.nome.trim()) { setMsg("Nome obrigatorio"); return; }
     const res = await fetch("/api/fornecedores", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify(form),
     });
     const json = await res.json();
@@ -50,7 +50,7 @@ export default function FornecedoresPage() {
     if (!confirm(`Excluir fornecedor "${f.nome}"?`)) return;
     const res = await fetch("/api/fornecedores", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({ id: f.id }),
     });
     const json = await res.json();

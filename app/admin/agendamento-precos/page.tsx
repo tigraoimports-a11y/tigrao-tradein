@@ -24,7 +24,7 @@ export default function AgendamentoPrecosPage() {
     async function load() {
       try {
         // Buscar variações da loja
-        const res = await fetch("/api/admin/mostruario", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+        const res = await fetch("/api/admin/mostruario", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
         const data = await res.json();
         const vars: Variacao[] = [];
         for (const prod of data.produtos || []) {

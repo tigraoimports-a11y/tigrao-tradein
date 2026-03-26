@@ -34,7 +34,7 @@ export default function ConciliacaoPage() {
   const fetchSaldos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/saldos?data=${dataRef}`, { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch(`/api/saldos?data=${dataRef}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       const json = await res.json();
       const row = json?.data?.[0] || json?.[0] || null;
       setSaldoSistema(row);

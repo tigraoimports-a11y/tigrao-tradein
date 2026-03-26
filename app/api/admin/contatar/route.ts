@@ -23,7 +23,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const usuario = request.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = request.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Contatou simulacao", `Simulacao ID: ${id}`, "simulacoes", id).catch(() => {});
 
   return NextResponse.json({ ok: true });

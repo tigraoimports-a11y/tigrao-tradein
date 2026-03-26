@@ -17,8 +17,8 @@ const ACTION_CONFIG: Record<string, { icon: string; color: string }> = {
   "Registrou venda": { icon: "💰", color: "#2ECC71" },
   "Excluiu venda": { icon: "🗑️", color: "#E74C3C" },
   "Registrou gasto": { icon: "📤", color: "#E8740E" },
-  "Adicionou ao estoque": { icon: "📦", color: "#3498DB" },
-  "Removeu do estoque": { icon: "📦", color: "#E74C3C" },
+  "Adicionou ao estoque": { icon: "⬆️", color: "#2ECC71" },
+  "Removeu do estoque": { icon: "⬇️", color: "#E74C3C" },
   "Alterou preco": { icon: "🏷️", color: "#9B59B6" },
   "Alterou usuario": { icon: "👤", color: "#6E6E73" },
   "Criou usuario": { icon: "👤", color: "#2ECC71" },
@@ -83,7 +83,7 @@ export default function LogPage() {
         params.set("to", nextDay.toISOString().split("T")[0]);
       }
       const res = await fetch(`/api/admin/log?${params}`, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
         const json = await res.json();

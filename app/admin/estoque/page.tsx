@@ -176,7 +176,7 @@ export default function EstoquePage() {
     setImeiSearching(true);
     try {
       const res = await fetch(`/api/estoque?imei=${encodeURIComponent(imeiSearch.trim())}`, {
-        headers: { "x-admin-password": password, "x-admin-user": userName },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       });
       if (res.ok) {
         const json = await res.json();
@@ -202,7 +202,7 @@ export default function EstoquePage() {
       const ids = Array.from(selectedIds);
       const res = await fetch("/api/estoque", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
         body: JSON.stringify({ ids }),
       });
       if (res.ok) {
@@ -479,7 +479,7 @@ export default function EstoquePage() {
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": userName } });
+      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } });
       if (res.ok) { const json = await res.json(); setEstoque(json.data ?? []); }
     } catch { /* ignore */ }
     setLoading(false);
@@ -487,7 +487,7 @@ export default function EstoquePage() {
 
   const fetchFornecedores = useCallback(async () => {
     try {
-      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) { const json = await res.json(); setFornecedores(json.data ?? []); }
     } catch { /* ignore */ }
   }, [password]);
@@ -498,7 +498,7 @@ export default function EstoquePage() {
     if (!novoFornecedorNome.trim()) return;
     const res = await fetch("/api/fornecedores", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({ nome: novoFornecedorNome }),
     });
     const json = await res.json();
@@ -518,7 +518,7 @@ export default function EstoquePage() {
   const apiPatch = async (id: string, fields: Record<string, unknown>) => {
     await fetch("/api/estoque", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({ id, ...fields }),
     });
   };
@@ -585,7 +585,7 @@ export default function EstoquePage() {
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({
         produto: nomeProduto, categoria: form.categoria,
         qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
@@ -594,6 +594,7 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null,
+        data_entrada: new Date().toISOString().split("T")[0],
       }),
     });
     const json = await res.json();
@@ -620,7 +621,7 @@ export default function EstoquePage() {
         try {
           const vRes = await fetch("/api/estoque", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
             body: JSON.stringify({
               produto: nomeProduto, categoria: form.categoria,
               qnt: parseInt(v.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
@@ -673,7 +674,7 @@ export default function EstoquePage() {
     if (!nomeProduto) { setMsg("Preencha o produto primeiro"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({
         produto: nomeProduto, categoria: form.categoria,
         qnt: parseInt(form.qnt) || 1, custo_unitario: parseFloat(form.custo_unitario) || 0,
@@ -700,7 +701,7 @@ export default function EstoquePage() {
       const rows = await res.json();
       const importRes = await fetch("/api/estoque", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
         body: JSON.stringify({ action: "import", rows }),
       });
       const json = await importRes.json();
@@ -1644,7 +1645,7 @@ export default function EstoquePage() {
                                               if (newCat && newCat !== p.categoria) {
                                                 await fetch("/api/estoque", {
                                                   method: "PATCH",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName },
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
                                                   body: JSON.stringify({ id: p.id, categoria: newCat }),
                                                 });
                                                 setEstoque((prev) => prev.map((r) => r.id === p.id ? { ...r, categoria: newCat } : r));
@@ -1668,7 +1669,7 @@ export default function EstoquePage() {
                                         )}
                                         <button onClick={async () => {
                                           if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
-                                          await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": userName }, body: JSON.stringify({ id: p.id }) });
+                                          await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id }) });
                                           setEstoque((prev) => prev.filter((r) => r.id !== p.id));
                                         }} className={`p-1.5 rounded-lg ${dm ? "hover:bg-red-900/30" : "hover:bg-red-50"} text-[#86868B] hover:text-red-500 transition-colors`}><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                         </div>
@@ -1830,7 +1831,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
     try {
       const res = await fetch("/api/scan", {
         method: "POST",
-        headers: { "x-admin-password": password, "x-admin-user": userName, "Content-Type": "application/json" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName), "Content-Type": "application/json" },
         body: JSON.stringify({ serial_no: code }),
       });
       const data = await res.json();
@@ -1870,7 +1871,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
     try {
       const res = await fetch("/api/scan", {
         method: "PUT",
-        headers: { "x-admin-password": password, "x-admin-user": userName, "Content-Type": "application/json" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName), "Content-Type": "application/json" },
         body: JSON.stringify({
           serial_no: serialNo,
           imei: form.imei,

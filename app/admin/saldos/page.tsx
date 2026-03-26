@@ -40,7 +40,7 @@ export default function SaldosPage() {
   const fetchSaldos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/saldos", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/saldos", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setSaldos(json.data ?? []);
@@ -51,7 +51,7 @@ export default function SaldosPage() {
 
   const fetchSaldoData = useCallback(async (d: string) => {
     try {
-      const res = await fetch(`/api/saldos?data=${d}`, { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch(`/api/saldos?data=${d}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         const s = json.data;
@@ -76,7 +76,7 @@ export default function SaldosPage() {
     setMsg("");
     const res = await fetch("/api/saldos", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({
         data: dataAtual,
         itau_base: parseFloat(fromDisplayBR(itau)) || 0,
@@ -97,7 +97,7 @@ export default function SaldosPage() {
     setMsg("");
     const res = await fetch("/api/saldos", {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       body: JSON.stringify({ data: dataAtual }),
     });
     const json = await res.json();

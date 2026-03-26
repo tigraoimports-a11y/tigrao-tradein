@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Registrou saldos", `Data: ${dataISO}`, "saldos_bancarios").catch(() => {});
 
   return NextResponse.json({ ok: true });
@@ -95,7 +95,7 @@ export async function PUT(req: NextRequest) {
   try {
     const report = await gerarNoite(supabase, dataISO);
 
-    const usuario = req.headers.get("x-admin-user") || "Sistema";
+    const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
     logActivity(usuario, "Executou fechamento noite", `Data: ${dataISO}`, "saldos_bancarios").catch(() => {});
 
     return NextResponse.json({ ok: true, report });

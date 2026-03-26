@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Criou fornecedor", `Fornecedor: ${body.nome.trim().toUpperCase()}`, "fornecedores", data?.id).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
@@ -56,7 +56,7 @@ export async function DELETE(req: NextRequest) {
   const { error } = await supabase.from("fornecedores").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Removeu fornecedor", `ID: ${id}`, "fornecedores", id).catch(() => {});
 
   return NextResponse.json({ ok: true });

@@ -57,7 +57,7 @@ export default function RelatoriosPage() {
     setLoading(true);
     try {
       const [vRes, gRes] = await Promise.all([
-        fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
+        fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch("/api/gastos", { headers: { "x-admin-password": password } }),
       ]);
       if (vRes.ok) {

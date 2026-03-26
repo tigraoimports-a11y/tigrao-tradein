@@ -7,7 +7,8 @@ function auth(req: NextRequest) {
 }
 
 function getUsuario(req: NextRequest): string {
-  return req.headers.get("x-admin-user") || "sistema";
+  const raw = req.headers.get("x-admin-user") || "sistema";
+  try { return decodeURIComponent(raw); } catch { return raw; }
 }
 
 function getRole(req: NextRequest): string {

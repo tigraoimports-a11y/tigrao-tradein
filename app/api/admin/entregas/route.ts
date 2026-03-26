@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Criou entrega", `Cliente: ${cliente}, Data: ${data_entrega}`, "entrega", data?.id).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Atualizou entrega", `Status: ${updates.status || "atualizado"}`, "entrega", id).catch(() => {});
 
   return NextResponse.json({ ok: true, data });
@@ -111,7 +111,7 @@ export async function DELETE(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const usuario = req.headers.get("x-admin-user") || "Sistema";
+  const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Removeu entrega", `ID: ${id}`, "entrega", id).catch(() => {});
 
   return NextResponse.json({ ok: true });

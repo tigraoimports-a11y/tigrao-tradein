@@ -162,7 +162,7 @@ export default function VendasPage() {
 
   const fetchFornecedores = useCallback(async () => {
     try {
-      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setFornecedores(json.data ?? []);
@@ -172,7 +172,7 @@ export default function VendasPage() {
 
   const fetchEstoque = useCallback(async () => {
     try {
-      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setEstoque((json.data ?? []).filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE"));
@@ -227,7 +227,7 @@ export default function VendasPage() {
           : `${filtroAno}-${filtroMes}-31`;
         url = `/api/vendas?from=${from}&to=${to}`;
       }
-      const res = await fetch(url, { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } });
+      const res = await fetch(url, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setVendas(json.data ?? []);
@@ -247,7 +247,7 @@ export default function VendasPage() {
     setLoadingHistorico(true);
     try {
       const res = await fetch(`/api/vendas?search=${encodeURIComponent(nome)}`, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
         const json = await res.json();
@@ -320,7 +320,7 @@ export default function VendasPage() {
         try {
           const res = await fetch("/api/vendas", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
             body: JSON.stringify(queue[i].payload),
           });
           const json = await res.json();
@@ -891,7 +891,7 @@ export default function VendasPage() {
       try {
         const res = await fetch("/api/vendas", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
           body: JSON.stringify(payload),
         });
         const json = await res.json();
@@ -945,7 +945,7 @@ export default function VendasPage() {
         };
         fetch("/api/admin/entregas", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
           body: JSON.stringify(entregaPayload),
         }).catch(() => {}); // fire-and-forget
       }
@@ -1073,7 +1073,7 @@ export default function VendasPage() {
     try {
       const mes = `${filtroAno}-${filtroMes}`;
       const res = await fetch(`/api/admin/exportar?mes=${mes}`, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (!res.ok) {
         const json = await res.json();
@@ -1595,7 +1595,7 @@ export default function VendasPage() {
                     try {
                       const res = await fetch("/api/scan", {
                         method: "POST",
-                        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema", "Content-Type": "application/json" },
+                        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema"), "Content-Type": "application/json" },
                         body: JSON.stringify({ serial_no: code }),
                       });
                       const data = await res.json();
@@ -2675,7 +2675,7 @@ export default function VendasPage() {
                                                 };
                                                 const res = await fetch("/api/vendas", {
                                                   method: "PATCH",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: JSON.stringify(updates),
                                                 });
                                                 const resBody = await res.json();
@@ -2944,7 +2944,7 @@ export default function VendasPage() {
                                             if (grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
                                               try {
                                                 const res = await fetch("/api/estoque", {
-                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                 });
                                                 if (res.ok) {
                                                   const estoqueData = await res.json();
@@ -3071,7 +3071,7 @@ export default function VendasPage() {
                                                 if (!confirm("Remover nota fiscal?")) return;
                                                 await fetch("/api/vendas", {
                                                   method: "PATCH",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
                                                 });
                                                 setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
@@ -3096,7 +3096,7 @@ export default function VendasPage() {
                                               try {
                                                 const res = await fetch("/api/vendas/nota-fiscal", {
                                                   method: "POST",
-                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: formData,
                                                 });
                                                 const json = await res.json();
@@ -3121,7 +3121,7 @@ export default function VendasPage() {
                                               try {
                                                 const res = await fetch("/api/vendas/nota-fiscal", {
                                                   method: "POST",
-                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: formData,
                                                 });
                                                 const json = await res.json();
@@ -3142,7 +3142,7 @@ export default function VendasPage() {
                                               e.stopPropagation();
                                               await fetch("/api/vendas", {
                                                 method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                 body: JSON.stringify({ id: v.id, status_pagamento: "FINALIZADO" }),
                                               });
                                               setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "FINALIZADO" } : r));
@@ -3160,7 +3160,7 @@ export default function VendasPage() {
                                               if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
                                               await fetch("/api/vendas", {
                                                 method: "DELETE",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                 body: JSON.stringify({ id: v.id }),
                                               });
                                               setVendas(prev => prev.filter(r => r.id !== v.id));
@@ -3177,7 +3177,7 @@ export default function VendasPage() {
                                               e.stopPropagation();
                                               await fetch("/api/vendas", {
                                                 method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                 body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }),
                                               });
                                               setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "AGUARDANDO" } : r));
@@ -3283,7 +3283,7 @@ export default function VendasPage() {
                                               e.stopPropagation();
                                               await fetch("/api/vendas", {
                                                 method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                 body: JSON.stringify({ id: v.id, comprovante_url: null }),
                                               });
                                               setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: "" } : r));
@@ -3308,7 +3308,7 @@ export default function VendasPage() {
                                               try {
                                                 const res = await fetch("/api/vendas/comprovante", {
                                                   method: "POST",
-                                                  headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: formData,
                                                 });
                                                 const json = await res.json();
@@ -3406,7 +3406,7 @@ export default function VendasPage() {
                       fd.append("venda_id", vendaId);
                       await fetch("/api/vendas/nota-fiscal", {
                         method: "POST",
-                        headers: { "x-admin-user": user?.nome || "sistema" },
+                        headers: { "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                         body: fd,
                       });
                     }

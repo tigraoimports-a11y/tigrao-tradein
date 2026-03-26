@@ -81,7 +81,7 @@ export default function MapaVendasPage() {
         url = `/api/admin/mapa-vendas?range=custom&from=${customFrom}&to=${customTo}`;
       }
       const res = await fetch(url, {
-        headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" },
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
       if (res.ok) {
         setData(await res.json());

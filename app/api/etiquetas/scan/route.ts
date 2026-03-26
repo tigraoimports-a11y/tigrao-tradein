@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         observacao: `Entrada confirmada: ${produtoNome}`,
       });
 
-      const usuarioLog = req.headers.get("x-admin-user") || usuario || "Sistema";
+      const usuarioLog = (() => { const r = req.headers.get("x-admin-user") || usuario || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
       logActivity(usuarioLog, "Bipou entrada", `Produto: ${produtoNome}, Codigo: ${codigo_barras}`, "etiquetas", etiqueta.id).catch(() => {});
 
       return NextResponse.json({
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
         observacao: `Saída confirmada: ${etiqueta.produto}`,
       });
 
-      const usuarioLog = req.headers.get("x-admin-user") || usuario || "Sistema";
+      const usuarioLog = (() => { const r = req.headers.get("x-admin-user") || usuario || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
       logActivity(usuarioLog, "Bipou saida", `Produto: ${etiqueta.produto}, Codigo: ${codigo_barras}`, "etiquetas", etiqueta.id).catch(() => {});
 
       return NextResponse.json({
