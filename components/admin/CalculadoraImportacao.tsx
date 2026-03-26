@@ -7,6 +7,55 @@ const formatBRL = (v: number) =>
 const formatUSD = (v: number) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
+// Catálogo de produtos com peso pré-cadastrado (kg)
+const PRODUTOS_PESO: { cat: string; nome: string; peso: number }[] = [
+  // iPhones
+  { cat: "iPhone", nome: "iPhone 16", peso: 0.24 },
+  { cat: "iPhone", nome: "iPhone 16 Plus", peso: 0.27 },
+  { cat: "iPhone", nome: "iPhone 16 Pro", peso: 0.26 },
+  { cat: "iPhone", nome: "iPhone 16 Pro Max", peso: 0.29 },
+  { cat: "iPhone", nome: "iPhone 17 Air", peso: 0.22 },
+  { cat: "iPhone", nome: "iPhone 17", peso: 0.24 },
+  { cat: "iPhone", nome: "iPhone 17 Pro", peso: 0.26 },
+  { cat: "iPhone", nome: "iPhone 17 Pro Max", peso: 0.29 },
+  // iPads
+  { cat: "iPad", nome: "iPad A16 10.9\"", peso: 0.48 },
+  { cat: "iPad", nome: "iPad Mini 7", peso: 0.30 },
+  { cat: "iPad", nome: "iPad Air M3 11\"", peso: 0.46 },
+  { cat: "iPad", nome: "iPad Air M3 13\"", peso: 0.62 },
+  { cat: "iPad", nome: "iPad Pro M5 11\"", peso: 0.44 },
+  { cat: "iPad", nome: "iPad Pro M5 13\"", peso: 0.58 },
+  // MacBooks
+  { cat: "MacBook", nome: "MacBook Air M4 13\"", peso: 1.24 },
+  { cat: "MacBook", nome: "MacBook Air M4 15\"", peso: 1.51 },
+  { cat: "MacBook", nome: "MacBook Air M5 13\"", peso: 1.24 },
+  { cat: "MacBook", nome: "MacBook Pro M5 14\"", peso: 1.55 },
+  { cat: "MacBook", nome: "MacBook Pro M5 16\"", peso: 2.14 },
+  // Mac Mini / Studio
+  { cat: "Mac", nome: "Mac Mini M4", peso: 0.68 },
+  { cat: "Mac", nome: "Mac Mini M4 Pro", peso: 0.73 },
+  { cat: "Mac", nome: "Mac Studio M4 Max", peso: 2.70 },
+  // Apple Watch
+  { cat: "Watch", nome: "Apple Watch SE 2 (40mm)", peso: 0.15 },
+  { cat: "Watch", nome: "Apple Watch SE 2 (44mm)", peso: 0.16 },
+  { cat: "Watch", nome: "Apple Watch S11 (42mm)", peso: 0.16 },
+  { cat: "Watch", nome: "Apple Watch S11 (46mm)", peso: 0.17 },
+  { cat: "Watch", nome: "Apple Watch Ultra 3", peso: 0.19 },
+  // AirPods
+  { cat: "AirPods", nome: "AirPods 4", peso: 0.10 },
+  { cat: "AirPods", nome: "AirPods 4 ANC", peso: 0.10 },
+  { cat: "AirPods", nome: "AirPods Pro 3", peso: 0.10 },
+  { cat: "AirPods", nome: "AirPods Max", peso: 0.40 },
+  // Acessórios
+  { cat: "Acessório", nome: "Apple Pencil Pro", peso: 0.05 },
+  { cat: "Acessório", nome: "Apple Pencil USB-C", peso: 0.05 },
+  { cat: "Acessório", nome: "Magic Keyboard Air M3 11\"", peso: 0.30 },
+  { cat: "Acessório", nome: "Magic Keyboard Air M3 13\"", peso: 0.37 },
+  { cat: "Acessório", nome: "Magic Keyboard Pro M4 11\"", peso: 0.36 },
+  { cat: "Acessório", nome: "AirTag 4 Pack", peso: 0.10 },
+  { cat: "Acessório", nome: "Magic Mouse", peso: 0.10 },
+];
+
 interface CalcResult {
   p: number;
   w: number;
@@ -23,6 +72,9 @@ export default function CalculadoraImportacao() {
   const [peso, setPeso] = useState("");
   const [cotacao, setCotacao] = useState("");
   const [result, setResult] = useState<CalcResult | null>(null);
+  const [showProdutos, setShowProdutos] = useState(false);
+  const [buscaProduto, setBuscaProduto] = useState("");
+  const [produtoSelecionado, setProdutoSelecionado] = useState("");
 
   useEffect(() => {
     if (preco && peso && cotacao) {
@@ -64,6 +116,68 @@ export default function CalculadoraImportacao() {
         </code>
       </div>
 
+      {/* Seletor de Produto */}
+      <div className="relative">
+        <button
+          onClick={() => setShowProdutos(!showProdutos)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#D2D2D7] bg-white hover:border-[#E8740E] transition-colors"
+        >
+          <span className={`text-sm font-semibold ${produtoSelecionado ? "text-[#1D1D1F]" : "text-[#C7C7CC]"}`}>
+            {produtoSelecionado || "Selecionar produto (preenche peso automaticamente)"}
+          </span>
+          <span className="text-[#86868B]">{showProdutos ? "▲" : "▼"}</span>
+        </button>
+
+        {showProdutos && (
+          <div className="absolute z-50 mt-1 w-full bg-white border border-[#D2D2D7] rounded-xl shadow-xl max-h-[400px] overflow-hidden">
+            <div className="p-2 border-b border-[#E5E5EA] sticky top-0 bg-white">
+              <input
+                type="text"
+                value={buscaProduto}
+                onChange={(e) => setBuscaProduto(e.target.value)}
+                placeholder="Buscar produto..."
+                className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm outline-none focus:border-[#E8740E]"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto max-h-[340px]">
+              {(() => {
+                const filtrados = PRODUTOS_PESO.filter(p =>
+                  p.nome.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+                  p.cat.toLowerCase().includes(buscaProduto.toLowerCase())
+                );
+                let lastCat = "";
+                return filtrados.map((p, i) => {
+                  const showCat = p.cat !== lastCat;
+                  lastCat = p.cat;
+                  return (
+                    <div key={i}>
+                      {showCat && (
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-[#86868B] uppercase tracking-wider bg-[#F5F5F7] sticky top-0">
+                          {p.cat}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          setPeso(String(p.peso));
+                          setProdutoSelecionado(p.nome);
+                          setShowProdutos(false);
+                          setBuscaProduto("");
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#F5F5F7] transition-colors flex justify-between items-center"
+                      >
+                        <span className="font-medium text-[#1D1D1F]">{p.nome}</span>
+                        <span className="text-xs text-[#86868B] font-mono">{p.peso} kg</span>
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Inputs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <InputField
@@ -77,7 +191,7 @@ export default function CalculadoraImportacao() {
           label="Peso do produto"
           suffix="kg"
           value={peso}
-          onChange={setPeso}
+          onChange={(v) => { setPeso(v); setProdutoSelecionado(""); }}
           placeholder="3.0"
         />
         <InputField
