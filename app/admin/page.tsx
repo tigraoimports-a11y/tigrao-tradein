@@ -6,7 +6,7 @@ import { proximoDiaUtil } from "@/lib/business-days";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-interface SaldoRow { itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean }
+interface SaldoRow { data?: string; itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean }
 interface DashData {
   saldos: SaldoRow | null;
   saldoAnterior: SaldoRow | null;
@@ -108,21 +108,29 @@ export default function DashboardPage() {
   const vendasPendentes = data.vendas.filter(v => v.status_pagamento === "AGUARDANDO");
   const valorPendente = vendasPendentes.reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
-  // Saldos bancários — usar fechamento anterior como base se as bases do dia estão zeradas
+  // Saldos bancários — verificar se a row é de HOJE ou de dia anterior
   const s = data.saldos;
   const prev = data.saldoAnterior;
-  const isManual = s?.manual === true;
-  let itauBase = s?.itau_base || 0;
-  let infBase = s?.inf_base || 0;
-  let mpBase = s?.mp_base || 0;
-  let espBase = s?.esp_especie || 0;
+  const saldoIsToday = s?.data === hoje;
+  const isManual = saldoIsToday && s?.manual === true;
+  let itauBase = 0;
+  let infBase = 0;
+  let mpBase = 0;
+  let espBase = 0;
 
-  // Se bases do dia estão todas zeradas, carregar fechamento anterior
-  if (!isManual && itauBase === 0 && infBase === 0 && mpBase === 0 && prev) {
-    itauBase = prev.esp_itau || 0;
-    infBase = prev.esp_inf || 0;
-    mpBase = prev.esp_mp || 0;
-    espBase = prev.esp_especie || 0;
+  if (saldoIsToday && (s?.itau_base || s?.inf_base || s?.mp_base)) {
+    // Row de hoje existe com bases preenchidas — usar direto
+    itauBase = s?.itau_base || 0;
+    infBase = s?.inf_base || 0;
+    mpBase = s?.mp_base || 0;
+    espBase = s?.esp_especie || 0;
+  } else {
+    // Sem row de hoje ou bases zeradas — usar fechamento anterior como base
+    const ref = prev || s; // prev é row anterior; se não existe, s é a mais recente
+    itauBase = ref?.esp_itau || 0;
+    infBase = ref?.esp_inf || 0;
+    mpBase = ref?.esp_mp || 0;
+    espBase = ref?.esp_especie || 0;
   }
 
   // Recebido hoje (D+0) — mesma lógica do relatório /noite

@@ -1310,7 +1310,7 @@ export async function POST(req: NextRequest) {
         const margemVenda = custoVenda > 0 && precoVenda > 0 ? ((lucroVenda / precoVenda) * 100).toFixed(1) : "—";
 
         // Determinar recebimento
-        const recebimento = ["PIX", "DINHEIRO", "ESPECIE"].includes(formaVenda) ? "D+0" : "D+1";
+        const recebimento = ["PIX", "DINHEIRO", "ESPECIE", "LINK"].includes(formaVenda) ? "D+0" : "D+1";
 
         // Registrar venda
         const { error: errVenda } = await supabase.from("vendas").insert({
