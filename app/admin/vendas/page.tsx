@@ -909,52 +909,113 @@ export default function VendasPage() {
   // Parser de texto colado (formulário WhatsApp)
   const parseClienteText = (text: string) => {
     const lines = text.split("\n").map(l => l.trim());
-    let nome = "", cpf = "", cnpj = "", email = "", endereco = "";
+    const r: Record<string, string> = {};
+    const extractValue = (line: string) => line.replace(/^[✅⚠️📌🤔]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const lower = line.toLowerCase();
+      const lower = line.toLowerCase().replace(/[✅⚠️📌🤔*]/g, "").trim();
+      if (!lower || lower.length < 3) continue;
+
       // Nome completo / Razão Social
-      if (lower.includes("nome completo") || lower.includes("nome:") || lower.includes("razão social") || lower.includes("razao social")) {
-        nome = line.replace(/.*(?:nome completo|razão social|razao social|nome)\s*[:：]\s*/i, "").trim();
+      if (lower.includes("nome completo") || lower.match(/^nome\s*[:：]/) || lower.includes("razão social") || lower.includes("razao social")) {
+        r.nome = extractValue(line);
       }
       // CNPJ
-      if (lower.includes("cnpj")) {
-        const cnpjMatch = line.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2}/);
-        if (cnpjMatch) cnpj = cnpjMatch[0];
+      else if (lower.includes("cnpj")) {
+        const m = line.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2}/);
+        if (m) r.cnpj = m[0];
       }
       // CPF
-      if (lower.includes("cpf")) {
-        const cpfMatch = line.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}/);
-        if (cpfMatch) cpf = cpfMatch[0];
+      else if (lower.includes("cpf")) {
+        const m = line.match(/\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}/);
+        if (m) r.cpf = m[0];
       }
       // Email
-      if (lower.includes("e-mail") || lower.includes("email")) {
-        const emailMatch = line.match(/[\w.+-]+@[\w.-]+\.\w+/);
-        if (emailMatch) email = emailMatch[0];
+      else if (lower.includes("e-mail") || lower.includes("email")) {
+        const m = line.match(/[\w.+-]+@[\w.-]+\.\w+/);
+        if (m) r.email = m[0];
+      }
+      // Telefone
+      else if (lower.includes("telefone") || lower.includes("celular") || lower.includes("whatsapp") || lower.includes("contato")) {
+        const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/);
+        if (m) r.telefone = m[0];
+      }
+      // CEP
+      else if (lower.includes("cep")) {
+        const m = line.match(/\d{5}[-.\s]?\d{3}/);
+        if (m) r.cep = m[0];
+      }
+      // Bairro
+      else if (lower.includes("bairro")) {
+        r.bairro = extractValue(line);
       }
       // Endereço
-      if (lower.includes("end.:") || lower.includes("endereço") || lower.includes("endereco") || lower.includes("end:")) {
-        endereco = line.replace(/.*(?:end\.|endereço|endereco|end)\s*[:：]\s*/i, "").trim();
-        // Pegar próxima linha se existir (endereço pode ter 2 linhas)
+      else if (lower.includes("endereço") || lower.includes("endereco") || lower.match(/^end[\s.:]/)) {
+        r.endereco = extractValue(line);
         if (i + 1 < lines.length && !lines[i + 1].includes(":") && !lines[i + 1].startsWith("✅") && lines[i + 1].length > 3) {
-          endereco += " " + lines[i + 1].trim();
+          r.endereco += " " + lines[i + 1].trim();
         }
       }
+      // Modelo / Produto
+      else if (lower.includes("modelo escolhido") || lower.includes("modelo:") || lower.includes("produto escolhido")) {
+        r.produto = extractValue(line);
+      }
+      // Valor
+      else if ((lower.includes("valor no pix") || lower.includes("valor:") || lower.includes("valor total")) && !lower.includes("pagamento")) {
+        const m = line.match(/[\d.,]+/g);
+        if (m) r.valor = m[m.length - 1].replace(/\./g, "").replace(",", ".");
+      }
+      // Forma de pagamento
+      else if (lower.includes("forma de pagamento") || lower.includes("forma pagamento")) {
+        const v = extractValue(line).toUpperCase();
+        if (v.includes("PIX")) r.forma = "PIX";
+        else if (v.includes("CARTAO") || v.includes("CARTÃO") || v.includes("CREDITO") || v.includes("CRÉDITO")) r.forma = "CARTAO";
+        else if (v.includes("ESPECIE") || v.includes("ESPÉCIE") || v.includes("DINHEIRO")) r.forma = "ESPECIE";
+        else r.forma = v;
+      }
+      // Como conheceu (origem)
+      else if (lower.includes("como conheceu") || lower.includes("como nos conheceu")) {
+        const v = extractValue(line).toLowerCase();
+        if (v.includes("instagram") || v.includes("insta")) r.origem = "ANUNCIO";
+        else if (v.includes("amig") || v.includes("indicaç") || v.includes("indicac") || v.includes("conhecid")) r.origem = "INDICACAO";
+        else if (v.includes("google") || v.includes("anuncio") || v.includes("anúncio")) r.origem = "ANUNCIO";
+        else if (v.includes("recompra") || v.includes("voltou") || v.includes("cliente antigo")) r.origem = "RECOMPRA";
+        else r.origem = "INDICACAO"; // default
+      }
+      // Entrega ou Retirada
+      else if (lower.includes("retirada") && lower.includes("entrega")) {
+        const v = extractValue(line).toLowerCase();
+        if (v.includes("entrega")) r.local = "ENTREGA";
+        else if (v.includes("retirada")) r.local = "RETIRADA";
+      }
+      // Horário
+      else if (lower.includes("horário") || lower.includes("horario")) {
+        r.horario = extractValue(line);
+      }
     }
-    return { nome, cpf, cnpj, email, endereco };
+    return r;
   };
 
   const handlePasteConfirm = () => {
-    const { nome, cpf, cnpj, email, endereco } = parseClienteText(pasteText);
-    if (nome) set("cliente", nome);
-    if (cpf) set("cpf", cpf);
-    if (cnpj) { set("cnpj", cnpj); set("pessoa", "PJ"); }
-    if (email) set("email", email);
-    if (endereco) set("endereco", endereco);
+    const r = parseClienteText(pasteText);
+    if (r.nome) set("cliente", r.nome);
+    if (r.cpf) set("cpf", r.cpf);
+    if (r.cnpj) { set("cnpj", r.cnpj); set("pessoa", "PJ"); }
+    if (r.email) set("email", r.email);
+    if (r.endereco) set("endereco", r.endereco);
+    if (r.cep) { set("cep", r.cep); fetchCep(r.cep.replace(/\D/g, "")); }
+    if (r.bairro) set("bairro", r.bairro);
+    if (r.origem) set("origem", r.origem);
+    if (r.local) set("local", r.local);
+    if (r.forma) set("forma", r.forma);
+    if (r.produto) set("produto", r.produto);
+    if (r.valor) set("preco_vendido", r.valor);
     setShowPasteModal(false);
     setPasteText("");
-    const tipo = cnpj ? "PJ" : "PF";
-    setMsg(nome ? `Dados ${tipo} preenchidos: ${nome}` : "Nenhum dado encontrado no texto");
+    const tipo = r.cnpj ? "PJ" : "PF";
+    const campos = Object.keys(r).length;
+    setMsg(r.nome ? `Dados ${tipo} preenchidos: ${r.nome} (${campos} campos)` : "Nenhum dado encontrado no texto");
   };
 
   // Exportar mês para Excel
