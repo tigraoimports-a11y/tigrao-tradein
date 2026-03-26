@@ -723,8 +723,37 @@ export default function EntregasPage() {
                   </div>
                 </div>
 
+                {/* Copiar formulário motoboy */}
+                <div className="pt-2 border-t border-[#D2D2D7]">
+                  <button
+                    onClick={() => {
+                      const regiao = e.regiao || e.bairro || "";
+                      const msg = [
+                        `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
+                        "",
+                        `⏰ *HORÁRIO:* ${e.horario || "A combinar"}`,
+                        `📍 *LOCAL:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
+                        `🍎 *PRODUTO:* ${e.produto || ""}`,
+                        `‼️ *TIPO:* ${e.tipo || "VENDA"}`,
+                        `💵 *PAGAMENTO:* ${e.forma_pagamento || ""} R$${Number(e.valor || 0).toLocaleString("pt-BR")}`,
+                        `👤 *CLIENTE:* ${e.cliente || ""}`,
+                        `📞 *CONTATO:* ${e.telefone || ""}`,
+                        e.observacao ? `OBS: ${e.observacao}` : "",
+                        "",
+                        `💼 Vendedor: ${e.vendedor || ""}`,
+                        "________________________________",
+                      ].filter(Boolean).join("\n");
+                      navigator.clipboard.writeText(msg);
+                      alert("Formulário copiado! Cole no WhatsApp do motoboy.");
+                    }}
+                    className="w-full py-2.5 rounded-xl text-center text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors mb-2"
+                  >
+                    📋 Copiar Formulário Motoboy
+                  </button>
+                </div>
+
                 {/* Acoes */}
-                <div className="flex gap-2 pt-2 border-t border-[#D2D2D7]">
+                <div className="flex gap-2">
                   {e.telefone && (
                     <a
                       href={`https://wa.me/55${e.telefone.replace(/\D/g, "")}`}
