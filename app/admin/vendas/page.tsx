@@ -2341,16 +2341,16 @@ export default function VendasPage() {
                         })();
 
                         return [
-                          <tr key={`header-${dataKey}`} className="bg-[#1D1D1F] dark:bg-[#1D1D1F]">
+                          <tr key={`header-${dataKey}`} className="bg-[#E8740E]">
                             <td colSpan={13} className="px-4 py-2.5">
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
                                 <span className="text-white font-semibold text-sm">
-                                  {dataLabel} <span className="text-[#86868B] font-normal capitalize text-xs ml-2">{diaSemana}</span>
+                                  {dataLabel} <span className="text-white/70 font-normal capitalize text-xs ml-2">{diaSemana}</span>
                                 </span>
-                                <div className="flex items-center gap-4 text-xs">
-                                  <span className="text-[#86868B]">{qtdDia} venda{qtdDia !== 1 ? "s" : ""}</span>
-                                  <span className="text-[#86868B]">Vendido: <span className="text-white">{fmt(vendidoDia)}</span></span>
-                                  <span className="text-[#86868B]">Lucro: <span className={lucroDia >= 0 ? "text-green-400" : "text-red-400"}>{fmt(lucroDia)}</span></span>
+                                <div className="flex items-center gap-5 text-xs whitespace-nowrap">
+                                  <span className="text-white/80">{qtdDia} venda{qtdDia !== 1 ? "s" : ""}</span>
+                                  <span className="text-white/80">Vendido: <span className="text-white font-semibold">{fmt(vendidoDia)}</span></span>
+                                  <span className="text-white/80">Lucro: <span className="text-white font-bold">{fmt(lucroDia)}</span></span>
                                 </div>
                               </div>
                             </td>
