@@ -2342,16 +2342,14 @@ export default function VendasPage() {
 
                         return [
                           <tr key={`header-${dataKey}`} className="bg-[#E8740E]">
-                            <td colSpan={13} className="px-4 py-2.5">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
+                            <td colSpan={13} className="px-4 py-2.5" style={{ position: "sticky", left: 0, right: 0 }}>
+                              <div className="flex items-center gap-4 flex-wrap">
                                 <span className="text-white font-semibold text-sm">
-                                  {dataLabel} <span className="text-white/70 font-normal capitalize text-xs ml-2">{diaSemana}</span>
+                                  {dataLabel} <span className="text-white/70 font-normal capitalize text-xs ml-1">{diaSemana}</span>
                                 </span>
-                                <div className="flex items-center gap-3 text-xs whitespace-nowrap">
-                                  <span className="text-white/80">{qtdDia} vendas</span>
-                                  <span className="text-white font-semibold">{fmt(vendidoDia)}</span>
-                                  <span className="bg-white/20 px-2 py-0.5 rounded text-white font-bold">Lucro {fmt(lucroDia)}</span>
-                                </div>
+                                <span className="text-white/80 text-xs">{qtdDia} vendas</span>
+                                <span className="text-white/80 text-xs">Vendido: <strong className="text-white">{fmt(vendidoDia)}</strong></span>
+                                <span className="bg-white/20 px-2 py-0.5 rounded text-white font-bold text-xs">Lucro: {fmt(lucroDia)}</span>
                               </div>
                             </td>
                           </tr>,
