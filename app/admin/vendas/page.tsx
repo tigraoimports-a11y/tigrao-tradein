@@ -2200,6 +2200,17 @@ export default function VendasPage() {
               grupoMap.set(v.grupo_id, list);
             }
           }
+
+          // Agrupar vendas por data para exibição com divisórias
+          const vendasPorData = new Map<string, Venda[]>();
+          for (const v of filtered) {
+            const d = v.data || "sem-data";
+            const list = vendasPorData.get(d) || [];
+            list.push(v);
+            vendasPorData.set(d, list);
+          }
+          const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
+
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : "Histórico de Vendas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -2315,8 +2326,36 @@ export default function VendasPage() {
                     </thead>
                     <tbody>
                       {filtered.length === 0 ? (
-                        <tr><td colSpan={12} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</td></tr>
-                      ) : filtered.map((v) => {
+                        <tr><td colSpan={13} className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</td></tr>
+                      ) : datasOrdenadas.flatMap((dataKey) => {
+                        const vendasDoDia = vendasPorData.get(dataKey) || [];
+                        const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
+                        const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+                        const qtdDia = vendasDoDia.length;
+                        const [y, m, d] = (dataKey || "").split("-");
+                        const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
+                        const diaSemana = (() => {
+                          try {
+                            return new Date(dataKey + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long" });
+                          } catch { return ""; }
+                        })();
+
+                        return [
+                          <tr key={`header-${dataKey}`} className="bg-[#1D1D1F] dark:bg-[#1D1D1F]">
+                            <td colSpan={13} className="px-4 py-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-white font-semibold text-sm">
+                                  {dataLabel} <span className="text-[#86868B] font-normal capitalize text-xs ml-2">{diaSemana}</span>
+                                </span>
+                                <div className="flex items-center gap-4 text-xs">
+                                  <span className="text-[#86868B]">{qtdDia} venda{qtdDia !== 1 ? "s" : ""}</span>
+                                  <span className="text-[#86868B]">Vendido: <span className="text-white">{fmt(vendidoDia)}</span></span>
+                                  <span className="text-[#86868B]">Lucro: <span className={lucroDia >= 0 ? "text-green-400" : "text-red-400"}>{fmt(lucroDia)}</span></span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>,
+                          ...vendasDoDia.map((v) => {
                         const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
@@ -2409,7 +2448,7 @@ export default function VendasPage() {
                             {/* Linha expandida */}
                             {isExpanded && (
                               <tr className="bg-[#FAFAFA]">
-                                <td colSpan={12} className="px-5 py-4">
+                                <td colSpan={13} className="px-5 py-4">
                                   {/* MODO EDIÇÃO */}
                                   {editingId === v.id ? (() => {
                                     const ef = editForm;
@@ -3018,6 +3057,7 @@ export default function VendasPage() {
                             )}
                           </React.Fragment>
                         );
+                      })];
                       })}
                     </tbody>
                   </table>
