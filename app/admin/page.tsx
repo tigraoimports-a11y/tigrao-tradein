@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const hoje = new Date().toISOString().split("T")[0];
+      const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
       const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
         fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
         fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password, "x-admin-user": user?.nome || "sistema" } }),
@@ -67,7 +67,7 @@ export default function DashboardPage() {
 
   if (loading || !data) return <div className="p-8 text-center text-[#86868B]">Carregando dashboard...</div>;
 
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const mesAtual = hoje.slice(0, 7);
 
   // Vendas do mês
