@@ -1180,6 +1180,7 @@ export default function VendasPage() {
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
   const selectCls = inputCls;
 
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
