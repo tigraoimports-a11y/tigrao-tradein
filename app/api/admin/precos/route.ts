@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       const parcelas12 = Math.round((pix * (1 + t12 / 100)) / 12);
       const parcelas18 = Math.round((pix * (1 + t18 / 100)) / 18);
       const parcelas21 = Math.round((pix * (1 + t21 / 100)) / 21);
-      const msg = `🐯 <b>ALTERAÇÃO DE PREÇO — TigrãoImports</b>\n\n${emoji} <b>${escHtml(modelo)} ${escHtml(armazenamento)}</b>\n💰 Novo preço PIX: <b>R$ ${pix.toLocaleString("pt-BR")}</b>\n💳 12x <b>R$ ${parcelas12}</b>\n💳 18x <b>R$ ${parcelas18}</b>\n💳 21x <b>R$ ${parcelas21}</b>\n📌 Status: ${escHtml(status ?? "ativo")}\n\n⚠️ <i>Atualizar arte do Instagram</i>`;
+      const msg = `🐯 <b>ALTERAÇÃO DE PREÇO — TigrãoImports</b>\n\n${emoji} <b>${escHtml(modelo)} ${escHtml(armazenamento)}</b>\n💰 Novo preço PIX: <b>R$ ${pix.toLocaleString("pt-BR")}</b>\n💳 12x <b>R$ ${parcelas12}</b>\n💳 18x <b>R$ ${parcelas18}</b>\n💳 21x <b>R$ ${parcelas21}</b>\n📌 Status: ${escHtml(status ?? "ativo")}\n👤 Alterado por: <b>${escHtml(usuario)}</b>\n\n⚠️ <i>Atualizar arte do Instagram</i>`;
       const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
