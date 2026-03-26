@@ -380,7 +380,22 @@ export default function VendasPage() {
     );
   }
 
-  const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
+  // Campos que NÃO devem ser uppercased (emails, senhas, etc)
+  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa"]);
+  const set = (field: string, value: string | boolean) => {
+    const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
+    setForm((f) => ({ ...f, [field]: v }));
+  };
+
+  // Formatação de valores com separador de milhares
+  const fmtMil = (v: string) => {
+    const num = v.replace(/\D/g, "");
+    return num ? Number(num).toLocaleString("pt-BR") : "";
+  };
+  const setMoney = (field: string, raw: string) => {
+    const clean = raw.replace(/\./g, "").replace(/\D/g, "");
+    setForm(f => ({ ...f, [field]: clean }));
+  };
 
   // Cálculos em tempo real
   const custo = parseFloat(form.custo) || 0;
@@ -1136,7 +1151,7 @@ export default function VendasPage() {
     return Array.from(map.values()).slice(0, 5);
   })();
 
-  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors uppercase ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
   const selectCls = inputCls;
 
@@ -1721,8 +1736,8 @@ export default function VendasPage() {
 
           {/* Row 3: Valores */}
           <div className="grid grid-cols-2 gap-4">
-            <div><p className={labelCls}>Custo (R$)</p><input type="number" value={form.custo} onChange={(e) => set("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
-            <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="number" value={form.preco_vendido} onChange={(e) => set("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
+            <div><p className={labelCls}>Custo (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.custo)} onChange={(e) => setMoney("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
+            <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.preco_vendido)} onChange={(e) => setMoney("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
           </div>
 
           {/* FORMA DE PAGAMENTO — inline only for single product (no cart) */}
