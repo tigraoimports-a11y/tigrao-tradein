@@ -323,94 +323,70 @@ export default function EtiquetasPrecoPage() {
     });
   }
 
-  // Abordagem alternativa: copiar QR como data URL via canvas
+  // Imprimir etiquetas — formato Brother QL-820NWB 62mm x 45mm
   function handlePrintDirect() {
     if (produtosSelecionados.length === 0) return;
-    const config = TAMANHOS[tamanho];
     const win = window.open("", "_blank", "width=800,height=600");
     if (!win) return;
 
-    // Gerar QR codes via qrcode lib (server-side compatible)
-    import("qrcode").then((QRCode) => {
-      const promises = produtosSelecionados.map(async (p) => {
-        const qrData = p.serial_no || p.imei || p.id;
-        const precoVal = precoCustom[p.id]
-          ? parseFloat(precoCustom[p.id].replace(/\./g, "").replace(",", "."))
-          : (p.preco_venda ?? p.custo_unitario);
-        const dataUrl = await QRCode.toDataURL(qrData, {
-          width: config.fontSize.qr * 3,
-          margin: 0,
-          errorCorrectionLevel: "M",
+    const etiquetasHtml = produtosSelecionados.map((p, idx) => {
+      const serial = p.serial_no || "";
+      const imei = p.imei || "";
+      const qrData = serial || imei || p.id;
+      const precoVal = precoCustom[p.id]
+        ? parseFloat(precoCustom[p.id].replace(/\./g, "").replace(",", "."))
+        : (p.preco_venda ?? p.custo_unitario);
+      return `
+      <div class="wrap" ${idx < produtosSelecionados.length - 1 ? 'style="page-break-after:always"' : ''}>
+        <div class="marca">TIGRAO IMPORTS</div>
+        <div class="produto">${p.produto}</div>
+        ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+        <div class="preco">${formatPrice(precoVal)}</div>
+        <div class="pix">a vista no PIX</div>
+        <div class="qr"><canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas></div>
+        ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+        ${!serial && imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+      </div>`;
+    }).join("");
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Etiquetas de Preco - TigraoImports</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{margin:0;padding:0;width:100%}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .wrap{text-align:center;padding:2mm 4mm 2mm 4mm}
+        .marca{font-size:7pt;font-weight:900;color:#F97316;letter-spacing:0.5px;margin-bottom:0.5mm}
+        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
+        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
+        .preco{font-size:14pt;font-weight:900;color:#111;margin-top:1.5mm;line-height:1}
+        .pix{font-size:6pt;color:#666;margin-top:0.5mm}
+        .extra{font-size:5.5pt;color:#444;margin-top:0.5mm;font-family:monospace;letter-spacing:0.5px}
+        .qr{margin:1.5mm auto 1mm;display:flex;justify-content:center}
+        @page{size:62mm 45mm;margin:0}
+      </style></head><body>
+      ${etiquetasHtml}
+      <script>
+        document.querySelectorAll('canvas[data-qr]').forEach(function(canvas) {
+          var data = canvas.getAttribute('data-qr');
+          var qr = qrcode(0, 'M');
+          qr.addData(data);
+          qr.make();
+          var size = 150;
+          canvas.width = size; canvas.height = size;
+          canvas.style.width = '10mm'; canvas.style.height = '10mm';
+          var ctx = canvas.getContext('2d');
+          var cells = qr.getModuleCount();
+          var cellSize = size / cells;
+          ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+          ctx.fillStyle = '#000';
+          for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+            if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
         });
-        return { ...p, qrDataUrl: dataUrl, precoFinal: precoVal };
-      });
-
-      Promise.all(promises).then((items) => {
-        const etiquetasHtml = items.map((p) => {
-          const serial = p.serial_no || "";
-          const imei = p.imei || "";
-          return `
-            <div class="etiqueta-preco" style="width:${config.width};height:${config.height};padding:${tamanho === "pequena" ? "2mm" : tamanho === "media" ? "3mm" : "4mm"};">
-              <div style="text-align:center;margin-bottom:${tamanho === "pequena" ? "0.5mm" : "1mm"}">
-                <span style="font-weight:900;font-size:${config.fontSize.marca};color:#F97316;letter-spacing:0.5px;">TIGRAO IMPORTS</span>
-              </div>
-              <div style="text-align:center;">
-                <p style="font-weight:bold;font-size:${config.fontSize.nome};line-height:1.15;color:#111;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${p.produto}</p>
-                ${p.cor && tamanho !== "pequena" ? `<p style="font-size:${config.fontSize.serial};color:#666;margin-top:0.5mm;">${p.cor}</p>` : ""}
-              </div>
-              <div style="display:flex;align-items:center;justify-content:center;gap:${tamanho === "pequena" ? "1mm" : "2mm"};flex:1;min-height:0;">
-                <img src="${p.qrDataUrl}" style="width:${config.fontSize.qr}px;height:${config.fontSize.qr}px;" />
-                <div style="text-align:center;flex:1;">
-                  <p style="font-weight:900;font-size:${config.fontSize.preco};line-height:1;color:#111;">${formatPrice(p.precoFinal)}</p>
-                  ${tamanho !== "pequena" ? `<p style="font-size:${config.fontSize.serial};color:#999;margin-top:0.5mm;">a vista no PIX</p>` : ""}
-                </div>
-              </div>
-              <div style="text-align:center;margin-top:${tamanho === "pequena" ? "0" : "1mm"};">
-                ${serial ? `<p style="font-size:${config.fontSize.serial};color:#999;font-family:monospace;letter-spacing:1px;">SN: ${serial}</p>` : ""}
-                ${!serial && imei ? `<p style="font-size:${config.fontSize.serial};color:#999;font-family:monospace;letter-spacing:1px;">IMEI: ${imei}</p>` : ""}
-              </div>
-            </div>
-          `;
-        }).join("");
-
-        win.document.write(`<!DOCTYPE html><html><head>
-          <title>Etiquetas de Preco - TigraoImports</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            html, body { margin: 0; padding: 0; }
-            body { font-family: Arial, Helvetica, sans-serif; }
-            .print-grid {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 2mm;
-              padding: 3mm;
-            }
-            .etiqueta-preco {
-              border: 0.5pt solid #999;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              overflow: hidden;
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            @media print {
-              @page { margin: 3mm; }
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .etiqueta-preco { border: 0.3pt solid #ccc; }
-            }
-          </style>
-        </head><body>
-          <div class="print-grid">${etiquetasHtml}</div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() { window.print(); }, 200);
-            };
-          <\/script>
-        </body></html>`);
-        win.document.close();
-      });
-    });
+        window.onload=function(){setTimeout(function(){window.print();},300)};
+      <\/script></body></html>`);
+    win.document.close();
   }
 
   const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 focus:outline-none";
