@@ -132,6 +132,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "delete_desconto") {
+    const { condicao, detalhe } = body;
+    const { error } = await supabase.from("descontos_condicao").delete().eq("condicao", condicao).eq("detalhe", detalhe);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "add_excluido") {
     const { modelo } = body;
     const { error } = await supabase.from("modelos_excluidos").upsert(

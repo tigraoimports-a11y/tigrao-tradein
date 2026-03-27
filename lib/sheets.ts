@@ -198,16 +198,26 @@ export function buildModelDiscountsMap(
     const garantia = condicoes["Garantia"] || {};
 
     // Parse battery tiers — suporta qualquer combinacao de thresholds
-    const BATTERY_THRESHOLD_MAP: Record<string, number> = {
-      "Abaixo de 95%": 95,
-      "Abaixo de 90%": 90,
-      "Abaixo de 85%": 85,
-      "Abaixo de 80%": 80,
-    };
+    // Extrai threshold do detalhe dinamicamente: "Abaixo de XX%" -> XX
     const batteryTiers: BatteryTier[] = [];
-    for (const [detail, threshold] of Object.entries(BATTERY_THRESHOLD_MAP)) {
-      if (bat[detail] !== undefined) {
-        batteryTiers.push({ threshold, discount: bat[detail] });
+    for (const [detail, discount] of Object.entries(bat)) {
+      const match = detail.match(/Abaixo de (\d+)%/);
+      if (match) {
+        batteryTiers.push({ threshold: parseInt(match[1]), discount });
+      }
+    }
+    // Fallback: se não encontrou nenhum tier, tentar mapa legado
+    if (batteryTiers.length === 0) {
+      const BATTERY_THRESHOLD_MAP: Record<string, number> = {
+        "Abaixo de 95%": 95,
+        "Abaixo de 90%": 90,
+        "Abaixo de 85%": 85,
+        "Abaixo de 80%": 80,
+      };
+      for (const [detail, threshold] of Object.entries(BATTERY_THRESHOLD_MAP)) {
+        if (bat[detail] !== undefined) {
+          batteryTiers.push({ threshold, discount: bat[detail] });
+        }
       }
     }
 

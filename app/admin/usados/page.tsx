@@ -123,6 +123,7 @@ export function UsadosContent() {
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
+  const [novoBateria, setNovoBateria] = useState<{ modelo: string; threshold: string; desconto: string } | null>(null);
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
   const [importingSheets, setImportingSheets] = useState(false);
 
@@ -172,6 +173,38 @@ export function UsadosContent() {
     setDescontos((prev) => prev.map((r) => r.condicao === d.condicao && r.detalhe === d.detalhe ? { ...r, desconto: newVal } : r));
     const e = { ...editingDesc }; delete e[key]; setEditingDesc(e);
     setSaving(null);
+  };
+
+  const handleAddBateriaTier = async () => {
+    if (!novoBateria) return;
+    const threshold = parseInt(novoBateria.threshold);
+    const desconto = parseFloat(novoBateria.desconto);
+    if (isNaN(threshold) || threshold < 1 || threshold > 100 || isNaN(desconto)) { setMsg("Preencha threshold (1-100) e valor do desconto"); return; }
+    const condicao = novoBateria.modelo ? `${novoBateria.modelo} - Bateria` : "Bateria";
+    const detalhe = `Abaixo de ${threshold}%`;
+    setSaving("bateria");
+    await apiPost({ action: "upsert_desconto", condicao, detalhe, desconto });
+    setDescontos((prev) => {
+      const exists = prev.findIndex((d) => d.condicao === condicao && d.detalhe === detalhe);
+      if (exists >= 0) {
+        const nv = [...prev];
+        nv[exists] = { ...nv[exists], desconto };
+        return nv;
+      }
+      return [...prev, { id: crypto.randomUUID(), condicao, detalhe, desconto, updated_at: new Date().toISOString() }];
+    });
+    setNovoBateria(null);
+    setSaving(null);
+    setMsg(`Nivel de bateria "Abaixo de ${threshold}%" adicionado!`);
+  };
+
+  const handleRemoveDesconto = async (d: DescontoCondicao) => {
+    if (!confirm(`Remover "${d.detalhe}" de "${d.condicao}"?`)) return;
+    // Delete via upsert with special value to mark for deletion
+    // Actually, we need a delete action in the API. For now, set discount to 0 to effectively disable it.
+    // Or better: we can add a delete action
+    await apiPost({ action: "delete_desconto", condicao: d.condicao, detalhe: d.detalhe });
+    setDescontos((prev) => prev.filter((x) => !(x.condicao === d.condicao && x.detalhe === d.detalhe)));
   };
 
   const handleImportDefaults = async () => {
@@ -347,12 +380,90 @@ export function UsadosContent() {
             </div>
           ) : (
             <>
+              {/* Descontos gerais (sem modelo específico) */}
+              {Object.keys(descGerais).length > 0 && (
+                <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
+                    <h3 className="font-semibold text-[#1D1D1F]">Descontos Gerais (todos os modelos)</h3>
+                    <button
+                      onClick={() => setNovoBateria({ modelo: "", threshold: "", desconto: "" })}
+                      className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors"
+                    >
+                      + Nivel Bateria
+                    </button>
+                  </div>
+                  {novoBateria && novoBateria.modelo === "" && (
+                    <div className="px-5 py-3 bg-[#FFF8F0] border-b border-[#E8740E]/20 flex items-center gap-3">
+                      <span className="text-xs text-[#86868B]">Abaixo de</span>
+                      <input type="number" value={novoBateria.threshold} onChange={(e) => setNovoBateria({ ...novoBateria, threshold: e.target.value })} placeholder="Ex: 83" className="w-16 px-2 py-1 rounded-lg border border-[#E8740E] text-sm text-center" autoFocus />
+                      <span className="text-xs text-[#86868B]">% → R$</span>
+                      <input type="number" value={novoBateria.desconto} onChange={(e) => setNovoBateria({ ...novoBateria, desconto: e.target.value })} placeholder="-200" className="w-20 px-2 py-1 rounded-lg border border-[#E8740E] text-sm text-right" onKeyDown={(e) => e.key === "Enter" && handleAddBateriaTier()} />
+                      <button onClick={handleAddBateriaTier} disabled={saving === "bateria"} className="px-3 py-1 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623]">Salvar</button>
+                      <button onClick={() => setNovoBateria(null)} className="text-xs text-[#86868B]">Cancelar</button>
+                    </div>
+                  )}
+                  <div className="p-4 space-y-4">
+                    {Object.entries(descGerais).map(([cond, rows]) => {
+                      const isBateriaCond = cond === "Bateria";
+                      return (
+                        <div key={cond}>
+                          <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">{cond}</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {rows.map((d) => {
+                              const key = `${d.condicao}|${d.detalhe}`;
+                              const isEd = editingDesc[key] !== undefined;
+                              return (
+                                <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm group">
+                                  <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
+                                  <div className="flex items-center gap-1">
+                                    {isEd ? (
+                                      <>
+                                        <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveDesconto(d); if (e.key === "Escape") { const ed = { ...editingDesc }; delete ed[key]; setEditingDesc(ed); } }} className="w-16 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
+                                        <button onClick={() => handleSaveDesconto(d)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                      </>
+                                    ) : (
+                                      <span className={`font-bold text-xs cursor-pointer hover:text-[#E8740E] ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
+                                        {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
+                                      </span>
+                                    )}
+                                    {isBateriaCond && !isEd && (
+                                      <button onClick={() => handleRemoveDesconto(d)} className="text-red-400 hover:text-red-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Remover">✕</button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Descontos por modelo — 1 card por iPhone */}
               {Object.entries(descByModel).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, condicoes]) => (
                 <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                  <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
                     <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
+                    <button
+                      onClick={() => setNovoBateria({ modelo, threshold: "", desconto: "" })}
+                      className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors"
+                    >
+                      + Nivel Bateria
+                    </button>
                   </div>
+                  {/* Form para novo nível de bateria neste modelo */}
+                  {novoBateria && novoBateria.modelo === modelo && (
+                    <div className="px-5 py-3 bg-[#FFF8F0] border-b border-[#E8740E]/20 flex items-center gap-3">
+                      <span className="text-xs text-[#86868B]">Abaixo de</span>
+                      <input type="number" value={novoBateria.threshold} onChange={(e) => setNovoBateria({ ...novoBateria, threshold: e.target.value })} placeholder="Ex: 83" className="w-16 px-2 py-1 rounded-lg border border-[#E8740E] text-sm text-center" autoFocus />
+                      <span className="text-xs text-[#86868B]">% → R$</span>
+                      <input type="number" value={novoBateria.desconto} onChange={(e) => setNovoBateria({ ...novoBateria, desconto: e.target.value })} placeholder="-200" className="w-20 px-2 py-1 rounded-lg border border-[#E8740E] text-sm text-right" onKeyDown={(e) => e.key === "Enter" && handleAddBateriaTier()} />
+                      <button onClick={handleAddBateriaTier} disabled={saving === "bateria"} className="px-3 py-1 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623]">Salvar</button>
+                      <button onClick={() => setNovoBateria(null)} className="text-xs text-[#86868B]">Cancelar</button>
+                    </div>
+                  )}
                   <div className="p-4 space-y-4">
                     {Object.entries(condicoes).map(([cond, rows]) => (
                       <div key={cond}>
@@ -361,19 +472,25 @@ export function UsadosContent() {
                           {rows.map((d) => {
                             const key = `${d.condicao}|${d.detalhe}`;
                             const isEd = editingDesc[key] !== undefined;
+                            const isBateria = cond === "Bateria";
                             return (
-                              <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
+                              <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm group">
                                 <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
+                                <div className="flex items-center gap-1">
                                 {isEd ? (
-                                  <div className="flex items-center gap-1">
+                                  <>
                                     <input type="number" value={editingDesc[key]} onChange={(e) => setEditingDesc({ ...editingDesc, [key]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveDesconto(d); if (e.key === "Escape") { const ed = { ...editingDesc }; delete ed[key]; setEditingDesc(ed); } }} className="w-16 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
                                     <button onClick={() => handleSaveDesconto(d)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                  </div>
+                                  </>
                                 ) : (
                                   <span className={`font-bold text-xs cursor-pointer hover:text-[#E8740E] ${d.desconto < 0 ? "text-red-500" : d.desconto > 0 ? "text-green-600" : "text-[#86868B]"}`} onClick={() => setEditingDesc({ ...editingDesc, [key]: String(d.desconto) })}>
                                     {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
                                   </span>
                                 )}
+                                {isBateria && !isEd && (
+                                  <button onClick={() => handleRemoveDesconto(d)} className="text-red-400 hover:text-red-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Remover">✕</button>
+                                )}
+                                </div>
                               </div>
                             );
                           })}
