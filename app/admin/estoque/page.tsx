@@ -1032,9 +1032,16 @@ export default function EstoquePage() {
                     Cancelar
                   </button>
                   <button
+                    onClick={handleConfirmarMover}
+                    className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    Mover sem etiqueta
+                  </button>
+                  <button
                     onClick={handlePrintEtiquetaModal}
                     disabled={etiquetaModal.loading}
-                    className="flex-[2] px-4 py-3 rounded-xl font-semibold text-sm bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                     Imprimir Etiqueta
