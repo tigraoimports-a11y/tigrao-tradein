@@ -1802,31 +1802,69 @@ export default function EstoquePage() {
                                       </td>
                                       <td className="px-4 py-2.5">
                                         <div className="flex gap-2 items-center opacity-40 group-hover/row:opacity-100 transition-opacity">
-                                        {showMover && !p.serial_no && !["MAC_MINI", "ACESSORIOS", "OUTROS", "AIRPODS"].includes(p.categoria) && (
-                                          <input
-                                            placeholder="Serial Number"
-                                            className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onKeyDown={async (e) => {
-                                              if (e.key === "Enter") {
-                                                const val = (e.target as HTMLInputElement).value.trim();
-                                                if (!val) return;
-                                                await apiPatch(p.id, { serial_no: val });
-                                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
-                                                setMsg(`Serial ${val} salvo!`);
-                                              }
-                                            }}
-                                            onBlur={async (e) => {
-                                              const val = e.target.value.trim();
-                                              if (!val) return;
-                                              await apiPatch(p.id, { serial_no: val });
-                                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
-                                            }}
-                                          />
-                                        )}
-                                        {showMover && (
-                                          <button onClick={() => handleMoverParaEstoque(p)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">{p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}</button>
-                                        )}
+                                        {showMover && (() => {
+                                          const needsSerial = !["MAC_MINI", "ACESSORIOS", "OUTROS", "AIRPODS"].includes(p.categoria);
+                                          const qnt = p.qnt || 1;
+
+                                          if (needsSerial && qnt > 1) {
+                                            // Múltiplas unidades: mostrar inputs de serial pra cada + botão Mover que separa
+                                            return (
+                                              <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+                                                <div className="flex gap-1 flex-wrap">
+                                                  {Array.from({ length: qnt }, (_, i) => (
+                                                    <input key={i} placeholder={`Serial ${i + 1}`} id={`serial-${p.id}-${i}`}
+                                                      className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                                  ))}
+                                                </div>
+                                                <button onClick={async () => {
+                                                  const serials: string[] = [];
+                                                  for (let i = 0; i < qnt; i++) {
+                                                    const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
+                                                    const val = el?.value?.trim() || "";
+                                                    if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
+                                                    serials.push(val);
+                                                  }
+                                                  // Atualizar o primeiro registro com serial 1 e qnt 1
+                                                  const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
+                                                  await apiPatch(p.id, { serial_no: serials[0], qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
+                                                  // Criar novos registros para os demais serials
+                                                  for (let i = 1; i < serials.length; i++) {
+                                                    await fetch("/api/estoque", {
+                                                      method: "POST",
+                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                                      body: JSON.stringify({
+                                                        produto: p.produto, categoria: p.categoria, qnt: 1,
+                                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                                        serial_no: serials[i], tipo: novoTipo, status: "EM ESTOQUE",
+                                                      }),
+                                                    });
+                                                  }
+                                                  setMsg(`${qnt} unidades movidas para estoque com seriais individuais!`);
+                                                  fetchEstoque();
+                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
+                                                  Mover {qnt} un.
+                                                </button>
+                                              </div>
+                                            );
+                                          }
+
+                                          // 1 unidade ou sem serial necessário
+                                          return (
+                                            <div className="flex gap-1 items-center">
+                                              {needsSerial && !p.serial_no && (
+                                                <input placeholder="Serial Number"
+                                                  className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                                  onClick={e => e.stopPropagation()}
+                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`Serial ${val} salvo!`); } }}
+                                                  onBlur={async (e) => { const val = e.target.value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
+                                                />
+                                              )}
+                                              <button onClick={() => handleMoverParaEstoque(p)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
+                                                {p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}
+                                              </button>
+                                            </div>
+                                          );
+                                        })()}
                                         <button
                                           onClick={() => handleDuplicar(p)}
                                           className={`p-1.5 rounded-lg ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F2F2F7]"} text-[#86868B] hover:text-[#E8740E] transition-colors`}
