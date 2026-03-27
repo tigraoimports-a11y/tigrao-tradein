@@ -2062,7 +2062,7 @@ export default function EstoquePage() {
                                           const qnt = p.qnt || 1;
 
                                           if (needsSerial && qnt > 1) {
-                                            // Múltiplas unidades: mostrar inputs de serial pra cada + botão Mover que separa
+                                            // Múltiplas unidades: inputs de serial + botão Salvar (separa em registros individuais)
                                             return (
                                               <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
                                                 <div className="flex gap-1 flex-wrap">
@@ -2071,7 +2071,7 @@ export default function EstoquePage() {
                                                       className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                                   ))}
                                                 </div>
-                                                <button onClick={() => {
+                                                <button onClick={async () => {
                                                   const serials: string[] = [];
                                                   for (let i = 0; i < qnt; i++) {
                                                     const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
@@ -2079,28 +2079,48 @@ export default function EstoquePage() {
                                                     if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
                                                     serials.push(val);
                                                   }
-                                                  handleMoverMultiploComEtiqueta(p, serials);
-                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
-                                                  Mover {qnt} un.
+                                                  // Separar em registros individuais (mantém A_CAMINHO)
+                                                  await apiPatch(p.id, { serial_no: serials[0], qnt: 1 });
+                                                  for (let i = 1; i < serials.length; i++) {
+                                                    await fetch("/api/estoque", {
+                                                      method: "POST",
+                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                                      body: JSON.stringify({
+                                                        produto: p.produto, categoria: p.categoria, qnt: 1,
+                                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                                        serial_no: serials[i], tipo: "A_CAMINHO", status: "A CAMINHO",
+                                                        data_compra: p.data_compra,
+                                                      }),
+                                                    });
+                                                  }
+                                                  setMsg(`✅ ${serials.length} seriais salvos! Selecione e clique "Mover → Estoque".`);
+                                                  fetchEstoque();
+                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+                                                  💾 Salvar {qnt} seriais
                                                 </button>
                                               </div>
                                             );
                                           }
 
-                                          // 1 unidade ou sem serial necessário
-                                          return (
-                                            <div className="flex gap-1 items-center">
-                                              {needsSerial && !p.serial_no && (
+                                          // 1 unidade
+                                          if (needsSerial && !p.serial_no) {
+                                            // Sem serial: input pra digitar + salvar
+                                            return (
+                                              <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
                                                 <input placeholder="Serial Number"
                                                   className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                                                  onClick={e => e.stopPropagation()}
-                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`Serial ${val} salvo!`); } }}
+                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`✅ Serial ${val} salvo!`); } }}
                                                   onBlur={async (e) => { const val = e.target.value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
                                                 />
-                                              )}
-                                              <button onClick={() => handleMoverParaEstoque(p)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
-                                                {p.tipo === "PENDENCIA" ? "Recebido" : "Mover"}
-                                              </button>
+                                              </div>
+                                            );
+                                          }
+
+                                          // Já tem serial ou não precisa: mostra o serial salvo (pronto pra selecionar)
+                                          return (
+                                            <div className="flex gap-1 items-center">
+                                              {p.serial_no && <span className={`text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>✅ {p.serial_no}</span>}
+                                              {!needsSerial && <span className={`text-[10px] ${dm ? "text-green-400" : "text-green-600"}`}>✅ Pronto</span>}
                                             </div>
                                           );
                                         })()}
