@@ -210,7 +210,7 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec): string {
       return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}`;
     }
     case "AIRPODS":
-      return spec.air_modelo;
+      return spec.air_modelo.toUpperCase();
     default:
       return "";
   }

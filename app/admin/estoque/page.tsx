@@ -595,68 +595,45 @@ export default function EstoquePage() {
     setMsg(`${item.produto} movido para estoque${novoTipo === "SEMINOVO" ? " (seminovo)" : ""}!`);
   };
 
-  const handleSubmitACaminho = async () => {
-    // Validar produtos
+  const handleSubmitMulti = async () => {
     if (pedidoProdutos.length === 0) { setMsg("Adicione pelo menos 1 produto"); return; }
-    const filledBancos = BANCOS.filter((b) => parseFloat(bancoValores[b]) > 0);
-    if (filledBancos.length === 0) { setMsg("Preencha o valor em pelo menos um banco"); return; }
 
-    const dataHoje = new Date().toISOString().split("T")[0];
-    const hora = new Date().toTimeString().slice(0, 5);
+    const status = form.tipo === "A_CAMINHO" ? "A CAMINHO" : "EM ESTOQUE";
+    const tipo = form.tipo;
+    let successCount = 0;
+    let errorMsg = "";
 
-    // Montar gastos (um por banco)
-    const base = {
-      data: dataHoje,
-      hora,
-      tipo: "SAIDA",
-      categoria: "FORNECEDOR",
-      descricao: descricaoGasto || "Compra fornecedor",
-      observacao: null,
-      is_dep_esp: false,
-    };
-
-    let gastos;
-    if (filledBancos.length === 1) {
-      gastos = { ...base, valor: parseFloat(bancoValores[filledBancos[0]]), banco: filledBancos[0] };
-    } else {
-      const grupoId = crypto.randomUUID();
-      gastos = filledBancos.map((b) => ({
-        ...base,
-        valor: parseFloat(bancoValores[b]),
-        banco: b,
-        grupo_id: grupoId,
-      }));
+    for (const p of pedidoProdutos) {
+      const nome = (p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec) : "")).toUpperCase();
+      if (!nome) continue;
+      const res = await fetch("/api/estoque", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+        body: JSON.stringify({
+          produto: nome,
+          categoria: p.categoria,
+          qnt: parseInt(p.qnt) || 1,
+          custo_unitario: parseFloat(p.custo_unitario) || 0,
+          status,
+          cor: p.cor || null,
+          tipo,
+          fornecedor: p.fornecedor || null,
+          imei: p.imei || null,
+          serial_no: p.serial_no || null,
+          data_entrada: new Date().toISOString().split("T")[0],
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) { successCount++; } else { errorMsg = json.error; }
     }
 
-    // Montar produtos
-    const produtos = pedidoProdutos.map((p) => {
-      const nome = p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec) : "");
-      return {
-        produto: nome,
-        categoria: p.categoria,
-        qnt: parseInt(p.qnt) || 1,
-        custo_unitario: parseFloat(p.custo_unitario) || 0,
-        cor: p.cor || null,
-        fornecedor: p.fornecedor || null,
-        imei: p.imei || null,
-        serial_no: p.serial_no || null,
-      };
-    });
-
-    const res = await fetch("/api/gastos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-      body: JSON.stringify({ gastos, produtos }),
-    });
-    const json = await res.json();
-    if (json.ok) {
-      setMsg(`Pedido registrado! ${produtos.length} produto(s) adicionados como A Caminho.`);
+    if (successCount > 0) {
+      setMsg(`${successCount} produto(s) adicionados${status === "A CAMINHO" ? " como A Caminho" : " ao estoque"}!${errorMsg ? ` (${errorMsg})` : ""}`);
       setPedidoProdutos([createEmptyProdutoRow()]);
-      setBancoValores(emptyBancoValores());
-      setDescricaoGasto("");
       fetchEstoque();
+      setFilterCat(pedidoProdutos[0]?.categoria || "");
     } else {
-      setMsg("Erro: " + (json.error || json.estoqueError || "Falha"));
+      setMsg("Erro: " + (errorMsg || "Nenhum produto adicionado"));
     }
   };
 
@@ -1198,17 +1175,66 @@ export default function EstoquePage() {
             )}
           </div>
 
-          {form.tipo === "A_CAMINHO" && (
-            <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#E8740E]/20"}`}>
-              <p className={`text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                Cadastre aqui os produtos que estao a caminho. IMEI e serial sao opcionais agora — preencha quando o produto chegar.
-              </p>
-              <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                Para registrar o pagamento ao fornecedor, use <strong>Gastos &rarr; FORNECEDOR</strong>.
-              </p>
+          {/* MODO MULTI-PRODUTO (NOVO e A_CAMINHO) */}
+          {(form.tipo === "NOVO" || form.tipo === "A_CAMINHO") && form.categoria !== "SEMINOVOS" ? (
+            <div className="space-y-4">
+              {form.tipo === "A_CAMINHO" && (
+                <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#E8740E]/20"}`}>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    IMEI e serial sao opcionais — preencha quando o produto chegar. Para pagamento, use <strong>Gastos &rarr; FORNECEDOR</strong>.
+                  </p>
+                </div>
+              )}
+
+              {/* Cards de produtos */}
+              <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"} space-y-4`}>
+                <div className="flex items-center justify-between">
+                  <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Produtos</p>
+                  {pedidoProdutos.length > 0 && (
+                    <p className={`text-xs font-semibold ${textSecondary}`}>
+                      {pedidoProdutos.length} produto(s) | Total: <span className="text-[#E8740E]">{fmt(pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 1), 0))}</span>
+                    </p>
+                  )}
+                </div>
+                {pedidoProdutos.map((row, i) => (
+                  <ProdutoSpecFields
+                    key={i}
+                    row={row}
+                    onChange={(updated) => {
+                      const nv = [...pedidoProdutos];
+                      nv[i] = updated;
+                      setPedidoProdutos(nv);
+                    }}
+                    onRemove={() => pedidoProdutos.length > 1 ? setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i)) : undefined}
+                    onDuplicate={() => {
+                      const clone = { ...row, spec: { ...row.spec }, imei: "", serial_no: "" };
+                      const nv = [...pedidoProdutos];
+                      nv.splice(i + 1, 0, clone);
+                      setPedidoProdutos(nv);
+                    }}
+                    fornecedores={fornecedores}
+                    inputCls={inputCls}
+                    labelCls={labelCls}
+                    darkMode={dm}
+                    index={i}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPedidoProdutos([...pedidoProdutos, createEmptyProdutoRow()])}
+                  className={`w-full py-3 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#636366] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-sm font-semibold transition-colors`}
+                >
+                  + Adicionar Produto
+                </button>
+              </div>
+
+              <button onClick={handleSubmitMulti} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
+                {form.tipo === "A_CAMINHO" ? `Adicionar ${pedidoProdutos.length} como A Caminho` : `Adicionar ${pedidoProdutos.length} ao Estoque`}
+              </button>
             </div>
-          )}
-          {/* Campos específicos por categoria */}
+          ) : (
+          <>
+          {/* Campos específicos por categoria (SEMINOVO) */}
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => { setS("ip_modelo", e.target.value); set("cor", ""); }} className={inputCls}>
@@ -1455,14 +1481,11 @@ export default function EstoquePage() {
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
-          <div className="flex gap-3">
-            <button onClick={() => handleSubmit(false)} className="flex-1 py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
-              {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : form.tipo === "A_CAMINHO" ? "Adicionar como A Caminho" : "Adicionar ao Estoque"}
-            </button>
-            <button onClick={() => handleSubmit(true)} className={`py-4 px-6 rounded-2xl border-2 border-[#E8740E] text-[#E8740E] text-[13px] font-semibold hover:bg-[#E8740E] hover:text-white transition-colors shadow-sm active:scale-[0.99]`} title="Registra e mantém o formulário para adicionar outro igual (limpa só IMEI/Serial)">
-              Registrar e Duplicar
-            </button>
-          </div>
+          <button onClick={() => handleSubmit(false)} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
+            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar Seminovo"}
+          </button>
+          </>
+          )}
         </div>
       ) : (
         /* LISTA */
