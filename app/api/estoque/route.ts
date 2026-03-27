@@ -180,11 +180,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Inserir novo produto — verificar se já existe (merge por produto+cor+categoria)
+  // Se tem serial_no, NUNCA faz merge — cada serial é uma unidade individual
   const produtoNome = String(body.produto || "").trim();
   const corNome = String(body.cor || "").trim() || null;
   const categoriaNome = String(body.categoria || "").trim();
+  const hasSerial = !!body.serial_no;
 
-  if (produtoNome) {
+  if (produtoNome && !hasSerial) {
     let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome);
     if (categoriaNome) existQuery = existQuery.eq("categoria", categoriaNome);
     if (corNome) existQuery = existQuery.eq("cor", corNome);
