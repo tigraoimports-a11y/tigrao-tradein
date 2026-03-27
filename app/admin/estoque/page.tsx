@@ -2071,7 +2071,7 @@ export default function EstoquePage() {
                                                       className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                                   ))}
                                                 </div>
-                                                <button onClick={async () => {
+                                                <button onClick={() => {
                                                   const serials: string[] = [];
                                                   for (let i = 0; i < qnt; i++) {
                                                     const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
@@ -2079,23 +2079,9 @@ export default function EstoquePage() {
                                                     if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
                                                     serials.push(val);
                                                   }
-                                                  // Salvar serial no primeiro e criar registros individuais (sem mover pra estoque)
-                                                  await apiPatch(p.id, { serial_no: serials[0], qnt: 1 });
-                                                  for (let i = 1; i < serials.length; i++) {
-                                                    await fetch("/api/estoque", {
-                                                      method: "POST",
-                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                                      body: JSON.stringify({
-                                                        produto: p.produto, categoria: p.categoria, qnt: 1,
-                                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                                        serial_no: serials[i], tipo: "A_CAMINHO", status: "A CAMINHO",
-                                                      }),
-                                                    });
-                                                  }
-                                                  setMsg(`${serials.length} seriais salvos! Selecione e clique "Mover → Estoque" quando pronto.`);
-                                                  fetchEstoque();
-                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
-                                                  Salvar {qnt} seriais
+                                                  handleMoverMultiploComEtiqueta(p, serials);
+                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
+                                                  Mover {qnt} un.
                                                 </button>
                                               </div>
                                             );
