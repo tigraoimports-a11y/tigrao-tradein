@@ -51,7 +51,7 @@ export default function OrcamentoPage() {
   const [catSel, setCatSel] = useState("");
   const [prodSel, setProdSel] = useState("");
   const [entrada, setEntrada] = useState("");
-  const [parcelas, setParcelas] = useState(12);
+  const [parcelasSel, setParcelasSel] = useState<number[]>([12]);
   const [textoGerado, setTextoGerado] = useState("");
   const [copiado, setCopiado] = useState(false);
 
@@ -115,9 +115,7 @@ export default function OrcamentoPage() {
       return;
     }
 
-    const taxa = getTaxaOrcamento(parcelas);
-    const valorComTaxa = restante / (1 - taxa / 100);
-    const valorParcela = Math.ceil(valorComTaxa / parcelas);
+    const sorted = [...parcelasSel].sort((a, b) => a - b);
 
     const linhas = [
       `${emoji} *${produtoSelecionado.nome}*`,
@@ -130,9 +128,31 @@ export default function OrcamentoPage() {
 
     if (entradaVal > 0) {
       linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
-      linhas.push(`💳 O restante parcelado ficaria ${parcelas}x R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+      if (sorted.length === 1) {
+        const taxa = getTaxaOrcamento(sorted[0]);
+        const vp = Math.ceil(restante / (1 - taxa / 100) / sorted[0]);
+        linhas.push(`💳 O restante parcelado ficaria ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+      } else {
+        linhas.push(`💳 O restante parcelado ficaria:`);
+        for (const n of sorted) {
+          const taxa = getTaxaOrcamento(n);
+          const vp = Math.ceil(restante / (1 - taxa / 100) / n);
+          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+        }
+      }
     } else {
-      linhas.push(`💳 ${parcelas}x R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+      if (sorted.length === 1) {
+        const taxa = getTaxaOrcamento(sorted[0]);
+        const vp = Math.ceil(precoPix / (1 - taxa / 100) / sorted[0]);
+        linhas.push(`💳 ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+      } else {
+        linhas.push(`💳 Parcelado no cartão:`);
+        for (const n of sorted) {
+          const taxa = getTaxaOrcamento(n);
+          const vp = Math.ceil(precoPix / (1 - taxa / 100) / n);
+          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+        }
+      }
       linhas.push(`💰 Ou R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX`);
     }
 
@@ -152,7 +172,7 @@ export default function OrcamentoPage() {
   // Auto gerar quando muda qualquer campo
   useEffect(() => {
     if (produtoSelecionado) gerarOrcamento();
-  }, [prodSel, entrada, parcelas]);
+  }, [prodSel, entrada, parcelasSel]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -205,33 +225,28 @@ export default function OrcamentoPage() {
                 </p>
               </div>
 
-              {/* Entrada + Parcelas */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className={labelCls}>Entrada PIX (R$)</p>
-                  <input type="text" inputMode="decimal" placeholder="0" value={entrada} onChange={e => setEntrada(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <p className={labelCls}>Parcelas</p>
-                  <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))} className={inputCls}>
-                    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
-                      const taxa = getTaxaOrcamento(n);
-                      return <option key={n} value={n}>{n}x (taxa {taxa.toFixed(1)}%)</option>;
-                    })}
-                  </select>
-                </div>
+              {/* Entrada */}
+              <div>
+                <p className={labelCls}>Entrada PIX (R$)</p>
+                <input type="text" inputMode="decimal" placeholder="0" value={entrada} onChange={e => setEntrada(e.target.value)} className={inputCls} />
               </div>
 
-              {/* Preview cálculo */}
-              {parseFloat(entrada) > 0 && (
-                <div className={`text-xs space-y-1 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
-                  <p>Preço PIX: R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR")}</p>
-                  <p>Entrada: -R$ {(parseFloat(entrada) || 0).toLocaleString("pt-BR")}</p>
-                  <p>Restante: R$ {(produtoSelecionado.preco_pix - (parseFloat(entrada) || 0)).toLocaleString("pt-BR")}</p>
-                  <p>Taxa {parcelas}x: {getTaxaOrcamento(parcelas).toFixed(2)}%</p>
-                  <p className="font-bold">Parcela: R$ {Math.ceil((produtoSelecionado.preco_pix - (parseFloat(entrada) || 0)) / (1 - getTaxaOrcamento(parcelas) / 100) / parcelas).toLocaleString("pt-BR")}</p>
+              {/* Parcelas — multi-select */}
+              <div>
+                <p className={labelCls}>Parcelas (selecione uma ou mais)</p>
+                <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
+                    const selected = parcelasSel.includes(n);
+                    return (
+                      <button key={n} onClick={() => {
+                        setParcelasSel(prev => selected ? prev.filter(x => x !== n) : [...prev, n]);
+                      }} className={`py-2 rounded-lg text-xs font-bold transition-colors ${selected ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"}`}>
+                        {n}x
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </>
           )}
         </div>
@@ -255,8 +270,8 @@ export default function OrcamentoPage() {
       {/* Tabela rápida de parcelas */}
       {produtoSelecionado && (
         <div className={cardCls}>
-          <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Tabela de parcelas</p>
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+          <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Tabela de parcelas (clique pra adicionar/remover)</p>
+          <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
             {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
               const precoPix = produtoSelecionado.preco_pix;
               const entradaVal = parseFloat(entrada) || 0;
@@ -265,9 +280,10 @@ export default function OrcamentoPage() {
               const taxa = getTaxaOrcamento(n);
               const valorComTaxa = restante / (1 - taxa / 100);
               const valorParcela = Math.ceil(valorComTaxa / n);
+              const selected = parcelasSel.includes(n);
               return (
-                <button key={n} onClick={() => setParcelas(n)}
-                  className={`p-2 rounded-lg text-center transition-colors ${parcelas === n ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>
+                <button key={n} onClick={() => setParcelasSel(prev => selected ? prev.filter(x => x !== n) : [...prev, n])}
+                  className={`p-2 rounded-lg text-center transition-colors ${selected ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>
                   <p className="text-xs font-bold">{n}x</p>
                   <p className="text-sm font-semibold">R$ {valorParcela.toLocaleString("pt-BR")}</p>
                 </button>
