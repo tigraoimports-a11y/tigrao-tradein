@@ -656,15 +656,14 @@ export default function EstoquePage() {
     const win = window.open("", "_blank", "width=800,height=600");
     if (!win) return;
 
-    const etiquetasHtml = produtosParaImprimir.map((p, idx) => {
+    const tds = produtosParaImprimir.map((p, idx) => {
       const serial = p.serial_no || "";
       const imei = p.imei || "";
       const qrData = serial || imei || p.id;
-      return `
-      <div class="cell">
-        <div class="qr"><canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas></div>
-        <div class="extra">${serial || imei || ""}</div>
-      </div>`;
+      return `<td style="text-align:center;vertical-align:top;padding:0 1mm">
+        <canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas>
+        <div style="font-size:4pt;font-family:monospace;color:#333;margin-top:1px">${serial || imei || ""}</div>
+      </td>`;
     }).join("");
 
     win.document.write(`<!DOCTYPE html><html><head>
@@ -672,16 +671,12 @@ export default function EstoquePage() {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0;width:100%}
-        body{font-family:Arial,Helvetica,sans-serif}
-        .grid{display:flex;flex-direction:row;flex-wrap:nowrap;justify-content:center;align-items:flex-start;padding:1mm 0;gap:0}
-        .cell{text-align:center;flex:0 0 auto;width:20mm}
-        .extra{font-size:3pt;color:#444;margin-top:0.3mm;font-family:monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:19mm;display:block}
-        .qr{display:flex;justify-content:center}
-        @page{size:62mm 24mm;margin:0}
-        @media print{.cell{border-color:#ddd}}
+        html,body{margin:0;padding:0}
+        body{font-family:Arial,sans-serif}
+        table{border-collapse:collapse;margin:0 auto}
+        @page{margin:0}
       </style></head><body>
-      <div class="grid">${etiquetasHtml}</div>
+      <table><tr>${tds}</tr></table>
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas) {
           var data = canvas.getAttribute('data-qr');
@@ -690,7 +685,7 @@ export default function EstoquePage() {
           qr.make();
           var size = 150;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '16mm'; canvas.style.height = '16mm';
+          canvas.style.width = '18mm'; canvas.style.height = '18mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
