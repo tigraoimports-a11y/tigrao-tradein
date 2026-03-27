@@ -9,7 +9,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
 interface SearchResult {
-  source: "estoque" | "venda";
+  source: "estoque" | "venda" | "produto_individual";
   location: string;
   id: string;
   produto: string;
@@ -21,8 +21,11 @@ interface SearchResult {
   serial_no?: string;
   data_compra?: string;
   data_entrada?: string;
+  data_saida?: string;
+  data_venda?: string;
   categoria?: string;
   tipo_produto?: string;
+  armazenamento?: string;
   observacao?: string;
   bateria?: number;
   qnt?: number;
@@ -34,6 +37,9 @@ interface SearchResult {
   banco?: string;
   tipo_venda?: string;
   parcelas?: number;
+  estoque_id?: string;
+  venda_id?: string;
+  status_pagamento?: string;
 }
 
 const locationLabel: Record<string, { text: string; color: string; bg: string; icon: string }> = {
@@ -41,6 +47,8 @@ const locationLabel: Record<string, { text: string; color: string; bg: string; i
   a_caminho: { text: "A Caminho", color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200", icon: "🚚" },
   vendido: { text: "Vendido", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", icon: "💰" },
   pendente: { text: "Pendente", color: "text-orange-700", bg: "bg-orange-50 border-orange-200", icon: "⏳" },
+  esgotado: { text: "Esgotado", color: "text-red-700", bg: "bg-red-50 border-red-200", icon: "❌" },
+  devolvido: { text: "Devolvido", color: "text-purple-700", bg: "bg-purple-50 border-purple-200", icon: "↩️" },
 };
 
 export default function BuscaSerialPage() {
@@ -175,9 +183,10 @@ export default function BuscaSerialPage() {
               const serial = mainItem.serial_no || mainItem.imei || "—";
               const loc = locationLabel[mainItem.location] || locationLabel.em_estoque;
 
-              // Find estoque entry and venda entry
-              const estoqueItem = items.find((i) => i.source === "estoque");
-              const vendaItem = items.find((i) => i.source === "venda");
+              // Find entries - produto_individual contains both estoque and venda info
+              const piItem = items.find((i) => i.source === "produto_individual");
+              const estoqueItem = piItem || items.find((i) => i.source === "estoque");
+              const vendaItem = piItem?.location === "vendido" ? piItem : items.find((i) => i.source === "venda");
 
               return (
                 <div key={key} className={cardCls}>
@@ -218,19 +227,19 @@ export default function BuscaSerialPage() {
                       {estoqueItem && (
                         <div className="relative pl-8">
                           <div className={`absolute left-0 top-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] border-2 ${
-                            estoqueItem.status === "A CAMINHO"
+                            estoqueItem.status === "A CAMINHO" || estoqueItem.status === "A_CAMINHO"
                               ? "bg-yellow-50 border-yellow-300"
                               : "bg-blue-50 border-blue-300"
                           }`}>
-                            {estoqueItem.status === "A CAMINHO" ? "🚚" : "📦"}
+                            {estoqueItem.status === "A CAMINHO" || estoqueItem.status === "A_CAMINHO" ? "🚚" : "📦"}
                           </div>
                           <div className={`rounded-xl border p-3 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className={`text-xs font-bold ${textSecondary}`}>
-                                {estoqueItem.status === "A CAMINHO" ? "A Caminho" : "Entrada no Estoque"}
+                                {estoqueItem.status === "A CAMINHO" || estoqueItem.status === "A_CAMINHO" ? "A Caminho" : "Entrada no Estoque"}
                               </span>
                               <span className={`text-xs ${textSecondary}`}>
-                                {estoqueItem.data_entrada || estoqueItem.data_compra || "—"}
+                                {estoqueItem.data_entrada ? new Date(estoqueItem.data_entrada).toLocaleDateString("pt-BR") : estoqueItem.data_compra || "—"}
                               </span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
@@ -246,6 +255,12 @@ export default function BuscaSerialPage() {
                                 <span className={textSecondary}>Categoria: </span>
                                 <span className={`font-medium ${textPrimary}`}>{estoqueItem.categoria || "—"}</span>
                               </div>
+                              {estoqueItem.armazenamento && (
+                                <div>
+                                  <span className={textSecondary}>Armazenamento: </span>
+                                  <span className={`font-medium ${textPrimary}`}>{estoqueItem.armazenamento}</span>
+                                </div>
+                              )}
                               {estoqueItem.tipo_produto && (
                                 <div>
                                   <span className={textSecondary}>Condicao: </span>
@@ -280,7 +295,7 @@ export default function BuscaSerialPage() {
                       )}
 
                       {/* Venda */}
-                      {vendaItem && (
+                      {vendaItem && vendaItem.location === "vendido" && (
                         <div className="relative pl-8">
                           <div className="absolute left-0 top-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-green-50 border-2 border-green-300">
                             💰
@@ -288,7 +303,7 @@ export default function BuscaSerialPage() {
                           <div className={`rounded-xl border p-3 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className={`text-xs font-bold ${textSecondary}`}>Vendido</span>
-                              <span className={`text-xs ${textSecondary}`}>{vendaItem.data || "—"}</span>
+                              <span className={`text-xs ${textSecondary}`}>{vendaItem.data_venda || vendaItem.data || "—"}</span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                               <div>
@@ -304,8 +319,8 @@ export default function BuscaSerialPage() {
                               {vendaItem.lucro !== undefined && (
                                 <div>
                                   <span className={textSecondary}>Lucro: </span>
-                                  <span className={`font-medium ${vendaItem.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                    {fmt(vendaItem.lucro)}
+                                  <span className={`font-medium ${(vendaItem.lucro ?? 0) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {fmt(vendaItem.lucro ?? 0)}
                                   </span>
                                 </div>
                               )}
@@ -317,7 +332,7 @@ export default function BuscaSerialPage() {
                               </div>
                               <div>
                                 <span className={textSecondary}>Status: </span>
-                                <span className={`font-medium ${textPrimary}`}>{vendaItem.status}</span>
+                                <span className={`font-medium ${textPrimary}`}>{vendaItem.status_pagamento || vendaItem.status}</span>
                               </div>
                             </div>
                             <div className="mt-2">
@@ -332,7 +347,7 @@ export default function BuscaSerialPage() {
                         </div>
                       )}
 
-                      {/* If only venda (no estoque record found) */}
+                      {/* If no details found */}
                       {!estoqueItem && !vendaItem && (
                         <div className="relative pl-8">
                           <div className="absolute left-0 top-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-gray-50 border-2 border-gray-300">

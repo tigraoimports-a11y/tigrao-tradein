@@ -16,11 +16,19 @@ export async function GET(req: NextRequest) {
 
   const searchTerm = `%${q}%`;
 
-  // Buscar no estoque (todos os campos relevantes)
+  // Buscar em produtos_individuais (seriais/IMEI ficam aqui)
+  const { data: prodIndividuais } = await supabase
+    .from("produtos_individuais")
+    .select("id, serial_no, imei, produto, categoria, cor, custo_unitario, status, fornecedor, estoque_id, venda_id, data_entrada")
+    .or(`serial_no.ilike.${searchTerm},imei.ilike.${searchTerm},produto.ilike.${searchTerm}`)
+    .order("data_entrada", { ascending: false })
+    .limit(20);
+
+  // Buscar no estoque (sem serial_no/imei que não existem aqui)
   const { data: estoqueResults } = await supabase
     .from("estoque")
-    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, imei, serial_no, data_compra, data_entrada, observacao, bateria")
-    .or(`produto.ilike.${searchTerm},imei.ilike.${searchTerm},serial_no.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cor.ilike.${searchTerm}`)
+    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria")
+    .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cor.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
 
@@ -35,6 +43,25 @@ export async function GET(req: NextRequest) {
   // Montar resultados
   const results = [];
 
+  // Produtos individuais (seriais/IMEI)
+  for (const pi of prodIndividuais ?? []) {
+    results.push({
+      tipo: "produto_individual" as const,
+      id: pi.id,
+      produto: pi.produto,
+      status: pi.status,
+      cor: pi.cor,
+      custo: pi.custo_unitario,
+      fornecedor: pi.fornecedor,
+      imei: pi.imei,
+      serial_no: pi.serial_no,
+      data_entrada: pi.data_entrada,
+      categoria: pi.categoria,
+      estoque_id: pi.estoque_id,
+      venda_id: pi.venda_id,
+    });
+  }
+
   for (const e of estoqueResults ?? []) {
     results.push({
       tipo: "estoque" as const,
@@ -44,8 +71,6 @@ export async function GET(req: NextRequest) {
       cor: e.cor,
       custo: e.custo_unitario,
       fornecedor: e.fornecedor,
-      imei: e.imei,
-      serial_no: e.serial_no,
       data_compra: e.data_compra,
       data_entrada: e.data_entrada,
       categoria: e.categoria,
