@@ -5,6 +5,8 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
+import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
+import { STRUCTURED_CATS, buildProdutoName } from "@/lib/produto-specs";
 
 const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -78,11 +80,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
     });
   }
 
-  result.sort((a, b) => {
-    const dateCompare = b.data.localeCompare(a.data);
-    if (dateCompare !== 0) return dateCompare;
-    return (b.hora || "00:00").localeCompare(a.hora || "00:00");
-  });
+  result.sort((a, b) => b.data.localeCompare(a.data));
   return result;
 }
 
@@ -148,6 +146,9 @@ export default function GastosPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [viewingKey, setViewingKey] = useState<string | null>(null);
 
+  // Fornecedores
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+
   // Form state
   const [form, setForm] = useState({
     data: new Date().toISOString().split("T")[0],
@@ -159,6 +160,8 @@ export default function GastosPage() {
   });
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
 
+  // Produtos do pedido fornecedor
+  const [pedidoProdutos, setPedidoProdutos] = useState<ProdutoRowState[]>([]);
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -185,12 +188,27 @@ export default function GastosPage() {
     setLoading(false);
   }, [password]);
 
+  // Buscar fornecedores
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/fornecedores", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setFornecedores(json.data ?? []);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [password]);
+
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
 
   const totalForm = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
+  const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
+
   const isFornecedor = form.categoria === "FORNECEDOR";
 
   const handleSubmit = async () => {
@@ -230,7 +248,26 @@ export default function GastosPage() {
       }));
     }
 
-    const payload = gastoItems;
+    // Se tem produtos de fornecedor, enviar no formato especial
+    let payload;
+    if (isFornecedor && pedidoProdutos.length > 0) {
+      const produtos = pedidoProdutos.map((p) => {
+        const nome = p.produto || (STRUCTURED_CATS.includes(p.categoria) ? buildProdutoName(p.categoria, p.spec) : "");
+        return {
+          produto: nome,
+          categoria: p.categoria,
+          qnt: parseInt(p.qnt) || 1,
+          custo_unitario: parseFloat(p.custo_unitario) || 0,
+          cor: p.cor || null,
+          fornecedor: p.fornecedor || null,
+          imei: p.imei || null,
+          serial_no: p.serial_no || null,
+        };
+      });
+      payload = { gastos: gastoItems, produtos };
+    } else {
+      payload = gastoItems;
+    }
 
     const res = await fetch("/api/gastos", {
       method: "POST",
@@ -239,9 +276,13 @@ export default function GastosPage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg("Gasto registrado!");
+      const prodMsg = isFornecedor && pedidoProdutos.length > 0
+        ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
+        : "";
+      setMsg(`Gasto registrado!${prodMsg}`);
       setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
       setBancoValores(emptyBancoValores());
+      setPedidoProdutos([]);
       fetchGastos();
     } else {
       setMsg("Erro: " + json.error);
@@ -388,6 +429,17 @@ export default function GastosPage() {
 
   const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
 
+  const BancoInputGrid = ({ valores, onChange, cls }: { valores: BancoValores; onChange: (b: Banco, v: string) => void; cls: string }) => (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {BANCOS.map((b) => (
+        <div key={b}>
+          <p className={labelCls}>{b.replace("_", " ")}</p>
+          <input type="number" placeholder="0" value={valores[b]} onChange={(e) => onChange(b, e.target.value)} className={cls} />
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
@@ -425,29 +477,61 @@ export default function GastosPage() {
                 <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalForm)}</span>
               )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {BANCOS.map((b) => (
-                    <div key={b}>
-                      <p className={labelCls}>{b.replace("_", " ")}</p>
-                      <input type="number" placeholder="0" value={bancoValores[b]} onChange={(e) => setBanco(b, e.target.value)} className={inputCls} />
-                    </div>
-                  ))}
-                </div>
+            <BancoInputGrid valores={bancoValores} onChange={setBanco} cls={inputCls} />
             <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
               Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
             </p>
           </div>
 
-          {/* Aviso para compras com produtos — redireciona pro estoque */}
+          {/* Seção de produtos do pedido — só aparece para FORNECEDOR */}
           {isFornecedor && (
-            <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#E8740E]/20"}`}>
-              <p className={`text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                Para registrar compra de produtos de fornecedor, use <strong>Estoque &rarr; tipo &quot;A Caminho&quot;</strong>.
-                La voce cadastra os produtos e o pagamento de uma vez, sem duplicar valores.
-              </p>
-              <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                Use esta aba apenas para gastos de fornecedor que nao envolvem produtos (frete, taxa, etc).
-              </p>
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF8F0]"} space-y-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Produtos do Pedido</p>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    Cadastre os produtos comprados. Eles entram no estoque como &quot;A Caminho&quot;.
+                  </p>
+                </div>
+                {pedidoProdutos.length > 0 && totalProdutos > 0 && (
+                  <div className="text-right">
+                    <p className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Custo total produtos</p>
+                    <p className="text-sm font-bold text-[#E8740E]">{fmt(totalProdutos)}</p>
+                  </div>
+                )}
+              </div>
+
+              {pedidoProdutos.map((row, i) => (
+                <ProdutoSpecFields
+                  key={i}
+                  row={row}
+                  onChange={(updated) => {
+                    const next = [...pedidoProdutos];
+                    next[i] = updated;
+                    setPedidoProdutos(next);
+                  }}
+                  onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
+                  onDuplicate={() => {
+                    const clone = { ...row, spec: { ...row.spec }, imei: "", serial_no: "" };
+                    const next = [...pedidoProdutos];
+                    next.splice(i + 1, 0, clone);
+                    setPedidoProdutos(next);
+                  }}
+                  fornecedores={fornecedores}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                  darkMode={dm}
+                  index={i}
+                />
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setPedidoProdutos([...pedidoProdutos, createEmptyProdutoRow()])}
+                className={`w-full py-3 rounded-xl border-2 border-dashed font-semibold text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}
+              >
+                + Adicionar Produto
+              </button>
             </div>
           )}
 
@@ -457,7 +541,7 @@ export default function GastosPage() {
           </label>
 
           <button onClick={handleSubmit} disabled={saving} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
-            {saving ? "Salvando..." : "Registrar"}
+            {saving ? "Salvando..." : isFornecedor && pedidoProdutos.length > 0 ? `Registrar Gasto + ${pedidoProdutos.length} Produto(s)` : "Registrar"}
           </button>
         </div>
       ) : (
@@ -611,14 +695,7 @@ export default function GastosPage() {
                               </div>
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {BANCOS.map((b) => (
-                                  <div key={b}>
-                                    <p className={labelCls}>{b.replace("_", " ")}</p>
-                                    <input type="number" placeholder="0" value={editBancoValores[b]} onChange={(e) => editSetBanco(b, e.target.value)} className={inputCls} />
-                                  </div>
-                                ))}
-                              </div>
+                                <BancoInputGrid valores={editBancoValores} onChange={editSetBanco} cls={inputCls} />
                               </div>
                               <div className="flex items-center gap-3">
                                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
