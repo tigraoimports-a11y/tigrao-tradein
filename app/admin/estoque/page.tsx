@@ -549,11 +549,12 @@ export default function EstoquePage() {
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const apiPatch = async (id: string, fields: Record<string, unknown>) => {
-    await fetch("/api/estoque", {
+    const res = await fetch("/api/estoque", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({ id, ...fields }),
     });
+    return res;
   };
 
   const handleUpdateQnt = async (item: ProdutoEstoque, newQnt: number) => {
@@ -2079,10 +2080,11 @@ export default function EstoquePage() {
                                                     if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
                                                     serials.push(val);
                                                   }
-                                                  // Separar em registros individuais (mantém A_CAMINHO)
-                                                  await apiPatch(p.id, { serial_no: serials[0], qnt: 1 });
+                                                  // Separar em registros individuais (garante A_CAMINHO)
+                                                  const res1 = await apiPatch(p.id, { serial_no: serials[0], qnt: 1, tipo: "A_CAMINHO", status: "A CAMINHO" });
+                                                  let created = 0;
                                                   for (let i = 1; i < serials.length; i++) {
-                                                    await fetch("/api/estoque", {
+                                                    const res = await fetch("/api/estoque", {
                                                       method: "POST",
                                                       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
                                                       body: JSON.stringify({
@@ -2092,9 +2094,10 @@ export default function EstoquePage() {
                                                         data_compra: p.data_compra,
                                                       }),
                                                     });
+                                                    if (res.ok) created++;
                                                   }
-                                                  setMsg(`✅ ${serials.length} seriais salvos! Selecione e clique "Mover → Estoque".`);
-                                                  fetchEstoque();
+                                                  setMsg(`✅ ${serials.length} seriais salvos (${created + 1} registros)! Selecione e clique "Mover → Estoque".`);
+                                                  await fetchEstoque();
                                                 }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
                                                   💾 Salvar {qnt} seriais
                                                 </button>
