@@ -24,7 +24,7 @@ export default function VendasPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reajusteId, setReajusteId] = useState<string | null>(null);
-  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU" });
+  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
@@ -3246,7 +3246,7 @@ export default function VendasPage() {
                                         )}
                                         {/* Botão Reajuste */}
                                         <button
-                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU" }); }}
+                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" }); }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
                                         >
                                           💲 Reajuste
@@ -3335,7 +3335,7 @@ export default function VendasPage() {
                                     {reajusteId === v.id && (
                                       <div className="md:col-span-3 space-y-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
                                         <h4 className="text-sm font-bold text-amber-700">Adicionar Reajuste</h4>
-                                        <div className="grid grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                           <div>
                                             <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Valor (R$)</p>
                                             <input type="number" placeholder="100" value={reajForm.valor} onChange={e => setReajForm(f => ({ ...f, valor: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm" />
@@ -3355,7 +3355,15 @@ export default function VendasPage() {
                                             </select>
                                           </div>
                                           <div>
-                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Banco PIX</p>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Forma</p>
+                                            <select value={reajForm.forma} onChange={e => setReajForm(f => ({ ...f, forma: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                              <option value="PIX">PIX</option>
+                                              <option value="CARTAO">Cartão de Crédito</option>
+                                              <option value="ESPECIE">Dinheiro</option>
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Banco</p>
                                             <select value={reajForm.banco} onChange={e => setReajForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
                                               <option value="ITAU">Itaú</option>
                                               <option value="INFINITE">Infinite</option>
@@ -3368,11 +3376,12 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
+                                              try {
                                               const valor = parseFloat(reajForm.valor);
                                               if (!valor || !reajForm.motivo) { alert("Preencha valor e motivo"); return; }
                                               const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, data: hoje };
-                                              const reajustesAtuais = Array.isArray(v.reajustes) ? v.reajustes : [];
+                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje };
+                                              const reajustesAtuais = Array.isArray(v.reajustes) ? [...v.reajustes] : [];
                                               const novosReajustes = [...reajustesAtuais, novoReajuste];
                                               const novoLucro = (v.lucro || 0) + valor;
                                               const res = await fetch("/api/vendas", {
@@ -3385,7 +3394,10 @@ export default function VendasPage() {
                                                 setVendas(prev => prev.map(r => r.id === v.id ? { ...r, reajustes: novosReajustes, lucro: novoLucro } : r));
                                                 setReajusteId(null);
                                                 setMsg(`Reajuste de R$ ${valor} registrado!`);
+                                              } else {
+                                                alert("Erro: " + (json.error || "falha ao salvar"));
                                               }
+                                              } catch (err) { alert("Erro de conexão: " + err); }
                                             }}
                                             className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors"
                                           >
