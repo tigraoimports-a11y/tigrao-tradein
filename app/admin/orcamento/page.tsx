@@ -23,15 +23,17 @@ function getTaxaOrcamento(parcelas: number): number {
 
 interface Produto {
   id: string;
-  produto: string;
+  modelo: string;
+  armazenamento: string;
   categoria: string;
   preco_pix: number;
-  ativo: boolean;
+  status: string;
+  nome: string; // computed: modelo + armazenamento
 }
 
 const CATEGORIAS_LABEL: Record<string, string> = {
-  IPHONES: "📱 iPhones",
-  IPADS: "📱 iPads",
+  IPHONE: "📱 iPhones",
+  IPAD: "📱 iPads",
   MACBOOK: "💻 MacBooks",
   MAC_MINI: "🖥️ Mac Mini",
   APPLE_WATCH: "⌚ Apple Watch",
@@ -60,7 +62,11 @@ export default function OrcamentoPage() {
         const res = await fetch("/api/admin/precos", { headers: { "x-admin-password": password } });
         if (res.ok) {
           const json = await res.json();
-          setProdutos((json.data ?? []).filter((p: Produto) => p.ativo && p.preco_pix > 0));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setProdutos((json.data ?? []).filter((p: any) => p.status === "ativo" && p.preco_pix > 0).map((p: any) => ({
+            ...p,
+            nome: `${p.modelo}${p.armazenamento ? " " + p.armazenamento : ""}`,
+          })));
         }
       } catch { /* ignore */ }
       setLoading(false);
@@ -91,7 +97,7 @@ export default function OrcamentoPage() {
     if (restante <= 0) {
       // Só PIX, sem parcela
       const texto = [
-        `📱 *${produtoSelecionado.produto}*`,
+        `📱 *${produtoSelecionado.nome}*`,
         `📦 Novo / Lacrado`,
         `✅ 1 ano de garantia`,
         `📄 Nota fiscal em seu nome`,
@@ -109,7 +115,7 @@ export default function OrcamentoPage() {
     const valorParcela = Math.ceil(valorComTaxa / parcelas);
 
     const linhas = [
-      `📱 *${produtoSelecionado.produto}*`,
+      `📱 *${produtoSelecionado.nome}*`,
       `📦 Novo / Lacrado`,
       `✅ 1 ano de garantia`,
       `📄 Nota fiscal em seu nome`,
@@ -177,7 +183,7 @@ export default function OrcamentoPage() {
               <select value={prodSel} onChange={e => setProdSel(e.target.value)} className={inputCls}>
                 <option value="">— Selecionar produto —</option>
                 {produtosFiltrados.map(p => (
-                  <option key={p.id} value={p.id}>{p.produto} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
+                  <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
                 ))}
               </select>
             )}
