@@ -674,11 +674,11 @@ export default function EstoquePage() {
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{margin:0;padding:0;width:100%}
         body{font-family:Arial,Helvetica,sans-serif}
-        .grid{display:flex;flex-wrap:wrap;gap:0;padding:0 1mm}
-        .cell{text-align:center;padding:0.5mm 0;width:20mm;height:23mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
-        .extra{font-size:3pt;color:#444;margin-top:0.2mm;font-family:monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:19mm}
+        .grid{display:flex;flex-direction:row;flex-wrap:nowrap;justify-content:center;align-items:flex-start;padding:1mm 0;gap:0}
+        .cell{text-align:center;flex:0 0 auto;width:20mm}
+        .extra{font-size:3pt;color:#444;margin-top:0.3mm;font-family:monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:19mm;display:block}
         .qr{display:flex;justify-content:center}
-        @page{size:62mm 25mm;margin:0}
+        @page{size:62mm 24mm;margin:0}
         @media print{.cell{border-color:#ddd}}
       </style></head><body>
       <div class="grid">${etiquetasHtml}</div>
@@ -688,9 +688,9 @@ export default function EstoquePage() {
           var qr = qrcode(0, 'M');
           qr.addData(data);
           qr.make();
-          var size = 200;
+          var size = 150;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '14mm'; canvas.style.height = '14mm';
+          canvas.style.width = '16mm'; canvas.style.height = '16mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
