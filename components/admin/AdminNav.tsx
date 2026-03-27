@@ -51,6 +51,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
       { href: "/admin/importar", label: "Importar", icon: "\u{1F4E5}", pageKey: "importar" },
       { href: "/admin/calculadora", label: "Calculadora", icon: "\u{1F9EE}", pageKey: "calculadora" },
+      { href: "/admin/orcamento", label: "Orçamento", icon: "\u{1F4B0}", pageKey: "orcamento" },
     ],
   },
 
