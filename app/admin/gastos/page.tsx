@@ -8,6 +8,15 @@ import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName } from "@/lib/produto-specs";
 
+// Formata número com separador de milhares: 31434 → "31.434"
+const fmtNum = (v: string) => {
+  const clean = v.replace(/[^\d,.-]/g, "").replace(/\./g, "");
+  const num = parseFloat(clean.replace(",", "."));
+  if (isNaN(num)) return v;
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+};
+const parseNum = (v: string) => v.replace(/\./g, "").replace(",", ".");
+
 const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -434,7 +443,7 @@ export default function GastosPage() {
       {BANCOS.map((b) => (
         <div key={b}>
           <p className={labelCls}>{b.replace("_", " ")}</p>
-          <input type="number" placeholder="0" value={valores[b]} onChange={(e) => onChange(b, e.target.value)} className={cls} />
+          <input type="text" inputMode="decimal" placeholder="0" value={valores[b] ? fmtNum(valores[b]) : ""} onChange={(e) => onChange(b, parseNum(e.target.value))} className={cls} />
         </div>
       ))}
     </div>
