@@ -17,32 +17,32 @@ async function getOcrWorker() {
   if (tesseractWorker) return tesseractWorker;
   const Tesseract = await import("tesseract.js");
   tesseractWorker = await Tesseract.createWorker("eng");
-  // Restringir a apenas letras e números (seriais Apple)
-  await tesseractWorker.setParameters({
-    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    tessedit_pageseg_mode: "7", // single line
-  } as Record<string, string>);
   return tesseractWorker;
 }
 
 async function ocrFromImage(blob: Blob): Promise<string> {
   const worker = await getOcrWorker();
   const { data } = await worker.recognize(blob);
-  // Limpa: remove tudo que nao e alfanumerico, uppercase
-  let text = data.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  // Remover prefixos comuns: (S), Serial No., SN:, SERIALNO, etc.
-  text = text.replace(/^S?S?ERIALNO/i, "");
-  text = text.replace(/^SERIALNO/i, "");
-  text = text.replace(/^SERIAL/i, "");
-  text = text.replace(/^SNO?/i, "");
-  text = text.replace(/^SN/i, "");
-  // Pegar os últimos 10-12 caracteres se o texto for muito longo (serial Apple = 10-12 chars)
-  if (text.length > 14) {
-    // Tentar achar um bloco de 10-12 alfanuméricos no final
-    const match = text.match(/([A-Z0-9]{10,12})$/);
-    if (match) text = match[1];
+  const raw = data.text;
+
+  // Estratégia 1: procurar "Serial No." ou "Serial No" seguido do serial
+  const serialMatch = raw.match(/Serial\s*No\.?\s*([A-Za-z0-9]{8,14})/i);
+  if (serialMatch) return serialMatch[1].toUpperCase();
+
+  // Estratégia 2: procurar "SN:" ou "S/N:" seguido do serial
+  const snMatch = raw.match(/S\/?N[:\s]+([A-Za-z0-9]{8,14})/i);
+  if (snMatch) return snMatch[1].toUpperCase();
+
+  // Estratégia 3: procurar qualquer bloco de 10-12 caracteres alfanuméricos (tamanho serial Apple)
+  const blocks = raw.match(/\b[A-Za-z][A-Za-z0-9]{9,13}\b/g);
+  if (blocks) {
+    // Preferir blocos que parecem seriais (mistura de letras e números)
+    const serial = blocks.find(b => /[A-Z]/i.test(b) && /[0-9]/.test(b));
+    if (serial) return serial.toUpperCase();
   }
-  return text;
+
+  // Fallback: limpar tudo e retornar
+  return raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 }
 
 function handleSerialPaste(
