@@ -11,6 +11,46 @@ import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
+/* ── OCR: colar imagem → texto no campo serial ── */
+let tesseractWorker: import("tesseract.js").Worker | null = null;
+async function getOcrWorker() {
+  if (tesseractWorker) return tesseractWorker;
+  const Tesseract = await import("tesseract.js");
+  tesseractWorker = await Tesseract.createWorker("eng");
+  return tesseractWorker;
+}
+
+async function ocrFromImage(blob: Blob): Promise<string> {
+  const worker = await getOcrWorker();
+  const { data } = await worker.recognize(blob);
+  // Limpa: remove tudo que nao e alfanumerico, uppercase
+  return data.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+function handleSerialPaste(
+  e: React.ClipboardEvent<HTMLInputElement>,
+  setValue: (val: string) => void,
+  setOcrLoading?: (loading: boolean) => void,
+) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith("image/")) {
+      e.preventDefault();
+      const blob = items[i].getAsFile();
+      if (!blob) return;
+      if (setOcrLoading) setOcrLoading(true);
+      ocrFromImage(blob)
+        .then((text) => {
+          if (text) setValue(text);
+        })
+        .catch(() => {})
+        .finally(() => { if (setOcrLoading) setOcrLoading(false); });
+      return;
+    }
+  }
+}
+
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
 interface ProdutoEstoque {
@@ -151,6 +191,7 @@ export default function EstoquePage() {
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
+  const [ocrLoading, setOcrLoading] = useState(false);
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
@@ -995,6 +1036,7 @@ export default function EstoquePage() {
   return (
     <div className="space-y-6">
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? (dm ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-700") : (dm ? "bg-green-900/30 text-green-400" : "bg-green-50 text-green-700")}`}>{msg}</div>}
+      {ocrLoading && <div className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-xl bg-orange-500 text-white text-sm font-semibold shadow-lg animate-pulse">Lendo serial da imagem...</div>}
 
       {/* Modal Etiqueta Obrigatória */}
       {etiquetaModal && (
@@ -1649,8 +1691,9 @@ export default function EstoquePage() {
               <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
             </div>
             <div>
-              <p className={labelCls}>Serial No</p>
-              <input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
+              <p className={labelCls}>Serial No {ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo serial...</span>}</p>
+              <input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional — cole imagem ou digite" className={inputCls}
+                onPaste={(e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading)} />
             </div>
           </div>
 
@@ -2009,7 +2052,8 @@ export default function EstoquePage() {
                                               )}
                                               {isEditingField(p.id, "serial_no") ? (
                                                 <div className="flex items-center gap-0.5">
-                                                  <input value={getEditVal(p.id, "serial_no") || ""} onChange={(e) => startEditField(p.id, "serial_no", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "serial_no"); if (e.key === "Escape") cancelEditField(p.id, "serial_no"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder="Serial" />
+                                                  <input value={getEditVal(p.id, "serial_no") || ""} onChange={(e) => startEditField(p.id, "serial_no", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "serial_no"); if (e.key === "Escape") cancelEditField(p.id, "serial_no"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder={ocrLoading ? "Lendo..." : "Serial"}
+                                                    onPaste={(e) => handleSerialPaste(e, (v) => startEditField(p.id, "serial_no", v), setOcrLoading)} />
                                                   <button onClick={() => saveField(p.id, "serial_no")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
                                               ) : (
@@ -2090,7 +2134,8 @@ export default function EstoquePage() {
                                                   {Array.from({ length: qnt }, (_, i) => (
                                                     <input key={i} placeholder={`Serial ${i + 1}`} id={`serial-${p.id}-${i}`}
                                                       style={{ textTransform: "uppercase" }}
-                                                      className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                                      className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                                      onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement; if (el) { el.value = v; } }, setOcrLoading)} />
                                                   ))}
                                                 </div>
                                                 <button onClick={async () => {
@@ -2131,11 +2176,12 @@ export default function EstoquePage() {
                                             // Sem serial: input pra digitar + salvar
                                             return (
                                               <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
-                                                <input placeholder="Serial Number"
+                                                <input placeholder={ocrLoading ? "Lendo..." : "Serial Number"}
                                                   style={{ textTransform: "uppercase" }}
                                                   className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
                                                   onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`✅ Serial ${val} salvo!`); } }}
                                                   onBlur={async (e) => { const val = e.target.value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
+                                                  onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; }, setOcrLoading)}
                                                 />
                                               </div>
                                             );
