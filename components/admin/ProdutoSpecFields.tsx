@@ -20,6 +20,7 @@ import {
   COR_OBRIGATORIA,
   IPHONE_ORIGENS,
   WATCH_PULSEIRAS,
+  getIphoneCores,
   type ProdutoSpec,
   DEFAULT_SPEC,
   buildProdutoName,
@@ -109,6 +110,7 @@ export default function ProdutoSpecFields({
   };
 
   const hasStructured = STRUCTURED_CATS.includes(row.categoria);
+  const coresEfetivas = row.categoria === "IPHONES" ? getIphoneCores(row.spec.ip_modelo) : CORES_POR_CATEGORIA[row.categoria];
 
   return (
     <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#E8E8ED]"} space-y-3`}>
@@ -149,10 +151,10 @@ export default function ProdutoSpecFields({
         </div>
         <div>
           <p className={labelCls}>Cor</p>
-          {CORES_POR_CATEGORIA[row.categoria] ? (
+          {coresEfetivas ? (
             <select value={row.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls}>
               {COR_OBRIGATORIA.includes(row.categoria) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
-              {CORES_POR_CATEGORIA[row.categoria].map((c) => <option key={c}>{c}</option>)}
+              {coresEfetivas.map((c) => <option key={c}>{c}</option>)}
             </select>
           ) : row.categoria === "MAC_MINI" ? null : (
             <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul..." className={inputCls} />

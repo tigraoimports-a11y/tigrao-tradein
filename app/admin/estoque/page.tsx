@@ -7,7 +7,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -487,6 +487,9 @@ export default function EstoquePage() {
 
   const formBaseCat = form.categoria === "SEMINOVOS" ? getBaseCat(spec.semi_subtipo) : getBaseCat(form.categoria);
   const hasStructuredFields = STRUCTURED_CATS_LIST.includes(formBaseCat) || form.categoria === "SEMINOVOS";
+
+  // Cores efetivas: para iPhones, filtra por modelo selecionado
+  const coresEfetivas = formBaseCat === "IPHONES" ? getIphoneCores(spec.ip_modelo) : CORES_POR_CATEGORIA[formBaseCat];
 
   const fetchEstoque = useCallback(async () => {
     setLoading(true);
@@ -1208,7 +1211,7 @@ export default function EstoquePage() {
           {/* Campos específicos por categoria */}
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => setS("ip_modelo", e.target.value)} className={inputCls}>
+              <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => { setS("ip_modelo", e.target.value); set("cor", ""); }} className={inputCls}>
                 {["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E", "17", "17 AIR", "17 PRO", "17 PRO MAX"].map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
               </select></div>
               <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
@@ -1410,10 +1413,10 @@ export default function EstoquePage() {
               <div className="w-8 h-8 rounded-full border-2 border-[#E8740E] flex items-center justify-center shrink-0" title="Cor principal">
                 <span className="text-xs">🎨</span>
               </div>
-              {CORES_POR_CATEGORIA[formBaseCat] ? (
+              {coresEfetivas ? (
                 <select value={form.cor} onChange={(e) => set("cor", e.target.value)} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
                   {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
-                  {CORES_POR_CATEGORIA[formBaseCat].map((c) => <option key={c}>{c}</option>)}
+                  {coresEfetivas.map((c) => <option key={c}>{c}</option>)}
                 </select>
               ) : (
                 <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} flex-1`} style={{ width: "auto" }} />
@@ -1425,10 +1428,10 @@ export default function EstoquePage() {
             {/* Cores adicionais */}
             {variacoes.map((v, i) => (
               <div key={i} className="flex items-center gap-2">
-                {CORES_POR_CATEGORIA[formBaseCat] ? (
+                {coresEfetivas ? (
                   <select value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
                     {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
-                    {CORES_POR_CATEGORIA[formBaseCat].map((c) => <option key={c}>{c}</option>)}
+                    {coresEfetivas.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 ) : (
                   <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} style={{ width: "auto" }} />

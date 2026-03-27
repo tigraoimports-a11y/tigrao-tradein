@@ -18,6 +18,37 @@ export const STRUCTURED_CATS = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPL
 
 // ── Cores por categoria ──
 
+/** Cores de iPhone por linha/modelo */
+export const IPHONE_CORES_POR_MODELO: Record<string, string[]> = {
+  "11":            ["Black", "Green", "Purple", "Red", "White", "Yellow"],
+  "11 PRO":        ["Gold", "Midnight Green", "Silver", "Space Gray"],
+  "11 PRO MAX":    ["Gold", "Midnight Green", "Silver", "Space Gray"],
+  "12":            ["Black", "Blue", "Green", "Purple", "Red", "White"],
+  "12 PRO":        ["Gold", "Graphite", "Pacific Blue", "Silver"],
+  "12 PRO MAX":    ["Gold", "Graphite", "Pacific Blue", "Silver"],
+  "13":            ["Blue", "Green", "Midnight", "Pink", "Red", "Starlight"],
+  "13 PRO":        ["Alpine Green", "Gold", "Graphite", "Sierra Blue", "Silver"],
+  "13 PRO MAX":    ["Alpine Green", "Gold", "Graphite", "Sierra Blue", "Silver"],
+  "14":            ["Blue", "Midnight", "Purple", "Red", "Starlight", "Yellow"],
+  "14 PLUS":       ["Blue", "Midnight", "Purple", "Red", "Starlight", "Yellow"],
+  "14 PRO":        ["Deep Purple", "Gold", "Silver", "Space Black"],
+  "14 PRO MAX":    ["Deep Purple", "Gold", "Silver", "Space Black"],
+  "15":            ["Black", "Blue", "Green", "Pink", "Yellow"],
+  "15 PLUS":       ["Black", "Blue", "Green", "Pink", "Yellow"],
+  "15 PRO":        ["Black Titanium", "Blue Titanium", "Natural Titanium", "White Titanium"],
+  "15 PRO MAX":    ["Black Titanium", "Blue Titanium", "Natural Titanium", "White Titanium"],
+  "16":            ["Black", "Pink", "Teal", "Ultramarine", "White"],
+  "16 PLUS":       ["Black", "Pink", "Teal", "Ultramarine", "White"],
+  "16 PRO":        ["Black Titanium", "Desert Titanium", "Natural Titanium", "White Titanium"],
+  "16 PRO MAX":    ["Black Titanium", "Desert Titanium", "Natural Titanium", "White Titanium"],
+  "16E":           ["Black", "White"],
+  "17":            ["Black", "Lavender", "Mist Blue", "Sage", "White"],
+  "17 AIR":        ["Cloud White", "Light Gold", "Sky Blue", "Space Black"],
+  "17 PRO":        ["Cosmic Orange", "Deep Blue", "Silver"],
+  "17 PRO MAX":    ["Cosmic Orange", "Deep Blue", "Silver"],
+};
+
+/** Lista completa de todas as cores de iPhone (fallback) */
 export const IPHONE_CORES = [
   "Alpine Green", "Black", "Blue", "Black Titanium", "Blue Titanium",
   "Cloud White", "Cosmic Orange", "Deep Blue", "Deep Purple", "Desert Titanium",
@@ -27,6 +58,11 @@ export const IPHONE_CORES = [
   "Silver", "Sky Blue", "Space Black", "Space Gray", "Starlight",
   "Teal", "Ultramarine", "White", "White Titanium", "Yellow",
 ];
+
+/** Retorna as cores do iPhone baseado no modelo selecionado */
+export function getIphoneCores(modelo: string): string[] {
+  return IPHONE_CORES_POR_MODELO[modelo] || IPHONE_CORES;
+}
 
 export const MACBOOK_CORES = ["Midnight", "Silver", "Starlight", "Sky Blue", "Space Black"];
 
