@@ -60,6 +60,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/entregas", label: "Entregas", icon: "\u{1F69A}", pageKey: "entregas" },
       { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
+      { href: "/admin/etiquetas-preco", label: "Etiquetas Preco", icon: "\u{1F4B0}", pageKey: "etiquetas-preco" },
     ],
   },
 
