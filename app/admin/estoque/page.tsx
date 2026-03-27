@@ -2069,6 +2069,7 @@ export default function EstoquePage() {
                                                 <div className="flex gap-1 flex-wrap">
                                                   {Array.from({ length: qnt }, (_, i) => (
                                                     <input key={i} placeholder={`Serial ${i + 1}`} id={`serial-${p.id}-${i}`}
+                                                      style={{ textTransform: "uppercase" }}
                                                       className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                                   ))}
                                                 </div>
@@ -2078,7 +2079,7 @@ export default function EstoquePage() {
                                                     const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
                                                     const val = el?.value?.trim() || "";
                                                     if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
-                                                    serials.push(val);
+                                                    serials.push(val.toUpperCase());
                                                   }
                                                   // Separar em registros individuais (garante A_CAMINHO)
                                                   const res1 = await apiPatch(p.id, { serial_no: serials[0], qnt: 1, tipo: "A_CAMINHO", status: "A CAMINHO" });
@@ -2111,9 +2112,10 @@ export default function EstoquePage() {
                                             return (
                                               <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
                                                 <input placeholder="Serial Number"
+                                                  style={{ textTransform: "uppercase" }}
                                                   className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`✅ Serial ${val} salvo!`); } }}
-                                                  onBlur={async (e) => { const val = e.target.value.trim(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
+                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`✅ Serial ${val} salvo!`); } }}
+                                                  onBlur={async (e) => { const val = e.target.value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
                                                 />
                                               </div>
                                             );

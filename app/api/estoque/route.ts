@@ -223,6 +223,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Forçar serial_no e imei em caixa alta
+  if (body.serial_no && typeof body.serial_no === "string") body.serial_no = body.serial_no.toUpperCase();
+  if (body.imei && typeof body.imei === "string") body.imei = body.imei.toUpperCase();
+
   const { data, error } = await supabase.from("estoque").insert({
     ...body,
     updated_at: new Date().toISOString(),
@@ -270,6 +274,10 @@ export async function PATCH(req: NextRequest) {
       );
     }
   }
+
+  // Forçar serial_no e imei em caixa alta
+  if (fields.serial_no && typeof fields.serial_no === "string") fields.serial_no = fields.serial_no.toUpperCase();
+  if (fields.imei && typeof fields.imei === "string") fields.imei = fields.imei.toUpperCase();
 
   const { error } = await supabase.from("estoque").update({
     ...fields,
