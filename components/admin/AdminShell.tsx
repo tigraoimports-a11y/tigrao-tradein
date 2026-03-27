@@ -1,8 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, lazy, Suspense } from "react";
 import AdminNav from "./AdminNav";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
+
+const SuperSearch = lazy(() => import("./SuperSearch"));
 
 export interface UserInfo {
   id: string;
@@ -49,6 +51,19 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Cmd+K / Ctrl+K para abrir Super Search
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   useEffect(() => {
     try {
@@ -264,6 +279,20 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               )}
             </div>
 
+            {/* Super Search button */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="px-2 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs border transition-colors flex items-center gap-1"
+              style={{
+                color: darkMode ? "#F5A623" : "#E8740E",
+                borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+              }}
+              title="Busca global (Cmd+K)"
+            >
+              🔍 <span className="hidden sm:inline">Buscar</span>
+              <kbd className="hidden sm:inline ml-1 px-1 py-0.5 rounded text-[9px] bg-black/5 dark:bg-white/10">⌘K</kbd>
+            </button>
+
             {/* Dark mode toggle */}
             <button
               onClick={toggleDark}
@@ -351,6 +380,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           .admin-dark p { color: #CCC; }
         ` }} />
       )}
+      {/* Super Search Modal */}
+      <Suspense fallback={null}>
+        <SuperSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      </Suspense>
     </AdminContext.Provider>
   );
 }
