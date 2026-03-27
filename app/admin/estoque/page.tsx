@@ -424,7 +424,7 @@ export default function EstoquePage() {
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
-    bateria: "", cliente: "", fornecedor: "", imei: "",
+    bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "",
   });
 
   // Campos estruturados por categoria
@@ -657,7 +657,7 @@ export default function EstoquePage() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (keepForm = false) => {
     const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
     const res = await fetch("/api/estoque", {
@@ -670,7 +670,7 @@ export default function EstoquePage() {
         cor: form.cor || null, observacao: form.observacao || null,
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
-        imei: form.imei || null,
+        imei: form.imei || null, serial_no: form.serial_no || null,
         data_entrada: new Date().toISOString().split("T")[0],
       }),
     });
@@ -727,20 +727,27 @@ export default function EstoquePage() {
           setMsg(`Produto adicionado com ${validVariacoes.length + 1} variacoes de cor! (${varResults.join(" | ")})`);
         }
       }
-      setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "" }));
-      setSpec({
-        ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
-        mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
-        mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
-        ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
-        aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
-        air_modelo: "AIRPODS 4",
-        semi_subtipo: "IPHONES",
-      });
+
+      if (keepForm) {
+        // Duplicar: mantém specs, cor, fornecedor, custo — limpa só IMEI, Serial e quantidade
+        setForm((f) => ({ ...f, imei: "", serial_no: "", qnt: "1" }));
+        setMsg("Produto adicionado! Preencha IMEI/Serial do proximo.");
+      } else {
+        setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "" }));
+        setSpec({
+          ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
+          mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
+          mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
+          ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+          aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
+          air_modelo: "AIRPODS 4",
+          semi_subtipo: "IPHONES",
+        });
+        setTab("estoque");
+      }
       setVariacoes([]);
       fetchEstoque();
-      setFilterCat(form.categoria); // Voltar na categoria do produto cadastrado
-      setTab("estoque");
+      setFilterCat(form.categoria);
     } else { setMsg("Erro: " + json.error); }
   };
 
@@ -1183,83 +1190,16 @@ export default function EstoquePage() {
             )}
           </div>
 
-          {/* === MODO A CAMINHO (Pedido Fornecedor Unificado) === */}
-          {form.tipo === "A_CAMINHO" && form.categoria !== "SEMINOVOS" ? (
-            <div className="space-y-6">
-              {/* Descrição do gasto */}
-              <div>
-                <p className={labelCls}>Descrição do Pedido</p>
-                <input value={descricaoGasto} onChange={(e) => setDescricaoGasto(e.target.value)} placeholder="Ex: Compra fornecedor Fulano - iPhones e MacBooks" className={inputCls} />
-              </div>
-
-              {/* Produtos */}
-              <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"} space-y-4`}>
-                <p className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>Produtos do Pedido</p>
-                {pedidoProdutos.map((row, i) => (
-                  <ProdutoSpecFields
-                    key={i}
-                    row={row}
-                    onChange={(updated) => {
-                      const nv = [...pedidoProdutos];
-                      nv[i] = updated;
-                      setPedidoProdutos(nv);
-                    }}
-                    onRemove={() => setPedidoProdutos(pedidoProdutos.filter((_, j) => j !== i))}
-                    onDuplicate={() => {
-                      const clone = { ...row, spec: { ...row.spec }, imei: "", serial_no: "" };
-                      const nv = [...pedidoProdutos];
-                      nv.splice(i + 1, 0, clone);
-                      setPedidoProdutos(nv);
-                    }}
-                    fornecedores={fornecedores}
-                    inputCls={inputCls}
-                    labelCls={labelCls}
-                    darkMode={dm}
-                    index={i}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPedidoProdutos([...pedidoProdutos, createEmptyProdutoRow()])}
-                  className={`w-full py-3 rounded-xl border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#636366] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"} text-sm font-semibold transition-colors`}
-                >
-                  + Adicionar Produto
-                </button>
-              </div>
-
-              {/* Pagamento */}
-              <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
-                  {totalPagamento > 0 && (
-                    <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalPagamento)}</span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {BANCOS.map((b) => (
-                    <div key={b}>
-                      <p className={labelCls}>{b.replace("_", " ")}</p>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        value={bancoValores[b]}
-                        onChange={(e) => setBancoValores((bv) => ({ ...bv, [b]: e.target.value }))}
-                        className={inputCls}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                  Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
-                </p>
-              </div>
-
-              <button onClick={handleSubmitACaminho} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
-                Registrar Pedido
-              </button>
+          {form.tipo === "A_CAMINHO" && (
+            <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#E8740E]/20"}`}>
+              <p className={`text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                Cadastre aqui os produtos que estao a caminho. IMEI e serial sao opcionais agora — preencha quando o produto chegar.
+              </p>
+              <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                Para registrar o pagamento ao fornecedor, use <strong>Gastos &rarr; FORNECEDOR</strong>.
+              </p>
             </div>
-          ) : (
-          <>
+          )}
           {/* Campos específicos por categoria */}
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
@@ -1415,10 +1355,16 @@ export default function EstoquePage() {
             );
           })()}
 
-          {/* IMEI */}
-          <div>
-            <p className={labelCls}>IMEI</p>
-            <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Numero do IMEI (opcional)" className={inputCls} />
+          {/* IMEI e Serial */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className={labelCls}>IMEI</p>
+              <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Serial No</p>
+              <input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
+            </div>
           </div>
 
           {/* Custo e Fornecedor */}
@@ -1501,11 +1447,14 @@ export default function EstoquePage() {
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
-          <button onClick={handleSubmit} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
-            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar ao Estoque"}
-          </button>
-          </>
-          )}
+          <div className="flex gap-3">
+            <button onClick={() => handleSubmit(false)} className="flex-1 py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
+              {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : form.tipo === "A_CAMINHO" ? "Adicionar como A Caminho" : "Adicionar ao Estoque"}
+            </button>
+            <button onClick={() => handleSubmit(true)} className={`py-4 px-6 rounded-2xl border-2 border-[#E8740E] text-[#E8740E] text-[13px] font-semibold hover:bg-[#E8740E] hover:text-white transition-colors shadow-sm active:scale-[0.99]`} title="Registra e mantém o formulário para adicionar outro igual (limpa só IMEI/Serial)">
+              Registrar e Duplicar
+            </button>
+          </div>
         </div>
       ) : (
         /* LISTA */
