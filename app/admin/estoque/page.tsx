@@ -603,58 +603,30 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Abre modal de etiqueta obrigatória antes de mover
-  const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
+  const handleMoverParaEstoque = (item: ProdutoEstoque) => {
     const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
     if (!item.serial_no && !catsSemSerial.includes(item.categoria)) {
       setMsg(`Preencha o numero de serie de "${item.produto}" antes de mover para estoque.`);
       return;
     }
-    // Buscar preço de venda da tabela precos
-    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: true, precoCustom: "", tamanho: "media" });
-    try {
-      const res = await fetch(`/api/admin/etiquetas-preco?categoria=${encodeURIComponent(item.categoria)}`, {
-        headers: { "x-admin-password": password },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const match = (json.data || []).find((p: { id: string }) => p.id === item.id);
-        setEtiquetaModal(prev => prev ? { ...prev, precoVenda: match?.preco_venda || null, loading: false } : null);
-      } else {
-        setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
-      }
-    } catch {
-      setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
-    }
+    // Etiqueta interna = preço de custo (custo_unitario)
+    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
   };
 
   // Abre modal para múltiplas unidades com seriais
-  const handleMoverMultiploComEtiqueta = async (item: ProdutoEstoque, serials: string[]) => {
+  const handleMoverMultiploComEtiqueta = (item: ProdutoEstoque, serials: string[]) => {
     const items = serials.map((s, i) => ({
       item: { ...item, serial_no: s, id: i === 0 ? item.id : `new-${i}` },
       serial: s,
     }));
-    setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: true, precoCustom: "", tamanho: "media" });
-    try {
-      const res = await fetch(`/api/admin/etiquetas-preco?categoria=${encodeURIComponent(item.categoria)}`, {
-        headers: { "x-admin-password": password },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const match = (json.data || []).find((p: { id: string }) => p.id === item.id);
-        setEtiquetaModal(prev => prev ? { ...prev, precoVenda: match?.preco_venda || null, loading: false } : null);
-      } else {
-        setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
-      }
-    } catch {
-      setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
-    }
+    setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
   };
 
   // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm
   const handlePrintEtiquetaModal = () => {
     if (!etiquetaModal) return;
-    const { item, items, precoVenda, precoCustom } = etiquetaModal;
-    const precoVal = precoCustom ? parseFloat(precoCustom.replace(/\./g, "").replace(",", ".")) : (precoVenda ?? item.custo_unitario);
+    const { item, items } = etiquetaModal;
+    const precoVal = item.custo_unitario;
     const formatPrice = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
     const produtosParaImprimir = items
@@ -1014,25 +986,9 @@ export default function EstoquePage() {
               {/* Preço */}
               <div className="space-y-2">
                 <label className={`text-xs font-semibold ${textSecondary}`}>Preco na etiqueta</label>
-                {etiquetaModal.loading ? (
-                  <div className={`text-sm ${textSecondary}`}>Buscando preco...</div>
-                ) : (
-                  <div className="flex gap-2 items-center">
-                    <div className={`flex-1 px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
-                      {etiquetaModal.precoVenda
-                        ? `R$ ${etiquetaModal.precoVenda.toLocaleString("pt-BR")} (tabela)`
-                        : `R$ ${etiquetaModal.item.custo_unitario.toLocaleString("pt-BR")} (custo)`}
-                    </div>
-                    <span className={`text-xs ${textSecondary}`}>ou</span>
-                    <input
-                      type="text"
-                      placeholder="Preco custom"
-                      value={etiquetaModal.precoCustom}
-                      onChange={e => setEtiquetaModal(prev => prev ? { ...prev, precoCustom: e.target.value } : null)}
-                      className={`w-32 px-3 py-2 rounded-lg text-sm border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                    />
-                  </div>
-                )}
+                <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
+                  R$ {etiquetaModal.item.custo_unitario.toLocaleString("pt-BR")} (custo)
+                </div>
               </div>
 
               {/* Info impressora */}
@@ -1048,12 +1004,7 @@ export default function EstoquePage() {
                   <p className="text-[11px] font-bold text-gray-900 mt-0.5 leading-tight">{etiquetaModal.item.produto}</p>
                   {etiquetaModal.item.cor && <p className="text-[8px] text-gray-500">{etiquetaModal.item.cor}</p>}
                   <p className="text-lg font-black text-gray-900 mt-1">
-                    {(() => {
-                      const p = etiquetaModal.precoCustom
-                        ? parseFloat(etiquetaModal.precoCustom.replace(/\./g, "").replace(",", "."))
-                        : (etiquetaModal.precoVenda ?? etiquetaModal.item.custo_unitario);
-                      return isNaN(p) ? "R$ 0" : p.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-                    })()}
+                    {etiquetaModal.item.custo_unitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </p>
                   <p className="text-[7px] text-gray-400">a vista no PIX</p>
                   <div className="mt-1 mx-auto w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
