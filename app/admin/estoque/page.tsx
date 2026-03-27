@@ -641,11 +641,10 @@ export default function EstoquePage() {
     setEtiquetaModal({ item: itens[0], batchItems: itens, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
   };
 
-  // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm
+  // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm continuous tape
   const handlePrintEtiquetaModal = () => {
     if (!etiquetaModal) return;
     const { item, items, batchItems } = etiquetaModal;
-    const formatPrice = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
     const produtosParaImprimir = batchItems
       ? batchItems
@@ -653,39 +652,58 @@ export default function EstoquePage() {
         ? items.map(i => i.item)
         : [item];
 
-    const win = window.open("", "_blank", "width=800,height=600");
+    const total = produtosParaImprimir.length;
+    // Up to 3 per row on the 62mm tape; wrap to next row if more
+    const perRow = Math.min(total, 3);
+    // Each QR cell gets equal percentage width
+    const cellWidth = Math.floor(100 / perRow);
+
+    const win = window.open("", "_blank", "width=800,height=400");
     if (!win) return;
 
-    const tds = produtosParaImprimir.map((p, idx) => {
-      const serial = p.serial_no || "";
-      const imei = p.imei || "";
-      const qrData = serial || imei || p.id;
-      return `<td style="text-align:center;vertical-align:top;padding:0 1mm">
-        <canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas>
-        <div style="font-size:4pt;font-family:monospace;color:#333;margin-top:1px">${serial || imei || ""}</div>
-      </td>`;
-    }).join("");
+    // Build rows of up to 3 QR codes each
+    let rowsHtml = "";
+    for (let i = 0; i < total; i += 3) {
+      const rowItems = produtosParaImprimir.slice(i, i + 3);
+      const cellsHtml = rowItems.map((p, idx) => {
+        const serial = p.serial_no || "";
+        const imei = p.imei || "";
+        const qrData = serial || imei || p.id;
+        const globalIdx = i + idx;
+        return `<td style="width:${cellWidth}%;text-align:center;vertical-align:top;padding:0">
+          <canvas id="qr-${globalIdx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+          <div style="font-size:4pt;font-family:monospace;color:#333;margin-top:0;line-height:1">${serial || imei || ""}</div>
+        </td>`;
+      }).join("");
+      rowsHtml += `<tr>${cellsHtml}</tr>`;
+    }
 
     win.document.write(`<!DOCTYPE html><html><head>
-      <title>Etiqueta - ${item.produto}</title>
+      <title>QR - ${item.produto}</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0}
+        html,body{margin:0;padding:0;width:100%;height:100%}
         body{font-family:Arial,sans-serif}
-        table{border-collapse:collapse;margin:0 auto}
-        @page{margin:0}
+        table{width:100%;border-collapse:collapse;table-layout:fixed}
+        td{padding:0}
+        canvas{display:block;margin:0 auto;width:90%;height:auto}
+        @page{size:62mm 25mm;margin:0}
+        @media print{
+          html,body{width:62mm;margin:0;padding:0;overflow:hidden}
+          table{width:100%}
+          canvas{width:90%;height:auto}
+        }
       </style></head><body>
-      <table><tr>${tds}</tr></table>
+      <table>${rowsHtml}</table>
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas) {
           var data = canvas.getAttribute('data-qr');
           var qr = qrcode(0, 'M');
           qr.addData(data);
           qr.make();
-          var size = 150;
+          var size = 200;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '18mm'; canvas.style.height = '18mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
