@@ -23,6 +23,8 @@ export default function VendasPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reajusteId, setReajusteId] = useState<string | null>(null);
+  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
@@ -3242,6 +3244,13 @@ export default function VendasPage() {
                                             ❌ Cancelar Venda
                                           </button>
                                         )}
+                                        {/* Botão Reajuste */}
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU" }); }}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
+                                        >
+                                          💲 Reajuste
+                                        </button>
                                         {v.status_pagamento === "FINALIZADO" && (
                                           <button
                                             onClick={async (e) => {
@@ -3291,32 +3300,104 @@ export default function VendasPage() {
                                       return (
                                         <div className="md:col-span-3 space-y-2">
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">Composicao do Pagamento</h4>
-                                          {/* Stacked bar */}
-                                          <div className="flex h-5 rounded-lg overflow-hidden w-full max-w-[300px]" title={parts.map(p => `${p.label}: ${fmt(p.value)} (${totalVenda > 0 ? Math.round((p.value / totalVenda) * 100) : 0}%)`).join(" | ")}>
+                                          <div className="h-4 rounded-full overflow-hidden flex" style={{ backgroundColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
                                             {parts.map((p, i) => (
-                                              <div
-                                                key={i}
-                                                className={`${p.color} relative group flex items-center justify-center transition-all`}
-                                                style={{ width: `${totalVenda > 0 ? (p.value / totalVenda) * 100 : 0}%` }}
-                                              >
-                                                {(p.value / totalVenda) * 100 >= 15 && (
-                                                  <span className="text-white text-[9px] font-bold">{Math.round((p.value / totalVenda) * 100)}%</span>
-                                                )}
+                                              <div key={i} className={`h-full ${p.color} flex items-center justify-center text-[10px] font-bold text-white`} style={{ width: `${(p.value / totalVenda) * 100}%` }}>
+                                                {Math.round((p.value / totalVenda) * 100)}%
                                               </div>
                                             ))}
                                           </div>
-                                          {/* Legend */}
-                                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-[#86868B]">
+                                          <div className="flex flex-wrap gap-3 text-xs">
                                             {parts.map((p, i) => (
-                                              <span key={i}>
-                                                <span className={`inline-block w-2 h-2 rounded-sm ${p.color} mr-1`}></span>
-                                                {p.label}: <strong className={p.textColor}>{fmt(p.value)}</strong> ({Math.round((p.value / totalVenda) * 100)}%)
-                                              </span>
+                                              <span key={i} className={p.textColor}>● {p.label}: <strong>R$ {p.value.toLocaleString("pt-BR")}</strong> ({Math.round((p.value / totalVenda) * 100)}%)</span>
                                             ))}
                                           </div>
                                         </div>
                                       );
                                     })()}
+
+                                    {/* Reajustes existentes */}
+                                    {Array.isArray(v.reajustes) && v.reajustes.length > 0 && (
+                                      <div className="md:col-span-3 space-y-2">
+                                        <h4 className="text-xs font-bold text-amber-600 uppercase">💲 Reajustes</h4>
+                                        {v.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string }, i: number) => (
+                                          <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${dm ? "bg-amber-900/20" : "bg-amber-50"}`}>
+                                            <span className="text-sm font-bold text-amber-600">+R$ {r.valor.toLocaleString("pt-BR")}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.motivo}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>PIX {r.banco}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.data?.split("-").reverse().join("/")}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Formulário de reajuste inline */}
+                                    {reajusteId === v.id && (
+                                      <div className="md:col-span-3 space-y-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
+                                        <h4 className="text-sm font-bold text-amber-700">Adicionar Reajuste</h4>
+                                        <div className="grid grid-cols-3 gap-3">
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Valor (R$)</p>
+                                            <input type="number" placeholder="100" value={reajForm.valor} onChange={e => setReajForm(f => ({ ...f, valor: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Motivo</p>
+                                            <select value={reajForm.motivo} onChange={e => setReajForm(f => ({ ...f, motivo: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                              <option value="">Selecionar...</option>
+                                              <option value="Sem caixa original">Sem caixa original</option>
+                                              <option value="Sem cabo">Sem cabo</option>
+                                              <option value="Sem fonte">Sem fonte</option>
+                                              <option value="Arranhão na tela">Arranhão na tela</option>
+                                              <option value="Marca de uso">Marca de uso</option>
+                                              <option value="Bateria abaixo do informado">Bateria abaixo do informado</option>
+                                              <option value="Peça trocada">Peça trocada</option>
+                                              <option value="Outro">Outro</option>
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Banco PIX</p>
+                                            <select value={reajForm.banco} onChange={e => setReajForm(f => ({ ...f, banco: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                              <option value="ITAU">Itaú</option>
+                                              <option value="INFINITE">Infinite</option>
+                                              <option value="MERCADO_PAGO">Mercado Pago</option>
+                                              <option value="ESPECIE">Espécie</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const valor = parseFloat(reajForm.valor);
+                                              if (!valor || !reajForm.motivo) { alert("Preencha valor e motivo"); return; }
+                                              const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, data: hoje };
+                                              const reajustesAtuais = Array.isArray(v.reajustes) ? v.reajustes : [];
+                                              const novosReajustes = [...reajustesAtuais, novoReajuste];
+                                              const novoLucro = (v.lucro || 0) + valor;
+                                              const res = await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, reajustes: novosReajustes, lucro: novoLucro }),
+                                              });
+                                              const json = await res.json();
+                                              if (json.ok) {
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, reajustes: novosReajustes, lucro: novoLucro } : r));
+                                                setReajusteId(null);
+                                                setMsg(`Reajuste de R$ ${valor} registrado!`);
+                                              }
+                                            }}
+                                            className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                                          >
+                                            Salvar Reajuste
+                                          </button>
+                                          <button onClick={(e) => { e.stopPropagation(); setReajusteId(null); }} className="px-4 py-2 rounded-lg text-sm text-[#86868B] hover:bg-gray-100 transition-colors">
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
 
                                     {/* Produto na troca */}
                                     {(() => {

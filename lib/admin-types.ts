@@ -64,6 +64,7 @@ export interface Venda {
   troca_cor: string | null;
   troca_bateria: string | null;
   troca_obs: string | null;
+  reajustes: { valor: number; motivo: string; banco: string; data: string }[];
 }
 
 export interface Reajuste {
