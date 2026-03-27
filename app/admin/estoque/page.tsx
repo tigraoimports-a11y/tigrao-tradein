@@ -641,10 +641,9 @@ export default function EstoquePage() {
       const imei = p.imei || "";
       const qrData = serial || imei || p.id;
       return `
-      <div class="wrap" ${idx < produtosParaImprimir.length - 1 ? 'style="page-break-after:always"' : ''}>
+      <div class="cell">
         <div class="qr"><canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas></div>
-        ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
-        ${!serial && imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+        <div class="extra">${serial || imei || ""}</div>
       </div>`;
     }).join("");
 
@@ -655,22 +654,23 @@ export default function EstoquePage() {
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{margin:0;padding:0;width:100%}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{text-align:center;padding:1mm 2mm 1mm 2mm}
-        .produto{font-size:6pt;font-weight:bold;line-height:1.1;margin-bottom:0.5mm;overflow:hidden;max-height:3mm}
-        .extra{font-size:5pt;color:#444;margin-top:0.5mm;font-family:monospace}
-        .qr{margin:0.5mm auto 0.5mm;display:flex;justify-content:center}
-        @page{size:62mm 45mm;margin:0}
+        .grid{display:flex;flex-wrap:wrap;gap:1mm;padding:1mm}
+        .cell{text-align:center;padding:1mm;border:0.3pt dashed #ccc;width:20mm;height:23mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
+        .extra{font-size:4pt;color:#444;margin-top:0.5mm;font-family:monospace;letter-spacing:0.3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:19mm}
+        .qr{display:flex;justify-content:center}
+        @page{size:62mm 25mm;margin:0}
+        @media print{.cell{border-color:#ddd}}
       </style></head><body>
-      ${etiquetasHtml}
+      <div class="grid">${etiquetasHtml}</div>
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas) {
           var data = canvas.getAttribute('data-qr');
           var qr = qrcode(0, 'M');
           qr.addData(data);
           qr.make();
-          var size = 300;
+          var size = 200;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '35mm'; canvas.style.height = '35mm';
+          canvas.style.width = '15mm'; canvas.style.height = '15mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
