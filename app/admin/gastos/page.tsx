@@ -184,6 +184,15 @@ export default function GastosPage() {
   const [editBancoValores, setEditBancoValores] = useState<BancoValores>(emptyBancoValores());
 
   const grupos = useMemo(() => agruparGastos(gastos), [gastos]);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const gruposFiltrados = useMemo(() => filtroCategoria ? grupos.filter(g => g.categoria === filtroCategoria) : grupos, [grupos, filtroCategoria]);
+  const categoriasUsadas = useMemo(() => [...new Set(grupos.map(g => g.categoria))].sort(), [grupos]);
+  // Agrupar por data
+  const gruposPorData = useMemo(() => {
+    const map: Record<string, typeof gruposFiltrados> = {};
+    for (const g of gruposFiltrados) { if (!map[g.data]) map[g.data] = []; map[g.data].push(g); }
+    return Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [gruposFiltrados]);
 
   const fetchGastos = useCallback(async () => {
     setLoading(true);
@@ -555,27 +564,54 @@ export default function GastosPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm inline-block`}>
-            <p className="text-xs text-[#86868B]">Total Saidas</p>
-            <p className="text-xl font-bold text-red-500">{fmt(totalSaida)}</p>
+          {/* KPI + Filtros */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
+              <p className="text-xs text-[#86868B]">Total Saidas</p>
+              <p className="text-xl font-bold text-red-500">{fmt(gruposFiltrados.reduce((s, g) => s + g.totalValor, 0))}</p>
+              <p className="text-[10px] text-[#86868B]">{gruposFiltrados.length} registros</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setFiltroCategoria("")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+                Todas
+              </button>
+              {categoriasUsadas.map(c => (
+                <button key={c} onClick={() => setFiltroCategoria(c)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filtroCategoria === c ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Categoria", "Descricao", "Valor", "Banco(s)", ""].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[#86868B] font-medium text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Carregando...</td></tr>
-                  ) : grupos.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">Nenhum gasto registrado</td></tr>
-                  ) : grupos.map((g) => (
+          {/* Gastos agrupados por data */}
+          {loading ? (
+            <p className="text-center text-[#86868B] py-8">Carregando...</p>
+          ) : gruposPorData.length === 0 ? (
+            <p className="text-center text-[#86868B] py-8">Nenhum gasto encontrado</p>
+          ) : gruposPorData.map(([data, gastosData]) => {
+            const totalDia = gastosData.reduce((s, g) => s + g.totalValor, 0);
+            const diasSemana = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+            const d = new Date(data + "T12:00:00");
+            const diaSemana = diasSemana[d.getDay()];
+            return (
+              <div key={data} className="space-y-2">
+                {/* Header do dia */}
+                <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-[#E8740E] text-white">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">{data.split("-").reverse().join("/")}</span>
+                    <span className="text-xs opacity-80">{diaSemana}</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs">
+                    <span>{gastosData.length} gastos</span>
+                    <span className="font-bold">R$ {totalDia.toLocaleString("pt-BR")}</span>
+                  </div>
+                </div>
+
+                {/* Gastos do dia */}
+                <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {gastosData.map((g) => (
                     <React.Fragment key={g.key}>
                       <tr
                         className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${viewingKey === g.key ? (dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]") : ""}`}
@@ -721,10 +757,12 @@ export default function GastosPage() {
                       )}
                     </React.Fragment>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
