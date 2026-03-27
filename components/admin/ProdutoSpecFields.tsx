@@ -95,6 +95,11 @@ export default function ProdutoSpecFields({
     if (field === "categoria") {
       updated.spec = { ...DEFAULT_SPEC };
       updated.produto = "";
+      updated.cor = "";
+    }
+    // Quando mudar cor, regenerar nome
+    if (field === "cor" && STRUCTURED_CATS.includes(row.categoria)) {
+      updated.produto = buildProdutoName(row.categoria, row.spec, value);
     }
     onChange(updated);
   };
@@ -102,9 +107,13 @@ export default function ProdutoSpecFields({
   const setSpec = (field: keyof ProdutoSpec, value: string) => {
     const newSpec = { ...row.spec, [field]: value };
     const updated = { ...row, spec: newSpec };
-    // Auto-gerar nome do produto
+    // Limpar cor ao trocar modelo de iPhone
+    if (field === "ip_modelo") {
+      updated.cor = "";
+    }
+    // Auto-gerar nome do produto com cor
     if (STRUCTURED_CATS.includes(row.categoria)) {
-      updated.produto = buildProdutoName(row.categoria, newSpec);
+      updated.produto = buildProdutoName(row.categoria, newSpec, field === "ip_modelo" ? "" : row.cor);
     }
     onChange(updated);
   };
@@ -344,7 +353,7 @@ export default function ProdutoSpecFields({
       <div>
         <p className={labelCls}>Nome do Produto</p>
         <input
-          value={row.produto || (hasStructured ? buildProdutoName(row.categoria, row.spec) : "")}
+          value={row.produto || (hasStructured ? buildProdutoName(row.categoria, row.spec, row.cor) : "")}
           onChange={(e) => set("produto", e.target.value)}
           placeholder={hasStructured ? "Auto-gerado pelos specs" : "Ex: Cabo USB-C Lightning 1m"}
           className={inputCls}

@@ -458,28 +458,31 @@ export default function EstoquePage() {
   // Gerar nome do produto automaticamente a partir dos campos estruturados
   const buildProdutoName = (cat: string): string => {
     const effectiveCat = cat === "SEMINOVOS" ? spec.semi_subtipo : cat;
+    const c = form.cor ? ` ${form.cor}` : "";
     switch (getBaseCat(effectiveCat)) {
       case "IPHONES": {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
-        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
+        const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : "";
+        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
       }
       case "MAC_MINI":
-        return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`;
+        return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
       case "MACBOOK": {
         const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
-        return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}`;
+        return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
         const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
-        return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}`;
+        return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }
       case "APPLE_WATCH": {
         const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
-        return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}`;
+        const pulseira = spec.aw_pulseira ? ` ${spec.aw_pulseira}` : "";
+        return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}${c}${pulseira}`.toUpperCase();
       }
       case "AIRPODS":
-        return spec.air_modelo;
+        return `${spec.air_modelo}${c}`.toUpperCase();
       default:
         return "";
     }
@@ -589,6 +592,12 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
+    // Serial obrigatório na chegada (exceto Mac Mini e Acessórios)
+    const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
+    if (!item.serial_no && !catsSemSerial.includes(item.categoria)) {
+      setMsg(`Preencha o numero de serie de "${item.produto}" antes de mover para estoque.`);
+      return;
+    }
     const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
     await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
     setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
@@ -604,7 +613,7 @@ export default function EstoquePage() {
     let errorMsg = "";
 
     for (const p of pedidoProdutos) {
-      const nome = (p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec) : "")).toUpperCase();
+      const nome = (p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : "")).toUpperCase();
       if (!nome) continue;
       const res = await fetch("/api/estoque", {
         method: "POST",

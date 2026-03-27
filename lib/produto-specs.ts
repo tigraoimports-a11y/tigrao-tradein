@@ -187,30 +187,33 @@ export const DEFAULT_SPEC: ProdutoSpec = {
 
 // ── Gera o nome do produto a partir dos specs (mesmo formato do estoque) ──
 
-export function buildProdutoName(cat: string, spec: ProdutoSpec): string {
+export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): string {
+  const c = cor ? ` ${cor.toUpperCase()}` : "";
   switch (cat) {
     case "IPHONES": {
       const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
-      return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}`;
+      const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : ""; // só código (ex: "LL")
+      return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
     }
     case "MAC_MINI":
-      return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`;
+      return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
     case "MACBOOK": {
       const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
       const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
-      return `${tipo} ${spec.mb_chip}${nucleos} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}`;
+      return `${tipo} ${spec.mb_chip}${nucleos} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
       const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
-      return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}`;
+      return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
     }
     case "APPLE_WATCH": {
       const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
-      return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}`;
+      const pulseira = spec.aw_pulseira ? ` ${spec.aw_pulseira}` : "";
+      return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}${c}${pulseira}`.toUpperCase();
     }
     case "AIRPODS":
-      return spec.air_modelo.toUpperCase();
+      return `${spec.air_modelo}${c}`.toUpperCase();
     default:
       return "";
   }
