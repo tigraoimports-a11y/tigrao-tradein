@@ -48,6 +48,29 @@ export default function RelatoriosPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
 
+  // Estado para envio de relatórios PDF por email
+  const [sendingSemanal, setSendingSemanal] = useState(false);
+  const [sendingMensal, setSendingMensal] = useState(false);
+  const [reportMsg, setReportMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+
+  const enviarRelatorio = async (tipo: "semanal" | "mensal") => {
+    const setSending = tipo === "semanal" ? setSendingSemanal : setSendingMensal;
+    setSending(true);
+    setReportMsg(null);
+    try {
+      const res = await fetch(`/api/reports/${tipo}`);
+      const data = await res.json();
+      if (data.ok) {
+        setReportMsg({ type: "ok", text: `Relatório ${tipo} enviado com sucesso para o email!` });
+      } else {
+        setReportMsg({ type: "error", text: data.error || `Erro ao enviar relatório ${tipo}` });
+      }
+    } catch (err) {
+      setReportMsg({ type: "error", text: `Erro de conexão: ${String(err)}` });
+    }
+    setSending(false);
+  };
+
   const hoje = new Date();
   const range = periodo === "semana"
     ? (() => { const d = new Date(hoje); d.setDate(d.getDate() + weekOffset * 7); return getWeekRange(d); })()
@@ -163,6 +186,37 @@ export default function RelatoriosPage() {
           <button onClick={() => periodo === "semana" ? setWeekOffset(o => o + 1) : setMonthOffset(o => o + 1)}
             className={`px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7]"}`}>▶</button>
         </div>
+      </div>
+
+      {/* Enviar Relatórios PDF por Email */}
+      <div className={cardCls}>
+        <h2 className={`text-sm font-bold uppercase mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+          Enviar Relatório PDF por Email
+        </h2>
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={() => enviarRelatorio("semanal")}
+            disabled={sendingSemanal}
+            className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-[#E8740E] hover:bg-[#D06A0D] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {sendingSemanal ? "Gerando..." : "Gerar Relatório Semanal"}
+          </button>
+          <button
+            onClick={() => enviarRelatorio("mensal")}
+            disabled={sendingMensal}
+            className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-[#1D1D1F] hover:bg-[#3A3A3C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {sendingMensal ? "Gerando..." : "Gerar Relatório Mensal"}
+          </button>
+        </div>
+        {reportMsg && (
+          <p className={`mt-3 text-sm font-medium ${reportMsg.type === "ok" ? "text-green-600" : "text-red-500"}`}>
+            {reportMsg.text}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-[#86868B]">
+          O semanal envia as últimas 2 semanas (com comparativo). O mensal envia o mês anterior completo.
+        </p>
       </div>
 
       {loading ? <p className="text-center py-8 text-[#86868B]">Carregando...</p> : (
