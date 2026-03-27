@@ -98,17 +98,28 @@ export default function LogPage() {
   }, [password, page, getDateRange, filterUser]);
 
   useEffect(() => { fetchLog(); }, [fetchLog]);
-  // Buscar lista de usuários do sistema
+  // Buscar lista de usuários do sistema + do log
   const [allUsuarios, setAllUsuarios] = useState<string[]>([]);
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/usuarios", { headers: { "x-admin-password": password } });
-        if (res.ok) {
-          const json = await res.json();
-          const nomes = (json.data ?? []).map((u: { nome: string }) => u.nome).sort();
-          setAllUsuarios(nomes);
+        // Buscar usuários cadastrados
+        const usersRes = await fetch("/api/usuarios", { headers: { "x-admin-password": password } });
+        const usersNomes: string[] = [];
+        if (usersRes.ok) {
+          const json = await usersRes.json();
+          usersNomes.push(...(json.data ?? []).map((u: { nome: string }) => u.nome));
         }
+        // Buscar usuários distintos do log (pega todos que já registraram atividade)
+        const logRes = await fetch("/api/admin/log?page=1&limit=500", {
+          headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+        });
+        const logNomes: string[] = [];
+        if (logRes.ok) {
+          const json = await logRes.json();
+          logNomes.push(...(json.data ?? []).map((e: { usuario: string }) => e.usuario));
+        }
+        setAllUsuarios([...new Set([...usersNomes, ...logNomes])].sort());
       } catch { /* ignore */ }
     })();
   }, [password]);
