@@ -3383,15 +3383,14 @@ export default function VendasPage() {
                                               const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje };
                                               const reajustesAtuais = Array.isArray(v.reajustes) ? [...v.reajustes] : [];
                                               const novosReajustes = [...reajustesAtuais, novoReajuste];
-                                              const novoLucro = (v.lucro || 0) + valor;
                                               const res = await fetch("/api/vendas", {
                                                 method: "PATCH",
                                                 headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, reajustes: novosReajustes, lucro: novoLucro }),
+                                                body: JSON.stringify({ id: v.id, reajustes: novosReajustes }),
                                               });
                                               const json = await res.json();
                                               if (json.ok) {
-                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, reajustes: novosReajustes, lucro: novoLucro } : r));
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, reajustes: novosReajustes } : r));
                                                 setReajusteId(null);
                                                 setMsg(`Reajuste de R$ ${valor} registrado!`);
                                               } else {
