@@ -10,6 +10,7 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
+import { QRCodeCanvas } from "qrcode.react";
 
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
@@ -173,6 +174,17 @@ export default function EstoquePage() {
   const [imeiResult, setImeiResult] = useState<ImeiSearchResult | null>(null);
   const [imeiSearching, setImeiSearching] = useState(false);
   const [showImeiSearch, setShowImeiSearch] = useState(false);
+
+  // Modal de etiqueta obrigatória ao mover
+  const [etiquetaModal, setEtiquetaModal] = useState<{
+    item: ProdutoEstoque;
+    items?: { item: ProdutoEstoque; serial: string }[]; // para múltiplas unidades
+    precoVenda: number | null;
+    printed: boolean;
+    loading: boolean;
+    precoCustom: string;
+    tamanho: "pequena" | "media" | "grande";
+  } | null>(null);
 
   const handleImeiSearch = async () => {
     if (!imeiSearch.trim()) return;
@@ -591,17 +603,154 @@ export default function EstoquePage() {
   // handleDuplicar referência legada — usa handleDuplicarProduto
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
+  // Abre modal de etiqueta obrigatória antes de mover
   const handleMoverParaEstoque = async (item: ProdutoEstoque) => {
-    // Serial obrigatório na chegada (exceto Mac Mini e Acessórios)
     const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
     if (!item.serial_no && !catsSemSerial.includes(item.categoria)) {
       setMsg(`Preencha o numero de serie de "${item.produto}" antes de mover para estoque.`);
       return;
     }
+    // Buscar preço de venda da tabela precos
+    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: true, precoCustom: "", tamanho: "media" });
+    try {
+      const res = await fetch(`/api/admin/etiquetas-preco?categoria=${encodeURIComponent(item.categoria)}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const match = (json.data || []).find((p: { id: string }) => p.id === item.id);
+        setEtiquetaModal(prev => prev ? { ...prev, precoVenda: match?.preco_venda || null, loading: false } : null);
+      } else {
+        setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
+      }
+    } catch {
+      setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
+    }
+  };
+
+  // Abre modal para múltiplas unidades com seriais
+  const handleMoverMultiploComEtiqueta = async (item: ProdutoEstoque, serials: string[]) => {
+    const items = serials.map((s, i) => ({
+      item: { ...item, serial_no: s, id: i === 0 ? item.id : `new-${i}` },
+      serial: s,
+    }));
+    setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: true, precoCustom: "", tamanho: "media" });
+    try {
+      const res = await fetch(`/api/admin/etiquetas-preco?categoria=${encodeURIComponent(item.categoria)}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const match = (json.data || []).find((p: { id: string }) => p.id === item.id);
+        setEtiquetaModal(prev => prev ? { ...prev, precoVenda: match?.preco_venda || null, loading: false } : null);
+      } else {
+        setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
+      }
+    } catch {
+      setEtiquetaModal(prev => prev ? { ...prev, loading: false } : null);
+    }
+  };
+
+  // Imprimir etiqueta do modal
+  const handlePrintEtiquetaModal = async () => {
+    if (!etiquetaModal) return;
+    const { item, items, precoVenda, precoCustom, tamanho } = etiquetaModal;
+
+    const TAMANHOS = {
+      pequena: { width: "50mm", height: "30mm", fontSize: { nome: "7pt", preco: "10pt", serial: "5pt", marca: "5pt", qr: 40 } },
+      media: { width: "70mm", height: "50mm", fontSize: { nome: "9pt", preco: "14pt", serial: "6pt", marca: "6pt", qr: 60 } },
+      grande: { width: "100mm", height: "70mm", fontSize: { nome: "12pt", preco: "18pt", serial: "7pt", marca: "8pt", qr: 80 } },
+    };
+    const config = TAMANHOS[tamanho];
+    const precoVal = precoCustom ? parseFloat(precoCustom.replace(/\./g, "").replace(",", ".")) : (precoVenda ?? item.custo_unitario);
+    const formatPrice = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+    const produtosParaImprimir = items
+      ? items.map(i => ({ ...i.item, precoFinal: precoVal }))
+      : [{ ...item, precoFinal: precoVal }];
+
+    const QRCode = await import("qrcode");
+    const qrItems = await Promise.all(produtosParaImprimir.map(async (p) => {
+      const qrData = p.serial_no || p.imei || p.id;
+      const dataUrl = await QRCode.toDataURL(qrData, { width: config.fontSize.qr * 3, margin: 0, errorCorrectionLevel: "M" });
+      return { ...p, qrDataUrl: dataUrl };
+    }));
+
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (!win) return;
+
+    const etiquetasHtml = qrItems.map((p) => {
+      const serial = p.serial_no || "";
+      const imei = p.imei || "";
+      return `
+        <div class="etiqueta-preco" style="width:${config.width};height:${config.height};padding:${tamanho === "pequena" ? "2mm" : tamanho === "media" ? "3mm" : "4mm"};">
+          <div style="text-align:center;margin-bottom:${tamanho === "pequena" ? "0.5mm" : "1mm"}">
+            <span style="font-weight:900;font-size:${config.fontSize.marca};color:#F97316;letter-spacing:0.5px;">TIGRAO IMPORTS</span>
+          </div>
+          <div style="text-align:center;">
+            <p style="font-weight:bold;font-size:${config.fontSize.nome};line-height:1.15;color:#111;">${p.produto}</p>
+            ${p.cor && tamanho !== "pequena" ? `<p style="font-size:${config.fontSize.serial};color:#666;margin-top:0.5mm;">${p.cor}</p>` : ""}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:${tamanho === "pequena" ? "1mm" : "2mm"};flex:1;min-height:0;">
+            <img src="${p.qrDataUrl}" style="width:${config.fontSize.qr}px;height:${config.fontSize.qr}px;" />
+            <div style="text-align:center;flex:1;">
+              <p style="font-weight:900;font-size:${config.fontSize.preco};line-height:1;color:#111;">${formatPrice(p.precoFinal)}</p>
+              ${tamanho !== "pequena" ? `<p style="font-size:${config.fontSize.serial};color:#999;margin-top:0.5mm;">a vista no PIX</p>` : ""}
+            </div>
+          </div>
+          <div style="text-align:center;margin-top:${tamanho === "pequena" ? "0" : "1mm"};">
+            ${serial ? `<p style="font-size:${config.fontSize.serial};color:#999;font-family:monospace;letter-spacing:1px;">SN: ${serial}</p>` : ""}
+            ${!serial && imei ? `<p style="font-size:${config.fontSize.serial};color:#999;font-family:monospace;letter-spacing:1px;">IMEI: ${imei}</p>` : ""}
+          </div>
+        </div>`;
+    }).join("");
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Etiqueta - ${item.produto}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; }
+        .print-grid { display: flex; flex-wrap: wrap; gap: 2mm; padding: 3mm; }
+        .etiqueta-preco { border: 0.5pt solid #999; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
+        @media print { @page { margin: 3mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .etiqueta-preco { border: 0.3pt solid #ccc; } }
+      </style>
+    </head><body>
+      <div class="print-grid">${etiquetasHtml}</div>
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); };<\/script>
+    </body></html>`);
+    win.document.close();
+
+    setEtiquetaModal(prev => prev ? { ...prev, printed: true } : null);
+  };
+
+  // Confirmar movimentação após etiqueta impressa
+  const handleConfirmarMover = async () => {
+    if (!etiquetaModal) return;
+    const { item, items } = etiquetaModal;
     const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
-    await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
-    setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
-    setMsg(`${item.produto} movido para estoque${novoTipo === "SEMINOVO" ? " (seminovo)" : ""}!`);
+
+    if (items && items.length > 1) {
+      // Múltiplas unidades
+      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
+      for (let i = 1; i < items.length; i++) {
+        await fetch("/api/estoque", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+          body: JSON.stringify({
+            produto: item.produto, categoria: item.categoria, qnt: 1,
+            custo_unitario: item.custo_unitario, cor: item.cor, fornecedor: item.fornecedor,
+            serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE",
+          }),
+        });
+      }
+      setMsg(`${items.length} unidades movidas para estoque com etiquetas impressas!`);
+      fetchEstoque();
+    } else {
+      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+      setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
+      setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
+    }
+    setEtiquetaModal(null);
   };
 
   const handleSubmitMulti = async () => {
@@ -840,6 +989,138 @@ export default function EstoquePage() {
   return (
     <div className="space-y-6">
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? (dm ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-700") : (dm ? "bg-green-900/30 text-green-400" : "bg-green-50 text-green-700")}`}>{msg}</div>}
+
+      {/* Modal Etiqueta Obrigatória */}
+      {etiquetaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => {}}>
+          <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border shadow-2xl w-full max-w-lg mx-4 overflow-hidden`} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+              <div>
+                <h3 className={`text-lg font-bold ${textPrimary}`}>🏷️ Imprimir Etiqueta</h3>
+                <p className={`text-xs ${textSecondary}`}>Obrigatorio antes de mover para estoque</p>
+              </div>
+              <button onClick={() => setEtiquetaModal(null)} className={`p-2 rounded-lg ${bgHoverBtn} ${textSecondary}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Produto info */}
+              <div className={`rounded-xl p-4 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`font-bold ${textPrimary}`}>{etiquetaModal.item.produto}</p>
+                <div className={`flex gap-3 mt-1 text-xs ${textSecondary}`}>
+                  {etiquetaModal.item.cor && <span>{etiquetaModal.item.cor}</span>}
+                  {etiquetaModal.item.serial_no && <span>SN: {etiquetaModal.item.serial_no}</span>}
+                  {etiquetaModal.items && <span>{etiquetaModal.items.length} unidades</span>}
+                </div>
+              </div>
+
+              {/* Preço */}
+              <div className="space-y-2">
+                <label className={`text-xs font-semibold ${textSecondary}`}>Preco na etiqueta</label>
+                {etiquetaModal.loading ? (
+                  <div className={`text-sm ${textSecondary}`}>Buscando preco...</div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <div className={`flex-1 px-3 py-2 rounded-lg text-sm ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
+                      {etiquetaModal.precoVenda
+                        ? `R$ ${etiquetaModal.precoVenda.toLocaleString("pt-BR")} (tabela)`
+                        : `R$ ${etiquetaModal.item.custo_unitario.toLocaleString("pt-BR")} (custo)`}
+                    </div>
+                    <span className={`text-xs ${textSecondary}`}>ou</span>
+                    <input
+                      type="text"
+                      placeholder="Preco custom"
+                      value={etiquetaModal.precoCustom}
+                      onChange={e => setEtiquetaModal(prev => prev ? { ...prev, precoCustom: e.target.value } : null)}
+                      className={`w-32 px-3 py-2 rounded-lg text-sm border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Tamanho */}
+              <div className="space-y-2">
+                <label className={`text-xs font-semibold ${textSecondary}`}>Tamanho da etiqueta</label>
+                <div className="flex gap-2">
+                  {(["pequena", "media", "grande"] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setEtiquetaModal(prev => prev ? { ...prev, tamanho: t } : null)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        etiquetaModal.tamanho === t
+                          ? "bg-[#E8740E] text-white"
+                          : dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"
+                      }`}
+                    >
+                      {t === "pequena" ? "Pequena 5x3" : t === "media" ? "Media 7x5" : "Grande 10x7"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview QR */}
+              <div className="flex justify-center py-2">
+                <div className="bg-white border border-gray-300 rounded-lg p-3 flex items-center gap-3" style={{ minWidth: 200 }}>
+                  <QRCodeCanvas
+                    value={etiquetaModal.item.serial_no || etiquetaModal.item.imei || etiquetaModal.item.id}
+                    size={60}
+                    level="M"
+                    includeMargin={false}
+                  />
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-orange-500">TIGRAO IMPORTS</p>
+                    <p className="text-xs font-bold text-gray-900 mt-0.5">{etiquetaModal.item.produto}</p>
+                    <p className="text-base font-black text-gray-900 mt-1">
+                      {(() => {
+                        const p = etiquetaModal.precoCustom
+                          ? parseFloat(etiquetaModal.precoCustom.replace(/\./g, "").replace(",", "."))
+                          : (etiquetaModal.precoVenda ?? etiquetaModal.item.custo_unitario);
+                        return isNaN(p) ? "R$ 0" : p.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                      })()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t flex gap-3" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+              {!etiquetaModal.printed ? (
+                <>
+                  <button onClick={() => setEtiquetaModal(null)} className={`flex-1 px-4 py-3 rounded-xl font-semibold text-sm ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handlePrintEtiquetaModal}
+                    disabled={etiquetaModal.loading}
+                    className="flex-[2] px-4 py-3 rounded-xl font-semibold text-sm bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Imprimir Etiqueta
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={handlePrintEtiquetaModal} className={`flex-1 px-4 py-3 rounded-xl font-semibold text-sm ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} flex items-center justify-center gap-1`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Reimprimir
+                  </button>
+                  <button
+                    onClick={handleConfirmarMover}
+                    className="flex-[2] px-4 py-3 rounded-xl font-semibold text-sm bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    Confirmar — Mover para Estoque
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* IMEI Search */}
       <div className="flex gap-2 items-center">
@@ -1816,7 +2097,7 @@ export default function EstoquePage() {
                                                       className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                                   ))}
                                                 </div>
-                                                <button onClick={async () => {
+                                                <button onClick={() => {
                                                   const serials: string[] = [];
                                                   for (let i = 0; i < qnt; i++) {
                                                     const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
@@ -1824,23 +2105,7 @@ export default function EstoquePage() {
                                                     if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
                                                     serials.push(val);
                                                   }
-                                                  // Atualizar o primeiro registro com serial 1 e qnt 1
-                                                  const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
-                                                  await apiPatch(p.id, { serial_no: serials[0], qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
-                                                  // Criar novos registros para os demais serials
-                                                  for (let i = 1; i < serials.length; i++) {
-                                                    await fetch("/api/estoque", {
-                                                      method: "POST",
-                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                                      body: JSON.stringify({
-                                                        produto: p.produto, categoria: p.categoria, qnt: 1,
-                                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                                        serial_no: serials[i], tipo: novoTipo, status: "EM ESTOQUE",
-                                                      }),
-                                                    });
-                                                  }
-                                                  setMsg(`${qnt} unidades movidas para estoque com seriais individuais!`);
-                                                  fetchEstoque();
+                                                  handleMoverMultiploComEtiqueta(p, serials);
                                                 }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
                                                   Mover {qnt} un.
                                                 </button>
