@@ -2400,9 +2400,10 @@ export default function VendasPage() {
           const filtered = [...filteredRaw].sort((a, b) => {
             // Vendas do mesmo grupo ficam juntas
             if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
-            // Separar: cliente final (VENDA/UPGRADE) primeiro, ATACADO depois
-            const aTipo = a.tipo === "ATACADO" ? 1 : 0;
-            const bTipo = b.tipo === "ATACADO" ? 1 : 0;
+            // Ordem: UPGRADE primeiro, depois VENDA, depois ATACADO
+            const tipoOrdem: Record<string, number> = { UPGRADE: 0, VENDA: 1, ATACADO: 2 };
+            const aTipo = tipoOrdem[a.tipo] ?? 1;
+            const bTipo = tipoOrdem[b.tipo] ?? 1;
             if (aTipo !== bTipo) return aTipo - bTipo;
             if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
             if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
