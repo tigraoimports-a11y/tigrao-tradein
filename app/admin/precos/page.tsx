@@ -15,6 +15,7 @@ interface PrecoProduto {
   preco_pix: number;
   status: string;
   categoria: string;
+  tipo?: string;
   updated_at?: string;
 }
 
@@ -62,7 +63,7 @@ function PrecosContent() {
   const tabKeys = categorias.map((c) => c.key);
   const [tab, setTab] = useTabParam<string>("IPHONE", tabKeys);
   const [showAdd, setShowAdd] = useState(false);
-  const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "" });
+  const [newProd, setNewProd] = useState({ modelo: "", preco_pix: "", tipo: "TRADEIN" });
   // Campos de especificação dinâmicos (label + valor) — combinados com " | " no armazenamento
   const [specFields, setSpecFields] = useState<{ label: string; value: string }[]>([{ label: "", value: "" }]);
   // Drag and drop
@@ -170,6 +171,7 @@ function PrecosContent() {
         preco_pix: newPrice,
         status: row.status,
         categoria: row.categoria || inferCategoria(row.modelo),
+        tipo: row.tipo ?? "TRADEIN",
       }),
     });
     setData((prev) => prev?.map((r) =>
@@ -194,6 +196,7 @@ function PrecosContent() {
         preco_pix: row.preco_pix,
         status: newStatus,
         categoria: row.categoria || inferCategoria(row.modelo),
+        tipo: row.tipo ?? "TRADEIN",
       }),
     });
     setData((prev) => prev?.map((r) =>
@@ -251,6 +254,7 @@ function PrecosContent() {
         preco_pix: preco,
         status: "ativo",
         categoria: tab,
+        tipo: newProd.tipo || "TRADEIN",
       }),
     });
     await fetchData(password);
@@ -519,6 +523,19 @@ function PrecosContent() {
                 className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
               />
             </div>
+            {/* Tipo */}
+            <div className="min-w-[120px]">
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
+              <select
+                value={newProd.tipo}
+                onChange={(e) => setNewProd({ ...newProd, tipo: e.target.value })}
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+              >
+                <option value="TRADEIN">Trade-In</option>
+                <option value="CATALOGO">Catálogo</option>
+                <option value="AMBOS">Ambos</option>
+              </select>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -585,6 +602,7 @@ function PrecosContent() {
                   )}
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Status</th>
+                  <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Tipo</th>
                   <th className="px-5 py-2"></th>
                 </tr>
               </thead>
@@ -652,6 +670,36 @@ function PrecosContent() {
                           {row.status === "esgotado" ? "Esgotado" : "Ativo"}
                         </button>
                       </td>
+                      <td className="px-5 py-3">
+                        <select
+                          value={row.tipo ?? "TRADEIN"}
+                          onChange={async (e) => {
+                            const newTipo = e.target.value;
+                            setData((prev) => prev?.map((r) =>
+                              r.modelo === row.modelo && r.armazenamento === row.armazenamento
+                                ? { ...r, tipo: newTipo }
+                                : r
+                            ) ?? null);
+                            await fetch("/api/admin/precos", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                              body: JSON.stringify({
+                                modelo: row.modelo,
+                                armazenamento: row.armazenamento,
+                                preco_pix: row.preco_pix,
+                                status: row.status,
+                                categoria: row.categoria || inferCategoria(row.modelo),
+                                tipo: newTipo,
+                              }),
+                            });
+                          }}
+                          className="px-2 py-1 rounded-lg text-xs border border-[#D2D2D7] bg-white text-[#1D1D1F]"
+                        >
+                          <option value="TRADEIN">Trade-In</option>
+                          <option value="CATALOGO">Catálogo</option>
+                          <option value="AMBOS">Ambos</option>
+                        </select>
+                      </td>
                       <td className="px-5 py-3 text-right">
                         {isEditing ? (
                           <div className="flex gap-2 justify-end">
@@ -677,7 +725,7 @@ function PrecosContent() {
                                 const parts = row.armazenamento.split("|").map((s) => s.trim());
                                 const labels = getLabelsForCategory(tab);
                                 setSpecFields(parts.map((v, idx) => ({ label: labels[idx] || `Spec ${idx + 1}`, value: v.replace(/\s*RAM$/i, "") })));
-                                setNewProd({ modelo: row.modelo, preco_pix: String(row.preco_pix) });
+                                setNewProd({ modelo: row.modelo, preco_pix: String(row.preco_pix), tipo: row.tipo ?? "TRADEIN" });
                                 setShowAdd(true);
                                 window.scrollTo({ top: 0, behavior: "smooth" });
                               }}

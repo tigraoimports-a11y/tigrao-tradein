@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const usuario = getUsuario(req);
 
   const body = await req.json();
-  const { modelo, armazenamento, preco_pix, status, categoria } = body;
+  const { modelo, armazenamento, preco_pix, status, categoria, tipo } = body;
 
   if (!modelo || !armazenamento || preco_pix === undefined) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
   };
   // Só enviar categoria se a coluna existir (backwards-compatible)
   if (categoria) row.categoria = categoria;
+  // tipo: TRADEIN (default) | CATALOGO | AMBOS
+  if (tipo) row.tipo = tipo;
 
   const { error } = await supabase.from("precos").upsert(row, { onConflict: "modelo,armazenamento" });
 
@@ -69,8 +71,10 @@ export async function POST(req: NextRequest) {
 
   await logActivity(usuario, "Alterou preco", `${modelo} ${armazenamento} -> R$ ${Number(preco_pix).toLocaleString("pt-BR")}`, "precos");
 
-  // Notificar design via Telegram
-  try {
+  // Notificar design via Telegram (apenas para produtos TRADEIN ou AMBOS)
+  const tipoFinal = tipo ?? "TRADEIN";
+  const shouldNotifyTelegram = tipoFinal === "TRADEIN" || tipoFinal === "AMBOS";
+  if (shouldNotifyTelegram) try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_PRECOS_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
     if (botToken && chatId) {

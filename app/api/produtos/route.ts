@@ -20,13 +20,13 @@ export async function GET(req: NextRequest) {
       const { supabase } = await import("@/lib/supabase");
       const { data } = await supabase
         .from("precos")
-        .select("modelo, armazenamento, preco_pix, status")
+        .select("modelo, armazenamento, preco_pix, status, tipo")
         .order("modelo")
         .order("armazenamento");
 
       if (data && data.length > 0) {
         const products: NewProduct[] = data
-          .filter((r) => r.status !== "esgotado")
+          .filter((r) => r.status !== "esgotado" && (r.tipo === "TRADEIN" || r.tipo === "AMBOS" || r.tipo == null))
           .map((r) => ({
             modelo: r.modelo,
             armazenamento: r.armazenamento,
