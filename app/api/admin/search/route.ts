@@ -16,10 +16,10 @@ export async function GET(req: NextRequest) {
 
   const searchTerm = `%${q}%`;
 
-  // Buscar no estoque
+  // Buscar no estoque (todos os campos relevantes)
   const { data: estoqueResults } = await supabase
     .from("estoque")
-    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, imei, serial_no, data_compra, data_entrada")
+    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, imei, serial_no, data_compra, data_entrada, observacao, bateria")
     .or(`produto.ilike.${searchTerm},imei.ilike.${searchTerm},serial_no.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cor.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
@@ -27,35 +27,17 @@ export async function GET(req: NextRequest) {
   // Buscar nas vendas
   const { data: vendasResults } = await supabase
     .from("vendas")
-    .select("id, produto, cliente, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem")
+    .select("id, produto, cliente, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem, bandeira, qnt_parcelas, entrada_pix, entrada_especie, produto_na_troca, banco_pix")
     .or(`produto.ilike.${searchTerm},cliente.ilike.${searchTerm}`)
     .order("data", { ascending: false })
     .limit(includeHistory ? 50 : 20);
 
-  // Montar resultados unificados
-  const results: {
-    tipo: "estoque" | "venda";
-    id: string;
-    produto: string;
-    status: string;
-    cor?: string;
-    custo?: number;
-    fornecedor?: string;
-    imei?: string;
-    serial_no?: string;
-    cliente?: string;
-    preco_vendido?: number;
-    lucro?: number;
-    data?: string;
-    categoria?: string;
-    forma?: string;
-    banco?: string;
-    tipo_venda?: string;
-  }[] = [];
+  // Montar resultados
+  const results = [];
 
   for (const e of estoqueResults ?? []) {
     results.push({
-      tipo: "estoque",
+      tipo: "estoque" as const,
       id: e.id,
       produto: e.produto,
       status: e.status,
@@ -64,14 +46,19 @@ export async function GET(req: NextRequest) {
       fornecedor: e.fornecedor,
       imei: e.imei,
       serial_no: e.serial_no,
-      data: e.data_entrada || e.data_compra,
+      data_compra: e.data_compra,
+      data_entrada: e.data_entrada,
       categoria: e.categoria,
+      tipo_produto: e.tipo,
+      observacao: e.observacao,
+      bateria: e.bateria,
+      qnt: e.qnt,
     });
   }
 
   for (const v of vendasResults ?? []) {
     results.push({
-      tipo: "venda",
+      tipo: "venda" as const,
       id: v.id,
       produto: v.produto,
       status: v.status_pagamento || "FINALIZADO",
@@ -79,10 +66,19 @@ export async function GET(req: NextRequest) {
       cliente: v.cliente,
       preco_vendido: v.preco_vendido,
       lucro: v.preco_vendido && v.custo ? v.preco_vendido - v.custo : undefined,
+      margem: v.preco_vendido && v.custo && v.preco_vendido > 0
+        ? ((v.preco_vendido - v.custo) / v.preco_vendido * 100)
+        : undefined,
       data: v.data,
       forma: v.forma,
       banco: v.banco,
       tipo_venda: v.tipo,
+      origem: v.origem,
+      bandeira: v.bandeira,
+      parcelas: v.qnt_parcelas,
+      entrada_pix: v.entrada_pix,
+      entrada_especie: v.entrada_especie,
+      produto_na_troca: v.produto_na_troca,
     });
   }
 
