@@ -674,11 +674,11 @@ export default function EstoquePage() {
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{margin:0;padding:0;width:100%}
         body{font-family:Arial,Helvetica,sans-serif}
-        .grid{display:flex;flex-wrap:wrap;gap:0.5mm;padding:0.5mm}
-        .cell{text-align:center;padding:0.5mm;border:0.3pt dashed #ccc;width:19mm;height:22mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
-        .extra{font-size:3.5pt;color:#444;margin-top:0.3mm;font-family:monospace;letter-spacing:0.3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:18mm}
+        .grid{display:flex;flex-wrap:wrap;gap:0;padding:0 1mm}
+        .cell{text-align:center;padding:0.5mm 0;width:20mm;height:23mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
+        .extra{font-size:3pt;color:#444;margin-top:0.2mm;font-family:monospace;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:19mm}
         .qr{display:flex;justify-content:center}
-        @page{size:62mm 23mm;margin:0}
+        @page{size:62mm 25mm;margin:0}
         @media print{.cell{border-color:#ddd}}
       </style></head><body>
       <div class="grid">${etiquetasHtml}</div>
