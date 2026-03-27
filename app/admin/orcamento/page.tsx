@@ -95,17 +95,21 @@ export default function OrcamentoPage() {
     const entradaVal = parseFloat(entrada) || 0;
     const restante = precoPix - entradaVal;
 
+    // Emoji por categoria
+    const catEmojis: Record<string, string> = { IPHONE: "📱", IPAD: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
+    const emoji = catEmojis[produtoSelecionado.categoria] || "📦";
+
     if (restante <= 0) {
-      // Só PIX, sem parcela
       const texto = [
-        `📱 *${produtoSelecionado.nome}*`,
+        `${emoji} *${produtoSelecionado.nome}*`,
+        ``,
         `📦 Novo / Lacrado`,
         `✅ 1 ano de garantia`,
         `📄 Nota fiscal em seu nome`,
         ``,
-        `💰 *R$ ${precoPix.toLocaleString("pt-BR")}* à vista no PIX`,
+        `💰 *R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}* à vista no PIX`,
         ``,
-        `⏰ Orçamento válido por 24 horas.`,
+        `⏰ Orçamento válido por 24 horas. Após esse período refaça o orçamento.`,
       ].join("\n");
       setTextoGerado(texto);
       return;
@@ -116,7 +120,8 @@ export default function OrcamentoPage() {
     const valorParcela = Math.ceil(valorComTaxa / parcelas);
 
     const linhas = [
-      `📱 *${produtoSelecionado.nome}*`,
+      `${emoji} *${produtoSelecionado.nome}*`,
+      ``,
       `📦 Novo / Lacrado`,
       `✅ 1 ano de garantia`,
       `📄 Nota fiscal em seu nome`,
@@ -124,15 +129,15 @@ export default function OrcamentoPage() {
     ];
 
     if (entradaVal > 0) {
-      linhas.push(`R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
-      linhas.push(`O restante parcelado ficaria ${parcelas}x R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+      linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
+      linhas.push(`💳 O restante parcelado ficaria ${parcelas}x R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
     } else {
       linhas.push(`💳 ${parcelas}x R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
       linhas.push(`💰 Ou R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX`);
     }
 
     linhas.push(``);
-    linhas.push(`⏰ Orçamento válido por 24 horas.`);
+    linhas.push(`⏰ Orçamento válido por 24 horas. Após esse período refaça o orçamento.`);
 
     setTextoGerado(linhas.join("\n"));
     setCopiado(false);
