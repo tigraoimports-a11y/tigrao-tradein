@@ -124,8 +124,9 @@ export function UsadosContent() {
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
   const [novoBateria, setNovoBateria] = useState<{ modelo: string; threshold: string; desconto: string } | null>(null);
+  const [showAddModelo, setShowAddModelo] = useState(false);
+  const [novoModelo, setNovoModelo] = useState({ modelo: "", armazenamento: "", valor_base: "" });
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
-  const [importingSheets, setImportingSheets] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -207,6 +208,43 @@ export function UsadosContent() {
     setDescontos((prev) => prev.filter((x) => !(x.condicao === d.condicao && x.detalhe === d.detalhe)));
   };
 
+  const handleAddModelo = async () => {
+    const { modelo, armazenamento, valor_base } = novoModelo;
+    if (!modelo.trim() || !armazenamento.trim() || !valor_base.trim()) {
+      setMsg("Preencha modelo, armazenamento e valor base");
+      return;
+    }
+    const val = parseFloat(valor_base);
+    if (isNaN(val) || val < 0) { setMsg("Valor invalido"); return; }
+    setSaving("add-modelo");
+    await apiPost({ action: "upsert_valor", modelo: modelo.trim(), armazenamento: armazenamento.trim(), valor_base: val });
+    setValores((prev) => {
+      const exists = prev.findIndex((v) => v.modelo === modelo.trim() && v.armazenamento === armazenamento.trim());
+      if (exists >= 0) {
+        const nv = [...prev];
+        nv[exists] = { ...nv[exists], valor_base: val };
+        return nv;
+      }
+      return [...prev, { id: crypto.randomUUID(), modelo: modelo.trim(), armazenamento: armazenamento.trim(), valor_base: val, ativo: true, updated_at: new Date().toISOString() }];
+    });
+    setMsg(`${modelo.trim()} ${armazenamento.trim()} adicionado com valor R$ ${val.toLocaleString("pt-BR")}!`);
+    setNovoModelo({ modelo: "", armazenamento: "", valor_base: "" });
+    setSaving(null);
+  };
+
+  const handleExportCSV = () => {
+    const rows = [["Modelo", "Armazenamento", "Valor Base"]];
+    valores.forEach((v) => rows.push([v.modelo, v.armazenamento, String(v.valor_base)]));
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `usados-valores-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImportDefaults = async () => {
     setMsg("");
     setSaving("import");
@@ -258,30 +296,16 @@ export function UsadosContent() {
         <h2 className="text-lg font-bold text-[#1D1D1F]">Avaliacao de Usados</h2>
         <div className="flex gap-2">
           <button
-            onClick={async () => {
-              setImportingSheets(true);
-              setMsg("");
-              try {
-                const res = await fetch("/api/admin/usados", {
-                  method: "PUT",
-                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                });
-                const json = await res.json();
-                if (json.ok) {
-                  setMsg(`Importado do Sheets: ${json.importedValores} valores, ${json.importedDescontos + json.importedDescontosModelo} descontos, ${json.importedExcluidos} excluidos`);
-                  fetchData();
-                } else {
-                  setMsg("Erro: " + json.error);
-                }
-              } catch (err) {
-                setMsg("Erro ao importar: " + String(err));
-              }
-              setImportingSheets(false);
-            }}
-            disabled={importingSheets}
-            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+            onClick={() => setShowAddModelo(!showAddModelo)}
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
           >
-            {importingSheets ? "Importando..." : "Importar do Sheets"}
+            + Adicionar Modelo
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 rounded-xl bg-white border border-[#D2D2D7] text-[#86868B] text-sm font-semibold hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+          >
+            Exportar CSV
           </button>
           {valores.length === 0 && (
             <button
@@ -296,6 +320,56 @@ export function UsadosContent() {
       </div>
 
       {msg && <div className="px-4 py-3 rounded-xl text-sm bg-green-50 text-green-700">{msg}</div>}
+
+      {/* Form adicionar modelo */}
+      {showAddModelo && (
+        <div className="bg-white border border-[#E8740E]/30 rounded-2xl p-5 shadow-sm space-y-3">
+          <p className="text-sm font-bold text-[#1D1D1F]">Adicionar Modelo Seminovo</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Modelo</p>
+              <input
+                value={novoModelo.modelo}
+                onChange={(e) => setNovoModelo({ ...novoModelo, modelo: e.target.value })}
+                placeholder="Ex: iPhone 17 Pro Max"
+                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                autoFocus
+              />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Armazenamento</p>
+              <select
+                value={novoModelo.armazenamento}
+                onChange={(e) => setNovoModelo({ ...novoModelo, armazenamento: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+              >
+                <option value="">— Selecionar —</option>
+                {["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-[#86868B] uppercase mb-1">Valor Base (R$)</p>
+              <input
+                type="number"
+                value={novoModelo.valor_base}
+                onChange={(e) => setNovoModelo({ ...novoModelo, valor_base: e.target.value })}
+                placeholder="Ex: 3500"
+                className="w-full px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm focus:outline-none focus:border-[#E8740E]"
+                onKeyDown={(e) => e.key === "Enter" && handleAddModelo()}
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <button onClick={handleAddModelo} disabled={saving === "add-modelo"} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] disabled:opacity-50">
+                {saving === "add-modelo" ? "..." : "Adicionar"}
+              </button>
+              <button onClick={() => setShowAddModelo(false)} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:border-[#E8740E]">
+                Fechar
+              </button>
+            </div>
+          </div>
+          <p className="text-[10px] text-[#86868B]">Dica: para adicionar vários armazenamentos do mesmo modelo, adicione um de cada vez.</p>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2">
