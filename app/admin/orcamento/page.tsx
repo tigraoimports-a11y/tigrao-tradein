@@ -3,11 +3,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
-// Taxas Infinite VISA (usada como padrão para orçamento cliente)
+// Taxas para orçamento cliente (embutir no preço parcelado)
 const TAXAS_PARCELA: Record<number, number> = {
-  1: 2.69, 2: 3.94, 3: 4.46, 4: 4.98, 5: 5.49, 6: 5.99,
-  7: 6.51, 8: 6.99, 9: 7.51, 10: 7.99, 11: 8.49, 12: 8.99,
-  18: 13.57, 21: 15.34,
+  1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+  7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+  13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+  19: 20, 20: 21, 21: 22,
 };
 
 function getTaxaOrcamento(parcelas: number): number {
@@ -208,7 +209,7 @@ export default function OrcamentoPage() {
                 <div>
                   <p className={labelCls}>Parcelas</p>
                   <select value={parcelas} onChange={e => setParcelas(Number(e.target.value))} className={inputCls}>
-                    {[1,2,3,4,5,6,7,8,9,10,11,12,18,21].map(n => {
+                    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
                       const taxa = getTaxaOrcamento(n);
                       return <option key={n} value={n}>{n}x (taxa {taxa.toFixed(1)}%)</option>;
                     })}
@@ -251,7 +252,7 @@ export default function OrcamentoPage() {
         <div className={cardCls}>
           <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Tabela de parcelas</p>
           <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-            {[1,2,3,4,5,6,7,8,9,10,11,12,18,21].map(n => {
+            {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
               const precoPix = produtoSelecionado.preco_pix;
               const entradaVal = parseFloat(entrada) || 0;
               const restante = precoPix - entradaVal;
