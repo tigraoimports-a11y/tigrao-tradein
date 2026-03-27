@@ -672,9 +672,6 @@ export default function EstoquePage() {
       <div class="wrap" ${idx < produtosParaImprimir.length - 1 ? 'style="page-break-after:always"' : ''}>
         <div class="marca">TIGRAO IMPORTS</div>
         <div class="produto">${p.produto}</div>
-        ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
-        <div class="preco">${formatPrice(precoVal)}</div>
-        <div class="pix">a vista no PIX</div>
         <div class="qr"><canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas></div>
         ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
         ${!serial && imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
@@ -688,13 +685,10 @@ export default function EstoquePage() {
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{margin:0;padding:0;width:100%}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{text-align:center;padding:2mm 4mm 2mm 4mm}
-        .marca{font-size:7pt;font-weight:900;color:#F97316;letter-spacing:0.5px;margin-bottom:0.5mm}
-        .produto{font-size:10pt;font-weight:bold;line-height:1.2}
-        .cor{font-size:7pt;color:#333;margin-top:0.5mm}
-        .preco{font-size:14pt;font-weight:900;color:#111;margin-top:1.5mm;line-height:1}
-        .pix{font-size:6pt;color:#666;margin-top:0.5mm}
-        .extra{font-size:5.5pt;color:#444;margin-top:0.5mm;font-family:monospace;letter-spacing:0.5px}
+        .wrap{text-align:center;padding:2mm 3mm 1.5mm 3mm}
+        .marca{font-size:6pt;font-weight:900;color:#F97316;letter-spacing:0.5px;margin-bottom:0.5mm}
+        .produto{font-size:7pt;font-weight:bold;line-height:1.15;max-height:4.5mm;overflow:hidden}
+        .extra{font-size:5pt;color:#444;margin-top:0.5mm;font-family:monospace;letter-spacing:0.5px}
         .qr{margin:1.5mm auto 1mm;display:flex;justify-content:center}
         @page{size:62mm 45mm;margin:0}
       </style></head><body>
@@ -705,9 +699,9 @@ export default function EstoquePage() {
           var qr = qrcode(0, 'M');
           qr.addData(data);
           qr.make();
-          var size = 150;
+          var size = 180;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '10mm'; canvas.style.height = '10mm';
+          canvas.style.width = '12mm'; canvas.style.height = '12mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
