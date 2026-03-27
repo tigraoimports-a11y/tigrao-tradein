@@ -178,12 +178,16 @@ export default function EstoquePage() {
   const [etiquetaModal, setEtiquetaModal] = useState<{
     item: ProdutoEstoque;
     items?: { item: ProdutoEstoque; serial: string }[]; // para múltiplas unidades
+    batchItems?: ProdutoEstoque[]; // para mover selecionados em lote
     precoVenda: number | null;
     printed: boolean;
     loading: boolean;
     precoCustom: string;
     tamanho: "pequena" | "media" | "grande";
   } | null>(null);
+
+  // Seleção em lote na aba A Caminho
+  const [selectedACaminho, setSelectedACaminho] = useState<Set<string>>(new Set());
 
   const handleImeiSearch = async () => {
     if (!imeiSearch.trim()) return;
@@ -622,16 +626,31 @@ export default function EstoquePage() {
     setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
   };
 
+  // Mover selecionados em lote
+  const handleMoverSelecionados = () => {
+    const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
+    const itens = aCaminho.filter(p => selectedACaminho.has(p.id));
+    if (itens.length === 0) { setMsg("Selecione pelo menos 1 produto"); return; }
+    // Verificar se todos têm serial (exceto categorias sem serial)
+    const semSerial = itens.filter(p => !p.serial_no && !catsSemSerial.includes(p.categoria));
+    if (semSerial.length > 0) {
+      setMsg(`Preencha o serial de: ${semSerial.map(p => p.produto).join(", ")}`);
+      return;
+    }
+    setEtiquetaModal({ item: itens[0], batchItems: itens, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
+  };
+
   // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm
   const handlePrintEtiquetaModal = () => {
     if (!etiquetaModal) return;
-    const { item, items } = etiquetaModal;
-    const precoVal = item.custo_unitario;
+    const { item, items, batchItems } = etiquetaModal;
     const formatPrice = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-    const produtosParaImprimir = items
-      ? items.map(i => i.item)
-      : [item];
+    const produtosParaImprimir = batchItems
+      ? batchItems
+      : items
+        ? items.map(i => i.item)
+        : [item];
 
     const win = window.open("", "_blank", "width=800,height=600");
     if (!win) return;
@@ -689,11 +708,20 @@ export default function EstoquePage() {
   // Confirmar movimentação após etiqueta impressa
   const handleConfirmarMover = async () => {
     if (!etiquetaModal) return;
-    const { item, items } = etiquetaModal;
-    const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
+    const { item, items, batchItems } = etiquetaModal;
 
-    if (items && items.length > 1) {
-      // Múltiplas unidades
+    if (batchItems && batchItems.length > 0) {
+      // Lote de produtos selecionados
+      for (const p of batchItems) {
+        const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
+        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+      }
+      setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
+      setSelectedACaminho(new Set());
+      fetchEstoque();
+    } else if (items && items.length > 1) {
+      // Múltiplas unidades (mesmo produto, seriais diferentes)
+      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
       await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
@@ -706,9 +734,10 @@ export default function EstoquePage() {
           }),
         });
       }
-      setMsg(`${items.length} unidades movidas para estoque com etiquetas impressas!`);
+      setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
       fetchEstoque();
     } else {
+      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
       await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
       setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
@@ -970,45 +999,32 @@ export default function EstoquePage() {
 
             {/* Content */}
             <div className="px-6 py-5 space-y-4">
-              {/* Produto info */}
-              <div className={`rounded-xl p-4 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                <p className={`font-bold ${textPrimary}`}>{etiquetaModal.item.produto}</p>
-                <div className={`flex gap-3 mt-1 text-xs ${textSecondary}`}>
-                  {etiquetaModal.item.cor && <span>{etiquetaModal.item.cor}</span>}
-                  {etiquetaModal.item.serial_no && <span>SN: {etiquetaModal.item.serial_no}</span>}
-                  {etiquetaModal.items && <span>{etiquetaModal.items.length} unidades</span>}
+              {/* Produto(s) info */}
+              {etiquetaModal.batchItems ? (
+                <div className={`rounded-xl p-4 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"} space-y-1 max-h-48 overflow-y-auto`}>
+                  <p className={`font-bold text-sm ${textPrimary} mb-2`}>{etiquetaModal.batchItems.length} produtos — QR codes em grade</p>
+                  {etiquetaModal.batchItems.map(p => (
+                    <div key={p.id} className={`flex justify-between text-xs ${textSecondary} py-0.5`}>
+                      <span className="truncate flex-1">{p.produto} {p.cor ? `(${p.cor})` : ""}</span>
+                      <span className="font-mono ml-2 text-[10px]">{p.serial_no || p.imei || "—"}</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              {/* Preço */}
-              <div className="space-y-2">
-                <label className={`text-xs font-semibold ${textSecondary}`}>Preco na etiqueta</label>
-                <div className={`px-3 py-2 rounded-lg text-sm font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"}`}>
-                  R$ {etiquetaModal.item.custo_unitario.toLocaleString("pt-BR")} (custo)
+              ) : (
+                <div className={`rounded-xl p-4 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                  <p className={`font-bold ${textPrimary}`}>{etiquetaModal.item.produto}</p>
+                  <div className={`flex gap-3 mt-1 text-xs ${textSecondary}`}>
+                    {etiquetaModal.item.cor && <span>{etiquetaModal.item.cor}</span>}
+                    {etiquetaModal.item.serial_no && <span>SN: {etiquetaModal.item.serial_no}</span>}
+                    {etiquetaModal.items && <span>{etiquetaModal.items.length} unidades</span>}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Info impressora */}
               <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                Brother QL-820NWB — 62mm x 45mm
-              </div>
-
-              {/* Preview etiqueta */}
-              <div className="flex justify-center py-2">
-                <div className="bg-white border border-gray-300 rounded-xl p-4 text-center" style={{ width: 220 }}>
-                  <p className="text-[8px] font-black text-orange-500 tracking-wide">TIGRAO IMPORTS</p>
-                  <p className="text-[11px] font-bold text-gray-900 mt-0.5 leading-tight">{etiquetaModal.item.produto}</p>
-                  {etiquetaModal.item.cor && <p className="text-[8px] text-gray-500">{etiquetaModal.item.cor}</p>}
-                  <p className="text-lg font-black text-gray-900 mt-1">
-                    {etiquetaModal.item.custo_unitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </p>
-                  <p className="text-[7px] text-gray-400">a vista no PIX</p>
-                  <div className="mt-1 mx-auto w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
-                    <span className="text-[7px] text-gray-500">QR</span>
-                  </div>
-                  {etiquetaModal.item.serial_no && <p className="text-[7px] text-gray-400 mt-1 font-mono">SN: {etiquetaModal.item.serial_no}</p>}
-                </div>
+                Brother QL-820NWB — {etiquetaModal.batchItems ? "QR codes em grade pra recortar" : "Etiqueta QR 62mm"}
               </div>
             </div>
 
@@ -1760,7 +1776,37 @@ export default function EstoquePage() {
               <p className={textSecondary}>Nenhum produto encontrado.</p>
             </div>
           ) : (
-            Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
+            <>
+            {/* Barra de seleção em lote — A Caminho */}
+            {tab === "acaminho" && filtered.length > 0 && (
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
+                <input
+                  type="checkbox"
+                  checked={selectedACaminho.size === filtered.length && filtered.length > 0}
+                  onChange={() => {
+                    if (selectedACaminho.size === filtered.length) {
+                      setSelectedACaminho(new Set());
+                    } else {
+                      setSelectedACaminho(new Set(filtered.map(p => p.id)));
+                    }
+                  }}
+                  className="w-4 h-4 accent-[#E8740E] cursor-pointer"
+                />
+                <span className={`text-sm ${textPrimary}`}>
+                  {selectedACaminho.size > 0 ? `${selectedACaminho.size} selecionado${selectedACaminho.size > 1 ? "s" : ""}` : "Selecionar todos"}
+                </span>
+                {selectedACaminho.size > 0 && (
+                  <button
+                    onClick={handleMoverSelecionados}
+                    className="ml-auto px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Mover {selectedACaminho.size} → Estoque
+                  </button>
+                )}
+              </div>
+            )}
+            {Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {dynamicCatLabels[cat] || cat}
@@ -1904,7 +1950,9 @@ export default function EstoquePage() {
                                       className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"} ${selectMode ? "cursor-pointer" : ""}`}
                                     >
                                       <td className="pl-2 py-2.5 select-none w-4">
-                                        {selectMode ? (
+                                        {tab === "acaminho" ? (
+                                          <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" onClick={e => e.stopPropagation()} />
+                                        ) : selectMode ? (
                                           <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
                                         ) : (
                                           <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
@@ -2112,7 +2160,8 @@ export default function EstoquePage() {
                 });
                 })()}
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
       )}
