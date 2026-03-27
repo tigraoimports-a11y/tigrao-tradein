@@ -17,6 +17,11 @@ async function getOcrWorker() {
   if (tesseractWorker) return tesseractWorker;
   const Tesseract = await import("tesseract.js");
   tesseractWorker = await Tesseract.createWorker("eng");
+  // Restringir a apenas letras e números (seriais Apple)
+  await tesseractWorker.setParameters({
+    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    tessedit_pageseg_mode: "7", // single line
+  } as Record<string, string>);
   return tesseractWorker;
 }
 
@@ -24,7 +29,11 @@ async function ocrFromImage(blob: Blob): Promise<string> {
   const worker = await getOcrWorker();
   const { data } = await worker.recognize(blob);
   // Limpa: remove tudo que nao e alfanumerico, uppercase
-  return data.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  let text = data.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  // Se o OCR encontrou "Serial No." ou "(S)" no inicio, extrair só o serial
+  const snMatch = text.match(/(?:SERIALNO|SNO?|S)([A-Z0-9]{8,})/);
+  if (snMatch) text = snMatch[1];
+  return text;
 }
 
 function handleSerialPaste(
