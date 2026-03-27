@@ -78,7 +78,11 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
     });
   }
 
-  result.sort((a, b) => b.data.localeCompare(a.data));
+  result.sort((a, b) => {
+    const dateCompare = b.data.localeCompare(a.data);
+    if (dateCompare !== 0) return dateCompare;
+    return (b.hora || "00:00").localeCompare(a.hora || "00:00");
+  });
   return result;
 }
 
@@ -384,17 +388,6 @@ export default function GastosPage() {
 
   const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
 
-  const BancoInputGrid = ({ valores, onChange, cls }: { valores: BancoValores; onChange: (b: Banco, v: string) => void; cls: string }) => (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {BANCOS.map((b) => (
-        <div key={b}>
-          <p className={labelCls}>{b.replace("_", " ")}</p>
-          <input type="number" placeholder="0" value={valores[b]} onChange={(e) => onChange(b, e.target.value)} className={cls} />
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
@@ -432,7 +425,14 @@ export default function GastosPage() {
                 <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalForm)}</span>
               )}
             </div>
-            <BancoInputGrid valores={bancoValores} onChange={setBanco} cls={inputCls} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {BANCOS.map((b) => (
+                    <div key={b}>
+                      <p className={labelCls}>{b.replace("_", " ")}</p>
+                      <input type="number" placeholder="0" value={bancoValores[b]} onChange={(e) => setBanco(b, e.target.value)} className={inputCls} />
+                    </div>
+                  ))}
+                </div>
             <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
               Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
             </p>
@@ -611,7 +611,14 @@ export default function GastosPage() {
                               </div>
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
-                                <BancoInputGrid valores={editBancoValores} onChange={editSetBanco} cls={inputCls} />
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {BANCOS.map((b) => (
+                                  <div key={b}>
+                                    <p className={labelCls}>{b.replace("_", " ")}</p>
+                                    <input type="number" placeholder="0" value={editBancoValores[b]} onChange={(e) => editSetBanco(b, e.target.value)} className={inputCls} />
+                                  </div>
+                                ))}
+                              </div>
                               </div>
                               <div className="flex items-center gap-3">
                                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
