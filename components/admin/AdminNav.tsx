@@ -46,12 +46,10 @@ const NAV: NavEntry[] = [
     label: "Produtos", icon: "\u{1F4E6}",
     items: [
       { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
-      { href: "/admin/precos", label: "Precos", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
-      { href: "/admin/agendamento-precos", label: "Agendar Precos", icon: "\u{1F4C5}", pageKey: "agendamento_precos" },
+      { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
+      { href: "/admin/calculadora", label: "Calculadora de Encomendas", icon: "\u{1F9EE}", pageKey: "calculadora" },
+      { href: "/admin/orcamento", label: "Gerador de Orçamentos", icon: "\u{1F4B0}", pageKey: "orcamento" },
       { href: "/admin/fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
-      { href: "/admin/importar", label: "Importar", icon: "\u{1F4E5}", pageKey: "importar" },
-      { href: "/admin/calculadora", label: "Calculadora", icon: "\u{1F9EE}", pageKey: "calculadora" },
-      { href: "/admin/orcamento", label: "Orçamento", icon: "\u{1F4B0}", pageKey: "orcamento" },
     ],
   },
 
