@@ -657,12 +657,12 @@ export default function EstoquePage() {
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{margin:0;padding:0;width:100%}
         body{font-family:Arial,Helvetica,sans-serif}
-        .wrap{text-align:center;padding:2mm 3mm 1.5mm 3mm}
-        .marca{font-size:6pt;font-weight:900;color:#F97316;letter-spacing:0.5px;margin-bottom:0.5mm}
-        .produto{font-size:7pt;font-weight:bold;line-height:1.15;max-height:4.5mm;overflow:hidden}
-        .extra{font-size:5pt;color:#444;margin-top:0.5mm;font-family:monospace;letter-spacing:0.5px}
-        .qr{margin:1.5mm auto 1mm;display:flex;justify-content:center}
-        @page{size:62mm 45mm;margin:0}
+        .wrap{text-align:center;padding:3mm 4mm 3mm 4mm}
+        .marca{font-size:7pt;font-weight:900;color:#F97316;letter-spacing:0.5px;margin-bottom:1mm}
+        .produto{font-size:8pt;font-weight:bold;line-height:1.2;margin-bottom:1mm}
+        .extra{font-size:6pt;color:#444;margin-top:1mm;font-family:monospace;letter-spacing:0.5px}
+        .qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+        @page{size:62mm auto;margin:0}
       </style></head><body>
       ${etiquetasHtml}
       <script>
@@ -671,9 +671,9 @@ export default function EstoquePage() {
           var qr = qrcode(0, 'M');
           qr.addData(data);
           qr.make();
-          var size = 180;
+          var size = 200;
           canvas.width = size; canvas.height = size;
-          canvas.style.width = '12mm'; canvas.style.height = '12mm';
+          canvas.style.width = '15mm'; canvas.style.height = '15mm';
           var ctx = canvas.getContext('2d');
           var cells = qr.getModuleCount();
           var cellSize = size / cells;
