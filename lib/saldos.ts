@@ -121,18 +121,33 @@ export async function recalcularSaldoDia(
   const reaj_mp = sumByBancoField(reajRows, "MERCADO_PAGO");
   const reaj_esp = sumByBancoField(reajRows, "ESPECIE");
 
-  // 5. Gastos (saídas)
+  // 5. Gastos (saídas normais, excluindo depósitos de espécie)
   const { data: gastos } = await supabase
     .from("gastos")
     .select("*")
     .eq("data", dataISO)
-    .eq("tipo", "SAIDA");
+    .eq("tipo", "SAIDA")
+    .or("is_dep_esp.is.null,is_dep_esp.eq.false");
 
   const gastoRows = (gastos ?? []) as { valor: number; banco: string | null }[];
   const saiu_itau = sumByBancoField(gastoRows, "ITAU");
   const saiu_inf = sumByBancoField(gastoRows, "INFINITE");
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
   const saiu_esp = sumByBancoField(gastoRows, "ESPECIE");
+
+  // 5a. Depósitos de espécie no banco (is_dep_esp = true)
+  // banco indica DESTINO do depósito, dinheiro SAI do caixa espécie
+  const { data: depositos } = await supabase
+    .from("gastos")
+    .select("*")
+    .eq("data", dataISO)
+    .eq("is_dep_esp", true);
+
+  const depRows = (depositos ?? []) as { valor: number; banco: string | null }[];
+  const dep_itau = sumByBancoField(depRows, "ITAU");
+  const dep_inf = sumByBancoField(depRows, "INFINITE");
+  const dep_mp = sumByBancoField(depRows, "MERCADO_PAGO");
+  const dep_esp_total = depRows.reduce((s, r) => s + Number(r.valor), 0);
 
   // 5b. Entrada em espécie de vendas
   const { data: todasVendasHoje } = await supabase
@@ -142,11 +157,11 @@ export async function recalcularSaldoDia(
     .neq("status_pagamento", "CANCELADO");
   const entradaEspecieHoje = (todasVendasHoje ?? []).reduce((s: number, v: { entrada_especie: number }) => s + Number(v.entrada_especie || 0), 0);
 
-  // 6. Calcular saldos finais
-  const esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau;
-  const esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf;
-  const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp;
-  const esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp;
+  // 6. Calcular saldos finais (depósitos: entram no banco, saem do caixa)
+  const esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau + dep_itau;
+  const esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf + dep_inf;
+  const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp + dep_mp;
+  const esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp - dep_esp_total;
 
   // 7. Gravar
   await supabase.from("saldos_bancarios").upsert({
