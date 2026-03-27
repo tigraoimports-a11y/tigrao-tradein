@@ -30,9 +30,18 @@ async function ocrFromImage(blob: Blob): Promise<string> {
   const { data } = await worker.recognize(blob);
   // Limpa: remove tudo que nao e alfanumerico, uppercase
   let text = data.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  // Se o OCR encontrou "Serial No." ou "(S)" no inicio, extrair só o serial
-  const snMatch = text.match(/(?:SERIALNO|SNO?|S)([A-Z0-9]{8,})/);
-  if (snMatch) text = snMatch[1];
+  // Remover prefixos comuns: (S), Serial No., SN:, SERIALNO, etc.
+  text = text.replace(/^S?S?ERIALNO/i, "");
+  text = text.replace(/^SERIALNO/i, "");
+  text = text.replace(/^SERIAL/i, "");
+  text = text.replace(/^SNO?/i, "");
+  text = text.replace(/^SN/i, "");
+  // Pegar os últimos 10-12 caracteres se o texto for muito longo (serial Apple = 10-12 chars)
+  if (text.length > 14) {
+    // Tentar achar um bloco de 10-12 alfanuméricos no final
+    const match = text.match(/([A-Z0-9]{10,12})$/);
+    if (match) text = match[1];
+  }
   return text;
 }
 
