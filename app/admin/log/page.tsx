@@ -58,6 +58,7 @@ export default function LogPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [periodo, setPeriodo] = useState<Periodo>("hoje");
+  const [filterUser, setFilterUser] = useState("");
 
   const getDateRange = useCallback((): { from: string; to: string } => {
     const today = new Date();
@@ -82,6 +83,7 @@ export default function LogPage() {
         nextDay.setDate(nextDay.getDate() + 1);
         params.set("to", nextDay.toISOString().split("T")[0]);
       }
+      if (filterUser) params.set("usuario", filterUser);
       const res = await fetch(`/api/admin/log?${params}`, {
         headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
       });
@@ -93,10 +95,28 @@ export default function LogPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, page, getDateRange]);
+  }, [password, page, getDateRange, filterUser]);
 
   useEffect(() => { fetchLog(); }, [fetchLog]);
-  useEffect(() => { setPage(1); }, [periodo]);
+  // Buscar lista de usuários do sistema
+  const [allUsuarios, setAllUsuarios] = useState<string[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/usuarios", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          const nomes = (json.data ?? []).map((u: { nome: string }) => u.nome).sort();
+          setAllUsuarios(nomes);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [password]);
+
+  useEffect(() => { setPage(1); }, [periodo, filterUser]);
+
+  // Combinar usuários do sistema + da página atual
+  const usuarios = [...new Set([...allUsuarios, ...entries.map((e) => e.usuario)])].sort();
 
   // Agrupar por hora
   const grouped = entries.reduce<Record<string, LogEntry[]>>((acc, e) => {
@@ -130,8 +150,8 @@ export default function LogPage() {
         </div>
       </div>
 
-      {/* Periodo pills */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Periodo pills + Filtro por usuário */}
+      <div className="flex items-center gap-2 flex-wrap">
         {(["hoje", "ontem", "7dias", "30dias", "tudo"] as Periodo[]).map((p) => (
           <button
             key={p}
@@ -145,6 +165,20 @@ export default function LogPage() {
             {{ hoje: "Hoje", ontem: "Ontem", "7dias": "7 dias", "30dias": "30 dias", tudo: "Histórico" }[p]}
           </button>
         ))}
+        <div className="h-5 w-px bg-[#E8E8ED] mx-1" />
+        <select
+          value={filterUser}
+          onChange={(e) => setFilterUser(e.target.value)}
+          className={`px-3 py-2 rounded-xl text-xs border transition-colors ${filterUser ? "border-[#E8740E] text-[#E8740E] font-semibold bg-[#FFF8F0]" : "border-[#E8E8ED] text-[#6E6E73] bg-white"}`}
+        >
+          <option value="">Todos os usuários</option>
+          {usuarios.map((u) => <option key={u} value={u}>{u}</option>)}
+        </select>
+        {filterUser && (
+          <button onClick={() => setFilterUser("")} className="text-xs text-[#E8740E] hover:text-[#D06A0D] font-semibold">
+            Limpar
+          </button>
+        )}
       </div>
 
       {/* Timeline */}

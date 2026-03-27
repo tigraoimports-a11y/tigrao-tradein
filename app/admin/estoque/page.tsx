@@ -1105,15 +1105,20 @@ export default function EstoquePage() {
 
           {/* Filtros inline */}
           {!["novo", "scan", "historico"].includes(tab) && (<>
-            {filterCat && tab === "estoque" && (
-              <button onClick={() => setFilterCat("")} className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E5E5EA] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}>
-                ← Voltar
-              </button>
+            {filterCat && tab === "estoque" ? (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setFilterCat("")} className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#E8740E]" : "bg-[#E5E5EA] text-[#1D1D1F] hover:bg-[#E8740E] hover:text-white"} transition-colors`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                  Voltar
+                </button>
+                <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{dynamicCatLabels[filterCat] || filterCat}</span>
+              </div>
+            ) : (
+              <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}>
+                <option value="">Todas categorias</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
+              </select>
             )}
-            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}>
-              <option value="">Todas categorias</option>
-              {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
-            </select>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-[11px] w-44 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#E5E5EA]"}`} />
             <button onClick={() => setShowNewCat(!showNewCat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}>
               + Categoria
@@ -1461,12 +1466,14 @@ export default function EstoquePage() {
         <div className="space-y-4">
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
-          ) : !filterCat && tab === "estoque" ? (
+          ) : !filterCat && ["estoque", "acaminho", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
               {categoriasState.map((cat) => {
-                const count = emEstoque.filter((p) => p.categoria === cat.key).length;
-                const units = emEstoque.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
+                const sourceList = tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : emEstoque;
+                const count = sourceList.filter((p) => p.categoria === cat.key).length;
+                const units = sourceList.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
+                if (count === 0 && tab !== "estoque") return null;
                 const isEditing = editingCatName === cat.key;
                 return (
                   <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
