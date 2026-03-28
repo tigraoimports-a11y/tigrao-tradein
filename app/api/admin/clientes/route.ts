@@ -91,13 +91,19 @@ export async function GET(req: NextRequest) {
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
     const cpf = (v.cpf || "").trim();
 
-    // Determinar a chave: se tem CPF e já vimos esse CPF, usar a mesma chave
+    // Determinar a chave de agrupamento:
+    // - Com CPF: agrupa por CPF (mesma pessoa mesmo com nomes diferentes)
+    // - Sem CPF: agrupa só pelo nome exato (não mistura com outros)
     let key: string;
-    if (cpf && cpfToKey.has(cpf)) {
-      key = cpfToKey.get(cpf)!;
+    if (cpf) {
+      if (cpfToKey.has(cpf)) {
+        key = cpfToKey.get(cpf)!;
+      } else {
+        key = `cpf:${cpf}`;
+        cpfToKey.set(cpf, key);
+      }
     } else {
-      key = nome.toUpperCase();
-      if (cpf) cpfToKey.set(cpf, key);
+      key = `nome:${nome.toUpperCase()}`;
     }
 
     if (!clienteMap.has(key)) {
