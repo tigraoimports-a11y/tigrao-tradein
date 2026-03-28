@@ -287,9 +287,76 @@ const CIDADE_COORDS: Record<string, { lat: number; lng: number }> = {
   "nilopolis": { lat: -22.8058, lng: -43.4187 },
   "nilópolis": { lat: -22.8058, lng: -43.4187 },
   "campos dos goytacazes": { lat: -21.7543, lng: -41.3244 },
+  "campos": { lat: -21.7543, lng: -41.3244 },
   "salvador": { lat: -12.9714, lng: -38.5124 },
   "florianopolis": { lat: -27.5954, lng: -48.5480 },
   "florianópolis": { lat: -27.5954, lng: -48.5480 },
+  // Mais cidades do estado do RJ
+  "teresopolis": { lat: -22.4121, lng: -42.9656 },
+  "teresópolis": { lat: -22.4121, lng: -42.9656 },
+  "cabo frio": { lat: -22.8789, lng: -42.0187 },
+  "resende": { lat: -22.4686, lng: -44.4467 },
+  "barra mansa": { lat: -22.5443, lng: -44.1748 },
+  "angra dos reis": { lat: -23.0067, lng: -44.3181 },
+  "mangaratiba": { lat: -22.9594, lng: -44.0408 },
+  "rio das ostras": { lat: -22.5269, lng: -41.9450 },
+  "araruama": { lat: -22.8729, lng: -42.3431 },
+  "nova friburgo": { lat: -22.2819, lng: -42.5311 },
+  "tres rios": { lat: -22.1168, lng: -43.2089 },
+  "três rios": { lat: -22.1168, lng: -43.2089 },
+  "barra do pirai": { lat: -22.4714, lng: -43.8267 },
+  "barra do piraí": { lat: -22.4714, lng: -43.8267 },
+  "valenca": { lat: -22.2453, lng: -43.7022 },
+  "valença": { lat: -22.2453, lng: -43.7022 },
+  "vassouras": { lat: -22.4039, lng: -43.6625 },
+  "paty do alferes": { lat: -22.4308, lng: -43.4267 },
+  "miguel pereira": { lat: -22.4572, lng: -43.4700 },
+  "queimados": { lat: -22.7106, lng: -43.5519 },
+  "japeri": { lat: -22.6431, lng: -43.6533 },
+  "paracambi": { lat: -22.6108, lng: -43.7108 },
+  "itaguai": { lat: -22.8631, lng: -43.7756 },
+  "itaguaí": { lat: -22.8631, lng: -43.7756 },
+  "magé": { lat: -22.6528, lng: -43.1706 },
+  "mage": { lat: -22.6528, lng: -43.1706 },
+  "guapimirim": { lat: -22.5369, lng: -43.0131 },
+  "rio bonito": { lat: -22.7133, lng: -42.6267 },
+  "silva jardim": { lat: -22.6517, lng: -42.3931 },
+  "casimiro de abreu": { lat: -22.4806, lng: -42.2042 },
+  "sao pedro da aldeia": { lat: -22.8389, lng: -42.1028 },
+  "são pedro da aldeia": { lat: -22.8389, lng: -42.1028 },
+  "iguaba grande": { lat: -22.8431, lng: -42.2289 },
+  "arraial do cabo": { lat: -22.9664, lng: -42.0275 },
+  "buzios": { lat: -22.7488, lng: -41.8819 },
+  "búzios": { lat: -22.7488, lng: -41.8819 },
+  "tangua": { lat: -22.7308, lng: -42.7144 },
+  "tanguá": { lat: -22.7308, lng: -42.7144 },
+  // Capitais e grandes cidades de outros estados
+  "curitiba": { lat: -25.4284, lng: -49.2733 },
+  "porto alegre": { lat: -30.0346, lng: -51.2177 },
+  "fortaleza": { lat: -3.7172, lng: -38.5433 },
+  "manaus": { lat: -3.1190, lng: -60.0217 },
+  "belem": { lat: -1.4558, lng: -48.5024 },
+  "belém": { lat: -1.4558, lng: -48.5024 },
+  "vitoria": { lat: -20.3155, lng: -40.3128 },
+  "vitória": { lat: -20.3155, lng: -40.3128 },
+  "campinas": { lat: -22.9099, lng: -47.0626 },
+  "guarulhos": { lat: -23.4543, lng: -46.5337 },
+  "santos": { lat: -23.9608, lng: -46.3336 },
+  "joinville": { lat: -26.3045, lng: -48.8487 },
+  "juiz de fora": { lat: -21.7642, lng: -43.3503 },
+  "uberlandia": { lat: -18.9186, lng: -48.2772 },
+  "uberlândia": { lat: -18.9186, lng: -48.2772 },
+  "natal": { lat: -5.7945, lng: -35.2110 },
+  "joao pessoa": { lat: -7.1195, lng: -34.8450 },
+  "joão pessoa": { lat: -7.1195, lng: -34.8450 },
+  "maceio": { lat: -9.6658, lng: -35.7353 },
+  "maceió": { lat: -9.6658, lng: -35.7353 },
+  "aracaju": { lat: -10.9091, lng: -37.0677 },
+  "teresina": { lat: -5.0892, lng: -42.8019 },
+  "campo grande": { lat: -20.4697, lng: -54.6201 },
+  "cuiaba": { lat: -15.6014, lng: -56.0979 },
+  "cuiabá": { lat: -15.6014, lng: -56.0979 },
+  "palmas": { lat: -10.1689, lng: -48.3317 },
 };
 
 function findBairroCoords(nome: string, cidade?: string): { lat: number; lng: number } | null {
@@ -396,7 +463,8 @@ export async function GET(req: NextRequest) {
       porBairro[key].lucro += Number(v.lucro || 0);
     }
 
-    const bairros = Object.entries(porBairro)
+    // Primeiro mapeia todos os bairros com coords
+    const bairrosRaw = Object.entries(porBairro)
       .map(([, d]) => {
         const coords = findBairroCoords(d.bairro, d.cidade);
         const nome = d.cidade && d.cidade !== "Rio de Janeiro" && d.bairro !== "Nao informado"
@@ -409,10 +477,62 @@ export async function GET(req: NextRequest) {
           ticket: d.qty > 0 ? Math.round(d.receita / d.qty) : 0,
           lat: coords?.lat ?? null,
           lng: coords?.lng ?? null,
+          cidade: d.cidade,
         };
-      })
+      });
+
+    // Bairros sem coordenadas: agrupar por cidade no mapa
+    const semCoords = bairrosRaw.filter(b => b.lat == null && b.nome !== "Nao informado");
+    const comCoords = bairrosRaw.filter(b => b.lat != null);
+
+    // Agrupar sem-coords por cidade e usar coords da cidade
+    const cidadeAgrupada: Record<string, { qty: number; receita: number; lucro: number; cidade: string }> = {};
+    for (const b of semCoords) {
+      const cidadeKey = (b.cidade || "").toLowerCase().trim();
+      if (!cidadeKey) continue;
+      if (!cidadeAgrupada[cidadeKey]) cidadeAgrupada[cidadeKey] = { qty: 0, receita: 0, lucro: 0, cidade: b.cidade };
+      cidadeAgrupada[cidadeKey].qty += b.qty;
+      cidadeAgrupada[cidadeKey].receita += b.receita;
+      cidadeAgrupada[cidadeKey].lucro += b.lucro;
+    }
+
+    // Adicionar cidades agrupadas como pontos no mapa (se tiver coords da cidade)
+    for (const [cidadeKey, d] of Object.entries(cidadeAgrupada)) {
+      const cidadeNorm = normalizeBairroName(d.cidade);
+      let coords: { lat: number; lng: number } | null = null;
+      if (CIDADE_COORDS[cidadeKey]) coords = CIDADE_COORDS[cidadeKey];
+      else {
+        for (const [key, c] of Object.entries(CIDADE_COORDS)) {
+          if (normalizeBairroName(key) === cidadeNorm) { coords = c; break; }
+        }
+      }
+      if (coords) {
+        // Verificar se já existe um ponto muito perto (mesma cidade) — somar
+        const existing = comCoords.find(b => b.cidade.toLowerCase().trim() === cidadeKey && Math.abs(b.lat! - coords!.lat) < 0.01);
+        if (existing) {
+          existing.qty += d.qty;
+          existing.receita += d.receita;
+          existing.lucro += d.lucro;
+          existing.ticket = existing.qty > 0 ? Math.round(existing.receita / existing.qty) : 0;
+        } else {
+          comCoords.push({
+            nome: d.cidade,
+            qty: d.qty,
+            receita: d.receita,
+            lucro: d.lucro,
+            ticket: d.qty > 0 ? Math.round(d.receita / d.qty) : 0,
+            lat: coords.lat,
+            lng: coords.lng,
+            cidade: d.cidade,
+          });
+        }
+      }
+    }
+
+    const bairros = [...comCoords, ...bairrosRaw.filter(b => b.nome === "Nao informado")]
+      .map(({ cidade: _c, ...rest }) => rest)
       .sort((a, b) => b.qty - a.qty)
-      .slice(0, 30);
+      .slice(0, 50);
 
     // --- Aggregate by cidade (top 10) ---
     const porCidade: Record<string, { qty: number; receita: number; lucro: number }> = {};
