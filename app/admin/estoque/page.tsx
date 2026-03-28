@@ -1002,7 +1002,7 @@ export default function EstoquePage() {
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
-  const emEstoque = [...novos, ...seminovos]; // Mostrar novos + seminovos na aba Estoque
+  const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
   const acabando = novos.filter((p) => p.qnt === 1);
@@ -1360,7 +1360,8 @@ export default function EstoquePage() {
       <div className="space-y-3">
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
-            { key: "estoque", label: "Estoque Disponível", count: emEstoque.length },
+            { key: "estoque", label: "Lacrados", count: emEstoque.length },
+            { key: "seminovos", label: "Seminovos", count: seminovos.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
           ] as const).map((t) => (
