@@ -83,6 +83,7 @@ export default function VendasPage() {
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+    valor_total_venda: "",
     // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
@@ -403,7 +404,7 @@ export default function VendasPage() {
   }
 
   // Campos que NÃO devem ser uppercased (emails, senhas, etc)
-  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa"]);
+  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
   const set = (field: string, value: string | boolean) => {
     const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
     setForm((f) => ({ ...f, [field]: v }));
@@ -473,6 +474,32 @@ export default function VendasPage() {
       if (total > 0) return String(Math.round(total));
     }
     return undefined;
+  };
+
+  // Distribuir valor total da venda proporcionalmente ao custo de cada produto no carrinho
+  const distribuirValorTotal = (totalStr: string) => {
+    const total = parseFloat(totalStr) || 0;
+    if (total <= 0 || produtosCarrinho.length === 0) return;
+    const custoTotal = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
+    if (custoTotal <= 0) {
+      // Sem custo definido: divide igualmente
+      const cada = Math.round(total / produtosCarrinho.length);
+      setProdutosCarrinho(prev => prev.map((p, i) => ({
+        ...p,
+        preco_vendido: String(i === prev.length - 1 ? total - cada * (prev.length - 1) : cada),
+      })));
+    } else {
+      // Proporcional ao custo
+      let distribuido = 0;
+      setProdutosCarrinho(prev => prev.map((p, i) => {
+        const pCusto = parseFloat(p.custo) || 0;
+        const valor = i === prev.length - 1
+          ? Math.round(total - distribuido)
+          : Math.round((pCusto / custoTotal) * total);
+        distribuido += valor;
+        return { ...p, preco_vendido: String(valor) };
+      }));
+    }
   };
 
   // Resumo financeiro
@@ -1132,6 +1159,7 @@ export default function VendasPage() {
       banco_pix: v.banco_pix || "ITAU",
       entrada_especie: "",
       entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+      valor_total_venda: "",
       banco_2nd: v.banco_2nd || "",
       banco_alt: v.banco_alt || "",
       parc_alt: String(v.parc_alt || ""),
@@ -1521,37 +1549,38 @@ export default function VendasPage() {
                 const pVendido = parseFloat(p.preco_vendido) || 0;
                 const pLucro = pVendido - pCusto;
                 return (
-                  <div key={i} className="flex items-center justify-between px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-[#1D1D1F] truncate block">{p.produto}</span>
-                      <span className="text-[10px] text-[#86868B]">
-                        {fmt(pCusto)} custo | {fmt(pVendido)} vendido | Lucro: <strong className={pLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(pLucro)}</strong>
-                        {p.fornecedor && ` | ${p.fornecedor}`}
-                        {p.serial_no && ` | SN: ${p.serial_no}`}
-                        {p.imei && ` | IMEI: ${p.imei}`}
+                  <div key={i} className="px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-[#1D1D1F] truncate">{p.produto}</span>
+                      <div className="ml-3 flex gap-1 flex-shrink-0">
+                        <button onClick={() => handleEditFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-blue-500 hover:bg-blue-50 transition-colors" title="Editar produto">✏️</button>
+                        <button onClick={() => handleRemoveFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors" title="Remover produto">✕</button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-[#86868B]">
+                      <span>{fmt(pCusto)} custo</span>
+                      <span>|</span>
+                      <span className="flex items-center gap-1">Vendido: R$
+                        <input
+                          type="text" inputMode="numeric"
+                          value={fmtMil(p.preco_vendido)}
+                          onChange={(e) => {
+                            const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                            setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, preco_vendido: clean } : item));
+                            setForm(f => ({ ...f, valor_total_venda: "" })); // limpa total ao editar manualmente
+                          }}
+                          className="w-20 px-1.5 py-0.5 text-[11px] font-semibold text-[#1D1D1F] bg-white border border-[#D2D2D7] rounded"
+                        />
                       </span>
-                      {parseFloat(p.produto_na_troca) > 0 && (
-                        <span className="text-[10px] text-orange-600 font-medium block">
-                          Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
-                        </span>
-                      )}
+                      <span>|</span>
+                      <span>Lucro: <strong className={pLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(pLucro)}</strong></span>
+                      {p.fornecedor && <><span>|</span><span>{p.fornecedor}</span></>}
                     </div>
-                    <div className="ml-3 flex gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => handleEditFromCart(i)}
-                        className="px-2 py-1 rounded-lg text-xs text-blue-500 hover:bg-blue-50 transition-colors"
-                        title="Editar produto"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => handleRemoveFromCart(i)}
-                        className="px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors"
-                        title="Remover produto"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    {parseFloat(p.produto_na_troca) > 0 && (
+                      <span className="text-[10px] text-orange-600 font-medium block">
+                        Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -1745,6 +1774,7 @@ export default function VendasPage() {
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+                    valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
@@ -2038,6 +2068,23 @@ export default function VendasPage() {
             <div className="border-t-2 border-[#E8740E] pt-4">
               <p className="text-sm font-bold text-[#1D1D1F] mb-1">Pagamento (para todos os produtos)</p>
               <p className="text-[10px] text-[#86868B] mb-3">Preencha o pagamento uma unica vez — vale para todos os {produtosCarrinho.length} produto{produtosCarrinho.length > 1 ? "s" : ""} no carrinho.</p>
+
+              {/* Valor total da venda — distribui proporcional ao custo */}
+              <div className="border border-green-300 bg-green-50 rounded-xl p-4 space-y-2">
+                <p className={labelCls}>Valor total da venda (R$)</p>
+                <p className="text-[10px] text-[#86868B] -mt-1">Preencha o total recebido — o sistema distribui entre os produtos proporcionalmente ao custo. Ou edite cada produto manualmente acima.</p>
+                <input
+                  type="text" inputMode="numeric"
+                  value={fmtMil(form.valor_total_venda)}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setForm(f => ({ ...f, valor_total_venda: clean }));
+                    distribuirValorTotal(clean);
+                  }}
+                  placeholder="Ex: 13000"
+                  className={inputCls + " font-bold text-lg"}
+                />
+              </div>
             </div>
 
             {/* FORMA DE PAGAMENTO — cart mode */}
@@ -3068,6 +3115,7 @@ export default function VendasPage() {
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
                                               entrada_fiado: String(primaryVenda.entrada_fiado || ""),
                                               fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+                                              valor_total_venda: "",
                                               banco_2nd: primaryVenda.banco_2nd || "",
                                               banco_alt: primaryVenda.banco_alt || "",
                                               parc_alt: String(primaryVenda.parc_alt || ""),
@@ -3591,6 +3639,7 @@ export default function VendasPage() {
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+                    valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
@@ -3619,6 +3668,7 @@ export default function VendasPage() {
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
                     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+                    valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
                     serial_no: "", imei: "",
