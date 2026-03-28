@@ -2323,45 +2323,72 @@ export default function EstoquePage() {
       {/* Modal de detalhes do produto */}
       {detailProduct && (() => {
         const p = detailProduct;
-        const bgModal = dm ? "bg-[#1C1C1E]" : "bg-white";
-        const bgSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
-        const txtP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
-        const txtS = dm ? "text-[#98989D]" : "text-[#86868B]";
-        const isLacrado = p.tipo === "NOVO";
+        const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
+        const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+        const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+        const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+        const isLac = p.tipo === "NOVO";
+        const dataE = p.data_entrada || p.data_compra;
+        const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailProduct(null)}>
-            <div className={`w-full max-w-lg mx-4 ${bgModal} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailProduct(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailProduct(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
+            <div className={`w-full max-w-lg mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
-                <h3 className={`text-sm font-bold ${txtP}`}>Detalhes do Item {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
-                <button onClick={() => setDetailProduct(null)} className={`text-lg ${txtS} hover:text-[#E8740E]`}>✕</button>
+                <h3 className={`text-sm font-bold ${mP}`}>Detalhes do Item {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
+                <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
               </div>
-              <div className={`mx-4 mt-4 p-4 rounded-xl border ${bgSec}`}>
-                <div className="flex items-start justify-between mb-3">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Produto</p><p className={`text-[15px] font-bold ${txtP}`}>{p.produto}</p></div>
-                  <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Status</p><span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
+              {/* Produto */}
+              <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
+                <div className="flex items-start justify-between mb-4">
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Produto</p><p className={`text-[16px] font-bold ${mP} mt-0.5`}>{p.produto}</p></div>
+                  <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {p.serial_no && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Numero de Serie</p><button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className={`text-sm font-mono ${txtP} hover:text-[#E8740E] flex items-center gap-1`}>{p.serial_no}<svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>}
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Condicao</p><span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${isLacrado ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLacrado ? "Lacrado" : "Usado"}</span></div>
-                  {p.imei && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>IMEI</p><button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }} className={`text-sm font-mono ${txtP} hover:text-[#E8740E] flex items-center gap-1`}>{p.imei}<svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>}
-                  {p.cor && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Cor</p><p className={`text-sm ${txtP}`}>{p.cor}</p></div>}
-                  {p.bateria && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Bateria</p><p className={`text-sm ${txtP}`}>{p.bateria}%</p></div>}
+                <div className="grid grid-cols-2 gap-4">
+                  {p.serial_no && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p><button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button></div>}
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
+                  {p.imei && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p><button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.imei} {cpIco}</button></div>}
+                  {p.cor && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p></div>}
+                  {p.bateria && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p></div>}
                 </div>
               </div>
-              <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSec}`}>
-                <p className={`text-xs font-bold ${txtP} mb-3`}>Informacoes Financeiras</p>
+              {/* Financeiro */}
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
                 <div className="grid grid-cols-3 gap-3">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Preco de Compra</p><p className={`text-sm font-bold ${txtP}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Balanco</p><p className="text-sm font-bold text-[#E8740E]">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Categoria</p><p className={`text-sm ${txtP}`}>{p.categoria}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanco</p><p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
               </div>
-              <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSec}`}>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Data de Entrada</p><p className={`text-sm ${txtP}`}>{p.data_compra || "—"}</p></div>
-                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Fornecedor</p><p className={`text-sm ${txtP}`}>{p.fornecedor || "Nao informado"}</p></div>
+              {/* Datas */}
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p><p className={`text-[13px] ${mP} mt-0.5`}>{dataE || "Nao informada"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p></div>
                 </div>
-                {p.observacao && <div className="mt-3"><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Observacao</p><p className={`text-sm ${txtP}`}>{p.observacao}</p></div>}
+                {p.observacao && <div className="mt-3"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.observacao}</p></div>}
+              </div>
+              {/* Operações Relacionadas */}
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <div className="flex items-center justify-between">
+                  <p className={`text-xs font-bold ${mP}`}>Operacoes Relacionadas</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setDetailProduct(null); window.location.href = `/admin/vendas?tab=nova&produto=${encodeURIComponent(p.produto)}&custo=${p.custo_unitario || 0}`; }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
+                      Criar Venda
+                    </button>
+                    <button
+                      onClick={() => { setDetailProduct(null); setTab("historico"); }}
+                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                      Ver Entrada
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="h-4" />
             </div>
