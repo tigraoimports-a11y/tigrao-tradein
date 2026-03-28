@@ -7,7 +7,7 @@ import { getTaxa, calcularLiquido } from "@/lib/taxas";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-interface SaldoRow { data?: string; itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; manual?: boolean }
+interface SaldoRow { data?: string; itau_base: number; inf_base: number; mp_base: number; esp_itau: number; esp_inf: number; esp_mp: number; esp_especie: number; esp_especie_base?: number; manual?: boolean }
 interface DashData {
   saldos: SaldoRow | null;
   saldoAnterior: SaldoRow | null;
@@ -130,7 +130,7 @@ export default function DashboardPage() {
     itauBase = s?.itau_base || 0;
     infBase = s?.inf_base || 0;
     mpBase = s?.mp_base || 0;
-    espBase = s?.esp_especie || 0;
+    espBase = s?.esp_especie_base ?? s?.esp_especie ?? 0;
   } else {
     // Sem row de hoje ou bases zeradas — usar fechamento anterior como base
     const ref = prev || s; // prev é row anterior; se não existe, s é a mais recente

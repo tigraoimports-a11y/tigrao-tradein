@@ -232,14 +232,14 @@ export default function StepQuote(p: StepQuoteProps) {
       {/* CTA */}
       <button onClick={() => { onTrackAction?.("quote_whatsapp"); window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" }); }}
         className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
-        style={{ backgroundColor: "var(--ti-accent)", color: "#fff" }}>
-        Desejo fechar meu pedido no WhatsApp
+        style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>
+        DESEJO FECHAR MEU PEDIDO NO WHATSAPP
       </button>
 
       <button onClick={onCotarOutro}
         className="w-full py-4 rounded-2xl text-[15px] font-semibold transition-all duration-200 active:scale-[0.98]"
         style={{ color: "#fff", backgroundColor: "#f97316", border: "1px solid #f97316" }}>
-        Cotar outro modelo
+        COTAR OUTRO MODELO
       </button>
 
       {/* Edit buttons */}
@@ -270,7 +270,7 @@ export default function StepQuote(p: StepQuoteProps) {
         <button onClick={() => setShowFeedback(true)}
           className="w-full py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
           style={{ color: "#fff", backgroundColor: "#ef4444", border: "1px solid #ef4444" }}>
-          Não gostei. Sair
+          NÃO GOSTEI, SAIR
         </button>
       ) : (
         <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={cardStyle}>

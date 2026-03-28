@@ -2069,22 +2069,36 @@ export default function VendasPage() {
               <p className="text-sm font-bold text-[#1D1D1F] mb-1">Pagamento (para todos os produtos)</p>
               <p className="text-[10px] text-[#86868B] mb-3">Preencha o pagamento uma unica vez — vale para todos os {produtosCarrinho.length} produto{produtosCarrinho.length > 1 ? "s" : ""} no carrinho.</p>
 
-              {/* Valor total da venda — distribui proporcional ao custo */}
-              <div className="border border-green-300 bg-green-50 rounded-xl p-4 space-y-2">
-                <p className={labelCls}>Valor total da venda (R$)</p>
-                <p className="text-[10px] text-[#86868B] -mt-1">Preencha o total recebido — o sistema distribui entre os produtos proporcionalmente ao custo. Ou edite cada produto manualmente acima.</p>
-                <input
-                  type="text" inputMode="numeric"
-                  value={fmtMil(form.valor_total_venda)}
-                  onChange={(e) => {
-                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
-                    setForm(f => ({ ...f, valor_total_venda: clean }));
-                    distribuirValorTotal(clean);
-                  }}
-                  placeholder="Ex: 13000"
-                  className={inputCls + " font-bold text-lg"}
-                />
-              </div>
+              {/* Valor total da venda — distribui proporcional ao custo (colapsável) */}
+              {(() => {
+                const allHavePrice = produtosCarrinho.every(p => parseFloat(p.preco_vendido) > 0);
+                const isOpen = !!form.valor_total_venda || !allHavePrice;
+                return isOpen ? (
+                  <div className="border border-green-300 bg-green-50 rounded-xl p-4 space-y-2">
+                    <p className={labelCls}>Valor total da venda (R$)</p>
+                    <p className="text-[10px] text-[#86868B] -mt-1">Preencha o total recebido — o sistema distribui entre os produtos proporcionalmente ao custo. Ou edite cada produto manualmente acima.</p>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={fmtMil(form.valor_total_venda)}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                        setForm(f => ({ ...f, valor_total_venda: clean }));
+                        distribuirValorTotal(clean);
+                      }}
+                      placeholder="Ex: 13000"
+                      className={inputCls + " font-bold text-lg"}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, valor_total_venda: "0" }))}
+                    className="text-[11px] text-[#86868B] underline"
+                  >
+                    Distribuir por valor total?
+                  </button>
+                );
+              })()}
             </div>
 
             {/* FORMA DE PAGAMENTO — cart mode */}
