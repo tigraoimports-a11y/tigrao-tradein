@@ -1753,7 +1753,7 @@ export default function VendasPage() {
                                     }`}
                                   >
                                     <div className="flex flex-col items-start gap-0.5">
-                                      <span>{p.cor || "—"}</span>
+                                      <span>{p.cor || p.produto.split(/\d+GB\s+/)[1]?.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || "—"}</span>
                                       {p.serial_no && <span className={`font-mono text-[10px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>SN: {p.serial_no.slice(-6)}</span>}
                                     </div>
                                   </button>
