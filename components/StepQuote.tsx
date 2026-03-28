@@ -153,14 +153,20 @@ export default function StepQuote(p: StepQuoteProps) {
           <p className="text-[36px] font-bold" style={{ color: "var(--ti-success)" }}>{formatBRL(dif)}</p>
         </div>
 
-        {/* Installment preview: 12x and 21x */}
+        {/* Installment preview: 12x and 21x (usando valores reais com juros) */}
         <div className="text-center space-y-1">
-          <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
-            ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>12x de {formatBRL(Math.ceil(dif / 12))}</span> no cartão
-          </p>
-          <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
-            ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>21x de {formatBRL(Math.ceil(dif / 21))}</span> no cartão
-          </p>
+          {(() => {
+            const p12 = parcOpts.find(i => i.parcelas === 12);
+            const p21 = parcOpts.find(i => i.parcelas === 21);
+            return <>
+              {p12 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+                ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>12x de {formatBRL(p12.valorParcela)}</span> no cartão
+              </p>}
+              {p21 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+                ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>21x de {formatBRL(p21.valorParcela)}</span> no cartão
+              </p>}
+            </>;
+          })()}
         </div>
 
         {/* Entrada PIX */}
