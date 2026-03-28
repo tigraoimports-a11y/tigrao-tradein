@@ -107,6 +107,13 @@ const DEFAULT_CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WA
 const STATUS_OPTIONS = ["EM ESTOQUE", "A CAMINHO", "PENDENTE", "ESGOTADO"] as const;
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+/** Converte YYYY-MM-DD para DD/MM/YYYY */
+const fmtDate = (d: string | null | undefined): string => {
+  if (!d) return "—";
+  const parts = d.split("-");
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return d;
+};
 
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
 const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
@@ -2365,7 +2372,7 @@ export default function EstoquePage() {
               {/* Datas */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p><p className={`text-[13px] ${mP} mt-0.5`}>{dataE || "Nao informada"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p><p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(dataE)}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p></div>
                 </div>
                 {p.observacao && <div className="mt-3"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.observacao}</p></div>}
@@ -2413,63 +2420,154 @@ export default function EstoquePage() {
       })()}
 
       {/* Modal Ver Entrada — produtos que entraram juntos */}
-      {entradaView && (() => {
-        const { data, fornecedor, produtos } = entradaView;
-        const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
-        const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
-        const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
-        const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
-        const totalCusto = produtos.reduce((s, p) => s + Number(p.custo_unitario || 0), 0);
-        return (
-          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEntradaView(null)} onKeyDown={(e) => { if (e.key === "Escape") setEntradaView(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
-            <div className={`w-full max-w-2xl mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-              <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
-                <div>
-                  <h3 className={`text-sm font-bold ${mP}`}>Entrada de Produtos</h3>
-                  <p className={`text-xs ${mS}`}>{data} — {fornecedor}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs font-semibold ${mS}`}>{produtos.length} itens | {fmt(totalCusto)}</span>
-                  <button onClick={() => setEntradaView(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
-                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Produto</th>
-                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Serial</th>
-                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Status</th>
-                      <th className={`px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Custo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {produtos.map((p) => (
-                      <tr key={p.id} className={`border-b ${dm ? "border-[#3A3A3C] hover:bg-[#2C2C2E]" : "border-[#F0F0F5] hover:bg-[#FAFAFA]"} transition-colors cursor-pointer`}
-                        onClick={() => { setEntradaView(null); setDetailProduct(p); }}>
-                        <td className={`px-4 py-3 ${mP}`}>
-                          <div className="font-medium text-xs">{p.produto}</div>
-                          {p.cor && <span className={`text-[10px] ${mS}`}>{p.cor}</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[11px] font-mono text-purple-500">{p.serial_no || "—"}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "VENDIDO" || p.status === "ESGOTADO" ? "bg-gray-100 text-gray-600" : "bg-yellow-100 text-yellow-700"}`}>{p.status}</span>
-                        </td>
-                        <td className={`px-4 py-3 text-right font-medium ${mP}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="px-5 py-3">
-                <button onClick={() => setEntradaView(null)} className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>Fechar</button>
-              </div>
-            </div>
+      {entradaView && <EntradaModal entradaView={entradaView} setEntradaView={setEntradaView} setDetailProduct={setDetailProduct} setMsg={setMsg} password={password} userName={userName} dm={dm} fetchEstoque={fetchEstoque} />}
+    </div>
+  );
+}
+
+/* ── Modal de Entrada de Produtos ── */
+function EntradaModal({ entradaView, setEntradaView, setDetailProduct, setMsg, password, userName, dm, fetchEstoque }: {
+  entradaView: { data: string; fornecedor: string; produtos: ProdutoEstoque[] };
+  setEntradaView: (v: { data: string; fornecedor: string; produtos: ProdutoEstoque[] } | null) => void;
+  setDetailProduct: (p: ProdutoEstoque | null) => void;
+  setMsg: (m: string) => void;
+  password: string;
+  userName: string;
+  dm: boolean;
+  fetchEstoque: () => void;
+}) {
+  const { data, fornecedor, produtos: initialProdutos } = entradaView;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<Record<string, string>>({});
+  const [produtos, setProdutos] = useState(initialProdutos);
+  const [saving, setSaving] = useState(false);
+
+  const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
+  const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+  const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+  const inputCls = `px-2 py-1 rounded-lg border text-xs focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#3A3A3C] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const totalCusto = produtos.reduce((s, p) => s + Number(p.custo_unitario || 0), 0);
+
+  const startEdit = (p: ProdutoEstoque) => {
+    setEditingId(p.id);
+    setEditFields({
+      produto: p.produto,
+      serial_no: p.serial_no || "",
+      imei: p.imei || "",
+      custo_unitario: String(p.custo_unitario || ""),
+      cor: p.cor || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    const updates: Record<string, unknown> = {};
+    const orig = produtos.find((p) => p.id === editingId);
+    if (!orig) { setSaving(false); return; }
+    if (editFields.produto !== orig.produto) updates.produto = editFields.produto;
+    if (editFields.serial_no !== (orig.serial_no || "")) updates.serial_no = editFields.serial_no || null;
+    if (editFields.imei !== (orig.imei || "")) updates.imei = editFields.imei || null;
+    if (editFields.cor !== (orig.cor || "")) updates.cor = editFields.cor || null;
+    if (editFields.custo_unitario !== String(orig.custo_unitario || "")) updates.custo_unitario = parseFloat(editFields.custo_unitario) || 0;
+
+    if (Object.keys(updates).length > 0) {
+      await fetch("/api/estoque", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+        body: JSON.stringify({ id: editingId, ...updates }),
+      });
+      setProdutos((prev) => prev.map((p) => p.id === editingId ? { ...p, ...updates } as ProdutoEstoque : p));
+      fetchEstoque();
+      setMsg("Produto atualizado!");
+    }
+    setEditingId(null);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEntradaView(null)} onKeyDown={(e) => { if (e.key === "Escape") { if (editingId) setEditingId(null); else setEntradaView(null); } }} tabIndex={-1} ref={(el: HTMLDivElement | null) => el?.focus()}>
+      <div className={`w-full max-w-3xl mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+          <div>
+            <h3 className={`text-sm font-bold ${mP}`}>Entrada de Produtos</h3>
+            <p className={`text-xs ${mS}`}>{fmtDate(data)} — {fornecedor}</p>
           </div>
-        );
-      })()}
+          <div className="flex items-center gap-3">
+            <span className={`text-xs font-semibold ${mS}`}>{produtos.length} itens | {fmt(totalCusto)}</span>
+            <button onClick={() => setEntradaView(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
+                <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Produto</th>
+                <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Serial</th>
+                <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Status</th>
+                <th className={`px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Custo</th>
+                <th className={`px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider ${mS} w-20`}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {produtos.map((p) => (
+                <React.Fragment key={p.id}>
+                  <tr className={`border-b ${dm ? "border-[#3A3A3C] hover:bg-[#2C2C2E]" : "border-[#F0F0F5] hover:bg-[#FAFAFA]"} transition-colors ${editingId === p.id ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}>
+                    <td className={`px-4 py-3 ${mP}`}>
+                      <div className="font-medium text-xs">{p.produto}</div>
+                      {p.cor && <span className={`text-[10px] ${mS}`}>{p.cor}</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-[11px] font-mono text-purple-500">{p.serial_no || "—"}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "VENDIDO" || p.status === "ESGOTADO" ? "bg-gray-100 text-gray-600" : "bg-yellow-100 text-yellow-700"}`}>{p.status}</span>
+                    </td>
+                    <td className={`px-4 py-3 text-right font-medium ${mP}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center gap-1 justify-center">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEdit(p); }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${dm ? "text-[#F5A623] hover:bg-[#E8740E]/20" : "text-[#E8740E] hover:bg-[#E8740E]/10"}`}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEntradaView(null); setDetailProduct(p); }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${dm ? "text-[#98989D] hover:bg-[#3A3A3C]" : "text-[#86868B] hover:bg-[#F0F0F5]"}`}
+                        >
+                          Ver
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {editingId === p.id && (
+                    <tr className={`border-b ${dm ? "border-[#E8740E]/30 bg-[#E8740E]/5" : "border-[#E8740E]/20 bg-[#FFF8F0]"}`}>
+                      <td colSpan={5} className="px-4 py-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          <div><p className={`text-[10px] uppercase ${mS}`}>Produto</p><input value={editFields.produto} onChange={(e) => setEditFields({ ...editFields, produto: e.target.value })} className={`${inputCls} w-full`} /></div>
+                          <div><p className={`text-[10px] uppercase ${mS}`}>Serial</p><input value={editFields.serial_no} onChange={(e) => setEditFields({ ...editFields, serial_no: e.target.value })} className={`${inputCls} w-full font-mono`} /></div>
+                          <div><p className={`text-[10px] uppercase ${mS}`}>IMEI</p><input value={editFields.imei} onChange={(e) => setEditFields({ ...editFields, imei: e.target.value })} className={`${inputCls} w-full font-mono`} /></div>
+                          <div><p className={`text-[10px] uppercase ${mS}`}>Cor</p><input value={editFields.cor} onChange={(e) => setEditFields({ ...editFields, cor: e.target.value })} className={`${inputCls} w-full`} /></div>
+                          <div><p className={`text-[10px] uppercase ${mS}`}>Custo (R$)</p><input type="number" value={editFields.custo_unitario} onChange={(e) => setEditFields({ ...editFields, custo_unitario: e.target.value })} className={`${inputCls} w-full`} /></div>
+                          <div className="flex items-end gap-2">
+                            <button onClick={saveEdit} disabled={saving} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] disabled:opacity-50">{saving ? "..." : "Salvar"}</button>
+                            <button onClick={() => setEditingId(null)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cancelar</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3">
+          <button onClick={() => setEntradaView(null)} className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>Fechar</button>
+        </div>
+      </div>
     </div>
   );
 }
