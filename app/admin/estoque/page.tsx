@@ -2246,45 +2246,29 @@ export default function EstoquePage() {
                                           );
                                         })()}
                                         <button
-                                          onClick={() => handleDuplicar(p)}
-                                          className={`p-1.5 rounded-lg ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F2F2F7]"} text-[#86868B] hover:text-[#E8740E] transition-colors`}
-                                          title="Duplicar"
-                                        ><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></button>
-                                        {editingCat[p.id] !== undefined ? (
-                                          <select
-                                            value={editingCat[p.id]}
-                                            onChange={async (e) => {
-                                              const newCat = e.target.value;
-                                              if (newCat && newCat !== p.categoria) {
-                                                await fetch("/api/estoque", {
-                                                  method: "PATCH",
-                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                                  body: JSON.stringify({ id: p.id, categoria: newCat }),
-                                                });
-                                                setEstoque((prev) => prev.map((r) => r.id === p.id ? { ...r, categoria: newCat } : r));
-                                                setMsg(`${p.produto} movido para ${newCat}`);
-                                              }
-                                              const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec);
-                                            }}
-                                            onBlur={() => { const ec = { ...editingCat }; delete ec[p.id]; setEditingCat(ec); }}
-                                            className={`px-1.5 py-1 rounded-lg border border-[#E8740E] text-[11px] ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`}
-                                            autoFocus
-                                          >
-                                            <option value="">Mover para...</option>
-                                            {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
-                                          </select>
-                                        ) : (
-                                          <button
-                                            onClick={() => setEditingCat({ ...editingCat, [p.id]: p.categoria })}
-                                            className={`p-1.5 rounded-lg ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F2F2F7]"} text-[#86868B] hover:text-[#E8740E] transition-colors`}
-                                            title="Mover categoria"
-                                          ><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg></button>
-                                        )}
-                                        <button onClick={async () => {
+                                          onClick={(e) => { e.stopPropagation(); setDetailProduct(p); }}
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#F5A623] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                                        >
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                          Ver
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleDuplicar(p); }}
+                                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#98989D] hover:bg-[#4A4A4C] hover:text-white" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] hover:text-[#1D1D1F]"}`}
+                                        >
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                          Duplicar
+                                        </button>
+                                        <button onClick={async (e) => {
+                                          e.stopPropagation();
                                           if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
                                           await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id }) });
                                           setEstoque((prev) => prev.filter((r) => r.id !== p.id));
-                                        }} className={`p-1.5 rounded-lg ${dm ? "hover:bg-red-900/30" : "hover:bg-red-50"} text-[#86868B] hover:text-red-500 transition-colors`}><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                        }} className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-red-400 hover:bg-red-500 hover:text-white" : "bg-red-50 text-red-400 hover:bg-red-500 hover:text-white"}`}
+                                        >
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                          Excluir
+                                        </button>
                                         </div>
                                       </td>
                                     </tr>
