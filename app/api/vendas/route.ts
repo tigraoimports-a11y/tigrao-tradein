@@ -250,6 +250,30 @@ export async function PATCH(req: NextRequest) {
     }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
   }
 
+  // Se tem reajustes, sincronizar com tabela reajustes (para relatório da noite)
+  if (fields.reajustes && Array.isArray(fields.reajustes) && data?.[0]) {
+    const venda = data[0];
+    // Deletar reajustes antigos desta venda
+    await supabase.from("reajustes").delete().eq("venda_ref", id);
+    // Inserir todos os reajustes atuais
+    const reajInserts = fields.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string }) => ({
+      data: r.data || hojeBR(),
+      cliente: venda.cliente || "?",
+      motivo: r.motivo || "",
+      valor: r.valor,
+      banco: r.banco || null,
+      venda_ref: id,
+    }));
+    if (reajInserts.length > 0) {
+      await supabase.from("reajustes").insert(reajInserts);
+    }
+    // Recalcular saldo do dia do reajuste (pode ser diferente do dia da venda)
+    const reajDatas = [...new Set(reajInserts.map((r: { data: string }) => r.data))];
+    for (const d of reajDatas) {
+      recalcularSaldoDia(supabase, d).catch(() => {});
+    }
+  }
+
   // Recalcular saldos do dia automaticamente
   const vendaData = data?.[0]?.data || fields.data;
   if (vendaData) recalcularSaldoDia(supabase, vendaData).catch(() => {});
