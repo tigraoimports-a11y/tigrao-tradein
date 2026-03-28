@@ -1729,17 +1729,23 @@ export default function VendasPage() {
                                 const isSelected = estoqueId === p.id;
                                 const cor = p.cor || extractCor(p.produto);
                                 return (
-                                  <div key={p.id} className="relative group">
+                                  <div key={p.id}>
                                     <button
                                       onClick={() => {
-                                        setEstoqueId(p.id);
-                                        set("produto", p.produto);
-                                        set("custo", String(p.custo_unitario));
-                                        if (p.fornecedor) set("fornecedor", p.fornecedor);
-                                        if (p.serial_no) set("serial_no", p.serial_no);
-                                        if (p.imei) set("imei", p.imei);
+                                        if (isSelected) {
+                                          // Desselecionar
+                                          setEstoqueId("");
+                                          set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
+                                        } else {
+                                          setEstoqueId(p.id);
+                                          set("produto", p.produto);
+                                          set("custo", String(p.custo_unitario));
+                                          if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                          if (p.serial_no) set("serial_no", p.serial_no);
+                                          if (p.imei) set("imei", p.imei);
+                                        }
                                       }}
-                                      className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                                      className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
                                         isSelected
                                           ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
                                           : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] hover:shadow-sm`
@@ -1751,18 +1757,23 @@ export default function VendasPage() {
                                         {!cor && !p.serial_no && <span>—</span>}
                                       </div>
                                     </button>
-                                    {/* Popup ao passar mouse */}
-                                    <div className={`absolute bottom-full left-0 mb-2 w-64 p-3 rounded-xl shadow-xl border z-30 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}>
-                                      <p className="text-xs font-bold mb-2">{p.produto}</p>
-                                      <div className="space-y-1 text-[11px]">
-                                        {p.serial_no && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial:</span> <span className="font-mono text-purple-500">{p.serial_no}</span></p>}
-                                        {p.imei && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI:</span> <span className="font-mono text-[#0071E3]">{p.imei}</span></p>}
-                                        {cor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor:</span> {cor}</p>}
-                                        <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo:</span> <span className="font-semibold text-green-600">{fmt(p.custo_unitario)}</span></p>
-                                        {p.fornecedor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor:</span> {p.fornecedor}</p>}
-                                        <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Tipo:</span> {p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p>
+                                    {/* Detalhes ao selecionar */}
+                                    {isSelected && (
+                                      <div className={`mt-2 p-3 rounded-xl border text-[11px] space-y-1.5 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#FFF8F0] border-[#E8740E]/20 text-[#1D1D1F]"}`}>
+                                        <p className="text-xs font-bold">{p.produto}</p>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                          {p.serial_no && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial:</span> <span className="font-mono text-purple-500">{p.serial_no}</span></p>}
+                                          {p.imei && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI:</span> <span className="font-mono text-[#0071E3]">{p.imei}</span></p>}
+                                          {cor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor:</span> {cor}</p>}
+                                          <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo:</span> <span className="font-semibold text-green-600">{fmt(p.custo_unitario)}</span></p>
+                                          {p.fornecedor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor:</span> {p.fornecedor}</p>}
+                                          <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Condicao:</span> {p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} className="text-[10px] text-red-500 hover:text-red-700 font-semibold mt-1">
+                                          ✕ Remover selecao
+                                        </button>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                 );
                               })}
