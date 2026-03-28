@@ -62,10 +62,29 @@ export async function recalcularSaldoDia(
     .eq("recebimento", "D+0");
 
   const d0 = (vendasD0 ?? []) as Venda[];
-  const pix_itau = d0.filter((v) => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  const pix_inf = d0.filter((v) => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  const pix_mp = d0.filter((v) => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido), 0);
-  const pix_esp = d0.filter((v) => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido), 0);
+  let pix_itau = d0.filter((v) => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido), 0);
+  let pix_inf = d0.filter((v) => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido), 0);
+  let pix_mp = d0.filter((v) => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido), 0);
+  let pix_esp = d0.filter((v) => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido), 0);
+
+  // 2b. Entradas PIX/espécie de vendas D+1 de hoje (PIX entra D+0, cartão D+1)
+  const { data: vendasD1Hoje } = await supabase
+    .from("vendas")
+    .select("*")
+    .eq("data", dataISO)
+    .eq("recebimento", "D+1");
+
+  for (const v of (vendasD1Hoje ?? []) as Venda[]) {
+    const pixVal = Number(v.entrada_pix || 0);
+    const espVal = Number(v.entrada_especie || 0);
+    const bancoPix = v.banco_pix || v.banco || "";
+    if (pixVal > 0) {
+      if (bancoPix === "ITAU") pix_itau += pixVal;
+      else if (bancoPix === "INFINITE") pix_inf += pixVal;
+      else if (bancoPix === "MERCADO_PAGO") pix_mp += pixVal;
+    }
+    if (espVal > 0) pix_esp += espVal;
+  }
 
   // 3. Créditos D+1 que caem neste dia
   const hoje = new Date(dataISO + "T12:00:00");

@@ -388,12 +388,26 @@ export async function POST(req: NextRequest) {
         lines.push(``);
         lines.push(`──────────────────`);
 
-        // 5. RECEBIDO ATÉ AGORA (D+0)
+        // 5. RECEBIDO ATÉ AGORA (D+0 + entradas PIX de vendas D+1)
         const vendasD0P = vp.filter(v => v.recebimento === "D+0");
-        const pixItauP = vendasD0P.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixInfP = vendasD0P.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixMpP = vendasD0P.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
-        const pixEspP = vendasD0P.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        let pixItauP = vendasD0P.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        let pixInfP = vendasD0P.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        let pixMpP = vendasD0P.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+        let pixEspP = vendasD0P.filter(v => v.banco === "ESPECIE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
+
+        // Somar entradas PIX/espécie de vendas D+1 (PIX entra no D+0)
+        const vendasD1P = vp.filter(v => v.recebimento === "D+1");
+        for (const v of vendasD1P) {
+          const pixVal = Number(v.entrada_pix || 0);
+          const espVal = Number(v.entrada_especie || 0);
+          const bancoPix = v.banco_pix || v.banco || "";
+          if (pixVal > 0) {
+            if (bancoPix === "ITAU") pixItauP += pixVal;
+            else if (bancoPix === "INFINITE") pixInfP += pixVal;
+            else if (bancoPix === "MERCADO_PAGO") pixMpP += pixVal;
+          }
+          if (espVal > 0) pixEspP += espVal;
+        }
 
         // Sinais antecipados
         const totalSinal = vp.reduce((s, v) => s + Number(v.sinal_antecipado || 0), 0);

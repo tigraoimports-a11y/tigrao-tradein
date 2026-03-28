@@ -115,10 +115,29 @@ export async function gerarNoite(
     .eq("recebimento", "D+0");
 
   const d0 = (vendasHoje ?? []) as Venda[];
-  const pix_itau = sumByBanco(d0, "ITAU");
-  const pix_inf = sumByBanco(d0, "INFINITE");
-  const pix_mp = sumByBanco(d0, "MERCADO_PAGO");
-  const pix_esp = sumByBanco(d0, "ESPECIE");
+  let pix_itau = sumByBanco(d0, "ITAU");
+  let pix_inf = sumByBanco(d0, "INFINITE");
+  let pix_mp = sumByBanco(d0, "MERCADO_PAGO");
+  let pix_esp = sumByBanco(d0, "ESPECIE");
+
+  // 2b. Entradas PIX/espécie de vendas D+1 de hoje (PIX entra no D+0, cartão no D+1)
+  const { data: vendasD1Hoje } = await supabase
+    .from("vendas")
+    .select("*")
+    .eq("data", dataISO)
+    .eq("recebimento", "D+1");
+
+  for (const v of (vendasD1Hoje ?? []) as Venda[]) {
+    const pixVal = Number(v.entrada_pix || 0);
+    const espVal = Number(v.entrada_especie || 0);
+    const bancoPix = v.banco_pix || v.banco || "";
+    if (pixVal > 0) {
+      if (bancoPix === "ITAU") pix_itau += pixVal;
+      else if (bancoPix === "INFINITE") pix_inf += pixVal;
+      else if (bancoPix === "MERCADO_PAGO") pix_mp += pixVal;
+    }
+    if (espVal > 0) pix_esp += espVal;
+  }
 
   // 3. Créditos D+1 de dias anteriores que creditam hoje
   const hoje = new Date(dataISO + "T12:00:00");
