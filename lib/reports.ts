@@ -87,10 +87,10 @@ export async function gerarNoite(
   let itau_base = Number(saldoRow?.itau_base ?? 0);
   let inf_base = Number(saldoRow?.inf_base ?? 0);
   let mp_base = Number(saldoRow?.mp_base ?? 0);
-  let esp_especie_base = Number(saldoRow?.esp_especie ?? 0);
+  let esp_especie_base = Number(saldoRow?.esp_especie_base ?? saldoRow?.esp_especie ?? 0);
 
   // Se não tem saldo para hoje ou bases são todas zero, carregar fechamento anterior
-  if (!saldoRow || (itau_base === 0 && inf_base === 0 && mp_base === 0)) {
+  if (!saldoRow || (itau_base === 0 && inf_base === 0 && mp_base === 0 && esp_especie_base === 0)) {
     const { data: prevSaldo } = await supabase
       .from("saldos_bancarios")
       .select("esp_itau, esp_inf, esp_mp, esp_especie")

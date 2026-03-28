@@ -116,6 +116,7 @@ export interface SaldoBancario {
   esp_inf: number;
   esp_mp: number;
   esp_especie: number;
+  esp_especie_base?: number;
 }
 
 // Relatórios

@@ -63,8 +63,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: dataISO, itau_base, inf_base, mp_base, esp_especie } = await req.json();
+  const { data: dataISO, itau_base, inf_base, mp_base, esp_especie, esp_especie_base } = await req.json();
   if (!dataISO) return NextResponse.json({ error: "data required" }, { status: 400 });
+
+  // esp_especie_base é o campo correto; esp_especie é mantido por compatibilidade
+  const baseEspecie = esp_especie_base ?? esp_especie ?? 0;
 
   const { error } = await supabase.from("saldos_bancarios").upsert(
     {
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
       itau_base: itau_base ?? 0,
       inf_base: inf_base ?? 0,
       mp_base: mp_base ?? 0,
-      esp_especie: esp_especie ?? 0,
+      esp_especie_base: baseEspecie,
     },
     { onConflict: "data" }
   );

@@ -34,10 +34,10 @@ export async function recalcularSaldoDia(
   let itau_base = Number(saldoRow?.itau_base ?? 0);
   let inf_base = Number(saldoRow?.inf_base ?? 0);
   let mp_base = Number(saldoRow?.mp_base ?? 0);
-  let esp_especie_base = Number(saldoRow?.esp_especie ?? 0);
+  let esp_especie_base = Number(saldoRow?.esp_especie_base ?? saldoRow?.esp_especie ?? 0);
 
   // Se bases são todas zero, carregar fechamento do dia anterior
-  if (!saldoRow || (itau_base === 0 && inf_base === 0 && mp_base === 0)) {
+  if (!saldoRow || (itau_base === 0 && inf_base === 0 && mp_base === 0 && esp_especie_base === 0)) {
     const { data: prevSaldo } = await supabase
       .from("saldos_bancarios")
       .select("esp_itau, esp_inf, esp_mp, esp_especie")
@@ -182,16 +182,35 @@ export async function recalcularSaldoDia(
   const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp + dep_mp;
   const esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp - dep_esp_total;
 
-  // 7. Gravar
-  await supabase.from("saldos_bancarios").upsert({
-    data: dataISO,
-    itau_base,
-    inf_base,
-    mp_base,
-    esp_itau,
-    esp_inf,
-    esp_mp,
-    esp_especie,
-    manual: false,
-  }, { onConflict: "data" });
+  // 7. Gravar — só atualiza campos de fechamento (esp_*), nunca sobrescreve bases
+  const { data: existing } = await supabase
+    .from("saldos_bancarios")
+    .select("id")
+    .eq("data", dataISO)
+    .single();
+
+  if (existing) {
+    // Registro já existe: só atualiza fechamentos
+    await supabase.from("saldos_bancarios").update({
+      esp_itau,
+      esp_inf,
+      esp_mp,
+      esp_especie,
+      manual: false,
+    }).eq("data", dataISO);
+  } else {
+    // Registro novo: cria com bases e fechamentos
+    await supabase.from("saldos_bancarios").insert({
+      data: dataISO,
+      itau_base,
+      inf_base,
+      mp_base,
+      esp_especie_base: esp_especie_base,
+      esp_itau,
+      esp_inf,
+      esp_mp,
+      esp_especie,
+      manual: false,
+    });
+  }
 }

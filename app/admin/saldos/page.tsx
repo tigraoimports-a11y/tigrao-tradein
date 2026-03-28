@@ -61,7 +61,7 @@ export default function SaldosPage() {
           setItau(toDisplayBR(String(s.itau_base || 0)));
           setInf(toDisplayBR(String(s.inf_base || 0)));
           setMp(toDisplayBR(String(s.mp_base || 0)));
-          setEsp(toDisplayBR(String(s.esp_especie || 0)));
+          setEsp(toDisplayBR(String(s.esp_especie_base ?? s.esp_especie ?? 0)));
         } else {
           setItau("0,00"); setInf("0,00"); setMp("0,00"); setEsp("0,00");
         }
@@ -83,7 +83,7 @@ export default function SaldosPage() {
         itau_base: parseFloat(fromDisplayBR(itau)) || 0,
         inf_base: parseFloat(fromDisplayBR(inf)) || 0,
         mp_base: parseFloat(fromDisplayBR(mp)) || 0,
-        esp_especie: parseFloat(fromDisplayBR(esp)) || 0,
+        esp_especie_base: parseFloat(fromDisplayBR(esp)) || 0,
       }),
     });
     const json = await res.json();
