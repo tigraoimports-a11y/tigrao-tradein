@@ -2013,14 +2013,7 @@ export default function EstoquePage() {
                                   </td>
                                   <td className="px-4 py-2 text-xs text-white/50">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
-                                  <td className="px-2 py-2">
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); handleDuplicarProduto(prodItems); }}
-                                      className="px-2 py-1 rounded-lg text-[10px] font-medium bg-white/10 text-white/70 hover:text-[#E8740E] hover:bg-white/20 transition-colors"
-                                      title="Duplicar produto com mesmas cores"
-                                    >📋 Duplicar</button>
-                                  </td>
-                                  <td></td>
+                                  <td colSpan={2}></td>
                                 </tr>
                                 {/* Linhas de cada cor */}
                                 {prodItems.map((p) => {
@@ -2251,13 +2244,6 @@ export default function EstoquePage() {
                                         >
                                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                           Ver
-                                        </button>
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); handleDuplicar(p); }}
-                                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#98989D] hover:bg-[#4A4A4C] hover:text-white" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] hover:text-[#1D1D1F]"}`}
-                                        >
-                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                          Duplicar
                                         </button>
                                         <button onClick={async (e) => {
                                           e.stopPropagation();
