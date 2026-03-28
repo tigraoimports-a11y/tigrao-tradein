@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { proximoDiaUtil } from "@/lib/business-days";
+import { getTaxa, calcularLiquido } from "@/lib/taxas";
 
 const fmt = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -27,6 +28,12 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      // Trigger server-side saldo recalculation before fetching data
+      await fetch("/api/saldos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+        body: JSON.stringify({ data: hoje }),
+      }).catch(() => {});
       const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
         fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
@@ -194,7 +201,7 @@ export default function DashboardPage() {
       contados.add(chave);
       const comprovante = Number(v.valor_comprovante || 0);
       const val = comprovante > 0
-        ? comprovante * 0.98
+        ? calcularLiquido(comprovante, getTaxa(v.banco || "", v.bandeira || "", Number(v.qnt_parcelas || 1), v.forma || ""))
         : Math.max(0, (v.preco_vendido || 0) - (v.entrada_pix || 0) - (v.entrada_especie || 0) - Number(v.produto_na_troca || 0));
       const banco = v.banco as keyof typeof acc;
       if (banco in acc) acc[banco] += val;
