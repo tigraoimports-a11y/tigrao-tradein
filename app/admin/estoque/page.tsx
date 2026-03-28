@@ -88,6 +88,7 @@ interface ProdutoEstoque {
   fornecedor: string | null;
   imei: string | null;
   serial_no: string | null;
+  data_entrada: string | null;
 }
 
 interface ImeiSearchResult {
