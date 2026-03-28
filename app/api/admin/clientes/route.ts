@@ -80,13 +80,25 @@ export async function GET(req: NextRequest) {
     }[];
   }>();
 
+  // Mapa de CPF → chave do clienteMap (para unificar mesma pessoa com nomes diferentes)
+  const cpfToKey = new Map<string, string>();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const v of vendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
-    const key = nome.toUpperCase();
 
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
+    const cpf = (v.cpf || "").trim();
+
+    // Determinar a chave: se tem CPF e já vimos esse CPF, usar a mesma chave
+    let key: string;
+    if (cpf && cpfToKey.has(cpf)) {
+      key = cpfToKey.get(cpf)!;
+    } else {
+      key = nome.toUpperCase();
+      if (cpf) cpfToKey.set(cpf, key);
+    }
 
     if (!clienteMap.has(key)) {
       clienteMap.set(key, {
@@ -117,6 +129,8 @@ export async function GET(req: NextRequest) {
     }
     if (v.data < c.cliente_desde) c.cliente_desde = v.data;
     if (isAtacado) c.is_lojista = true;
+    // Sempre usar o nome mais completo
+    if (nome.length > c.nome.length) c.nome = nome;
     // Preencher dados pessoais mais recentes
     if (v.cpf && !c.cpf) c.cpf = v.cpf;
     if (v.cnpj && !c.cnpj) c.cnpj = v.cnpj;
