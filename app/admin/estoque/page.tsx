@@ -2392,7 +2392,7 @@ export default function EstoquePage() {
                             if (json.error) { setMsg("Erro: " + json.error); return; }
                             setMsg("✅ Movido para estoque!");
                             setDetailProduct(null);
-                            fetchData();
+                            fetchEstoque();
                           } catch { setMsg("Erro ao mover"); }
                         }}
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
