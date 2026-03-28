@@ -120,22 +120,33 @@ export async function POST(req: NextRequest) {
 
   // Descontar do estoque se veio de um produto cadastrado
   if (estoqueId) {
-    const { data: item } = await supabase.from("estoque").select("qnt,produto").eq("id", estoqueId).single();
+    const { data: item } = await supabase.from("estoque").select("qnt,produto,tipo").eq("id", estoqueId).single();
     if (item) {
       const novaQnt = Math.max(0, Number(item.qnt) - 1);
-      await supabase.from("estoque").update({
-        qnt: novaQnt,
-        status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
-        updated_at: new Date().toISOString(),
-      }).eq("id", estoqueId);
-      // Log remoção automática do estoque
-      await logActivity(
-        usuario,
-        "Removeu do estoque (auto)",
-        `${item.produto || body.produto || "?"} — restam ${novaQnt} un.`,
-        "estoque",
-        estoqueId
-      );
+      if (novaQnt === 0 && item.tipo === "SEMINOVO") {
+        // Seminovos vendidos são removidos do estoque (não reabastecidos)
+        await supabase.from("estoque").delete().eq("id", estoqueId);
+        await logActivity(
+          usuario,
+          "Removeu seminovo do estoque (auto)",
+          `${item.produto || body.produto || "?"} — vendido, removido do estoque`,
+          "estoque",
+          estoqueId
+        );
+      } else {
+        await supabase.from("estoque").update({
+          qnt: novaQnt,
+          status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+          updated_at: new Date().toISOString(),
+        }).eq("id", estoqueId);
+        await logActivity(
+          usuario,
+          "Removeu do estoque (auto)",
+          `${item.produto || body.produto || "?"} — restam ${novaQnt} un.`,
+          "estoque",
+          estoqueId
+        );
+      }
     }
   }
 
