@@ -238,7 +238,7 @@ export default function StepQuote(p: StepQuoteProps) {
 
       <button onClick={onCotarOutro}
         className="w-full py-4 rounded-2xl text-[15px] font-semibold transition-all duration-200 active:scale-[0.98]"
-        style={{ color: "var(--ti-accent)", backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+        style={{ color: "#fff", backgroundColor: "#f97316", border: "1px solid #f97316" }}>
         Cotar outro modelo
       </button>
 
@@ -269,7 +269,7 @@ export default function StepQuote(p: StepQuoteProps) {
       {!showFeedback ? (
         <button onClick={() => setShowFeedback(true)}
           className="w-full py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
-          style={{ color: "var(--ti-muted)", backgroundColor: "var(--ti-btn-bg)", border: "1px solid var(--ti-btn-border)" }}>
+          style={{ color: "#fff", backgroundColor: "#ef4444", border: "1px solid #ef4444" }}>
           Não gostei. Sair
         </button>
       ) : (
