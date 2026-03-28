@@ -9,14 +9,12 @@ import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName } from "@/lib/produto-specs";
 
-// Formata número com separador de milhares: 31434 → "31.434"
-const fmtNum = (v: string) => {
-  const clean = v.replace(/[^\d,.-]/g, "").replace(/\./g, "");
-  const num = parseFloat(clean.replace(",", "."));
-  if (isNaN(num)) return v;
-  return num.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+/** Converte string BR (ex: "12.250,89" ou "128,89") para número */
+const parseBR = (v: string): number => {
+  if (!v) return 0;
+  const clean = v.replace(/\./g, "").replace(",", ".");
+  return parseFloat(clean) || 0;
 };
-const parseNum = (v: string) => v.replace(/\./g, "").replace(",", ".");
 
 const BANCOS: Banco[] = ["ITAU", "INFINITE", "MERCADO_PAGO", "ESPECIE"];
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
@@ -225,13 +223,13 @@ export default function GastosPage() {
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
 
-  const totalForm = BANCOS.reduce((s, b) => s + (parseFloat(bancoValores[b]) || 0), 0);
+  const totalForm = BANCOS.reduce((s, b) => s + (parseBR(bancoValores[b]) || 0), 0);
   const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
 
   const isFornecedor = form.categoria === "FORNECEDOR";
 
   const handleSubmit = async () => {
-    const filled = BANCOS.filter((b) => parseFloat(bancoValores[b]) > 0);
+    const filled = BANCOS.filter((b) => parseBR(bancoValores[b]) > 0);
     if (filled.length === 0) {
       setMsg("Preencha o valor em pelo menos um banco");
       return;
@@ -256,12 +254,12 @@ export default function GastosPage() {
     // Montar gastos (single ou multi-banco)
     let gastoItems;
     if (filled.length === 1) {
-      gastoItems = { ...base, valor: parseFloat(bancoValores[filled[0]]), banco: filled[0] };
+      gastoItems = { ...base, valor: parseBR(bancoValores[filled[0]]), banco: filled[0] };
     } else {
       const grupoId = crypto.randomUUID();
       gastoItems = filled.map((b) => ({
         ...base,
-        valor: parseFloat(bancoValores[b]),
+        valor: parseBR(bancoValores[b]),
         banco: b,
         grupo_id: grupoId,
       }));
@@ -337,7 +335,7 @@ export default function GastosPage() {
     const grupo = grupos.find((g) => g.key === editingKey);
     if (!grupo) { setEditSaving(false); return; }
 
-    const filled = BANCOS.filter((b) => parseFloat(editBancoValores[b]) > 0);
+    const filled = BANCOS.filter((b) => parseBR(editBancoValores[b]) > 0);
     if (filled.length === 0) { alert("Preencha o valor em pelo menos um banco"); setEditSaving(false); return; }
 
     const base = {
@@ -356,7 +354,7 @@ export default function GastosPage() {
       if (filled.length === 1) {
         payload = {
           grupo_id: grupo.grupo_id,
-          items: [{ ...base, valor: parseFloat(editBancoValores[filled[0]]), banco: filled[0] }],
+          items: [{ ...base, valor: parseBR(editBancoValores[filled[0]]), banco: filled[0] }],
         };
       } else {
         const novoGrupoId = crypto.randomUUID();
@@ -364,7 +362,7 @@ export default function GastosPage() {
           grupo_id: grupo.grupo_id,
           items: filled.map((b) => ({
             ...base,
-            valor: parseFloat(editBancoValores[b]),
+            valor: parseBR(editBancoValores[b]),
             banco: b,
             grupo_id: novoGrupoId,
           })),
@@ -375,7 +373,7 @@ export default function GastosPage() {
         payload = {
           id: grupo.items[0].id,
           ...base,
-          valor: parseFloat(editBancoValores[filled[0]]),
+          valor: parseBR(editBancoValores[filled[0]]),
           banco: filled[0],
         };
       } else {
@@ -387,7 +385,7 @@ export default function GastosPage() {
         const novoGrupoId = crypto.randomUUID();
         const items = filled.map((b) => ({
           ...base,
-          valor: parseFloat(editBancoValores[b]),
+          valor: parseBR(editBancoValores[b]),
           banco: b,
           grupo_id: novoGrupoId,
         }));
@@ -453,7 +451,7 @@ export default function GastosPage() {
       {BANCOS.map((b) => (
         <div key={b}>
           <p className={labelCls}>{b.replace("_", " ")}</p>
-          <input type="text" inputMode="decimal" placeholder="0" value={valores[b] ? fmtNum(valores[b]) : ""} onChange={(e) => onChange(b, parseNum(e.target.value))} className={cls} />
+          <input type="text" inputMode="decimal" placeholder="0" value={valores[b]} onChange={(e) => onChange(b, e.target.value)} className={cls} />
         </div>
       ))}
     </div>
