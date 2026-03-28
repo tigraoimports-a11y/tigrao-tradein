@@ -174,7 +174,39 @@ export async function GET(req: NextRequest) {
       vendas: v.vendas,
     }));
 
-  // ─── 5. KPIs ───
+  // ─── 5. Top Produtos por Mes ───
+  const MESES_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const mesProdutoMap: Record<string, Record<string, { qtd: number; receita: number }>> = {};
+
+  for (const v of rows) {
+    if (!v.data) continue;
+    const d = new Date(v.data + "T12:00:00");
+    const mesNum = d.getMonth() + 1;
+    const ano = d.getFullYear();
+    const key = `${ano}-${String(mesNum).padStart(2, "0")}`;
+    const produto = v.produto || "N/A";
+
+    if (!mesProdutoMap[key]) mesProdutoMap[key] = {};
+    if (!mesProdutoMap[key][produto]) mesProdutoMap[key][produto] = { qtd: 0, receita: 0 };
+    mesProdutoMap[key][produto].qtd += 1;
+    mesProdutoMap[key][produto].receita += Number(v.preco_vendido) || 0;
+  }
+
+  const produtosPorMes = Object.entries(mesProdutoMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, produtos]) => {
+      const [anoStr, mesStr] = key.split("-");
+      const ano = parseInt(anoStr);
+      const mesNum = parseInt(mesStr);
+      const mes = `${MESES_LABELS[mesNum - 1]}/${ano}`;
+      const top5 = Object.entries(produtos)
+        .map(([produto, { qtd, receita }]) => ({ produto, qtd, receita }))
+        .sort((a, b) => b.qtd - a.qtd)
+        .slice(0, 5);
+      return { mes, mesNum, ano, produtos: top5 };
+    });
+
+  // ─── 6. KPIs ───
   // Melhor dia da semana
   const melhorDia = porDiaSemana.reduce((best, d) => d.faturamento > best.faturamento ? d : best, porDiaSemana[0]);
 
@@ -207,6 +239,7 @@ export async function GET(req: NextRequest) {
     porHora,
     topProdutos,
     faturamentoSemanal,
+    produtosPorMes,
     kpis: {
       melhorDia: {
         dia: melhorDia?.diaFull || "N/A",

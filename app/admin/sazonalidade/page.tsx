@@ -40,6 +40,19 @@ interface SemanaData {
   vendas: number;
 }
 
+interface ProdutoMesItem {
+  produto: string;
+  qtd: number;
+  receita: number;
+}
+
+interface ProdutosPorMes {
+  mes: string;
+  mesNum: number;
+  ano: number;
+  produtos: ProdutoMesItem[];
+}
+
 interface KPIs {
   melhorDia: { dia: string; faturamento: number; faturamentoMedio: number };
   horarioPico: { inicio: number; fim: number; pct: number; vendas: number };
@@ -54,6 +67,7 @@ interface SazonalidadeData {
   porHora: HoraData[];
   topProdutos: TopProduto[];
   faturamentoSemanal: SemanaData[];
+  produtosPorMes: ProdutosPorMes[];
   kpis: KPIs;
 }
 
@@ -427,6 +441,59 @@ export default function SazonalidadePage() {
               </table>
             </div>
           </Section>
+
+          {/* Top Produtos por Mes */}
+          {data.produtosPorMes.length > 0 && (
+            <Section title="Top Produtos por Mes" darkMode={darkMode}>
+              <p className={`text-xs mb-4 ${darkMode ? "text-[#777]" : "text-[#86868B]"}`}>
+                Produto mais vendido em cada mes — ideal para planejar estoque
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={`border-b ${darkMode ? "border-[#2A2A2A]" : "border-[#E5E5EA]"}`}>
+                      <th className={`text-left py-2 font-medium ${darkMode ? "text-[#999]" : "text-[#86868B]"}`}>Mes</th>
+                      <th className={`text-left py-2 font-medium ${darkMode ? "text-[#999]" : "text-[#86868B]"}`}>Top Produto</th>
+                      <th className={`text-right py-2 font-medium ${darkMode ? "text-[#999]" : "text-[#86868B]"}`}>Qtd</th>
+                      <th className={`text-right py-2 font-medium ${darkMode ? "text-[#999]" : "text-[#86868B]"}`}>Receita</th>
+                      <th className={`text-left py-2 pl-6 font-medium ${darkMode ? "text-[#999]" : "text-[#86868B]"}`}>Outros destaques</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.produtosPorMes.map((m, i) => {
+                      const top = m.produtos[0];
+                      const rest = m.produtos.slice(1);
+                      return (
+                        <tr key={i} className={`border-b transition-colors ${
+                          darkMode
+                            ? "border-[#1A1A1A] hover:bg-[#1A1A1A]"
+                            : "border-[#F0F0F0] hover:bg-[#F5F5F7]"
+                        }`}>
+                          <td className={`py-3 font-semibold ${darkMode ? "text-[#F5F5F5]" : "text-[#1D1D1F]"}`}>
+                            {m.mes}
+                          </td>
+                          <td className={`py-3 font-medium ${darkMode ? "text-[#E8740E]" : "text-[#E8740E]"}`}>
+                            {top?.produto || "—"}
+                          </td>
+                          <td className={`py-3 text-right ${darkMode ? "text-[#F5F5F5]" : "text-[#1D1D1F]"}`}>
+                            {top?.qtd || 0} un.
+                          </td>
+                          <td className={`py-3 text-right ${darkMode ? "text-[#F5F5F5]" : "text-[#1D1D1F]"}`}>
+                            {top ? fmt(top.receita) : "—"}
+                          </td>
+                          <td className={`py-3 pl-6 text-xs ${darkMode ? "text-[#777]" : "text-[#86868B]"}`}>
+                            {rest.length > 0
+                              ? rest.map((r) => `${r.produto} (${r.qtd})`).join(", ")
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
         </>
       )}
     </div>
