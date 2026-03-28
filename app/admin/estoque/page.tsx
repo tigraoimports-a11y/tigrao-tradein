@@ -221,6 +221,7 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  const [entradaView, setEntradaView] = useState<{ data: string; fornecedor: string; produtos: ProdutoEstoque[] } | null>(null);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
 
@@ -2382,7 +2383,21 @@ export default function EstoquePage() {
                       Criar Venda
                     </button>
                     <button
-                      onClick={() => { setDetailProduct(null); setTab("historico"); }}
+                      onClick={async () => {
+                        // Buscar produtos que entraram junto (mesmo fornecedor + mesma data)
+                        const dataRef = p.data_entrada || p.data_compra;
+                        const forn = p.fornecedor;
+                        if (!dataRef || !forn) { setMsg("Sem dados de entrada para este produto"); return; }
+                        try {
+                          const res = await fetch(`/api/estoque?action=entrada&data=${dataRef}&fornecedor=${encodeURIComponent(forn)}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } });
+                          const json = await res.json();
+                          if (json.data && json.data.length > 0) {
+                            setEntradaView({ data: dataRef, fornecedor: forn, produtos: json.data });
+                          } else {
+                            setMsg("Nenhum registro de entrada encontrado");
+                          }
+                        } catch { setMsg("Erro ao buscar entrada"); }
+                      }}
                       className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
@@ -2392,6 +2407,65 @@ export default function EstoquePage() {
                 </div>
               </div>
               <div className="h-4" />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal Ver Entrada — produtos que entraram juntos */}
+      {entradaView && (() => {
+        const { data, fornecedor, produtos } = entradaView;
+        const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
+        const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+        const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+        const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+        const totalCusto = produtos.reduce((s, p) => s + Number(p.custo_unitario || 0), 0);
+        return (
+          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEntradaView(null)} onKeyDown={(e) => { if (e.key === "Escape") setEntradaView(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
+            <div className={`w-full max-w-2xl mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                <div>
+                  <h3 className={`text-sm font-bold ${mP}`}>Entrada de Produtos</h3>
+                  <p className={`text-xs ${mS}`}>{data} — {fornecedor}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-semibold ${mS}`}>{produtos.length} itens | {fmt(totalCusto)}</span>
+                  <button onClick={() => setEntradaView(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
+                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Produto</th>
+                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Serial</th>
+                      <th className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Status</th>
+                      <th className={`px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${mS}`}>Custo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {produtos.map((p) => (
+                      <tr key={p.id} className={`border-b ${dm ? "border-[#3A3A3C] hover:bg-[#2C2C2E]" : "border-[#F0F0F5] hover:bg-[#FAFAFA]"} transition-colors cursor-pointer`}
+                        onClick={() => { setEntradaView(null); setDetailProduct(p); }}>
+                        <td className={`px-4 py-3 ${mP}`}>
+                          <div className="font-medium text-xs">{p.produto}</div>
+                          {p.cor && <span className={`text-[10px] ${mS}`}>{p.cor}</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-[11px] font-mono text-purple-500">{p.serial_no || "—"}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "VENDIDO" || p.status === "ESGOTADO" ? "bg-gray-100 text-gray-600" : "bg-yellow-100 text-yellow-700"}`}>{p.status}</span>
+                        </td>
+                        <td className={`px-4 py-3 text-right font-medium ${mP}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 py-3">
+                <button onClick={() => setEntradaView(null)} className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>Fechar</button>
+              </div>
             </div>
           </div>
         );

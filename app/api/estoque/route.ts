@@ -50,6 +50,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ estoque: estoqueItems ?? [], vendas: vendaItems ?? [] });
   }
 
+  // Buscar entrada (produtos do mesmo fornecedor + data)
+  if (action === "entrada") {
+    const data = searchParams.get("data");
+    const fornecedor = searchParams.get("fornecedor");
+    if (!data || !fornecedor) return NextResponse.json({ error: "data e fornecedor obrigatorios" }, { status: 400 });
+    let query = supabase.from("estoque").select("*")
+      .eq("fornecedor", fornecedor)
+      .order("produto");
+    // Tentar por data_entrada primeiro, senão data_compra
+    const { data: byEntrada } = await query.eq("data_entrada", data);
+    if (byEntrada && byEntrada.length > 0) {
+      return NextResponse.json({ data: byEntrada });
+    }
+    const { data: byCompra } = await supabase.from("estoque").select("*").eq("fornecedor", fornecedor).eq("data_compra", data).order("produto");
+    return NextResponse.json({ data: byCompra ?? [] });
+  }
+
   // Historico de movimentações
   if (action === "historico") {
     const limit = parseInt(searchParams.get("limit") || "100");
