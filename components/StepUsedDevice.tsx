@@ -301,8 +301,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
               const answeredYes = partsReplaced === "apple" || partsReplaced === "thirdParty";
               return <>
                 <div className="flex gap-2">
-                  <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">Não</Btn>
-                  <Btn sel={answeredYes} onClick={() => { if (!answeredYes) setPartsReplaced("apple"); tq("partsReplaced"); }}>Sim</Btn>
+                  <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success" className="flex-1">Não</Btn>
+                  <Btn sel={answeredYes} onClick={() => { if (!answeredYes) setPartsReplaced("apple"); tq("partsReplaced"); }} className="flex-1">Sim</Btn>
                 </div>
                 {answeredYes && (
                   <div className="mt-4">
