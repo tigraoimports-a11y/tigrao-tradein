@@ -110,7 +110,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "2px solid var(--ti-btn-border)" }}>
           <span className="text-[24px]">📦</span>
           {lbl.lacrado_label || "Lacrado"}
-          <span className="text-[11px] font-normal opacity-70">{lbl.lacrado_desc || "Novo, na caixa"}</span>
+          <span className="text-[11px] font-normal opacity-70">{lbl.lacrado_desc || "Novo, na caixa. 1 ano de garantia Apple, nota fiscal"}</span>
         </button>
         <button onClick={() => selectMode("seminovo")}
           className="py-5 rounded-2xl text-[15px] font-semibold transition-all duration-200 flex flex-col items-center gap-2"
@@ -119,7 +119,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
             : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "2px solid var(--ti-btn-border)" }}>
           <span className="text-[24px]">📱</span>
           {lbl.seminovo_label || "Seminovo"}
-          <span className="text-[11px] font-normal opacity-70">{lbl.seminovo_desc || "Revisado, com garantia"}</span>
+          <span className="text-[11px] font-normal opacity-70">{lbl.seminovo_desc || "Usado, revisado, com garantia de 3 meses, nota fiscal"}</span>
         </button>
       </div>
 

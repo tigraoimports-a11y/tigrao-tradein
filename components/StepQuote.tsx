@@ -55,7 +55,7 @@ export default function StepQuote(p: StepQuoteProps) {
 
   const hasSecond = !!(usedModel2 && usedStorage2);
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
-  const [sairLoading, setSairLoading] = useState(false); const [showFeedback, setShowFeedback] = useState(false);
+  const [sairLoading, setSairLoading] = useState(false); const [showFeedback, setShowFeedback] = useState(false); const [showAllParc, setShowAllParc] = useState(false);
   const [motivo, setMotivo] = useState("");
   const countdown = useCountdown(validadeHoras);
 
@@ -137,8 +137,19 @@ export default function StepQuote(p: StepQuoteProps) {
           <p className="text-[36px] font-bold" style={{ color: "var(--ti-success)" }}>{formatBRL(dif)}</p>
         </div>
 
+        {/* Installment preview: 12x and 21x */}
+        <div className="text-center space-y-1">
+          <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+            ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>12x de {formatBRL(Math.ceil(dif / 12))}</span> no cartão
+          </p>
+          <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+            ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>21x de {formatBRL(Math.ceil(dif / 21))}</span> no cartão
+          </p>
+        </div>
+
+        {/* Entrada PIX */}
         <div>
-          <p className="text-[11px] font-semibold tracking-wider uppercase mb-3 text-center" style={{ color: "var(--ti-muted)" }}>Entrada no PIX (opcional)</p>
+          <p className="text-[13px] font-medium mb-3 text-center" style={{ color: "var(--ti-text)" }}>Deseja dar uma entrada no PIX? Qual valor?</p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-medium" style={{ color: "var(--ti-muted)" }}>R$</span>
             <input type="number" inputMode="numeric" min={0} max={dif-1} placeholder="0" value={entradaStr}
@@ -153,38 +164,50 @@ export default function StepQuote(p: StepQuoteProps) {
           )}
         </div>
 
+        {/* Collapsible installment options */}
         <div>
-          <p className="text-[11px] font-semibold tracking-wider uppercase mb-3 text-center" style={{ color: "var(--ti-muted)" }}>
-            {temEnt ? "Parcelamento do restante" : "Parcelamento no cartao"}
-          </p>
-          <div className="relative">
-            <select value={parc} onChange={(e) => setParc(e.target.value)}
-              className="w-full appearance-none px-4 py-3.5 rounded-2xl text-[15px] cursor-pointer transition-colors" style={inputStyle}>
-              <option value="">Escolha o parcelamento...</option>
-              <option value="pix">PIX a vista — {formatBRL(dif)}</option>
-              {parcOpts.map((i) => <option key={i.parcelas} value={String(i.parcelas)}>{i.parcelas}x de {formatBRL(i.valorParcela)} (total: {formatBRL(i.total)})</option>)}
-            </select>
-            <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ti-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-            </div>
-          </div>
+          <button onClick={() => setShowAllParc(!showAllParc)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
+            style={{ color: "var(--ti-accent)", backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+            <span>Visualizar todos os parcelamentos</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ti-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: showAllParc ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
 
-          {instSel && (
-            <div className="mt-3 rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
-              {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
-                <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
-              </div>}
-              <div className="flex justify-between text-[13px] mb-2">
-                <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
-                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
+          {showAllParc && (
+            <div className="mt-3 space-y-3 animate-fadeIn">
+              <div className="relative">
+                <select value={parc} onChange={(e) => setParc(e.target.value)}
+                  className="w-full appearance-none px-4 py-3.5 rounded-2xl text-[15px] cursor-pointer transition-colors" style={inputStyle}>
+                  <option value="">Escolha o parcelamento...</option>
+                  <option value="pix">PIX a vista — {formatBRL(dif)}</option>
+                  {parcOpts.map((i) => <option key={i.parcelas} value={String(i.parcelas)}>{i.parcelas}x de {formatBRL(i.valorParcela)} (total: {formatBRL(i.total)})</option>)}
+                </select>
+                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ti-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>{formatBRL(instSel.total)}</span>
-              </div>
-              {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
-                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
-                <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
-              </div>}
+
+              {instSel && (
+                <div className="rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+                  {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
+                    <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
+                  </div>}
+                  <div className="flex justify-between text-[13px] mb-2">
+                    <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
+                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>{formatBRL(instSel.total)}</span>
+                  </div>
+                  {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
+                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
+                    <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
+                  </div>}
+                </div>
+              )}
             </div>
           )}
         </div>
