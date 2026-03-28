@@ -219,6 +219,7 @@ export default function EstoquePage() {
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
 
@@ -2033,8 +2034,8 @@ export default function EstoquePage() {
                                       onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
                                       onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                       onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      onClick={selectMode ? () => toggleSelect(p.id) : undefined}
-                                      className={`border-b ${borderLight} last:border-0 transition-colors ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"} ${selectMode ? "cursor-pointer" : ""}`}
+                                      onClick={selectMode ? () => toggleSelect(p.id) : () => setDetailProduct(p)}
+                                      className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                     >
                                       <td className="pl-2 py-2.5 select-none w-4">
                                         {tab === "acaminho" ? (
@@ -2348,6 +2349,55 @@ export default function EstoquePage() {
           </button>
         </div>
       )}
+
+      {/* Modal de detalhes do produto */}
+      {detailProduct && (() => {
+        const p = detailProduct;
+        const bgModal = dm ? "bg-[#1C1C1E]" : "bg-white";
+        const bgSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+        const txtP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+        const txtS = dm ? "text-[#98989D]" : "text-[#86868B]";
+        const isLacrado = p.tipo === "NOVO";
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailProduct(null)}>
+            <div className={`w-full max-w-lg mx-4 ${bgModal} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                <h3 className={`text-sm font-bold ${txtP}`}>Detalhes do Item {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
+                <button onClick={() => setDetailProduct(null)} className={`text-lg ${txtS} hover:text-[#E8740E]`}>✕</button>
+              </div>
+              <div className={`mx-4 mt-4 p-4 rounded-xl border ${bgSec}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Produto</p><p className={`text-[15px] font-bold ${txtP}`}>{p.produto}</p></div>
+                  <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Status</p><span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {p.serial_no && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Numero de Serie</p><button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className={`text-sm font-mono ${txtP} hover:text-[#E8740E] flex items-center gap-1`}>{p.serial_no}<svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>}
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Condicao</p><span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${isLacrado ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLacrado ? "Lacrado" : "Usado"}</span></div>
+                  {p.imei && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>IMEI</p><button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }} className={`text-sm font-mono ${txtP} hover:text-[#E8740E] flex items-center gap-1`}>{p.imei}<svg className="w-3 h-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>}
+                  {p.cor && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Cor</p><p className={`text-sm ${txtP}`}>{p.cor}</p></div>}
+                  {p.bateria && <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Bateria</p><p className={`text-sm ${txtP}`}>{p.bateria}%</p></div>}
+                </div>
+              </div>
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSec}`}>
+                <p className={`text-xs font-bold ${txtP} mb-3`}>Informacoes Financeiras</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Preco de Compra</p><p className={`text-sm font-bold ${txtP}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Balanco</p><p className="text-sm font-bold text-[#E8740E]">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Categoria</p><p className={`text-sm ${txtP}`}>{p.categoria}</p></div>
+                </div>
+              </div>
+              <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSec}`}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Data de Entrada</p><p className={`text-sm ${txtP}`}>{p.data_compra || "—"}</p></div>
+                  <div><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Fornecedor</p><p className={`text-sm ${txtP}`}>{p.fornecedor || "Nao informado"}</p></div>
+                </div>
+                {p.observacao && <div className="mt-3"><p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Observacao</p><p className={`text-sm ${txtP}`}>{p.observacao}</p></div>}
+              </div>
+              <div className="h-4" />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
