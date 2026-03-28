@@ -2382,12 +2382,13 @@ export default function EstoquePage() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className={`text-xs font-bold ${mP}`}>Operacoes Relacionadas</p>
                   <div className="flex gap-2 flex-wrap">
-                    {p.status === "PENDENTE" && (
+                    {(p.status === "PENDENTE" || p.tipo === "PENDENCIA") && (
                       <button
                         onClick={async () => {
                           if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
                           try {
-                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE" }) });
+                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo;
+                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo }) });
                             const json = await res.json();
                             if (json.error) { setMsg("Erro: " + json.error); return; }
                             setMsg("✅ Movido para estoque!");
