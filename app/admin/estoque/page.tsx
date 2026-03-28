@@ -2050,8 +2050,8 @@ export default function EstoquePage() {
                                         ) : (
                                           <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
                                         )}
-                                        {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>IMEI</span>}
-                                        {p.serial_no && <span className="ml-1.5 text-[10px] text-purple-500 font-mono" title={`SN: ${p.serial_no}`}>SN</span>}
+                                        {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>{p.imei}</span>}
+                                        {p.serial_no && <span className="ml-1.5 text-[10px] text-purple-500 font-mono" title={`SN: ${p.serial_no}`}>{p.serial_no}</span>}
                                       </td>
                                       {isPendenciasTab && (
                                         <td className="px-2 py-2.5 text-xs">
