@@ -2379,9 +2379,28 @@ export default function EstoquePage() {
               </div>
               {/* Operações Relacionadas */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className={`text-xs font-bold ${mP}`}>Operacoes Relacionadas</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {p.status === "PENDENTE" && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
+                          try {
+                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE" }) });
+                            const json = await res.json();
+                            if (json.error) { setMsg("Erro: " + json.error); return; }
+                            setMsg("✅ Movido para estoque!");
+                            setDetailProduct(null);
+                            fetchData();
+                          } catch { setMsg("Erro ao mover"); }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        Mover para Estoque
+                      </button>
+                    )}
                     <button
                       onClick={() => { setDetailProduct(null); window.location.href = `/admin/vendas?tab=nova&produto=${encodeURIComponent(p.produto)}&custo=${p.custo_unitario || 0}`; }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] transition-colors"
