@@ -147,7 +147,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -1722,23 +1722,39 @@ export default function VendasPage() {
                             <div className="px-4 py-2 flex flex-wrap gap-2">
                               {items.map((p) => {
                                 const isSelected = estoqueId === p.id;
+                                const label = p.serial_no
+                                  ? `SN: ${p.serial_no.slice(-6)}`
+                                  : p.cor || "Sem cor";
+                                const tooltip = [
+                                  p.serial_no ? `Serial: ${p.serial_no}` : null,
+                                  p.imei ? `IMEI: ${p.imei}` : null,
+                                  p.cor ? `Cor: ${p.cor}` : null,
+                                  `Custo: ${fmt(p.custo_unitario)}`,
+                                  p.fornecedor ? `Forn: ${p.fornecedor}` : null,
+                                ].filter(Boolean).join(" | ");
                                 return (
                                   <button
                                     key={p.id}
+                                    title={tooltip}
                                     onClick={() => {
                                       setEstoqueId(p.id);
                                       const nome = p.cor ? `${p.produto} ${p.cor}` : p.produto;
                                       set("produto", nome);
                                       set("custo", String(p.custo_unitario));
                                       if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                      if (p.serial_no) set("serial_no", p.serial_no);
+                                      if (p.imei) set("imei", p.imei);
                                     }}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                                       isSelected
                                         ? "bg-[#E8740E] text-white shadow-sm"
                                         : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] ${dm ? "hover:bg-[#2A1A0F]" : "hover:bg-[#FFF8F0]"}`
                                     }`}
                                   >
-                                    {p.cor || "Sem cor"} <span className="text-[10px] opacity-70">({p.qnt})</span>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                      <span>{p.cor || "—"}</span>
+                                      {p.serial_no && <span className={`font-mono text-[10px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>SN: {p.serial_no.slice(-6)}</span>}
+                                    </div>
                                   </button>
                                 );
                               })}
