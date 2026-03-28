@@ -268,8 +268,15 @@ export function getUniqueModels(products: NewProduct[]): string[] {
   return [...new Set(products.map((p) => p.modelo))];
 }
 
+function parseStorageSize(s: string): number {
+  const num = parseFloat(s) || 0;
+  if (s.toUpperCase().includes("TB")) return num * 1024;
+  return num;
+}
+
 export function getStoragesForModel(products: NewProduct[], modelo: string): string[] {
-  return [...new Set(products.filter((p) => p.modelo === modelo).map((p) => p.armazenamento))];
+  return [...new Set(products.filter((p) => p.modelo === modelo).map((p) => p.armazenamento))]
+    .sort((a, b) => parseStorageSize(a) - parseStorageSize(b));
 }
 
 export function getProductPrice(products: NewProduct[], modelo: string, armazenamento: string): number | null {
@@ -282,7 +289,8 @@ export function getUniqueUsedModels(usedValues: UsedDeviceValue[]): string[] {
 }
 
 export function getUsedStoragesForModel(usedValues: UsedDeviceValue[], modelo: string): string[] {
-  return [...new Set(usedValues.filter((d) => d.modelo === modelo).map((d) => d.armazenamento))];
+  return [...new Set(usedValues.filter((d) => d.modelo === modelo).map((d) => d.armazenamento))]
+    .sort((a, b) => parseStorageSize(a) - parseStorageSize(b));
 }
 
 export function getUsedBaseValue(usedValues: UsedDeviceValue[], modelo: string, armazenamento: string): number | null {
