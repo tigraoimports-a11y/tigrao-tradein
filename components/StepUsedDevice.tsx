@@ -46,6 +46,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [sideScratch, setSideScratch] = useState<"none"|"one"|"multiple"|null>(null);
   const [peeling, setPeeling] = useState<"none"|"light"|"heavy"|null>(null);
+  const [hasWearMarks, setHasWearMarks] = useState<boolean | null>(null);
+  const [wearMarks, setWearMarks] = useState<string[]>([]);
   const [partsReplaced, setPartsReplaced] = useState<"no"|"apple"|"thirdParty"|null>(null);
   const [partsReplacedDetail, setPartsReplacedDetail] = useState("");
   const [hasWarranty, setHasWarranty] = useState<boolean|null>(null);
@@ -64,12 +66,29 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const storages = useMemo(() => (model ? getUsedStoragesForModel(filtered, model) : []), [filtered, model]);
   const baseValue = useMemo(() => (model && storage ? getUsedBaseValue(filtered, model, storage) : null), [filtered, model, storage]);
 
+  // Calculate accumulated wearMarks discount from selected options
+  const wearMarksDiscount = useMemo(() => {
+    if (!isQActive(qc, "wearMarks") || wearMarks.length === 0) return 0;
+    const opts = getQOptions(qc, "wearMarks");
+    return wearMarks.reduce((sum, val) => {
+      const opt = opts.find((o) => o.value === val);
+      return sum + (opt?.discount || 0);
+    }, 0);
+  }, [wearMarks, qc]);
+
+  const useNewWearMarks = isQActive(qc, "hasWearMarks");
+
   const cond: ConditionData = {
     screenScratch: screenScratch ?? "none", sideScratch: sideScratch ?? "none", peeling: peeling ?? "none",
     battery: battery ?? 100, hasDamage: hasDamage === true, partsReplaced: partsReplaced ?? "no",
     partsReplacedDetail: partsReplaced === "apple" ? partsReplacedDetail : "",
     hasWarranty: hasWarranty === true, warrantyMonth: hasWarranty ? warrantyMonth : null,
     warrantyYear: hasWarranty ? warrantyYear : null, hasOriginalBox: hasOriginalBox === true,
+    ...(useNewWearMarks ? {
+      hasWearMarks: hasWearMarks === true,
+      wearMarks,
+      wearMarksDiscount,
+    } : {}),
   };
 
   const md = useMemo(() => getDiscountsForModel(model, modelDiscounts), [model, modelDiscounts]);
@@ -77,14 +96,16 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
     if (baseValue === null || (isQActive(qc, "hasDamage") && hasDamage !== false) || (isQActive(qc, "partsReplaced") && partsReplaced === "thirdParty")) return 0;
     return calculateTradeInValue(baseValue, cond, md, warrantyBonuses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox]);
+  }, [baseValue, screenScratch, sideScratch, peeling, battery, hasDamage, partsReplaced, hasWarranty, warrantyMonth, warrantyYear, md, hasOriginalBox, hasWearMarks, wearMarksDiscount]);
 
   const isExcluded = excludedModels.some((m) => model.toLowerCase().includes(m.toLowerCase()));
   const batteryFilled = !isQActive(qc, "battery") || (battery !== null && battery >= 1 && battery <= 100);
-  const screenOk = !isQActive(qc, "screenScratch") || screenScratch !== null;
-  const sideOk = !isQActive(qc, "sideScratch") || sideScratch !== null;
-  const peelingOk = !isQActive(qc, "peeling") || peeling !== null;
-  const allCond = screenOk && sideOk && peelingOk && batteryFilled;
+  // New wear marks system: if hasWearMarks is active, skip old screenScratch/sideScratch/peeling checks
+  const wearMarksOk = !isQActive(qc, "hasWearMarks") || hasWearMarks === false || (hasWearMarks === true && (!isQActive(qc, "wearMarks") || wearMarks.length > 0));
+  const screenOk = useNewWearMarks || !isQActive(qc, "screenScratch") || screenScratch !== null;
+  const sideOk = useNewWearMarks || !isQActive(qc, "sideScratch") || sideScratch !== null;
+  const peelingOk = useNewWearMarks || !isQActive(qc, "peeling") || peeling !== null;
+  const allCond = screenOk && sideOk && peelingOk && batteryFilled && wearMarksOk;
   const damageOk = !isQActive(qc, "hasDamage") || hasDamage === false;
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
@@ -167,7 +188,80 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             </div>
           </Section>
 
-          {batteryFilled && isQActive(qc, "screenScratch") && <Section title={getQTitle(qc, "screenScratch", "Riscos na tela")}><div className="flex gap-2">
+          {/* === NEW: Wear marks 2-step flow === */}
+          {batteryFilled && isQActive(qc, "hasWearMarks") && (
+            <Section title={getQTitle(qc, "hasWearMarks", "Seu aparelho possui marcas de uso?")}>
+              <div className="flex gap-2">
+                {(() => {
+                  const opts = getQOptions(qc, "hasWearMarks");
+                  const noOpt = opts.find(o => o.value === "no");
+                  const yesOpt = opts.find(o => o.value === "yes");
+                  return <>
+                    <Btn sel={hasWearMarks===false} onClick={() => { setHasWearMarks(false); setWearMarks([]); tq("hasWearMarks"); }} className="flex-1" variant="success">{noOpt?.label || "Nao"}</Btn>
+                    <Btn sel={hasWearMarks===true} onClick={() => { setHasWearMarks(true); tq("hasWearMarks"); }} className="flex-1">{yesOpt?.label || "Sim"}</Btn>
+                  </>;
+                })()}
+              </div>
+            </Section>
+          )}
+
+          {batteryFilled && isQActive(qc, "hasWearMarks") && hasWearMarks === true && isQActive(qc, "wearMarks") && (
+            <Section title={getQTitle(qc, "wearMarks", "Selecione as marcas de uso:")}>
+              <div className="grid grid-cols-1 gap-2">
+                {(() => {
+                  const opts = getQOptions(qc, "wearMarks");
+                  const items = opts.length > 0
+                    ? opts
+                    : [
+                        { value: "screen_scratches", label: "Arranhoes na tela", discount: -200 },
+                        { value: "side_marks", label: "Marcas nas laterais", discount: -200 },
+                        { value: "light_peeling", label: "Descascado leve", discount: -200 },
+                        { value: "heavy_peeling", label: "Descascado forte", discount: -300 },
+                      ];
+                  return items.map((opt) => {
+                    const isSelected = wearMarks.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          setWearMarks((prev) =>
+                            isSelected ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
+                          );
+                          tq("wearMarks");
+                        }}
+                        className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 text-left"
+                        style={isSelected
+                          ? { backgroundColor: "var(--ti-error-light)", color: "var(--ti-error)", border: "1px solid var(--ti-error)" }
+                          : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }
+                        }
+                      >
+                        <span className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[11px] font-bold"
+                          style={isSelected
+                            ? { backgroundColor: "var(--ti-error)", color: "white", border: "1px solid var(--ti-error)" }
+                            : { backgroundColor: "transparent", border: "2px solid var(--ti-btn-border)" }
+                          }
+                        >
+                          {isSelected ? "\u2713" : ""}
+                        </span>
+                        <span className="flex-1">{opt.label}</span>
+                        <span className="text-[12px] opacity-70">R$ {opt.discount}</span>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+              {wearMarks.length > 0 && (
+                <div className="mt-3 rounded-xl px-4 py-2 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--ti-error)" }}>
+                    Desconto total: R$ {wearMarksDiscount}
+                  </p>
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* === LEGACY: Old individual scratch/peeling questions (only if hasWearMarks is NOT active) === */}
+          {batteryFilled && !useNewWearMarks && isQActive(qc, "screenScratch") && <Section title={getQTitle(qc, "screenScratch", "Riscos na tela")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "screenScratch");
               const items: [string, string][] = opts.length > 0
@@ -177,7 +271,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             })()}
           </div></Section>}
 
-          {screenScratch !== null && isQActive(qc, "sideScratch") && <Section title={getQTitle(qc, "sideScratch", "Riscos laterais")}><div className="flex gap-2">
+          {screenScratch !== null && !useNewWearMarks && isQActive(qc, "sideScratch") && <Section title={getQTitle(qc, "sideScratch", "Riscos laterais")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "sideScratch");
               const items: [string, string][] = opts.length > 0
@@ -187,7 +281,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             })()}
           </div></Section>}
 
-          {sideScratch !== null && isQActive(qc, "peeling") && <Section title={getQTitle(qc, "peeling", "Descascado / Amassado")}><div className="flex gap-2">
+          {sideScratch !== null && !useNewWearMarks && isQActive(qc, "peeling") && <Section title={getQTitle(qc, "peeling", "Descascado / Amassado")}><div className="flex gap-2">
             {(() => {
               const opts = getQOptions(qc, "peeling");
               const items: [string, string][] = opts.length > 0
@@ -197,7 +291,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             })()}
           </div></Section>}
 
-          {peeling !== null && isQActive(qc, "partsReplaced") && (
+          {/* Parts replaced — shows after wear marks (new) or peeling (legacy) */}
+          {((useNewWearMarks && (hasWearMarks === false || (hasWearMarks === true && wearMarks.length > 0))) || (!useNewWearMarks && peeling !== null)) && isQActive(qc, "partsReplaced") && (
           <Section title={getQTitle(qc, "partsReplaced", "O aparelho já teve alguma peça trocada?")}>
             {(() => {
               const opts = getQOptions(qc, "partsReplaced");

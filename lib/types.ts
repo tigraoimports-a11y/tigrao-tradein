@@ -53,7 +53,7 @@ export interface TradeInQuestion {
   id: string;
   slug: string;
   titulo: string;
-  tipo: "yesno" | "selection" | "numeric" | "conditional_date";
+  tipo: "yesno" | "selection" | "numeric" | "conditional_date" | "multiselect";
   opcoes: TradeInQuestionOption[];
   ordem: number;
   ativo: boolean;

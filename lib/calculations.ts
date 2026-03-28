@@ -14,6 +14,9 @@ export interface ConditionData {
   warrantyMonth: number | null; // 1-12
   warrantyYear: number | null;  // ex: 2026, 2027
   hasOriginalBox: boolean;
+  hasWearMarks?: boolean;          // novo: "Seu aparelho possui marcas de uso?"
+  wearMarks?: string[];            // novo: seleções múltiplas de marcas de uso
+  wearMarksDiscount?: number;      // novo: desconto acumulado das marcas selecionadas
 }
 
 // iPad: mesmos campos do iPhone + Apple Pencil inclusa
@@ -211,9 +214,15 @@ export function calculateTradeInValue(
   const d = modelDiscounts || DEFAULT_DISCOUNTS;
   let value = baseValue;
 
-  value += d.screenScratch[condition.screenScratch];
-  value += d.sideScratch[condition.sideScratch];
-  value += d.peeling[condition.peeling];
+  // New wear marks system: if hasWearMarks is defined, use accumulated discount
+  if (condition.hasWearMarks !== undefined) {
+    value += (condition.wearMarksDiscount || 0);
+  } else {
+    // Legacy: individual scratch/peeling questions
+    value += d.screenScratch[condition.screenScratch];
+    value += d.sideScratch[condition.sideScratch];
+    value += d.peeling[condition.peeling];
+  }
 
   value += applyBatteryDiscount(condition.battery, d.batteryTiers);
 
@@ -259,17 +268,35 @@ export function getConditionLines(condition: ConditionData): string[] {
 
   lines.push(`Saude bateria ${condition.battery}%`);
 
-  if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
-  else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
-  else lines.push("2 ou mais arranhoes na tela");
+  // New wear marks system
+  if (condition.hasWearMarks !== undefined) {
+    if (!condition.hasWearMarks || !condition.wearMarks || condition.wearMarks.length === 0) {
+      lines.push("Sem marcas de uso");
+    } else {
+      const wearLabels: Record<string, string> = {
+        screen_scratches: "Arranhoes na tela",
+        side_marks: "Marcas nas laterais",
+        light_peeling: "Descascado leve",
+        heavy_peeling: "Descascado forte",
+      };
+      condition.wearMarks.forEach((m) => {
+        lines.push(wearLabels[m] || m);
+      });
+    }
+  } else {
+    // Legacy
+    if (condition.screenScratch === "none") lines.push("Sem arranhoes na tela");
+    else if (condition.screenScratch === "one") lines.push("1 arranhao na tela");
+    else lines.push("2 ou mais arranhoes na tela");
 
-  if (condition.sideScratch === "none") lines.push("Sem arranhoes laterais");
-  else if (condition.sideScratch === "one") lines.push("1 arranhao lateral");
-  else lines.push("2 ou mais arranhoes laterais");
+    if (condition.sideScratch === "none") lines.push("Sem arranhoes laterais");
+    else if (condition.sideScratch === "one") lines.push("1 arranhao lateral");
+    else lines.push("2 ou mais arranhoes laterais");
 
-  if (condition.peeling === "none") lines.push("Sem marcas de uso");
-  else if (condition.peeling === "light") lines.push("Marcas de uso leves");
-  else lines.push("Marcas de uso fortes");
+    if (condition.peeling === "none") lines.push("Sem marcas de uso");
+    else if (condition.peeling === "light") lines.push("Marcas de uso leves");
+    else lines.push("Marcas de uso fortes");
+  }
 
   if (condition.partsReplaced === "apple") lines.push(`Peca trocada na Apple (autorizada)${condition.partsReplacedDetail ? `: ${condition.partsReplacedDetail}` : ""}`);
   else if (condition.partsReplaced === "no") lines.push("Sem pecas trocadas");

@@ -11,6 +11,7 @@ const TIPO_LABELS: Record<string, string> = {
   selection: "Seleção",
   numeric: "Numérico",
   conditional_date: "Data Condicional",
+  multiselect: "Multi-seleção",
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -18,6 +19,7 @@ const TIPO_COLORS: Record<string, string> = {
   selection: "bg-purple-100 text-purple-700",
   numeric: "bg-green-100 text-green-700",
   conditional_date: "bg-yellow-100 text-yellow-700",
+  multiselect: "bg-orange-100 text-orange-700",
 };
 
 export default function TradeInQuestionsAdmin({ password }: Props) {
@@ -32,17 +34,26 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   }
 
   useEffect(() => {
-    // Always fetch from public API (no auth needed for reading)
-    fetch("/api/tradein-perguntas?device_type=iphone")
+    // Fetch from admin API to include inactive questions
+    fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() })
       .then(r => r.json())
       .then(json => {
         setQuestions(json.data || []);
         if (!json.data || json.data.length === 0) {
-          setMsg("Nenhuma pergunta encontrada na API.");
+          // Fallback to public API
+          return fetch("/api/tradein-perguntas?device_type=iphone")
+            .then(r => r.json())
+            .then(json2 => {
+              setQuestions(json2.data || []);
+              if (!json2.data || json2.data.length === 0) {
+                setMsg("Nenhuma pergunta encontrada na API.");
+              }
+            });
         }
       })
       .catch(err => setMsg("Erro: " + String(err)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSave(q: TradeInQuestion) {
@@ -235,8 +246,8 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                   />
                 </div>
 
-                {/* Options editor - for selection and yesno */}
-                {(q.tipo === "selection" || q.tipo === "yesno") && (
+                {/* Options editor - for selection, yesno, and multiselect */}
+                {(q.tipo === "selection" || q.tipo === "yesno" || q.tipo === "multiselect") && (
                   <div>
                     <label className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Opções de resposta</label>
                     <div className="mt-2 space-y-2">
