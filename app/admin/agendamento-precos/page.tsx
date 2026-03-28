@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useState, useEffect, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -82,7 +83,7 @@ export default function AgendamentoPrecosPage() {
   }
 
   // Verificar agendamentos que precisam ser ativados
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = hojeBR();
   const pendentes = agendamentos.filter(a => !a.aplicado && a.data_ativacao <= hoje);
   const futuros = agendamentos.filter(a => !a.aplicado && a.data_ativacao > hoje);
   const aplicados = agendamentos.filter(a => a.aplicado);

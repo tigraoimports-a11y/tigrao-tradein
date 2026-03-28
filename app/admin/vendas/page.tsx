@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -56,7 +57,7 @@ export default function VendasPage() {
 
   // Filtros de data para histórico
   const now = new Date();
-  const hojeBR = now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD no fuso BR
+  const hojeStr = hojeBR(); // data de hoje no fuso BR
   const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
   const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [filtroDia, setFiltroDia] = useState("");
@@ -75,7 +76,7 @@ export default function VendasPage() {
 
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
-    data: new Date().toISOString().split("T")[0],
+    data: hojeBR(),
     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
@@ -1107,7 +1108,7 @@ export default function VendasPage() {
   // ── Duplicar Venda ──
   const handleDuplicar = (v: Venda) => {
     setForm({
-      data: new Date().toISOString().split("T")[0], // hoje
+      data: hojeBR(), // hoje
       cliente: v.cliente,
       cpf: "",
       cnpj: "",
@@ -1206,7 +1207,7 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]" },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500" },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeBR).length, color: "bg-blue-500" },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500" },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
@@ -1737,7 +1738,7 @@ export default function VendasPage() {
               <button
                 onClick={() => {
                   setForm({
-                    data: new Date().toISOString().split("T")[0],
+                    data: hojeBR(),
                     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
@@ -2394,7 +2395,7 @@ export default function VendasPage() {
       ) : (
         /* Vendas Em Andamento / Finalizadas */
         (() => {
-          const hoje = hojeBR;
+          const hoje = hojeStr;
           const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : tab === "hoje"
@@ -3042,7 +3043,7 @@ export default function VendasPage() {
 
                                             // Preencher formulário Nova Venda com dados da venda para edição completa
                                             setForm({
-                                              data: primaryVenda.data || new Date().toISOString().split("T")[0],
+                                              data: primaryVenda.data || hojeBR(),
                                               cliente: primaryVenda.cliente,
                                               cpf: primaryVenda.cpf || "",
                                               cnpj: primaryVenda.cnpj || "",
@@ -3583,7 +3584,7 @@ export default function VendasPage() {
                   setNotaFiscalFile(null);
                   // Limpar formulário completo após nota fiscal
                   setForm({
-                    data: new Date().toISOString().split("T")[0],
+                    data: hojeBR(),
                     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
@@ -3611,7 +3612,7 @@ export default function VendasPage() {
                   setNotaFiscalFile(null);
                   // Limpar formulário completo ao pular nota fiscal
                   setForm({
-                    data: new Date().toISOString().split("T")[0],
+                    data: hojeBR(),
                     cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",

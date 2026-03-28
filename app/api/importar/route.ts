@@ -1,3 +1,4 @@
+import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   // Se autoStatus=true e table=vendas, definir status_pagamento baseado na data
   // data < hoje = FINALIZADO, data = hoje = AGUARDANDO
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = hojeBR();
   const processedRows = (table === "vendas" && autoStatus)
     ? rows.map(r => ({
         ...r,

@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -25,7 +26,7 @@ export default function SaldosPage() {
   const { password, user, darkMode: dm } = useAdmin();
   const [saldos, setSaldos] = useState<SaldoBancario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dataAtual, setDataAtual] = useState(new Date().toISOString().split("T")[0]);
+  const [dataAtual, setDataAtual] = useState(hojeBR());
   const [saldoHoje, setSaldoHoje] = useState<SaldoBancario | null>(null);
   const [saving, setSaving] = useState(false);
   const [executando, setExecutando] = useState(false);

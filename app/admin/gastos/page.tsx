@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -160,7 +161,7 @@ export default function GastosPage() {
 
   // Form state
   const [form, setForm] = useState({
-    data: new Date().toISOString().split("T")[0],
+    data: hojeBR(),
     horario: new Date().toTimeString().slice(0, 5),
     categoria: "OUTROS",
     descricao: "",

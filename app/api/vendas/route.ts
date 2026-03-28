@@ -1,3 +1,4 @@
+import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { sendPaymentNotification, sendSaleNotification, sendCancelNotification } from "@/lib/telegram";
@@ -177,7 +178,7 @@ export async function POST(req: NextRequest) {
         telefone: null,
         endereco: body.endereco || null,
         bairro: body.bairro || null,
-        data_entrega: body.data || new Date().toISOString().split("T")[0],
+        data_entrega: body.data || hojeBR(),
         horario: null,
         status: "PENDENTE",
         entregador: null,

@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -29,7 +30,7 @@ export default function ConciliacaoPage() {
   const [mpReal, setMpReal] = useState("");
   const [espReal, setEspReal] = useState("");
   const [conciliado, setConciliado] = useState(false);
-  const [dataRef, setDataRef] = useState(new Date().toISOString().split("T")[0]);
+  const [dataRef, setDataRef] = useState(hojeBR());
 
   const fetchSaldos = useCallback(async () => {
     setLoading(true);

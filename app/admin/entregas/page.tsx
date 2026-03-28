@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -84,7 +85,7 @@ export default function EntregasPage() {
     telefone: "",
     endereco: "",
     bairro: "",
-    data_entrega: new Date().toISOString().split("T")[0],
+    data_entrega: hojeBR(),
     horario: "",
     entregador: "",
     observacao: "",
@@ -160,7 +161,7 @@ export default function EntregasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Entrega agendada!");
-      setForm({ ...emptyForm, data_entrega: new Date().toISOString().split("T")[0] });
+      setForm({ ...emptyForm, data_entrega: hojeBR() });
       setShowProd2(false); setShowProd3(false); setShowPagAlt(false);
       setShowForm(false);
       fetchEntregas();
@@ -251,7 +252,7 @@ export default function EntregasPage() {
     }
   };
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = hojeBR();
 
   const inputCls = "w-full px-3 py-2 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] transition-colors";
   const labelCls = "text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1";

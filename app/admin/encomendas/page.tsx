@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -41,7 +42,7 @@ export default function EncomendasPage() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
-    cliente: "", whatsapp: "", data: new Date().toISOString().split("T")[0],
+    cliente: "", whatsapp: "", data: hojeBR(),
     produto: "", cor: "", valor_venda: "", sinal_recebido: "", banco_sinal: "",
     custo: "", fornecedor: "", observacao: "",
   });

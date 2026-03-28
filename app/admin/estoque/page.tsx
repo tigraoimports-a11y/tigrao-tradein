@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -843,7 +844,7 @@ export default function EstoquePage() {
           fornecedor: p.fornecedor || null,
           imei: p.imei || null,
           serial_no: p.serial_no || null,
-          data_entrada: new Date().toISOString().split("T")[0],
+          data_entrada: hojeBR(),
         }),
       });
       const json = await res.json();
@@ -874,7 +875,7 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
-        data_entrada: new Date().toISOString().split("T")[0],
+        data_entrada: hojeBR(),
       }),
     });
     const json = await res.json();
@@ -2398,7 +2399,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState({
     categoria: "IPHONES", produto: "", cor: "", armazenamento: "",
-    custo_unitario: "", fornecedor: "", data_compra: new Date().toISOString().split("T")[0],
+    custo_unitario: "", fornecedor: "", data_compra: hojeBR(),
     imei: "", imei2: "", observacao: "",
   });
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
@@ -2424,7 +2425,7 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
         // Produto novo — abrir formulário com form resetado
         setForm({
           categoria: "IPHONES", produto: "", cor: "", armazenamento: "",
-          custo_unitario: "", fornecedor: "", data_compra: new Date().toISOString().split("T")[0],
+          custo_unitario: "", fornecedor: "", data_compra: hojeBR(),
           imei: "", imei2: "", observacao: "",
         });
         setStep("form");

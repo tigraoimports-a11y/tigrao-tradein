@@ -1,3 +1,4 @@
+import { hojeBR } from "@/lib/date-utils";
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   // Inserir produtos no estoque (se pedido fornecedor)
   if (pedidoFornecedorId && hasProdutos && body.produtos.length > 0) {
-    const dataCompra = gastoItems[0]?.data || new Date().toISOString().split("T")[0];
+    const dataCompra = gastoItems[0]?.data || hojeBR();
     const estoqueItems = body.produtos.map((p: {
       produto: string;
       categoria: string;

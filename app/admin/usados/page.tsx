@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -240,7 +241,7 @@ export function UsadosContent() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `usados-valores-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `usados-valores-${hojeBR()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

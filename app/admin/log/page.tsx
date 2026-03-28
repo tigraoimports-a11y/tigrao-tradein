@@ -1,4 +1,5 @@
 "use client";
+import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
@@ -45,7 +46,7 @@ function timeAgo(iso: string): string {
 }
 
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  return hojeBR();
 }
 
 type Periodo = "hoje" | "ontem" | "7dias" | "30dias" | "tudo";
