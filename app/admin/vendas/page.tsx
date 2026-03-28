@@ -196,8 +196,9 @@ export default function VendasPage() {
       const key = `${p.categoria}__${tipo}`;
       if (!catSet.has(key)) {
         catSet.add(key);
-        const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", OUTROS: "Outros", SEMINOVOS: "Seminovos" };
-        cats.push({ key, label: catLabel[p.categoria] || p.categoria });
+        const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", OUTROS: "Outros", SEMINOVOS: "Seminovos" };
+        const label = (catLabel[p.categoria] || p.categoria) + (tipo === "SEMINOVO" ? " (Seminovo)" : "");
+        cats.push({ key, label });
       }
     }
     // Ordenar: Lacrados primeiro, depois Seminovos, dentro de cada tipo por nome
