@@ -11,7 +11,6 @@ interface VendaRow {
   id: number;
   data: string;
   produto: string;
-  categoria: string | null;
   preco_vendido: number;
   custo: number;
   lucro: number;
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
   // Fetch vendas
   let query = supabase
     .from("vendas")
-    .select("id, data, produto, categoria, preco_vendido, custo, lucro, created_at, origem, tipo")
+    .select("id, data, produto, preco_vendido, custo, lucro, created_at, origem, tipo")
     .order("data", { ascending: true });
 
   if (fromDate) query = query.gte("data", fromDate);
@@ -77,7 +76,7 @@ export async function GET(req: NextRequest) {
   if (prevFromDate && prevToDate) {
     const { data: prevVendas } = await supabase
       .from("vendas")
-      .select("id, data, produto, categoria, preco_vendido, custo, lucro, created_at, origem, tipo")
+      .select("id, data, produto, preco_vendido, custo, lucro, created_at, origem, tipo")
       .gte("data", prevFromDate)
       .lte("data", prevToDate)
       .limit(5000);
