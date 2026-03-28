@@ -2045,8 +2045,8 @@ export default function EstoquePage() {
                                           <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
                                         )}
                                       </td>
-                                      <td className="px-2 py-2.5 text-sm">
-                                        <div className="flex flex-col gap-0.5">
+                                      <td className="px-2 py-2.5 text-sm" colSpan={isPendenciasTab ? 1 : 2}>
+                                        <div className="flex flex-col gap-1">
                                           {isPendenciasTab && isEditingField(p.id, "cor") ? (
                                             <div className="flex items-center gap-1">
                                               <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
@@ -2056,9 +2056,29 @@ export default function EstoquePage() {
                                             <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
-                                            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                                              {p.imei && <span className="text-[11px] text-[#0071E3] font-mono">IMEI: {p.imei}</span>}
-                                              {p.serial_no && <span className="text-[11px] text-purple-500 font-mono">SN: {p.serial_no}</span>}
+                                            <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-0.5 px-2 py-1.5 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
+                                              {p.imei && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }}
+                                                  className="flex items-center gap-1.5 text-[12px] font-mono text-[#0071E3] hover:text-[#E8740E] transition-colors cursor-pointer"
+                                                  title="Clique para copiar IMEI"
+                                                >
+                                                  <span className="text-[10px] font-sans font-semibold text-[#86868B]">IMEI</span>
+                                                  {p.imei}
+                                                  <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                                </button>
+                                              )}
+                                              {p.serial_no && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }}
+                                                  className="flex items-center gap-1.5 text-[12px] font-mono text-purple-600 hover:text-[#E8740E] transition-colors cursor-pointer"
+                                                  title="Clique para copiar Serial"
+                                                >
+                                                  <span className="text-[10px] font-sans font-semibold text-[#86868B]">SN</span>
+                                                  {p.serial_no}
+                                                  <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                                </button>
+                                              )}
                                             </div>
                                           )}
                                         </div>
