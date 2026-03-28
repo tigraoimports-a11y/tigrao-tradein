@@ -291,33 +291,40 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
             })()}
           </div></Section>}
 
-          {/* Parts replaced — shows after wear marks (new) or peeling (legacy) */}
+          {/* Parts replaced — 2-step flow: first Sim/Não, then where */}
           {((useNewWearMarks && (hasWearMarks === false || (hasWearMarks === true && wearMarks.length > 0))) || (!useNewWearMarks && peeling !== null)) && isQActive(qc, "partsReplaced") && (
-          <Section title={getQTitle(qc, "partsReplaced", "O aparelho já teve alguma peça trocada?")}>
+          <Section title="O aparelho já teve alguma peça trocada?">
             {(() => {
-              const opts = getQOptions(qc, "partsReplaced");
-              const noOpt = opts.find(o => o.value === "no");
-              const appleOpt = opts.find(o => o.value === "apple");
-              const tpOpt = opts.find(o => o.value === "thirdParty");
+              const tpOpt = getQOptions(qc, "partsReplaced").find(o => o.value === "thirdParty");
               const partsConfig = getQ(qc, "partsReplaced")?.config || {};
+              const hasPartsAnswer = partsReplaced !== null;
+              const answeredYes = partsReplaced === "apple" || partsReplaced === "thirdParty";
               return <>
-                <div className="grid grid-cols-1 gap-2">
-                  <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">{noOpt?.label || "Não"}</Btn>
-                  <Btn sel={partsReplaced==="apple"} onClick={() => { setPartsReplaced("apple"); tq("partsReplaced"); }} variant="success">{appleOpt?.label || "Sim, na Apple (autorizada)"}</Btn>
-                  <Btn sel={partsReplaced==="thirdParty"} onClick={() => { setPartsReplaced("thirdParty"); tq("partsReplaced"); }} variant="error">{tpOpt?.label || "Sim, fora da Apple"}</Btn>
+                <div className="flex gap-2">
+                  <Btn sel={partsReplaced==="no"} onClick={() => { setPartsReplaced("no"); tq("partsReplaced"); }} variant="success">Não</Btn>
+                  <Btn sel={answeredYes} onClick={() => { if (!answeredYes) setPartsReplaced("apple"); tq("partsReplaced"); }}>Sim</Btn>
                 </div>
-                {partsReplaced === "apple" && (
-                  <div className="mt-3">
-                    <label className="block text-[12px] font-semibold mb-1.5 text-center" style={{ color: "var(--ti-muted)" }}>Qual peça foi trocada?</label>
-                    <input type="text" value={partsReplacedDetail} onChange={(e) => setPartsReplacedDetail(e.target.value)}
-                      placeholder={(partsConfig.detailPlaceholder as string) || "Ex: Tela, Bateria, Alto-falante..."}
-                      className="w-full px-4 py-3 rounded-2xl text-[14px] text-center focus:outline-none"
-                      style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-success)", color: "var(--ti-text)" }} />
-                  </div>
-                )}
-                {partsReplaced === "thirdParty" && (
-                  <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
-                    <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{tpOpt?.rejectMessage || "Infelizmente não aceitamos aparelhos com peças trocadas fora da rede autorizada Apple."}</p>
+                {answeredYes && (
+                  <div className="mt-4">
+                    <p className="text-[13px] font-semibold text-center mb-2" style={{ color: "var(--ti-text)" }}>Onde foi feito o reparo?</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Btn sel={partsReplaced==="apple"} onClick={() => { setPartsReplaced("apple"); tq("partsReplaced"); }} variant="success">Na loja da Apple (autorizada)</Btn>
+                      <Btn sel={partsReplaced==="thirdParty"} onClick={() => { setPartsReplaced("thirdParty"); tq("partsReplaced"); }} variant="error">Fora da Apple</Btn>
+                    </div>
+                    {partsReplaced === "apple" && (
+                      <div className="mt-3">
+                        <label className="block text-[12px] font-semibold mb-1.5 text-center" style={{ color: "var(--ti-muted)" }}>Qual peça foi trocada?</label>
+                        <input type="text" value={partsReplacedDetail} onChange={(e) => setPartsReplacedDetail(e.target.value)}
+                          placeholder={(partsConfig.detailPlaceholder as string) || "Ex: Tela, Bateria, Alto-falante..."}
+                          className="w-full px-4 py-3 rounded-2xl text-[14px] text-center focus:outline-none"
+                          style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-success)", color: "var(--ti-text)" }} />
+                      </div>
+                    )}
+                    {partsReplaced === "thirdParty" && (
+                      <div className="mt-4 rounded-2xl p-4 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
+                        <p className="text-[15px] font-semibold" style={{ color: "var(--ti-error)" }}>{tpOpt?.rejectMessage || "Infelizmente não aceitamos aparelhos com peças trocadas fora da rede autorizada Apple."}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>;

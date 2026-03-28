@@ -214,6 +214,11 @@ export function calculateTradeInValue(
   const d = modelDiscounts || DEFAULT_DISCOUNTS;
   let value = baseValue;
 
+  // Peça trocada na Apple: desconto de R$200
+  if (condition.partsReplaced === "apple") {
+    value -= 200;
+  }
+
   // New wear marks system: if hasWearMarks is defined, use accumulated discount
   if (condition.hasWearMarks !== undefined) {
     value += (condition.wearMarksDiscount || 0);
