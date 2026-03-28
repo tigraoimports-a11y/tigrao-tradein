@@ -56,6 +56,7 @@ export default function VendasPage() {
 
   // Filtros de data para histórico
   const now = new Date();
+  const hojeBR = now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD no fuso BR
   const [filtroAno, setFiltroAno] = useState(String(now.getFullYear()));
   const [filtroMes, setFiltroMes] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const [filtroDia, setFiltroDia] = useState("");
@@ -1205,7 +1206,7 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]" },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500" },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === now.toISOString().split("T")[0]).length, color: "bg-blue-500" },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeBR).length, color: "bg-blue-500" },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
@@ -2393,7 +2394,7 @@ export default function VendasPage() {
       ) : (
         /* Vendas Em Andamento / Finalizadas */
         (() => {
-          const hoje = now.toISOString().split("T")[0];
+          const hoje = hojeBR;
           const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : tab === "hoje"
