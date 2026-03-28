@@ -2042,17 +2042,23 @@ export default function EstoquePage() {
                                           <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
                                         )}
                                       </td>
-                                      <td className="px-2 py-2.5 text-sm whitespace-nowrap" colSpan={isPendenciasTab ? 1 : 1}>
-                                        {isPendenciasTab && isEditingField(p.id, "cor") ? (
-                                          <div className="flex items-center gap-1">
-                                            <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
-                                            <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                          </div>
-                                        ) : (
-                                          <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
-                                        )}
-                                        {p.imei && <span className="ml-1.5 text-[10px] text-[#0071E3] font-mono" title={`IMEI: ${p.imei}`}>{p.imei}</span>}
-                                        {p.serial_no && <span className="ml-1.5 text-[10px] text-purple-500 font-mono" title={`SN: ${p.serial_no}`}>{p.serial_no}</span>}
+                                      <td className="px-2 py-2.5 text-sm">
+                                        <div className="flex flex-col gap-0.5">
+                                          {isPendenciasTab && isEditingField(p.id, "cor") ? (
+                                            <div className="flex items-center gap-1">
+                                              <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
+                                              <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                            </div>
+                                          ) : (
+                                            <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
+                                          )}
+                                          {(p.imei || p.serial_no) && (
+                                            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                              {p.imei && <span className="text-[11px] text-[#0071E3] font-mono">IMEI: {p.imei}</span>}
+                                              {p.serial_no && <span className="text-[11px] text-purple-500 font-mono">SN: {p.serial_no}</span>}
+                                            </div>
+                                          )}
+                                        </div>
                                       </td>
                                       {isPendenciasTab && (
                                         <td className="px-2 py-2.5 text-xs">
