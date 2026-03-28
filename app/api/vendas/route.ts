@@ -224,6 +224,10 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  // Remover campos internos que não existem na tabela vendas
+  delete fields._seminovo;
+  delete fields._estoque_id;
+
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
