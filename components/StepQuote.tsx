@@ -79,7 +79,18 @@ export default function StepQuote(p: StepQuoteProps) {
     usadoSec = `*Seu aparelho na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliação do usado: ${f2(tradeInValue)}`;
   }
 
-  const waMsg = `Ola! Vi meu orçamento no site e quero fechar!\n\n*Nome:* ${clienteNome}\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_\n\nQuero fechar o pedido!`;
+  const origemMap: Record<string, string> = {
+    "anuncio": "Vim por um anúncio",
+    "story": "Vim pelo Story",
+    "direct": "Vim pelo Direct",
+    "whatsapp": "Vim pelo WhatsApp",
+    "indicacao": "Vim por indicação",
+    "ja_cliente": "Já sou cliente de vocês",
+  };
+  const origemTexto = clienteOrigem ? (origemMap[clienteOrigem.toLowerCase()] || `Vim pelo ${clienteOrigem}`) : "";
+  const origemLine = origemTexto ? `\n${origemTexto} e desejo fechar meu pedido!\n` : "";
+
+  const waMsg = `Olá, me chamo ${clienteNome}. ${origemTexto || "Vi meu orçamento no site"} e desejo fechar meu pedido!\n\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_`;
   const waUrl = getWhatsAppUrl(whatsappNumero, waMsg);
   const condLines = getAnyConditionLines(deviceType, condition);
 
