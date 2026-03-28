@@ -1693,70 +1693,77 @@ export default function VendasPage() {
                 </select></div>
                 </div>
 
-                {/* Produtos agrupados por modelo com cores como botões */}
+                {/* Produtos agrupados por modelo */}
                 {catSel && (() => {
-                  // Agrupar por nome do produto (sem cor)
                   const grupos: Record<string, EstoqueItem[]> = {};
                   for (const p of produtosFiltrados) {
-                    const key = p.produto;
-                    if (!grupos[key]) grupos[key] = [];
-                    grupos[key].push(p);
+                    if (!grupos[p.produto]) grupos[p.produto] = [];
+                    grupos[p.produto].push(p);
                   }
                   const grupoKeys = Object.keys(grupos).sort();
 
                   if (grupoKeys.length === 0) return (
-                    <div className="p-4 bg-[#F5F5F7] rounded-xl text-center text-sm text-[#86868B]">Nenhum produto disponivel nesta categoria</div>
+                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Nenhum produto disponivel nesta categoria</div>
                   );
 
+                  // Extrair cor do nome do produto
+                  const extractCor = (nome: string) => {
+                    const after = nome.split(/\d+GB\s+/)[1];
+                    if (!after) return null;
+                    return after.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || null;
+                  };
+
                   return (
-                    <div className="border border-[#D2D2D7] rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
+                    <div className={`border rounded-xl overflow-hidden max-h-[450px] overflow-y-auto ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
                       {grupoKeys.map((modelo) => {
                         const items = grupos[modelo];
-                        const custo = items[0].custo_unitario;
                         const totalQnt = items.reduce((s, p) => s + p.qnt, 0);
                         return (
-                          <div key={modelo} className="border-b border-[#F5F5F7] last:border-0">
-                            <div className="px-4 py-2.5 bg-[#F5F5F7] flex items-center justify-between">
-                              <span className="text-sm font-semibold text-[#1D1D1F]">{modelo}</span>
-                              <span className="text-[10px] text-[#86868B]">{totalQnt} un. | {fmt(custo)}</span>
+                          <div key={modelo} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
+                            <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modelo}</span>
+                              <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{totalQnt} un.</span>
                             </div>
-                            <div className="px-4 py-2 flex flex-wrap gap-2">
+                            <div className="px-4 py-3 flex flex-wrap gap-2">
                               {items.map((p) => {
                                 const isSelected = estoqueId === p.id;
-                                const label = p.serial_no
-                                  ? `SN: ${p.serial_no.slice(-6)}`
-                                  : p.cor || "Sem cor";
-                                const tooltip = [
-                                  p.serial_no ? `Serial: ${p.serial_no}` : null,
-                                  p.imei ? `IMEI: ${p.imei}` : null,
-                                  p.cor ? `Cor: ${p.cor}` : null,
-                                  `Custo: ${fmt(p.custo_unitario)}`,
-                                  p.fornecedor ? `Forn: ${p.fornecedor}` : null,
-                                ].filter(Boolean).join(" | ");
+                                const cor = p.cor || extractCor(p.produto);
                                 return (
-                                  <button
-                                    key={p.id}
-                                    title={tooltip}
-                                    onClick={() => {
-                                      setEstoqueId(p.id);
-                                      const nome = p.cor ? `${p.produto} ${p.cor}` : p.produto;
-                                      set("produto", nome);
-                                      set("custo", String(p.custo_unitario));
-                                      if (p.fornecedor) set("fornecedor", p.fornecedor);
-                                      if (p.serial_no) set("serial_no", p.serial_no);
-                                      if (p.imei) set("imei", p.imei);
-                                    }}
-                                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                                      isSelected
-                                        ? "bg-[#E8740E] text-white shadow-sm"
-                                        : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] ${dm ? "hover:bg-[#2A1A0F]" : "hover:bg-[#FFF8F0]"}`
-                                    }`}
-                                  >
-                                    <div className="flex flex-col items-start gap-0.5">
-                                      <span>{p.cor || p.produto.split(/\d+GB\s+/)[1]?.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || "—"}</span>
-                                      {p.serial_no && <span className={`font-mono text-[10px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>SN: {p.serial_no.slice(-6)}</span>}
+                                  <div key={p.id} className="relative group">
+                                    <button
+                                      onClick={() => {
+                                        setEstoqueId(p.id);
+                                        set("produto", p.produto);
+                                        set("custo", String(p.custo_unitario));
+                                        if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                        if (p.serial_no) set("serial_no", p.serial_no);
+                                        if (p.imei) set("imei", p.imei);
+                                      }}
+                                      className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                                        isSelected
+                                          ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
+                                          : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] hover:shadow-sm`
+                                      }`}
+                                    >
+                                      <div className="flex flex-col items-start gap-1">
+                                        {cor && <span className="font-semibold">{cor}</span>}
+                                        {p.serial_no && <span className={`font-mono text-[11px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>{p.serial_no}</span>}
+                                        {!cor && !p.serial_no && <span>—</span>}
+                                      </div>
+                                    </button>
+                                    {/* Popup ao passar mouse */}
+                                    <div className={`absolute bottom-full left-0 mb-2 w-64 p-3 rounded-xl shadow-xl border z-30 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}>
+                                      <p className="text-xs font-bold mb-2">{p.produto}</p>
+                                      <div className="space-y-1 text-[11px]">
+                                        {p.serial_no && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial:</span> <span className="font-mono text-purple-500">{p.serial_no}</span></p>}
+                                        {p.imei && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI:</span> <span className="font-mono text-[#0071E3]">{p.imei}</span></p>}
+                                        {cor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor:</span> {cor}</p>}
+                                        <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo:</span> <span className="font-semibold text-green-600">{fmt(p.custo_unitario)}</span></p>
+                                        {p.fornecedor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor:</span> {p.fornecedor}</p>}
+                                        <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Tipo:</span> {p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p>
+                                      </div>
                                     </div>
-                                  </button>
+                                  </div>
                                 );
                               })}
                             </div>
