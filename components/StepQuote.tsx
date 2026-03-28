@@ -80,14 +80,19 @@ export default function StepQuote(p: StepQuoteProps) {
   }
 
   const origemMap: Record<string, string> = {
+    "anúncio": "Vim por um anúncio",
     "anuncio": "Vim por um anúncio",
     "story": "Vim pelo Story",
     "direct": "Vim pelo Direct",
     "whatsapp": "Vim pelo WhatsApp",
+    "indicação": "Vim por indicação",
     "indicacao": "Vim por indicação",
+    "já sou cliente": "Já sou cliente de vocês",
+    "ja sou cliente": "Já sou cliente de vocês",
     "ja_cliente": "Já sou cliente de vocês",
   };
-  const origemTexto = clienteOrigem ? (origemMap[clienteOrigem.toLowerCase()] || `Vim pelo ${clienteOrigem}`) : "";
+  const origemKey = clienteOrigem?.toLowerCase().normalize("NFC") || "";
+  const origemTexto = clienteOrigem ? (origemMap[origemKey] || `Vim por ${clienteOrigem}`) : "";
   const origemLine = origemTexto ? `\n${origemTexto} e desejo fechar meu pedido!\n` : "";
 
   const waMsg = `Olá, me chamo ${clienteNome}. ${origemTexto || "Vi meu orçamento no site"} e desejo fechar meu pedido!\n\n*WhatsApp:* ${clienteWhatsApp}\n${igLine}\n*ORÇAMENTO DE TROCA -- TigraoImports*\n---\n\n*Produto novo:*\n${newModel} ${newStorage} -- ${f2(newPrice)}\nLacrado | 1 ano de garantia | Nota Fiscal\n\n${usadoSec}\n\n---\n*Diferença no PIX: ${f2(dif)}*\n\n*Forma de pagamento escolhida:*\n${formaPag}\n\n_Validade deste orçamento: ${validadeHoras} horas_`;
