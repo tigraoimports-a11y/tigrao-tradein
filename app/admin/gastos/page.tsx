@@ -484,8 +484,8 @@ export default function GastosPage() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-            <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
+            <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
+            <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
           </div>
 
           {/* Distribuição por banco */}
@@ -736,8 +736,8 @@ export default function GastosPage() {
                                 </select></div>
                               </div>
                               <div className="grid grid-cols-2 gap-3">
-                                <div><p className={labelCls}>Descricao</p><input value={editForm.descricao} onChange={(e) => editSet("descricao", e.target.value)} className={inputCls} /></div>
-                                <div><p className={labelCls}>Observacao</p><input value={editForm.observacao} onChange={(e) => editSet("observacao", e.target.value)} className={inputCls} /></div>
+                                <div><p className={labelCls}>Descricao</p><input value={editForm.descricao} onChange={(e) => editSet("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
+                                <div><p className={labelCls}>Observacao</p><input value={editForm.observacao} onChange={(e) => editSet("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
                               </div>
                               <div className={`p-3 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
