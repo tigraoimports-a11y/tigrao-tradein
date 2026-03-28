@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data: rawVendas, error } = await query.limit(5000);
+  const { data: rawVendas, error } = await query.limit(10000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Filtrar canceladas no JS (evita problema com neq e NULL no Supabase)
