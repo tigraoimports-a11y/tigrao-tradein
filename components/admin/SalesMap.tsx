@@ -20,18 +20,42 @@ interface SalesMapProps {
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
-function getColor(qty: number, maxQty: number): string {
+// Gradient de intensidade — laranja da marca
+function getMarkerColor(qty: number, maxQty: number): { bg: string; border: string; glow: string } {
   const ratio = maxQty > 0 ? qty / maxQty : 0;
-  if (ratio >= 0.7) return "#EF4444"; // red
-  if (ratio >= 0.4) return "#E8740E"; // orange
-  return "#2ECC71"; // green
+  if (ratio >= 0.6) return { bg: "#E8740E", border: "#C45D00", glow: "rgba(232,116,14,0.4)" };
+  if (ratio >= 0.3) return { bg: "#F59E0B", border: "#D97706", glow: "rgba(245,158,11,0.3)" };
+  return { bg: "#86868B", border: "#6E6E73", glow: "rgba(134,134,139,0.2)" };
 }
 
-function getRadius(qty: number, maxQty: number): number {
-  const minR = 8;
-  const maxR = 30;
+function getMarkerSize(qty: number, maxQty: number): number {
   const ratio = maxQty > 0 ? qty / maxQty : 0;
-  return minR + ratio * (maxR - minR);
+  return 18 + ratio * 22; // 18px a 40px
+}
+
+function createPinIcon(qty: number, maxQty: number): L.DivIcon {
+  const { bg, border, glow } = getMarkerColor(qty, maxQty);
+  const size = getMarkerSize(qty, maxQty);
+  const fontSize = size < 24 ? 9 : size < 30 ? 10 : 12;
+
+  return L.divIcon({
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `<div style="
+      width:${size}px;height:${size}px;
+      background:${bg};
+      border:2px solid ${border};
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-weight:700;font-size:${fontSize}px;
+      font-family:system-ui,sans-serif;
+      box-shadow:0 0 ${size/2}px ${glow}, 0 2px 8px rgba(0,0,0,0.15);
+      transition:transform 0.2s;
+      cursor:pointer;
+    ">${qty}</div>`,
+  });
 }
 
 export default function SalesMap({ bairros }: SalesMapProps) {
@@ -41,34 +65,35 @@ export default function SalesMap({ bairros }: SalesMapProps) {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clean up previous map instance
     if (mapInstanceRef.current) {
       mapInstanceRef.current.remove();
       mapInstanceRef.current = null;
     }
 
     const map = L.map(mapRef.current, {
-      center: [-22.95, -43.25],
-      zoom: 11,
+      center: [-22.5, -43.2],
+      zoom: 9,
       scrollWheelZoom: true,
-      zoomControl: true,
+      zoomControl: false,
     });
+
+    // Zoom control no canto direito
+    L.control.zoom({ position: "bottomright" }).addTo(map);
 
     mapInstanceRef.current = map;
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    // Mapa clean dark — CartoDB Dark Matter
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 19,
       subdomains: "abcd",
     }).addTo(map);
 
-    // Filter bairros that have coordinates
     const mappable = bairros.filter(
       (b) => b.lat != null && b.lng != null && b.nome !== "Nao informado"
     );
 
     if (mappable.length === 0) {
-      // No data to show
       return () => {
         if (mapInstanceRef.current) {
           mapInstanceRef.current.remove();
@@ -80,46 +105,44 @@ export default function SalesMap({ bairros }: SalesMapProps) {
     const maxQty = Math.max(...mappable.map((b) => b.qty), 1);
 
     for (const b of mappable) {
-      const color = getColor(b.qty, maxQty);
-      const radius = getRadius(b.qty, maxQty);
+      const icon = createPinIcon(b.qty, maxQty);
 
-      const circle = L.circleMarker([b.lat!, b.lng!], {
-        radius,
-        fillColor: color,
-        color: "#fff",
-        weight: 2,
-        opacity: 0.9,
-        fillOpacity: 0.7,
-      }).addTo(map);
+      const marker = L.marker([b.lat!, b.lng!], { icon }).addTo(map);
 
-      circle.bindPopup(
-        `<div style="font-family: system-ui, sans-serif; min-width: 160px;">
-          <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #1D1D1F;">${b.nome}</div>
-          <div style="font-size: 12px; color: #6E6E73; line-height: 1.8;">
-            <span style="font-weight: 600; color: #E8740E;">${b.qty}</span> vendas<br/>
-            Faturamento: <span style="font-weight: 600; color: #1D1D1F;">${fmt(b.receita)}</span><br/>
-            Lucro: <span style="font-weight: 600; color: #2ECC71;">${fmt(b.lucro)}</span><br/>
-            Ticket: ${fmt(b.ticket)}
+      marker.bindPopup(
+        `<div style="font-family:system-ui,sans-serif;min-width:180px;padding:4px 0;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#1D1D1F;border-bottom:2px solid #E8740E;padding-bottom:6px;">${b.nome}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:#6E6E73;">
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;">Vendas</div>
+              <div style="font-weight:700;font-size:16px;color:#E8740E;">${b.qty}</div>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;">Ticket</div>
+              <div style="font-weight:600;color:#1D1D1F;">${fmt(b.ticket)}</div>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;">Faturamento</div>
+              <div style="font-weight:600;color:#1D1D1F;">${fmt(b.receita)}</div>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;">Lucro</div>
+              <div style="font-weight:600;color:#2ECC71;">${fmt(b.lucro)}</div>
+            </div>
           </div>
         </div>`,
-        { closeButton: true, maxWidth: 250 }
+        { closeButton: false, maxWidth: 280, className: "custom-popup" }
       );
     }
 
-    // Fit bounds — focus on RJ region (filter out distant outliers for zoom)
-    const rjRegion = mappable.filter(
-      (b) => b.lat! > -24.5 && b.lat! < -21.5 && b.lng! > -44.5 && b.lng! < -42.0
-    );
-    const boundsData = rjRegion.length > 1 ? rjRegion : mappable;
-    if (boundsData.length > 1) {
-      const bounds = L.latLngBounds(
-        boundsData.map((b) => [b.lat!, b.lng!] as [number, number])
-      );
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
-    } else if (boundsData.length === 1) {
-      map.setView([boundsData[0].lat!, boundsData[0].lng!], 12);
-    } else {
-      map.setView([-22.95, -43.25], 11);
+    // Fit bounds — incluir todo estado do RJ (lat -21 a -24, lng -41 a -45)
+    // Mas se tem vendas fora do RJ, incluir também
+    const allPoints = mappable.map((b) => [b.lat!, b.lng!] as [number, number]);
+    if (allPoints.length > 1) {
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    } else if (allPoints.length === 1) {
+      map.setView(allPoints[0], 12);
     }
 
     return () => {
@@ -134,40 +157,44 @@ export default function SalesMap({ bairros }: SalesMapProps) {
     (b) => b.lat != null && b.lng != null && b.nome !== "Nao informado"
   ).length;
 
+  const totalVendas = bairros.reduce((s, b) => s + b.qty, 0);
+
   return (
-    <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-base font-semibold text-[#1D1D1F]">
-          Mapa de Vendas
-        </h2>
-        <span className="text-xs text-[#86868B]">
-          {mappableCount} bairros no mapa
-        </span>
+    <div className="bg-white border border-[#E5E5E5] rounded-2xl overflow-hidden shadow-sm">
+      {/* Header sobre o mapa */}
+      <div className="flex items-center justify-between px-4 sm:px-6 pt-4 pb-2">
+        <div>
+          <h2 className="text-sm font-semibold text-[#1D1D1F]">
+            Distribuicao Geografica
+          </h2>
+          <p className="text-[11px] text-[#86868B] mt-0.5">
+            Clique nos marcadores para detalhes
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-[#86868B]">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#86868B]" />
+            Poucas
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+            Media
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#E8740E]" />
+            Muitas
+          </span>
+          <span className="text-[#86868B] font-medium ml-2">
+            {mappableCount} locais
+          </span>
+        </div>
       </div>
-      <p className="text-xs text-[#86868B] mb-3">
-        Distribuicao geografica por bairro — clique nos circulos para detalhes
-      </p>
 
-      {/* Legend */}
-      <div className="flex gap-4 mb-3 text-[10px] text-[#6E6E73]">
-        <div className="flex items-center gap-1">
-          <span className="inline-block w-3 h-3 rounded-full bg-[#2ECC71]" />
-          Poucas
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="inline-block w-3 h-3 rounded-full bg-[#E8740E]" />
-          Media
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="inline-block w-3 h-3 rounded-full bg-[#EF4444]" />
-          Muitas
-        </div>
-      </div>
-
+      {/* Mapa */}
       <div
         ref={mapRef}
-        className="w-full rounded-xl overflow-hidden"
-        style={{ height: "500px" }}
+        className="w-full"
+        style={{ height: "520px" }}
       />
     </div>
   );
