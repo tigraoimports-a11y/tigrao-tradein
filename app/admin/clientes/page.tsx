@@ -48,6 +48,10 @@ export default function ClientesPage() {
   const [notas, setNotas] = useState<{ id: string; data: string; cliente: string; produto: string; preco_vendido: number; nota_fiscal_url: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailClient, setDetailClient] = useState<Cliente | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
+  const [savingClient, setSavingClient] = useState(false);
   const [totals, setTotals] = useState({ total: 0, total_gasto: 0, total_compras: 0 });
   const [sortBy, setSortBy] = useState<"gasto" | "compras" | "nome" | "recente">("gasto");
 
@@ -236,7 +240,7 @@ export default function ClientesPage() {
               ) : sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
-                    onClick={() => setExpandedId(expandedId === c.nome ? null : c.nome)}
+                    onClick={() => setDetailClient(c)}
                     className={`border-b cursor-pointer transition-colors ${dm ? "border-[#2C2C2E] hover:bg-[#2C2C2E]" : "border-[#F5F5F7] hover:bg-[#FAFAFA]"} ${expandedId === c.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
                   >
                     <td className="px-4 py-3">
@@ -314,6 +318,200 @@ export default function ClientesPage() {
         </p>
       )}
       </>)}
+
+      {/* Modal de Detalhes do Cliente */}
+      {detailClient && (() => {
+        const c = detailClient;
+        const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
+        const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+        const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+        const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+        const mInput = `w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#3A3A3C] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:outline-none focus:border-[#E8740E]`;
+
+        const openEdit = () => {
+          setEditForm({
+            nome: c.nome || "", cpf: c.cpf || "", email: c.email || "",
+            bairro: c.bairro || "", cidade: c.cidade || "", uf: c.uf || "",
+            cep: "", endereco: "",
+          });
+          setEditing(true);
+        };
+
+        const saveEdit = async () => {
+          setSavingClient(true);
+          // Atualizar todas as vendas desse cliente com os novos dados
+          for (const v of c.vendas) {
+            const updates: Record<string, string | null> = {};
+            if (editForm.nome && editForm.nome !== c.nome) updates.cliente = editForm.nome.toUpperCase();
+            if (editForm.cpf !== (c.cpf || "")) updates.cpf = editForm.cpf || null;
+            if (editForm.email !== (c.email || "")) updates.email = editForm.email || null;
+            if (editForm.bairro !== (c.bairro || "")) updates.bairro = editForm.bairro || null;
+            if (editForm.cidade !== (c.cidade || "")) updates.cidade = editForm.cidade || null;
+            if (editForm.uf !== (c.uf || "")) updates.uf = editForm.uf || null;
+            if (Object.keys(updates).length > 0) {
+              await fetch("/api/estoque", {
+                method: "PATCH",
+                headers: { ...apiHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ table: "vendas", id: v.id, ...updates }),
+              }).catch(() => {});
+              // Fallback: patch direto
+              await fetch(`https://fohhlehrqtwruzxjzrql.supabase.co/rest/v1/vendas?id=eq.${v.id}`, {
+                method: "PATCH",
+                headers: {
+                  "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
+                  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvaGhsZWhycXR3cnV6eGp6cnFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg1OTI1MiwiZXhwIjoyMDg5NDM1MjUyfQ.l0655fvNwRljhyDZl8ODW5H2HS3PH7rZb1Kjx5TJXvg",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(updates),
+              }).catch(() => {});
+            }
+          }
+          setSavingClient(false);
+          setEditing(false);
+          setDetailClient(null);
+          fetchClientes();
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setDetailClient(null); setEditing(false); }} onKeyDown={(e) => { if (e.key === "Escape") { setDetailClient(null); setEditing(false); } }} tabIndex={-1} ref={(el) => el?.focus()}>
+            <div className={`w-full max-w-2xl mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Editar Contato</p>
+                  <h3 className={`text-lg font-bold ${mP}`}>{c.nome}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!editing && (
+                    <button onClick={openEdit} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20">
+                      Editar
+                    </button>
+                  )}
+                  <button onClick={() => { setDetailClient(null); setEditing(false); }} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                </div>
+              </div>
+
+              {/* Info Card */}
+              <div className={`mx-5 mt-4 p-4 rounded-xl border ${mSec}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nome do Contato</p>
+                    {editing ? <input value={editForm.nome} onChange={(e) => setEditForm(f => ({ ...f, nome: e.target.value }))} className={mInput} />
+                    : <p className={`text-[15px] font-bold ${mP}`}>{c.nome}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tipo</p>
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${c.is_lojista ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                      {c.is_lojista ? "Atacado" : "Cliente"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações de Contato */}
+              <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes de Contato</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Documento</p>
+                    {editing ? <input value={editForm.cpf} onChange={(e) => setEditForm(f => ({ ...f, cpf: e.target.value }))} className={mInput} placeholder="CPF ou CNPJ" />
+                    : <p className={`text-[13px] font-mono ${mP} mt-0.5`}>{c.cpf || "—"}</p>}
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Email</p>
+                    {editing ? <input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} className={mInput} placeholder="email@exemplo.com" />
+                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.email || "—"}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Endereco</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Estado</p>
+                    {editing ? <input value={editForm.uf} onChange={(e) => setEditForm(f => ({ ...f, uf: e.target.value }))} className={mInput} placeholder="UF" />
+                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.uf || "—"}</p>}
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cidade</p>
+                    {editing ? <input value={editForm.cidade} onChange={(e) => setEditForm(f => ({ ...f, cidade: e.target.value }))} className={mInput} placeholder="Cidade" />
+                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.cidade || "—"}</p>}
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bairro</p>
+                    {editing ? <input value={editForm.bairro} onChange={(e) => setEditForm(f => ({ ...f, bairro: e.target.value }))} className={mInput} placeholder="Bairro" />
+                    : <p className={`text-[13px] ${mP} mt-0.5`}>{c.bairro || "—"}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo Financeiro */}
+              <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Resumo Financeiro</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Compras</p>
+                    <p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{c.total_compras}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Gasto</p>
+                    <p className="text-[14px] font-bold text-green-600 mt-0.5">{fmt(c.total_gasto)}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cliente Desde</p>
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(c.cliente_desde)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de edição */}
+              {editing && (
+                <div className="mx-5 mt-3 flex gap-2">
+                  <button onClick={saveEdit} disabled={savingClient} className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
+                    {savingClient ? "Salvando..." : "Salvar Alteracoes"}
+                  </button>
+                  <button onClick={() => setEditing(false)} className={`px-4 py-3 rounded-xl border text-sm font-semibold ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"}`}>
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {/* Últimas Operações */}
+              <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({c.vendas.length})</p>
+                {c.vendas.length === 0 ? (
+                  <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                    {c.vendas.map((v) => (
+                      <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
+                          <span className={`font-medium truncate ${mP}`}>{v.produto}</span>
+                          {v.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {v.serial_no}</span>}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                          <span className={mS}>{v.forma} · {v.banco}</span>
+                          <span className="font-bold text-green-600 w-20 text-right">{fmt(v.preco_vendido)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Fechar */}
+              <div className="mx-5 mt-4 mb-5">
+                <button onClick={() => { setDetailClient(null); setEditing(false); }} className={`w-full py-3 rounded-xl text-sm font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"} transition-colors`}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
