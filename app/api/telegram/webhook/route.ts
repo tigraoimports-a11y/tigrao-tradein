@@ -441,7 +441,6 @@ export async function POST(req: NextRequest) {
         const proxDiaUtil = proximoDiaUtil(new Date(hoje + "T12:00:00"));
         const proxDiaFormatado = formatDateBR(proxDiaUtil);
 
-        const vendasD1P = vp.filter(v => v.recebimento === "D+1");
         const d1ItauP = vendasD1P.filter(v => v.banco === "ITAU").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const d1InfP = vendasD1P.filter(v => v.banco === "INFINITE").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);
         const d1MpP = vendasD1P.filter(v => v.banco === "MERCADO_PAGO").reduce((s, v) => s + Number(v.preco_vendido || 0), 0);

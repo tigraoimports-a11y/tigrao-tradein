@@ -270,7 +270,7 @@ export async function PATCH(req: NextRequest) {
     // Recalcular saldo do dia do reajuste (pode ser diferente do dia da venda)
     const reajDatas = [...new Set(reajInserts.map((r: { data: string }) => r.data))];
     for (const d of reajDatas) {
-      recalcularSaldoDia(supabase, d).catch(() => {});
+      recalcularSaldoDia(supabase, d as string).catch(() => {});
     }
   }
 

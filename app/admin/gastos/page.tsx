@@ -552,11 +552,6 @@ export default function GastosPage() {
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-sm text-[#86868B]">
-            <input type="checkbox" checked={form.is_dep_esp} onChange={(e) => set("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
-            Deposito de especie (sai do caixa, entra no banco)
-          </label>
-
           <button onClick={handleSubmit} disabled={saving} className="w-full py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
             {saving ? "Salvando..." : isFornecedor && pedidoProdutos.length > 0 ? `Registrar Gasto + ${pedidoProdutos.length} Produto(s)` : "Registrar"}
           </button>
@@ -742,10 +737,6 @@ export default function GastosPage() {
                                 {bancoInputGrid(editBancoValores, editSetBanco, inputCls)}
                               </div>
                               <div className="flex items-center gap-3">
-                                <label className="flex items-center gap-2 text-sm text-[#86868B]">
-                                  <input type="checkbox" checked={editForm.is_dep_esp} onChange={(e) => editSet("is_dep_esp", e.target.checked)} className="accent-[#E8740E]" />
-                                  Deposito de especie
-                                </label>
                                 <div className="flex-1" />
                                 <button onClick={() => setEditingKey(null)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
                                 <button onClick={handleEditSave} disabled={editSaving} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">{editSaving ? "Salvando..." : "Salvar"}</button>
