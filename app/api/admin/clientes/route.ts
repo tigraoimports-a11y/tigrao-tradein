@@ -33,8 +33,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data: rawVendas, error } = await query.limit(10000);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Buscar todas as vendas sem limite fixo (paginação automática)
+  const rawVendas: Record<string, unknown>[] = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data: batch, error: batchErr } = await query.range(from, from + PAGE - 1);
+    if (batchErr) return NextResponse.json({ error: batchErr.message }, { status: 500 });
+    if (!batch || batch.length === 0) break;
+    rawVendas.push(...batch);
+    if (batch.length < PAGE) break;
+    from += PAGE;
+  }
 
   // Filtrar canceladas no JS (evita problema com neq e NULL no Supabase)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
