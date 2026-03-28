@@ -21,7 +21,7 @@ interface StepClientDataProps {
 export default function StepClientData({ onNext, onBack, initialNome, initialWhatsApp, initialInstagram, initialOrigem, tradeinConfig }: StepClientDataProps) {
   const [nome, setNome] = useState(initialNome || ""); const [whatsapp, setWhatsapp] = useState(initialWhatsApp || "");
   const [instagram, setInstagram] = useState(initialInstagram || ""); const [origem, setOrigem] = useState(initialOrigem || "");
-  const canProceed = nome.trim() !== "" && whatsapp.trim() !== "";
+  const canProceed = nome.trim() !== "" && whatsapp.trim() !== "" && origem !== "";
 
   const origens = useMemo(() => {
     const list = tradeinConfig?.origens;
@@ -60,7 +60,7 @@ export default function StepClientData({ onNext, onBack, initialNome, initialWha
       </div>
 
       <div className="animate-fadeIn">
-        <label className="block text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: "var(--ti-muted)" }}>{lbl.step3_origem_label || "Como nos encontrou? (opcional)"}</label>
+        <label className="block text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: "var(--ti-muted)" }}>{lbl.step3_origem_label || "Como nos encontrou?"}</label>
         <div className="grid grid-cols-2 gap-2">
           {origens.map((o) => (
             <button key={o} onClick={() => setOrigem(origem === o ? "" : o)}
