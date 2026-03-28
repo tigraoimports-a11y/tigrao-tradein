@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
+  const [bankDetailsOpen, setBankDetailsOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -251,12 +252,12 @@ export default function DashboardPage() {
   const d1AmanhaInf = vendasHoje.filter(v => v.banco === "INFINITE" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
   const Card = ({ title, value, color, sub, icon }: { title: string; value: string; color: string; sub?: string; icon?: string }) => (
-    <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-1">
-        {icon && <span className="text-lg">{icon}</span>}
-        <span className="text-xs text-[#86868B] font-medium">{title}</span>
+    <div className="bg-white rounded-2xl border border-[#D2D2D7] p-3 md:p-4 shadow-sm">
+      <div className="flex items-center gap-1.5 md:gap-2 mb-1">
+        {icon && <span className="text-base md:text-lg">{icon}</span>}
+        <span className="text-[11px] md:text-xs text-[#86868B] font-medium leading-tight">{title}</span>
       </div>
-      <div className={`text-xl font-bold ${color}`}>{value}</div>
+      <div className={`text-lg md:text-xl font-bold ${color}`}>{value}</div>
       {sub && <div className="text-[11px] text-[#86868B] mt-1">{sub}</div>}
     </div>
   );
@@ -311,28 +312,62 @@ export default function DashboardPage() {
             <p className="text-[11px] text-[#86868B]">Mes: {fmt(lucroMes)}</p>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
-            <p className="text-[9px] text-[#86868B]">Itau</p>
-            <p className="text-[12px] font-bold text-blue-700">{fmt(saldoItau)}</p>
+        {/* Bank balances — collapsible accordion */}
+        <button
+          onClick={() => setBankDetailsOpen(!bankDetailsOpen)}
+          className="w-full bg-white rounded-xl border border-[#D2D2D7] p-3 shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">Saldos por Banco</span>
+            <span className="text-[11px] text-[#86868B]">{bankDetailsOpen ? "▲" : "▼"}</span>
           </div>
-          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
-            <p className="text-[9px] text-[#86868B]">Infinite</p>
-            <p className="text-[12px] font-bold text-purple-700">{fmt(saldoInf)}</p>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="text-center">
+              <p className="text-[9px] text-[#86868B]">Itau</p>
+              <p className="text-[12px] font-bold text-blue-700">{fmt(saldoItau)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-[#86868B]">Infinite</p>
+              <p className="text-[12px] font-bold text-purple-700">{fmt(saldoInf)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-[#86868B]">MP</p>
+              <p className="text-[12px] font-bold text-green-700">{fmt(saldoMP)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-[#86868B]">Especie</p>
+              <p className="text-[12px] font-bold text-[#1D1D1F]">{fmt(saldoEsp)}</p>
+            </div>
           </div>
-          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
-            <p className="text-[9px] text-[#86868B]">MP</p>
-            <p className="text-[12px] font-bold text-green-700">{fmt(saldoMP)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-[#D2D2D7] p-2.5 text-center shadow-sm">
-            <p className="text-[9px] text-[#86868B]">Especie</p>
-            <p className="text-[12px] font-bold text-[#1D1D1F]">{fmt(saldoEsp)}</p>
-          </div>
-        </div>
+          {bankDetailsOpen && (
+            <div className="mt-3 pt-3 border-t border-[#E5E5EA] space-y-2.5 text-left" onClick={(e) => e.stopPropagation()}>
+              {/* Itau details */}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-blue-700 font-semibold">Itau</span>
+                <span className="text-[11px] text-[#86868B]">Base: {fmt(itauBase)} | PIX: +{fmt(pixHojeItau)} | Saidas: -{fmt(gastosHojeItau)}</span>
+              </div>
+              {/* Infinite details */}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-purple-700 font-semibold">Infinite</span>
+                <span className="text-[11px] text-[#86868B]">Base: {fmt(infBase)} | PIX: +{fmt(pixHojeInf)} | Saidas: -{fmt(gastosHojeInf)}</span>
+              </div>
+              {/* MP details */}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-green-700 font-semibold">MP</span>
+                <span className="text-[11px] text-[#86868B]">Base: {fmt(mpBase)} | Link: +{fmt(pixHojeMP)} | Saidas: -{fmt(gastosHojeMP)}</span>
+              </div>
+              {/* Especie details */}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[#1D1D1F] font-semibold">Especie</span>
+                <span className="text-[11px] text-[#86868B]">Base: {fmt(espBase)} | Receb: +{fmt(especieHoje)} | Saidas: -{fmt(gastosHojeEsp)}</span>
+              </div>
+            </div>
+          )}
+        </button>
       </div>
 
-      {/* Saldos Bancários */}
-      <div>
+      {/* Saldos Bancários — hidden on mobile (shown in mobile KPI above) */}
+      <div className="hidden md:block">
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Saldos Bancários</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card icon="🏦" title="Saldo Itaú (atual)" value={fmt(saldoItau)} color="text-blue-700" sub={`Base: ${fmt(itauBase)} | PIX: +${fmt(pixHojeItau)} | Saídas: -${fmt(gastosHojeItau)}`} />
@@ -381,23 +416,23 @@ export default function DashboardPage() {
         return (
           <div>
             <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Projecao do Mes</h2>
-            <div className="bg-white rounded-2xl border border-[#D2D2D7] p-5 shadow-sm space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 md:p-5 shadow-sm space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                 <div>
-                  <p className="text-xs text-[#86868B]">Lucro ate hoje</p>
-                  <p className="text-lg font-bold text-green-700">{fmt(lucroMes)}</p>
+                  <p className="text-[11px] md:text-xs text-[#86868B]">Lucro ate hoje</p>
+                  <p className="text-base md:text-lg font-bold text-green-700">{fmt(lucroMes)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#86868B]">Media diaria</p>
-                  <p className="text-lg font-bold text-[#1D1D1F]">{fmt(mediaDiaria)}</p>
+                  <p className="text-[11px] md:text-xs text-[#86868B]">Media diaria</p>
+                  <p className="text-base md:text-lg font-bold text-[#1D1D1F]">{fmt(mediaDiaria)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#86868B]">Projecao fim do mes</p>
-                  <p className="text-lg font-bold text-blue-700">{fmt(projecaoFimMes)}</p>
+                  <p className="text-[11px] md:text-xs text-[#86868B]">Projecao fim do mes</p>
+                  <p className="text-base md:text-lg font-bold text-blue-700">{fmt(projecaoFimMes)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#86868B]">Dias restantes</p>
-                  <p className="text-lg font-bold text-[#1D1D1F]">{diasRestantes}</p>
+                  <p className="text-[11px] md:text-xs text-[#86868B]">Dias restantes</p>
+                  <p className="text-base md:text-lg font-bold text-[#1D1D1F]">{diasRestantes}</p>
                 </div>
               </div>
               {/* Barra de progresso */}
@@ -438,23 +473,23 @@ export default function DashboardPage() {
 
       {/* Totais */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-5">
+        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 md:p-5">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">🏦</span>
+            <span className="text-base md:text-lg">🏦</span>
             <span className="text-sm text-blue-600 font-medium">Saldo Total em Conta</span>
           </div>
-          <div className="text-2xl font-bold text-blue-800">{fmt(saldoTotal)}</div>
-          <div className="text-xs text-blue-500 mt-1">
+          <div className="text-xl md:text-2xl font-bold text-blue-800">{fmt(saldoTotal)}</div>
+          <div className="text-[11px] md:text-xs text-blue-500 mt-1">
             Itaú: {fmt(saldoItau)} | Inf: {fmt(saldoInf)} | MP: {fmt(saldoMP)} | Esp: {fmt(saldoEsp)}
           </div>
         </div>
-        <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-5">
+        <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-4 md:p-5">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">🏆</span>
+            <span className="text-base md:text-lg">🏆</span>
             <span className="text-sm text-yellow-700 font-medium">Patrimônio da Empresa</span>
           </div>
-          <div className="text-2xl font-bold text-yellow-800">{fmt(patrimonio)}</div>
-          <div className="text-xs text-yellow-600 mt-1">
+          <div className="text-xl md:text-2xl font-bold text-yellow-800">{fmt(patrimonio)}</div>
+          <div className="text-[11px] md:text-xs text-yellow-600 mt-1">
             Produtos: {fmt(capitalProdutos)} | Contas: {fmt(saldoTotal)}
           </div>
         </div>
@@ -532,8 +567,8 @@ function VendasChart({ vendas }: { vendas: DashData["vendas"] }) {
           ))}
         </div>
       </div>
-      <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm overflow-x-auto">
-        <div className="flex items-end gap-1 min-w-fit" style={{ height: 160 }}>
+      <div className="bg-white rounded-2xl border border-[#D2D2D7] p-4 shadow-sm overflow-x-auto -mx-1 md:mx-0">
+        <div className="flex items-end gap-1 min-w-fit" style={{ height: 160, minWidth: dias > 14 ? `${dias * 32}px` : undefined }}>
           {chartData.map((d, i) => (
             <div key={i} className="flex flex-col items-center gap-1 flex-1 min-w-[28px]">
               <span className="text-[9px] text-[#86868B] font-medium">{d.qtd > 0 ? d.qtd : ""}</span>
