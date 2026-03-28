@@ -39,18 +39,18 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   });
 
   // Theme — from URL ?tema= or admin config with auto night mode (18h–6h)
-  const [temaDia, setTemaDia] = useState<string>("tigrao");
+  const [temaDia, setTemaDia] = useState<string>("clean");
   const [temaNoite, setTemaNoite] = useState<string>("tigrao");
   const [temaKey, setTemaKey] = useState<string>(temaParam || "tigrao");
   const tema = useMemo(() => getTemaTI(temaKey), [temaKey]);
   const cssVars = useMemo(() => temaTICSSVars(tema), [tema]);
 
-  // Auto switch theme based on time of day (18h–6h = night)
+  // Auto switch theme based on time of day (19h–6h = night)
   useEffect(() => {
     if (temaParam) return; // URL override — don't auto switch
     function pickByHour() {
       const h = new Date().getHours();
-      const isNight = h >= 18 || h < 6;
+      const isNight = h >= 19 || h < 6;
       setTemaKey(isNight ? temaNoite : temaDia);
     }
     pickByHour();
