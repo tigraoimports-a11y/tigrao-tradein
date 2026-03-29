@@ -247,7 +247,7 @@ export default function DashboardPage() {
   const valorEstoque = data.estoque.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
   const valorACaminho = data.aCaminho.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
   const capitalProdutos = valorEstoque + valorACaminho;
-  const patrimonio = capitalProdutos + saldoTotal;
+  const patrimonio = capitalProdutos + saldoTotal; // d1Total adicionado abaixo após calcular
 
   // Fiado pendente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,7 +261,9 @@ export default function DashboardPage() {
   // D+1 previsão próximo dia útil (via API com taxas reais)
   const d1AmanhaItau = data.d1Preview?.d1_itau || 0;
   const d1AmanhaInf = data.d1Preview?.d1_inf || 0;
+  const d1Total = d1AmanhaItau + d1AmanhaInf;
   const proxDiaUtil = data.d1Preview?.data || "";
+  const patrimonioTotal = patrimonio + d1Total;
 
   const Card = ({ title, value, color, sub, icon }: { title: string; value: string; color: string; sub?: string; icon?: string }) => (
     <div className="bg-white rounded-2xl border border-[#D2D2D7] p-3 md:p-4 shadow-sm">
@@ -307,7 +309,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gradient-to-br from-[#E8740E] to-[#F5A623] rounded-2xl p-4 text-white shadow-lg">
             <p className="text-[11px] font-medium opacity-80">Patrimonio Total</p>
-            <p className="text-[22px] font-bold mt-1">{fmt(patrimonio)}</p>
+            <p className="text-[22px] font-bold mt-1">{fmt(patrimonioTotal)}</p>
           </div>
           <div className="bg-gradient-to-br from-[#1D1D1F] to-[#3A3A3C] rounded-2xl p-4 text-white shadow-lg">
             <p className="text-[11px] font-medium opacity-80">Saldo em Conta</p>
@@ -501,9 +503,9 @@ export default function DashboardPage() {
             <span className="text-base md:text-lg">🏆</span>
             <span className="text-sm text-yellow-700 font-medium">Patrimônio da Empresa</span>
           </div>
-          <div className="text-xl md:text-2xl font-bold text-yellow-800">{fmt(patrimonio)}</div>
+          <div className="text-xl md:text-2xl font-bold text-yellow-800">{fmt(patrimonioTotal)}</div>
           <div className="text-[11px] md:text-xs text-yellow-600 mt-1">
-            Produtos: {fmt(capitalProdutos)} | Contas: {fmt(saldoTotal)}
+            Produtos: {fmt(capitalProdutos)} | Contas: {fmt(saldoTotal)} | D+1: {fmt(d1Total)}
           </div>
         </div>
       </div>
@@ -517,7 +519,7 @@ export default function DashboardPage() {
               const pBase = Number(patrimonioBase.patrimonio_base);
               const retirada = Number(patrimonioBase.distribuicao_lucro);
               const lucroLiq = lucroMes - saidasMes;
-              const patAtual = patrimonio;
+              const patAtual = patrimonioTotal;
               const crescimento = patAtual - pBase;
               const crescPct = pBase > 0 ? (crescimento / pBase) * 100 : 0;
               return <>
@@ -570,11 +572,11 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl border border-dashed border-[#D2D2D7] p-5 text-center">
             <p className="text-sm text-[#86868B] mb-3">Nenhum patrimônio base registrado para este mês</p>
             <button onClick={async () => {
-              const base = patrimonio;
+              const base = patrimonioTotal;
               await fetch("/api/patrimonio", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ mes: hoje.slice(0, 7), patrimonio_base: base, estoque_base: capitalProdutos, saldos_base: saldoTotal }) });
               fetchData();
             }} className="px-4 py-2 bg-[#E8740E] text-white text-sm font-semibold rounded-xl hover:bg-[#D06A0C] transition-colors">
-              Registrar patrimônio base ({fmt(patrimonio)})
+              Registrar patrimônio base ({fmt(patrimonioTotal)})
             </button>
           </div>
         )}
