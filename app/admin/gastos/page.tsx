@@ -444,7 +444,7 @@ export default function GastosPage() {
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
-  const totalSaida = gastos.reduce((s, g) => s + Number(g.valor), 0);
+  const totalSaida = gastos.filter(g => !g.is_dep_esp).reduce((s, g) => s + Number(g.valor), 0);
 
   const bancoInputGrid = (valores: BancoValores, onChange: (b: Banco, v: string) => void, cls: string) => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -562,8 +562,8 @@ export default function GastosPage() {
           <div className="flex flex-wrap items-center gap-4">
             <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 shadow-sm`}>
               <p className="text-xs text-[#86868B]">Total Saidas</p>
-              <p className="text-xl font-bold text-red-500">{fmt(gruposFiltrados.reduce((s, g) => s + g.totalValor, 0))}</p>
-              <p className="text-[10px] text-[#86868B]">{gruposFiltrados.length} registros</p>
+              <p className="text-xl font-bold text-red-500">{fmt(gruposFiltrados.filter(g => !g.is_dep_esp).reduce((s, g) => s + g.totalValor, 0))}</p>
+              <p className="text-[10px] text-[#86868B]">{gruposFiltrados.filter(g => !g.is_dep_esp).length} registros</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setFiltroCategoria("")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
@@ -583,7 +583,7 @@ export default function GastosPage() {
           ) : gruposPorData.length === 0 ? (
             <p className="text-center text-[#86868B] py-8">Nenhum gasto encontrado</p>
           ) : gruposPorData.map(([data, gastosData]) => {
-            const totalDia = gastosData.reduce((s, g) => s + g.totalValor, 0);
+            const totalDia = gastosData.filter(g => !g.is_dep_esp).reduce((s, g) => s + g.totalValor, 0);
             const diasSemana = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
             const d = new Date(data + "T12:00:00");
             const diaSemana = diasSemana[d.getDay()];
