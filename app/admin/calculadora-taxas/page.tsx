@@ -39,12 +39,8 @@ export default function CalculadoraTaxasPage() {
   }, [valor]);
 
   return (
-    <div className="max-w-md mx-auto space-y-4">
-      <div>
-        <h1 className="text-lg font-bold text-[#1D1D1F]">Calculadora de Parcelas</h1>
-      </div>
-
-      <div className="bg-white border border-[#D2D2D7] rounded-xl p-3 shadow-sm">
+    <div className="max-w-md mx-auto space-y-2">
+      <div className="bg-white border border-[#D2D2D7] rounded-xl p-2 shadow-sm">
         <input
           type="text"
           inputMode="numeric"
@@ -61,27 +57,27 @@ export default function CalculadoraTaxasPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#1D1D1F] text-white text-[11px]">
-                <th className="px-2 py-2 text-left font-semibold"></th>
-                <th className="px-2 py-2 text-center font-semibold">PARCELA</th>
-                <th className="px-2 py-2 text-right font-semibold">TOTAL</th>
+                <th className="px-2 py-1.5 text-left font-semibold"></th>
+                <th className="px-2 py-1.5 text-center font-semibold">PARCELA</th>
+                <th className="px-2 py-1.5 text-right font-semibold">TOTAL</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b border-[#E5E5E5] bg-green-50">
-                <td className="px-2 py-[6px] font-bold text-green-700">PIX</td>
-                <td className="px-2 py-[6px] text-center font-bold text-green-700">{fmt(valor)}</td>
-                <td className="px-2 py-[6px] text-right font-bold text-green-700">{fmt(valor)}</td>
+                <td className="px-2 py-[5px] font-bold text-green-700">PIX</td>
+                <td className="px-2 py-[5px] text-center font-bold text-green-700">{fmt(valor)}</td>
+                <td className="px-2 py-[5px] text-right font-bold text-green-700">{fmt(valor)}</td>
               </tr>
               <tr className="border-b border-[#E5E5E5] bg-blue-50">
-                <td className="px-2 py-[6px] font-bold text-blue-700">Debito</td>
-                <td className="px-2 py-[6px] text-center font-bold text-blue-700">{fmt(debito)}</td>
-                <td className="px-2 py-[6px] text-right font-bold text-blue-700">{fmt(debito)}</td>
+                <td className="px-2 py-[5px] font-bold text-blue-700">Debito</td>
+                <td className="px-2 py-[5px] text-center font-bold text-blue-700">{fmt(debito)}</td>
+                <td className="px-2 py-[5px] text-right font-bold text-blue-700">{fmt(debito)}</td>
               </tr>
               {parcelas.map((p, i) => (
                 <tr key={p.n} className={`border-b border-[#E5E5E5] ${i % 2 === 0 ? "" : "bg-[#FAFAFA]"}`}>
-                  <td className="px-2 py-[6px] font-bold text-[#1D1D1F]">{p.n}x</td>
-                  <td className="px-2 py-[6px] text-center font-bold text-[#E8740E]">{fmt(p.parcela)}</td>
-                  <td className="px-2 py-[6px] text-right font-semibold text-green-600">{fmt(p.total)}</td>
+                  <td className="px-2 py-[5px] font-bold text-[#1D1D1F]">{p.n}x</td>
+                  <td className="px-2 py-[5px] text-center font-bold text-[#E8740E]">{fmt(p.parcela)}</td>
+                  <td className="px-2 py-[5px] text-right font-semibold text-green-600">{fmt(p.total)}</td>
                 </tr>
               ))}
             </tbody>
