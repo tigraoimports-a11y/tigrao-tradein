@@ -98,7 +98,7 @@ export default function DashboardPage() {
   const lucroHoje = vendasHoje.reduce((s, v) => s + (v.lucro || 0), 0);
 
   // Gastos (excluir FORNECEDOR — compra de estoque não é gasto, vira produto)
-  const gastosReais = (arr: typeof gastosMes) => arr.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR");
+  const gastosReais = (arr: typeof gastosMes) => arr.filter(g => g.tipo === "SAIDA" && g.categoria !== "FORNECEDOR" && !g.is_dep_esp);
   const saidasMes = gastosReais(gastosMes).reduce((s, g) => s + (g.valor || 0), 0);
   const saidasHoje = gastosReais(gastosHoje).reduce((s, g) => s + (g.valor || 0), 0);
   const entradasMes = gastosMes.filter(g => g.tipo === "ENTRADA").reduce((s, g) => s + (g.valor || 0), 0);
@@ -113,8 +113,8 @@ export default function DashboardPage() {
   // Tipos de venda
   const upgrades = vendasMes.filter(v => v.tipo === "UPGRADE");
   const somenteVendas = vendasMes.filter(v => v.tipo === "VENDA");
-  const atacado = vendasMes.filter(v => v.tipo === "ATACADO" || v.origem === "ATACADO");
-  const clienteFinal = vendasMes.filter(v => v.origem !== "ATACADO");
+  const atacado = vendasMes.filter(v => v.tipo === "ATACADO");
+  const clienteFinal = vendasMes.filter(v => v.tipo !== "ATACADO");
 
   // Vendas pendentes
   const vendasPendentes = data.vendas.filter(v => v.status_pagamento === "AGUARDANDO");
