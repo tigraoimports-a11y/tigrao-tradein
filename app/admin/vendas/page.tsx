@@ -11,6 +11,45 @@ import type { Venda } from "@/lib/admin-types";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+const fmtCents = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
+
+/** Calcula o lucro real de uma venda, descontando a taxa da maquininha */
+function calcLucroReal(v: { custo: number; preco_vendido: number; forma: string; banco: string; qnt_parcelas: number | null; bandeira: string | null; valor_comprovante: number | null; entrada_pix: number; entrada_especie: number; produto_na_troca: string | null; comp_alt: number | null; banco_alt: string | null; parc_alt: number | null; band_alt: string | null; lucro: number }): { lucro: number; margem: number } {
+  const forma = v.forma;
+
+  // PIX, DINHEIRO, FIADO: sem taxa, lucro do banco está correto
+  if (forma === "PIX" || forma === "DINHEIRO" || forma === "FIADO") {
+    return { lucro: v.lucro, margem: v.preco_vendido > 0 ? (v.lucro / v.preco_vendido) * 100 : 0 };
+  }
+
+  const taxa = forma === "CARTAO"
+    ? getTaxa(v.banco, v.bandeira, v.qnt_parcelas, "CARTAO")
+    : forma === "DEBITO" ? 0.75
+    : 0;
+
+  if (taxa <= 0) {
+    return { lucro: v.lucro, margem: v.preco_vendido > 0 ? (v.lucro / v.preco_vendido) * 100 : 0 };
+  }
+
+  const pix = v.entrada_pix || 0;
+  const especie = v.entrada_especie || 0;
+  const troca = parseFloat(v.produto_na_troca || "0") || 0;
+  const compAlt = v.comp_alt || 0;
+  const taxaAlt = compAlt > 0 ? getTaxa(v.banco_alt || "ITAU", v.band_alt || null, v.parc_alt || 0, "CARTAO") : 0;
+  const liqAlt = compAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(compAlt, taxaAlt) : compAlt) : 0;
+
+  // Usar valor_comprovante salvo, ou estimar a parte do cartão
+  const comp = v.valor_comprovante || (v.preco_vendido - pix - especie - troca - compAlt);
+  if (comp <= 0) {
+    return { lucro: v.lucro, margem: v.preco_vendido > 0 ? (v.lucro / v.preco_vendido) * 100 : 0 };
+  }
+
+  const liqPrincipal = calcularLiquido(comp, taxa);
+  const totalReal = liqPrincipal + liqAlt + pix + especie + troca;
+  const lucro = totalReal - v.custo;
+  const margem = totalReal > 0 ? (lucro / totalReal) * 100 : 0;
+  return { lucro: Math.round(lucro * 100) / 100, margem: Math.round(margem * 10) / 10 };
+}
 
 const VENDAS_PASSWORD = "tigrao$vendas";
 
@@ -737,40 +776,46 @@ export default function VendasPage() {
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
     }
-    if (payloads.length > 1) {
+    // Recalcular preco_vendido = total real recebido (liquido apos taxa)
+    // O banco calcula lucro = preco_vendido - custo, entao preco_vendido
+    // precisa ser o valor liquido real, nao o preco cheio
+    {
       const comprovanteTotal = Number(payloads[0]?.valor_comprovante || 0);
-      if (comprovanteTotal > 0) {
-        // Calculate total custo for proportional distribution
+      const gForma = form.forma;
+      const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : form.banco;
+      const gParcelas = parseInt(form.qnt_parcelas) || 0;
+      const gBandeira = form.bandeira || null;
+      const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
+        ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+        : gForma === "DEBITO" ? 0.75
+        : 0;
+
+      // Total líquido from comprovante after tax
+      const totalLiquido = gTaxa > 0 && comprovanteTotal > 0
+        ? calcularLiquido(comprovanteTotal, gTaxa)
+        : comprovanteTotal;
+
+      // Cartão alternativo (2o cartão)
+      const gCompAlt = parseFloat(form.comp_alt) || 0;
+      const gTaxaAlt = gCompAlt > 0
+        ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+        : 0;
+      const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
+
+      // Add entradas (pix, especie) — these are global
+      const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+      const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
+      // Trocas são por produto — somar todas as trocas de todos os produtos
+      const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
+      const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+
+      if (payloads.length === 1) {
+        // Produto único: preco_vendido = total real recebido (líquido)
+        payloads[0].preco_vendido = Math.round(totalRecebido * 100) / 100;
+      } else if (comprovanteTotal > 0) {
+        // Multi-produto: distribuir proporcionalmente pelo custo
         const totalCusto = payloads.reduce((s, p) => s + Number(p.custo || 0), 0);
-
         if (totalCusto > 0) {
-          // Calculate taxa from form (same for all products since payment is global)
-          const gForma = form.forma;
-          const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : form.banco;
-          const gParcelas = parseInt(form.qnt_parcelas) || 0;
-          const gBandeira = form.bandeira || null;
-          const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
-            ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
-            : gForma === "DEBITO" ? 0.75
-            : 0;
-
-          // Total líquido from comprovante after tax
-          const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
-
-          // Cartão alternativo (2o cartão)
-          const gCompAlt = parseFloat(form.comp_alt) || 0;
-          const gTaxaAlt = gCompAlt > 0
-            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
-            : 0;
-          const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
-
-          // Add entradas (pix, especie) — these are global
-          const gEntradaPix = parseFloat(form.entrada_pix) || 0;
-          const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
-          // Trocas são por produto — somar todas as trocas de todos os produtos
-          const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
-
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
           for (let i = 0; i < payloads.length; i++) {
@@ -1679,7 +1724,7 @@ export default function VendasPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className={labelCls}>Categoria</p>
                     <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
@@ -1687,10 +1732,6 @@ export default function VendasPage() {
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
-                  <option value="">— Selecionar —</option>
-                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-                </select></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
@@ -1928,8 +1969,18 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Maquina</p><select value={form.banco} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option>
                   </select></div>
-                  <div><p className={labelCls}>Parcelas</p><input type="number" value={form.qnt_parcelas} onChange={(e) => set("qnt_parcelas", e.target.value)} placeholder="1" className={inputCls} /></div>
-                  <div><p className={labelCls}>Bandeira</p><select value={form.bandeira} onChange={(e) => set("bandeira", e.target.value)} className={selectCls}>
+                  <div><p className={labelCls}>Parcelas</p><input type="number" value={form.qnt_parcelas} onChange={(e) => {
+                    set("qnt_parcelas", e.target.value);
+                    // Recalcular preco_vendido quando parcelas mudam
+                    const newVendido = recalcVendido({ comp: form.valor_comprovante_input });
+                    if (newVendido && produtosCarrinho.length === 0) set("preco_vendido", newVendido);
+                  }} placeholder="1" className={inputCls} /></div>
+                  <div><p className={labelCls}>Bandeira</p><select value={form.bandeira} onChange={(e) => {
+                    set("bandeira", e.target.value);
+                    // Recalcular preco_vendido quando bandeira muda
+                    const newVendido = recalcVendido({ comp: form.valor_comprovante_input });
+                    if (newVendido && produtosCarrinho.length === 0) set("preco_vendido", newVendido);
+                  }} className={selectCls}>
                     <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
                   </select></div>
                   {taxa > 0 && (
@@ -2534,7 +2585,7 @@ export default function VendasPage() {
 
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : "Histórico de Vendas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-          const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
+          const totalLucro = filtered.reduce((s, v) => s + calcLucroReal(v).lucro, 0);
 
           return (
             <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -2654,7 +2705,7 @@ export default function VendasPage() {
                     <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
-                    const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
+                    const lucroDia = vendasDoDia.reduce((s, v) => s + calcLucroReal(v).lucro, 0);
                     const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
                     const qtdDia = vendasDoDia.length;
                     const [y, m, d] = (dataKey || "").split("-");
@@ -2774,8 +2825,7 @@ export default function VendasPage() {
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
                               <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
-                              <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                              {(() => { const lr = calcLucroReal(v); return (<><td className={`px-3 py-2.5 font-bold text-xs ${lr.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmtCents(lr.lucro)}</td><td className="px-3 py-2.5 text-[#86868B] text-xs">{lr.margem.toFixed(1)}%</td></>); })()}
                               <td className="px-3 py-2.5 text-xs max-w-[250px]">
                                 <div className="space-y-0.5">
                                   {pagParts.map((p, i) => (
@@ -2815,9 +2865,31 @@ export default function VendasPage() {
                                                 e.stopPropagation();
                                                 setEditSaving(true);
                                                 // lucro e margem_pct são GENERATED ALWAYS no Supabase — NÃO enviar!
-                                                const pv = parseFloat(ef.preco_vendido) || 0;
                                                 const c = parseFloat(ef.custo) || 0;
-                                                // Lucro = total real recebido - custo (preco_vendido já é o total real)
+                                                // Recalcular preco_vendido = total real recebido (liquido apos taxa)
+                                                const efForma = ef.forma;
+                                                const efBanco = ef.banco;
+                                                const efParcelas = parseInt(ef.qnt_parcelas) || 0;
+                                                const efBandeira = ef.bandeira || null;
+                                                const efTaxa = (efForma === "CARTAO")
+                                                  ? getTaxa(efBanco, efBandeira, efParcelas, efForma)
+                                                  : efForma === "DEBITO" ? 0.75
+                                                  : 0;
+                                                const efComprovante = parseFloat(ef.valor_comprovante) || 0;
+                                                const efLiquido = efTaxa > 0 && efComprovante > 0
+                                                  ? calcularLiquido(efComprovante, efTaxa)
+                                                  : efComprovante;
+                                                const efCompAlt = parseFloat(ef.comp_alt) || 0;
+                                                const efTaxaAlt = efCompAlt > 0
+                                                  ? getTaxa(ef.banco_alt || "ITAU", ef.band_alt || null, parseInt(ef.parc_alt) || 0, "CARTAO")
+                                                  : 0;
+                                                const efLiqAlt = efCompAlt > 0 ? (efTaxaAlt > 0 ? calcularLiquido(efCompAlt, efTaxaAlt) : efCompAlt) : 0;
+                                                const efPix = parseFloat(ef.entrada_pix) || 0;
+                                                const efEspecie = parseFloat(ef.entrada_especie) || 0;
+                                                const efTroca = parseFloat(ef.produto_na_troca) || 0;
+                                                const pv = efForma === "PIX" || efForma === "DINHEIRO"
+                                                  ? (parseFloat(ef.preco_vendido) || 0)
+                                                  : Math.round((efLiquido + efLiqAlt + efPix + efEspecie + efTroca) * 100) / 100;
                                                 const newLucro = pv - c;
                                                 const newMargem = pv > 0 ? Math.round(((pv - c) / pv) * 1000) / 10 : 0;
                                                 const updates: Record<string, unknown> = {
