@@ -117,6 +117,28 @@ export const CORES_ETIQUETA: Record<string, string[]> = {
 };
 
 /**
+ * Detecta a categoria correta baseada no nome do produto.
+ * Retorna a categoria detectada ou null se nao conseguir detectar.
+ */
+export function detectCategoria(produtoNome: string): string | null {
+  if (!produtoNome) return null;
+  const nome = produtoNome.toUpperCase();
+
+  // Verificar por palavras-chave especificas (ordem importa — mais especifico primeiro)
+  if (nome.includes("AIRTAG")) return "ACESSORIOS";
+  if (nome.includes("MAGIC KEYBOARD")) return "ACESSORIOS";
+  if (nome.includes("APPLE PENCIL")) return "ACESSORIOS";
+  if (nome.includes("MAC MINI")) return "MAC_MINI";
+  if (nome.includes("MACBOOK")) return "MACBOOK";
+  if (nome.includes("AIRPODS") || nome.includes("AIRPOD")) return "AIRPODS";
+  if (nome.includes("IPAD")) return "IPADS";
+  if (nome.includes("IPHONE")) return "IPHONES";
+  if (nome.includes("WATCH")) return "APPLE_WATCH";
+
+  return null;
+}
+
+/**
  * Status da etiqueta/produto
  */
 export const STATUS_ETIQUETA = {

@@ -8,6 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
+import { detectCategoria } from "@/lib/barcode";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
@@ -1984,6 +1985,12 @@ export default function EstoquePage() {
                             const showMover = tab === "acaminho" || isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                            const prodCustoMedio = prodTotal > 0 ? Math.round(prodValor / prodTotal) : 0;
+                            // Verificar se há variação de custo entre unidades (fornecedores diferentes)
+                            const custosUnicos = new Set(prodItems.filter(p => p.custo_unitario).map(p => p.custo_unitario));
+                            const temVariacaoCusto = custosUnicos.size > 1;
+                            const custoMin = Math.min(...prodItems.filter(p => p.custo_unitario).map(p => p.custo_unitario));
+                            const custoMax = Math.max(...prodItems.filter(p => p.custo_unitario).map(p => p.custo_unitario));
 
                             return (
                               <React.Fragment key={prodNome}>
@@ -2020,7 +2027,14 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
                                   </td>
-                                  <td className="px-4 py-2 text-xs text-white/50">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                  <td className="px-4 py-2 text-xs">
+                                    {prodCustoMedio > 0 ? (
+                                      <div className="flex flex-col">
+                                        <span className="text-white/80 font-semibold">{fmt(prodCustoMedio)}{temVariacaoCusto ? " med." : ""}</span>
+                                        {temVariacaoCusto && <span className="text-white/40 text-[10px]">{fmt(custoMin)} ~ {fmt(custoMax)}</span>}
+                                      </div>
+                                    ) : ""}
+                                  </td>
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
                                 </tr>
@@ -2803,7 +2817,11 @@ function ScanEntradaTab({ password, userName, onSuccess }: { password: string; u
           {/* Produto (nome completo) */}
           <div>
             <p className={labelCls}>Produto (nome completo)</p>
-            <input value={form.produto} onChange={e => setForm(f => ({ ...f, produto: e.target.value }))} placeholder="Ex: IPHONE 17 PRO MAX 256GB" className={inputCls} />
+            <input value={form.produto} onChange={e => {
+              const val = e.target.value;
+              const cat = detectCategoria(val);
+              setForm(f => ({ ...f, produto: val, ...(cat ? { categoria: cat } : {}) }));
+            }} placeholder="Ex: IPHONE 17 PRO MAX 256GB" className={inputCls} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

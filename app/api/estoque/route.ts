@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
+import { detectCategoria } from "@/lib/barcode";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -118,6 +119,18 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Auto-corrigir categorias incorretas (ex: AirTag cadastrado como IPHONES → ACESSORIOS)
+  if (data) {
+    for (const item of data) {
+      const catCorreta = detectCategoria(item.produto);
+      if (catCorreta && catCorreta !== item.categoria) {
+        await supabase.from("estoque").update({ categoria: catCorreta }).eq("id", item.id);
+        item.categoria = catCorreta;
+      }
+    }
+  }
+
   return NextResponse.json({ data });
 }
 
