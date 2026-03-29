@@ -141,8 +141,10 @@ export async function gerarNoite(
     if (espVal > 0) pix_esp += espVal;
   }
 
-  // 3. Créditos D+1 de dias anteriores que creditam hoje
+  // 3. Créditos D+1 de dias anteriores que creditam no próximo dia útil
   const hoje = new Date(dataISO + "T12:00:00");
+  const proxDiaUtil = proximoDiaUtil(hoje);
+  const proxDiaUtilISO = `${proxDiaUtil.getFullYear()}-${String(proxDiaUtil.getMonth() + 1).padStart(2, "0")}-${String(proxDiaUtil.getDate()).padStart(2, "0")}`;
   const seteDiasAtras = new Date(hoje);
   seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
   const seteDiasISO = `${seteDiasAtras.getFullYear()}-${String(seteDiasAtras.getMonth() + 1).padStart(2, "0")}-${String(seteDiasAtras.getDate()).padStart(2, "0")}`;
@@ -152,7 +154,7 @@ export async function gerarNoite(
     .select("*")
     .eq("recebimento", "D+1")
     .gte("data", seteDiasISO)
-    .lt("data", dataISO)
+    .lte("data", dataISO)
     .neq("status_pagamento", "CANCELADO");
 
   const d1rows = (vendasD1 ?? []) as Venda[];
@@ -162,7 +164,7 @@ export async function gerarNoite(
   for (const v of d1rows) {
     const dataReceb = proximoDiaUtil(new Date(v.data + "T12:00:00"));
     const recebISO = `${dataReceb.getFullYear()}-${String(dataReceb.getMonth() + 1).padStart(2, "0")}-${String(dataReceb.getDate()).padStart(2, "0")}`;
-    if (recebISO === dataISO) {
+    if (recebISO === proxDiaUtilISO) {
       const comprovante = Number(v.valor_comprovante || 0);
       if (comprovante > 0) {
         // Deduplicar por ID da venda (cada registro = 1 produto/1 comprovante)
@@ -299,7 +301,7 @@ export async function gerarNoite(
     data: dataISO,
     itau_base, inf_base, mp_base,
     pix_itau, pix_inf, pix_mp, pix_esp,
-    d1_itau, d1_inf, d1_mp,
+    d1_itau, d1_inf, d1_mp, d1_data: proxDiaUtilISO,
     reaj_itau, reaj_inf, reaj_mp, reaj_esp,
     saiu_itau, saiu_inf, saiu_mp, saiu_esp,
     esp_itau, esp_inf, esp_mp, esp_especie,

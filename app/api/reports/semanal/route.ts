@@ -186,9 +186,10 @@ async function fetchSemanaData(inicio: string, fim: string, semanaNum: number, e
       .neq("status_pagamento", "CANCELADO"),
     supabase
       .from("gastos")
-      .select("data, valor, tipo, categoria, descricao, banco")
+      .select("data, valor, tipo, categoria, descricao, banco, is_dep_esp")
       .gte("data", inicio)
-      .lte("data", fim),
+      .lte("data", fim)
+      .or("is_dep_esp.is.null,is_dep_esp.eq.false"),
   ]);
 
   return {

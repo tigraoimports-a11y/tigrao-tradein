@@ -257,7 +257,8 @@ export function formatNoiteHTML(r: ReportNoite): string {
   // Créditos D+1 amanhã
   const totalD1 = r.d1_itau + r.d1_inf + r.d1_mp;
   if (totalD1 > 0) {
-    lines.push(``, `📅 <b>RECEBIMENTOS AMANHÃ (D+1)</b>`);
+    const d1Label = r.d1_data ? `RECEBIMENTOS ${r.d1_data.split("-").reverse().join("/")} (Crédito D+1)` : "RECEBIMENTOS PRÓX. DIA ÚTIL (D+1)";
+    lines.push(``, `💳 <b>${d1Label}</b>`);
     if (r.d1_itau > 0) lines.push(`  Crédito Itaú: ${fmtBRL(r.d1_itau)}`);
     if (r.d1_inf > 0) lines.push(`  Crédito Infinite: ${fmtBRL(r.d1_inf)}`);
     if (r.d1_mp > 0) lines.push(`  Crédito MP: ${fmtBRL(r.d1_mp)}`);

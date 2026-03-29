@@ -147,6 +147,7 @@ export interface ReportNoite {
   d1_itau: number;
   d1_inf: number;
   d1_mp: number;
+  d1_data?: string;
   // Reajustes
   reaj_itau: number;
   reaj_inf: number;
