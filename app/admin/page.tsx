@@ -16,6 +16,7 @@ interface DashData {
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
   pendencias: number;
   aCaminho: { qnt: number; custo_unitario: number }[];
+  d1Preview?: { data: string; d1_itau: number; d1_inf: number; d1_mp: number; total: number } | null;
 }
 
 export default function DashboardPage() {
@@ -35,20 +36,22 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
         body: JSON.stringify({ data: hoje }),
       }).catch(() => {});
-      const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes] = await Promise.all([
+      const [saldosRes, saldoPrevRes, vendasRes, gastosRes, estoqueRes, d1Res] = await Promise.all([
         fetch("/api/saldos?latest=true", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch(`/api/saldos?before=${hoje}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch("/api/vendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch("/api/gastos", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
         fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } }),
+        fetch("/api/d1-preview", { headers: { "x-admin-password": password } }),
       ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const [saldos, saldoPrev, vendas, gastos, estoque]: any[] = await Promise.all([
+      const [saldos, saldoPrev, vendas, gastos, estoque, d1Preview]: any[] = await Promise.all([
         saldosRes.ok ? saldosRes.json().catch(() => ({})) : {},
         saldoPrevRes.ok ? saldoPrevRes.json().catch(() => ({})) : {},
         vendasRes.ok ? vendasRes.json().catch(() => ({})) : {},
         gastosRes.ok ? gastosRes.json().catch(() => ({})) : {},
         estoqueRes.ok ? estoqueRes.json().catch(() => ({})) : {},
+        d1Res.ok ? d1Res.json().catch(() => ({})) : {},
       ]);
 
       const estoqueArr = Array.isArray(estoque) ? estoque : estoque?.data || [];
@@ -63,6 +66,7 @@ export default function DashboardPage() {
         estoque: estoqueArr.filter((e: { tipo: string }) => e.tipo !== "PENDENCIA" && e.tipo !== "A_CAMINHO"),
         pendencias: estoqueArr.filter((e: { tipo: string }) => e.tipo === "PENDENCIA").length,
         aCaminho: estoqueArr.filter((e: { tipo: string }) => e.tipo === "A_CAMINHO"),
+        d1Preview: d1Preview || null,
       });
       setLastUpdate(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
     } catch (e) {
@@ -247,32 +251,10 @@ export default function DashboardPage() {
   // Margem média
   const margemMedia = totalVendidoMes > 0 ? ((lucroMes / totalVendidoMes) * 100).toFixed(1) : "0";
 
-  // D+1 previsão próximo dia útil (vendas D+1 dos últimos 7 dias cujo crédito cai no próx. dia útil)
-  const calcProxDiaUtil = (d: Date): string => {
-    const next = new Date(d);
-    next.setDate(next.getDate() + 1);
-    while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
-    return next.toLocaleDateString("en-CA");
-  };
-  const proxDiaUtil = calcProxDiaUtil(new Date(hoje + "T12:00:00"));
-  const seteDiasAtras = new Date(hoje + "T12:00:00");
-  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
-  const seteDiasISO = seteDiasAtras.toLocaleDateString("en-CA");
-
-  let d1AmanhaItau = 0, d1AmanhaInf = 0;
-  const vendasAll = data.vendas || [];
-  for (const v of vendasAll) {
-    if (v.recebimento !== "D+1" || v.status_pagamento === "CANCELADO") continue;
-    const vData = (v.data || "").slice(0, 10);
-    if (vData < seteDiasISO || vData > hoje) continue;
-    const recebData = calcProxDiaUtil(new Date(vData + "T12:00:00"));
-    if (recebData !== proxDiaUtil) continue;
-    const val = v.valor_comprovante ? Number(v.valor_comprovante) * 0.9 : Number(v.preco_vendido || 0) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
-    if (val > 0) {
-      if (v.banco === "ITAU") d1AmanhaItau += val;
-      else if (v.banco === "INFINITE") d1AmanhaInf += val;
-    }
-  }
+  // D+1 previsão próximo dia útil (via API com taxas reais)
+  const d1AmanhaItau = data.d1Preview?.d1_itau || 0;
+  const d1AmanhaInf = data.d1Preview?.d1_inf || 0;
+  const proxDiaUtil = data.d1Preview?.data || "";
 
   const Card = ({ title, value, color, sub, icon }: { title: string; value: string; color: string; sub?: string; icon?: string }) => (
     <div className="bg-white rounded-2xl border border-[#D2D2D7] p-3 md:p-4 shadow-sm">
