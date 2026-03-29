@@ -112,7 +112,8 @@ export async function gerarNoite(
     .from("vendas")
     .select("*")
     .eq("data", dataISO)
-    .eq("recebimento", "D+0");
+    .eq("recebimento", "D+0")
+    .neq("status_pagamento", "CANCELADO");
 
   const d0 = (vendasHoje ?? []) as Venda[];
   let pix_itau = sumByBanco(d0, "ITAU");
@@ -125,7 +126,8 @@ export async function gerarNoite(
     .from("vendas")
     .select("*")
     .eq("data", dataISO)
-    .eq("recebimento", "D+1");
+    .eq("recebimento", "D+1")
+    .neq("status_pagamento", "CANCELADO");
 
   for (const v of (vendasD1Hoje ?? []) as Venda[]) {
     const pixVal = Number(v.entrada_pix || 0);
@@ -150,7 +152,8 @@ export async function gerarNoite(
     .select("*")
     .eq("recebimento", "D+1")
     .gte("data", seteDiasISO)
-    .lt("data", dataISO);
+    .lt("data", dataISO)
+    .neq("status_pagamento", "CANCELADO");
 
   const d1rows = (vendasD1 ?? []) as Venda[];
   let d1_itau = 0, d1_inf = 0, d1_mp = 0;
@@ -196,14 +199,15 @@ export async function gerarNoite(
   const reaj_mp = sumByBancoField(reajRows, "MERCADO_PAGO");
   const reaj_esp = sumByBancoField(reajRows, "ESPECIE");
 
-  // 5. Gastos do dia
+  // 5. Gastos do dia (excluir transferências/depósitos em espécie)
   const { data: gastos } = await supabase
     .from("gastos")
     .select("*")
     .eq("data", dataISO)
-    .eq("tipo", "SAIDA");
+    .eq("tipo", "SAIDA")
+    .or("is_dep_esp.is.null,is_dep_esp.eq.false");
 
-  const gastoRows = (gastos ?? []) as { valor: number; banco: string | null }[];
+  const gastoRows = (gastos ?? []) as { valor: number; banco: string | null; categoria?: string }[];
   const saiu_itau = sumByBancoField(gastoRows, "ITAU");
   const saiu_inf = sumByBancoField(gastoRows, "INFINITE");
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
@@ -243,7 +247,8 @@ export async function gerarNoite(
   const { data: todasVendas } = await supabase
     .from("vendas")
     .select("preco_vendido, lucro, custo, origem, tipo, margem_pct")
-    .eq("data", dataISO);
+    .eq("data", dataISO)
+    .neq("status_pagamento", "CANCELADO");
 
   const all = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number }[];
   const totalVendas = all.length;
@@ -267,12 +272,13 @@ export async function gerarNoite(
   }
   const upgradesHoje = (porTipo["UPGRADE"]?.qty || 0);
 
-  // Gastos detalhados
+  // Gastos detalhados (excluir transferências/depósitos em espécie)
   const { data: gastosAll } = await supabase
     .from("gastos")
     .select("categoria, descricao, valor, banco")
     .eq("data", dataISO)
-    .eq("tipo", "SAIDA");
+    .eq("tipo", "SAIDA")
+    .or("is_dep_esp.is.null,is_dep_esp.eq.false");
 
   const gastosDetalhados = ((gastosAll ?? []) as { categoria: string; descricao: string; valor: number; banco: string }[]);
   const totalGastos = gastosDetalhados.reduce((s, g) => s + Number(g.valor), 0);
