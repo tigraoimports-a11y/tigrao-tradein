@@ -247,9 +247,32 @@ export default function DashboardPage() {
   // Margem média
   const margemMedia = totalVendidoMes > 0 ? ((lucroMes / totalVendidoMes) * 100).toFixed(1) : "0";
 
-  // D+1 previsão amanhã (vendas de hoje que serão creditadas amanhã)
-  const d1AmanhaItau = vendasHoje.filter(v => v.banco === "ITAU" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
-  const d1AmanhaInf = vendasHoje.filter(v => v.banco === "INFINITE" && v.recebimento === "D+1").reduce((s, v) => s + (v.preco_vendido || 0), 0);
+  // D+1 previsão próximo dia útil (vendas D+1 dos últimos 7 dias cujo crédito cai no próx. dia útil)
+  const calcProxDiaUtil = (d: Date): string => {
+    const next = new Date(d);
+    next.setDate(next.getDate() + 1);
+    while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+    return next.toLocaleDateString("en-CA");
+  };
+  const proxDiaUtil = calcProxDiaUtil(new Date(hoje + "T12:00:00"));
+  const seteDiasAtras = new Date(hoje + "T12:00:00");
+  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+  const seteDiasISO = seteDiasAtras.toLocaleDateString("en-CA");
+
+  let d1AmanhaItau = 0, d1AmanhaInf = 0;
+  const vendasAll = data.vendas || [];
+  for (const v of vendasAll) {
+    if (v.recebimento !== "D+1" || v.status_pagamento === "CANCELADO") continue;
+    const vData = (v.data || "").slice(0, 10);
+    if (vData < seteDiasISO || vData > hoje) continue;
+    const recebData = calcProxDiaUtil(new Date(vData + "T12:00:00"));
+    if (recebData !== proxDiaUtil) continue;
+    const val = v.valor_comprovante ? Number(v.valor_comprovante) * 0.9 : Number(v.preco_vendido || 0) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
+    if (val > 0) {
+      if (v.banco === "ITAU") d1AmanhaItau += val;
+      else if (v.banco === "INFINITE") d1AmanhaInf += val;
+    }
+  }
 
   const Card = ({ title, value, color, sub, icon }: { title: string; value: string; color: string; sub?: string; icon?: string }) => (
     <div className="bg-white rounded-2xl border border-[#D2D2D7] p-3 md:p-4 shadow-sm">
@@ -387,7 +410,7 @@ export default function DashboardPage() {
           <Card icon="📤" title={`Saídas Hoje`} value={fmt(saidasHoje)} color="text-red-600" sub={`${gastosHoje.filter(g => g.tipo === "SAIDA").length} operações`} />
           <Card icon="🛒" title="Vendas Hoje" value={fmt(vendasHojeTotal)} color="text-blue-600" sub={`${vendasHoje.length} vendas | Lucro: ${fmt(lucroHoje)}`} />
           <Card icon="✅" title="Recebido Hoje" value={fmt(vendasHojeTotal)} color="text-green-600" sub={`PIX/Dinheiro | Link MP`} />
-          <Card icon="📅" title="Previsão Amanhã" value={fmt(d1AmanhaItau + d1AmanhaInf)} color="text-[#1D1D1F]" sub={`Itaú: ${fmt(d1AmanhaItau)} | Infinite: ${fmt(d1AmanhaInf)}`} />
+          <Card icon="📅" title={`Previsão ${proxDiaUtil.split("-").reverse().join("/")}`} value={fmt(d1AmanhaItau + d1AmanhaInf)} color="text-[#1D1D1F]" sub={`Itaú: ${fmt(d1AmanhaItau)} | Infinite: ${fmt(d1AmanhaInf)}`} />
         </div>
       </div>
 
