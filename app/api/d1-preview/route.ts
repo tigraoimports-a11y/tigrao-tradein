@@ -45,16 +45,14 @@ export async function GET(req: NextRequest) {
       contados.add(chave);
       const parcelas = Number(v.qnt_parcelas || 1);
       const taxa = getTaxa(v.banco || "", v.bandeira || "", parcelas, v.forma || "");
-      // Vendas parceladas: só a 1a parcela cai no D+1 (valor bruto / parcelas, depois desconta taxa)
-      const compParcela = parcelas > 1 ? comprovante / parcelas : comprovante;
-      const val = calcularLiquido(compParcela, taxa);
+      // Maquininha credita o valor total líquido no D+1 (banco financia parcelas)
+      const val = calcularLiquido(comprovante, taxa);
       if (v.banco === "ITAU") d1_itau += val;
       else if (v.banco === "INFINITE") d1_inf += val;
       else if (v.banco === "MERCADO_PAGO") d1_mp += val;
     } else {
-      const parcelas = Number(v.qnt_parcelas || 1);
       const rawVal = Number(v.preco_vendido || 0) - Number(v.entrada_pix || 0) - Number(v.entrada_especie || 0) - Number(v.produto_na_troca || 0);
-      const val = parcelas > 1 ? rawVal / parcelas : rawVal;
+      const val = rawVal;
       if (val > 0) {
         if (v.banco === "ITAU") d1_itau += val;
         else if (v.banco === "INFINITE") d1_inf += val;
