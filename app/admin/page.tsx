@@ -399,10 +399,11 @@ export default function DashboardPage() {
       {/* Resumo do Mês */}
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Março 2026</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card icon="💰" title="Faturamento do Mês" value={fmt(totalVendidoMes)} color="text-blue-700" sub={`${vendasMes.length} vendas | Custo: ${fmt(totalCustoMes)}`} />
-          <Card icon="📈" title="Lucro do Mês" value={fmt(lucroMes)} color="text-green-700" sub={`Margem média: ${margemMedia}%`} />
+          <Card icon="📈" title="Lucro Bruto" value={fmt(lucroMes)} color="text-green-700" sub={`Margem média: ${margemMedia}%`} />
           <Card icon="📤" title="Gastos do Mês" value={fmt(saidasMes)} color="text-red-600" sub={`Compras fornecedor: ${fmt(comprasFornecedorMes)} (não contabilizado)`} />
+          <Card icon="💎" title="Lucro Líquido" value={fmt(lucroMes - saidasMes)} color={lucroMes - saidasMes >= 0 ? "text-green-700" : "text-red-600"} sub={`Bruto ${fmt(lucroMes)} - Gastos ${fmt(saidasMes)}`} />
         </div>
       </div>
 
