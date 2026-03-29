@@ -184,7 +184,14 @@ export default function GastosPage() {
 
   const grupos = useMemo(() => agruparGastos(gastos), [gastos]);
   const [filtroCategoria, setFiltroCategoria] = useState("");
-  const gruposFiltrados = useMemo(() => filtroCategoria ? grupos.filter(g => g.categoria === filtroCategoria) : grupos, [grupos, filtroCategoria]);
+  const [categoriasExcluidas, setCategoriasExcluidas] = useState<Set<string>>(new Set());
+  const toggleCategoria = (cat: string) => setCategoriasExcluidas(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
+  const gruposFiltrados = useMemo(() => {
+    let result = grupos;
+    if (filtroCategoria) result = result.filter(g => g.categoria === filtroCategoria);
+    if (categoriasExcluidas.size > 0) result = result.filter(g => !categoriasExcluidas.has(g.categoria));
+    return result;
+  }, [grupos, filtroCategoria, categoriasExcluidas]);
   const categoriasUsadas = useMemo(() => [...new Set(grupos.map(g => g.categoria))].sort(), [grupos]);
   // Agrupar por data
   const gruposPorData = useMemo(() => {
@@ -566,15 +573,33 @@ export default function GastosPage() {
               <p className="text-[10px] text-[#86868B]">{gruposFiltrados.filter(g => !g.is_dep_esp).length} registros</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => setFiltroCategoria("")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+              <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
                 Todas
               </button>
               {categoriasUsadas.map(c => (
-                <button key={c} onClick={() => setFiltroCategoria(c)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filtroCategoria === c ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+                <button key={c} onClick={() => { setCategoriasExcluidas(new Set()); setFiltroCategoria(filtroCategoria === c ? "" : c); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filtroCategoria === c ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
                   {c}
                 </button>
               ))}
             </div>
+            {/* Checkbox: excluir categorias */}
+            {!filtroCategoria && (
+              <div className={`w-full border rounded-xl p-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+                <p className="text-[10px] text-[#86868B] uppercase tracking-wider font-semibold mb-2">Excluir categorias:</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {categoriasUsadas.map(c => (
+                    <label key={c} className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={categoriasExcluidas.has(c)} onChange={() => toggleCategoria(c)}
+                        className="w-3.5 h-3.5 rounded accent-[#E8740E]" />
+                      <span className={`text-xs ${categoriasExcluidas.has(c) ? "line-through text-[#86868B]" : dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{c}</span>
+                    </label>
+                  ))}
+                  {categoriasExcluidas.size > 0 && (
+                    <button onClick={() => setCategoriasExcluidas(new Set())} className="text-[10px] text-[#E8740E] underline ml-2">Limpar</button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Gastos agrupados por data */}
