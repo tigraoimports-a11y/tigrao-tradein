@@ -25,6 +25,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
   const [bankDetailsOpen, setBankDetailsOpen] = useState(false);
+  const [patrimonioBase, setPatrimonioBase] = useState<{ patrimonio_base: number; estoque_base: number; saldos_base: number; distribuicao_lucro: number } | null>(null);
+  const [editingPatrimonio, setEditingPatrimonio] = useState(false);
+  const [patInput, setPatInput] = useState({ base: "", retirada: "" });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -69,6 +72,10 @@ export default function DashboardPage() {
         d1Preview: d1Preview || null,
       });
       setLastUpdate(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
+      // Buscar patrimônio do mês
+      const mesAtualPat = hoje.slice(0, 7);
+      fetch(`/api/patrimonio?mes=${mesAtualPat}`, { headers: { "x-admin-password": password } })
+        .then(r => r.json()).then(j => { if (j.data) setPatrimonioBase(j.data); }).catch(() => {});
     } catch (e) {
       console.error(e);
     }
@@ -499,6 +506,78 @@ export default function DashboardPage() {
             Produtos: {fmt(capitalProdutos)} | Contas: {fmt(saldoTotal)}
           </div>
         </div>
+      </div>
+
+      {/* Balanço do Mês */}
+      <div>
+        <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Balanço do Mês</h2>
+        {patrimonioBase ? (
+          <div className="bg-white rounded-2xl border border-[#D2D2D7] p-5 shadow-sm space-y-3">
+            {(() => {
+              const pBase = Number(patrimonioBase.patrimonio_base);
+              const retirada = Number(patrimonioBase.distribuicao_lucro);
+              const lucroLiq = lucroMes - saidasMes;
+              const patAtual = patrimonio;
+              const crescimento = patAtual - pBase;
+              const crescPct = pBase > 0 ? (crescimento / pBase) * 100 : 0;
+              return <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-[#86868B] text-xs">Patrimônio Início</p>
+                    <p className="font-bold text-[#1D1D1F] text-lg">{fmt(pBase)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#86868B] text-xs">+ Lucro Bruto</p>
+                    <p className="font-bold text-green-600">{fmt(lucroMes)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#86868B] text-xs">- Gastos Operacionais</p>
+                    <p className="font-bold text-red-500">{fmt(saidasMes)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#86868B] text-xs">= Lucro Líquido</p>
+                    <p className={`font-bold ${lucroLiq >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(lucroLiq)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#86868B] text-xs flex items-center gap-1">- Retirada PF {!editingPatrimonio && <button onClick={() => { setEditingPatrimonio(true); setPatInput(p => ({ ...p, retirada: String(retirada || "") })); }} className="text-[10px] text-[#E8740E] underline">editar</button>}</p>
+                    {editingPatrimonio ? (
+                      <div className="flex gap-1 mt-1">
+                        <input type="text" inputMode="numeric" value={patInput.retirada} onChange={e => setPatInput(p => ({ ...p, retirada: e.target.value.replace(/\D/g, "") }))} className="w-24 px-2 py-1 text-sm border rounded-lg" placeholder="0" />
+                        <button onClick={async () => {
+                          await fetch("/api/patrimonio", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ mes: hoje.slice(0, 7), distribuicao_lucro: Number(patInput.retirada) || 0 }) });
+                          setEditingPatrimonio(false);
+                          fetchData();
+                        }} className="px-2 py-1 bg-[#E8740E] text-white text-xs rounded-lg">OK</button>
+                      </div>
+                    ) : (
+                      <p className="font-bold text-purple-600">{fmt(retirada)}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[#86868B] text-xs">= Patrimônio Atual</p>
+                    <p className="font-bold text-[#1D1D1F] text-lg">{fmt(patAtual)}</p>
+                  </div>
+                </div>
+                <div className={`rounded-xl p-3 text-center ${crescimento >= 0 ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+                  <span className={`text-sm font-bold ${crescimento >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    Crescimento: {fmt(crescimento)} ({crescPct >= 0 ? "+" : ""}{crescPct.toFixed(1)}%)
+                  </span>
+                </div>
+              </>;
+            })()}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-dashed border-[#D2D2D7] p-5 text-center">
+            <p className="text-sm text-[#86868B] mb-3">Nenhum patrimônio base registrado para este mês</p>
+            <button onClick={async () => {
+              const base = patrimonio;
+              await fetch("/api/patrimonio", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-password": password }, body: JSON.stringify({ mes: hoje.slice(0, 7), patrimonio_base: base, estoque_base: capitalProdutos, saldos_base: saldoTotal }) });
+              fetchData();
+            }} className="px-4 py-2 bg-[#E8740E] text-white text-sm font-semibold rounded-xl hover:bg-[#D06A0C] transition-colors">
+              Registrar patrimônio base ({fmt(patrimonio)})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Top Gastos por Categoria */}
