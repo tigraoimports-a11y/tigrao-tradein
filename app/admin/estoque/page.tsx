@@ -1872,8 +1872,8 @@ export default function EstoquePage() {
             </div>
           ) : (
             <>
-            {/* Barra de seleção em lote — A Caminho */}
-            {tab === "acaminho" && filtered.length > 0 && (
+            {/* Barra de seleção em lote — A Caminho (admin only) */}
+            {isAdmin && tab === "acaminho" && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
                 <input
                   type="checkbox"
@@ -1891,13 +1891,29 @@ export default function EstoquePage() {
                   {selectedACaminho.size > 0 ? `${selectedACaminho.size} selecionado${selectedACaminho.size > 1 ? "s" : ""}` : "Selecionar todos"}
                 </span>
                 {selectedACaminho.size > 0 && (
-                  <button
-                    onClick={handleMoverSelecionados}
-                    className="ml-auto px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Mover {selectedACaminho.size} → Estoque
-                  </button>
+                  <div className="ml-auto flex gap-2">
+                    <button
+                      onClick={handleMoverSelecionados}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Mover {selectedACaminho.size} → Estoque
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Excluir ${selectedACaminho.size} produto(s) selecionado(s)?`)) return;
+                        const ids = [...selectedACaminho];
+                        await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ ids }) });
+                        setEstoque(prev => prev.filter(e => !selectedACaminho.has(e.id)));
+                        setSelectedACaminho(new Set());
+                        setMsg(`${ids.length} produto(s) excluído(s)`);
+                      }}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      Excluir {selectedACaminho.size}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -2041,7 +2057,7 @@ export default function EstoquePage() {
                                       className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                     >
                                       <td className="pl-2 py-2.5 select-none w-4">
-                                        {tab === "acaminho" ? (
+                                        {isAdmin && tab === "acaminho" ? (
                                           <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" onClick={e => e.stopPropagation()} />
                                         ) : selectMode ? (
                                           <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
