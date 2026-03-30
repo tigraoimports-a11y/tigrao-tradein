@@ -775,6 +775,17 @@ export default function VendasPage() {
     setMsg("");
 
     // Build payloads for all products
+    // Se tem carrinho, atribuir a troca global ao primeiro produto
+    if (allProducts.length > 1) {
+      const globalTroca1 = form.produto_na_troca;
+      const globalTroca2 = form.produto_na_troca2;
+      if ((parseFloat(globalTroca1) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca) > 0)) {
+        allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte };
+      }
+      if ((parseFloat(globalTroca2) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca2) > 0)) {
+        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2 };
+      }
+    }
     const payloads: Record<string, unknown>[] = [];
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
