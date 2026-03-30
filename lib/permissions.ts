@@ -35,6 +35,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
       { key: "orcamento", label: "Gerador de Orcamentos" },
       { key: "calculadora", label: "Calculadora de Encomendas" },
       { key: "operacoes", label: "Operacoes" },
+      { key: "gerar_link", label: "Link de Compra" },
     ],
   },
   {
@@ -83,6 +84,7 @@ const PATH_TO_KEY: Record<string, string> = {
   "/admin/orcamento": "orcamento",
   "/admin/operacoes": "operacoes",
   "/admin/agendamento-precos": "agendamento_precos",
+  "/admin/gerar-link": "gerar_link",
   "/admin/entregas": "entregas",
   "/admin/encomendas": "encomendas",
   "/admin/fornecedores": "fornecedores",
@@ -114,6 +116,7 @@ const KEY_TO_LEGACY: Record<string, string> = {
   calculadora: "operacoes.read",
   orcamento: "operacoes.read",
   operacoes: "operacoes.read",
+  gerar_link: "operacoes.read",
   vendas_ver: "vendas.read",
   vendas_registrar: "vendas.create",
   entregas: "entregas.read",

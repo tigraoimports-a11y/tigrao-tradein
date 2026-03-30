@@ -239,6 +239,11 @@ export default function EstoquePage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showDiagnostico, setShowDiagnostico] = useState(false);
 
+  // Balance mode (seminovos)
+  const [balanceMode, setBalanceMode] = useState(false);
+  const [balanceSelected, setBalanceSelected] = useState<Set<string>>(new Set());
+  const [balanceApplying, setBalanceApplying] = useState(false);
+
   // IMEI search
   const [imeiSearch, setImeiSearch] = useState("");
   const [imeiResult, setImeiResult] = useState<ImeiSearchResult | null>(null);
@@ -628,6 +633,30 @@ export default function EstoquePage() {
     return res;
   };
 
+  const handleApplyBalance = async () => {
+    if (balanceSelected.size === 0) return;
+    const selectedItems = estoque.filter((p) => balanceSelected.has(p.id));
+    const totalCusto = selectedItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+    const totalQnt = selectedItems.reduce((s, p) => s + p.qnt, 0);
+    if (totalQnt === 0) return;
+    const avgCusto = Math.round(totalCusto / totalQnt);
+    if (!confirm(`Aplicar custo médio de ${fmt(avgCusto)} a ${balanceSelected.size} item(ns)?`)) return;
+    setBalanceApplying(true);
+    try {
+      for (const item of selectedItems) {
+        await apiPatch(item.id, { custo_unitario: avgCusto });
+      }
+      setEstoque((prev) => prev.map((p) => balanceSelected.has(p.id) ? { ...p, custo_unitario: avgCusto } : p));
+      setMsg(`Balanço aplicado: ${balanceSelected.size} item(ns) com custo ${fmt(avgCusto)}`);
+      setBalanceSelected(new Set());
+      setBalanceMode(false);
+    } catch {
+      setMsg("Erro ao aplicar balanço");
+    } finally {
+      setBalanceApplying(false);
+    }
+  };
+
   const handleUpdateQnt = async (item: ProdutoEstoque, newQnt: number) => {
     const newStatus = newQnt === 0 ? "ESGOTADO" : item.status === "ESGOTADO" ? "EM ESTOQUE" : item.status;
     await apiPatch(item.id, { qnt: newQnt, status: newStatus });
@@ -837,6 +866,7 @@ export default function EstoquePage() {
     const tipo = form.tipo;
     let successCount = 0;
     let errorMsg = "";
+    const mergeMessages: string[] = [];
 
     for (const p of pedidoProdutos) {
       const nome = (p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : "")).toUpperCase();
@@ -859,11 +889,17 @@ export default function EstoquePage() {
         }),
       });
       const json = await res.json();
-      if (json.ok) { successCount++; } else { errorMsg = json.error; }
+      if (json.ok) {
+        successCount++;
+        if (json.merged && json.mergeDetails) {
+          mergeMessages.push(`🔄 ${p.produto || nome}: ${json.mergeDetails.log}`);
+        }
+      } else { errorMsg = json.error; }
     }
 
     if (successCount > 0) {
-      setMsg(`${successCount} produto(s) adicionados${status === "A CAMINHO" ? " como A Caminho" : " ao estoque"}!${errorMsg ? ` (${errorMsg})` : ""}`);
+      const mergeInfo = mergeMessages.length > 0 ? ` | ${mergeMessages.join(" | ")}` : "";
+      setMsg(`${successCount} produto(s) adicionados${status === "A CAMINHO" ? " como A Caminho" : " ao estoque"}!${mergeInfo}${errorMsg ? ` (${errorMsg})` : ""}`);
       setPedidoProdutos([createEmptyProdutoRow()]);
       fetchEstoque();
       setFilterCat(pedidoProdutos[0]?.categoria || "");
@@ -891,20 +927,26 @@ export default function EstoquePage() {
     });
     const json = await res.json();
     if (json.ok) {
-      // Verificar se produto existe no mostruário
-      try {
-        const lojaRes = await fetch("/api/loja?format=grouped");
-        const lojaData = await lojaRes.json();
-        const lojaProdutos = lojaData.produtos || [];
-        const prodNome = form.produto.toLowerCase();
-        const existeNoMostruario = lojaProdutos.some((p: { nome: string }) => prodNome.includes(p.nome.toLowerCase()) || p.nome.toLowerCase().includes(prodNome));
-        if (!existeNoMostruario) {
-          setMsg(`Produto adicionado! 💡 "${form.produto}" nao esta no mostruario. Deseja publicar no site? Va em Mostruario > + Novo Produto`);
-        } else {
+      // Se houve merge (preço médio), mostrar mensagem detalhada
+      if (json.merged && json.mergeDetails) {
+        const d = json.mergeDetails;
+        setMsg(`🔄 Produto mesclado! ${d.log}`);
+      } else {
+        // Verificar se produto existe no mostruário
+        try {
+          const lojaRes = await fetch("/api/loja?format=grouped");
+          const lojaData = await lojaRes.json();
+          const lojaProdutos = lojaData.produtos || [];
+          const prodNome = form.produto.toLowerCase();
+          const existeNoMostruario = lojaProdutos.some((p: { nome: string }) => prodNome.includes(p.nome.toLowerCase()) || p.nome.toLowerCase().includes(prodNome));
+          if (!existeNoMostruario) {
+            setMsg(`Produto adicionado! 💡 "${form.produto}" nao esta no mostruario. Deseja publicar no site? Va em Mostruario > + Novo Produto`);
+          } else {
+            setMsg("Produto adicionado!");
+          }
+        } catch {
           setMsg("Produto adicionado!");
         }
-      } catch {
-        setMsg("Produto adicionado!");
       }
       // Criar variações de cor adicionais
       const validVariacoes = variacoes.filter((v) => v.cor.trim());
@@ -1404,6 +1446,14 @@ export default function EstoquePage() {
               className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${selectMode ? "bg-red-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-red-500 hover:text-red-500`}`}
             >
               {selectMode ? "Cancelar" : "Selecionar"}
+            </button>
+          )}
+          {isAdmin && tab === "seminovos" && !selectMode && (
+            <button
+              onClick={() => { setBalanceMode(!balanceMode); if (balanceMode) setBalanceSelected(new Set()); }}
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${balanceMode ? "bg-blue-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-blue-500 hover:text-blue-500`}`}
+            >
+              {balanceMode ? "Cancelar Balanço" : "Balancear Preços"}
             </button>
           )}
 
@@ -2048,16 +2098,18 @@ export default function EstoquePage() {
                                   return (
                                     <tr
                                       key={p.id}
-                                      draggable={!selectMode}
-                                      onDragStart={(e) => { if (selectMode) return; e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
+                                      draggable={!selectMode && !balanceMode}
+                                      onDragStart={(e) => { if (selectMode || balanceMode) return; e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
                                       onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
                                       onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                       onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      onClick={selectMode ? () => toggleSelect(p.id) : () => setDetailProduct(p)}
-                                      className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dragId === p.id ? "opacity-40" : ""} ${selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
+                                      onClick={balanceMode ? () => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; }) : selectMode ? () => toggleSelect(p.id) : () => setDetailProduct(p)}
+                                      className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dragId === p.id ? "opacity-40" : ""} ${balanceMode && balanceSelected.has(p.id) ? (dm ? "bg-blue-500/10" : "bg-blue-50") : selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                     >
                                       <td className="pl-2 py-2.5 select-none w-4">
-                                        {isAdmin && tab === "acaminho" ? (
+                                        {balanceMode && tab === "seminovos" ? (
+                                          <input type="checkbox" checked={balanceSelected.has(p.id)} onChange={() => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" onClick={e => e.stopPropagation()} />
+                                        ) : isAdmin && tab === "acaminho" ? (
                                           <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" onClick={e => e.stopPropagation()} />
                                         ) : selectMode ? (
                                           <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
@@ -2345,6 +2397,33 @@ export default function EstoquePage() {
           </button>
         </div>
       )}
+
+      {/* Floating balance bar */}
+      {balanceMode && tab === "seminovos" && balanceSelected.size > 0 && (() => {
+        const selItems = estoque.filter((p) => balanceSelected.has(p.id));
+        const totalCusto = selItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+        const totalQnt = selItems.reduce((s, p) => s + p.qnt, 0);
+        const avgCusto = totalQnt > 0 ? Math.round(totalCusto / totalQnt) : 0;
+        return (
+          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+            <span className={`text-sm font-semibold ${textPrimary}`}>{balanceSelected.size} selecionado(s)</span>
+            <span className={`text-sm ${textSecondary}`}>Custo medio: <span className="font-bold text-blue-500">{fmt(avgCusto)}</span></span>
+            <button
+              onClick={handleApplyBalance}
+              disabled={balanceApplying}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+            >
+              {balanceApplying ? "Aplicando..." : "Aplicar Balanço"}
+            </button>
+            <button
+              onClick={() => { setBalanceSelected(new Set()); setBalanceMode(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
+            >
+              Cancelar
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Modal de detalhes do produto */}
       {detailProduct && (() => {

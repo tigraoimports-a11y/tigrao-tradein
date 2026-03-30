@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
       const cor = String(row.cor || "").trim() || null;
 
       // Verificar se já existe no estoque
-      let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produto);
+      let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
       if (cor) existQuery = existQuery.eq("cor", cor);
       else existQuery = existQuery.is("cor", null);
       const { data: existing } = await existQuery.limit(1).single();
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
   const hasSerial = !!body.serial_no;
 
   if (produtoNome && !hasSerial) {
-    let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome);
+    let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome).in("status", ["EM ESTOQUE", "ESGOTADO"]);
     if (categoriaNome) existQuery = existQuery.eq("categoria", categoriaNome);
     if (corNome) existQuery = existQuery.eq("cor", corNome);
     else existQuery = existQuery.is("cor", null);
@@ -229,14 +229,20 @@ export async function POST(req: NextRequest) {
       }).eq("id", existing.id);
       if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
 
+      const usuario = getUsuario(req);
+      const mergeLog = `Preço médio aplicado: ${existQnt} un x R$${existCost} + ${addQnt} un x R$${addCost} = ${totalQnt} un x R$${avgCost}`;
       await logEstoque(
-        getUsuario(req), "alteracao", existing.id, produtoNome,
+        usuario, "alteracao", existing.id, produtoNome,
         "merge (qnt+custo_medio)",
         `${existQnt}un x R$${existCost}`,
         `${totalQnt}un x R$${avgCost}`
       );
+      await logActivity(usuario, "Merge estoque (preço médio)", `${produtoNome}${corNome ? ` ${corNome}` : ""}: ${mergeLog}`, "estoque", existing.id);
 
-      return NextResponse.json({ ok: true, merged: true, id: existing.id });
+      return NextResponse.json({
+        ok: true, merged: true, id: existing.id,
+        mergeDetails: { existQnt, existCost, addQnt, addCost, totalQnt, avgCost, log: mergeLog },
+      });
     }
   }
 
