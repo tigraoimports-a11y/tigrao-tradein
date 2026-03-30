@@ -308,12 +308,21 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     <main className="min-h-dvh flex flex-col items-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
       <div className="w-full max-w-[440px]">
         {/* Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-[32px] font-bold tracking-tight" style={{ color: tema.text }}>Trade-In</h1>
-          <p className="text-[15px] mt-1" style={{ color: tema.textMuted }}>Simule o valor da sua troca</p>
+        <div className="text-center mb-6">
+          <p className="text-[13px] font-semibold tracking-wider uppercase" style={{ color: tema.textMuted }}>TigraoImports</p>
+          <h1 className="text-[24px] font-bold tracking-tight mt-1" style={{ color: tema.text }}>Avaliacao do seu aparelho</h1>
         </div>
 
-        <StepBar current={step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4} />
+        {/* Barra de progresso simples */}
+        <div className="mb-8">
+          <div className="flex justify-between text-[11px] font-medium mb-2" style={{ color: tema.textMuted }}>
+            <span>Etapa {step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4} de 4</span>
+            <span>{step <= 1.7 ? "Seu aparelho" : step === 2 ? "Aparelho novo" : step === 3 ? "Seus dados" : "Cotacao"}</span>
+          </div>
+          <div className="w-full h-[6px] rounded-full" style={{ backgroundColor: "var(--ti-card-border)" }}>
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4) / 4) * 100}%`, backgroundColor: "var(--ti-accent)" }} />
+          </div>
+        </div>
 
         <div className="animate-fadeIn">
           {step === 1 && (

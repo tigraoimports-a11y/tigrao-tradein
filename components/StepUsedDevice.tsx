@@ -118,11 +118,21 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
   return (
     <div className="space-y-8">
-      <h2 className="text-[20px] font-bold" style={{ color: "var(--ti-text)" }}>Qual é o modelo do seu usado?</h2>
+      <div className="text-center">
+        <h2 className="text-[22px] font-bold" style={{ color: "var(--ti-text)" }}>Qual iPhone voce tem?</h2>
+        <p className="text-[14px] mt-1" style={{ color: "var(--ti-muted)" }}>Selecione a linha pra comecar</p>
+      </div>
 
-      <Section title="Linha do seu iPhone">
+      <Section title="">
         <div className="grid grid-cols-3 gap-2">
-          {lines.map((l) => <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)}>{`iPhone ${l}`}</Btn>)}
+          {lines.map((l) => {
+            const popular = ["15", "16", "17"].includes(l);
+            return (
+              <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)} className={popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}>
+                {`iPhone ${l}`}
+              </Btn>
+            );
+          })}
         </div>
       </Section>
 
