@@ -2524,7 +2524,8 @@ export default function VendasPage() {
             const gCompAlt = parseFloat(form.comp_alt) || 0;
             const gPixE = parseFloat(form.entrada_pix) || 0;
             const gEspecieE = parseFloat(form.entrada_especie) || 0;
-            const gTrocaE = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
+            const gTrocaEProds = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
+            const gTrocaE = gTrocaEProds || valorTroca; // fallback: form global troca (cart mode)
             // Receita real = líquido cartão principal + líquido cartão alt + pix + espécie + troca
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
@@ -2541,7 +2542,8 @@ export default function VendasPage() {
             const gCompAltConf = parseFloat(form.comp_alt) || 0;
             const gPix = parseFloat(form.entrada_pix) || 0;
             const gEspecie = parseFloat(form.entrada_especie) || 0;
-            const gTroca = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
+            const gTrocaProds = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
+            const gTroca = gTrocaProds || valorTroca;
             const somaFormas = gComprovante + gCompAltConf + gPix + gEspecie + gTroca;
             // Only check conferencia if at least one payment field is filled
             const temConferencia = somaFormas > 0 && totalVendido > 0;
