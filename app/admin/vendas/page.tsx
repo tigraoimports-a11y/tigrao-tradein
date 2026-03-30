@@ -1762,6 +1762,7 @@ export default function VendasPage() {
                     .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
+                    .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
                     .replace(/\s{2,}/g, " ")
                     .trim();
                   const grupos: Record<string, EstoqueItem[]> = {};
