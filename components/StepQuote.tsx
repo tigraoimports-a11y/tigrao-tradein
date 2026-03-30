@@ -248,34 +248,52 @@ export default function StepQuote(p: StepQuoteProps) {
       {(() => {
         if (!allProducts || allProducts.length === 0) return null;
         const currentKey = `${newModel} ${newStorage}`;
+        // Filtrar por mesma categoria (iPhone com iPhone, etc)
+        const modeloLower = newModel.toLowerCase();
+        const isIphone = modeloLower.includes("iphone");
+        const isMac = modeloLower.includes("mac");
+        const isWatch = modeloLower.includes("watch");
+        const isIpad = modeloLower.includes("ipad");
         const alternatives = allProducts
           .filter(p => {
             const key = `${p.modelo} ${p.armazenamento}`;
-            return key !== currentKey && p.precoPix < newPrice && p.precoPix > tradeInValue;
+            if (key === currentKey) return false;
+            if (p.precoPix >= newPrice || p.precoPix <= tradeInValue) return false;
+            // Mesma categoria
+            const m = p.modelo.toLowerCase();
+            if (isIphone && !m.includes("iphone")) return false;
+            if (isMac && !m.includes("mac")) return false;
+            if (isWatch && !m.includes("watch")) return false;
+            if (isIpad && !m.includes("ipad")) return false;
+            return true;
           })
           .map(p => ({ ...p, dif: p.precoPix - tradeInValue }))
           .sort((a, b) => b.precoPix - a.precoPix)
           .slice(0, 4);
         if (alternatives.length === 0) return null;
         return (
-          <div className="rounded-2xl p-4 space-y-3" style={cardStyle}>
-            <p className="text-[13px] font-bold text-center" style={{ color: "var(--ti-text)" }}>
+          <div className="space-y-3">
+            <p className="text-[14px] font-bold text-center" style={{ color: "var(--ti-text)" }}>
               Outras opcoes com a sua troca:
             </p>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               {alternatives.map(alt => {
                 const altQt = calculateQuote(tradeInValue, alt.precoPix);
                 const alt12 = altQt.installments.find(i => i.parcelas === 12);
                 const alt21 = altQt.installments.find(i => i.parcelas === 21);
                 return (
-                  <div key={`${alt.modelo}-${alt.armazenamento}`} className="rounded-xl p-3 transition-colors" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                    <p className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>
-                      {alt.modelo} {alt.armazenamento}
+                  <div key={`${alt.modelo}-${alt.armazenamento}`} className="rounded-2xl p-3 text-center" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" }}>
+                    <p className="text-[13px] font-bold leading-tight" style={{ color: "var(--ti-text)" }}>
+                      {alt.modelo}
                     </p>
-                    <div className="flex items-center gap-3 mt-1 text-[12px]" style={{ color: "var(--ti-muted)" }}>
-                      <span className="font-bold" style={{ color: "#22c55e" }}>PIX: {formatBRL(alt.dif)}</span>
-                      {alt12 && <span>12x {formatBRL(alt12.valorParcela)}</span>}
-                      {alt21 && <span>21x {formatBRL(alt21.valorParcela)}</span>}
+                    <p className="text-[11px]" style={{ color: "var(--ti-muted)" }}>{alt.armazenamento}</p>
+                    <p className="text-[18px] font-bold mt-2" style={{ color: "#22c55e" }}>
+                      {formatBRL(alt.dif)}
+                    </p>
+                    <p className="text-[10px]" style={{ color: "var(--ti-muted)" }}>no PIX</p>
+                    <div className="mt-1 text-[10px] space-y-0.5" style={{ color: "var(--ti-muted)" }}>
+                      {alt12 && <p>ou 12x de {formatBRL(alt12.valorParcela)}</p>}
+                      {alt21 && <p>ou 21x de {formatBRL(alt21.valorParcela)}</p>}
                     </div>
                   </div>
                 );
