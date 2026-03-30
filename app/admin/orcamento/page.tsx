@@ -243,21 +243,12 @@ export default function OrcamentoPage() {
 
           {produtoSelecionado && (
             <>
-              {/* Preço PIX + botão adicionar */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-1 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
-                  <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                    R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <button onClick={() => {
-                  if (!carrinho.find(c => c.id === produtoSelecionado.id)) {
-                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
-                  }
-                }} className="px-4 py-3 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors whitespace-nowrap">
-                  + Adicionar
-                </button>
+              {/* Preço PIX */}
+              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
+                <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                  R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
               </div>
 
               {/* Carrinho */}
@@ -279,6 +270,16 @@ export default function OrcamentoPage() {
                   </div>
                 </div>
               )}
+
+              {/* Botão adicionar mais produto */}
+              <button onClick={() => {
+                if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
+                  setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
+                }
+                setProdSel(""); setCatSel("");
+              }} className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
+                + Adicionar outro produto ao orcamento
+              </button>
 
               {/* Troca */}
               <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-blue-50 border border-blue-200"}`}>
