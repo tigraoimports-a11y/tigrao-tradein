@@ -47,11 +47,23 @@ export default function OrcamentoPage() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Seminovos do estoque
+  interface SeminovoEstoque {
+    id: string;
+    produto: string;
+    cor: string | null;
+    bateria: number | null;
+    observacao: string | null;
+    custo_unitario: number;
+    qnt: number;
+  }
+  const [seminovosEstoque, setSeminovosEstoque] = useState<SeminovoEstoque[]>([]);
+  const [semiSel, setSemiSel] = useState<SeminovoEstoque | null>(null);
+
   // Form
   const [tipoOrc, setTipoOrc] = useState<"lacrado" | "seminovo">("lacrado");
   const [catSel, setCatSel] = useState("");
   const [prodSel, setProdSel] = useState("");
-  const [semiNome, setSemiNome] = useState("");
   const [semiPreco, setSemiPreco] = useState("");
   const [semiObs, setSemiObs] = useState("");
   const [entrada, setEntrada] = useState("");
@@ -67,19 +79,27 @@ export default function OrcamentoPage() {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/admin/precos", { headers: { "x-admin-password": password } });
-        if (res.ok) {
-          const json = await res.json();
+        const [resPrecos, resEstoque] = await Promise.all([
+          fetch("/api/admin/precos", { headers: { "x-admin-password": password } }),
+          fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "admin") } }),
+        ]);
+        if (resPrecos.ok) {
+          const json = await resPrecos.json();
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setProdutos((json.data ?? []).filter((p: any) => p.status === "ativo" && p.preco_pix > 0).map((p: any) => ({
             ...p,
             nome: `${p.modelo}${p.armazenamento ? " " + p.armazenamento : ""}`,
           })));
         }
+        if (resEstoque.ok) {
+          const json = await resEstoque.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setSeminovosEstoque((json.data ?? []).filter((p: any) => p.tipo === "SEMINOVO" && p.status === "EM ESTOQUE" && p.qnt > 0));
+        }
       } catch { /* ignore */ }
       setLoading(false);
     })();
-  }, [password]);
+  }, [password, user]);
 
   const categorias = useMemo(() => {
     const cats = [...new Set(produtos.map(p => p.categoria))].sort();
@@ -95,9 +115,20 @@ export default function OrcamentoPage() {
     return produtos.find(p => p.id === prodSel);
   }, [produtos, prodSel]);
 
+  // Agrupar seminovos por modelo
+  const seminovosAgrupados = useMemo(() => {
+    const map: Record<string, SeminovoEstoque[]> = {};
+    for (const s of seminovosEstoque) {
+      if (!map[s.produto]) map[s.produto] = [];
+      map[s.produto].push(s);
+    }
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [seminovosEstoque]);
+
   // Produto virtual para seminovo (usado no mesmo fluxo)
-  const semiProduto = tipoOrc === "seminovo" && semiNome && parseFloat(semiPreco) > 0
-    ? { id: "semi", nome: semiNome.toUpperCase(), preco: parseFloat(semiPreco), categoria: "IPHONE" }
+  const semiNome = semiSel ? semiSel.produto : "";
+  const semiProduto = tipoOrc === "seminovo" && semiSel && parseFloat(semiPreco) > 0
+    ? { id: semiSel.id, nome: semiSel.produto.toUpperCase(), preco: parseFloat(semiPreco), categoria: "IPHONE" }
     : null;
 
   const gerarOrcamento = () => {
@@ -219,7 +250,7 @@ export default function OrcamentoPage() {
   useEffect(() => {
     if (produtoSelecionado || carrinho.length > 0 || semiProduto) gerarOrcamento();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, tipoOrc, semiNome, semiPreco, semiObs]);
+  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, tipoOrc, semiSel, semiPreco, semiObs]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -236,7 +267,7 @@ export default function OrcamentoPage() {
           <div>
             <p className={labelCls}>Tipo</p>
             <div className="flex gap-2">
-              <button onClick={() => { setTipoOrc("lacrado"); setSemiNome(""); setSemiPreco(""); setSemiObs(""); setTextoGerado(""); }}
+              <button onClick={() => { setTipoOrc("lacrado"); setSemiSel(null); setSemiPreco(""); setSemiObs(""); setTextoGerado(""); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${tipoOrc === "lacrado" ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                 📦 Lacrado
               </button>
@@ -284,25 +315,60 @@ export default function OrcamentoPage() {
           {/* ==== SEMINOVO ==== */}
           {tipoOrc === "seminovo" && (
           <div className="space-y-4 animate-fadeIn">
-            <div>
-              <p className={labelCls}>Nome do produto</p>
-              <input type="text" placeholder="Ex: iPhone 16 Pro Max 256GB" value={semiNome} onChange={e => setSemiNome(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <p className={labelCls}>Preco de venda PIX (R$)</p>
-              <input type="text" inputMode="numeric" placeholder="Ex: 6500" value={semiPreco} onChange={e => setSemiPreco(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </div>
-            <div>
-              <p className={labelCls}>Observacao (opcional)</p>
-              <input type="text" placeholder="Ex: Garantia Apple ate agosto, bateria 95%, Grade A" value={semiObs} onChange={e => setSemiObs(e.target.value)} className={inputCls} />
-            </div>
-            {semiPreco && parseFloat(semiPreco) > 0 && (
-              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preco PIX Seminovo</p>
-                <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                  R$ {parseFloat(semiPreco).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </p>
+            {seminovosAgrupados.length === 0 ? (
+              <div className={`rounded-xl p-4 text-center ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Nenhum seminovo em estoque no momento.</p>
               </div>
+            ) : (
+              <>
+              <div>
+                <p className={labelCls}>Selecionar seminovo do estoque</p>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {seminovosAgrupados.map(([modelo, items]) => (
+                    <div key={modelo}>
+                      <p className={`text-xs font-bold mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{modelo} ({items.length} un.)</p>
+                      {items.map(item => {
+                        const sel = semiSel?.id === item.id;
+                        const details = [item.cor, item.bateria ? `🔋${item.bateria}%` : null, item.observacao].filter(Boolean).join(" · ");
+                        return (
+                          <button key={item.id} onClick={() => { setSemiSel(sel ? null : item); setSemiObs(item.observacao || ""); }}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl mb-1 text-sm transition-colors ${sel ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>
+                            <span className="font-semibold">{item.produto}</span>
+                            {details && <span className={`block text-xs mt-0.5 ${sel ? "text-white/70" : dm ? "text-[#636366]" : "text-[#86868B]"}`}>{details}</span>}
+                            <span className={`text-xs ${sel ? "text-white/70" : "text-[#E8740E]"}`}>Custo: R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {semiSel && (
+                <>
+                <div>
+                  <p className={labelCls}>Preco de venda PIX (R$)</p>
+                  <input type="text" inputMode="numeric" placeholder="Ex: 6500" value={semiPreco} onChange={e => setSemiPreco(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+                  {semiPreco && semiSel.custo_unitario > 0 && (
+                    <p className={`text-xs mt-1 ${parseFloat(semiPreco) > semiSel.custo_unitario ? "text-green-500" : "text-red-500"}`}>
+                      Lucro: R$ {(parseFloat(semiPreco) - semiSel.custo_unitario).toLocaleString("pt-BR")} ({((parseFloat(semiPreco) - semiSel.custo_unitario) / parseFloat(semiPreco) * 100).toFixed(1)}%)
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className={labelCls}>Observacao no orcamento (opcional)</p>
+                  <input type="text" placeholder="Ex: Garantia Apple ate agosto, Grade A" value={semiObs} onChange={e => setSemiObs(e.target.value)} className={inputCls} />
+                </div>
+                {semiPreco && parseFloat(semiPreco) > 0 && (
+                  <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                    <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preco PIX Seminovo</p>
+                    <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                      R$ {parseFloat(semiPreco).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+                </>
+              )}
+              </>
             )}
           </div>
           )}
