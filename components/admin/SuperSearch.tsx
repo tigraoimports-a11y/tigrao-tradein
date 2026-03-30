@@ -224,26 +224,35 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
   );
 }
 
+interface CategorizedResults {
+  operacoes: SearchResult[];
+  contatos: SearchResult[];
+  estoque: SearchResult[];
+  vendas: SearchResult[];
+}
+
 export default function SuperSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { password, darkMode: dm } = useAdmin();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<CategorizedResults>({ operacoes: [], contatos: [], estoque: [], vendas: [] });
   const [loading, setLoading] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
   const [detailItem, setDetailItem] = useState<SearchResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const hasResults = results.operacoes.length + results.contatos.length + results.estoque.length + results.vendas.length > 0;
+
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setQuery("");
-      setResults([]);
+      setResults({ operacoes: [], contatos: [], estoque: [], vendas: [] });
       setDetailItem(null);
     }
   }, [open]);
 
   const search = useCallback(async (q: string) => {
-    if (q.length < 2) { setResults([]); return; }
+    if (q.length < 2) { setResults({ operacoes: [], contatos: [], estoque: [], vendas: [] }); return; }
     setLoading(true);
     try {
       const params = new URLSearchParams({ q });
@@ -253,7 +262,12 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
       });
       if (res.ok) {
         const json = await res.json();
-        setResults(json.results ?? []);
+        setResults({
+          operacoes: json.operacoes ?? [],
+          contatos: json.contatos ?? [],
+          estoque: json.estoque ?? [],
+          vendas: json.vendas ?? [],
+        });
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -350,48 +364,142 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                 <p className="text-3xl mb-2">🔍</p>
                 <p className={`text-sm ${textSecondary}`}>Digite para buscar</p>
               </div>
-            ) : results.length === 0 ? (
+            ) : !hasResults ? (
               <div className="py-12 text-center">
                 <p className={`text-sm ${textSecondary}`}>Nenhum resultado para &quot;{query}&quot;</p>
               </div>
             ) : (
-              <div className={`divide-y ${dm ? "divide-[#2C2C2E]" : "divide-[#F0F0F5]"}`}>
-                {results.map((r) => (
-                  <div
-                    key={`${r.tipo}-${r.id}`}
-                    className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors`}
-                    onClick={() => setDetailItem(r)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{r.tipo === "estoque" ? "📦" : "💰"}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-semibold ${textPrimary} truncate`}>{r.produto}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusBadge(r.status)}`}>{r.status}</span>
-                          {r.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadge(r.tipo_venda)}`}>{r.tipo_venda}</span>}
-                        </div>
-                        <div className={`text-xs ${textSecondary} mt-0.5 flex items-center gap-2 flex-wrap`}>
-                          {r.cor && <span>{r.cor}</span>}
-                          {r.fornecedor && <span>Forn: {r.fornecedor}</span>}
-                          {r.cliente && <span>Cliente: {r.cliente}</span>}
-                          {(r.data_entrada || r.data) && <span>{r.data_entrada || r.data}</span>}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {r.tipo === "venda" && r.preco_vendido ? (
-                          <div>
-                            <p className="text-sm font-bold text-[#E8740E]">{fmt(r.preco_vendido)}</p>
-                            {r.lucro !== undefined && (
-                              <p className={`text-[10px] font-semibold ${r.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>Lucro: {fmt(r.lucro)}</p>
-                            )}
-                          </div>
-                        ) : r.custo ? (
-                          <p className={`text-sm font-semibold ${textSecondary}`}>{fmt(r.custo)}</p>
-                        ) : null}
-                      </div>
+              <div>
+                {/* ── OPERAÇÕES ── */}
+                {results.operacoes.length > 0 && (
+                  <>
+                    <div className={`px-5 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Operacoes ({results.operacoes.length})</span>
                     </div>
-                  </div>
-                ))}
+                    {results.operacoes.map((op, i) => (
+                      <div key={`op-${i}`} className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-lg ${op.tipo === "Entrada" ? "text-green-500" : "text-blue-500"}`}>
+                            {op.tipo === "Entrada" ? "↓" : "↑"}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-semibold ${textPrimary}`}>{op.contato}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>{op.tipo}</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600">{op.status}</span>
+                            </div>
+                            <div className={`text-xs ${textSecondary} mt-0.5`}>
+                              {op.data?.split("-").reverse().join("/")} · {op.total_itens} {op.total_itens === 1 ? "item" : "itens"}
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold text-green-600 shrink-0">{fmt(op.valor_total)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* ── CONTATOS ── */}
+                {results.contatos.length > 0 && (
+                  <>
+                    <div className={`px-5 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Contatos ({results.contatos.length})</span>
+                    </div>
+                    {results.contatos.map((c, i) => (
+                      <div key={`ct-${i}`} className={`px-5 py-3 ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">👤</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-semibold ${textPrimary}`}>{c.nome}</span>
+                              {c.origem === "ATACADO" && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700">Atacado</span>}
+                            </div>
+                            <div className={`text-xs ${textSecondary} mt-0.5 flex items-center gap-3`}>
+                              {c.cpf && <span>{c.cpf}</span>}
+                              {c.email && <span>{c.email}</span>}
+                              <span>{c.total_compras} {c.total_compras === 1 ? "compra" : "compras"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* ── ESTOQUE ── */}
+                {results.estoque.length > 0 && (
+                  <>
+                    <div className={`px-5 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Estoque ({results.estoque.length})</span>
+                    </div>
+                    {results.estoque.map((r) => (
+                      <div
+                        key={`est-${r.id}`}
+                        className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}
+                        onClick={() => setDetailItem({ ...r, tipo: "estoque" })}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">📦</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-sm font-semibold ${textPrimary} truncate`}>{r.produto}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusBadge(r.status)}`}>{r.status}</span>
+                            </div>
+                            <div className={`text-xs ${textSecondary} mt-0.5 flex items-center gap-2 flex-wrap`}>
+                              {r.serial_no && <span className="font-mono text-purple-500">SN: {r.serial_no}</span>}
+                              {r.imei && <span className="font-mono text-blue-500">IMEI: {r.imei}</span>}
+                              {r.fornecedor && <span>Forn: {r.fornecedor}</span>}
+                              {r.data_entrada && <span>{r.data_entrada}</span>}
+                            </div>
+                          </div>
+                          {r.custo ? <p className={`text-sm font-semibold ${textSecondary} shrink-0`}>{fmt(r.custo)}</p> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* ── VENDAS ── */}
+                {results.vendas.length > 0 && (
+                  <>
+                    <div className={`px-5 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Vendas ({results.vendas.length})</span>
+                    </div>
+                    {results.vendas.map((r) => (
+                      <div
+                        key={`vd-${r.id}`}
+                        className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}
+                        onClick={() => setDetailItem({ ...r, tipo: "venda" })}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">💰</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-sm font-semibold ${textPrimary} truncate`}>{r.produto}</span>
+                              {r.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadge(r.tipo_venda)}`}>{r.tipo_venda}</span>}
+                              {r.origem && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{r.origem}</span>}
+                            </div>
+                            <div className={`text-xs ${textSecondary} mt-0.5 flex items-center gap-2 flex-wrap`}>
+                              {r.cliente && <span>{r.cliente}</span>}
+                              {r.data && <span>{r.data.split("-").reverse().join("/")}</span>}
+                              {r.serial_no && <span className="font-mono text-purple-500">SN: {r.serial_no}</span>}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {r.preco_vendido ? (
+                              <div>
+                                <p className="text-sm font-bold text-[#E8740E]">{fmt(r.preco_vendido)}</p>
+                                {r.lucro !== undefined && (
+                                  <p className={`text-[10px] font-semibold ${r.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}</p>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

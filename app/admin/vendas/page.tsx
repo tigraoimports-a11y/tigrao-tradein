@@ -238,9 +238,10 @@ export default function VendasPage() {
         const from = filtroDia
           ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
           : `${filtroAno}-${filtroMes}-01`;
+        const lastDay = new Date(Number(filtroAno), Number(filtroMes), 0).getDate();
         const to = filtroDia
           ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
-          : `${filtroAno}-${filtroMes}-31`;
+          : `${filtroAno}-${filtroMes}-${lastDay}`;
         url = `/api/vendas?from=${from}&to=${to}`;
       }
       const res = await fetch(url, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
