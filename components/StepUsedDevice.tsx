@@ -124,11 +124,11 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       </div>
 
       <Section title="">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           {lines.map((l) => {
             const popular = ["15", "16", "17"].includes(l);
             return (
-              <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)} className={popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}>
+              <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)} className={`min-w-[30%] ${popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}`}>
                 {`iPhone ${l}`}
               </Btn>
             );
