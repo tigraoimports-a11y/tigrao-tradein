@@ -2155,14 +2155,20 @@ export default function VendasPage() {
               <p className="text-sm font-bold text-[#1D1D1F] mb-1">Pagamento (para todos os produtos)</p>
               <p className="text-[10px] text-[#86868B] mb-3">Preencha o pagamento uma unica vez — vale para todos os {produtosCarrinho.length} produto{produtosCarrinho.length > 1 ? "s" : ""} no carrinho.</p>
 
-              {/* Valor total da venda — distribui proporcional ao custo (colapsável) */}
+              {/* Valor total da venda — distribui proporcional ao custo */}
               {(() => {
+                const multiProduto = produtosCarrinho.length > 1;
                 const allHavePrice = produtosCarrinho.every(p => parseFloat(p.preco_vendido) > 0);
-                const isOpen = !!form.valor_total_venda || !allHavePrice;
+                const isOpen = multiProduto || !!form.valor_total_venda || !allHavePrice;
                 return isOpen ? (
                   <div className="border border-green-300 bg-green-50 rounded-xl p-4 space-y-2">
                     <p className={labelCls}>Valor total da venda (R$)</p>
-                    <p className="text-[10px] text-[#86868B] -mt-1">Preencha o total recebido — o sistema distribui entre os produtos proporcionalmente ao custo. Ou edite cada produto manualmente acima.</p>
+                    <p className="text-[10px] text-[#86868B] -mt-1">
+                      {multiProduto
+                        ? "Quanto o cliente pagou no total? (PIX + cartao + troca). O sistema distribui entre os produtos."
+                        : "Preencha o total recebido. Ou edite o preco vendido manualmente acima."
+                      }
+                    </p>
                     <input
                       type="text" inputMode="numeric"
                       value={fmtMil(form.valor_total_venda)}
