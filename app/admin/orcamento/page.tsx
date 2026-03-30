@@ -55,6 +55,8 @@ export default function OrcamentoPage() {
   const [textoGerado, setTextoGerado] = useState("");
   const [copiado, setCopiado] = useState(false);
   const [carrinho, setCarrinho] = useState<{ id: string; nome: string; preco: number; categoria: string }[]>([]);
+  const [trocaProduto, setTrocaProduto] = useState("");
+  const [trocaValor, setTrocaValor] = useState("");
 
   useEffect(() => {
     if (!password) return;
@@ -94,7 +96,9 @@ export default function OrcamentoPage() {
 
     // Se tem carrinho com múltiplos produtos, usar total do carrinho
     const itensOrcamento = carrinho.length > 0 ? carrinho : produtoSelecionado ? [{ id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }] : [];
-    const precoPix = itensOrcamento.reduce((s, p) => s + p.preco, 0);
+    const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco, 0);
+    const trocaVal = parseFloat(trocaValor) || 0;
+    const precoPix = totalBruto - trocaVal;
     const entradaVal = parseFloat(entrada) || 0;
     const restante = precoPix - entradaVal;
 
@@ -136,6 +140,17 @@ export default function OrcamentoPage() {
       `📄 Nota fiscal em seu nome`,
       ``,
     );
+
+    if (trocaProduto && trocaVal > 0) {
+      linhas.push(
+        `🔄 *Seu aparelho na troca:*`,
+        `${trocaProduto}`,
+        `Avaliação: R$ ${trocaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        ``,
+        `*Com a troca do seu produto você pagará a diferença de:*`,
+        ``,
+      );
+    }
 
     if (entradaVal > 0) {
       linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
@@ -184,7 +199,7 @@ export default function OrcamentoPage() {
   useEffect(() => {
     if (produtoSelecionado || carrinho.length > 0) gerarOrcamento();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho]);
+  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -265,6 +280,18 @@ export default function OrcamentoPage() {
                   </div>
                 </div>
               )}
+
+              {/* Troca */}
+              <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-blue-50 border border-blue-200"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-700"}`}>Produto na troca?</p>
+                <input type="text" placeholder="Ex: iPhone 15 Pro Max 256GB" value={trocaProduto} onChange={e => setTrocaProduto(e.target.value)} className={inputCls} />
+                {trocaProduto && (
+                  <div>
+                    <p className={labelCls}>Valor da avaliacao (R$)</p>
+                    <input type="text" inputMode="decimal" placeholder="Ex: 3500" value={trocaValor} onChange={e => setTrocaValor(e.target.value)} className={inputCls} />
+                  </div>
+                )}
+              </div>
 
               {/* Entrada */}
               <div>
