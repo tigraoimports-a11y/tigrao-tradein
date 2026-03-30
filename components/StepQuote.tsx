@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { QuoteResult, InstallmentOption, AnyConditionData, DeviceType } from "@/lib/calculations";
 import type { LeadSaiu } from "@/lib/supabase";
+import type { NewProduct } from "@/lib/types";
 import { calculateQuote, getWhatsAppUrl, getAnyConditionLines, formatBRL } from "@/lib/calculations";
 
 const PARCELAS_OPCOES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
@@ -16,6 +17,7 @@ interface StepQuoteProps {
   tradeInValue1?: number; tradeInValue2?: number;
   clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string;
   whatsappNumero: string; validadeHoras: number; vendedor?: string | null;
+  allProducts?: NewProduct[];
   onReset: () => void; onCotarOutro: () => void;
   onGoToStep?: (step: number) => void;
   onTrackAction?: (action: string) => void;
@@ -51,7 +53,7 @@ function useCountdown(hours: number) {
 export default function StepQuote(p: StepQuoteProps) {
   const { newModel, newStorage, newPrice, usedModel, usedStorage, condition, deviceType, tradeInValue,
     usedModel2, usedStorage2, condition2, deviceType2, tradeInValue1, tradeInValue2,
-    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, onReset, onCotarOutro, onGoToStep, onTrackAction } = p;
+    clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, allProducts, onReset, onCotarOutro, onGoToStep, onTrackAction } = p;
 
   const hasSecond = !!(usedModel2 && usedStorage2);
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
@@ -241,6 +243,50 @@ export default function StepQuote(p: StepQuoteProps) {
         style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>
         DESEJO FECHAR MEU PEDIDO NO WHATSAPP
       </button>
+
+      {/* Alternativas mais baratas */}
+      {(() => {
+        if (!allProducts || allProducts.length === 0) return null;
+        const currentKey = `${newModel} ${newStorage}`;
+        const alternatives = allProducts
+          .filter(p => {
+            const key = `${p.modelo} ${p.armazenamento}`;
+            return key !== currentKey && p.precoPix < newPrice && p.precoPix > tradeInValue;
+          })
+          .map(p => ({ ...p, dif: p.precoPix - tradeInValue }))
+          .sort((a, b) => b.precoPix - a.precoPix)
+          .slice(0, 4);
+        if (alternatives.length === 0) return null;
+        return (
+          <div className="rounded-2xl p-4 space-y-3" style={cardStyle}>
+            <p className="text-[13px] font-bold text-center" style={{ color: "var(--ti-text)" }}>
+              Outras opcoes com a sua troca:
+            </p>
+            <div className="space-y-2">
+              {alternatives.map(alt => {
+                const altQt = calculateQuote(tradeInValue, alt.precoPix);
+                const alt12 = altQt.installments.find(i => i.parcelas === 12);
+                const alt21 = altQt.installments.find(i => i.parcelas === 21);
+                return (
+                  <div key={`${alt.modelo}-${alt.armazenamento}`} className="rounded-xl p-3 transition-colors" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+                    <p className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>
+                      {alt.modelo} {alt.armazenamento}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1 text-[12px]" style={{ color: "var(--ti-muted)" }}>
+                      <span className="font-bold" style={{ color: "#22c55e" }}>PIX: {formatBRL(alt.dif)}</span>
+                      {alt12 && <span>12x {formatBRL(alt12.valorParcela)}</span>}
+                      {alt21 && <span>21x {formatBRL(alt21.valorParcela)}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-center" style={{ color: "var(--ti-muted)" }}>
+              Valores com a troca do seu {usedModel} {usedStorage}
+            </p>
+          </div>
+        );
+      })()}
 
       <button onClick={onCotarOutro}
         className="w-full py-4 rounded-2xl text-[15px] font-semibold transition-all duration-200 active:scale-[0.98]"
