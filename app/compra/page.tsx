@@ -68,6 +68,8 @@ function CompraForm() {
   const [bairro, setBairro] = useState("");
   const [horario, setHorario] = useState("");
   const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
+  const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
+  const [shopping, setShopping] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
 
@@ -108,7 +110,7 @@ function CompraForm() {
       `Produto: ${produto} -- R$ ${formatPrice(preco)}`,
       "",
       `Horario: ${horario}`,
-      `Local: ${local}`,
+      `Local: ${local}${local === "Entrega" ? ` - ${tipoEntrega}${tipoEntrega === "Shopping" ? `: ${shopping}` : ""}` : ""}`,
     ].join("\n");
 
     const url = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
@@ -333,6 +335,50 @@ function CompraForm() {
                 <span className="font-medium">Entrega</span>
               </label>
             </div>
+
+            {local === "Entrega" && (
+              <div className="mt-3 space-y-3 animate-fadeIn">
+                <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
+                <div className="flex gap-3">
+                  <label
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                      tipoEntrega === "Residencia"
+                        ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]"
+                        : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"
+                    }`}
+                  >
+                    <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
+                    <span className="text-lg">🏠</span>
+                    <span className="font-medium">Residencia</span>
+                  </label>
+                  <label
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                      tipoEntrega === "Shopping"
+                        ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]"
+                        : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"
+                    }`}
+                  >
+                    <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
+                    <span className="text-lg">🏬</span>
+                    <span className="font-medium">Shopping</span>
+                  </label>
+                </div>
+
+                {tipoEntrega === "Shopping" && (
+                  <div>
+                    <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Qual shopping? *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shopping}
+                      onChange={(e) => setShopping(e.target.value)}
+                      placeholder="Ex: BarraShopping, Village Mall..."
+                      className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
