@@ -70,6 +70,8 @@ function CompraForm() {
   const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
   const [shopping, setShopping] = useState("");
+  const [temTroca, setTemTroca] = useState<boolean | null>(null);
+  const [descTroca, setDescTroca] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
 
@@ -96,22 +98,29 @@ function CompraForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const message = [
-      `*Nova Compra - ${vendedor}*`,
+    const localStr = local === "Loja" ? "Retirada em loja"
+      : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
+      : "Entrega - Residencia";
+
+    const lines = [
+      `✅ Nome completo: ${nome}`,
+      `✅ CPF: ${cpf}`,
+      `✅ E-mail: ${email}`,
+      `✅ Telefone: ${telefone}`,
+      `✅ CEP: ${cep}`,
+      `✅ Endereco: ${endereco}`,
+      `✅ Bairro: ${bairro}`,
       "",
-      `Nome completo: ${nome}`,
-      `CPF: ${cpf}`,
-      `E-mail: ${email}`,
-      `Telefone: ${telefone}`,
-      `CEP: ${cep}`,
-      `Endereco: ${endereco}`,
-      `Bairro: ${bairro}`,
-      "",
-      `Produto: ${produto} -- R$ ${formatPrice(preco)}`,
-      "",
-      `Horario: ${horario}`,
-      `Local: ${local}${local === "Entrega" ? ` - ${tipoEntrega}${tipoEntrega === "Shopping" ? `: ${shopping}` : ""}` : ""}`,
-    ].join("\n");
+      `*Produto:* ${produto}${preco ? ` — R$ ${formatPrice(preco)}` : ""}`,
+    ];
+
+    if (temTroca && descTroca) {
+      lines.push("", `🔄 *Produto na troca:* ${descTroca}`);
+    }
+
+    lines.push("", `✅ Horario: ${horario}`, `✅ ${localStr}`);
+
+    const message = lines.join("\n");
 
     const url = `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
@@ -273,6 +282,39 @@ function CompraForm() {
               placeholder="Bairro"
               className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
             />
+          </div>
+        </div>
+
+        {/* Troca */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED] space-y-3">
+          <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">
+            Troca
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Voce vai dar algum produto na troca?</label>
+            <div className="flex gap-3">
+              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${temTroca === false ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                <input type="radio" name="troca" checked={temTroca === false} onChange={() => { setTemTroca(false); setDescTroca(""); }} className="sr-only" />
+                <span className="font-medium">Não</span>
+              </label>
+              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${temTroca === true ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                <input type="radio" name="troca" checked={temTroca === true} onChange={() => setTemTroca(true)} className="sr-only" />
+                <span className="font-medium">Sim</span>
+              </label>
+            </div>
+            {temTroca && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Descreva o produto *</label>
+                <textarea
+                  required
+                  value={descTroca}
+                  onChange={(e) => setDescTroca(e.target.value)}
+                  placeholder="Ex: iPhone 15 Pro Max 256GB, bateria 90%, sem marcas de uso"
+                  rows={3}
+                  className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] resize-none"
+                />
+              </div>
+            )}
           </div>
         </div>
 
