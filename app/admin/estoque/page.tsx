@@ -2129,7 +2129,7 @@ export default function EstoquePage() {
                                               <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                             </div>
                                           ) : (
-                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isEditableItemTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
+                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {p.cor || "—"}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
@@ -2163,7 +2163,7 @@ export default function EstoquePage() {
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
                                               ) : isEditableItemTab ? (
-                                                <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
                                               ) : p.bateria ? (
@@ -2177,7 +2177,7 @@ export default function EstoquePage() {
                                                 <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                               </div>
                                             ) : isEditableItemTab ? (
-                                              <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
+                                              <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
                                                 {p.observacao || "+ Origem"}
                                               </button>
                                             ) : p.observacao ? (
@@ -2417,25 +2417,91 @@ export default function EstoquePage() {
         const isLac = p.tipo === "NOVO";
         const dataE = p.data_entrada || p.data_compra;
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+        const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailProduct(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailProduct(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
             <div className={`w-full max-w-lg mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
-                <h3 className={`text-sm font-bold ${mP}`}>Detalhes do Item {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
+                <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
                 <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
               </div>
-              {/* Produto */}
+              {/* Produto — editável para pendências */}
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-start justify-between mb-4">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Produto</p><p className={`text-[16px] font-bold ${mP} mt-0.5`}>{p.produto}</p></div>
+                  <div className="flex-1 mr-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Produto (modelo + memoria)</p>
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        defaultValue={p.produto}
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim().toUpperCase();
+                          if (val && val !== p.produto) {
+                            await apiPatch(p.id, { produto: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: val } : x));
+                            setDetailProduct({ ...p, produto: val });
+                            setMsg("Produto atualizado!");
+                          }
+                        }}
+                        className={`w-full text-[15px] font-bold mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                    ) : (
+                      <p className={`text-[16px] font-bold ${mP} mt-0.5`}>{p.produto}</p>
+                    )}
+                  </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {p.serial_no && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p><button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button></div>}
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
+                  {/* Cor */}
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        defaultValue={p.cor || ""}
+                        placeholder="Ex: TITANIO NATURAL"
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim().toUpperCase() || null;
+                          if (val !== (p.cor || null)) {
+                            await apiPatch(p.id, { cor: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
+                            setDetailProduct({ ...p, cor: val });
+                            setMsg("Cor atualizada!");
+                          }
+                        }}
+                        className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                    ) : p.cor ? (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p>
+                    ) : null}
+                  </div>
                   {p.imei && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p><button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.imei} {cpIco}</button></div>}
-                  {p.cor && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p></div>}
-                  {p.bateria && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p></div>}
+                  {/* Bateria */}
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%)</p>
+                    {canEdit ? (
+                      <input
+                        type="number"
+                        min={0} max={100}
+                        defaultValue={p.bateria || ""}
+                        placeholder="Ex: 92"
+                        onBlur={async (e) => {
+                          const val = e.target.value ? parseInt(e.target.value) : null;
+                          if (val !== p.bateria) {
+                            await apiPatch(p.id, { bateria: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, bateria: val } : x));
+                            setDetailProduct({ ...p, bateria: val });
+                            setMsg("Bateria atualizada!");
+                          }
+                        }}
+                        className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                    ) : p.bateria ? (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               {/* Financeiro */}
@@ -2447,13 +2513,34 @@ export default function EstoquePage() {
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
               </div>
-              {/* Datas */}
+              {/* Datas + Observação */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <div className="grid grid-cols-2 gap-4">
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p><p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(dataE)}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p></div>
                 </div>
-                {p.observacao && <div className="mt-3"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.observacao}</p></div>}
+                <div className="mt-3">
+                  <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p>
+                  {canEdit ? (
+                    <textarea
+                      defaultValue={p.observacao || ""}
+                      placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
+                      rows={2}
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim() || null;
+                        if (val !== (p.observacao || null)) {
+                          await apiPatch(p.id, { observacao: val });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
+                          setDetailProduct({ ...p, observacao: val });
+                          setMsg("Observacao atualizada!");
+                        }
+                      }}
+                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none resize-none`}
+                    />
+                  ) : p.observacao ? (
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{p.observacao}</p>
+                  ) : <p className={`text-[13px] ${mS} mt-0.5`}>—</p>}
+                </div>
               </div>
               {/* Operações Relacionadas */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
