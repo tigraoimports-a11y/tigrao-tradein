@@ -82,6 +82,8 @@ function CompraForm() {
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
   const [shopping, setShopping] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("");
+  const [parcelas, setParcelas] = useState("");
+  const [origem, setOrigem] = useState("");
   const [temTroca, setTemTroca] = useState<boolean | null>(null);
   const [descTroca, setDescTroca] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
@@ -131,7 +133,8 @@ function CompraForm() {
       `Bairro: ${bairro}`,
       "",
       `*Produto:* ${produto}${preco ? ` -- R$ ${formatPrice(preco)}` : ""}`,
-      `*Forma de pagamento:* ${formaPagamento}`,
+      `*Forma de pagamento:* ${formaPagamento}${formaPagamento.includes("Cartao") && parcelas ? ` em ${parcelas}x` : ""}`,
+      origem ? `*Como conheceu:* ${origem}` : "",
     ];
 
     if (temTroca && descTroca) {
@@ -332,6 +335,19 @@ function CompraForm() {
           </div>
         </div>
 
+        {/* Como conheceu */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED] space-y-3">
+          <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Como nos encontrou?</p>
+          <div className="grid grid-cols-3 gap-2">
+            {["Anuncio", "Story", "Direct", "WhatsApp", "Indicacao", "Ja sou cliente"].map(o => (
+              <label key={o} className={`flex items-center justify-center px-2 py-2.5 rounded-lg border-2 cursor-pointer transition-colors text-[12px] font-medium text-center ${origem === o ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                <input type="radio" name="origem" value={o} checked={origem === o} onChange={() => setOrigem(o)} className="sr-only" />
+                {o}
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Pagamento */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED] space-y-3">
           <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Pagamento</p>
@@ -340,12 +356,25 @@ function CompraForm() {
             <div className="grid grid-cols-2 gap-2">
               {["PIX", "Cartao de Credito", "Debito", "PIX + Cartao"].map(f => (
                 <label key={f} className={`flex items-center justify-center px-3 py-3 rounded-lg border-2 cursor-pointer transition-colors text-sm font-medium ${formaPagamento === f ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                  <input type="radio" name="pagamento" value={f} checked={formaPagamento === f} onChange={() => setFormaPagamento(f)} className="sr-only" />
+                  <input type="radio" name="pagamento" value={f} checked={formaPagamento === f} onChange={() => { setFormaPagamento(f); if (!f.includes("Cartao")) setParcelas(""); }} className="sr-only" />
                   {f}
                 </label>
               ))}
             </div>
           </div>
+          {formaPagamento.includes("Cartao") && (
+            <div>
+              <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Em quantas vezes?</label>
+              <div className="grid grid-cols-7 gap-1.5">
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => (
+                  <label key={n} className={`flex items-center justify-center py-2 rounded-lg border-2 cursor-pointer transition-colors text-xs font-bold ${parcelas === String(n) ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                    <input type="radio" name="parcelas" value={n} checked={parcelas === String(n)} onChange={() => setParcelas(String(n))} className="sr-only" />
+                    {n}x
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Troca */}
