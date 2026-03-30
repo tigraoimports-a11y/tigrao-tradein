@@ -117,13 +117,50 @@ export const WATCH_PULSEIRAS = ["S/M", "M/L", "One Size"];
 
 // ── Opções por categoria ──
 
-export const IPHONE_MODELOS = ["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "17", "17 PRO", "17 PRO MAX"];
+export const IPHONE_MODELOS = ["11", "11 PRO", "11 PRO MAX", "12", "12 MINI", "12 PRO", "12 PRO MAX", "13", "13 MINI", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16E", "16 PRO", "16 PRO MAX", "17", "17 AIR", "17 PRO", "17 PRO MAX"];
 export const IPHONE_STORAGES = ["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"];
 
-export const MACBOOK_TIPOS = ["AIR", "PRO"] as const;
+/** Armazenamentos válidos por modelo de iPhone */
+export const IPHONE_STORAGES_POR_MODELO: Record<string, string[]> = {
+  "11":            ["64GB", "128GB", "256GB"],
+  "11 PRO":        ["64GB", "256GB", "512GB"],
+  "11 PRO MAX":    ["64GB", "256GB", "512GB"],
+  "12":            ["64GB", "128GB", "256GB"],
+  "12 MINI":       ["64GB", "128GB", "256GB"],
+  "12 PRO":        ["128GB", "256GB", "512GB"],
+  "12 PRO MAX":    ["128GB", "256GB", "512GB"],
+  "13":            ["128GB", "256GB", "512GB"],
+  "13 MINI":       ["128GB", "256GB", "512GB"],
+  "13 PRO":        ["128GB", "256GB", "512GB", "1TB"],
+  "13 PRO MAX":    ["128GB", "256GB", "512GB", "1TB"],
+  "14":            ["128GB", "256GB", "512GB"],
+  "14 PLUS":       ["128GB", "256GB", "512GB"],
+  "14 PRO":        ["128GB", "256GB", "512GB", "1TB"],
+  "14 PRO MAX":    ["128GB", "256GB", "512GB", "1TB"],
+  "15":            ["128GB", "256GB", "512GB"],
+  "15 PLUS":       ["128GB", "256GB", "512GB"],
+  "15 PRO":        ["128GB", "256GB", "512GB", "1TB"],
+  "15 PRO MAX":    ["256GB", "512GB", "1TB"],
+  "16":            ["128GB", "256GB", "512GB"],
+  "16 PLUS":       ["128GB", "256GB", "512GB"],
+  "16E":           ["128GB", "256GB", "512GB"],
+  "16 PRO":        ["128GB", "256GB", "512GB", "1TB"],
+  "16 PRO MAX":    ["256GB", "512GB", "1TB"],
+  "17":            ["256GB", "512GB"],
+  "17 AIR":        ["256GB", "512GB"],
+  "17 PRO":        ["256GB", "512GB", "1TB"],
+  "17 PRO MAX":    ["256GB", "512GB", "1TB", "2TB"],
+};
+
+export function getIphoneStorages(modelo: string): string[] {
+  return IPHONE_STORAGES_POR_MODELO[modelo] || IPHONE_STORAGES;
+}
+
+export const MACBOOK_TIPOS = ["AIR", "PRO", "NEO"] as const;
 export const MACBOOK_TELAS_AIR = ['13"', '15"'];
 export const MACBOOK_TELAS_PRO = ['14"', '16"'];
-export const MACBOOK_CHIPS = ["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX"];
+export const MACBOOK_TELAS_NEO = ['14"'];
+export const MACBOOK_CHIPS = ["M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"];
 export const MACBOOK_RAMS = ["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"];
 export const MACBOOK_STORAGES = ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"];
 export const MACBOOK_NUCLEOS = [
@@ -156,7 +193,7 @@ export const IPAD_CONNS = [
   { value: "WIFI+CELL", label: "WiFi + Cellular (5G)" },
 ];
 
-export const WATCH_MODELOS = ["SE", "SERIES 10", "SERIES 11", "ULTRA", "ULTRA 2"];
+export const WATCH_MODELOS = ["SE", "SE 2ND", "SERIES 9", "SERIES 10", "SERIES 11", "ULTRA 2", "ULTRA 3"];
 export const WATCH_TAMANHOS = ["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"];
 export const WATCH_CONNS = [
   { value: "GPS", label: "GPS" },

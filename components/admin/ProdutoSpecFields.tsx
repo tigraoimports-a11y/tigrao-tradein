@@ -5,7 +5,7 @@ import {
   CATEGORIAS,
   CAT_LABELS,
   STRUCTURED_CATS,
-  IPHONE_STORAGES,
+  getIphoneStorages,
   MACBOOK_CHIPS,
   MACBOOK_NUCLEOS,
   MACBOOK_RAMS,
@@ -34,7 +34,7 @@ const IPHONE_MODELOS_FULL = [
   "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E",
   "17", "17 AIR", "17 PRO", "17 PRO MAX",
 ];
-const MACBOOK_CHIPS_FULL = ["A18 PRO", "M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"];
+const MACBOOK_CHIPS_FULL = ["A18 PRO", "M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"];
 const WATCH_MODELOS_FULL = ["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"];
 const WATCH_TAMANHOS = ["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"];
 
@@ -185,14 +185,14 @@ export default function ProdutoSpecFields({
         <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
           <div>
             <p className={labelCls}>Modelo</p>
-            <select value={row.spec.ip_modelo} onChange={(e) => setSpec("ip_modelo", e.target.value)} className={inputCls}>
+            <select value={row.spec.ip_modelo} onChange={(e) => { setSpec("ip_modelo", e.target.value); const validStorages = getIphoneStorages(e.target.value); if (!validStorages.includes(row.spec.ip_storage)) setSpec("ip_storage", validStorages[0]); }} className={inputCls}>
               {IPHONE_MODELOS_FULL.map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.ip_storage} onChange={(e) => setSpec("ip_storage", e.target.value)} className={inputCls}>
-              {IPHONE_STORAGES.map((s) => <option key={s}>{s}</option>)}
+              {getIphoneStorages(row.spec.ip_modelo).map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
