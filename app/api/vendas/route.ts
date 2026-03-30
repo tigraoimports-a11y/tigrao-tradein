@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
   if (seminovoData && seminovoData.produto) {
-    await supabase.from("estoque").insert({
+    const { error: errSeminovo } = await supabase.from("estoque").insert({
       produto: seminovoData.produto,
       categoria: "IPHONES",
       qnt: 1,
@@ -180,11 +180,12 @@ export async function POST(req: NextRequest) {
       data_compra: body.data || null,
       updated_at: new Date().toISOString(),
     });
+    if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
   }
 
   // 2º produto na troca — mesmo fluxo do primeiro
   if (seminovoData2 && seminovoData2.produto) {
-    await supabase.from("estoque").insert({
+    const { error: errSeminovo2 } = await supabase.from("estoque").insert({
       produto: seminovoData2.produto,
       categoria: "IPHONES",
       qnt: 1,
@@ -198,6 +199,7 @@ export async function POST(req: NextRequest) {
       data_compra: body.data || null,
       updated_at: new Date().toISOString(),
     });
+    if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
   }
 
   // Auto-criar entrega quando local é ENTREGA
