@@ -115,15 +115,27 @@ export default function OrcamentoPage() {
     return produtos.find(p => p.id === prodSel);
   }, [produtos, prodSel]);
 
-  // Agrupar seminovos por modelo
-  const seminovosAgrupados = useMemo(() => {
-    const map: Record<string, SeminovoEstoque[]> = {};
-    for (const s of seminovosEstoque) {
-      if (!map[s.produto]) map[s.produto] = [];
-      map[s.produto].push(s);
-    }
-    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+  // Categorias de seminovos (derivar do nome do produto)
+  const getSemiCategoria = (produto: string): string => {
+    const p = produto.toUpperCase();
+    if (p.includes("IPHONE")) return "IPHONE";
+    if (p.includes("IPAD")) return "IPAD";
+    if (p.includes("MACBOOK") || p.includes("MAC MINI") || p.includes("IMAC")) return "MACBOOK";
+    if (p.includes("WATCH")) return "APPLE_WATCH";
+    if (p.includes("AIRPODS")) return "AIRPODS";
+    return "OUTROS";
+  };
+
+  const [semiCat, setSemiCat] = useState("");
+  const semiCategorias = useMemo(() => {
+    const cats = [...new Set(seminovosEstoque.map(s => getSemiCategoria(s.produto)))].sort();
+    return cats;
   }, [seminovosEstoque]);
+
+  const seminovosFiltrados = useMemo(() => {
+    if (!semiCat) return [];
+    return seminovosEstoque.filter(s => getSemiCategoria(s.produto) === semiCat);
+  }, [seminovosEstoque, semiCat]);
 
   // Produto virtual para seminovo (usado no mesmo fluxo)
   const semiNome = semiSel ? semiSel.produto : "";
@@ -271,7 +283,7 @@ export default function OrcamentoPage() {
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${tipoOrc === "lacrado" ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                 📦 Lacrado
               </button>
-              <button onClick={() => { setTipoOrc("seminovo"); setProdSel(""); setCatSel(""); setTextoGerado(""); }}
+              <button onClick={() => { setTipoOrc("seminovo"); setProdSel(""); setCatSel(""); setSemiCat(""); setSemiSel(null); setSemiPreco(""); setTextoGerado(""); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${tipoOrc === "seminovo" ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                 📱 Seminovo
               </button>
@@ -315,41 +327,66 @@ export default function OrcamentoPage() {
           {/* ==== SEMINOVO ==== */}
           {tipoOrc === "seminovo" && (
           <div className="space-y-4 animate-fadeIn">
-            {seminovosAgrupados.length === 0 ? (
+            {seminovosEstoque.length === 0 ? (
               <div className={`rounded-xl p-4 text-center ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
                 <p className={`text-sm ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Nenhum seminovo em estoque no momento.</p>
               </div>
             ) : (
               <>
+              {/* Categoria */}
               <div>
-                <p className={labelCls}>Selecionar seminovo do estoque</p>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {seminovosAgrupados.map(([modelo, items]) => (
-                    <div key={modelo}>
-                      <p className={`text-xs font-bold mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{modelo} ({items.length} un.)</p>
-                      {items.map(item => {
-                        const sel = semiSel?.id === item.id;
-                        const details = [item.cor, item.bateria ? `🔋${item.bateria}%` : null, item.observacao].filter(Boolean).join(" · ");
-                        return (
-                          <button key={item.id} onClick={() => { setSemiSel(sel ? null : item); setSemiObs(item.observacao || ""); }}
-                            className={`w-full text-left px-3 py-2.5 rounded-xl mb-1 text-sm transition-colors ${sel ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"}`}>
-                            <span className="font-semibold">{item.produto}</span>
-                            {details && <span className={`block text-xs mt-0.5 ${sel ? "text-white/70" : dm ? "text-[#636366]" : "text-[#86868B]"}`}>{details}</span>}
-                            <span className={`text-xs ${sel ? "text-white/70" : "text-[#E8740E]"}`}>Custo: R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                <p className={labelCls}>Categoria</p>
+                <div className="flex flex-wrap gap-2">
+                  {semiCategorias.map(c => (
+                    <button key={c} onClick={() => { setSemiCat(semiCat === c ? "" : c); setSemiSel(null); setSemiPreco(""); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${semiCat === c ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                      {CATEGORIAS_LABEL[c] || c} ({seminovosEstoque.filter(s => getSemiCategoria(s.produto) === c).length})
+                    </button>
                   ))}
                 </div>
               </div>
+
+              {/* Produto select */}
+              {semiCat && (
+              <div>
+                <p className={labelCls}>Produto ({seminovosFiltrados.length} disponíveis)</p>
+                <select value={semiSel?.id || ""} onChange={e => {
+                  const item = seminovosFiltrados.find(s => s.id === e.target.value);
+                  setSemiSel(item || null);
+                  setSemiPreco("");
+                  setSemiObs(item?.observacao || "");
+                }} className={inputCls}>
+                  <option value="">— Selecionar seminovo —</option>
+                  {seminovosFiltrados.map(item => {
+                    const details = [item.cor, item.bateria ? `${item.bateria}%` : null, item.observacao].filter(Boolean).join(" · ");
+                    return (
+                      <option key={item.id} value={item.id}>
+                        {item.produto}{details ? ` (${details})` : ""} — Custo R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              )}
+
+              {/* Detalhes + Preço */}
               {semiSel && (
                 <>
+                <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecionado</p>
+                  <p className={`text-sm font-bold mt-0.5 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{semiSel.produto}</p>
+                  <div className="flex flex-wrap gap-3 mt-1 text-xs">
+                    {semiSel.cor && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor: {semiSel.cor}</span>}
+                    {semiSel.bateria && <span className="text-green-500">🔋 {semiSel.bateria}%</span>}
+                    {semiSel.observacao && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{semiSel.observacao}</span>}
+                    <span className="text-[#E8740E] font-semibold">Custo: R$ {semiSel.custo_unitario?.toLocaleString("pt-BR")}</span>
+                  </div>
+                </div>
                 <div>
                   <p className={labelCls}>Preco de venda PIX (R$)</p>
                   <input type="text" inputMode="numeric" placeholder="Ex: 6500" value={semiPreco} onChange={e => setSemiPreco(e.target.value.replace(/\D/g, ""))} className={inputCls} />
                   {semiPreco && semiSel.custo_unitario > 0 && (
-                    <p className={`text-xs mt-1 ${parseFloat(semiPreco) > semiSel.custo_unitario ? "text-green-500" : "text-red-500"}`}>
+                    <p className={`text-xs mt-1 font-semibold ${parseFloat(semiPreco) > semiSel.custo_unitario ? "text-green-500" : "text-red-500"}`}>
                       Lucro: R$ {(parseFloat(semiPreco) - semiSel.custo_unitario).toLocaleString("pt-BR")} ({((parseFloat(semiPreco) - semiSel.custo_unitario) / parseFloat(semiPreco) * 100).toFixed(1)}%)
                     </p>
                   )}
@@ -358,14 +395,6 @@ export default function OrcamentoPage() {
                   <p className={labelCls}>Observacao no orcamento (opcional)</p>
                   <input type="text" placeholder="Ex: Garantia Apple ate agosto, Grade A" value={semiObs} onChange={e => setSemiObs(e.target.value)} className={inputCls} />
                 </div>
-                {semiPreco && parseFloat(semiPreco) > 0 && (
-                  <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                    <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preco PIX Seminovo</p>
-                    <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                      R$ {parseFloat(semiPreco).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                )}
                 </>
               )}
               </>
