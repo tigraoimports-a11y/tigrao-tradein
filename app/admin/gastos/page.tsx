@@ -94,23 +94,57 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
 
 // Componente para mostrar produtos vinculados no histórico
 function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornecedorId: string; password: string; dm: boolean }) {
-  const [produtos, setProdutos] = useState<{ id: string; produto: string; cor: string; qnt: number; custo_unitario: number; status: string; fornecedor: string }[]>([]);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const [produtos, setProdutos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const reload = async () => {
+    try {
+      const res = await fetch(`/api/estoque?pedido_fornecedor_id=${pedidoFornecedorId}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setProdutos(json.data ?? []);
+      }
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/estoque?pedido_fornecedor_id=${pedidoFornecedorId}`, {
-          headers: { "x-admin-password": password },
+    reload().then(() => setLoading(false));
+  }, [pedidoFornecedorId, password]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startEdit = (p: any) => {
+    setEditId(p.id);
+    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "" });
+  };
+
+  const saveEdit = async () => {
+    if (!editId) return;
+    setSaving(true);
+    try {
+      const updates: Record<string, any> = {};
+      const original = produtos.find((p: any) => p.id === editId);
+      if (editFields.serial_no !== (original?.serial_no || "")) updates.serial_no = editFields.serial_no.toUpperCase() || null;
+      if (editFields.imei !== (original?.imei || "")) updates.imei = editFields.imei || null;
+      if (editFields.produto !== (original?.produto || "")) updates.produto = editFields.produto.toUpperCase() || null;
+      if (Object.keys(updates).length > 0) {
+        await fetch("/api/estoque", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-password": password },
+          body: JSON.stringify({ id: editId, ...updates }),
         });
-        if (res.ok) {
-          const json = await res.json();
-          setProdutos(json.data ?? []);
-        }
-      } catch { /* ignore */ }
-      setLoading(false);
-    })();
-  }, [pedidoFornecedorId, password]);
+        await reload();
+      }
+    } catch { /* ignore */ }
+    setSaving(false);
+    setEditId(null);
+  };
+
+  const inputCls = `w-full px-2 py-1 rounded border text-xs ${dm ? "bg-[#2C2C2E] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:outline-none focus:border-[#E8740E]`;
 
   if (loading) return <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Carregando produtos...</p>;
   if (produtos.length === 0) return null;
@@ -121,20 +155,60 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
         Produtos do pedido ({produtos.length})
       </p>
       <div className="space-y-1.5">
-        {produtos.map((p) => (
-          <div key={p.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                {p.status}
-              </span>
-              <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                {p.produto}{p.cor ? ` — ${p.cor}` : ""}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>x{p.qnt}</span>
-              <span className="font-bold text-[#E8740E]">{fmt(p.custo_unitario)}</span>
-            </div>
+        {produtos.map((p: any) => (
+          <div key={p.id} className={`px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
+            {editId === p.id ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Produto</p>
+                    <input value={editFields.produto} onChange={(e) => setEditFields(f => ({ ...f, produto: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial No.</p>
+                    <input value={editFields.serial_no} onChange={(e) => setEditFields(f => ({ ...f, serial_no: e.target.value }))} placeholder="Ex: C39XXXXX..." className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>IMEI</p>
+                    <input value={editFields.imei} onChange={(e) => setEditFields(f => ({ ...f, imei: e.target.value }))} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveEdit} disabled={saving} className="px-3 py-1 rounded bg-[#E8740E] text-white text-[10px] font-semibold hover:bg-[#D06A0D]">
+                    {saving ? "Salvando..." : "Salvar"}
+                  </button>
+                  <button onClick={() => setEditId(null)} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : p.status === "PENDENTE" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
+                      {p.status}
+                    </span>
+                    <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}
+                    </span>
+                  </div>
+                  {(p.serial_no || p.imei) && (
+                    <div className={`mt-1 flex items-center gap-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                      {p.serial_no && <span className="font-mono text-purple-500">SN: {p.serial_no}</span>}
+                      {p.imei && <span className="font-mono text-blue-500">IMEI: {p.imei}</span>}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>x{p.qnt}</span>
+                  <span className="font-bold text-[#E8740E]">{fmt(p.custo_unitario)}</span>
+                  <button onClick={() => startEdit(p)} className={`text-[10px] font-semibold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"} hover:underline`}>
+                    Editar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
