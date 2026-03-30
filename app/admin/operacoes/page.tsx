@@ -156,40 +156,73 @@ export default function OperacoesPage() {
       {/* Modal Detalhes da Operação */}
       {detailOp && (() => {
         const op = detailOp;
+        const custoTotal = op.itens.reduce((s: number, i: OperacaoItem) => s + (i.custo || 0), 0);
+        const lucroTotal = op.valor_total - custoTotal;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailOp(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailOp(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
-            <div className={`w-full max-w-2xl mx-4 ${dm ? "bg-[#1C1C1E]" : "bg-white"} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm print:bg-white print:items-start" onClick={() => setDetailOp(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailOp(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
+            <div className={`w-full max-w-2xl mx-4 ${dm ? "bg-[#1C1C1E]" : "bg-white"} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto print:max-h-none print:shadow-none print:rounded-none`} onClick={(e) => e.stopPropagation()}>
               {/* Header */}
               <div className={`flex items-center justify-between px-6 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className={`text-lg font-bold ${txtP}`}>{op.codigo}</h3>
+                  <p className={`text-[10px] ${txtS}`}>{op.codigo}</p>
+                  <div className="flex items-center gap-2 mt-1">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                       {op.tipo === "Entrada" ? "↓" : "↑"} {op.tipo}
                     </span>
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">{op.status}</span>
+                    <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">{op.status}</span>
+                    <span className={`text-sm font-semibold ${txtP}`}>{fmtDate(op.data)}</span>
                   </div>
-                  <p className={`text-xs ${txtS} mt-1`}>{fmtDate(op.data)} · {op.total_itens} itens · {op.contato}</p>
                 </div>
-                <button onClick={() => setDetailOp(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${txtS} hover:text-[#E8740E] text-lg`}>✕</button>
+                <div className="flex items-center gap-2 print:hidden">
+                  <button onClick={() => window.print()} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${txtS} hover:text-[#E8740E]`} title="Imprimir">🖨️</button>
+                  <button onClick={() => setDetailOp(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${txtS} hover:text-[#E8740E] text-lg`}>✕</button>
+                </div>
+              </div>
+
+              {/* Contato */}
+              <div className={`mx-5 mt-4 p-4 rounded-xl border ${bgSec}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Contato</p>
+                    <p className={`text-sm font-bold ${txtP}`}>{op.contato}</p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Tipo de Entrega</p>
+                    <p className={`text-sm ${txtP}`}>{op.tipo === "Entrada" ? "Compra Fornecedor" : "Retirada"}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Produtos da Operação */}
-              <div className={`mx-5 mt-4 p-4 rounded-xl border ${bgSec}`}>
+              <div className={`mx-5 mt-3 p-4 rounded-xl border ${bgSec}`}>
                 <p className={`text-xs font-bold ${txtP} mb-3`}>Produtos da Operacao ({op.itens.length} {op.itens.length === 1 ? "item" : "itens"})</p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {op.itens.map((item) => (
-                    <div key={item.id} className={`flex items-center justify-between px-4 py-3 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-white"}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${txtP}`}>{item.produto}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {item.serial_no && <span className="text-[11px] text-purple-500 font-mono">SN: {item.serial_no}</span>}
-                          {item.imei && <span className="text-[11px] text-[#0071E3] font-mono">IMEI: {item.imei}</span>}
-                          {item.cor && <span className={`text-[11px] ${txtS}`}>{item.cor}</span>}
-                          {item.tipo_venda && <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.tipo_venda === "UPGRADE" ? "bg-purple-100 text-purple-700" : item.tipo_venda === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{item.tipo_venda}</span>}
+                    <div key={item.id} className={`px-4 py-3 rounded-lg border-l-4 ${dm ? "bg-[#1C1C1E] border-l-[#E8740E]" : "bg-white border-l-[#E8740E]"}`}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold ${txtP}`}>{item.produto}</p>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {item.tipo_venda && <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${item.tipo_venda === "NOVO" || item.tipo_venda === "VENDA" ? "bg-green-100 text-green-700" : item.tipo_venda === "UPGRADE" ? "bg-purple-100 text-purple-700" : item.tipo_venda === "ATACADO" ? "bg-blue-100 text-blue-700" : item.tipo_venda === "SEMINOVO" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700"}`}>{item.tipo_venda}</span>}
+                            {item.cor && <span className={`text-[11px] ${txtS}`}>{item.cor}</span>}
+                          </div>
+                          {(item.serial_no || item.imei) && (
+                            <div className={`flex items-center gap-4 mt-2 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                              {item.serial_no && (
+                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(item.serial_no || ""); }} className="flex items-center gap-1 text-[11px] font-mono text-purple-500 hover:text-purple-700" title="Copiar serial">
+                                  <span className={`text-[9px] font-sans font-bold ${txtS}`}>SN</span> {item.serial_no}
+                                </button>
+                              )}
+                              {item.imei && (
+                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(item.imei || ""); }} className="flex items-center gap-1 text-[11px] font-mono text-[#0071E3] hover:text-blue-700" title="Copiar IMEI">
+                                  <span className={`text-[9px] font-sans font-bold ${txtS}`}>IMEI</span> {item.imei}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
+                        <p className="text-sm font-bold text-green-600 shrink-0 ml-3">{fmt(item.preco)}</p>
                       </div>
-                      <p className="text-sm font-bold text-green-600 shrink-0 ml-3">{fmt(item.preco)}</p>
                     </div>
                   ))}
                 </div>
@@ -211,10 +244,26 @@ export default function OperacoesPage() {
                     <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Data</p>
                     <p className={`text-[13px] ${txtP} mt-0.5`}>{fmtDate(op.data)}</p>
                   </div>
+                  {op.tipo === "Saída" && custoTotal > 0 && (
+                    <>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Custo Total</p>
+                        <p className={`text-[13px] ${txtP} mt-0.5`}>{fmt(custoTotal)}</p>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Lucro</p>
+                        <p className={`text-[13px] font-bold mt-0.5 ${lucroTotal >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(lucroTotal)}</p>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${txtS}`}>Margem</p>
+                        <p className={`text-[13px] font-bold mt-0.5 ${lucroTotal >= 0 ? "text-green-600" : "text-red-500"}`}>{op.valor_total > 0 ? (lucroTotal / op.valor_total * 100).toFixed(1) : "0"}%</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              <div className="mx-5 mt-4 mb-5">
+              <div className="mx-5 mt-4 mb-5 print:hidden">
                 <button onClick={() => setDetailOp(null)} className={`w-full py-3 rounded-xl text-sm font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"} transition-colors`}>
                   Fechar
                 </button>
