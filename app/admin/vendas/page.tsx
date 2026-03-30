@@ -2218,9 +2218,23 @@ export default function VendasPage() {
                 </select></div>
 
                 {form.forma === "PIX" && (
+                  <>
                   <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
                     <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
                   </select></div>
+                  <div><p className={labelCls}>Valor transferido (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setMoney("valor_comprovante_input", e.target.value);
+                    recalcVendido({ comp: clean });
+                  }} placeholder="Valor do PIX" className={inputCls} /></div>
+                  {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                    <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                      {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
+                      {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
+                      <span>= Vendido: <strong className="text-green-600">{fmt(Math.round((parseFloat(form.valor_comprovante_input) || 0) + entradaEspecie + valorTroca))}</strong></span>
+                    </div>
+                  )}
+                  </>
                 )}
 
                 {form.forma === "DEBITO" && (
@@ -2229,7 +2243,9 @@ export default function VendasPage() {
                       <option>ITAU</option><option>INFINITE</option>
                     </select></div>
                     <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                      const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                       setMoney("valor_comprovante_input", e.target.value);
+                      recalcVendido({ comp: clean });
                     }} placeholder="Valor da maquina" className={inputCls} /></div>
                     <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                       <span>Taxa: <strong className="text-[#E8740E]">0.75%</strong></span>
@@ -2259,7 +2275,9 @@ export default function VendasPage() {
                     {taxa > 0 && (
                       <>
                         <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                          const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                           setMoney("valor_comprovante_input", e.target.value);
+                          recalcVendido({ comp: clean });
                         }} placeholder="Valor da maquina" className={inputCls} /></div>
                         <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                           <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
@@ -2284,7 +2302,9 @@ export default function VendasPage() {
                     {taxa > 0 && (
                       <>
                         <div><p className={labelCls}>Valor no Link (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
+                          const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                           setMoney("valor_comprovante_input", e.target.value);
+                          recalcVendido({ comp: clean });
                         }} placeholder="Valor total do link" className={inputCls} /></div>
                         <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                           <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
@@ -2315,6 +2335,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Entrada PIX (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_pix)} onChange={(e) => {
                     const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                     setForm(f => ({ ...f, entrada_pix: clean, ...(parseFloat(clean) > 0 && !f.banco_pix ? { banco_pix: "ITAU" } : {}) }));
+                    recalcVendido({ pix: clean });
                   }} placeholder="0" className={inputCls} /></div>
                   {entradaPix > 0 && (
                     <div><p className={labelCls}>Banco do PIX</p><select value={form.banco_pix} onChange={(e) => set("banco_pix", e.target.value)} className={selectCls}>
@@ -2328,7 +2349,9 @@ export default function VendasPage() {
                 {form.forma !== "ESPECIE" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div><p className={labelCls}>Entrada Especie (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.entrada_especie)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                     setMoney("entrada_especie", e.target.value);
+                    recalcVendido({ especie: clean });
                   }} placeholder="0" className={inputCls} /></div>
                 </div>
                 )}
