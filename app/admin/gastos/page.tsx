@@ -203,7 +203,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                       {p.status}
                     </span>
                     <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}
+                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}{p.observacao ? ` · ${p.observacao.split(" ")[0]}${p.observacao.includes("(") ? " " + p.observacao.match(/\([^)]+\)/)?.[0] : ""}` : ""}
                     </span>
                   </div>
                   {(p.serial_no || p.imei) && (
