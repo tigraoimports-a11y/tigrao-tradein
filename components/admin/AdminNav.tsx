@@ -47,7 +47,7 @@ const NAV: NavEntry[] = [
     items: [
       { href: "/admin/estoque", label: "Estoque", icon: "\u{1F4E6}", pageKey: "estoque" },
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
-      { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas-preco" },
+      { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
       { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
       { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
       { href: "/admin/fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
@@ -59,7 +59,7 @@ const NAV: NavEntry[] = [
     label: "Operacional", icon: "\u{1F69A}",
     items: [
       { href: "/admin/entregas", label: "Entregas", icon: "\u{1F69A}", pageKey: "entregas" },
-      { href: "/admin/calculadora-taxas", label: "Calculadora Taxas", icon: "\u{1F4F1}", pageKey: "calculadora-taxas" },
+      { href: "/admin/calculadora-taxas", label: "Calculadora Taxas", icon: "\u{1F4F1}", pageKey: "calculadora_taxas" },
       { href: "/admin/orcamento", label: "Gerador de Orcamentos", icon: "\u{1F4B0}", pageKey: "orcamento" },
       { href: "/admin/calculadora", label: "Calculadora de Encomendas", icon: "\u{1F9EE}", pageKey: "calculadora" },
       { href: "/admin/operacoes", label: "Operacoes", icon: "\u{1F4CB}", pageKey: "operacoes" },
