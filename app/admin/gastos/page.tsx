@@ -7,7 +7,7 @@ import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
-import { STRUCTURED_CATS, buildProdutoName } from "@/lib/produto-specs";
+import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS } from "@/lib/produto-specs";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -179,8 +179,11 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                     <input value={editFields.imei} onChange={(e) => setEditFields(f => ({ ...f, imei: e.target.value }))} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} />
                   </div>
                   <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observacao</p>
-                    <input value={editFields.observacao} onChange={(e) => setEditFields(f => ({ ...f, observacao: e.target.value }))} placeholder="Origem, notas..." className={inputCls} />
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem</p>
+                    <select value={editFields.observacao} onChange={(e) => setEditFields(f => ({ ...f, observacao: e.target.value }))} className={inputCls}>
+                      <option value="">— Sem origem —</option>
+                      {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="flex gap-2">
