@@ -2131,7 +2131,7 @@ export default function EstoquePage() {
                                           ) : (
                                             <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isEditableItemTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
                                           )}
-                                          {(p.imei || p.serial_no) && (
+                                          {!isEditableItemTab && (p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-0.5 px-2 py-1.5 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
                                               {p.imei && (
                                                 <button
@@ -2156,6 +2156,11 @@ export default function EstoquePage() {
                                                 </button>
                                               )}
                                             </div>
+                                          )}
+                                          {isEditableItemTab && (
+                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold mt-0.5 ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
+                                            </span>
                                           )}
                                         </div>
                                       </td>
