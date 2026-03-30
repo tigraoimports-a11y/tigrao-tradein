@@ -216,31 +216,30 @@ export default function OrcamentoPage() {
           <div>
             <p className={labelCls}>Categoria</p>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => { setCatSel(""); setProdSel(""); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!catSel ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
-                Todos
-              </button>
               {categorias.map(c => (
-                <button key={c} onClick={() => { setCatSel(c); setProdSel(""); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${catSel === c ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                <button key={c} onClick={() => { setCatSel(catSel === c ? "" : c); setProdSel(""); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${catSel === c ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                   {CATEGORIAS_LABEL[c] || c}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Produto */}
-          <div>
-            <p className={labelCls}>Produto</p>
-            {loading ? (
-              <p className="text-sm text-[#86868B]">Carregando...</p>
-            ) : (
-              <select value={prodSel} onChange={e => setProdSel(e.target.value)} className={inputCls}>
-                <option value="">— Selecionar produto —</option>
-                {produtosFiltrados.map(p => (
-                  <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
-                ))}
-              </select>
-            )}
-          </div>
+          {/* Produto — só mostra após selecionar categoria */}
+          {catSel && (
+            <div>
+              <p className={labelCls}>Produto</p>
+              {loading ? (
+                <p className="text-sm text-[#86868B]">Carregando...</p>
+              ) : (
+                <select value={prodSel} onChange={e => setProdSel(e.target.value)} className={inputCls}>
+                  <option value="">— Selecionar produto —</option>
+                  {produtosFiltrados.map(p => (
+                    <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           {produtoSelecionado && (
             <>
