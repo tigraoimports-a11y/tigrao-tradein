@@ -2121,7 +2121,7 @@ export default function EstoquePage() {
                                           <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
                                         )}
                                       </td>
-                                      <td className="px-2 py-2.5 text-sm" colSpan={isEditableItemTab ? 1 : 2}>
+                                      <td className="px-2 py-2.5 text-sm">
                                         <div className="flex flex-col gap-1">
                                           {isEditableItemTab && isEditingField(p.id, "cor") ? (
                                             <div className="flex items-center gap-1">
@@ -2131,73 +2131,64 @@ export default function EstoquePage() {
                                           ) : (
                                             <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isEditableItemTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
                                           )}
-                                          {!isEditableItemTab && (p.imei || p.serial_no) && (
-                                            <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-0.5 px-2 py-1.5 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
+                                          {(p.imei || p.serial_no) && (
+                                            <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
                                               {p.imei && (
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }}
-                                                  className="flex items-center gap-1.5 text-[12px] font-mono text-[#0071E3] hover:text-[#E8740E] transition-colors cursor-pointer"
-                                                  title="Clique para copiar IMEI"
-                                                >
-                                                  <span className="text-[10px] font-sans font-semibold text-[#86868B]">IMEI</span>
-                                                  {p.imei}
-                                                  <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }} className="flex items-center gap-1 text-[11px] font-mono text-[#0071E3] hover:text-[#E8740E] cursor-pointer" title="Copiar IMEI">
+                                                  <span className="text-[9px] font-sans font-bold text-[#86868B]">IMEI</span>{p.imei}
                                                 </button>
                                               )}
                                               {p.serial_no && (
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }}
-                                                  className="flex items-center gap-1.5 text-[12px] font-mono text-purple-600 hover:text-[#E8740E] transition-colors cursor-pointer"
-                                                  title="Clique para copiar Serial"
-                                                >
-                                                  <span className="text-[10px] font-sans font-semibold text-[#86868B]">SN</span>
-                                                  {p.serial_no}
-                                                  <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className="flex items-center gap-1 text-[11px] font-mono text-purple-600 hover:text-[#E8740E] cursor-pointer" title="Copiar Serial">
+                                                  <span className="text-[9px] font-sans font-bold text-[#86868B]">SN</span>{p.serial_no}
                                                 </button>
                                               )}
                                             </div>
                                           )}
-                                          {/* Condição exibida na coluna do meio */}
                                         </div>
                                       </td>
-                                      {isEditableItemTab && (
-                                        <td className="px-2 py-2.5 text-xs">
-                                          <div className="flex flex-col gap-1.5">
-                                            <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>
-                                            <div className="flex flex-wrap gap-1">
-                                              {/* Condição: Lacrado / Usado */}
-                                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                                                {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
-                                              </span>
-                                              {/* Bateria (só seminovo/pendência) */}
-                                              {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                                isEditingField(p.id, "bateria") ? (
-                                                  <div className="flex items-center gap-0.5">
-                                                    <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
-                                                    <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                  </div>
-                                                ) : (
-                                                  <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                    {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
-                                                  </button>
-                                                )
-                                              )}
-                                              {/* Origem */}
-                                              {isEditingField(p.id, "observacao") ? (
+                                      <td className="px-2 py-2.5 text-xs">
+                                        <div className="flex flex-col gap-1">
+                                          {isEditableItemTab && <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>}
+                                          <div className="flex flex-wrap gap-1 items-center">
+                                            {/* Condição: Lacrado / Usado */}
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
+                                            </span>
+                                            {/* Bateria (só seminovo/pendência) */}
+                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
+                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
                                                 <div className="flex items-center gap-0.5">
-                                                  <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Origem..." />
-                                                  <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                  <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
+                                                  <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : (
-                                                <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
-                                                  {p.observacao || "+ Origem"}
+                                              ) : isEditableItemTab ? (
+                                                <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
-                                              )}
-                                            </div>
+                                              ) : p.bateria ? (
+                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
+                                              ) : null
+                                            )}
+                                            {/* Origem/Obs */}
+                                            {isEditableItemTab && isEditingField(p.id, "observacao") ? (
+                                              <div className="flex items-center gap-0.5">
+                                                <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Origem..." />
+                                                <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                              </div>
+                                            ) : isEditableItemTab ? (
+                                              <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
+                                                {p.observacao || "+ Origem"}
+                                              </button>
+                                            ) : p.observacao ? (
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{p.observacao}</span>
+                                            ) : null}
                                           </div>
-                                        </td>
-                                      )}
-                                      {showObs && !isEditableItemTab && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
+                                          {!isEditableItemTab && p.data_entrada && (
+                                            <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#C7C7CC]"}`}>{p.data_entrada}</span>
+                                          )}
+                                        </div>
+                                      </td>
                                       <td className="px-4 py-2.5">
                                         {isEditQnt ? (
                                           <div className="flex items-center gap-1">
