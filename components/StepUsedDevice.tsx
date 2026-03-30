@@ -124,11 +124,14 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       </div>
 
       <Section title="">
-        <div className="flex flex-wrap justify-center gap-2">
-          {lines.map((l) => {
+        <div className="grid grid-cols-3 gap-2" style={{ justifyItems: "center" }}>
+          {lines.map((l, i) => {
             const popular = ["15", "16", "17"].includes(l);
+            const isLast = i === lines.length - 1 && lines.length % 3 !== 0;
             return (
-              <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)} className={`min-w-[30%] ${popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}`}>
+              <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)}
+                className={`w-full ${popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}`}
+                style={isLast && lines.length % 3 === 1 ? { gridColumn: "2" } : undefined}>
                 {`iPhone ${l}`}
               </Btn>
             );
@@ -186,15 +189,15 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[16px] font-bold" style={{ color: "var(--ti-muted)" }}>%</span>
               </div>
-              <div className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                <p className="text-[12px] font-semibold mb-1.5" style={{ color: "var(--ti-text)" }}>Como descobrir a saúde da bateria:</p>
-                <div className="text-[11px] space-y-1" style={{ color: "var(--ti-muted)" }}>
+              <details className="rounded-xl p-3" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+                <summary className="text-[12px] font-semibold cursor-pointer" style={{ color: "var(--ti-accent)" }}>Como descobrir a saúde da bateria?</summary>
+                <div className="text-[11px] space-y-1 mt-2" style={{ color: "var(--ti-muted)" }}>
                   <p>1. Abra <strong style={{ color: "var(--ti-text)" }}>Ajustes</strong> no seu iPhone</p>
                   <p>2. Toque em <strong style={{ color: "var(--ti-text)" }}>Bateria</strong></p>
                   <p>3. Toque em <strong style={{ color: "var(--ti-text)" }}>Saúde e Carregamento da Bateria</strong></p>
                   <p>4. Veja o valor em <strong style={{ color: "var(--ti-text)" }}>Capacidade Máxima</strong></p>
                 </div>
-              </div>
+              </details>
             </div>
           </Section>
 
@@ -207,7 +210,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
                   const noOpt = opts.find(o => o.value === "no");
                   const yesOpt = opts.find(o => o.value === "yes");
                   return <>
-                    <Btn sel={hasWearMarks===false} onClick={() => { setHasWearMarks(false); setWearMarks([]); tq("hasWearMarks"); }} className="flex-1" variant="success">{noOpt?.label || "Nao"}</Btn>
+                    <Btn sel={hasWearMarks===false} onClick={() => { setHasWearMarks(false); setWearMarks([]); tq("hasWearMarks"); }} className="flex-1" variant="success">{noOpt?.label || "Não"}</Btn>
                     <Btn sel={hasWearMarks===true} onClick={() => { setHasWearMarks(true); tq("hasWearMarks"); }} className="flex-1">{yesOpt?.label || "Sim"}</Btn>
                   </>;
                 })()}
@@ -382,9 +385,9 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
       {canProceed && (
         <button onClick={() => onNext({ usedModel: model, usedStorage: storage, condition: cond, tradeInValue, deviceType: "iphone" })}
-          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
-          style={{ backgroundColor: "var(--ti-accent)" }}>
-          Continuar
+          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
+          style={{ backgroundColor: "#22c55e" }}>
+          Ver minha avaliacao →
         </button>
       )}
     </div>
@@ -408,8 +411,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Btn({ sel, onClick, children, className = "", variant = "default" }: {
-  sel: boolean; onClick: () => void; children: React.ReactNode; className?: string; variant?: "default"|"success"|"error";
+function Btn({ sel, onClick, children, className = "", variant = "default", style: extraStyle }: {
+  sel: boolean; onClick: () => void; children: React.ReactNode; className?: string; variant?: "default"|"success"|"error"; style?: React.CSSProperties;
 }) {
   const selStyle = variant === "success"
     ? { backgroundColor: "var(--ti-success-light)", color: "var(--ti-success)", border: "1px solid var(--ti-success)" }
@@ -420,7 +423,7 @@ function Btn({ sel, onClick, children, className = "", variant = "default" }: {
 
   return (
     <button onClick={onClick} className={`px-4 py-3.5 rounded-2xl text-[14px] font-medium transition-all duration-200 ${className}`}
-      style={sel ? selStyle : unselStyle}>
+      style={{ ...(sel ? selStyle : unselStyle), ...extraStyle }}>
       {children}
     </button>
   );
