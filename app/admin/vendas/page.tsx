@@ -436,7 +436,7 @@ export default function VendasPage() {
   // Cálculos em tempo real
   const custo = parseFloat(form.custo) || 0;
   const preco = parseFloat(form.preco_vendido) || 0;
-  const valorTroca = parseFloat(form.produto_na_troca) || 0;
+  const valorTroca = (parseFloat(form.produto_na_troca) || 0) + (parseFloat(form.produto_na_troca2) || 0);
   const entradaPix = parseFloat(form.entrada_pix) || 0;
   const entradaEspecie = parseFloat(form.entrada_especie) || 0;
   const valorCartao = preco - valorTroca - entradaPix - entradaEspecie;
@@ -1618,6 +1618,11 @@ export default function VendasPage() {
                     {parseFloat(p.produto_na_troca) > 0 && (
                       <span className="text-[10px] text-orange-600 font-medium block">
                         Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
+                      </span>
+                    )}
+                    {parseFloat(p.produto_na_troca2) > 0 && (
+                      <span className="text-[10px] text-orange-600 font-medium block">
+                        2ª Troca: {p.troca_produto2} ({fmt(parseFloat(p.produto_na_troca2))})
                       </span>
                     )}
                   </div>
