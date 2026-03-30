@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { proximoDiaUtil } from "@/lib/business-days";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
@@ -21,6 +22,15 @@ interface DashData {
 
 export default function DashboardPage() {
   const { password, user } = useAdmin();
+  const router = useRouter();
+
+  // Não-admin sem permissão de dashboard → redirecionar pro estoque
+  useEffect(() => {
+    if (user && user.role !== "admin" && !(user as { permissoes?: string[] }).permissoes?.includes("dashboard")) {
+      router.replace("/admin/estoque");
+    }
+  }, [user, router]);
+
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState("");
