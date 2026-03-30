@@ -195,6 +195,7 @@ function getModeloBase(produto: string, categoria: string): string {
 export default function EstoquePage() {
   const { password, user, darkMode } = useAdmin();
   const userName = user?.nome ?? "sistema";
+  const isAdmin = user?.role === "admin";
   const dm = darkMode;
   // Dark mode color helpers
   const bgCard = dm ? "bg-[#1C1C1E]" : "bg-white";
@@ -1391,13 +1392,13 @@ export default function EstoquePage() {
           <button onClick={() => setTab("scan")} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "scan" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Scan
           </button>
-          <button onClick={() => setTab("novo" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "novo" ? "bg-[#E8740E] text-white" : "bg-[#E8740E]/10 text-[#E8740E] border border-[#E8740E]/20 hover:bg-[#E8740E] hover:text-white"}`}>
+          {isAdmin && <button onClick={() => setTab("novo" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "novo" ? "bg-[#E8740E] text-white" : "bg-[#E8740E]/10 text-[#E8740E] border border-[#E8740E]/20 hover:bg-[#E8740E] hover:text-white"}`}>
             + Adicionar
-          </button>
+          </button>}
           <button onClick={() => setTab("historico" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "historico" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Historico
           </button>
-          {!["novo", "scan", "historico", "etiquetas"].includes(tab) && (
+          {isAdmin && !["novo", "scan", "historico", "etiquetas"].includes(tab) && (
             <button
               onClick={() => { setSelectMode(!selectMode); if (selectMode) setSelectedIds(new Set()); }}
               className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${selectMode ? "bg-red-500 text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-red-500 hover:text-red-500`}`}
@@ -2146,9 +2147,9 @@ export default function EstoquePage() {
                                           </div>
                                         ) : (
                                           <div className="flex items-center gap-1">
-                                            <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-red-100 hover:text-red-500 text-xs font-bold`}>-</button>
-                                            <span className={`font-bold min-w-[24px] text-center cursor-pointer hover:text-[#E8740E] ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`} onClick={() => setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
-                                            <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-green-100 hover:text-green-600 text-xs font-bold`}>+</button>
+                                            {isAdmin && <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-red-100 hover:text-red-500 text-xs font-bold`}>-</button>}
+                                            <span className={`font-bold min-w-[24px] text-center ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""} ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`} onClick={() => isAdmin && setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
+                                            {isAdmin && <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-green-100 hover:text-green-600 text-xs font-bold`}>+</button>}
                                           </div>
                                         )}
                                       </td>
@@ -2159,9 +2160,9 @@ export default function EstoquePage() {
                                             <button onClick={() => handleSaveCusto(p)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                           </div>
                                         ) : (
-                                          <span className="text-xs cursor-pointer hover:text-[#E8740E] flex items-center gap-1" onClick={() => setEditingCusto({ ...editingCusto, [p.id]: String(p.custo_unitario || "") })}>
+                                          <span className={`text-xs flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isAdmin && setEditingCusto({ ...editingCusto, [p.id]: String(p.custo_unitario || "") })}>
                                             {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
-                                            <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            {isAdmin && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                           </span>
                                         )}
                                       </td>
@@ -2254,7 +2255,7 @@ export default function EstoquePage() {
                                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                           Ver
                                         </button>
-                                        <button onClick={async (e) => {
+                                        {isAdmin && <button onClick={async (e) => {
                                           e.stopPropagation();
                                           if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
                                           await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id }) });
@@ -2263,7 +2264,7 @@ export default function EstoquePage() {
                                         >
                                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                           Excluir
-                                        </button>
+                                        </button>}
                                         </div>
                                       </td>
                                     </tr>
