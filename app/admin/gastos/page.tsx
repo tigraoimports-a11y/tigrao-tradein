@@ -119,7 +119,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
 
   const startEdit = (p: any) => {
     setEditId(p.id);
-    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "" });
+    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "" });
   };
 
   const saveEdit = async () => {
@@ -131,6 +131,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
       if (editFields.serial_no !== (original?.serial_no || "")) updates.serial_no = editFields.serial_no.toUpperCase() || null;
       if (editFields.imei !== (original?.imei || "")) updates.imei = editFields.imei || null;
       if (editFields.produto !== (original?.produto || "")) updates.produto = editFields.produto.toUpperCase() || null;
+      if (editFields.observacao !== (original?.observacao || "")) updates.observacao = editFields.observacao || null;
+      if (editFields.cor !== (original?.cor || "")) updates.cor = editFields.cor || null;
       if (Object.keys(updates).length > 0) {
         await fetch("/api/estoque", {
           method: "PATCH",
@@ -160,9 +162,13 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
             {editId === p.id ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div>
+                  <div className="md:col-span-2">
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Produto</p>
                     <input value={editFields.produto} onChange={(e) => setEditFields(f => ({ ...f, produto: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor</p>
+                    <input value={editFields.cor} onChange={(e) => setEditFields(f => ({ ...f, cor: e.target.value }))} placeholder="Ex: Silver" className={inputCls} />
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial No.</p>
@@ -171,6 +177,10 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                   <div>
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>IMEI</p>
                     <input value={editFields.imei} onChange={(e) => setEditFields(f => ({ ...f, imei: e.target.value }))} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Observacao</p>
+                    <input value={editFields.observacao} onChange={(e) => setEditFields(f => ({ ...f, observacao: e.target.value }))} placeholder="Origem, notas..." className={inputCls} />
                   </div>
                 </div>
                 <div className="flex gap-2">
