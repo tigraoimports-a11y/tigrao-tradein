@@ -50,10 +50,14 @@ function formatPrice(value: string | null) {
 function CompraForm() {
   const searchParams = useSearchParams();
 
-  const produto = searchParams.get("produto") || "";
-  const preco = searchParams.get("preco") || "";
+  const produtoParam = searchParams.get("produto") || searchParams.get("p") || "";
+  const precoParam = searchParams.get("preco") || searchParams.get("v") || "";
   const vendedor = searchParams.get("vendedor") || "";
   const whatsapp = searchParams.get("whatsapp") || "";
+
+  const [produtoInput, setProdutoInput] = useState(produtoParam);
+  const produto = produtoInput || produtoParam;
+  const preco = precoParam;
 
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
@@ -111,7 +115,7 @@ function CompraForm() {
     window.open(url, "_blank");
   }
 
-  if (!produto || !whatsapp) {
+  if (!whatsapp) {
     return (
       <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-6 shadow-sm text-center max-w-sm">
@@ -135,9 +139,25 @@ function CompraForm() {
 
       {/* Product info */}
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">
-        <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Produto</p>
-        <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produto}</p>
-        <p className="text-[#E8740E] font-bold text-2xl mt-1">R$ {formatPrice(preco)}</p>
+        {produtoParam ? (
+          <>
+            <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Produto</p>
+            <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
+            {preco && <p className="text-[#E8740E] font-bold text-2xl mt-1">R$ {formatPrice(preco)}</p>}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Qual produto deseja?</p>
+            <input
+              type="text"
+              required
+              value={produtoInput}
+              onChange={(e) => setProdutoInput(e.target.value)}
+              placeholder="Ex: iPhone 17 Pro Max 256GB Silver"
+              className="w-full mt-2 px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
+            />
+          </>
+        )}
         {vendedor && (
           <p className="text-[#86868B] text-sm mt-2">Vendedor: {vendedor}</p>
         )}
