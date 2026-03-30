@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.data.localeCompare(a.data))
     .slice(0, 15)
     .map((op, i) => ({
-      codigo: `OP-${op.tipo === "Entrada" ? "E" : "S"}${new Date(op.data).getTime()}${String(i).padStart(3, "0")}`,
+      codigo: `OP-${String(op.tipo) === "Entrada" ? "E" : "S"}${new Date(op.data).getTime()}${String(i).padStart(3, "0")}`,
       ...op,
       status: "Concluída",
     }));

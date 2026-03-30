@@ -298,7 +298,10 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
       });
       if (res.ok) {
         // Atualizar resultado na lista
-        setResults(prev => prev.map(r => r.id === id ? { ...r, ...fields, custo: fields.custo_unitario ?? r.custo } : r));
+        setResults(prev => {
+          if (Array.isArray(prev)) return prev.map(r => r.id === id ? { ...r, ...fields, custo: fields.custo_unitario ?? r.custo } : r) as typeof prev;
+          return prev;
+        });
         if (detailItem?.id === id) setDetailItem(prev => prev ? { ...prev, ...fields, custo: fields.custo_unitario ?? prev.custo } : null);
       }
     } catch { /* ignore */ }

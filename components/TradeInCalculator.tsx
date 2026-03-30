@@ -64,6 +64,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fbq = (...args: any[]) => { if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq(...args); };
 
+  const [started, setStarted] = useState(false);
   const [step, setStep] = useState(1);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -248,6 +249,56 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           >
             Tentar novamente
           </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!started && !loading) {
+    return (
+      <main className="min-h-dvh flex flex-col items-center justify-center px-4" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
+        <div className="w-full max-w-[440px] text-center space-y-6 animate-fadeIn">
+          {/* Logo */}
+          <div className="text-[48px]">📱</div>
+
+          <div>
+            <h1 className="text-[28px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
+              Troque seu aparelho usado<br />por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>novo</span> e pague<br />apenas a diferenca!
+            </h1>
+          </div>
+
+          <p className="text-[16px] leading-relaxed" style={{ color: tema.textMuted }}>
+            Descubra em <strong>30 segundos</strong> quanto vale seu aparelho na troca por um novo lacrado com garantia Apple.
+          </p>
+
+          {/* CTA */}
+          <button
+            onClick={() => { setStarted(true); trackStep(1); }}
+            className="w-full py-4 rounded-2xl text-[18px] font-bold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
+            style={{ backgroundColor: "#22c55e" }}
+          >
+            Descobrir o valor do meu aparelho
+          </button>
+
+          {/* Social proof */}
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex -space-x-1">
+              <span className="text-lg">⭐⭐⭐⭐⭐</span>
+            </div>
+            <span className="text-[13px] font-medium" style={{ color: tema.textMuted }}>+400 trocas realizadas</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-4 text-[12px] pt-1" style={{ color: tema.textMuted }}>
+            <span>✅ Produtos lacrados</span>
+            <span>✅ Nota fiscal</span>
+            <span>✅ Garantia Apple</span>
+          </div>
+
+          {/* Footer */}
+          <div className="pt-4">
+            <p className="text-[13px] font-semibold" style={{ color: tema.textMuted }}>TigraoImports</p>
+            <p className="text-[11px]" style={{ color: tema.textMuted }}>Barra da Tijuca, Rio de Janeiro</p>
+          </div>
         </div>
       </main>
     );
