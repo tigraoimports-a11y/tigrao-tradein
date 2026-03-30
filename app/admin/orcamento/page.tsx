@@ -137,6 +137,37 @@ export default function OrcamentoPage() {
     return seminovosEstoque.filter(s => getSemiCategoria(s.produto) === semiCat);
   }, [seminovosEstoque, semiCat]);
 
+  // Limpar nome do seminovo: remover origem (LL, BE, BR), chip info (E-SIM, Chip Físico)
+  const cleanSemiNome = (nome: string): string => {
+    return nome
+      .replace(/\s*(LL|BE|BR)\s*\([^)]*\)/gi, "")       // LL (EUA), BE (BR), BR (BR)
+      .replace(/[-–]\s*E-?SIM/gi, "")                     // - E-SIM, -E-SIM
+      .replace(/[-–]\s*CHIP\s+F[ÍI]SICO\s*\+?\s*E-?SIM/gi, "") // - CHIP FÍSICO + E-SIM
+      .replace(/[-–]\s*CHIP\s+F[ÍI]SICO/gi, "")          // - CHIP FÍSICO
+      .replace(/\s{2,}/g, " ")                             // double spaces
+      .trim();
+  };
+
+  // Extrair info relevante do obs: garantia apple
+  const cleanSemiDetails = (item: SeminovoEstoque): string => {
+    const parts: string[] = [];
+    if (item.cor) parts.push(item.cor);
+    if (item.bateria) parts.push(`🔋${item.bateria}%`);
+    // Extrair garantia do obs
+    if (item.observacao) {
+      const obsUp = item.observacao.toUpperCase();
+      if (obsUp.includes("GARANTIA APPLE") || obsUp.includes("GARANTIA AGOSTO")) {
+        const match = item.observacao.match(/GARANTIA\s+(?:APPLE\s+)?(\w+)/i);
+        if (match) parts.push(`Garantia ${match[1]}`);
+      }
+      // Condição do aparelho
+      if (obsUp.includes("MARCAS")) parts.push("Marcas de uso");
+      if (obsUp.includes("ARRANHA")) parts.push("Arranhões");
+      if (obsUp.includes("PERFEITO") || obsUp.includes("EXCELENTE")) parts.push("Excelente estado");
+    }
+    return parts.join(" · ");
+  };
+
   // Produto virtual para seminovo (usado no mesmo fluxo)
   const semiNome = semiSel ? semiSel.produto : "";
   const semiProduto = tipoOrc === "seminovo" && semiSel && parseFloat(semiPreco) > 0
@@ -358,10 +389,11 @@ export default function OrcamentoPage() {
                 }} className={inputCls}>
                   <option value="">— Selecionar seminovo —</option>
                   {seminovosFiltrados.map(item => {
-                    const details = [item.cor, item.bateria ? `${item.bateria}%` : null, item.observacao].filter(Boolean).join(" · ");
+                    const nome = cleanSemiNome(item.produto);
+                    const details = cleanSemiDetails(item);
                     return (
                       <option key={item.id} value={item.id}>
-                        {item.produto}{details ? ` (${details})` : ""} — Custo R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}
+                        {nome}{details ? ` (${details})` : ""} — Custo R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}
                       </option>
                     );
                   })}
@@ -374,11 +406,11 @@ export default function OrcamentoPage() {
                 <>
                 <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
                   <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecionado</p>
-                  <p className={`text-sm font-bold mt-0.5 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{semiSel.produto}</p>
+                  <p className={`text-sm font-bold mt-0.5 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{cleanSemiNome(semiSel.produto)}</p>
                   <div className="flex flex-wrap gap-3 mt-1 text-xs">
                     {semiSel.cor && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor: {semiSel.cor}</span>}
                     {semiSel.bateria && <span className="text-green-500">🔋 {semiSel.bateria}%</span>}
-                    {semiSel.observacao && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{semiSel.observacao}</span>}
+                    {cleanSemiDetails(semiSel) && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{cleanSemiDetails(semiSel)}</span>}
                     <span className="text-[#E8740E] font-semibold">Custo: R$ {semiSel.custo_unitario?.toLocaleString("pt-BR")}</span>
                   </div>
                 </div>
