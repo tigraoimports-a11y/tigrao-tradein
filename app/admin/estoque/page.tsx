@@ -1102,6 +1102,8 @@ export default function EstoquePage() {
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
   const isPendenciasTab = tab === "pendencias";
+  const isACaminhoTab = tab === "acaminho";
+  const isEditableItemTab = isPendenciasTab || isACaminhoTab;
 
   // renderProductRow removido — agora renderizado inline com agrupamento por produto/cor
 
@@ -1980,11 +1982,13 @@ export default function EstoquePage() {
                   const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items]) => {
-                  // Sub-agrupar por nome do produto (sem cor)
+                  // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
+                  const stripOrigem = (nome: string) => nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\(.*?\))?\s*$/i, "").replace(/\s*-\s*(Chip Físico \+ E-sim|E-sim)\s*$/i, "").trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
-                    if (!byProduto[p.produto]) byProduto[p.produto] = [];
-                    byProduto[p.produto].push(p);
+                    const groupKey = stripOrigem(p.produto);
+                    if (!byProduto[groupKey]) byProduto[groupKey] = [];
+                    byProduto[groupKey].push(p);
                   });
                   // Ordenar por storage (64GB < 128GB < 256GB < 512GB < 1TB < 2TB)
                   function storageToNum(name: string): number {
@@ -2047,7 +2051,7 @@ export default function EstoquePage() {
                       <table className="w-full text-sm">
                         <tbody>
                           {produtoEntries.map(([prodNome, prodItems]) => {
-                            const showObs = tab === "seminovos" || isPendenciasTab;
+                            const showObs = tab === "seminovos" || isEditableItemTab;
                             const showMover = tab === "acaminho" || isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
@@ -2117,15 +2121,15 @@ export default function EstoquePage() {
                                           <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
                                         )}
                                       </td>
-                                      <td className="px-2 py-2.5 text-sm" colSpan={isPendenciasTab ? 1 : 2}>
+                                      <td className="px-2 py-2.5 text-sm" colSpan={isEditableItemTab ? 1 : 2}>
                                         <div className="flex flex-col gap-1">
-                                          {isPendenciasTab && isEditingField(p.id, "cor") ? (
+                                          {isEditableItemTab && isEditingField(p.id, "cor") ? (
                                             <div className="flex items-center gap-1">
                                               <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
                                               <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                             </div>
                                           ) : (
-                                            <span className={`${textSecondary} ${isPendenciasTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isPendenciasTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
+                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isEditableItemTab && startEditField(p.id, "cor", p.cor || "")}>• {p.cor || "—"}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-0.5 px-2 py-1.5 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
@@ -2155,7 +2159,7 @@ export default function EstoquePage() {
                                           )}
                                         </div>
                                       </td>
-                                      {isPendenciasTab && (
+                                      {isEditableItemTab && (
                                         <td className="px-2 py-2.5 text-xs">
                                           <div className="flex flex-col gap-1">
                                             <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>
@@ -2206,7 +2210,7 @@ export default function EstoquePage() {
                                           </div>
                                         </td>
                                       )}
-                                      {showObs && !isPendenciasTab && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
+                                      {showObs && !isEditableItemTab && <td className="px-4 py-2.5 text-[#86868B] text-xs max-w-[200px]">{p.observacao || "—"}{p.bateria ? ` | Bat: ${p.bateria}%` : ""}</td>}
                                       <td className="px-4 py-2.5">
                                         {isEditQnt ? (
                                           <div className="flex items-center gap-1">
