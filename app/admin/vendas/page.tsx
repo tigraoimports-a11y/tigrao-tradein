@@ -465,28 +465,34 @@ export default function VendasPage() {
   const margem = totalRealRecebido > 0 ? (lucro / totalRealRecebido) * 100 : 0;
 
   // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
-  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; comp?: string }) => {
+  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string }) => {
     const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
     const curTaxa = taxa;
     const curForma = form.forma;
     const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
-    const trc = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
+    const trc1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
+    const trc2 = parseFloat(overrides.troca2 ?? form.produto_na_troca2) || 0;
+    const trc = trc1 + trc2;
 
+    let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      // PIX é 100% líquido
-      return String(Math.round(compVal + esp + trc));
-    }
-    if (compVal > 0 && curTaxa > 0) {
+      result = String(Math.round(compVal + esp + trc));
+    } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      return String(Math.round(liqCartao + pix + esp + trc));
-    }
-    // Espécie ou sem comprovante: soma tudo que entrou
-    if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
+      result = String(Math.round(liqCartao + pix + esp + trc));
+    } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
       const total = pix + esp + trc + compVal;
-      if (total > 0) return String(Math.round(total));
+      if (total > 0) result = String(Math.round(total));
     }
-    return undefined;
+
+    // Se tem carrinho com 2+ produtos, distribuir automaticamente
+    if (result && produtosCarrinho.length > 0) {
+      distribuirValorTotal(result);
+      setForm(f => ({ ...f, valor_total_venda: result! }));
+    }
+
+    return result;
   };
 
   // Distribuir valor total da venda proporcionalmente ao custo de cada produto no carrinho
@@ -1929,13 +1935,9 @@ export default function VendasPage() {
                 <div><p className={labelCls}>Valor do PIX (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
                   const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                   setMoney("valor_comprovante_input", e.target.value);
-                  // PIX é 100% líquido — preco_vendido = valor PIX + troca + espécie
-                  if (produtosCarrinho.length === 0) {
-                    const pixVal = parseFloat(clean) || 0;
-                    if (pixVal > 0) {
-                      const totalLiq = Math.round(pixVal + (parseFloat(form.entrada_especie) || 0) + (parseFloat(form.produto_na_troca) || 0));
-                      setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
-                    }
+                  const newVendido = recalcVendido({ comp: clean });
+                  if (produtosCarrinho.length === 0 && newVendido) {
+                    setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: newVendido }));
                   }
                 }} placeholder="Valor transferido" className={inputCls} /></div>
                 </>
@@ -1949,13 +1951,9 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Valor no Comprovante (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => {
                     const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                     setMoney("valor_comprovante_input", e.target.value);
-                    if (produtosCarrinho.length === 0) {
-                      const compVal = parseFloat(clean) || 0;
-                      if (compVal > 0 && taxa > 0) {
-                        const liquidoDebito = calcularLiquido(compVal, taxa);
-                        const totalLiq = Math.round(liquidoDebito + entradaPix + entradaEspecie + valorTroca);
-                        setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: String(totalLiq) }));
-                      }
+                    const newVendido = recalcVendido({ comp: clean });
+                    if (produtosCarrinho.length === 0 && newVendido) {
+                      setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: newVendido }));
                     }
                   }} placeholder="Valor da maquina" className={inputCls} /></div>
                   <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
