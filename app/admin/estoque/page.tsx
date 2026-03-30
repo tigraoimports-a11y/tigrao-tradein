@@ -2157,58 +2157,40 @@ export default function EstoquePage() {
                                               )}
                                             </div>
                                           )}
-                                          {isEditableItemTab && (
-                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold mt-0.5 ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
-                                            </span>
-                                          )}
+                                          {/* Condição exibida na coluna do meio */}
                                         </div>
                                       </td>
                                       {isEditableItemTab && (
                                         <td className="px-2 py-2.5 text-xs">
-                                          <div className="flex flex-col gap-1">
+                                          <div className="flex flex-col gap-1.5">
                                             <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>
-                                            {/* Campos editáveis: IMEI, Serial, Obs, Bateria */}
                                             <div className="flex flex-wrap gap-1">
-                                              {isEditingField(p.id, "imei") ? (
-                                                <div className="flex items-center gap-0.5">
-                                                  <input value={getEditVal(p.id, "imei") || ""} onChange={(e) => startEditField(p.id, "imei", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "imei"); if (e.key === "Escape") cancelEditField(p.id, "imei"); }} className="w-28 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder="IMEI" />
-                                                  <button onClick={() => saveField(p.id, "imei")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                </div>
-                                              ) : (
-                                                <button onClick={() => startEditField(p.id, "imei", p.imei || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.imei ? "bg-blue-50 text-[#0071E3]" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                  {p.imei ? `IMEI: ${p.imei.slice(-6)}` : "+ IMEI"}
-                                                </button>
+                                              {/* Condição: Lacrado / Usado */}
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                                                {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
+                                              </span>
+                                              {/* Bateria (só seminovo/pendência) */}
+                                              {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
+                                                isEditingField(p.id, "bateria") ? (
+                                                  <div className="flex items-center gap-0.5">
+                                                    <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
+                                                    <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                  </div>
+                                                ) : (
+                                                  <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                    {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
+                                                  </button>
+                                                )
                                               )}
-                                              {isEditingField(p.id, "serial_no") ? (
-                                                <div className="flex items-center gap-0.5">
-                                                  <input value={getEditVal(p.id, "serial_no") || ""} onChange={(e) => startEditField(p.id, "serial_no", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "serial_no"); if (e.key === "Escape") cancelEditField(p.id, "serial_no"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-[10px] font-mono" autoFocus placeholder={ocrLoading ? "Lendo..." : "Serial"}
-                                                    onPaste={(e) => handleSerialPaste(e, (v) => startEditField(p.id, "serial_no", v), setOcrLoading)} />
-                                                  <button onClick={() => saveField(p.id, "serial_no")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                </div>
-                                              ) : (
-                                                <button onClick={() => startEditField(p.id, "serial_no", p.serial_no || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.serial_no ? "bg-purple-50 text-purple-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                  {p.serial_no ? `SN: ${p.serial_no.slice(-6)}` : "+ Serial"}
-                                                </button>
-                                              )}
-                                              {isEditingField(p.id, "bateria") ? (
-                                                <div className="flex items-center gap-0.5">
-                                                  <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
-                                                  <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                </div>
-                                              ) : (
-                                                <button onClick={() => startEditField(p.id, "bateria", String(p.bateria || ""))} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                  {p.bateria ? `Bat: ${p.bateria}%` : "+ Bateria"}
-                                                </button>
-                                              )}
+                                              {/* Origem */}
                                               {isEditingField(p.id, "observacao") ? (
                                                 <div className="flex items-center gap-0.5">
-                                                  <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Obs..." />
+                                                  <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Origem..." />
                                                   <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
                                               ) : (
-                                                <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[120px] truncate`}>
-                                                  {p.observacao || "+ Obs"}
+                                                <button onClick={() => startEditField(p.id, "observacao", p.observacao || "")} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
+                                                  {p.observacao || "+ Origem"}
                                                 </button>
                                               )}
                                             </div>
