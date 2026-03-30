@@ -81,6 +81,7 @@ function CompraForm() {
   const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
   const [shopping, setShopping] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState("");
   const [temTroca, setTemTroca] = useState<boolean | null>(null);
   const [descTroca, setDescTroca] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
@@ -130,6 +131,7 @@ function CompraForm() {
       `Bairro: ${bairro}`,
       "",
       `*Produto:* ${produto}${preco ? ` -- R$ ${formatPrice(preco)}` : ""}`,
+      `*Forma de pagamento:* ${formaPagamento}`,
     ];
 
     if (temTroca && descTroca) {
@@ -327,6 +329,22 @@ function CompraForm() {
               placeholder="Bairro"
               className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
             />
+          </div>
+        </div>
+
+        {/* Pagamento */}
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED] space-y-3">
+          <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Pagamento</p>
+          <div>
+            <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Forma de pagamento *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {["PIX", "Cartao de Credito", "Debito", "PIX + Cartao"].map(f => (
+                <label key={f} className={`flex items-center justify-center px-3 py-3 rounded-lg border-2 cursor-pointer transition-colors text-sm font-medium ${formaPagamento === f ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                  <input type="radio" name="pagamento" value={f} checked={formaPagamento === f} onChange={() => setFormaPagamento(f)} className="sr-only" />
+                  {f}
+                </label>
+              ))}
+            </div>
           </div>
         </div>
 
