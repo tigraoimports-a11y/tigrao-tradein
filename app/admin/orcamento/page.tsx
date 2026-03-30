@@ -48,8 +48,12 @@ export default function OrcamentoPage() {
   const [loading, setLoading] = useState(true);
 
   // Form
+  const [tipoOrc, setTipoOrc] = useState<"lacrado" | "seminovo">("lacrado");
   const [catSel, setCatSel] = useState("");
   const [prodSel, setProdSel] = useState("");
+  const [semiNome, setSemiNome] = useState("");
+  const [semiPreco, setSemiPreco] = useState("");
+  const [semiObs, setSemiObs] = useState("");
   const [entrada, setEntrada] = useState("");
   const [parcelasSel, setParcelasSel] = useState<number[]>([12]);
   const [textoGerado, setTextoGerado] = useState("");
@@ -91,11 +95,23 @@ export default function OrcamentoPage() {
     return produtos.find(p => p.id === prodSel);
   }, [produtos, prodSel]);
 
+  // Produto virtual para seminovo (usado no mesmo fluxo)
+  const semiProduto = tipoOrc === "seminovo" && semiNome && parseFloat(semiPreco) > 0
+    ? { id: "semi", nome: semiNome.toUpperCase(), preco: parseFloat(semiPreco), categoria: "IPHONE" }
+    : null;
+
   const gerarOrcamento = () => {
-    if (!produtoSelecionado && carrinho.length === 0) return;
+    if (tipoOrc === "seminovo") {
+      if (!semiProduto && carrinho.length === 0) return;
+    } else {
+      if (!produtoSelecionado && carrinho.length === 0) return;
+    }
 
     // Se tem carrinho com múltiplos produtos, usar total do carrinho
-    const itensOrcamento = carrinho.length > 0 ? carrinho : produtoSelecionado ? [{ id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }] : [];
+    const itensOrcamento = carrinho.length > 0 ? carrinho
+      : tipoOrc === "seminovo" && semiProduto ? [semiProduto]
+      : produtoSelecionado ? [{ id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]
+      : [];
     const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco, 0);
     const trocaVal = parseFloat(trocaValor) || 0;
     const precoPix = totalBruto - trocaVal;
@@ -106,11 +122,13 @@ export default function OrcamentoPage() {
 
     if (restante <= 0) {
       const linhasSimples = itensOrcamento.map(p => `${catEmojis[p.categoria] || "📦"} *${p.nome}*`);
+      const isSemi = tipoOrc === "seminovo";
       const texto = [
         ...linhasSimples,
         ``,
-        `📦 Novo / Lacrado`,
-        `✅ 1 ano de garantia`,
+        isSemi ? `📱 Seminovo — Revisado` : `📦 Novo / Lacrado`,
+        isSemi ? `✅ 3 meses de garantia` : `✅ 1 ano de garantia`,
+        ...(isSemi && semiObs ? [`ℹ️ ${semiObs}`] : []),
         `📄 Nota fiscal em seu nome`,
         ``,
         `💰 *R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}* à vista no PIX`,
@@ -134,9 +152,11 @@ export default function OrcamentoPage() {
       const emoji = catEmojis[itensOrcamento[0]?.categoria] || "📦";
       linhas.push(`${emoji} *${itensOrcamento[0]?.nome}*`, ``);
     }
+    const isSemi = tipoOrc === "seminovo";
     linhas.push(
-      `📦 Novo / Lacrado`,
-      `✅ 1 ano de garantia`,
+      isSemi ? `📱 Seminovo — Revisado` : `📦 Novo / Lacrado`,
+      isSemi ? `✅ 3 meses de garantia` : `✅ 1 ano de garantia`,
+      ...(isSemi && semiObs ? [`ℹ️ ${semiObs}`] : []),
       `📄 Nota fiscal em seu nome`,
       ``,
     );
@@ -197,9 +217,9 @@ export default function OrcamentoPage() {
 
   // Auto gerar quando muda qualquer campo
   useEffect(() => {
-    if (produtoSelecionado || carrinho.length > 0) gerarOrcamento();
+    if (produtoSelecionado || carrinho.length > 0 || semiProduto) gerarOrcamento();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor]);
+  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, tipoOrc, semiNome, semiPreco, semiObs]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -212,6 +232,24 @@ export default function OrcamentoPage() {
 
       <div className={cardCls}>
         <div className="space-y-4">
+          {/* Tipo: Lacrado / Seminovo */}
+          <div>
+            <p className={labelCls}>Tipo</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setTipoOrc("lacrado"); setSemiNome(""); setSemiPreco(""); setSemiObs(""); setTextoGerado(""); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${tipoOrc === "lacrado" ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                📦 Lacrado
+              </button>
+              <button onClick={() => { setTipoOrc("seminovo"); setProdSel(""); setCatSel(""); setTextoGerado(""); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${tipoOrc === "seminovo" ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                📱 Seminovo
+              </button>
+            </div>
+          </div>
+
+          {/* ==== LACRADO ==== */}
+          {tipoOrc === "lacrado" && (
+          <>
           {/* Categoria */}
           <div>
             <p className={labelCls}>Categoria</p>
@@ -240,16 +278,46 @@ export default function OrcamentoPage() {
               )}
             </div>
           )}
+          </>
+          )}
 
-          {produtoSelecionado && (
+          {/* ==== SEMINOVO ==== */}
+          {tipoOrc === "seminovo" && (
+          <div className="space-y-4 animate-fadeIn">
+            <div>
+              <p className={labelCls}>Nome do produto</p>
+              <input type="text" placeholder="Ex: iPhone 16 Pro Max 256GB" value={semiNome} onChange={e => setSemiNome(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Preco de venda PIX (R$)</p>
+              <input type="text" inputMode="numeric" placeholder="Ex: 6500" value={semiPreco} onChange={e => setSemiPreco(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Observacao (opcional)</p>
+              <input type="text" placeholder="Ex: Garantia Apple ate agosto, bateria 95%, Grade A" value={semiObs} onChange={e => setSemiObs(e.target.value)} className={inputCls} />
+            </div>
+            {semiPreco && parseFloat(semiPreco) > 0 && (
+              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preco PIX Seminovo</p>
+                <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                  R$ {parseFloat(semiPreco).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            )}
+          </div>
+          )}
+
+          {(produtoSelecionado || semiProduto) && (
             <>
-              {/* Preço PIX */}
+              {/* Preço PIX — só para lacrado (seminovo já mostra acima) */}
+              {produtoSelecionado && tipoOrc === "lacrado" && (
               <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
                 <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
                 <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
                   R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
+              )}
 
               {/* Carrinho */}
               {carrinho.length > 0 && (
@@ -336,12 +404,12 @@ export default function OrcamentoPage() {
       )}
 
       {/* Tabela rápida de parcelas */}
-      {produtoSelecionado && (
+      {(produtoSelecionado || semiProduto) && (
         <div className={cardCls}>
           <p className={`text-sm font-bold mb-3 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Tabela de parcelas (clique pra adicionar/remover)</p>
           <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
             {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => {
-              const precoPix = produtoSelecionado.preco_pix;
+              const precoPix = semiProduto ? semiProduto.preco : (produtoSelecionado?.preco_pix || 0);
               const entradaVal = parseFloat(entrada) || 0;
               const restante = precoPix - entradaVal;
               if (restante <= 0) return null;

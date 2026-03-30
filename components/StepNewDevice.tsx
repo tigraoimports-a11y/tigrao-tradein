@@ -34,7 +34,6 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   const [lineB, setLineB] = useState(""); const [modelB, setModelB] = useState(""); const [storageB, setStorageB] = useState("");
   const [semiModel, setSemiModel] = useState("");
   const [semiStorage, setSemiStorage] = useState("");
-  const [semiPreco, setSemiPreco] = useState("");
   const [semiNome, setSemiNome] = useState("");
   const [semiWhatsapp, setSemiWhatsapp] = useState("");
 
@@ -250,33 +249,45 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                 <p className="text-[13px] mb-2" style={{ color: "var(--ti-muted)" }}>Voce selecionou:</p>
                 <p className="text-[18px] font-bold" style={{ color: "var(--ti-text)" }}>{semiModel} {semiStorage}</p>
                 <p className="text-[12px] mt-1" style={{ color: "var(--ti-accent)" }}>SEMINOVO</p>
+                <p className="text-[12px] mt-3" style={{ color: "var(--ti-muted)" }}>A cotacao sera feita por WhatsApp com base nas condicoes do seu aparelho.</p>
               </div>
-              <Sec title="Preco de venda (R$)">
-                <input
-                  type="text" inputMode="numeric"
-                  placeholder="Ex: 6500"
-                  value={semiPreco}
-                  onChange={e => setSemiPreco(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-4 py-3.5 rounded-xl text-[16px] font-bold text-center"
-                  style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }}
-                />
-                {semiPreco && tradeInValue > 0 && (
-                  <div className="mt-2 rounded-xl p-3 text-center" style={{ backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-accent)" }}>
-                    <p className="text-[12px]" style={{ color: "var(--ti-muted)" }}>Com a sua troca:</p>
-                    <p className="text-[20px] font-bold" style={{ color: "var(--ti-accent)" }}>
-                      R$ {((parseFloat(semiPreco) || 0) - tradeInValue).toLocaleString("pt-BR")}
-                    </p>
-                  </div>
-                )}
-              </Sec>
-              {semiPreco && parseFloat(semiPreco) > 0 && (
-                <button
-                  onClick={() => onNext({ newModel: `${semiModel} SEMINOVO`, newStorage: semiStorage, newPrice: parseFloat(semiPreco) || 0 })}
-                  className="w-full py-4 rounded-2xl text-[15px] font-semibold text-white transition-all duration-200 active:scale-[0.98]"
-                  style={{ backgroundColor: "var(--ti-accent)" }}>
-                  Gerar Orcamento
-                </button>
-              )}
+              <div className="space-y-2">
+                <input type="text" placeholder="Seu nome" value={semiNome} onChange={e => setSemiNome(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-[14px]" style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }} />
+                <input type="tel" placeholder="Seu WhatsApp" value={semiWhatsapp} onChange={e => setSemiWhatsapp(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-[14px]" style={{ backgroundColor: "var(--ti-input-bg)", color: "var(--ti-text)", border: "1px solid var(--ti-input-border)" }} />
+              </div>
+              <button
+                onClick={() => {
+                  if (!semiNome.trim()) { alert("Informe seu nome"); return; }
+                  // Salvar simulação seminovo no banco de dados
+                  fetch("/api/leads", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      nome: semiNome,
+                      whatsapp: semiWhatsapp || "",
+                      instagram: "",
+                      modeloNovo: `${semiModel} SEMINOVO`,
+                      storageNovo: semiStorage,
+                      precoNovo: 0,
+                      modeloUsado: usedModel || "",
+                      storageUsado: usedStorage || "",
+                      avaliacaoUsado: tradeInValue || 0,
+                      diferenca: 0,
+                      status: "GOSTEI",
+                      formaPagamento: "WhatsApp Seminovo",
+                    }),
+                  }).catch(() => {});
+                  const waNum = whatsappNumber || "5521995618747";
+                  const msg = encodeURIComponent(buildWhatsAppMsg());
+                  window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");
+                }}
+                className="w-full py-4 rounded-2xl text-[15px] font-semibold text-white transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2"
+                style={{ backgroundColor: "#25D366" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492l4.612-1.474A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75c-2.115 0-4.07-.662-5.674-1.789l-.407-.264-2.746.878.829-2.676-.281-.427A9.71 9.71 0 012.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75z"/></svg>
+                Consultar no WhatsApp
+              </button>
             </div>
           )}
         </div>
