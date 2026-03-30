@@ -54,6 +54,7 @@ export default function OrcamentoPage() {
   const [parcelasSel, setParcelasSel] = useState<number[]>([12]);
   const [textoGerado, setTextoGerado] = useState("");
   const [copiado, setCopiado] = useState(false);
+  const [carrinho, setCarrinho] = useState<{ id: string; nome: string; preco: number; categoria: string }[]>([]);
 
   useEffect(() => {
     if (!password) return;
@@ -89,19 +90,20 @@ export default function OrcamentoPage() {
   }, [produtos, prodSel]);
 
   const gerarOrcamento = () => {
-    if (!produtoSelecionado) return;
+    if (!produtoSelecionado && carrinho.length === 0) return;
 
-    const precoPix = produtoSelecionado.preco_pix;
+    // Se tem carrinho com múltiplos produtos, usar total do carrinho
+    const itensOrcamento = carrinho.length > 0 ? carrinho : produtoSelecionado ? [{ id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }] : [];
+    const precoPix = itensOrcamento.reduce((s, p) => s + p.preco, 0);
     const entradaVal = parseFloat(entrada) || 0;
     const restante = precoPix - entradaVal;
 
-    // Emoji por categoria
     const catEmojis: Record<string, string> = { IPHONE: "📱", IPAD: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
-    const emoji = catEmojis[produtoSelecionado.categoria] || "📦";
 
     if (restante <= 0) {
+      const linhasSimples = itensOrcamento.map(p => `${catEmojis[p.categoria] || "📦"} *${p.nome}*`);
       const texto = [
-        `${emoji} *${produtoSelecionado.nome}*`,
+        ...linhasSimples,
         ``,
         `📦 Novo / Lacrado`,
         `✅ 1 ano de garantia`,
@@ -117,14 +119,23 @@ export default function OrcamentoPage() {
 
     const sorted = [...parcelasSel].sort((a, b) => a - b);
 
-    const linhas = [
-      `${emoji} *${produtoSelecionado.nome}*`,
-      ``,
+    const linhas: string[] = [];
+    if (itensOrcamento.length > 1) {
+      linhas.push(`*ORÇAMENTO -- TigraoImports*`, ``);
+      for (const p of itensOrcamento) {
+        linhas.push(`${catEmojis[p.categoria] || "📦"} *${p.nome}* — R$ ${p.preco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+      }
+      linhas.push(``, `💰 *Total: R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`, ``);
+    } else {
+      const emoji = catEmojis[itensOrcamento[0]?.categoria] || "📦";
+      linhas.push(`${emoji} *${itensOrcamento[0]?.nome}*`, ``);
+    }
+    linhas.push(
       `📦 Novo / Lacrado`,
       `✅ 1 ano de garantia`,
       `📄 Nota fiscal em seu nome`,
       ``,
-    ];
+    );
 
     if (entradaVal > 0) {
       linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
@@ -171,8 +182,9 @@ export default function OrcamentoPage() {
 
   // Auto gerar quando muda qualquer campo
   useEffect(() => {
-    if (produtoSelecionado) gerarOrcamento();
-  }, [prodSel, entrada, parcelasSel]);
+    if (produtoSelecionado || carrinho.length > 0) gerarOrcamento();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prodSel, entrada, parcelasSel, carrinho]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -217,13 +229,42 @@ export default function OrcamentoPage() {
 
           {produtoSelecionado && (
             <>
-              {/* Preço PIX */}
-              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
-                <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                  R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </p>
+              {/* Preço PIX + botão adicionar */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-1 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                  <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
+                  <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                    R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <button onClick={() => {
+                  if (!carrinho.find(c => c.id === produtoSelecionado.id)) {
+                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
+                  }
+                }} className="px-4 py-3 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors whitespace-nowrap">
+                  + Adicionar
+                </button>
               </div>
+
+              {/* Carrinho */}
+              {carrinho.length > 0 && (
+                <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no orcamento ({carrinho.length})</p>
+                  {carrinho.map((item, i) => (
+                    <div key={item.id} className="flex items-center justify-between text-sm">
+                      <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {item.nome}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-green-600">R$ {item.preco.toLocaleString("pt-BR")}</span>
+                        <button onClick={() => setCarrinho(prev => prev.filter(c => c.id !== item.id))} className="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className={`pt-2 border-t flex justify-between font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
+                    <span>Total</span>
+                    <span className="text-green-600">R$ {carrinho.reduce((s, c) => s + c.preco, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Entrada */}
               <div>
