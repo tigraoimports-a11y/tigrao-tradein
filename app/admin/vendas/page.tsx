@@ -162,6 +162,7 @@ export default function VendasPage() {
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
+  const [expandedVendaCor, setExpandedVendaCor] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [scanMode, setScanMode] = useState(true); // Scan é o modo padrão — produto novo obrigatório bipar
   const [scanMsg, setScanMsg] = useState("");
@@ -1731,56 +1732,99 @@ export default function VendasPage() {
                     return after.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || null;
                   };
 
+                  // Extrair modelo base (sem cor) pra agrupar cores num card só
+                  const extractModeloBase = (nome: string) => {
+                    // Pega tudo até a memória (ex: "IPHONE 16 PLUS 128GB")
+                    const m = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
+                    return m ? m[1].trim() : nome;
+                  };
+
+                  // Reagrupar: modelo base → cores → itens
+                  const porModelo: Record<string, Record<string, EstoqueItem[]>> = {};
+                  for (const key of grupoKeys) {
+                    const itens = grupos[key];
+                    for (const p of itens) {
+                      const base = extractModeloBase(stripOrigemVendas(p.produto));
+                      const cor = p.cor || extractCor(p.produto) || "—";
+                      if (!porModelo[base]) porModelo[base] = {};
+                      if (!porModelo[base][cor]) porModelo[base][cor] = [];
+                      porModelo[base][cor].push(p);
+                    }
+                  }
+                  const modeloKeys = Object.keys(porModelo).sort();
+
                   return (
                     <div className={`border rounded-xl overflow-hidden max-h-[450px] overflow-y-auto ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
-                      {grupoKeys.map((modelo) => {
-                        const items = grupos[modelo];
-                        const totalQnt = items.reduce((s, p) => s + p.qnt, 0);
+                      {modeloKeys.map((modeloBase) => {
+                        const cores = porModelo[modeloBase];
+                        const totalQnt = Object.values(cores).flat().reduce((s, p) => s + p.qnt, 0);
+                        const corKeys = Object.keys(cores).sort();
                         return (
-                          <div key={modelo} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
+                          <div key={modeloBase} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
+                            {/* Header: modelo + memória */}
                             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modelo}</span>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modeloBase}</span>
                               <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{totalQnt} un.</span>
                             </div>
-                            <div className="px-4 py-3 flex flex-wrap gap-2">
-                              {items.map((p) => {
-                                const isSelected = estoqueId === p.id;
-                                const cor = p.cor || extractCor(p.produto);
+                            {/* Cores como chips */}
+                            <div className="px-4 py-2 space-y-1">
+                              {corKeys.map((cor) => {
+                                const corItems = cores[cor];
+                                const corQnt = corItems.reduce((s, p) => s + p.qnt, 0);
+                                const hasSelected = corItems.some(p => estoqueId === p.id);
+                                const isCorExpanded = hasSelected || expandedVendaCor === `${modeloBase}__${cor}`;
                                 return (
-                                  <button
-                                    key={p.id}
-                                    onClick={() => {
-                                      if (isSelected) {
-                                        setEstoqueId("");
-                                        set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
-                                      } else {
-                                        setEstoqueId(p.id);
-                                        set("produto", p.produto);
-                                        set("custo", String(p.custo_unitario));
-                                        if (p.fornecedor) set("fornecedor", p.fornecedor);
-                                        if (p.serial_no) set("serial_no", p.serial_no);
-                                        if (p.imei) set("imei", p.imei);
-                                      }
-                                    }}
-                                    className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                                      isSelected
-                                        ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
-                                        : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] hover:shadow-sm`
-                                    }`}
-                                  >
-                                    <div className="flex flex-col items-start gap-1">
-                                      {cor && <span className="font-semibold">{cor}</span>}
-                                      {p.serial_no && <span className={`font-mono text-[11px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>{p.serial_no}</span>}
-                                      {!cor && !p.serial_no && <span>—</span>}
-                                    </div>
-                                  </button>
+                                  <div key={cor}>
+                                    <button
+                                      onClick={() => setExpandedVendaCor(isCorExpanded && !hasSelected ? "" : `${modeloBase}__${cor}`)}
+                                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${isCorExpanded ? (dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#E8E8ED] text-[#1D1D1F]") : (dm ? "text-[#98989D] hover:bg-[#2C2C2E]" : "text-[#86868B] hover:bg-[#F5F5F7]")}`}
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        <span className="text-[10px] text-[#86868B]">{isCorExpanded ? "▼" : "▶"}</span>
+                                        <span className="font-semibold">{cor}</span>
+                                      </span>
+                                      <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#C7C7CC]"}`}>{corQnt} un.</span>
+                                    </button>
+                                    {/* Seriais expandidos */}
+                                    {isCorExpanded && (
+                                      <div className="pl-6 pr-3 py-2 flex flex-wrap gap-2">
+                                        {corItems.map((p) => {
+                                          const isSelected = estoqueId === p.id;
+                                          return (
+                                            <button
+                                              key={p.id}
+                                              onClick={() => {
+                                                if (isSelected) {
+                                                  setEstoqueId("");
+                                                  set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
+                                                } else {
+                                                  setEstoqueId(p.id);
+                                                  set("produto", p.produto);
+                                                  set("custo", String(p.custo_unitario));
+                                                  if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                                  if (p.serial_no) set("serial_no", p.serial_no);
+                                                  if (p.imei) set("imei", p.imei);
+                                                }
+                                              }}
+                                              className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                                isSelected
+                                                  ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
+                                                  : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E]`
+                                              }`}
+                                            >
+                                              {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
                                 );
                               })}
                             </div>
-                            {/* Detalhes do produto selecionado neste grupo */}
-                            {items.some((p) => estoqueId === p.id) && (() => {
-                              const p = items.find((p) => estoqueId === p.id)!;
-                              const cor = p.cor || extractCor(p.produto);
+                            {/* Detalhes do produto selecionado */}
+                            {Object.values(cores).flat().some((p) => estoqueId === p.id) && (() => {
+                              const p = Object.values(cores).flat().find((p) => estoqueId === p.id)!;
                               return (
                                 <div className={`mx-4 mb-3 p-4 rounded-xl border text-xs space-y-2 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#FFF8F0] border-[#E8740E]/20 text-[#1D1D1F]"}`}>
                                   <div className="flex items-center justify-between">
@@ -1792,7 +1836,6 @@ export default function VendasPage() {
                                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
                                     {p.serial_no && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial</span><p className="font-mono text-purple-500 font-semibold">{p.serial_no}</p></div>}
                                     {p.imei && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI</span><p className="font-mono text-[#0071E3] font-semibold">{p.imei}</p></div>}
-                                    {cor && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor</span><p className="font-semibold">{cor}</p></div>}
                                     <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo</span><p className="font-semibold text-green-600">{fmt(p.custo_unitario)}</p></div>
                                     {p.fornecedor && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor</span><p className="font-semibold">{p.fornecedor}</p></div>}
                                     <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Condicao</span><p className="font-semibold">{p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p></div>
