@@ -23,10 +23,10 @@ const VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:    "5521967442665",
   nicolas:  "5521995618747",
   bianca:   "5521972461357",
-  anuncio:  "5521995618747",
-  direct:   "5521995618747",
-  story:    "5521995618747",
-  whatsapp: "5521995618747",
+  anuncio:  "5521972461357",
+  direct:   "5521972461357",
+  story:    "5521972461357",
+  whatsapp: "5521972461357",
 };
 
 export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }: { vendedor?: string | null; temaParam?: string | null }) {
