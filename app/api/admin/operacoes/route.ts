@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   // Buscar vendas (saídas) agrupadas por cliente+data
   let vendasQuery = supabase
     .from("vendas")
-    .select("id, cliente, produto, data, preco_vendido, custo, serial_no, imei, tipo, cor, created_at")
+    .select("id, cliente, produto, data, preco_vendido, custo, serial_no, imei, tipo, created_at")
     .neq("status_pagamento", "CANCELADO")
     .order("data", { ascending: false })
     .order("created_at", { ascending: false });
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       preco: Number(v.preco_vendido || 0),
       custo: Number(v.custo || 0),
       tipo_venda: v.tipo,
-      cor: v.cor,
+      cor: null,
     });
   }
 

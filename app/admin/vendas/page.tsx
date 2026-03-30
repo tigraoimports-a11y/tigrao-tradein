@@ -1676,6 +1676,8 @@ export default function VendasPage() {
                   <option value="">— Selecionar —</option>
                   {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
                 </select></div>
+                <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
+                <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -1729,55 +1731,59 @@ export default function VendasPage() {
                                 const isSelected = estoqueId === p.id;
                                 const cor = p.cor || extractCor(p.produto);
                                 return (
-                                  <div key={p.id}>
-                                    <button
-                                      onClick={() => {
-                                        if (isSelected) {
-                                          // Desselecionar
-                                          setEstoqueId("");
-                                          set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
-                                        } else {
-                                          setEstoqueId(p.id);
-                                          set("produto", p.produto);
-                                          set("custo", String(p.custo_unitario));
-                                          if (p.fornecedor) set("fornecedor", p.fornecedor);
-                                          if (p.serial_no) set("serial_no", p.serial_no);
-                                          if (p.imei) set("imei", p.imei);
-                                        }
-                                      }}
-                                      className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
-                                        isSelected
-                                          ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
-                                          : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] hover:shadow-sm`
-                                      }`}
-                                    >
-                                      <div className="flex flex-col items-start gap-1">
-                                        {cor && <span className="font-semibold">{cor}</span>}
-                                        {p.serial_no && <span className={`font-mono text-[11px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>{p.serial_no}</span>}
-                                        {!cor && !p.serial_no && <span>—</span>}
-                                      </div>
-                                    </button>
-                                    {/* Detalhes ao selecionar */}
-                                    {isSelected && (
-                                      <div className={`mt-2 p-3 rounded-xl border text-[11px] space-y-1.5 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#FFF8F0] border-[#E8740E]/20 text-[#1D1D1F]"}`}>
-                                        <p className="text-xs font-bold">{p.produto}</p>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                          {p.serial_no && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial:</span> <span className="font-mono text-purple-500">{p.serial_no}</span></p>}
-                                          {p.imei && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI:</span> <span className="font-mono text-[#0071E3]">{p.imei}</span></p>}
-                                          {cor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor:</span> {cor}</p>}
-                                          <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo:</span> <span className="font-semibold text-green-600">{fmt(p.custo_unitario)}</span></p>
-                                          {p.fornecedor && <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor:</span> {p.fornecedor}</p>}
-                                          <p><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Condicao:</span> {p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p>
-                                        </div>
-                                        <button onClick={(e) => { e.stopPropagation(); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} className="text-[10px] text-red-500 hover:text-red-700 font-semibold mt-1">
-                                          ✕ Remover selecao
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
+                                  <button
+                                    key={p.id}
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setEstoqueId("");
+                                        set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
+                                      } else {
+                                        setEstoqueId(p.id);
+                                        set("produto", p.produto);
+                                        set("custo", String(p.custo_unitario));
+                                        if (p.fornecedor) set("fornecedor", p.fornecedor);
+                                        if (p.serial_no) set("serial_no", p.serial_no);
+                                        if (p.imei) set("imei", p.imei);
+                                      }
+                                    }}
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                                      isSelected
+                                        ? "bg-[#E8740E] text-white shadow-md ring-2 ring-[#E8740E]/30"
+                                        : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E] hover:shadow-sm`
+                                    }`}
+                                  >
+                                    <div className="flex flex-col items-start gap-1">
+                                      {cor && <span className="font-semibold">{cor}</span>}
+                                      {p.serial_no && <span className={`font-mono text-[11px] ${isSelected ? "text-white/80" : "text-purple-500"}`}>{p.serial_no}</span>}
+                                      {!cor && !p.serial_no && <span>—</span>}
+                                    </div>
+                                  </button>
                                 );
                               })}
                             </div>
+                            {/* Detalhes do produto selecionado neste grupo */}
+                            {items.some((p) => estoqueId === p.id) && (() => {
+                              const p = items.find((p) => estoqueId === p.id)!;
+                              const cor = p.cor || extractCor(p.produto);
+                              return (
+                                <div className={`mx-4 mb-3 p-4 rounded-xl border text-xs space-y-2 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#FFF8F0] border-[#E8740E]/20 text-[#1D1D1F]"}`}>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-bold">{p.produto}</p>
+                                    <button onClick={() => { setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} className="text-[10px] text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded-lg hover:bg-red-50">
+                                      ✕ Remover
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
+                                    {p.serial_no && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Serial</span><p className="font-mono text-purple-500 font-semibold">{p.serial_no}</p></div>}
+                                    {p.imei && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>IMEI</span><p className="font-mono text-[#0071E3] font-semibold">{p.imei}</p></div>}
+                                    {cor && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor</span><p className="font-semibold">{cor}</p></div>}
+                                    <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Custo</span><p className="font-semibold text-green-600">{fmt(p.custo_unitario)}</p></div>
+                                    {p.fornecedor && <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Fornecedor</span><p className="font-semibold">{p.fornecedor}</p></div>}
+                                    <div><span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Condicao</span><p className="font-semibold">{p.tipo === "SEMINOVO" ? "Usado" : "Lacrado"}</p></div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -2353,8 +2359,6 @@ export default function VendasPage() {
                     <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo === "SIM"} onChange={(e) => set("troca_cabo", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
                     <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte === "SIM"} onChange={(e) => set("troca_fonte", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
                   </div>
-                  <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                  <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
                   <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
                 </>
               )}
@@ -3375,6 +3379,8 @@ export default function VendasPage() {
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
                                         <p><strong>Produto:</strong> {v.produto}</p>
+                                        {v.serial_no && <p><strong>Serial No.:</strong> <span className="font-mono">{v.serial_no}</span></p>}
+                                        {v.imei && <p><strong>IMEI:</strong> <span className="font-mono">{v.imei}</span></p>}
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
@@ -3525,8 +3531,6 @@ export default function VendasPage() {
                                             {tProd && <p><strong>Modelo:</strong> {tProd}</p>}
                                             {tCor && <p><strong>Cor:</strong> {tCor}</p>}
                                             {tBat && <p><strong>Bateria:</strong> {tBat}%</p>}
-                                            {v.serial_no && <p><strong>Serial No.:</strong> {v.serial_no}</p>}
-                                            {v.imei && <p><strong>IMEI:</strong> {v.imei}</p>}
                                             {tValor > 0 && <p><strong>Valor da troca:</strong> R$ {tValor.toLocaleString("pt-BR")}</p>}
                                             {tObs && <p><strong>Obs:</strong> {tObs}</p>}
                                           </div>
