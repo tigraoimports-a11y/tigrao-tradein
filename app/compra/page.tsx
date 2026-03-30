@@ -59,6 +59,17 @@ function CompraForm() {
   const produto = produtoInput || produtoParam;
   const preco = precoParam;
 
+  const [catalogo, setCatalogo] = useState<Record<string, { produto: string; cor: string | null; preco: number | null }[]>>({});
+  const [catSel, setCatSel] = useState("");
+
+  useEffect(() => {
+    if (!produtoParam) {
+      fetch("/api/produtos-disponiveis").then(r => r.json()).then(j => {
+        if (j.categorias) setCatalogo(j.categorias);
+      }).catch(() => {});
+    }
+  }, [produtoParam]);
+
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
@@ -103,22 +114,29 @@ function CompraForm() {
       : "Entrega - Residencia";
 
     const lines = [
-      `✅ Nome completo: ${nome}`,
-      `✅ CPF: ${cpf}`,
-      `✅ E-mail: ${email}`,
-      `✅ Telefone: ${telefone}`,
-      `✅ CEP: ${cep}`,
-      `✅ Endereco: ${endereco}`,
-      `✅ Bairro: ${bairro}`,
+      `Olá, me chamo ${nome}. Vim pelo formulário de compra!`,
       "",
-      `*Produto:* ${produto}${preco ? ` — R$ ${formatPrice(preco)}` : ""}`,
+      `WhatsApp: ${telefone}`,
+      `E-mail: ${email}`,
+      "",
+      `*DADOS DA COMPRA -- TigraoImports*`,
+      "",
+      `Nome completo: ${nome}`,
+      `CPF: ${cpf}`,
+      `E-mail: ${email}`,
+      `Telefone: ${telefone}`,
+      `CEP: ${cep}`,
+      `Endereco: ${endereco}`,
+      `Bairro: ${bairro}`,
+      "",
+      `*Produto:* ${produto}${preco ? ` -- R$ ${formatPrice(preco)}` : ""}`,
     ];
 
     if (temTroca && descTroca) {
-      lines.push("", `🔄 *Produto na troca:* ${descTroca}`);
+      lines.push("", `*Produto na troca:* ${descTroca}`);
     }
 
-    lines.push("", `✅ Horario: ${horario}`, `✅ ${localStr}`);
+    lines.push("", `Horario: ${horario}`, `${localStr}`);
 
     const message = lines.join("\n");
 
@@ -155,6 +173,33 @@ function CompraForm() {
             <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Produto</p>
             <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
             {preco && <p className="text-[#E8740E] font-bold text-2xl mt-1">R$ {formatPrice(preco)}</p>}
+          </>
+        ) : Object.keys(catalogo).length > 0 ? (
+          <>
+            <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold">Qual produto deseja?</p>
+            {/* Categorias */}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {Object.keys(catalogo).map(cat => (
+                <button key={cat} type="button" onClick={() => { setCatSel(catSel === cat ? "" : cat); setProdutoInput(""); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${catSel === cat ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73]"}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+            {/* Produtos da categoria */}
+            {catSel && catalogo[catSel] && (
+              <div className="mt-3 max-h-[200px] overflow-y-auto space-y-1 border border-[#D2D2D7] rounded-lg p-2 bg-[#F5F5F7]">
+                {catalogo[catSel].map(p => (
+                  <button key={p.produto} type="button" onClick={() => setProdutoInput(p.produto)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${produtoInput === p.produto ? "bg-[#E8740E] text-white font-semibold" : "bg-white text-[#1D1D1F] hover:bg-[#FFF5EB]"}`}>
+                    {p.produto}
+                  </button>
+                ))}
+              </div>
+            )}
+            {produtoInput && (
+              <p className="mt-2 text-sm font-semibold text-[#E8740E]">Selecionado: {produtoInput}</p>
+            )}
           </>
         ) : (
           <>
