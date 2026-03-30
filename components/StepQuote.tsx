@@ -254,6 +254,9 @@ export default function StepQuote(p: StepQuoteProps) {
         const isMac = modeloLower.includes("mac");
         const isWatch = modeloLower.includes("watch");
         const isIpad = modeloLower.includes("ipad");
+        // Extrair a "linha" do modelo: iPhone 17 Pro Max → "17", Apple Watch Series 11 → "11", MacBook Pro 2024 → "2024"
+        const lineMatch = newModel.match(/(\d+)/);
+        const productLine = lineMatch ? lineMatch[1] : "";
         const alternatives = allProducts
           .filter(p => {
             const key = `${p.modelo} ${p.armazenamento}`;
@@ -265,6 +268,11 @@ export default function StepQuote(p: StepQuoteProps) {
             if (isMac && !m.includes("mac")) return false;
             if (isWatch && !m.includes("watch")) return false;
             if (isIpad && !m.includes("ipad")) return false;
+            // Mesma linha: ex iPhone 17 só com outros iPhone 17
+            if (productLine) {
+              const pLine = p.modelo.match(/(\d+)/);
+              if (pLine && pLine[1] !== productLine) return false;
+            }
             return true;
           })
           .map(p => ({ ...p, dif: p.precoPix - tradeInValue }))
