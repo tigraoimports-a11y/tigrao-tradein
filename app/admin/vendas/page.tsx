@@ -1757,10 +1757,18 @@ export default function VendasPage() {
 
                 {/* Produtos agrupados por modelo */}
                 {catSel && (() => {
+                  // Limpar nome do produto: remover origem e chip
+                  const stripOrigemVendas = (nome: string) => nome
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
+                    .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
+                    .replace(/\s{2,}/g, " ")
+                    .trim();
                   const grupos: Record<string, EstoqueItem[]> = {};
                   for (const p of produtosFiltrados) {
-                    if (!grupos[p.produto]) grupos[p.produto] = [];
-                    grupos[p.produto].push(p);
+                    const key = stripOrigemVendas(p.produto);
+                    if (!grupos[key]) grupos[key] = [];
+                    grupos[key].push(p);
                   }
                   const grupoKeys = Object.keys(grupos).sort();
 

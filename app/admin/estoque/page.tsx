@@ -222,6 +222,7 @@ export default function EstoquePage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
@@ -1983,7 +1984,12 @@ export default function EstoquePage() {
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
-                  const stripOrigem = (nome: string) => nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\(.*?\))?\s*$/i, "").replace(/\s*-\s*(Chip Físico \+ E-sim|E-sim)\s*$/i, "").trim();
+                  const stripOrigem = (nome: string) => nome
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
+                    .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
+                    .replace(/\s{2,}/g, " ")
+                    .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
                     const groupKey = stripOrigem(p.produto);
@@ -2061,13 +2067,27 @@ export default function EstoquePage() {
                                 {/* Espaçador entre produtos */}
                                 <tr><td colSpan={10} className="h-2"></td></tr>
                                 {/* Header do produto */}
-                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"}`}>
+                                {(() => {
+                                  const alwaysExpand = isEditableItemTab || tab === "seminovos";
+                                  const isExpanded = alwaysExpand || expandedProducts.has(prodNome);
+                                  const toggleExpand = () => {
+                                    if (alwaysExpand) return;
+                                    setExpandedProducts(prev => {
+                                      const s = new Set(prev);
+                                      s.has(prodNome) ? s.delete(prodNome) : s.add(prodNome);
+                                      return s;
+                                    });
+                                  };
+                                  return (<>
+                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"} ${!alwaysExpand ? "cursor-pointer" : ""}`} onClick={toggleExpand}>
                                   <td className="w-1" style={{ background: "#E8740E" }}></td>
                                   <td className="px-3 py-3 font-bold text-[13px] text-white" colSpan={1}>
+                                    <div className="flex items-center gap-2">
+                                      {!alwaysExpand && <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>}
                                     {(() => {
                                       const canEditNome = isPendenciasTab || tab === "acaminho";
                                       return editingNome[prodItems[0]?.id] !== undefined && canEditNome ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                           <input
                                             value={editingNome[prodItems[0].id]}
                                             onChange={(e) => setEditingNome({ ...editingNome, [prodItems[0].id]: e.target.value })}
@@ -2081,12 +2101,13 @@ export default function EstoquePage() {
                                           <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
                                         </div>
                                       ) : (
-                                        <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => canEditNome && setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome })}>
+                                        <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {prodNome}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
                                     })()}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
@@ -2095,8 +2116,8 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
                                 </tr>
-                                {/* Linhas de cada cor */}
-                                {prodItems.map((p) => {
+                                {/* Linhas de cada cor — só quando expandido */}
+                                {isExpanded && prodItems.map((p) => {
                                   const isEditCusto = editingCusto[p.id] !== undefined;
                                   const isEditQnt = editingQnt[p.id] !== undefined;
                                   return (
@@ -2320,6 +2341,8 @@ export default function EstoquePage() {
                                     </tr>
                                   );
                                 })}
+                                </>);
+                                })()}
                               </React.Fragment>
                             );
                           })}
