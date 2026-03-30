@@ -94,6 +94,8 @@ export async function POST(req: NextRequest) {
   // Extrair dados do seminovo antes de inserir a venda
   const seminovoData = body._seminovo;
   delete body._seminovo;
+  const seminovoData2 = body._seminovo2;
+  delete body._seminovo2;
 
   // Extrair estoque_id antes de inserir
   const estoqueId = body._estoque_id;
@@ -180,6 +182,24 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // 2º produto na troca — mesmo fluxo do primeiro
+  if (seminovoData2 && seminovoData2.produto) {
+    await supabase.from("estoque").insert({
+      produto: seminovoData2.produto,
+      categoria: "IPHONES",
+      qnt: 1,
+      custo_unitario: seminovoData2.valor || 0,
+      status: "PENDENTE",
+      tipo: "PENDENCIA",
+      cor: seminovoData2.cor || null,
+      observacao: seminovoData2.observacao || null,
+      bateria: seminovoData2.bateria || null,
+      cliente: body.cliente || null,
+      data_compra: body.data || null,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
   // Auto-criar entrega quando local é ENTREGA
   if (data && (body.local || "").toUpperCase() === "ENTREGA") {
     try {
@@ -237,6 +257,7 @@ export async function PATCH(req: NextRequest) {
 
   // Remover campos internos que não existem na tabela vendas
   delete fields._seminovo;
+  delete fields._seminovo2;
   delete fields._estoque_id;
 
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();

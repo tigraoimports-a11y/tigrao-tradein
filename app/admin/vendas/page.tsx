@@ -87,11 +87,16 @@ export default function VendasPage() {
     // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+    // 2º produto na troca
+    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
     // Serial e IMEI
     serial_no: "", imei: "",
     // CEP e endereço
     cep: "", bairro: "", cidade: "", uf: "",
   });
+
+  // 2ª troca toggle
+  const [showSegundaTroca, setShowSegundaTroca] = useState(false);
 
   // CEP auto-fill
   const [cepLoading, setCepLoading] = useState(false);
@@ -143,6 +148,12 @@ export default function VendasPage() {
     troca_caixa: string;
     troca_cabo: string;
     troca_fonte: string;
+    // 2º produto na troca
+    produto_na_troca2: string;
+    troca_produto2: string;
+    troca_cor2: string;
+    troca_bateria2: string;
+    troca_obs2: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -525,7 +536,9 @@ export default function VendasPage() {
     const gEntradaPix = parseFloat(form.entrada_pix) || 0;
     const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
     // Troca individual por produto (do carrinho)
-    const pValorTroca = parseFloat(prodFields.produto_na_troca) || 0;
+    const pValorTroca1 = parseFloat(prodFields.produto_na_troca) || 0;
+    const pValorTroca2 = parseFloat(prodFields.produto_na_troca2) || 0;
+    const pValorTroca = pValorTroca1 + pValorTroca2;
     const pTemTroca = pValorTroca > 0;
     const gTemEntradaPix = gEntradaPix > 0;
 
@@ -596,6 +609,11 @@ export default function VendasPage() {
       troca_cor: prodFields.troca_cor || null,
       troca_bateria: prodFields.troca_bateria || null,
       troca_obs: prodFields.troca_obs || null,
+      troca_produto2: prodFields.troca_produto2 || null,
+      troca_cor2: prodFields.troca_cor2 || null,
+      troca_bateria2: prodFields.troca_bateria2 || null,
+      troca_obs2: prodFields.troca_obs2 || null,
+      produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : null,
       status_pagamento: "AGUARDANDO",
     };
 
@@ -606,10 +624,20 @@ export default function VendasPage() {
     if (pTemTroca && prodFields.troca_produto) {
       payload._seminovo = {
         produto: prodFields.troca_produto,
-        valor: pValorTroca,
+        valor: pValorTroca1,
         cor: prodFields.troca_cor || null,
         bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
         observacao: prodFields.troca_obs || null,
+      };
+    }
+
+    if (pValorTroca2 > 0 && prodFields.troca_produto2) {
+      payload._seminovo2 = {
+        produto: prodFields.troca_produto2,
+        valor: pValorTroca2,
+        cor: prodFields.troca_cor2 || null,
+        bateria: prodFields.troca_bateria2 ? parseInt(prodFields.troca_bateria2 as string) : null,
+        observacao: prodFields.troca_obs2 || null,
       };
     }
 
@@ -637,6 +665,11 @@ export default function VendasPage() {
     troca_caixa: form.troca_caixa,
     troca_cabo: form.troca_cabo,
     troca_fonte: form.troca_fonte,
+    produto_na_troca2: form.produto_na_troca2,
+    troca_produto2: form.troca_produto2,
+    troca_cor2: form.troca_cor2,
+    troca_bateria2: form.troca_bateria2,
+    troca_obs2: form.troca_obs2,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -648,10 +681,12 @@ export default function VendasPage() {
       serial_no: "", imei: "",
       produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "",
       troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
     }));
     setCatSel("");
     setEstoqueId("");
     setProdutoManual(false);
+    setShowSegundaTroca(false);
   };
 
   // Add current product to cart
@@ -1176,6 +1211,7 @@ export default function VendasPage() {
       troca_caixa: "",
       troca_cabo: "",
       troca_fonte: "",
+      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
       serial_no: "",
       imei: v.imei || "",
       cep: "",
@@ -1187,6 +1223,7 @@ export default function VendasPage() {
     setEstoqueId("");
     setProdutoManual(true); // produto duplicado vai como manual
     setProdutosCarrinho([]); // limpar carrinho ao duplicar
+    setShowSegundaTroca(false);
     const [y, m, d] = (v.data || "").split("-");
     setDuplicadoInfo({ data: d && m ? `${d}/${m}` : v.data, cliente: v.cliente });
     setTab("nova");
@@ -1818,9 +1855,11 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
+                  setShowSegundaTroca(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
@@ -2364,6 +2403,50 @@ export default function VendasPage() {
               )}
             </div>
             {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
+
+            {/* Botão para adicionar 2º produto na troca */}
+            {temTroca && !showSegundaTroca && (
+              <button
+                type="button"
+                onClick={() => setShowSegundaTroca(true)}
+                className="w-full py-2 rounded-lg text-xs font-semibold text-orange-600 border border-orange-300 hover:bg-orange-50 transition-colors"
+              >
+                + Adicionar 2º produto na troca
+              </button>
+            )}
+
+            {/* 2º PRODUTO NA TROCA */}
+            {showSegundaTroca && (
+              <div className="mt-4 pt-4 border-t border-dashed border-orange-300">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-bold text-[#1D1D1F]">🔄 2º Produto na troca</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSegundaTroca(false);
+                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "" }));
+                    }}
+                    className="text-xs text-red-400 hover:text-red-600"
+                  >
+                    Remover
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div><p className={labelCls}>Valor da 2ª troca (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.produto_na_troca2)} onChange={(e) => {
+                    const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                    setForm(f => ({ ...f, produto_na_troca2: clean }));
+                  }} placeholder="0" className={inputCls} /></div>
+                  {(parseFloat(form.produto_na_troca2) || 0) > 0 && (
+                    <>
+                      <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto2} onChange={(e) => set("troca_produto2", e.target.value)} placeholder="Ex: iPhone 14 Pro 128GB" className={inputCls} /></div>
+                      <div><p className={labelCls}>Cor</p><input value={form.troca_cor2} onChange={(e) => set("troca_cor2", e.target.value)} placeholder="Ex: Preto" className={inputCls} /></div>
+                      <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria2} onChange={(e) => set("troca_bateria2", e.target.value)} placeholder="Ex: 85" className={inputCls} /></div>
+                      <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do 2º seminovo</p><input value={form.troca_obs2} onChange={(e) => set("troca_obs2", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Botão Adicionar Produto ao Carrinho — sempre visível quando tem cliente */}
@@ -3184,6 +3267,7 @@ export default function VendasPage() {
                                               troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
                                               troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
                                               troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
+                                              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
@@ -3215,6 +3299,11 @@ export default function VendasPage() {
                                                 troca_caixa: "",
                                                 troca_cabo: "",
                                                 troca_fonte: "",
+                                                produto_na_troca2: String((gv as unknown as Record<string, unknown>).produto_na_troca2 || ""),
+                                                troca_produto2: (gv as unknown as Record<string, string>).troca_produto2 || "",
+                                                troca_cor2: (gv as unknown as Record<string, string>).troca_cor2 || "",
+                                                troca_bateria2: (gv as unknown as Record<string, string>).troca_bateria2 || "",
+                                                troca_obs2: (gv as unknown as Record<string, string>).troca_obs2 || "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
@@ -3538,6 +3627,29 @@ export default function VendasPage() {
                                       );
                                     })()}
 
+                                    {/* 2º Produto na troca */}
+                                    {(() => {
+                                      const vx = v as unknown as Record<string, string | number | null>;
+                                      const t2Prod = vx.troca_produto2 ? String(vx.troca_produto2) : "";
+                                      const t2Cor = vx.troca_cor2 ? String(vx.troca_cor2) : "";
+                                      const t2Bat = vx.troca_bateria2 ? String(vx.troca_bateria2) : "";
+                                      const t2Obs = vx.troca_obs2 ? String(vx.troca_obs2) : "";
+                                      const t2Valor = vx.produto_na_troca2 ? Number(vx.produto_na_troca2) : 0;
+                                      if (!t2Prod && !t2Valor) return null;
+                                      return (
+                                        <div className="space-y-2">
+                                          <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 2º Produto na Troca</h4>
+                                          <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                            {t2Prod && <p><strong>Modelo:</strong> {t2Prod}</p>}
+                                            {t2Cor && <p><strong>Cor:</strong> {t2Cor}</p>}
+                                            {t2Bat && <p><strong>Bateria:</strong> {t2Bat}%</p>}
+                                            {t2Valor > 0 && <p><strong>Valor da troca:</strong> R$ {t2Valor.toLocaleString("pt-BR")}</p>}
+                                            {t2Obs && <p><strong>Obs:</strong> {t2Obs}</p>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* Comprovante */}
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Comprovante</h4>
@@ -3695,9 +3807,11 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
+                  setShowSegundaTroca(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
@@ -3724,9 +3838,11 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
+                  setShowSegundaTroca(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
