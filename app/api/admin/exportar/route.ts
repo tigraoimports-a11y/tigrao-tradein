@@ -59,64 +59,63 @@ export async function GET(req: NextRequest) {
     if (errVendas) throw new Error(`Erro ao buscar vendas: ${errVendas.message}`);
     if (errGastos) throw new Error(`Erro ao buscar gastos: ${errGastos.message}`);
 
-    // Montar rows de vendas (formato completo para dia e mês)
-    const vendasRows = (vendas ?? []).map(v => {
-      // Montar info de troca
-      let trocaInfo = "";
-      if (v.troca_produto) {
-        trocaInfo = v.troca_produto;
-        if (v.troca_cor) trocaInfo += ` ${v.troca_cor}`;
-        if (v.troca_bateria) trocaInfo += ` | Bat: ${v.troca_bateria}%`;
-        if (v.troca_obs) trocaInfo += ` | ${v.troca_obs}`;
-      }
-      let trocaInfo2 = "";
-      if (v.troca_produto2) {
-        trocaInfo2 = v.troca_produto2;
-        if (v.troca_cor2) trocaInfo2 += ` ${v.troca_cor2}`;
-        if (v.troca_bateria2) trocaInfo2 += ` | Bat: ${v.troca_bateria2}%`;
-        if (v.troca_obs2) trocaInfo2 += ` | ${v.troca_obs2}`;
-      }
+    // Parsear valor de troca (pode ser string "R$ 1.200,00" ou número)
+    const parseTroca = (val: unknown): number => {
+      if (!val) return 0;
+      if (typeof val === "number") return val;
+      const s = String(val).replace(/R\$\s*/g, "").replace(/\./g, "").replace(",", ".").trim();
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
 
-      // Pagamento alternativo
-      let pagAlt = "";
-      if (v.banco_alt) {
-        pagAlt = formatBanco(v.banco_alt);
-        if (v.parc_alt) pagAlt += ` ${v.parc_alt}x`;
-        if (v.band_alt) pagAlt += ` ${v.band_alt}`;
-      }
+    // Montar info de troca (produto + detalhes)
+    const buildTrocaDesc = (produto: string | null, cor: string | null, bat: string | null, obs: string | null): string => {
+      if (!produto) return "";
+      let desc = produto;
+      if (cor) desc += ` ${cor}`;
+      if (bat) desc += ` | Bat: ${bat}%`;
+      if (obs) desc += ` | ${obs}`;
+      return desc;
+    };
+
+    // Montar rows de vendas — organizado e limpo
+    const vendasRows = (vendas ?? []).map(v => {
+      const trocaVal1 = parseTroca(v.produto_na_troca);
+      const trocaVal2 = parseTroca(v.produto_na_troca2);
+      const trocaDesc1 = buildTrocaDesc(v.troca_produto, v.troca_cor, v.troca_bateria, v.troca_obs);
+      const trocaDesc2 = buildTrocaDesc(v.troca_produto2, v.troca_cor2, v.troca_bateria2, v.troca_obs2);
+      const temTraoca = trocaVal1 > 0 || trocaDesc1;
 
       return {
+        // Dados principais
         Data: formatDateBR(v.data),
         Cliente: v.cliente || "",
-        CPF: v.cpf || "",
-        "E-mail": v.email || "",
         Produto: v.produto || "",
-        "Serial/IMEI": v.serial_no || v.imei || "",
         Tipo: v.tipo || "VENDA",
+        // Financeiro
         "Preco Venda": num(v.preco_vendido),
         Custo: num(v.custo),
         Lucro: num(v.lucro),
         "Margem%": num(v.margem_pct),
+        // Pagamento
         "Forma Pgto": formatForma(v.forma, v.qnt_parcelas, v.bandeira),
         Banco: formatBanco(v.banco),
-        "Entrada PIX": num(v.entrada_pix),
-        "Entrada Especie": num(v.entrada_especie),
-        "Sinal Antecipado": num(v.sinal_antecipado),
-        "Pgto Alternativo": pagAlt,
-        "Valor Pgto Alt": num(v.comp_alt),
-        "Troca 1": trocaInfo,
-        "Valor Troca 1": num(v.produto_na_troca),
-        "Troca 2": trocaInfo2,
-        "Valor Troca 2": num(v.produto_na_troca2),
+        // Troca
+        "Troca 1": trocaDesc1,
+        "Valor Troca 1": trocaVal1 || "",
+        "Troca 2": trocaDesc2,
+        "Valor Troca 2": trocaVal2 || "",
+        // Cliente
+        CPF: v.cpf || "",
+        "E-mail": v.email || "",
         Endereco: v.endereco || "",
         Bairro: v.bairro || "",
         CEP: v.cep || "",
-        Cidade: v.cidade || "",
-        UF: v.uf || "",
+        // Venda
         Local: v.local || "",
         Origem: v.origem || "",
+        Serial: v.serial_no || v.imei || "",
         Status: v.status_pagamento || "FINALIZADO",
-        Obs: v.notas || "",
       };
     });
 
@@ -174,7 +173,8 @@ export async function GET(req: NextRequest) {
 
     // Sheet 1: Vendas
     const wsVendas = XLSX.utils.json_to_sheet(vendasRows);
-    setColumnWidths(wsVendas, [12, 25, 15, 25, 35, 18, 12, 15, 15, 12, 10, 20, 15, 12, 12, 12, 18, 12, 35, 12, 35, 12, 30, 20, 10, 15, 5, 12, 15, 12, 25]);
+    // Data, Cliente, Produto, Tipo, PrecoVenda, Custo, Lucro, Margem, FormaPgto, Banco, Troca1, ValTroca1, Troca2, ValTroca2, CPF, Email, Endereco, Bairro, CEP, Local, Origem, Serial, Status
+    setColumnWidths(wsVendas, [11, 28, 38, 10, 13, 13, 12, 9, 22, 15, 30, 12, 30, 12, 16, 28, 35, 20, 11, 12, 14, 18, 12]);
     XLSX.utils.book_append_sheet(wb, wsVendas, "Vendas");
 
     // Sheet 2: Gastos
