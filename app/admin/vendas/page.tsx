@@ -35,6 +35,7 @@ export default function VendasPage() {
   const [vendasPw, setVendasPw] = useState("");
   const [vendasPwError, setVendasPwError] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [exportandoDia, setExportandoDia] = useState(false);
   const { isOnline } = useOnlineStatus();
   const [offlineCount, setOfflineCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -1191,7 +1192,6 @@ export default function VendasPage() {
   };
 
   // Exportar dia para Excel (backup completo)
-  const [exportandoDia, setExportandoDia] = useState(false);
   const handleExportarDia = async () => {
     setExportandoDia(true);
     try {
