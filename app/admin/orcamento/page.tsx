@@ -139,8 +139,8 @@ export default function OrcamentoPage() {
   }, [todosProdutos, catSel]);
 
   const produtoSelecionado = useMemo(() => {
-    return produtos.find(p => p.id === prodSel);
-  }, [produtos, prodSel]);
+    return todosProdutos.find(p => p.id === prodSel);
+  }, [todosProdutos, prodSel]);
 
   // Categorias de seminovos (derivar do nome do produto)
   const getSemiCategoria = (produto: string): string => {
