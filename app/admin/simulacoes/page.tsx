@@ -838,14 +838,18 @@ export default function AdminPage() {
 }
 
 /* ── WhatsApp Config Panel ── */
+const VENDEDORES_DEFAULT: { nome: string; label: string; numero: string }[] = [
+  { nome: "andre", label: "Andre", numero: "5521967442665" },
+  { nome: "nicolas", label: "Nicolas", numero: "5521995618747" },
+  { nome: "bianca", label: "Bianca", numero: "5521972461357" },
+];
+
 function WhatsAppConfigPanel({ password }: { password: string }) {
-  const [principal, setPrincipal] = useState("");
-  const [vendedores, setVendedores] = useState<Record<string, string>>({});
+  const [principal, setPrincipal] = useState("5521967442665");
+  const [vendedores, setVendedores] = useState<Record<string, { numero: string; ativo: boolean }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-  const [novoNome, setNovoNome] = useState("");
-  const [novoNum, setNovoNum] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/tradein-config", { headers: { "x-admin-password": password } })
@@ -853,7 +857,26 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
       .then(j => {
         if (j.data) {
           setPrincipal(j.data.whatsapp_principal || "5521967442665");
-          setVendedores(j.data.whatsapp_vendedores || {});
+          // Converter formato antigo (string) pra novo (objeto com ativo)
+          const raw = j.data.whatsapp_vendedores || {};
+          const mapped: Record<string, { numero: string; ativo: boolean }> = {};
+          for (const v of VENDEDORES_DEFAULT) {
+            const existing = raw[v.nome];
+            if (typeof existing === "string") {
+              mapped[v.nome] = { numero: existing, ativo: true };
+            } else if (existing && typeof existing === "object") {
+              mapped[v.nome] = existing;
+            } else {
+              mapped[v.nome] = { numero: v.numero, ativo: true };
+            }
+          }
+          // Outros vendedores extras
+          for (const [k, val] of Object.entries(raw)) {
+            if (!mapped[k]) {
+              mapped[k] = typeof val === "string" ? { numero: val, ativo: true } : (val as { numero: string; ativo: boolean });
+            }
+          }
+          setVendedores(mapped);
         }
       })
       .catch(() => {})
@@ -864,81 +887,96 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
     setSaving(true);
     setMsg("");
     try {
+      // Converter pra formato que o TradeInCalculator espera: { nome: "numero" } (só ativos)
+      const waMap: Record<string, string> = {};
+      for (const [nome, v] of Object.entries(vendedores)) {
+        if (v.ativo) waMap[nome] = v.numero;
+      }
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
-        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_vendedores: vendedores }),
+        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_vendedores: waMap }),
       });
       const j = await res.json();
-      if (j.ok) setMsg("Salvo!");
+      if (j.ok) { setMsg("Salvo!"); setTimeout(() => setMsg(""), 3000); }
       else setMsg("Erro: " + (j.error || "desconhecido"));
     } catch { setMsg("Erro de conexao"); }
     setSaving(false);
   };
 
-  if (loading) return <p className="text-sm text-[#86868B]">Carregando...</p>;
+  const toggleVendedor = (nome: string) => {
+    setVendedores(prev => ({
+      ...prev,
+      [nome]: { ...prev[nome], ativo: !prev[nome]?.ativo },
+    }));
+  };
 
-  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
+  const setPrincipalFromVendedor = (numero: string) => {
+    setPrincipal(numero);
+  };
+
+  if (loading) return <p className="text-sm text-[#86868B]">Carregando...</p>;
 
   return (
     <div className="space-y-4 max-w-lg">
+      {/* Numero principal */}
       <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
         <div>
           <h2 className="font-bold text-[#1D1D1F] text-lg">WhatsApp Principal</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">Numero que recebe TODAS as mensagens (trade-in, formulario de compra, etc). Muda em tempo real.</p>
+          <p className="text-xs text-[#86868B] mt-0.5">Todas as mensagens do site vao pra esse numero. Clique num vendedor abaixo pra trocar rapido.</p>
         </div>
 
+        {/* Seletor rapido */}
+        <div className="flex gap-2">
+          {Object.entries(vendedores).filter(([, v]) => v.ativo).map(([nome, v]) => {
+            const isActive = principal === v.numero;
+            return (
+              <button key={nome} onClick={() => setPrincipalFromVendedor(v.numero)}
+                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? "bg-[#E8740E] text-white shadow-md" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"}`}>
+                {nome.charAt(0).toUpperCase() + nome.slice(1)}
+                {isActive && <span className="ml-1.5">&#x2705;</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
+          <span className="text-[#86868B]">Numero ativo:</span>
+          <span className="font-mono font-semibold text-[#1D1D1F]">+{principal.replace(/^55/, "55 ").replace(/(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
+        </div>
+
+        <button onClick={salvar} disabled={saving}
+          className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${msg === "Salvo!" ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
+          {saving ? "Salvando..." : msg === "Salvo!" ? "&#x2705; Salvo!" : "Salvar"}
+        </button>
+      </div>
+
+      {/* Vendedores com toggle */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
         <div>
-          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Numero principal (com DDI+DDD)</label>
-          <input type="text" inputMode="numeric" value={principal} onChange={e => setPrincipal(e.target.value.replace(/\D/g, ""))}
-            placeholder="5521967442665" className={inputCls} />
+          <h2 className="font-bold text-[#1D1D1F]">Vendedores</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">Ative/desative vendedores. Quando ativo, o link ?ref=nome direciona pro numero dele.</p>
+        </div>
+
+        <div className="space-y-3">
+          {Object.entries(vendedores).map(([nome, v]) => (
+            <div key={nome} className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${v.ativo ? "bg-white border-[#D2D2D7]" : "bg-[#F5F5F7] border-[#E8E8ED] opacity-60"}`}>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-[#1D1D1F]">{nome.charAt(0).toUpperCase() + nome.slice(1)}</p>
+                <p className="text-xs font-mono text-[#86868B]">+{v.numero.replace(/^55(\d{2})/, "55 ($1) ").replace(/(\d{5})(\d{4})$/, "$1-$2")}</p>
+              </div>
+              {/* Toggle estilo iOS */}
+              <button onClick={() => toggleVendedor(nome)}
+                className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${v.ativo ? "bg-green-500" : "bg-[#D2D2D7]"}`}>
+                <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${v.ativo ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+          ))}
         </div>
 
         <button onClick={salvar} disabled={saving}
           className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
           {saving ? "Salvando..." : "Salvar"}
-        </button>
-        {msg && <p className={`text-sm font-semibold ${msg.startsWith("Erro") ? "text-red-500" : "text-green-500"}`}>{msg}</p>}
-      </div>
-
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
-        <div>
-          <h2 className="font-bold text-[#1D1D1F]">Numeros por vendedor</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">Quando o link tem ?ref=nome, usa o numero desse vendedor. Se nao tiver, usa o principal.</p>
-        </div>
-
-        <div className="space-y-2">
-          {Object.entries(vendedores).sort(([a], [b]) => a.localeCompare(b)).map(([nome, num]) => (
-            <div key={nome} className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#1D1D1F] w-20">{nome}</span>
-              <input type="text" inputMode="numeric" value={num} onChange={e => setVendedores(prev => ({ ...prev, [nome]: e.target.value.replace(/\D/g, "") }))}
-                className={`${inputCls} flex-1`} />
-              <button onClick={() => { const v = { ...vendedores }; delete v[nome]; setVendedores(v); }}
-                className="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 rounded hover:bg-red-50">X</button>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-2 items-end border-t border-[#E8E8ED] pt-3">
-          <div className="flex-1">
-            <label className="block text-xs text-[#86868B] mb-1">Nome</label>
-            <input type="text" value={novoNome} onChange={e => setNovoNome(e.target.value.toLowerCase())} placeholder="ex: nicolas" className={inputCls} />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs text-[#86868B] mb-1">Numero</label>
-            <input type="text" inputMode="numeric" value={novoNum} onChange={e => setNovoNum(e.target.value.replace(/\D/g, ""))} placeholder="5521..." className={inputCls} />
-          </div>
-          <button onClick={() => {
-            if (novoNome && novoNum) {
-              setVendedores(prev => ({ ...prev, [novoNome]: novoNum }));
-              setNovoNome(""); setNovoNum("");
-            }
-          }} className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-green-500 text-white hover:bg-green-600">+</button>
-        </div>
-
-        <button onClick={salvar} disabled={saving}
-          className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
-          {saving ? "Salvando..." : "Salvar vendedores"}
         </button>
       </div>
     </div>
