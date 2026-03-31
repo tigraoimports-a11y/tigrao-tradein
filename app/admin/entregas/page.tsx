@@ -300,107 +300,142 @@ export default function EntregasPage() {
                   let currentTroca = "";
 
                   for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].replace(/\*/g, "").trim(); // Remove WhatsApp bold asterisks
-                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️·•]/g, "").trim();
+                    // Limpa asteriscos e emojis pra versão "clean" mas mantém original pra extract
+                    const lineClean = lines[i].replace(/\*/g, "").trim();
+                    const low = lineClean.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️🖥️💳📦🍎📱💻⌚🎧·•]/g, "").trim();
                     if (!low || low.length < 2) continue;
+
+                    // Extract: pega valor depois do primeiro ":"
+                    const extr = (l: string) => { const idx = l.indexOf(":"); return idx >= 0 ? l.slice(idx + 1).trim() : l.trim(); };
 
                     // Detect sections (multi-product format)
                     if (low.includes("modelo escolhido")) { section = "produtos"; continue; }
                     if (low.includes("trocas inclu")) { section = "trocas"; continue; }
                     if (low.includes("desconto adicional")) { section = "desconto"; continue; }
-                    if (low.includes("valor:") || low.includes("valor total")) { section = "valor"; }
+                    if (low.match(/^valor\s*[:：]/) || low.includes("valor total")) { section = "valor"; }
+                    if (low.includes("dados da compra")) { continue; } // skip header
 
                     // "Produto:" inline — captura o valor na mesma linha
-                    if ((low.match(/^produto\s*[:：]/) || low.includes("produto:")) && !low.includes("troca") && !low.includes("na troca")) {
-                      let val = extract(line);
-                      // Separar preço se presente: "Mac Mini M4 — R$ 9.597"
+                    if ((low.match(/^produto\s*[:：]/) || (low.includes("produto:") && !low.includes("troca"))) && !low.includes("na troca")) {
+                      let val = extr(lineClean);
                       const precoMatch = val.match(/\s*[—–-]\s*R?\$?\s*([\d.,]+)\s*$/);
                       if (precoMatch) {
-                        const precoVal = precoMatch[1].replace(/\./g, "").replace(",", ".");
-                        if (!r.valor) r.valor = precoVal;
+                        if (!r.valor) r.valor = precoMatch[1].replace(/\./g, "").replace(",", ".");
                         val = val.replace(/\s*[—–-]\s*R?\$?\s*[\d.,]+\s*$/, "").trim();
                       }
                       if (val && val.length > 2) { produtos.push(val); section = ""; }
                       continue;
                     }
-                    // "Produto na troca:" — entra seção trocas e captura inline
-                    if (low.includes("produto na troca")) {
-                      section = "trocas";
-                      const val = extract(line);
-                      // Pode ter "Seu aparelho na troca:" embutido, limpar
-                      const cleanVal = val.replace(/seu aparelho na troca\s*[:：]?\s*/i, "").trim();
-                      if (cleanVal && cleanVal.length > 3) {
-                        currentTroca = cleanVal + "\n";
+
+                    // Produto sem label — detectar por nome de produto Apple (com emoji 🖥️📱 etc)
+                    if (!produtos.length && (
+                      low.match(/^(iphone|ipad|mac|macbook|apple watch|airpods|air tag)/i) ||
+                      low.match(/^(mac mini|mac pro)/i) ||
+                      lineClean.match(/^[🖥️📱💻⌚🎧📦]\s*.{3,}/u)
+                    )) {
+                      const val = lineClean.replace(/^[🖥️📱💻⌚🎧📦]\s*/u, "").trim();
+                      if (val.length > 3 && !val.includes("vista") && !val.includes("restante")) {
+                        produtos.push(val);
+                        continue;
                       }
+                    }
+
+                    // "Produto na troca:" — entra seção trocas
+                    if (low.includes("produto na troca") || low.includes("aparelho na troca")) {
+                      section = "trocas";
+                      const val = extr(lineClean).replace(/seu aparelho na troca\s*[:：]?\s*/i, "").trim();
+                      if (val && val.length > 3) currentTroca = val + "\n";
                       continue;
                     }
 
-                    // Personal data — reset section when matched
-                    if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) { r.cliente = extract(line); section = ""; }
-                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp") || low.includes("contato")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; section = ""; }
-                    else if (low.includes("bairro")) { r.bairro = extract(line); section = ""; }
-                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) { r.endereco = extract(line); section = ""; }
-                    else if (low.includes("cep")) { const m = line.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; section = ""; }
+                    // === Campos com label ===
+                    if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) { r.cliente = extr(lineClean); section = ""; }
+                    else if (low.includes("telefone") || low.includes("celular") || low.match(/^whatsapp\s*[:：]/)) {
+                      const m = lineClean.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/);
+                      if (m) r.telefone = m[0]; section = "";
+                    }
+                    else if (low.match(/^bairro\s*[:：]/)) { r.bairro = extr(lineClean); section = ""; }
+                    else if (low.includes("endereco") || low.includes("endereço") || low.match(/^end[\s.:]/)) { r.endereco = extr(lineClean); section = ""; }
+                    else if (low.match(/^cep\s*[:：]/)) { const m = lineClean.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; section = ""; }
+
+                    // Forma de pagamento (com label)
                     else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
-                      const val = extract(line);
-                      r.forma_pagamento = val;
-                      // Extrair valor total — pegar o maior valor ou "Entrada PIX R$ X + ..."
-                      const allVals = [...val.matchAll(/R?\$?\s*([\d.,]+)/g)].map(m => parseFloat(m[1].replace(/\./g, "").replace(",", ".")));
-                      if (allVals.length > 0 && !r.valor) {
-                        // Se tem "Entrada PIX R$ 8.000 + 10x..." somar entrada + total cartão
-                        const entradaMatch = val.match(/entrada.*?R?\$?\s*([\d.,]+)/i);
-                        if (entradaMatch) {
-                          const entrada = parseFloat(entradaMatch[1].replace(/\./g, "").replace(",", "."));
-                          const totalCartao = allVals.find(v => v !== entrada && v > 100) || 0;
-                          r.valor = String(entrada + totalCartao);
-                        } else {
-                          r.valor = String(Math.max(...allVals));
-                        }
-                      }
+                      r.forma_pagamento = extr(lineClean); section = "";
+                    }
+
+                    // Valor: "💰 R$ 8.000,00 à vista no PIX de entrada" (sem label "Valor:")
+                    else if (low.includes("vista") && low.includes("pix")) {
+                      const m = lineClean.match(/R?\$?\s*([\d.,]+)/);
+                      if (m) { r.entrada_pix = m[1].replace(/\./g, "").replace(",", "."); section = "pagamento"; }
+                    }
+                    // Parcelas: "• 10x de R$ 178,00"
+                    else if (low.match(/^\d+x\s+de\s+r/) || low.match(/•\s*\d+x/)) {
+                      const m = lineClean.match(/(\d+)x\s+de\s+R?\$?\s*([\d.,]+)/);
+                      if (m) { r.parcelas = `${m[1]}x de R$${m[2]}`; }
                       section = "";
                     }
-                    else if (low.includes("horário") || low.includes("horario")) { r.horario = extract(line); section = ""; }
-                    else if (low.includes("vendedor")) { r.vendedor = extract(line); section = ""; }
-                    else if (low.includes("como conheceu")) { section = ""; } // ignorar
-                    else if (low.match(/^local\s*[:：]/) || (low.includes("entrega") && (low.includes("residencia") || low.includes("residência") || low.includes("shopping")))) {
-                      const val = extract(line).toLowerCase();
-                      if (val.includes("shopping") || val.includes("village") || val.includes("barra") || val.includes("mall")) { r.local_entrega = "SHOPPING"; }
-                      else if (val.includes("residencia") || val.includes("residência") || val.includes("casa")) { r.local_entrega = "RESIDÊNCIA"; }
+                    // "O restante parcelado ficaria:" — skip
+                    else if (low.includes("restante parcelado")) { section = "pagamento"; }
+
+                    else if (low.match(/^horario\s*[:：]/) || low.includes("horário") || low.includes("horario:")) { r.horario = extr(lineClean); section = ""; }
+                    else if (low.match(/^vendedor\s*[:：]/)) { r.vendedor = extr(lineClean); section = ""; }
+                    else if (low.includes("como conheceu")) { section = ""; }
+
+                    // Local: "Local: Entrega - Shopping: VillageMall" ou "Local: Entrega - Av. das Americas..."
+                    else if (low.match(/^local\s*[:：]/)) {
+                      const val = extr(lineClean);
+                      const lowVal = val.toLowerCase();
+                      if (lowVal.includes("entrega")) { r.local_entrega = "OUTRO"; } // default entrega
+                      if (lowVal.includes("shopping") || lowVal.includes("village") || lowVal.includes("mall") || lowVal.includes("barra")) { r.local_entrega = "SHOPPING"; }
+                      else if (lowVal.includes("residencia") || lowVal.includes("residência")) { r.local_entrega = "RESIDÊNCIA"; }
+                      else if (lowVal.includes("loja") || lowVal.includes("retirada")) { r.local_entrega = ""; }
                       section = "";
                     }
+
                     else if (low.includes("antecipado")) { r.tipo_pagamento = "ANTECIPADO"; }
                     else if (low.includes("pagar na entrega")) { r.tipo_pagamento = "NA ENTREGA"; }
+
                     // Valor section
-                    else if (section === "valor" || (low.includes("valor") && !low.includes("avaliado"))) {
-                      const m = line.match(/R?\$?\s*([\d.,]+)/);
+                    else if (section === "valor") {
+                      const m = lineClean.match(/R?\$?\s*([\d.,]+)/);
                       if (m) { r.valor = m[1].replace(/\./g, "").replace(",", "."); section = ""; }
                     }
                     // Desconto
                     else if (section === "desconto") {
-                      const m = line.match(/R?\$?\s*([\d.,]+)/);
+                      const m = lineClean.match(/R?\$?\s*([\d.,]+)/);
                       if (m) { r.desconto = m[1].replace(/\./g, "").replace(",", "."); section = ""; }
                     }
                     // Products section — each line is a product (multi-product format)
                     else if (section === "produtos" && low.length > 3) {
-                      produtos.push(line.replace(/^[✅⚠️📌🤔*·•]\s*/g, "").trim());
+                      produtos.push(lineClean.replace(/^[✅⚠️📌🤔·•]\s*/g, "").trim());
                     }
-                    // Trocas section — collect trade-in details
+                    // Trocas section
                     else if (section === "trocas") {
-                      if (line.startsWith("·") || line.startsWith("•") || (low.match(/^iphone|^apple|^ipad|^macbook|^airpods/) && !low.includes("avaliado"))) {
+                      if (low.match(/^iphone|^apple|^ipad|^macbook|^airpods/) || lineClean.startsWith("·") || lineClean.startsWith("•")) {
                         if (currentTroca) trocas.push(currentTroca.trim());
-                        currentTroca = line.replace(/^[·•]\s*/, "") + "\n";
+                        currentTroca = lineClean.replace(/^[·•]\s*/, "") + "\n";
                       } else if (low.includes("avaliado")) {
-                        currentTroca += line + "\n";
+                        currentTroca += lineClean + "\n";
                         trocas.push(currentTroca.trim());
                         currentTroca = "";
                       } else if (low.includes("seu aparelho")) {
-                        // Skip "Seu aparelho na troca:" header
+                        // skip header
                       } else if (currentTroca || low.length > 3) {
-                        currentTroca += line + "\n";
+                        currentTroca += lineClean + "\n";
                       }
                     }
                   }
                   if (currentTroca) trocas.push(currentTroca.trim());
+
+                  // Montar forma_pagamento e valor quando veio entrada PIX + parcelas (formato sem label)
+                  if (r.entrada_pix && !r.forma_pagamento) {
+                    r.forma_pagamento = r.parcelas
+                      ? `Entrada PIX R$${Number(r.entrada_pix).toLocaleString("pt-BR")} + ${r.parcelas} no cartao`
+                      : `PIX R$${Number(r.entrada_pix).toLocaleString("pt-BR")}`;
+                  }
+                  if (r.entrada_pix && !r.valor) {
+                    r.valor = r.entrada_pix;
+                  }
 
                   // Apply to form
                   if (r.cliente) set("cliente", r.cliente);
