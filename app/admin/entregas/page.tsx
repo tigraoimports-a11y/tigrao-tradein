@@ -290,39 +290,97 @@ export default function EntregasPage() {
                   const text = await navigator.clipboard.readText();
                   if (!text || text.length < 10) { setMsg("Nada no clipboard. Copie a mensagem do WhatsApp primeiro."); return; }
                   const lines = text.split("\n").map(l => l.trim());
-                  const extract = (line: string) => line.replace(/^[✅⚠️📌🤔🔄💰📋🏷️]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
+                  const extract = (line: string) => line.replace(/^[✅⚠️📌🤔🔄💰📋🏷️🎯]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
                   const r: Record<string, string> = {};
-                  for (const line of lines) {
-                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔*]/g, "").trim();
-                    if (!low || low.length < 3) continue;
-                    if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) r.cliente = extract(line);
-                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; }
-                    else if (low.includes("bairro")) r.bairro = extract(line);
-                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) r.endereco = extract(line);
+                  const produtos: string[] = [];
+                  const trocas: string[] = [];
+                  let section = ""; // track current section
+                  let currentTroca = "";
+
+                  for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️*·•]/g, "").trim();
+                    if (!low || low.length < 2) continue;
+
+                    // Detect sections
+                    if (low.includes("modelo escolhido") || low.includes("produto:")) { section = "produtos"; continue; }
+                    if (low.includes("trocas inclu") || low.includes("produto na troca")) { section = "trocas"; continue; }
+                    if (low.includes("desconto adicional")) { section = "desconto"; continue; }
+                    if (low.includes("valor:") || low.includes("valor total")) { section = "valor"; }
+
+                    // Personal data
+                    if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) { r.cliente = extract(line); section = ""; }
+                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp") || low.includes("contato")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; }
+                    else if (low.includes("bairro")) { r.bairro = extract(line); }
+                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) { r.endereco = extract(line); }
                     else if (low.includes("cep")) { const m = line.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; }
-                    else if (low.includes("produto:") || low.includes("modelo escolhido") || low.includes("modelo:")) r.produto = extract(line);
-                    else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) r.forma_pagamento = extract(line);
-                    else if ((low.includes("valor") || low.includes("total")) && !low.includes("pagamento")) { const m = line.match(/[\d.,]+/g); if (m) r.valor = m[m.length - 1].replace(/\./g, "").replace(",", "."); }
-                    else if (low.includes("horário") || low.includes("horario")) r.horario = extract(line);
-                    else if (low.includes("vendedor")) r.vendedor = extract(line);
-                    else if (low.includes("troca:") || low.includes("produto na troca")) r.detalhes_upgrade = extract(line);
-                    else if (low.includes("entrega") && low.includes("residencia")) { r.local_entrega = "RESIDÊNCIA"; r.tipo_pagamento = "ANTECIPADO"; }
+                    else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) { r.forma_pagamento = extract(line); }
+                    else if (low.includes("horário") || low.includes("horario")) { r.horario = extract(line); }
+                    else if (low.includes("vendedor")) { r.vendedor = extract(line); }
+                    else if (low.includes("entrega") && low.includes("residencia")) { r.local_entrega = "RESIDÊNCIA"; }
                     else if (low.includes("entrega") && low.includes("shopping")) { r.local_entrega = "SHOPPING"; }
-                    else if (low.includes("antecipado")) r.tipo_pagamento = "ANTECIPADO";
-                    else if (low.includes("pagar na entrega")) r.tipo_pagamento = "NA ENTREGA";
+                    else if (low.includes("antecipado")) { r.tipo_pagamento = "ANTECIPADO"; }
+                    else if (low.includes("pagar na entrega")) { r.tipo_pagamento = "NA ENTREGA"; }
+                    // Valor section
+                    else if (section === "valor" || (low.includes("valor") && !low.includes("avaliado"))) {
+                      const m = line.match(/R?\$?\s*([\d.,]+)/);
+                      if (m) { r.valor = m[1].replace(/\./g, "").replace(",", "."); r.forma_pagamento = extract(line); section = ""; }
+                    }
+                    // Desconto
+                    else if (section === "desconto") {
+                      const m = line.match(/R?\$?\s*([\d.,]+)/);
+                      if (m) { r.desconto = m[1].replace(/\./g, "").replace(",", "."); section = ""; }
+                    }
+                    // Products section — each line is a product
+                    else if (section === "produtos" && low.length > 3 && !low.startsWith("trocas")) {
+                      produtos.push(line.replace(/^[✅⚠️📌🤔*·•]\s*/g, "").trim());
+                    }
+                    // Trocas section — detect new troca by "·" prefix or iPhone/Apple
+                    else if (section === "trocas") {
+                      if (line.startsWith("·") || line.startsWith("•") || (low.match(/^iphone|^apple|^ipad|^macbook|^airpods/) && !low.includes("avaliado"))) {
+                        if (currentTroca) trocas.push(currentTroca.trim());
+                        currentTroca = line.replace(/^[·•]\s*/, "") + "\n";
+                      } else if (low.includes("avaliado")) {
+                        currentTroca += line + "\n";
+                        trocas.push(currentTroca.trim());
+                        currentTroca = "";
+                      } else if (currentTroca) {
+                        currentTroca += line + "\n";
+                      }
+                    }
                   }
+                  if (currentTroca) trocas.push(currentTroca.trim());
+
+                  // Apply to form
                   if (r.cliente) set("cliente", r.cliente);
                   if (r.telefone) set("telefone", r.telefone);
                   if (r.bairro) set("bairro", r.bairro);
                   if (r.endereco) set("endereco", r.endereco);
-                  if (r.produto) set("produto", r.produto);
-                  if (r.forma_pagamento) set("forma_pagamento", r.forma_pagamento);
-                  if (r.valor) set("valor", r.valor);
                   if (r.horario) set("horario", r.horario);
                   if (r.vendedor) set("vendedor", r.vendedor);
                   if (r.local_entrega) set("local_entrega", r.local_entrega);
-                  if (r.detalhes_upgrade) { set("tipo", "UPGRADE"); set("detalhes_upgrade", r.detalhes_upgrade); }
-                  setMsg(`✅ Dados colados! ${Object.keys(r).length} campos preenchidos.`);
+
+                  // Products
+                  if (produtos.length > 0) set("produto", produtos[0]);
+                  if (produtos.length > 1) { setShowProd2(true); set("produto2", produtos[1]); }
+                  if (produtos.length > 2) { setShowProd2(true); setShowProd3(true); set("produto3", produtos[2]); }
+                  // If more than 3, put rest in observacao
+                  if (produtos.length > 3) {
+                    set("observacao", `Produtos adicionais: ${produtos.slice(3).join(", ")}`);
+                  }
+
+                  // Trocas → tipo UPGRADE + detalhes
+                  if (trocas.length > 0) {
+                    set("tipo", "UPGRADE");
+                    set("detalhes_upgrade", trocas.join("\n\n"));
+                  }
+
+                  // Payment
+                  if (r.forma_pagamento) set("forma_pagamento", r.forma_pagamento);
+                  if (r.valor) set("valor", r.valor);
+
+                  const totalFields = Object.keys(r).length + produtos.length + trocas.length;
+                  setMsg(`✅ Dados colados! ${totalFields} campos preenchidos. ${produtos.length} produto(s), ${trocas.length} troca(s).`);
                 } catch { setMsg("Erro ao ler clipboard. Permita o acesso."); }
               }}
               className="px-4 py-2 rounded-xl text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
