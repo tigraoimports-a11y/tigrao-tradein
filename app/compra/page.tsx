@@ -87,7 +87,8 @@ function CompraForm() {
   // WhatsApp pode vir do URL ou ser buscado da config
   const [whatsappConfig, setWhatsappConfig] = useState("");
   // Sempre André como default. Config sobrescreve se disponível.
-  const whatsappFinal = whatsappConfig || "5521967442665";
+  // Prioridade: param URL (do gerador de link) > config DB > fallback André
+  const whatsappFinal = whatsapp || whatsappConfig || "5521967442665";
 
   // Fetch products + config
   useEffect(() => {
@@ -188,7 +189,14 @@ function CompraForm() {
     let pagStr = formaPagamento;
     if (formaPagamento.includes("Cartao") && parcelas) {
       const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
-      if (p) {
+      if (entradaPixNum > 0) {
+        // Entrada PIX + Cartão parcelado
+        if (p) {
+          pagStr = `Entrada PIX R$ ${fmt(entradaPixNum)} + ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao (total cartao: R$ ${fmt(p.total)})`;
+        } else {
+          pagStr = `Entrada PIX R$ ${fmt(entradaPixNum)} + Cartao em ${parcelas}x`;
+        }
+      } else if (p) {
         pagStr = `R$ ${fmt(p.total)} em ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao`;
       } else {
         pagStr = `Cartao de Credito em ${parcelas}x`;
@@ -197,7 +205,7 @@ function CompraForm() {
       pagStr = `PIX — R$ ${fmt(valorBase)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas) {
       const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
-      pagStr = p ? `PIX + Cartao — ${parcelas}x de R$ ${fmt(p.valorParcela)}` : `PIX + Cartao em ${parcelas}x`;
+      pagStr = p ? `Entrada PIX R$ ${fmt(entradaPixNum)} + ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao` : `PIX + Cartao em ${parcelas}x`;
     }
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
