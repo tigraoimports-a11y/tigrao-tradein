@@ -26,23 +26,28 @@ export default function GerarLinkPage() {
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
 
-  // WhatsApp fixo da Bianca — ela recebe todos os formulários
-  const WHATSAPP_BIANCA = "5521972461357";
+  // WhatsApp por vendedor: André recebe os dele, resto vai pra Bianca
+  const WHATSAPP_VENDEDOR: Record<string, string> = {
+    Andre: "5521967442665",
+    Bianca: "5521972461357",
+    Nicolas: "5521972461357",
+    Nicole: "5521972461357",
+  };
 
   function gerarLink() {
     const prodsFilled = produtos.filter(Boolean);
     if (prodsFilled.length === 0) return;
 
+    const whatsappDestino = WHATSAPP_VENDEDOR[vendedorNome] || "5521972461357";
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
     const params = new URLSearchParams();
     params.set("produto", prodsFilled[0]);
-    // Produtos adicionais
     for (let i = 1; i < prodsFilled.length; i++) {
       params.set(`produto${i + 1}`, prodsFilled[i]);
     }
     if (rawPreco && rawPreco !== "0") params.set("preco", rawPreco);
     params.set("vendedor", vendedorNome || "");
-    params.set("whatsapp", WHATSAPP_BIANCA);
+    params.set("whatsapp", whatsappDestino);
     if (forma) params.set("forma", forma);
     if (parcelas) params.set("parcelas", parcelas);
     if (rawEntrada && rawEntrada !== "0") params.set("entrada_pix", rawEntrada);
@@ -312,7 +317,7 @@ export default function GerarLinkPage() {
             </a>
           </div>
           <p className="text-[10px] text-[#86868B] text-center">
-            O formulario vai direcionar o cliente pro WhatsApp da Bianca
+            WhatsApp: {vendedorNome === "Andre" ? "Andre" : "Bianca"}
           </p>
         </div>
       )}
