@@ -166,14 +166,17 @@ function getModeloBase(produto: string, categoria: string): string {
     return produto;
   }
   if (baseCat === "IPADS") {
-    if (p.includes("MINI")) return "iPad Mini";
-    // Separar por tamanho (11", 13", etc)
+    // Extrair memória (128GB, 256GB, 512GB, 1TB)
+    const memMatch = p.match(/(\d+\s*(?:GB|TB))/i);
+    const mem = memMatch ? ` ${memMatch[1]}` : "";
+    // Extrair tamanho (11", 13")
     const sizeMatch = p.match(/(\d{2})[""]/);
     const size = sizeMatch ? ` ${sizeMatch[1]}"` : "";
-    if (p.includes("AIR")) return `iPad Air${size}`;
-    if (p.includes("PRO")) return `iPad Pro${size}`;
-    if (p.includes("A16")) return "iPad A16";
-    return "iPad";
+    if (p.includes("MINI")) return `iPad Mini${mem}`;
+    if (p.includes("AIR")) return `iPad Air${size}${mem}`;
+    if (p.includes("PRO")) return `iPad Pro${size}${mem}`;
+    if (p.includes("A16")) return `iPad A16${mem}`;
+    return `iPad${mem}`;
   }
   if (baseCat === "MAC_MINI") {
     return "Mac Mini";
