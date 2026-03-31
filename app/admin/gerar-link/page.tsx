@@ -40,20 +40,27 @@ export default function GerarLinkPage() {
 
     const whatsappDestino = WHATSAPP_VENDEDOR[vendedorNome] || "5521972461357";
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const params = new URLSearchParams();
-    params.set("produto", prodsFilled[0]);
-    for (let i = 1; i < prodsFilled.length; i++) {
-      params.set(`produto${i + 1}`, prodsFilled[i]);
-    }
-    if (rawPreco && rawPreco !== "0") params.set("preco", rawPreco);
-    params.set("vendedor", vendedorNome || "");
-    params.set("whatsapp", whatsappDestino);
-    if (forma) params.set("forma", forma);
-    if (parcelas) params.set("parcelas", parcelas);
-    if (rawEntrada && rawEntrada !== "0") params.set("entrada_pix", rawEntrada);
-    if (localEntrega) params.set("local", localEntrega);
 
-    const link = `${baseUrl}/compra?${params.toString()}`;
+    // Gerar link curto: comprime parâmetros em base64url
+    const shortData: Record<string, string> = {};
+    shortData.p = prodsFilled[0];
+    for (let i = 1; i < prodsFilled.length; i++) {
+      shortData[`p${i + 1}`] = prodsFilled[i];
+    }
+    if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    shortData.s = vendedorNome || "";
+    shortData.w = whatsappDestino;
+    if (forma) shortData.f = forma;
+    if (parcelas) shortData.x = parcelas;
+    if (rawEntrada && rawEntrada !== "0") shortData.e = rawEntrada;
+    if (localEntrega) shortData.l = localEntrega;
+
+    // Codifica em base64url
+    const json = JSON.stringify(shortData);
+    const b64 = btoa(unescape(encodeURIComponent(json)))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+    const link = `${baseUrl}/c/${b64}`;
     setGeneratedLink(link);
     setCopied(false);
   }
