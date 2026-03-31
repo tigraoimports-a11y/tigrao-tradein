@@ -107,6 +107,8 @@ function CompraForm() {
   const [telefone, setTelefone] = useState(whatsappClienteParam);
   const [cep, setCep] = useState("");
   const [endereco, setEndereco] = useState("");
+  const [numero, setNumero] = useState("");
+  const [complemento, setComplemento] = useState("");
   const [bairro, setBairro] = useState("");
   const [horario, setHorario] = useState("");
   const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
@@ -195,7 +197,7 @@ function CompraForm() {
       `*E-mail:* ${email}`,
       `*Telefone:* ${telefone}`,
       `*CEP:* ${cep}`,
-      `*Endereco:* ${endereco}`,
+      `*Endereco:* ${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`,
       `*Bairro:* ${bairro}`,
       "",
       `*Produto:* ${produtoInput || produtoParam}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
@@ -216,7 +218,10 @@ function CompraForm() {
       }
     }
 
-    lines.push("", `Horario: ${horario}`, `${localStr}`);
+    // Entrega info
+    const pagEntrega = local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
+    lines.push("", `*Horario:* ${horario}`, `*Local:* ${localStr}`);
+    if (pagEntrega) lines.push(pagEntrega);
 
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
     window.open(url, "_blank");
@@ -352,8 +357,18 @@ function CompraForm() {
             {cepError && <p className="text-red-500 text-xs mt-1">{cepError}</p>}
           </div>
           <div>
-            <label className={labelCls}>Endereco *</label>
-            <input type="text" required value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua, numero, complemento" className={inputCls} />
+            <label className={labelCls}>Endereco (rua) *</label>
+            <input type="text" required value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Ex: Rua Pitimbu" className={inputCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Numero *</label>
+              <input type="text" required inputMode="numeric" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 10" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Complemento</label>
+              <input type="text" value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Apto, bloco..." className={inputCls} />
+            </div>
           </div>
           <div>
             <label className={labelCls}>Bairro *</label>
