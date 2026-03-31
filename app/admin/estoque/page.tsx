@@ -2001,6 +2001,20 @@ export default function EstoquePage() {
                   </div>
                 );
               })}
+              {/* Card Seminovos — só na aba estoque (lacrados) */}
+              {tab === "estoque" && seminovos.length > 0 && (
+                <div
+                  className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all cursor-pointer`}
+                  onClick={() => setTab("seminovos")}
+                >
+                  <div className="text-[40px] mb-4">📱</div>
+                  <h3 className={`font-bold text-[15px] ${textPrimary} hover:text-[#E8740E] transition-colors`}>Seminovos</h3>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className={`text-[12px] ${textSecondary}`}>{seminovos.length} produtos</span>
+                    <span className={`text-[12px] ${textMuted}`}>{seminovos.reduce((s, p) => s + p.qnt, 0)} un.</span>
+                  </div>
+                </div>
+              )}
             </div>
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
