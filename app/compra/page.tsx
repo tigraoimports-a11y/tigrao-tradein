@@ -161,11 +161,16 @@ function CompraForm() {
     let pagStr = formaPagamento;
     if (formaPagamento.includes("Cartao") && parcelas) {
       const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
-      pagStr = p ? `${fmt(p.total)} em ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao` : `${parcelas}x no cartao`;
+      if (p) {
+        pagStr = `R$ ${fmt(p.total)} em ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao`;
+      } else {
+        pagStr = `Cartao de Credito em ${parcelas}x`;
+      }
     } else if (formaPagamento === "PIX" && valorBase > 0) {
-      pagStr = `PIX - R$ ${fmt(valorBase)}`;
+      pagStr = `PIX — R$ ${fmt(valorBase)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas) {
-      pagStr = `PIX + Cartao em ${parcelas}x`;
+      const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
+      pagStr = p ? `PIX + Cartao — ${parcelas}x de R$ ${fmt(p.valorParcela)}` : `PIX + Cartao em ${parcelas}x`;
     }
 
     const lines = [
@@ -185,8 +190,8 @@ function CompraForm() {
       `Endereco: ${endereco}`,
       `Bairro: ${bairro}`,
       "",
-      `*Produto:* ${produtoInput || produtoParam}`,
-      ...(preco > 0 ? [`*Forma de pagamento:* ${pagStr}`] : [`*Forma de pagamento:* ${formaPagamento}`]),
+      `*Produto:* ${produtoInput || produtoParam}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
+      `*Forma de pagamento:* ${pagStr}`,
       ...(origem ? [`*Como conheceu:* ${origem}`] : []),
     ];
 

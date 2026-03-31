@@ -1555,11 +1555,11 @@ export default function EstoquePage() {
           return "OUTROS";
         };
 
-        // Filtrar itens para reposição: qnt < estoque_minimo (ou qnt <= 1 se não tem minimo)
+        // Filtrar itens para reposição: qnt < estoque_minimo (só itens com mínimo definido)
         const reposicaoItems = novos.filter(p => {
-          const min = (p as unknown as Record<string, unknown>).estoque_minimo;
+          const min = p.estoque_minimo;
           if (typeof min === "number" && min > 0) return p.qnt < min;
-          return p.qnt <= 1; // fallback se não tem minimo definido
+          return false; // sem mínimo definido = não aparece na reposição
         });
 
         // Estrutura: cat → linha → modelo_base → [{cor, qnt, esgotado}]
@@ -2677,6 +2677,32 @@ export default function EstoquePage() {
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanco</p><p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
+                {/* Estoque mínimo — para lacrados, editável pelo admin */}
+                {p.tipo === "NOVO" && isAdmin && (
+                  <div className="mt-3 pt-3 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS} mb-1`}>Estoque Minimo (pra reposicao)</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min={0}
+                        defaultValue={p.estoque_minimo ?? ""}
+                        placeholder="Ex: 3"
+                        onBlur={async (e) => {
+                          const val = e.target.value ? parseInt(e.target.value) : null;
+                          if (val !== p.estoque_minimo) {
+                            await apiPatch(p.id, { estoque_minimo: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, estoque_minimo: val } : x));
+                            setDetailProduct({ ...p, estoque_minimo: val });
+                            setMsg("Estoque minimo atualizado!");
+                          }
+                        }}
+                        className={`w-24 px-3 py-2 rounded-lg border text-[14px] font-bold text-center ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-blue-400" : "bg-white border-[#D2D2D7] text-blue-600"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <span className={`text-[12px] ${mS}`}>
+                        {p.estoque_minimo ? `Atual: ${p.qnt} / Min: ${p.estoque_minimo} ${p.qnt < p.estoque_minimo ? "⚠️ REPOR" : "✅ OK"}` : "Nao definido"}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {/* Preço sugerido — só para seminovos, editável pelo admin */}
                 {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && isAdmin && (
                   <div className="mt-3 pt-3 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
