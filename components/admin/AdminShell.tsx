@@ -96,6 +96,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         }
       }
       if (savedDark === "true") setDarkMode(true);
+      // Limpar override manual expirado
+      const manualExp = parseInt(localStorage.getItem("admin_dark_manual") || "0");
+      if (manualExp > 0 && Date.now() >= manualExp) localStorage.removeItem("admin_dark_manual");
     } catch {
       // Qualquer erro — limpar tudo e começar fresh
       try {
@@ -106,10 +109,33 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
+  // Dark mode automático: 6h-18h claro, 18h-6h escuro
+  useEffect(() => {
+    const checkHour = () => {
+      const manual = localStorage.getItem("admin_dark_manual");
+      if (manual) return; // usuário forçou manualmente, respeitar
+      const h = new Date().getHours();
+      const shouldBeDark = h < 6 || h >= 18;
+      setDarkMode(prev => {
+        if (prev !== shouldBeDark) localStorage.setItem("admin_dark", String(shouldBeDark));
+        return shouldBeDark;
+      });
+    };
+    checkHour();
+    const timer = setInterval(checkHour, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const toggleDark = () => {
     setDarkMode(prev => {
       const next = !prev;
       localStorage.setItem("admin_dark", String(next));
+      // Marcar como manual por 12h (depois volta ao automático)
+      localStorage.setItem("admin_dark_manual", String(Date.now() + 12 * 60 * 60 * 1000));
+      setTimeout(() => {
+        const exp = parseInt(localStorage.getItem("admin_dark_manual") || "0");
+        if (Date.now() >= exp) localStorage.removeItem("admin_dark_manual");
+      }, 12 * 60 * 60 * 1000);
       return next;
     });
   };
