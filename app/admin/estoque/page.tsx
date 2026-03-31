@@ -1568,43 +1568,36 @@ export default function EstoquePage() {
         const catOrder = ["IPHONE", "IPAD", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
         const catLabels: Record<string, string> = { IPHONE: "IPHONES", IPAD: "IPADS", MACBOOK: "MACBOOKS", MAC_MINI: "MAC MINI", APPLE_WATCH: "APPLE WATCH", AIRPODS: "AIRPODS", ACESSORIOS: "ACESSÓRIOS" };
 
-        const tree: Record<string, Record<string, Record<string, CorInfo[]>>> = {};
+        // Agrupar: cat → modelo_base → [{cor, qnt}]
+        const byCatModel: Record<string, Record<string, CorInfo[]>> = {};
         for (const p of reposicaoItems) {
           const cat = p.categoria || "OUTROS";
           const nome = stripOrigemRepo(p.produto);
           const base = extractBase(nome);
           const cor = extractCor(nome) || p.cor || null;
-          const linha = extractLinha(nome, cat);
-          if (!tree[cat]) tree[cat] = {};
-          if (!tree[cat][linha]) tree[cat][linha] = {};
-          if (!tree[cat][linha][base]) tree[cat][linha][base] = [];
-          // Evitar duplicatas
-          const existing = tree[cat][linha][base].find(c => c.cor === cor);
-          if (!existing) {
-            tree[cat][linha][base].push({ cor, qnt: p.qnt, jaCaminho: produtosACaminho.has(nome.toUpperCase()) });
-          }
+          if (!byCatModel[cat]) byCatModel[cat] = {};
+          if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
+          const existing = byCatModel[cat][base].find(c => c.cor === cor);
+          if (existing) { existing.qnt += p.qnt; }
+          else { byCatModel[cat][base].push({ cor, qnt: p.qnt, jaCaminho: produtosACaminho.has(nome.toUpperCase()) }); }
         }
 
-        const sortedCats = Object.keys(tree).sort((a, b) => {
+        const sortedCats = Object.keys(byCatModel).sort((a, b) => {
           const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
           return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
         });
 
         // Build copy text
         const buildCopyText = () => {
-          const lines: string[] = ["*LISTA DE PRODUTOS PARA REPOSIÇÃO*", ""];
+          const lines: string[] = ["*COMPRAR PRODUTOS*", ""];
           for (const cat of sortedCats) {
             lines.push(`*${catLabels[cat] || cat}*`);
-            const linhas = Object.keys(tree[cat]).sort();
-            for (const linha of linhas) {
-              lines.push(`> ${linha}`);
-              const modelos = Object.entries(tree[cat][linha]).sort(([a], [b]) => a.localeCompare(b));
-              for (const [base, cores] of modelos) {
-                lines.push(`* ${base}`);
-                for (const c of cores) {
-                  const status = c.qnt === 0 ? "ESGOTADO" : `${c.qnt} un.`;
-                  lines.push(`  - ${c.cor || "—"} (${status})${c.jaCaminho ? " ✈️" : ""}`);
-                }
+            const modelos = Object.entries(byCatModel[cat]).sort(([a], [b]) => a.localeCompare(b));
+            for (const [base, cores] of modelos) {
+              lines.push(`\n${base}`);
+              for (const c of cores) {
+                const label = c.qnt === 0 ? `COMPRAR ${c.cor || "—"}` : `${c.qnt}x ${c.cor || "—"}`;
+                lines.push(`${c.qnt === 0 ? "🔴" : "🟡"} ${label}${c.jaCaminho ? " ✈️" : ""}`);
               }
             }
             lines.push("");
@@ -1613,11 +1606,11 @@ export default function EstoquePage() {
         };
 
         return (
-          <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-6`}>
+          <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-4`}>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className={`text-[18px] font-bold ${textPrimary}`}>Lista de Produtos para Reposição</h2>
-                <p className={`text-[13px] mt-1 ${textSecondary}`}>Produtos abaixo do estoque mínimo</p>
+                <h2 className={`text-[18px] font-bold ${textPrimary}`}>Comprar Produtos</h2>
+                <p className={`text-[13px] mt-1 ${textSecondary}`}>Produtos abaixo do estoque mínimo — clique na categoria</p>
               </div>
               <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
@@ -1627,35 +1620,43 @@ export default function EstoquePage() {
             {sortedCats.length === 0 ? (
               <p className={`text-sm ${textSecondary} text-center py-8`}>Estoque OK! Nenhum produto abaixo do mínimo.</p>
             ) : (
-              sortedCats.map(cat => (
-                <div key={cat} className="space-y-4">
-                  <h3 className={`text-[16px] font-bold ${textPrimary} pb-1 border-b-2 ${dm ? "border-[#3A3A3C]" : "border-[#1D1D1F]"}`}>
-                    {catLabels[cat] || cat}
-                  </h3>
-                  {Object.entries(tree[cat]).sort(([a], [b]) => a.localeCompare(b)).map(([linha, modelos]) => (
-                    <div key={linha} className="pl-2">
-                      <p className={`text-[13px] font-bold ${dm ? "text-[#E8740E]" : "text-[#E8740E]"} mb-2`}>▸ {linha}</p>
-                      <div className="space-y-3 pl-3">
-                        {Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b)).map(([base, cores]) => (
+              sortedCats.map(cat => {
+                const modelos = Object.entries(byCatModel[cat]).sort(([a], [b]) => a.localeCompare(b));
+                const totalItems = modelos.reduce((s, [, cores]) => s + cores.length, 0);
+                const isOpen = expandedProducts.has(`repo_${cat}`);
+                return (
+                  <div key={cat} className={`border rounded-xl overflow-hidden ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                    <button
+                      onClick={() => setExpandedProducts(prev => { const s = new Set(prev); s.has(`repo_${cat}`) ? s.delete(`repo_${cat}`) : s.add(`repo_${cat}`); return s; })}
+                      className={`w-full flex items-center justify-between px-5 py-4 font-bold text-[15px] transition-colors ${isOpen ? (dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]") : (dm ? "hover:bg-[#1C1C1E]" : "hover:bg-[#FAFAFA]")}`}
+                      style={{ color: isOpen ? "var(--at-accent, #E8740E)" : undefined }}
+                    >
+                      <span className={`flex items-center gap-2 ${!isOpen ? textPrimary : ""}`}>
+                        <span className="text-[12px]">{isOpen ? "▼" : "▶"}</span>
+                        {catLabels[cat] || cat}
+                      </span>
+                      <span className={`text-[12px] font-normal ${textSecondary}`}>{totalItems} itens</span>
+                    </button>
+                    {isOpen && (
+                      <div className={`px-5 pb-4 pt-2 space-y-4 ${dm ? "bg-[#1C1C1E]" : "bg-white"}`}>
+                        {modelos.map(([base, cores]) => (
                           <div key={base}>
-                            <p className={`text-[13px] font-semibold ${textPrimary} mb-1`}>{base}</p>
+                            <p className={`text-[13px] font-bold ${textPrimary} mb-1`}>{base}</p>
                             <div className="pl-3 space-y-0.5">
-                              {cores.map((c, i) => (
-                                <div key={i} className={`flex items-center gap-2 text-[12px] py-0.5`}>
-                                  <span>{c.qnt === 0 ? "🔴" : "🟡"}</span>
-                                  <span className={textPrimary}>{c.qnt} {c.cor || "—"}</span>
-                                  {c.qnt === 0 && <span className="text-[10px] font-bold text-red-500">ESGOTADO</span>}
-                                  {c.jaCaminho && <span className="text-[10px] font-bold text-blue-500">A CAMINHO</span>}
-                                </div>
+                              {cores.sort((a, b) => (b.qnt - a.qnt) || (a.cor || "").localeCompare(b.cor || "")).map((c, i) => (
+                                <p key={i} className={`text-[13px] ${textPrimary}`}>
+                                  {c.qnt === 0 ? "🔴" : "🟡"} {c.qnt === 0 ? "COMPRAR" : `${c.qnt}x`} {c.cor || "—"}
+                                  {c.jaCaminho && <span className="text-[10px] font-bold text-blue-500 ml-2">A CAMINHO</span>}
+                                </p>
                               ))}
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ))
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         );
