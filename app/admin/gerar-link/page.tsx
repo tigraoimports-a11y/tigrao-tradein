@@ -67,21 +67,27 @@ export default function GerarLinkPage() {
       const text = await navigator.clipboard.readText();
       if (!text || text.length < 10) { setPasteMsg("Nada no clipboard."); return; }
 
-      const lines = text.split("\n").map(l => l.trim());
+      // Limpa asteriscos do WhatsApp bold e junta tudo
+      const clean = (s: string) => s.replace(/\*/g, "").trim();
+      const lines = text.split("\n").map(l => clean(l));
       let filled = 0;
 
       for (const line of lines) {
         const low = line.toLowerCase();
-        const extract = (l: string) => l.replace(/^[^:：]+[:：]\s*/, "").trim();
+        // Extrai valor depois do primeiro ":"
+        const extract = (l: string) => {
+          const idx = l.indexOf(":");
+          return idx >= 0 ? l.slice(idx + 1).trim() : l.trim();
+        };
 
-        if (low.includes("produto desejado") || low.match(/^produto\s*[:：]/)) {
+        if (low.includes("produto desejado") || low.match(/^produto\s*:/)) {
           const val = extract(line);
           if (val) { setProduto(val); filled++; }
         } else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
           const val = extract(line);
           if (val) {
             // Parse "18x 582,00 cartão" → forma=Cartao Credito, parcelas=18
-            const parcMatch = val.match(/^(\d+)x/i);
+            const parcMatch = val.match(/(\d+)\s*x/i);
             if (parcMatch) {
               setParcelas(parcMatch[1]);
               filled++;
@@ -93,7 +99,7 @@ export default function GerarLinkPage() {
             else if (lowVal.includes("espécie") || lowVal.includes("especie") || lowVal.includes("dinheiro")) { setForma("Especie"); filled++; }
             else if (lowVal.includes("link")) { setForma("Link de Pagamento"); filled++; }
           }
-        } else if (low.includes("entrega") && !low.includes("forma")) {
+        } else if ((low.includes("entrega") || low.includes("local")) && !low.includes("forma")) {
           const val = extract(line);
           const lowVal = val.toLowerCase();
           if (lowVal.includes("shopping") || lowVal.includes("praia") || lowVal.includes("barra") || lowVal.includes("village") || lowVal.includes("mall")) {
@@ -103,7 +109,6 @@ export default function GerarLinkPage() {
           } else if (lowVal.includes("loja") || lowVal.includes("retirada")) {
             setLocalEntrega("loja"); filled++;
           } else if (val) {
-            // Qualquer texto de entrega que não reconhece = shopping (caso comum)
             setLocalEntrega("shopping"); filled++;
           }
         } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
