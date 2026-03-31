@@ -59,87 +59,66 @@ export async function GET(req: NextRequest) {
     if (errVendas) throw new Error(`Erro ao buscar vendas: ${errVendas.message}`);
     if (errGastos) throw new Error(`Erro ao buscar gastos: ${errGastos.message}`);
 
-    // Montar rows de vendas
-    let vendasRows: Record<string, unknown>[];
+    // Montar rows de vendas (formato completo para dia e mês)
+    const vendasRows = (vendas ?? []).map(v => {
+      // Montar info de troca
+      let trocaInfo = "";
+      if (v.troca_produto) {
+        trocaInfo = v.troca_produto;
+        if (v.troca_cor) trocaInfo += ` ${v.troca_cor}`;
+        if (v.troca_bateria) trocaInfo += ` | Bat: ${v.troca_bateria}%`;
+        if (v.troca_obs) trocaInfo += ` | ${v.troca_obs}`;
+      }
+      let trocaInfo2 = "";
+      if (v.troca_produto2) {
+        trocaInfo2 = v.troca_produto2;
+        if (v.troca_cor2) trocaInfo2 += ` ${v.troca_cor2}`;
+        if (v.troca_bateria2) trocaInfo2 += ` | Bat: ${v.troca_bateria2}%`;
+        if (v.troca_obs2) trocaInfo2 += ` | ${v.troca_obs2}`;
+      }
 
-    if (isDaily) {
-      // Exportação diária: todos os campos detalhados
-      vendasRows = (vendas ?? []).map(v => {
-        // Montar info de troca
-        let trocaInfo = "";
-        if (v.troca_produto) {
-          trocaInfo = v.troca_produto;
-          if (v.troca_cor) trocaInfo += ` ${v.troca_cor}`;
-          if (v.troca_bateria) trocaInfo += ` | Bat: ${v.troca_bateria}%`;
-          if (v.troca_obs) trocaInfo += ` | ${v.troca_obs}`;
-        }
-        let trocaInfo2 = "";
-        if (v.troca_produto2) {
-          trocaInfo2 = v.troca_produto2;
-          if (v.troca_cor2) trocaInfo2 += ` ${v.troca_cor2}`;
-          if (v.troca_bateria2) trocaInfo2 += ` | Bat: ${v.troca_bateria2}%`;
-          if (v.troca_obs2) trocaInfo2 += ` | ${v.troca_obs2}`;
-        }
+      // Pagamento alternativo
+      let pagAlt = "";
+      if (v.banco_alt) {
+        pagAlt = formatBanco(v.banco_alt);
+        if (v.parc_alt) pagAlt += ` ${v.parc_alt}x`;
+        if (v.band_alt) pagAlt += ` ${v.band_alt}`;
+      }
 
-        // Pagamento alternativo
-        let pagAlt = "";
-        if (v.banco_alt) {
-          pagAlt = formatBanco(v.banco_alt);
-          if (v.parc_alt) pagAlt += ` ${v.parc_alt}x`;
-          if (v.band_alt) pagAlt += ` ${v.band_alt}`;
-        }
-
-        return {
-          Data: formatDateBR(v.data),
-          Cliente: v.cliente || "",
-          CPF: v.cpf || "",
-          "E-mail": v.email || "",
-          Produto: v.produto || "",
-          "Serial/IMEI": v.serial_no || v.imei || "",
-          Tipo: v.tipo || "VENDA",
-          "Preco Venda": num(v.preco_vendido),
-          Custo: num(v.custo),
-          Lucro: num(v.lucro),
-          "Margem%": num(v.margem_pct),
-          "Forma Pgto": formatForma(v.forma, v.qnt_parcelas, v.bandeira),
-          Banco: formatBanco(v.banco),
-          "Entrada PIX": num(v.entrada_pix),
-          "Entrada Especie": num(v.entrada_especie),
-          "Sinal Antecipado": num(v.sinal_antecipado),
-          "Pgto Alternativo": pagAlt,
-          "Valor Pgto Alt": num(v.comp_alt),
-          "Troca 1": trocaInfo,
-          "Valor Troca 1": num(v.produto_na_troca),
-          "Troca 2": trocaInfo2,
-          "Valor Troca 2": num(v.produto_na_troca2),
-          Endereco: v.endereco || "",
-          Bairro: v.bairro || "",
-          Cidade: v.cidade || "",
-          UF: v.uf || "",
-          CEP: v.cep || "",
-          Local: v.local || "",
-          Origem: v.origem || "",
-          Status: v.status_pagamento || "FINALIZADO",
-          Obs: v.notas || "",
-          "Grupo ID": v.grupo_id || "",
-        };
-      });
-    } else {
-      // Exportação mensal: formato resumido (original)
-      vendasRows = (vendas ?? []).map(v => ({
+      return {
         Data: formatDateBR(v.data),
         Cliente: v.cliente || "",
+        CPF: v.cpf || "",
+        "E-mail": v.email || "",
         Produto: v.produto || "",
+        "Serial/IMEI": v.serial_no || v.imei || "",
+        Tipo: v.tipo || "VENDA",
         "Preco Venda": num(v.preco_vendido),
         Custo: num(v.custo),
         Lucro: num(v.lucro),
         "Margem%": num(v.margem_pct),
         "Forma Pgto": formatForma(v.forma, v.qnt_parcelas, v.bandeira),
         Banco: formatBanco(v.banco),
+        "Entrada PIX": num(v.entrada_pix),
+        "Entrada Especie": num(v.entrada_especie),
+        "Sinal Antecipado": num(v.sinal_antecipado),
+        "Pgto Alternativo": pagAlt,
+        "Valor Pgto Alt": num(v.comp_alt),
+        "Troca 1": trocaInfo,
+        "Valor Troca 1": num(v.produto_na_troca),
+        "Troca 2": trocaInfo2,
+        "Valor Troca 2": num(v.produto_na_troca2),
+        Endereco: v.endereco || "",
+        Bairro: v.bairro || "",
+        CEP: v.cep || "",
+        Cidade: v.cidade || "",
+        UF: v.uf || "",
+        Local: v.local || "",
         Origem: v.origem || "",
         Status: v.status_pagamento || "FINALIZADO",
-      }));
-    }
+        Obs: v.notas || "",
+      };
+    });
 
     const gastosRows = (gastos ?? []).map(g => ({
       Data: formatDateBR(g.data),
@@ -194,11 +173,7 @@ export async function GET(req: NextRequest) {
 
     // Sheet 1: Vendas
     const wsVendas = XLSX.utils.json_to_sheet(vendasRows);
-    if (isDaily) {
-      setColumnWidths(wsVendas, [12, 25, 15, 25, 35, 18, 12, 15, 15, 12, 10, 20, 15, 12, 12, 12, 18, 12, 35, 12, 35, 12, 30, 20, 15, 5, 10, 12, 15, 12, 12, 25, 12]);
-    } else {
-      setColumnWidths(wsVendas, [12, 25, 35, 15, 15, 15, 10, 20, 15, 15, 15]);
-    }
+    setColumnWidths(wsVendas, [12, 25, 15, 25, 35, 18, 12, 15, 15, 12, 10, 20, 15, 12, 12, 12, 18, 12, 35, 12, 35, 12, 30, 20, 10, 15, 5, 12, 15, 12, 25]);
     XLSX.utils.book_append_sheet(wb, wsVendas, "Vendas");
 
     // Sheet 2: Gastos
