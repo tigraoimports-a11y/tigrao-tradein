@@ -153,42 +153,46 @@ function getModeloBase(produto: string, categoria: string): string {
   const p = produto.toUpperCase().trim();
   const baseCat = getBaseCat(categoria);
 
-  if (baseCat === "APPLE_WATCH") {
-    if (p.includes("ULTRA")) return "Apple Watch Ultra";
-    if (p.includes("SE")) return "Apple Watch SE";
-    if (p.includes("S11") || p.includes("SERIES 11")) return "Apple Watch Series 11";
-    if (p.includes("S10") || p.includes("SERIES 10")) return "Apple Watch Series 10";
-    return "Apple Watch";
-  }
+  // Helpers
+  const getMem = () => { const m = p.match(/(\d+)\s*(GB|TB)/i); return m ? ` ${m[1]}${m[2].toUpperCase()}` : ""; };
+  const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
+
   if (baseCat === "IPHONES") {
-    const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS)?/i);
-    if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}`;
+    const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
+    if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}${getMem()}`;
     return produto;
   }
   if (baseCat === "IPADS") {
-    // Extrair memória (128GB, 256GB, 512GB, 1TB)
-    const memMatch = p.match(/(\d+\s*(?:GB|TB))/i);
-    const mem = memMatch ? ` ${memMatch[1]}` : "";
-    // Extrair tamanho (11", 13")
-    const sizeMatch = p.match(/(\d{2})[""]/);
-    const size = sizeMatch ? ` ${sizeMatch[1]}"` : "";
+    const mem = getMem();
+    const size = getSize();
     if (p.includes("MINI")) return `iPad Mini${mem}`;
     if (p.includes("AIR")) return `iPad Air${size}${mem}`;
     if (p.includes("PRO")) return `iPad Pro${size}${mem}`;
     if (p.includes("A16")) return `iPad A16${mem}`;
     return `iPad${mem}`;
   }
-  if (baseCat === "MAC_MINI") {
-    return "Mac Mini";
-  }
   if (baseCat === "MACBOOK") {
-    if (p.includes("NEO")) return "MacBook Neo 13\"";
-    if (p.includes("AIR") && (p.includes("15") || p.includes("15\""))) return "MacBook Air 15\"";
-    if (p.includes("AIR")) return "MacBook Air 13\"";
-    if (p.includes("PRO") && (p.includes("16") || p.includes("16\""))) return "MacBook Pro 16\"";
-    if (p.includes("PRO") && (p.includes("14") || p.includes("14\""))) return "MacBook Pro 14\"";
-    if (p.includes("PRO")) return "MacBook Pro";
-    return "MacBook";
+    const mem = getMem();
+    const size = getSize();
+    if (p.includes("NEO")) return `MacBook Neo${size}${mem}`;
+    if (p.includes("AIR")) return `MacBook Air${size}${mem}`;
+    if (p.includes("PRO")) return `MacBook Pro${size}${mem}`;
+    return `MacBook${mem}`;
+  }
+  if (baseCat === "MAC_MINI") {
+    const mem = getMem();
+    if (p.includes("PRO")) return `Mac Mini Pro${mem}`;
+    return `Mac Mini${mem}`;
+  }
+  if (baseCat === "APPLE_WATCH") {
+    // Watch não tem memória relevante, agrupar por modelo + tamanho
+    const sizeW = p.match(/(\d{2})\s*MM/i);
+    const sz = sizeW ? ` ${sizeW[1]}mm` : "";
+    if (p.includes("ULTRA")) return `Apple Watch Ultra${sz}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}`;
+    if (p.includes("S11") || p.includes("SERIES 11")) return `Apple Watch Series 11${sz}`;
+    if (p.includes("S10") || p.includes("SERIES 10")) return `Apple Watch Series 10${sz}`;
+    return `Apple Watch${sz}`;
   }
   if (baseCat === "AIRPODS") {
     if (p.includes("PRO 3")) return "AirPods Pro 3";
