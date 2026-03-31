@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     // Fetch vendas e gastos em paralelo
     const vendasQuery = supabase
       .from("vendas")
-      .select("data, cliente, cpf, email, produto, preco_vendido, custo, lucro, margem_pct, forma, banco, origem, status_pagamento, tipo, qnt_parcelas, bandeira, local, serial_no, imei, produto_na_troca, produto_na_troca2, troca_produto, troca_cor, troca_bateria, troca_obs, troca_produto2, troca_cor2, troca_bateria2, troca_obs2, entrada_pix, entrada_especie, sinal_antecipado, banco_alt, parc_alt, band_alt, comp_alt, endereco, bairro, cidade, uf, cep, vendedor, notas, grupo_id")
+      .select("data, cliente, cpf, email, produto, preco_vendido, custo, lucro, margem_pct, forma, banco, origem, status_pagamento, tipo, qnt_parcelas, bandeira, local, serial_no, imei, produto_na_troca, produto_na_troca2, troca_produto, troca_cor, troca_bateria, troca_obs, troca_produto2, troca_cor2, troca_bateria2, troca_obs2, entrada_pix, entrada_especie, sinal_antecipado, banco_alt, parc_alt, band_alt, comp_alt, endereco, bairro, cidade, uf, cep, notas, grupo_id")
       .gte("data", dataInicio)
       .lte("data", dataFim)
       .order("data", { ascending: true });
@@ -119,7 +119,6 @@ export async function GET(req: NextRequest) {
           CEP: v.cep || "",
           Local: v.local || "",
           Origem: v.origem || "",
-          Vendedor: v.vendedor || "",
           Status: v.status_pagamento || "FINALIZADO",
           Obs: v.notas || "",
           "Grupo ID": v.grupo_id || "",
