@@ -205,18 +205,21 @@ export default function EntregasPage() {
 
     const localEntrega = form.local_entrega ? `\n🏠 *Local:* ${form.local_entrega}` : "";
 
+    const tipoLabel = form.tipo === "UPGRADE" ? "UPGRADE (Troca)" : form.tipo || "Compra";
     const lines = [
-      `🛵 *ENTREGA ${form.bairro || "—"}* 🛵`,
-      "",
-      `⏰ *Horário:* ${form.horario || "—"}`,
-      `📍 *Local:* ${form.endereco || "—"}${localEntrega}`,
-      `🍎 *Produto:* ${produtoText}`,
-      `‼️ *Tipo:* ${form.tipo || "—"}${form.detalhes_upgrade ? ` — ${form.detalhes_upgrade}` : ""}`,
-      `💰 *Pagamento:* ${pagText}${pagAlt}`,
-      `🧑 *Cliente:* ${form.cliente || "—"}`,
-      `📞 *Contato:* ${form.telefone || "—"}`,
-      form.observacao ? `📝 *Observação:* ${form.observacao}` : "",
-      `💼 *Vendedor:* ${form.vendedor || "—"}`,
+      `🛵 *ENTREGA ${(form.bairro || "—").toUpperCase()}* 🛵`,
+      `🛵`,
+      `⏰ *HORÁRIO:* ${form.horario || "—"}`,
+      `📍 *LOCAL:* ${form.endereco || "—"} - ${form.bairro || ""}`,
+      `🍎 *PRODUTO:* ${produtoText}`,
+      `‼️ *TIPO:* ${tipoLabel}`,
+      ...(form.tipo === "UPGRADE" && form.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${form.detalhes_upgrade}`] : []),
+      `💵 *PAGAMENTO:* ${pagText}${pagAlt}`,
+      ...(form.local_entrega === "RESIDÊNCIA" ? [`R$${form.valor || "—"}`, `⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
+      `🧑 *CLIENTE:* ${form.cliente || "—"}`,
+      `📞 *CONTATO:* ${form.telefone || "—"}`,
+      form.observacao ? `OBS: ${form.observacao}` : "",
+      `💼 Vendedor: ${form.vendedor || "—"}`,
     ].filter(Boolean);
     return lines.join("\n");
   };
@@ -776,18 +779,20 @@ export default function EntregasPage() {
                   <button
                     onClick={() => {
                       const regiao = e.regiao || e.bairro || "";
+                      const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
+                      const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
                       const msg = [
                         `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
-                        "",
+                        `🛵`,
                         `⏰ *HORÁRIO:* ${e.horario || "A combinar"}`,
-                        `📍 *LOCAL:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
+                        `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
-                        `‼️ *TIPO:* ${e.tipo || "VENDA"}`,
+                        `‼️ *TIPO:* ${tipoLabel}`,
+                        ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
                         `💵 *PAGAMENTO:* ${e.forma_pagamento || ""} R$${Number(e.valor || 0).toLocaleString("pt-BR")}`,
-                        `👤 *CLIENTE:* ${e.cliente || ""}`,
+                        `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
                         e.observacao ? `OBS: ${e.observacao}` : "",
-                        "",
                         `💼 Vendedor: ${e.vendedor || ""}`,
                         "________________________________",
                       ].filter(Boolean).join("\n");
