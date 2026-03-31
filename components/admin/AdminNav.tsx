@@ -196,7 +196,7 @@ export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
       {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden print:hidden fixed bottom-4 left-4 z-50 w-12 h-12 rounded-full bg-[#E8740E] text-white shadow-lg flex items-center justify-center text-xl hover:bg-[#D06A0D] transition-colors"
+        className="lg:hidden print:hidden fixed top-3 left-3 z-50 w-11 h-11 rounded-full bg-[#E8740E] text-white shadow-lg flex items-center justify-center text-lg hover:bg-[#D06A0D] transition-colors"
       >
         {mobileOpen ? "\u2715" : "\u2630"}
       </button>

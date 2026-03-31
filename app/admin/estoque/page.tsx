@@ -1415,7 +1415,7 @@ export default function EstoquePage() {
       {/* Tabs — Segmented control Apple style */}
       {tab !== "etiquetas" && (
       <div className="space-y-3">
-        <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+        <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
             { key: "seminovos", label: "Seminovos", count: seminovos.length },

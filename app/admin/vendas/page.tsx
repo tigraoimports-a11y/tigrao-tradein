@@ -1463,7 +1463,7 @@ export default function VendasPage() {
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
           {/* Row 1: Data */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
           </div>
 
@@ -1549,7 +1549,7 @@ export default function VendasPage() {
               )}
 
               {/* Local + Origem + Tipo */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div><p className={labelCls}>Local</p><select value={form.local} onChange={(e) => set("local", e.target.value)} className={selectCls}>
                   <option value="">—</option><option>ENTREGA</option><option>RETIRADA</option><option>CORREIO</option><option>ATACADO</option>
                 </select></div>
