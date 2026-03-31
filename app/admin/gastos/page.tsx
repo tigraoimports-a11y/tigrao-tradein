@@ -206,12 +206,10 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                       {p.produto}{p.cor ? ` — ${p.cor}` : ""}{p.observacao ? ` · ${p.observacao.split(" ")[0]}${p.observacao.includes("(") ? " " + p.observacao.match(/\([^)]+\)/)?.[0] : ""}` : ""}
                     </span>
                   </div>
-                  {(p.serial_no || p.imei) && (
-                    <div className={`mt-1 flex items-center gap-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                      {p.serial_no && <span className="font-mono text-purple-500">SN: {p.serial_no}</span>}
-                      {p.imei && <span className="font-mono text-blue-500">IMEI: {p.imei}</span>}
-                    </div>
-                  )}
+                  <div className={`mt-1 flex items-center gap-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                    {p.serial_no ? <span className="font-mono text-purple-500">SN: {p.serial_no}</span> : <span className="font-mono opacity-50">S/N</span>}
+                    {p.imei && <span className="font-mono text-blue-500">IMEI: {p.imei}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>x{p.qnt}</span>
