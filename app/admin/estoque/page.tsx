@@ -212,8 +212,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -1420,6 +1420,7 @@ export default function EstoquePage() {
             { key: "seminovos", label: "Seminovos", count: seminovos.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
+            { key: "reposicao", label: "Reposição", count: esgotados.length + acabando.length },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`px-3.5 py-2 rounded-lg text-[12px] font-semibold transition-all ${
@@ -1524,7 +1525,88 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {tab === "novo" ? (
+      {/* ===== ABA REPOSIÇÃO ===== */}
+      {tab === "reposicao" ? (() => {
+        const reposicaoItems = novos.filter(p => p.qnt <= 1);
+        const stripOrigemRepo = (nome: string) => nome
+          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+          .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
+          .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
+          .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
+          .replace(/\s{2,}/g, " ").trim();
+        // Agrupar por categoria
+        const repoByCat: Record<string, string[]> = {};
+        for (const p of reposicaoItems) {
+          const cat = p.categoria || "OUTROS";
+          const nome = stripOrigemRepo(p.produto);
+          if (!repoByCat[cat]) repoByCat[cat] = [];
+          if (!repoByCat[cat].includes(nome)) repoByCat[cat].push(nome);
+        }
+        // Ordenar nomes dentro de cada categoria
+        for (const cat of Object.keys(repoByCat)) repoByCat[cat].sort();
+        const catOrder = ["IPHONE", "IPAD", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
+        const catLabels: Record<string, string> = { IPHONE: "IPHONES", IPAD: "IPADS", MACBOOK: "MACBOOKS", MAC_MINI: "MAC MINI", APPLE_WATCH: "APPLE WATCH", AIRPODS: "AIRPODS", ACESSORIOS: "ACESSÓRIOS" };
+        const sortedCats = Object.keys(repoByCat).sort((a, b) => {
+          const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+        return (
+          <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-6`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className={`text-[18px] font-bold ${textPrimary}`}>Lista de Produtos para Reposição</h2>
+                <p className={`text-[13px] mt-1 ${textSecondary}`}>Produtos com estoque zerado ou apenas 1 unidade</p>
+              </div>
+              <button onClick={() => {
+                const text = sortedCats.map(cat => {
+                  const label = catLabels[cat] || cat;
+                  const items = repoByCat[cat];
+                  return `*${label}*\n${items.map(n => `  - ${n}`).join("\n")}`;
+                }).join("\n\n");
+                navigator.clipboard.writeText(`*LISTA DE PRODUTOS PARA REPOSIÇÃO*\n\n${text}`);
+                setMsg("Lista copiada!");
+              }} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
+                📋 Copiar Lista
+              </button>
+            </div>
+            {sortedCats.length === 0 ? (
+              <p className={`text-sm ${textSecondary} text-center py-8`}>Nenhum produto em falta no momento!</p>
+            ) : (
+              sortedCats.map(cat => {
+                const items = repoByCat[cat];
+                return (
+                  <div key={cat}>
+                    <h3 className={`text-[15px] font-bold ${textPrimary} mb-2 pb-1 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                      {catLabels[cat] || cat}
+                    </h3>
+                    <div className="space-y-1 pl-2">
+                      {items.map(nome => {
+                        const item = reposicaoItems.find(p => stripOrigemRepo(p.produto) === nome);
+                        const isZero = item?.qnt === 0;
+                        const jaCaminho = produtosACaminho.has(nome.toUpperCase());
+                        return (
+                          <div key={nome} className={`flex items-center justify-between py-1.5 px-2 rounded-lg ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]"}`}>
+                            <span className={`text-[13px] ${textPrimary}`}>
+                              {isZero ? "🔴" : "🟡"} {nome}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {isZero && <span className="text-[10px] font-bold text-red-500">ESGOTADO</span>}
+                              {!isZero && <span className="text-[10px] font-bold text-yellow-500">1 UN.</span>}
+                              {jaCaminho && <span className="text-[10px] font-bold text-blue-500">A CAMINHO</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      })()
+
+      : tab === "novo" ? (
         /* FORMULÁRIO */
         <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 shadow-sm space-y-8`}>
           <div>
