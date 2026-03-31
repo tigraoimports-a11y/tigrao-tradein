@@ -9,9 +9,12 @@ export default function GerarLinkPage() {
   const [produto, setProduto] = useState("");
   const [preco, setPreco] = useState("");
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
-  const [whatsapp, setWhatsapp] = useState("");
+  const [forma, setForma] = useState("");
+  const [parcelas, setParcelas] = useState("");
+  const [localEntrega, setLocalEntrega] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const [pasteMsg, setPasteMsg] = useState("");
 
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -21,17 +24,21 @@ export default function GerarLinkPage() {
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
 
-  function gerarLink() {
-    if (!produto || !preco || !whatsapp) return;
+  // WhatsApp fixo da Bianca — ela recebe todos os formulários
+  const WHATSAPP_BIANCA = "5521972461357";
 
-    const cleanWhatsapp = whatsapp.replace(/\D/g, "");
+  function gerarLink() {
+    if (!produto) return;
+
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const params = new URLSearchParams({
-      produto,
-      preco: rawPreco,
-      vendedor: vendedorNome,
-      whatsapp: cleanWhatsapp,
-    });
+    const params = new URLSearchParams();
+    params.set("produto", produto);
+    if (rawPreco && rawPreco !== "0") params.set("preco", rawPreco);
+    params.set("vendedor", vendedorNome || "");
+    params.set("whatsapp", WHATSAPP_BIANCA);
+    if (forma) params.set("forma", forma);
+    if (parcelas) params.set("parcelas", parcelas);
+    if (localEntrega) params.set("local", localEntrega);
 
     const link = `${baseUrl}/compra?${params.toString()}`;
     setGeneratedLink(link);
@@ -44,7 +51,6 @@ export default function GerarLinkPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
       const ta = document.createElement("textarea");
       ta.value = generatedLink;
       document.body.appendChild(ta);
@@ -56,64 +62,169 @@ export default function GerarLinkPage() {
     }
   }
 
+  async function colarResumo() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || text.length < 10) { setPasteMsg("Nada no clipboard."); return; }
+
+      const lines = text.split("\n").map(l => l.trim());
+      let filled = 0;
+
+      for (const line of lines) {
+        const low = line.toLowerCase();
+        const extract = (l: string) => l.replace(/^[^:：]+[:：]\s*/, "").trim();
+
+        if (low.includes("produto desejado") || low.match(/^produto\s*[:：]/)) {
+          const val = extract(line);
+          if (val) { setProduto(val); filled++; }
+        } else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
+          const val = extract(line);
+          if (val) {
+            // Parse "18x 582,00 cartão" → forma=Cartao Credito, parcelas=18
+            const parcMatch = val.match(/^(\d+)x/i);
+            if (parcMatch) {
+              setParcelas(parcMatch[1]);
+              filled++;
+            }
+            const lowVal = val.toLowerCase();
+            if (lowVal.includes("pix")) { setForma("Pix"); filled++; }
+            else if (lowVal.includes("cart") || lowVal.includes("credito") || lowVal.includes("crédito") || parcMatch) { setForma("Cartao Credito"); filled++; }
+            else if (lowVal.includes("debito") || lowVal.includes("débito")) { setForma("Cartao Debito"); filled++; }
+            else if (lowVal.includes("espécie") || lowVal.includes("especie") || lowVal.includes("dinheiro")) { setForma("Especie"); filled++; }
+            else if (lowVal.includes("link")) { setForma("Link de Pagamento"); filled++; }
+          }
+        } else if (low.includes("entrega") && !low.includes("forma")) {
+          const val = extract(line);
+          const lowVal = val.toLowerCase();
+          if (lowVal.includes("shopping") || lowVal.includes("praia") || lowVal.includes("barra") || lowVal.includes("village") || lowVal.includes("mall")) {
+            setLocalEntrega("shopping"); filled++;
+          } else if (lowVal.includes("resid") || lowVal.includes("casa") || lowVal.includes("apartamento") || lowVal.includes("apt")) {
+            setLocalEntrega("residencia"); filled++;
+          } else if (lowVal.includes("loja") || lowVal.includes("retirada")) {
+            setLocalEntrega("loja"); filled++;
+          } else if (val) {
+            // Qualquer texto de entrega que não reconhece = shopping (caso comum)
+            setLocalEntrega("shopping"); filled++;
+          }
+        } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
+          const m = line.match(/R?\$?\s*([\d.,]+)/);
+          if (m) {
+            const val = m[1].replace(/\./g, "");
+            setPreco(formatPreco(val)); filled++;
+          }
+        }
+      }
+
+      if (filled > 0) {
+        setPasteMsg(`Resumo colado! ${filled} campo(s) preenchido(s).`);
+      } else {
+        setPasteMsg("Nenhum campo reconhecido no texto.");
+      }
+      setTimeout(() => setPasteMsg(""), 3000);
+    } catch {
+      setPasteMsg("Erro ao ler clipboard. Permita o acesso.");
+      setTimeout(() => setPasteMsg(""), 3000);
+    }
+  }
+
+  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
+  const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
+
   return (
     <div className="max-w-lg mx-auto space-y-4">
       <h1 className="text-xl font-bold text-[#1D1D1F]">Gerar Link de Compra</h1>
       <p className="text-sm text-[#86868B]">
-        Gere um link para enviar ao cliente pelo WhatsApp. O cliente preenche os dados e envia de volta automaticamente.
+        Gere um link pre-preenchido para enviar ao cliente. Ele completa os dados pessoais e envia direto pro WhatsApp da Bianca.
       </p>
 
       <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
+        {/* Botão colar resumo */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-[#1D1D1F]">Dados do pedido</p>
+          <button
+            onClick={colarResumo}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+          >
+            📋 Colar resumo Instagram
+          </button>
+        </div>
+
+        {pasteMsg && (
+          <div className={`px-3 py-2 rounded-lg text-xs font-medium ${pasteMsg.includes("Erro") || pasteMsg.includes("Nada") || pasteMsg.includes("Nenhum") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+            {pasteMsg}
+          </div>
+        )}
+
         <div>
-          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Produto *</label>
+          <label className={labelCls}>Produto *</label>
           <input
             type="text"
             value={produto}
             onChange={(e) => setProduto(e.target.value)}
             placeholder="Ex: iPhone 17 Pro Max 256GB Silver"
-            className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
+            className={inputCls}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Preco (R$) *</label>
+          <label className={labelCls}>Preco (R$)</label>
           <input
             type="text"
             inputMode="numeric"
             value={preco}
             onChange={(e) => setPreco(formatPreco(e.target.value))}
             placeholder="Ex: 8.797"
-            className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
+            className={inputCls}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Nome do Vendedor</label>
-          <input
-            type="text"
-            value={vendedorNome}
-            onChange={(e) => setVendedorNome(e.target.value)}
-            placeholder="Seu nome"
-            className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Forma de Pagamento</label>
+            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!e.target.value.includes("Cartao")) setParcelas(""); }} className={inputCls}>
+              <option value="">-- Opcional --</option>
+              <option value="Pix">Pix</option>
+              <option value="Cartao Credito">Cartao Credito</option>
+              <option value="Cartao Debito">Cartao Debito</option>
+              <option value="Especie">Especie</option>
+              <option value="Link de Pagamento">Link de Pagamento</option>
+            </select>
+          </div>
+          {(forma === "Cartao Credito" || forma === "Cartao Debito") && (
+            <div>
+              <label className={labelCls}>Parcelas</label>
+              <select value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={inputCls}>
+                <option value="">--</option>
+                {Array.from({ length: 21 }, (_, i) => i + 1).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">WhatsApp (com DDD) *</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={whatsapp}
-            onChange={(e) => setWhatsapp(e.target.value.replace(/\D/g, "").slice(0, 13))}
-            placeholder="5521999999999"
-            className="w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
-          />
-          <p className="text-xs text-[#86868B] mt-1">Formato: 55 + DDD + numero (ex: 5521999999999)</p>
+          <label className={labelCls}>Local de Entrega</label>
+          <select value={localEntrega} onChange={(e) => setLocalEntrega(e.target.value)} className={inputCls}>
+            <option value="">-- Opcional --</option>
+            <option value="loja">Retirada em Loja</option>
+            <option value="shopping">Entrega em Shopping</option>
+            <option value="residencia">Entrega em Residencia</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={labelCls}>Vendedor</label>
+          <select value={vendedorNome} onChange={(e) => setVendedorNome(e.target.value)} className={inputCls}>
+            <option value="">-- Selecionar --</option>
+            <option value="Andre">Andre</option>
+            <option value="Bianca">Bianca</option>
+            <option value="Nicolas">Nicolas</option>
+            <option value="Nicole">Nicole</option>
+          </select>
         </div>
 
         <button
           onClick={gerarLink}
-          disabled={!produto || !preco || !whatsapp}
+          disabled={!produto}
           className="w-full py-3 bg-[#E8740E] text-white font-bold rounded-xl hover:bg-[#D06A0D] active:bg-[#B85E0B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Gerar Link
@@ -123,7 +234,7 @@ export default function GerarLinkPage() {
       {generatedLink && (
         <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-3">
           <p className="text-sm font-semibold text-[#1D1D1F]">Link gerado:</p>
-          <div className="bg-[#F5F5F7] rounded-lg p-3 break-all text-sm text-[#1D1D1F] font-mono border border-[#D2D2D7]">
+          <div className="bg-[#F5F5F7] rounded-lg p-3 break-all text-xs text-[#1D1D1F] font-mono border border-[#D2D2D7]">
             {generatedLink}
           </div>
           <div className="flex gap-2">
@@ -149,6 +260,9 @@ export default function GerarLinkPage() {
               Enviar
             </a>
           </div>
+          <p className="text-[10px] text-[#86868B] text-center">
+            O formulario vai direcionar o cliente pro WhatsApp da Bianca
+          </p>
         </div>
       )}
     </div>

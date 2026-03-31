@@ -66,6 +66,9 @@ function CompraForm() {
   const parcelasParam = searchParams.get("parcelas") || "";
   const entradaPixParam = searchParams.get("entrada_pix") || "";
 
+  // Local de entrega (vindo do gerador de link)
+  const localParam = searchParams.get("local") || "";
+
   // Products from API
   const [allProducts, setAllProducts] = useState<ProdutoAPI[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, { produto: string; cor: string | null; preco: number | null }[]>>({});
@@ -111,8 +114,8 @@ function CompraForm() {
   const [complemento, setComplemento] = useState("");
   const [bairro, setBairro] = useState("");
   const [horario, setHorario] = useState("");
-  const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
-  const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
+  const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
+  const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
   const [shopping, setShopping] = useState("");
   const [formaPagamento, setFormaPagamento] = useState(formaParam);
   const [parcelas, setParcelas] = useState(parcelasParam);
