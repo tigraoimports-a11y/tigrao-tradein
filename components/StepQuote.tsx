@@ -247,6 +247,8 @@ export default function StepQuote(p: StepQuoteProps) {
       {(() => {
         const condLines = getAnyConditionLines(deviceType, condition);
         const condStr = condLines.slice(0, 3).join(", ");
+        // Determinar forma de pagamento pra pré-preencher
+        const formaPagParam = parc === "pix" ? "PIX" : parc && entNum > 0 ? "PIX + Cartao" : parc ? "Cartao de Credito" : "";
         const params = new URLSearchParams({
           produto: `${newModel} ${newStorage}`,
           preco: String(Math.round(newPrice)),
@@ -258,6 +260,9 @@ export default function StepQuote(p: StepQuoteProps) {
           ...(clienteNome ? { nome: clienteNome } : {}),
           ...(clienteWhatsApp ? { whatsapp_cliente: clienteWhatsApp } : {}),
           ...(clienteInstagram ? { instagram: clienteInstagram } : {}),
+          ...(formaPagParam ? { forma: formaPagParam } : {}),
+          ...(parc && parc !== "pix" ? { parcelas: parc } : {}),
+          ...(entNum > 0 ? { entrada_pix: String(Math.round(entNum)) } : {}),
         });
         const compraUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/compra?${params.toString()}`;
         return (

@@ -61,6 +61,11 @@ function CompraForm() {
   const whatsappClienteParam = searchParams.get("whatsapp_cliente") || "";
   const instagramParam = searchParams.get("instagram") || "";
 
+  // Payment params (vindos do StepQuote)
+  const formaParam = searchParams.get("forma") || "";
+  const parcelasParam = searchParams.get("parcelas") || "";
+  const entradaPixParam = searchParams.get("entrada_pix") || "";
+
   // Products from API
   const [allProducts, setAllProducts] = useState<ProdutoAPI[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, { produto: string; cor: string | null; preco: number | null }[]>>({});
@@ -106,8 +111,8 @@ function CompraForm() {
   const [local, setLocal] = useState<"Loja" | "Entrega">("Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">("Residencia");
   const [shopping, setShopping] = useState("");
-  const [formaPagamento, setFormaPagamento] = useState("");
-  const [parcelas, setParcelas] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState(formaParam);
+  const [parcelas, setParcelas] = useState(parcelasParam);
   const [origem, setOrigem] = useState("");
   const [instagram, setInstagram] = useState(instagramParam);
   const [cepLoading, setCepLoading] = useState(false);
