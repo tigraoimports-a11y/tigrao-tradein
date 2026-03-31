@@ -75,7 +75,7 @@ function CompraForm() {
 
   // WhatsApp pode vir do URL ou ser buscado da config
   const [whatsappConfig, setWhatsappConfig] = useState("");
-  const whatsappFinal = whatsapp || whatsappConfig;
+  const whatsappFinal = whatsappConfig || whatsapp || "5521967442665";
 
   // Fetch products + config
   useEffect(() => {
@@ -527,6 +527,10 @@ function CompraForm() {
                     <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
                     &#x1F3EC; <span className="font-medium">Shopping</span>
                   </label>
+                </div>
+                {/* Info de pagamento por tipo de entrega */}
+                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
+                  {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
                 </div>
                 {tipoEntrega === "Shopping" && (
                   <div>
