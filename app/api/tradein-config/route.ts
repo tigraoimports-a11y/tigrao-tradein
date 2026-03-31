@@ -39,7 +39,13 @@ export async function GET() {
       return NextResponse.json({ data: DEFAULT_CONFIG });
     }
 
-    return NextResponse.json({ data });
+    // Extrair whatsapp config do campo labels (onde salvamos pra evitar dependencia de colunas)
+    const labels = (data.labels && typeof data.labels === "object") ? data.labels as Record<string, unknown> : {};
+    const result = { ...data };
+    if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
+    if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
+
+    return NextResponse.json({ data: result });
   } catch {
     return NextResponse.json({ data: DEFAULT_CONFIG });
   }

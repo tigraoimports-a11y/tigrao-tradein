@@ -15,7 +15,14 @@ export async function GET(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+
+  // Extrair whatsapp config do campo labels
+  const labels = (data?.labels && typeof data.labels === "object") ? data.labels as Record<string, unknown> : {};
+  const result = { ...data };
+  if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
+  if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
+
+  return NextResponse.json({ data: result });
 }
 
 export async function PUT(req: NextRequest) {
@@ -26,10 +33,18 @@ export async function PUT(req: NextRequest) {
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.seminovos !== undefined) updates.seminovos = body.seminovos;
-  if (body.labels !== undefined) updates.labels = body.labels;
   if (body.origens !== undefined) updates.origens = body.origens;
-  if (body.whatsapp_principal !== undefined) updates.whatsapp_principal = body.whatsapp_principal;
-  if (body.whatsapp_vendedores !== undefined) updates.whatsapp_vendedores = body.whatsapp_vendedores;
+
+  // Salvar whatsapp config dentro do campo labels (JSONB) pra não depender de colunas novas
+  if (body.whatsapp_principal !== undefined || body.whatsapp_vendedores !== undefined || body.labels !== undefined) {
+    const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
+    const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
+    const newLabels = { ...currentLabels };
+    if (body.labels !== undefined) Object.assign(newLabels, body.labels);
+    if (body.whatsapp_principal !== undefined) newLabels._whatsapp_principal = body.whatsapp_principal;
+    if (body.whatsapp_vendedores !== undefined) newLabels._whatsapp_vendedores = body.whatsapp_vendedores;
+    updates.labels = newLabels;
+  }
 
   // Get the single config row id
   const { data: existing } = await supabase
