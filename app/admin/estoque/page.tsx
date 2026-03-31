@@ -675,6 +675,19 @@ export default function EstoquePage() {
     const e = { ...editingCusto }; delete e[item.id]; setEditingCusto(e);
   };
 
+  // Editar preço em massa (todas as unidades de um grupo)
+  const [bulkCustoKey, setBulkCustoKey] = useState<string>("");
+  const [bulkCustoVal, setBulkCustoVal] = useState<string>("");
+  const handleBulkCusto = async (items: ProdutoEstoque[]) => {
+    const val = parseFloat(bulkCustoVal.replace(",", "."));
+    if (isNaN(val) || val <= 0) return;
+    const ids = items.map(p => p.id);
+    await Promise.all(ids.map(id => apiPatch(id, { custo_unitario: val })));
+    setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, custo_unitario: val } : p));
+    setBulkCustoKey(""); setBulkCustoVal("");
+    setMsg(`Preco atualizado para ${items.length} unidades: R$ ${val.toLocaleString("pt-BR")}`);
+  };
+
   // Edição genérica de campo inline
   const startEditField = (id: string, field: string, value: string) => {
     setEditingField((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
@@ -2265,7 +2278,33 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
                                   </td>
-                                  <td className="px-4 py-2 text-xs text-white/50">{prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : ""}</td>
+                                  <td className="px-4 py-2 text-xs text-white/50" onClick={e => e.stopPropagation()}>
+                                    {bulkCustoKey === prodNome ? (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[10px] text-white/30">R$</span>
+                                        <input
+                                          type="number"
+                                          value={bulkCustoVal}
+                                          onChange={(e) => setBulkCustoVal(e.target.value)}
+                                          onKeyDown={(e) => { if (e.key === "Enter") handleBulkCusto(prodItems); if (e.key === "Escape") { setBulkCustoKey(""); setBulkCustoVal(""); } }}
+                                          className="w-20 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right bg-[#1A1A1A] text-white"
+                                          placeholder={String(prodItems[0]?.custo_unitario || "")}
+                                          autoFocus
+                                        />
+                                        <button onClick={() => handleBulkCusto(prodItems)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                        <button onClick={() => { setBulkCustoKey(""); setBulkCustoVal(""); }} className="text-[10px] text-red-400">✕</button>
+                                      </div>
+                                    ) : (
+                                      <span
+                                        className={`flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""}`}
+                                        onClick={() => { if (isAdmin) { setBulkCustoKey(prodNome); setBulkCustoVal(String(prodItems[0]?.custo_unitario || "")); } }}
+                                        title={isAdmin ? "Editar preco de todas as unidades" : ""}
+                                      >
+                                        {prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : "—"}
+                                        {isAdmin && <span className="text-[9px] opacity-0 group-hover/card:opacity-50">✏️</span>}
+                                      </span>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
                                 </tr>
