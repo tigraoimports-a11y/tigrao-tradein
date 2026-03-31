@@ -467,15 +467,25 @@ export default function OrcamentoPage() {
                 </div>
               )}
 
-              {/* Botão adicionar mais produto */}
-              <button onClick={() => {
-                if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
-                  setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
-                }
-                setProdSel(""); setCatSel("");
-              }} className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
-                + Adicionar outro produto ao orcamento
-              </button>
+              {/* Botões adicionar mais */}
+              <div className="flex gap-2">
+                <button onClick={() => {
+                  if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
+                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
+                  }
+                  setProdSel(""); setCatSel("");
+                }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
+                  + Outro produto
+                </button>
+                <button onClick={() => {
+                  if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
+                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
+                  }
+                  setProdSel(""); setCatSel("ACESSORIOS");
+                }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
+                  + Acessorios
+                </button>
+              </div>
 
               {/* Troca */}
               <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-blue-50 border border-blue-200"}`}>
