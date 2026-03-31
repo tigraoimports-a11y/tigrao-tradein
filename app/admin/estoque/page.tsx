@@ -89,6 +89,7 @@ interface ProdutoEstoque {
   imei: string | null;
   serial_no: string | null;
   data_entrada: string | null;
+  preco_sugerido: number | null;
 }
 
 interface ImeiSearchResult {
@@ -2607,6 +2608,36 @@ export default function EstoquePage() {
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanco</p><p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
+                {/* Preço sugerido — só para seminovos, editável pelo admin */}
+                {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && isAdmin && (
+                  <div className="mt-3 pt-3 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS} mb-1`}>Preco Sugerido de Venda</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[13px] ${mS}`}>R$</span>
+                      <input
+                        type="text" inputMode="numeric"
+                        defaultValue={p.preco_sugerido ? String(p.preco_sugerido) : ""}
+                        placeholder="Ex: 6500"
+                        onBlur={async (e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          const num = val ? parseInt(val) : null;
+                          if (num !== p.preco_sugerido) {
+                            await apiPatch(p.id, { preco_sugerido: num });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, preco_sugerido: num } : x));
+                            setDetailProduct({ ...p, preco_sugerido: num });
+                            setMsg("Preco sugerido atualizado!");
+                          }
+                        }}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-[14px] font-bold ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-green-400" : "bg-white border-[#D2D2D7] text-green-600"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                    </div>
+                    {p.preco_sugerido && p.custo_unitario ? (
+                      <p className={`text-[11px] mt-1 ${p.preco_sugerido > p.custo_unitario ? "text-green-500" : "text-red-500"}`}>
+                        Margem: {fmt(p.preco_sugerido - p.custo_unitario)} ({((p.preco_sugerido - p.custo_unitario) / p.preco_sugerido * 100).toFixed(1)}%)
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
               {/* Datas + Observação */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>

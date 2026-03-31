@@ -56,6 +56,7 @@ export default function OrcamentoPage() {
     observacao: string | null;
     custo_unitario: number;
     qnt: number;
+    preco_sugerido: number | null;
   }
   const [seminovosEstoque, setSeminovosEstoque] = useState<SeminovoEstoque[]>([]);
   const [semiSel, setSemiSel] = useState<SeminovoEstoque | null>(null);
@@ -384,7 +385,7 @@ export default function OrcamentoPage() {
                 <select value={semiSel?.id || ""} onChange={e => {
                   const item = seminovosFiltrados.find(s => s.id === e.target.value);
                   setSemiSel(item || null);
-                  setSemiPreco("");
+                  setSemiPreco(item?.preco_sugerido ? String(item.preco_sugerido) : "");
                   setSemiObs(item?.observacao || "");
                 }} className={inputCls}>
                   <option value="">— Selecionar seminovo —</option>
@@ -393,7 +394,7 @@ export default function OrcamentoPage() {
                     const details = cleanSemiDetails(item);
                     return (
                       <option key={item.id} value={item.id}>
-                        {nome}{details ? ` (${details})` : ""} — Custo R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}
+                        {nome}{details ? ` (${details})` : ""} — Custo R$ {item.custo_unitario?.toLocaleString("pt-BR") || "—"}{item.preco_sugerido ? ` → Sugerido R$ ${item.preco_sugerido.toLocaleString("pt-BR")}` : ""}
                       </option>
                     );
                   })}
