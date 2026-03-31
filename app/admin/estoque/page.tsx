@@ -1962,7 +1962,7 @@ export default function EstoquePage() {
                 const sourceList = tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : emEstoque;
                 const count = sourceList.filter((p) => p.categoria === cat.key).length;
                 const units = sourceList.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
-                if (count === 0 && tab !== "estoque") return null;
+                if (count === 0) return null;
                 const isEditing = editingCatName === cat.key;
                 return (
                   <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
@@ -2152,7 +2152,7 @@ export default function EstoquePage() {
                                 <tr><td colSpan={10} className="h-2"></td></tr>
                                 {/* Header do produto */}
                                 {(() => {
-                                  const alwaysExpand = isEditableItemTab || tab === "seminovos";
+                                  const alwaysExpand = isEditableItemTab;
                                   const isExpanded = alwaysExpand || expandedProducts.has(prodNome);
                                   const toggleExpand = () => {
                                     if (alwaysExpand) return;
