@@ -211,9 +211,10 @@ export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-[#E8E8ED] z-40 flex flex-col transition-all duration-200 print:hidden ${
+        className={`admin-themed-sidebar fixed top-0 left-0 h-full border-r z-40 flex flex-col transition-all duration-200 print:hidden ${
           collapsed ? "w-[60px]" : "w-[220px]"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+        style={{ background: "var(--at-sidebar, #FFFFFF)", borderColor: "var(--at-sidebar-border, #E8E8ED)" }}
       >
         {/* Logo area */}
         <div className="px-3 py-4 border-b border-[#E8E8ED] flex items-center gap-2">

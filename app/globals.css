@@ -66,3 +66,145 @@ input[type="range"]::-moz-range-thumb {
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* ═══════ Admin Themes ═══════ */
+/* Theme variables applied via class on .admin-themed */
+.admin-themed {
+  --at-bg: #F5F5F7;
+  --at-bg2: #FFFFFF;
+  --at-card: #FFFFFF;
+  --at-card-border: #D2D2D7;
+  --at-card-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --at-text: #1D1D1F;
+  --at-text2: #86868B;
+  --at-text3: #C7C7CC;
+  --at-accent: #E8740E;
+  --at-accent2: #F5A623;
+  --at-sidebar: #FFFFFF;
+  --at-sidebar-border: #E8E8ED;
+  --at-sidebar-text: #6E6E73;
+  --at-sidebar-active: #FFF5EB;
+  --at-input-bg: #F5F5F7;
+  --at-input-border: #D2D2D7;
+  --at-radius: 16px;
+  --at-radius-sm: 12px;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Tema 1: Glassmorphism */
+.theme-glass {
+  --at-bg: #E8E0F0;
+  --at-bg2: rgba(255,255,255,0.5);
+  --at-card: rgba(255,255,255,0.55);
+  --at-card-border: rgba(255,255,255,0.3);
+  --at-card-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --at-sidebar: rgba(255,255,255,0.6);
+  --at-sidebar-border: rgba(255,255,255,0.3);
+  --at-input-bg: rgba(255,255,255,0.4);
+  --at-input-border: rgba(255,255,255,0.5);
+  --at-radius: 20px;
+}
+.theme-glass .admin-themed-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.theme-glass .admin-themed-sidebar {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Tema 2: Minimal flat */
+.theme-minimal {
+  --at-bg: #FAFAFA;
+  --at-bg2: #FFFFFF;
+  --at-card: #FFFFFF;
+  --at-card-border: transparent;
+  --at-card-shadow: none;
+  --at-sidebar: #FAFAFA;
+  --at-sidebar-border: #F0F0F0;
+  --at-text2: #999999;
+  --at-input-bg: #F5F5F5;
+  --at-input-border: #EEEEEE;
+  --at-radius: 8px;
+  --at-radius-sm: 6px;
+}
+
+/* Tema 3: Apple-inspired */
+.theme-apple {
+  --at-bg: #F2F2F7;
+  --at-bg2: #FFFFFF;
+  --at-card: #FFFFFF;
+  --at-card-border: rgba(0,0,0,0.04);
+  --at-card-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
+  --at-accent: #007AFF;
+  --at-accent2: #5AC8FA;
+  --at-sidebar: #F2F2F7;
+  --at-sidebar-border: #E5E5EA;
+  --at-sidebar-active: #E3F0FF;
+  --at-input-bg: #EFEFF4;
+  --at-input-border: #D1D1D6;
+  --at-radius: 14px;
+  --at-radius-sm: 10px;
+}
+
+/* Tema 4: Dark premium */
+.theme-dark-premium {
+  --at-bg: #0C0C0E;
+  --at-bg2: #141416;
+  --at-card: #1C1C1E;
+  --at-card-border: #2C2C2E;
+  --at-card-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --at-text: #F5F5F7;
+  --at-text2: #98989D;
+  --at-text3: #48484A;
+  --at-accent: #D4A853;
+  --at-accent2: #E8C06A;
+  --at-sidebar: #141416;
+  --at-sidebar-border: #2C2C2E;
+  --at-sidebar-text: #8E8E93;
+  --at-sidebar-active: rgba(212,168,83,0.12);
+  --at-input-bg: #2C2C2E;
+  --at-input-border: #3A3A3C;
+  --at-radius: 16px;
+}
+
+/* Tema 5: Compact/Dense */
+.theme-compact {
+  --at-bg: #F0F0F0;
+  --at-bg2: #FFFFFF;
+  --at-card: #FFFFFF;
+  --at-card-border: #E0E0E0;
+  --at-card-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  --at-accent: #2563EB;
+  --at-accent2: #3B82F6;
+  --at-sidebar: #1E293B;
+  --at-sidebar-border: #334155;
+  --at-sidebar-text: #94A3B8;
+  --at-sidebar-active: rgba(37,99,235,0.15);
+  --at-input-bg: #F8FAFC;
+  --at-input-border: #CBD5E1;
+  --at-radius: 8px;
+  --at-radius-sm: 6px;
+}
+.theme-compact {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Dark mode overrides for all themes */
+.admin-dark.admin-themed:not(.theme-dark-premium) {
+  --at-bg: #0A0A0A;
+  --at-bg2: #141414;
+  --at-card: #1C1C1E;
+  --at-card-border: #3A3A3C;
+  --at-card-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --at-text: #F5F5F7;
+  --at-text2: #98989D;
+  --at-text3: #636366;
+  --at-sidebar: #1C1C1E;
+  --at-sidebar-border: #3A3A3C;
+  --at-sidebar-text: #8E8E93;
+  --at-sidebar-active: rgba(232,116,14,0.12);
+  --at-input-bg: #2C2C2E;
+  --at-input-border: #3A3A3C;
+}

@@ -51,6 +51,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [adminTheme, setAdminTheme] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("admin_theme") || "";
+    return "";
+  });
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Cmd+K / Ctrl+K para abrir Super Search
@@ -272,10 +276,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       }),
     }}>
       <div
-        className={`min-h-screen overflow-x-hidden transition-colors duration-300 ${darkMode ? "admin-dark" : ""}`}
+        className={`min-h-screen overflow-x-hidden transition-colors duration-300 admin-themed ${adminTheme} ${darkMode ? "admin-dark" : ""}`}
         style={{
-          background: darkMode ? "#0A0A0A" : "#F5F5F7",
-          color: darkMode ? "#F5F5F5" : "#1D1D1F",
+          background: adminTheme ? "var(--at-bg)" : (darkMode ? "#0A0A0A" : "#F5F5F7"),
+          color: adminTheme ? "var(--at-text)" : (darkMode ? "#F5F5F5" : "#1D1D1F"),
           ...darkStyles,
         }}
       >
@@ -331,6 +335,25 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             >
               {darkMode ? "☀️ Claro" : "🌙 Escuro"}
             </button>
+
+            {/* Theme selector */}
+            <select
+              value={adminTheme}
+              onChange={(e) => { setAdminTheme(e.target.value); localStorage.setItem("admin_theme", e.target.value); }}
+              className="px-1.5 sm:px-2 py-1.5 rounded-xl text-[10px] sm:text-xs border transition-colors hidden sm:block"
+              style={{
+                color: darkMode ? "#98989D" : "#86868B",
+                borderColor: darkMode ? "#2A2A2A" : "#D2D2D7",
+                background: darkMode ? "#1C1C1E" : "#FFFFFF",
+              }}
+            >
+              <option value="">Tema Padrao</option>
+              <option value="theme-glass">Glassmorphism</option>
+              <option value="theme-minimal">Minimal</option>
+              <option value="theme-apple">Apple</option>
+              <option value="theme-dark-premium">Dark Premium</option>
+              <option value="theme-compact">Compact</option>
+            </select>
             <button
               onClick={async () => {
                 const res = await fetch("/api/estoque?action=undo", { headers: { "x-admin-password": password } });
