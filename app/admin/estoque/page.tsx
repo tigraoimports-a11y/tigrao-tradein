@@ -181,15 +181,20 @@ function getModeloBase(produto: string, categoria: string): string {
   if (baseCat === "MACBOOK") {
     const mem = getMem();
     const size = getSize();
-    if (p.includes("NEO")) return `MacBook Neo${size}${mem}`;
-    if (p.includes("AIR")) return `MacBook Air${size}${mem}`;
-    if (p.includes("PRO")) return `MacBook Pro${size}${mem}`;
-    return `MacBook${mem}`;
+    // Extrair chip (M4, M5, M4 Pro, M5 Pro)
+    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
+    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
+    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${mem}`;
+    if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
+    if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
+    if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
+    return `MacBook${chip}${mem}`;
   }
   if (baseCat === "MAC_MINI") {
     const mem = getMem();
-    if (p.includes("PRO")) return `Mac Mini Pro${mem}`;
-    return `Mac Mini${mem}`;
+    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
+    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
+    return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
     // Watch não tem memória relevante, agrupar por modelo + tamanho
