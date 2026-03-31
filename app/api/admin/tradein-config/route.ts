@@ -28,6 +28,8 @@ export async function PUT(req: NextRequest) {
   if (body.seminovos !== undefined) updates.seminovos = body.seminovos;
   if (body.labels !== undefined) updates.labels = body.labels;
   if (body.origens !== undefined) updates.origens = body.origens;
+  if (body.whatsapp_principal !== undefined) updates.whatsapp_principal = body.whatsapp_principal;
+  if (body.whatsapp_vendedores !== undefined) updates.whatsapp_vendedores = body.whatsapp_vendedores;
 
   // Get the single config row id
   const { data: existing } = await supabase

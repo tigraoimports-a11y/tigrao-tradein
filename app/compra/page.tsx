@@ -68,14 +68,20 @@ function CompraForm() {
   const [produtoInput, setProdutoInput] = useState(produtoParam);
   const [precoAuto, setPrecoAuto] = useState(precoParam ? parseInt(precoParam) : 0);
 
-  // Fetch products
+  // WhatsApp pode vir do URL ou ser buscado da config
+  const [whatsappConfig, setWhatsappConfig] = useState("");
+  const whatsappFinal = whatsapp || whatsappConfig;
+
+  // Fetch products + config
   useEffect(() => {
     Promise.all([
       fetch("/api/produtos").then(r => r.json()).catch(() => ({ data: [] })),
       fetch("/api/produtos-disponiveis").then(r => r.json()).catch(() => ({ categorias: {} })),
-    ]).then(([prodRes, catRes]) => {
+      fetch("/api/tradein-config").then(r => r.json()).catch(() => ({ data: null })),
+    ]).then(([prodRes, catRes, cfgRes]) => {
       if (prodRes.data) setAllProducts(prodRes.data);
       if (catRes.categorias) setCatalogo(catRes.categorias);
+      if (cfgRes.data?.whatsapp_principal) setWhatsappConfig(cfgRes.data.whatsapp_principal);
     });
   }, []);
 
@@ -199,17 +205,17 @@ function CompraForm() {
 
     lines.push("", `Horario: ${horario}`, `${localStr}`);
 
-    const url = `https://wa.me/${whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
+    const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
     window.open(url, "_blank");
   }
 
-  if (!whatsapp) {
+  if (!whatsappFinal) {
     return (
       <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl p-6 shadow-sm text-center max-w-sm">
           <p className="text-2xl mb-2">&#x1F42F;</p>
-          <p className="text-[#1D1D1F] font-semibold">Link invalido</p>
-          <p className="text-[#86868B] text-sm mt-1">Este link de compra esta incompleto. Solicite um novo link ao vendedor.</p>
+          <p className="text-[#1D1D1F] font-semibold">Carregando...</p>
+          <p className="text-[#86868B] text-sm mt-1">Aguarde um momento...</p>
         </div>
       </div>
     );

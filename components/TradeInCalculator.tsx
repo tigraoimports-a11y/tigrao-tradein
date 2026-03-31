@@ -19,7 +19,8 @@ interface UsedData {
   modelDiscounts: Record<string, ModelDiscounts>;
 }
 
-const VENDEDOR_WHATSAPP: Record<string, string> = {
+// Fallback hardcoded — será sobrescrito por tradeinConfig.whatsapp_vendedores se existir
+const DEFAULT_VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:    "5521967442665",
   nicolas:  "5521967442665",
   bianca:   "5521972461357",
@@ -94,7 +95,15 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   });
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
-  const [tradeinConfig, setTradeinConfig] = useState<TradeInConfig | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
+  // Mapa dinâmico de WhatsApp por vendedor — usa DB se disponível
+  const VENDEDOR_WHATSAPP = useMemo(() => {
+    const dbMap = tradeinConfig?.whatsapp_vendedores;
+    return dbMap && Object.keys(dbMap).length > 0 ? { ...DEFAULT_VENDEDOR_WHATSAPP, ...dbMap } : DEFAULT_VENDEDOR_WHATSAPP;
+  }, [tradeinConfig]);
+  // WhatsApp principal — usa DB se disponível
+  const whatsappPrincipal: string = tradeinConfig?.whatsapp_principal || config.whatsappNumero;
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -387,7 +396,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 2 && (
-            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig} />
+            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig} />
           )}
 
           {step === 3 && (
@@ -407,7 +416,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
-              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || config.whatsappNumero}
+              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
               validadeHoras={config.validadeHoras} vendedor={vendedor}
               onReset={handleReset} onCotarOutro={handleCotarOutro}
               onGoToStep={handleGoToStep}
