@@ -152,14 +152,15 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b[1].qty - a[1].qty)
       .slice(0, 5);
 
+    const fmtR = (n: number) => `R$ ${Math.round(n).toLocaleString("pt-BR")}`;
     const resumoRows = [
-      { Indicador: "Total de Vendas (qtd)", Valor: totalVendasQty },
-      { Indicador: "Faturamento Total", Valor: totalVendasValor },
-      { Indicador: "Custo Total", Valor: totalCusto },
-      { Indicador: "Lucro Bruto", Valor: totalLucro },
-      { Indicador: "Total Gastos", Valor: totalGastos },
-      { Indicador: "Lucro Liquido (Vendas - Gastos)", Valor: lucroLiquido },
-      { Indicador: "Margem Media (%)", Valor: Math.round(margemMedia * 10) / 10 },
+      { Indicador: "Total de Vendas (qtd)", Valor: String(totalVendasQty) },
+      { Indicador: "Faturamento Total", Valor: fmtR(totalVendasValor) },
+      { Indicador: "Custo Total", Valor: fmtR(totalCusto) },
+      { Indicador: "Lucro Bruto", Valor: fmtR(totalLucro) },
+      { Indicador: "Total Gastos", Valor: fmtR(totalGastos) },
+      { Indicador: "Lucro Liquido (Vendas - Gastos)", Valor: fmtR(lucroLiquido) },
+      { Indicador: "Margem Media (%)", Valor: `${(Math.round(margemMedia * 10) / 10)}%` },
       { Indicador: "", Valor: "" },
       { Indicador: "TOP 5 PRODUTOS VENDIDOS", Valor: "" },
       ...top5.map(([nome, info], i) => ({
@@ -189,7 +190,7 @@ export async function GET(req: NextRequest) {
     XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
 
     // Gerar buffer
-    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx", bookSST: false });
 
     return new NextResponse(buffer, {
       status: 200,
