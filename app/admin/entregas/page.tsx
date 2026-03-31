@@ -304,40 +304,66 @@ export default function EntregasPage() {
                     const low = line.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️*·•]/g, "").trim();
                     if (!low || low.length < 2) continue;
 
-                    // Detect sections
-                    if (low.includes("modelo escolhido") || low.includes("produto:")) { section = "produtos"; continue; }
-                    if (low.includes("trocas inclu") || low.includes("produto na troca")) { section = "trocas"; continue; }
+                    // Detect sections (multi-product format)
+                    if (low.includes("modelo escolhido")) { section = "produtos"; continue; }
+                    if (low.includes("trocas inclu")) { section = "trocas"; continue; }
                     if (low.includes("desconto adicional")) { section = "desconto"; continue; }
                     if (low.includes("valor:") || low.includes("valor total")) { section = "valor"; }
 
-                    // Personal data
+                    // "Produto:" inline — captura o valor na mesma linha
+                    if ((low.match(/^produto\s*[:：]/) || low.includes("produto:")) && !low.includes("troca") && !low.includes("na troca")) {
+                      const val = extract(line);
+                      if (val && val.length > 2) { produtos.push(val); section = ""; }
+                      continue;
+                    }
+                    // "Produto na troca:" — entra seção trocas e captura inline
+                    if (low.includes("produto na troca")) {
+                      section = "trocas";
+                      const val = extract(line);
+                      // Pode ter "Seu aparelho na troca:" embutido, limpar
+                      const cleanVal = val.replace(/seu aparelho na troca\s*[:：]?\s*/i, "").trim();
+                      if (cleanVal && cleanVal.length > 3) {
+                        currentTroca = cleanVal + "\n";
+                      }
+                      continue;
+                    }
+
+                    // Personal data — reset section when matched
                     if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) { r.cliente = extract(line); section = ""; }
-                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp") || low.includes("contato")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; }
-                    else if (low.includes("bairro")) { r.bairro = extract(line); }
-                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) { r.endereco = extract(line); }
-                    else if (low.includes("cep")) { const m = line.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; }
-                    else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) { r.forma_pagamento = extract(line); }
-                    else if (low.includes("horário") || low.includes("horario")) { r.horario = extract(line); }
-                    else if (low.includes("vendedor")) { r.vendedor = extract(line); }
-                    else if (low.includes("entrega") && low.includes("residencia")) { r.local_entrega = "RESIDÊNCIA"; }
-                    else if (low.includes("entrega") && low.includes("shopping")) { r.local_entrega = "SHOPPING"; }
+                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp") || low.includes("contato")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; section = ""; }
+                    else if (low.includes("bairro")) { r.bairro = extract(line); section = ""; }
+                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) { r.endereco = extract(line); section = ""; }
+                    else if (low.includes("cep")) { const m = line.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; section = ""; }
+                    else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
+                      const val = extract(line);
+                      r.forma_pagamento = val;
+                      // Extrair valor se incluído (ex: "3297 PIX")
+                      const valM = val.match(/(\d[\d.,]*)/);
+                      if (valM && !r.valor) r.valor = valM[1].replace(/\./g, "").replace(",", ".");
+                      section = "";
+                    }
+                    else if (low.includes("horário") || low.includes("horario")) { r.horario = extract(line); section = ""; }
+                    else if (low.includes("vendedor")) { r.vendedor = extract(line); section = ""; }
+                    else if (low.includes("como conheceu")) { section = ""; } // ignorar
+                    else if (low.includes("entrega") && (low.includes("residencia") || low.includes("residência"))) { r.local_entrega = "RESIDÊNCIA"; section = ""; }
+                    else if (low.includes("entrega") && low.includes("shopping")) { r.local_entrega = "SHOPPING"; section = ""; }
                     else if (low.includes("antecipado")) { r.tipo_pagamento = "ANTECIPADO"; }
                     else if (low.includes("pagar na entrega")) { r.tipo_pagamento = "NA ENTREGA"; }
                     // Valor section
                     else if (section === "valor" || (low.includes("valor") && !low.includes("avaliado"))) {
                       const m = line.match(/R?\$?\s*([\d.,]+)/);
-                      if (m) { r.valor = m[1].replace(/\./g, "").replace(",", "."); r.forma_pagamento = extract(line); section = ""; }
+                      if (m) { r.valor = m[1].replace(/\./g, "").replace(",", "."); section = ""; }
                     }
                     // Desconto
                     else if (section === "desconto") {
                       const m = line.match(/R?\$?\s*([\d.,]+)/);
                       if (m) { r.desconto = m[1].replace(/\./g, "").replace(",", "."); section = ""; }
                     }
-                    // Products section — each line is a product
-                    else if (section === "produtos" && low.length > 3 && !low.startsWith("trocas")) {
+                    // Products section — each line is a product (multi-product format)
+                    else if (section === "produtos" && low.length > 3) {
                       produtos.push(line.replace(/^[✅⚠️📌🤔*·•]\s*/g, "").trim());
                     }
-                    // Trocas section — detect new troca by "·" prefix or iPhone/Apple
+                    // Trocas section — collect trade-in details
                     else if (section === "trocas") {
                       if (line.startsWith("·") || line.startsWith("•") || (low.match(/^iphone|^apple|^ipad|^macbook|^airpods/) && !low.includes("avaliado"))) {
                         if (currentTroca) trocas.push(currentTroca.trim());
@@ -346,7 +372,9 @@ export default function EntregasPage() {
                         currentTroca += line + "\n";
                         trocas.push(currentTroca.trim());
                         currentTroca = "";
-                      } else if (currentTroca) {
+                      } else if (low.includes("seu aparelho")) {
+                        // Skip "Seu aparelho na troca:" header
+                      } else if (currentTroca || low.length > 3) {
                         currentTroca += line + "\n";
                       }
                     }
