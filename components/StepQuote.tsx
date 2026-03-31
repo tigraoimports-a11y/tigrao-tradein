@@ -217,7 +217,7 @@ export default function StepQuote(p: StepQuoteProps) {
                     <span className="text-[15px] font-bold" style={{ color: "var(--ti-accent)" }}>{formatBRL(dif)}</span>
                   </button>
                   {/* Parcelas */}
-                  {parcOpts.filter(i => [2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(i.parcelas)).map((i) => (
+                  {parcOpts.map((i) => (
                     <button key={i.parcelas} onClick={() => { setParc(String(i.parcelas)); setShowAllParc(false); }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
                       style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
