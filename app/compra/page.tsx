@@ -75,7 +75,8 @@ function CompraForm() {
 
   // WhatsApp pode vir do URL ou ser buscado da config
   const [whatsappConfig, setWhatsappConfig] = useState("");
-  const whatsappFinal = whatsappConfig || whatsapp || "5521967442665";
+  // Sempre André como default. Config sobrescreve se disponível.
+  const whatsappFinal = whatsappConfig || "5521967442665";
 
   // Fetch products + config
   useEffect(() => {
