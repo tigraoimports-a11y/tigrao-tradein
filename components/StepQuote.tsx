@@ -202,16 +202,22 @@ export default function StepQuote(p: StepQuoteProps) {
 
           {showAllParc && (
             <div className="mt-3 space-y-3 animate-fadeIn">
-              <div className="relative">
-                <select value={parc} onChange={(e) => setParc(e.target.value)}
-                  className="w-full appearance-none px-4 py-3.5 rounded-2xl text-[15px] cursor-pointer transition-colors" style={inputStyle}>
-                  <option value="">Escolha o parcelamento...</option>
-                  <option value="pix">PIX a vista — {formatBRL(dif)}</option>
-                  {parcOpts.map((i) => <option key={i.parcelas} value={String(i.parcelas)}>{i.parcelas}x de {formatBRL(i.valorParcela)} (total: {formatBRL(i.total)})</option>)}
-                </select>
-                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ti-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                </div>
+              {/* Grid de parcelas — clique direto */}
+              <div className="grid grid-cols-3 gap-2">
+                <button onClick={() => setParc("pix")}
+                  className="flex flex-col items-center py-3 px-2 rounded-xl text-center transition-all"
+                  style={parc === "pix" ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid var(--ti-input-border, #D2D2D7)" }}>
+                  <span className="text-[12px] font-bold" style={{ color: "var(--ti-accent)" }}>PIX</span>
+                  <span className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(dif)}</span>
+                </button>
+                {parcOpts.filter(i => [2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(i.parcelas)).map((i) => (
+                  <button key={i.parcelas} onClick={() => setParc(String(i.parcelas))}
+                    className="flex flex-col items-center py-3 px-2 rounded-xl text-center transition-all"
+                    style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid var(--ti-input-border, #D2D2D7)" }}>
+                    <span className="text-[12px] font-bold" style={{ color: parc === String(i.parcelas) ? "var(--ti-accent)" : "var(--ti-text)" }}>{i.parcelas}x</span>
+                    <span className="text-[13px] font-semibold" style={{ color: parc === String(i.parcelas) ? "var(--ti-accent)" : "var(--ti-muted)" }}>{formatBRL(i.valorParcela)}</span>
+                  </button>
+                ))}
               </div>
 
               {instSel && (
