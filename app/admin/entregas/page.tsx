@@ -89,11 +89,7 @@ export default function EntregasPage() {
     horario: "",
     entregador: "",
     observacao: "",
-    produto: "",
-    produto2: "",
-    produto3: "",
     tipo: "",
-    detalhes_upgrade: "",
     forma_pagamento: "",
     valor: "",
     parcelas: "",
@@ -105,8 +101,8 @@ export default function EntregasPage() {
     local_entrega: "",
   };
   const [form, setForm] = useState(emptyForm);
-  const [showProd2, setShowProd2] = useState(false);
-  const [showProd3, setShowProd3] = useState(false);
+  const [produtos, setProdutos] = useState<string[]>([""]);
+  const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
@@ -138,6 +134,8 @@ export default function EntregasPage() {
     setSaving(true);
     setMsg("");
 
+    const produtosStr = produtos.filter(Boolean).join(" | ");
+    const trocasStr = trocas.filter(Boolean).join("\n---\n");
     const res = await fetch("/api/admin/entregas", {
       method: "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
@@ -149,9 +147,9 @@ export default function EntregasPage() {
         horario: form.horario || null,
         entregador: form.entregador || null,
         observacao: form.observacao || null,
-        produto: form.produto || null,
+        produto: produtosStr || null,
         tipo: form.tipo || null,
-        detalhes_upgrade: form.detalhes_upgrade || null,
+        detalhes_upgrade: trocasStr || null,
         forma_pagamento: form.forma_pagamento || null,
         valor: form.valor ? parseFloat(form.valor) : null,
         vendedor: form.vendedor || null,
@@ -162,7 +160,7 @@ export default function EntregasPage() {
     if (json.ok) {
       setMsg("Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
-      setShowProd2(false); setShowProd3(false); setShowPagAlt(false);
+      setProdutos([""]); setTrocas([]); setShowPagAlt(false);
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -184,10 +182,10 @@ export default function EntregasPage() {
   };
 
   const buildWhatsAppText = () => {
-    const produtos = [form.produto, form.produto2, form.produto3].filter(Boolean);
-    const produtoText = produtos.length > 1
-      ? produtos.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
-      : form.produto || "—";
+    const prods = produtos.filter(Boolean);
+    const produtoText = prods.length > 1
+      ? prods.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
+      : prods[0] || "—";
 
     // Pagamento principal
     let pagText = `${form.forma_pagamento || "—"}`;
@@ -203,9 +201,13 @@ export default function EntregasPage() {
       pagAlt = `\n💵 *Pagamento 2:* ${form.forma_pagamento_2} R$${form.valor_2}`;
     }
 
-    const localEntrega = form.local_entrega ? `\n🏠 *Local:* ${form.local_entrega}` : "";
-
     const tipoLabel = form.tipo === "UPGRADE" ? "UPGRADE (Troca)" : form.tipo || "Compra";
+
+    // Trocas formatadas
+    const trocasText = trocas.filter(Boolean).map((t, i) => {
+      return trocas.length > 1 ? `${i + 1}. ${t.replace(/\n/g, " / ")}` : t.replace(/\n/g, " / ");
+    }).join("\n   ");
+
     const lines = [
       `🛵 *ENTREGA ${(form.bairro || "—").toUpperCase()}* 🛵`,
       `🛵`,
@@ -213,9 +215,9 @@ export default function EntregasPage() {
       `📍 *LOCAL:* ${form.endereco || "—"} - ${form.bairro || ""}`,
       `🍎 *PRODUTO:* ${produtoText}`,
       `‼️ *TIPO:* ${tipoLabel}`,
-      ...(form.tipo === "UPGRADE" && form.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${form.detalhes_upgrade}`] : []),
+      ...(form.tipo === "UPGRADE" && trocas.filter(Boolean).length > 0 ? [`🔄 *PRODUTO NA TROCA:*\n   ${trocasText}`] : []),
       `💵 *PAGAMENTO:* ${pagText}${pagAlt}`,
-      ...(form.local_entrega === "RESIDÊNCIA" ? [`R$${form.valor || "—"}`, `⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
+      ...(form.local_entrega === "RESIDÊNCIA" ? [`⚠️ PAGAMENTO ANTECIPADO`] : form.local_entrega === "SHOPPING" ? [`✅ PAGAR NA ENTREGA`] : []),
       `🧑 *CLIENTE:* ${form.cliente || "—"}`,
       `📞 *CONTATO:* ${form.telefone || "—"}`,
       form.observacao ? `OBS: ${form.observacao}` : "",
@@ -360,19 +362,15 @@ export default function EntregasPage() {
                   if (r.vendedor) set("vendedor", r.vendedor);
                   if (r.local_entrega) set("local_entrega", r.local_entrega);
 
-                  // Products
-                  if (produtos.length > 0) set("produto", produtos[0]);
-                  if (produtos.length > 1) { setShowProd2(true); set("produto2", produtos[1]); }
-                  if (produtos.length > 2) { setShowProd2(true); setShowProd3(true); set("produto3", produtos[2]); }
-                  // If more than 3, put rest in observacao
-                  if (produtos.length > 3) {
-                    set("observacao", `Produtos adicionais: ${produtos.slice(3).join(", ")}`);
+                  // Products — populate dynamic array
+                  if (produtos.length > 0) {
+                    setProdutos(produtos);
                   }
 
-                  // Trocas → tipo UPGRADE + detalhes
+                  // Trocas → tipo UPGRADE + array de trocas
                   if (trocas.length > 0) {
                     set("tipo", "UPGRADE");
-                    set("detalhes_upgrade", trocas.join("\n\n"));
+                    setTrocas(trocas);
                   }
 
                   // Payment
@@ -414,30 +412,26 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
-            <div className="col-span-2 md:col-span-3">
-              <p className={labelCls}>Produto</p>
-              <input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 17 256GB Lavanda" className={inputCls} />
-            </div>
-            {showProd2 ? (
-              <div className="col-span-2 md:col-span-3">
-                <p className={labelCls}>Produto 2</p>
-                <input value={form.produto2} onChange={(e) => set("produto2", e.target.value)} placeholder="Segundo produto..." className={inputCls} />
-              </div>
-            ) : (
-              <div className="col-span-2 md:col-span-3">
-                <button onClick={() => setShowProd2(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto 2</button>
-              </div>
-            )}
-            {showProd2 && (showProd3 ? (
-              <div className="col-span-2 md:col-span-3">
-                <p className={labelCls}>Produto 3</p>
-                <input value={form.produto3} onChange={(e) => set("produto3", e.target.value)} placeholder="Terceiro produto..." className={inputCls} />
-              </div>
-            ) : (
-              <div className="col-span-2 md:col-span-3">
-                <button onClick={() => setShowProd3(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto 3</button>
+            {/* Produtos dinâmicos */}
+            {produtos.map((prod, idx) => (
+              <div key={idx} className="col-span-2 md:col-span-3 flex gap-2 items-end">
+                <div className="flex-1">
+                  <p className={labelCls}>{idx === 0 ? "Produto" : `Produto ${idx + 1}`}</p>
+                  <input
+                    value={prod}
+                    onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
+                    placeholder={idx === 0 ? "Ex: iPhone 17 256GB Lavanda" : `Produto ${idx + 1}...`}
+                    className={inputCls}
+                  />
+                </div>
+                {idx > 0 && (
+                  <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2 text-red-400 hover:text-red-600 text-lg" title="Remover">✕</button>
+                )}
               </div>
             ))}
+            <div className="col-span-2 md:col-span-3">
+              <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+            </div>
             <div>
               <p className={labelCls}>Tipo</p>
               <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
@@ -447,10 +441,36 @@ export default function EntregasPage() {
               </select>
             </div>
             {form.tipo === "UPGRADE" && (
-              <div className="col-span-2 md:col-span-3">
-                <p className={labelCls}>Detalhes do upgrade/troca</p>
-                <input value={form.detalhes_upgrade} onChange={(e) => set("detalhes_upgrade", e.target.value)} placeholder="Descricao do aparelho usado" className={inputCls} />
-              </div>
+              <>
+                <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
+                  <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">🔄 Produtos na troca</p>
+                </div>
+                {trocas.length === 0 && (
+                  <div className="col-span-2 md:col-span-3">
+                    <button onClick={() => setTrocas([""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto na troca</button>
+                  </div>
+                )}
+                {trocas.map((troca, idx) => (
+                  <div key={idx} className="col-span-2 md:col-span-3 flex gap-2 items-start">
+                    <div className="flex-1">
+                      <p className={labelCls}>Troca {idx + 1}</p>
+                      <textarea
+                        value={troca}
+                        onChange={(e) => { const nt = [...trocas]; nt[idx] = e.target.value; setTrocas(nt); }}
+                        placeholder={`Ex: iPhone 16 256GB\n1 marca na lateral\nBateria 93%\nAvaliado R$5.000`}
+                        rows={3}
+                        className={inputCls + " resize-none"}
+                      />
+                    </div>
+                    <button onClick={() => setTrocas(trocas.filter((_, i) => i !== idx))} className="px-2 py-2 text-red-400 hover:text-red-600 text-lg mt-5" title="Remover">✕</button>
+                  </div>
+                ))}
+                {trocas.length > 0 && (
+                  <div className="col-span-2 md:col-span-3">
+                    <button onClick={() => setTrocas([...trocas, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar outra troca</button>
+                  </div>
+                )}
+              </>
             )}
             <div>
               <p className={labelCls}>Forma de Pagamento</p>
