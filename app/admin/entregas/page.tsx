@@ -300,8 +300,8 @@ export default function EntregasPage() {
                   let currentTroca = "";
 
                   for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i];
-                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️*·•]/g, "").trim();
+                    const line = lines[i].replace(/\*/g, "").trim(); // Remove WhatsApp bold asterisks
+                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔🎯🔄💰📋🏷️·•]/g, "").trim();
                     if (!low || low.length < 2) continue;
 
                     // Detect sections (multi-product format)
@@ -312,7 +312,14 @@ export default function EntregasPage() {
 
                     // "Produto:" inline — captura o valor na mesma linha
                     if ((low.match(/^produto\s*[:：]/) || low.includes("produto:")) && !low.includes("troca") && !low.includes("na troca")) {
-                      const val = extract(line);
+                      let val = extract(line);
+                      // Separar preço se presente: "Mac Mini M4 — R$ 9.597"
+                      const precoMatch = val.match(/\s*[—–-]\s*R?\$?\s*([\d.,]+)\s*$/);
+                      if (precoMatch) {
+                        const precoVal = precoMatch[1].replace(/\./g, "").replace(",", ".");
+                        if (!r.valor) r.valor = precoVal;
+                        val = val.replace(/\s*[—–-]\s*R?\$?\s*[\d.,]+\s*$/, "").trim();
+                      }
                       if (val && val.length > 2) { produtos.push(val); section = ""; }
                       continue;
                     }
@@ -337,16 +344,30 @@ export default function EntregasPage() {
                     else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
                       const val = extract(line);
                       r.forma_pagamento = val;
-                      // Extrair valor se incluído (ex: "3297 PIX")
-                      const valM = val.match(/(\d[\d.,]*)/);
-                      if (valM && !r.valor) r.valor = valM[1].replace(/\./g, "").replace(",", ".");
+                      // Extrair valor total — pegar o maior valor ou "Entrada PIX R$ X + ..."
+                      const allVals = [...val.matchAll(/R?\$?\s*([\d.,]+)/g)].map(m => parseFloat(m[1].replace(/\./g, "").replace(",", ".")));
+                      if (allVals.length > 0 && !r.valor) {
+                        // Se tem "Entrada PIX R$ 8.000 + 10x..." somar entrada + total cartão
+                        const entradaMatch = val.match(/entrada.*?R?\$?\s*([\d.,]+)/i);
+                        if (entradaMatch) {
+                          const entrada = parseFloat(entradaMatch[1].replace(/\./g, "").replace(",", "."));
+                          const totalCartao = allVals.find(v => v !== entrada && v > 100) || 0;
+                          r.valor = String(entrada + totalCartao);
+                        } else {
+                          r.valor = String(Math.max(...allVals));
+                        }
+                      }
                       section = "";
                     }
                     else if (low.includes("horário") || low.includes("horario")) { r.horario = extract(line); section = ""; }
                     else if (low.includes("vendedor")) { r.vendedor = extract(line); section = ""; }
                     else if (low.includes("como conheceu")) { section = ""; } // ignorar
-                    else if (low.includes("entrega") && (low.includes("residencia") || low.includes("residência"))) { r.local_entrega = "RESIDÊNCIA"; section = ""; }
-                    else if (low.includes("entrega") && low.includes("shopping")) { r.local_entrega = "SHOPPING"; section = ""; }
+                    else if (low.match(/^local\s*[:：]/) || (low.includes("entrega") && (low.includes("residencia") || low.includes("residência") || low.includes("shopping")))) {
+                      const val = extract(line).toLowerCase();
+                      if (val.includes("shopping") || val.includes("village") || val.includes("barra") || val.includes("mall")) { r.local_entrega = "SHOPPING"; }
+                      else if (val.includes("residencia") || val.includes("residência") || val.includes("casa")) { r.local_entrega = "RESIDÊNCIA"; }
+                      section = "";
+                    }
                     else if (low.includes("antecipado")) { r.tipo_pagamento = "ANTECIPADO"; }
                     else if (low.includes("pagar na entrega")) { r.tipo_pagamento = "NA ENTREGA"; }
                     // Valor section
