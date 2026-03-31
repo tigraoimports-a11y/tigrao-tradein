@@ -209,28 +209,28 @@ function CompraForm() {
     }
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
+    const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
+    const pagEntrega = local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
+
     const lines = [
       `Ola, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliacao de troca no site e preenchi o formulario de compra." : "Vim pelo formulario de compra!"}`,
       "",
-      `*WhatsApp:* ${telefone}`,
-      `*E-mail:* ${email}`,
-      ...(instagram ? [`*Instagram:* ${instagram}`] : []),
-      "",
       `*DADOS DA COMPRA -- TigraoImports*`,
       "",
+      // Dados pessoais
       `*Nome completo:* ${nome}`,
       `*CPF:* ${cpf}`,
       `*E-mail:* ${email}`,
       `*Telefone:* ${telefone}`,
+      ...(instagram ? [`*Instagram:* ${instagram}`] : []),
       `*CEP:* ${cep}`,
-      `*Endereco:* ${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`,
+      `*Endereco:* ${enderecoFull}`,
       `*Bairro:* ${bairro}`,
       "",
-      ...(vendedor ? [`*Vendedor:* ${vendedor}`] : []),
+      // Produto e pagamento
       `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
       ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
       `*Forma de pagamento:* ${pagStr}`,
-      ...(origem ? [`*Como conheceu:* ${origem}`] : []),
     ];
 
     // Trade-in info
@@ -246,9 +246,12 @@ function CompraForm() {
       }
     }
 
-    // Entrega info
-    const pagEntrega = local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
-    lines.push("", `*Horario:* ${horario}`, `*Local:* ${localStr}`);
+    // Vendedor, origem, entrega
+    lines.push("");
+    if (vendedor) lines.push(`*Vendedor:* ${vendedor}`);
+    if (origem) lines.push(`*Como conheceu:* ${origem}`);
+    lines.push(`*Horario:* ${horario}`);
+    lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
 
     // Se é entrega, criar automaticamente na aba de entregas
