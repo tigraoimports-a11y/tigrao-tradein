@@ -69,6 +69,14 @@ function CompraForm() {
   // Local de entrega (vindo do gerador de link)
   const localParam = searchParams.get("local") || "";
 
+  // Produtos adicionais (vindo do gerador de link)
+  const produtosExtras: string[] = [];
+  for (let i = 2; i <= 10; i++) {
+    const p = searchParams.get(`produto${i}`);
+    if (p) produtosExtras.push(p);
+    else break;
+  }
+
   // Products from API
   const [allProducts, setAllProducts] = useState<ProdutoAPI[]>([]);
   const [catalogo, setCatalogo] = useState<Record<string, { produto: string; cor: string | null; preco: number | null }[]>>({});
@@ -210,6 +218,7 @@ function CompraForm() {
       "",
       ...(vendedor ? [`*Vendedor:* ${vendedor}`] : []),
       `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
+      ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
       `*Forma de pagamento:* ${pagStr}`,
       ...(origem ? [`*Como conheceu:* ${origem}`] : []),
     ];
@@ -246,7 +255,7 @@ function CompraForm() {
           telefone,
           endereco: enderecoCompleto,
           bairro,
-          produto: produtoInput || produtoParam,
+          produto: [produtoInput || produtoParam, ...produtosExtras].filter(Boolean).join(" | "),
           forma_pagamento: `${pagStr} — ${pagInfo}`,
           valor: valorBase > 0 ? valorBase : null,
           horario,
@@ -290,8 +299,11 @@ function CompraForm() {
       <div className="mx-4 mt-4 bg-white rounded-xl p-4 shadow-sm border border-[#E8E8ED]">
         {produtoParam ? (
           <>
-            <p className={sectionTitle}>Produto</p>
+            <p className={sectionTitle}>{produtosExtras.length > 0 ? "Produtos" : "Produto"}</p>
             <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
+            {produtosExtras.map((p, i) => (
+              <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p}</p>
+            ))}
             {preco > 0 && (
               <div className="mt-2 space-y-1">
                 <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>

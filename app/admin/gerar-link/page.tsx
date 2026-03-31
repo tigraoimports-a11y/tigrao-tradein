@@ -6,11 +6,12 @@ import { useAdmin } from "@/components/admin/AdminShell";
 export default function GerarLinkPage() {
   const { user } = useAdmin();
 
-  const [produto, setProduto] = useState("");
+  const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
+  const [entradaPix, setEntradaPix] = useState("");
   const [localEntrega, setLocalEntrega] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
@@ -23,21 +24,28 @@ export default function GerarLinkPage() {
   };
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
+  const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
 
   // WhatsApp fixo da Bianca — ela recebe todos os formulários
   const WHATSAPP_BIANCA = "5521972461357";
 
   function gerarLink() {
-    if (!produto) return;
+    const prodsFilled = produtos.filter(Boolean);
+    if (prodsFilled.length === 0) return;
 
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
     const params = new URLSearchParams();
-    params.set("produto", produto);
+    params.set("produto", prodsFilled[0]);
+    // Produtos adicionais
+    for (let i = 1; i < prodsFilled.length; i++) {
+      params.set(`produto${i + 1}`, prodsFilled[i]);
+    }
     if (rawPreco && rawPreco !== "0") params.set("preco", rawPreco);
     params.set("vendedor", vendedorNome || "");
     params.set("whatsapp", WHATSAPP_BIANCA);
     if (forma) params.set("forma", forma);
     if (parcelas) params.set("parcelas", parcelas);
+    if (rawEntrada && rawEntrada !== "0") params.set("entrada_pix", rawEntrada);
     if (localEntrega) params.set("local", localEntrega);
 
     const link = `${baseUrl}/compra?${params.toString()}`;
@@ -67,14 +75,14 @@ export default function GerarLinkPage() {
       const text = await navigator.clipboard.readText();
       if (!text || text.length < 10) { setPasteMsg("Nada no clipboard."); return; }
 
-      // Limpa asteriscos do WhatsApp bold e junta tudo
+      // Limpa asteriscos do WhatsApp bold
       const clean = (s: string) => s.replace(/\*/g, "").trim();
       const lines = text.split("\n").map(l => clean(l));
       let filled = 0;
+      const parsedProdutos: string[] = [];
 
       for (const line of lines) {
         const low = line.toLowerCase();
-        // Extrai valor depois do primeiro ":"
         const extract = (l: string) => {
           const idx = l.indexOf(":");
           return idx >= 0 ? l.slice(idx + 1).trim() : l.trim();
@@ -82,24 +90,34 @@ export default function GerarLinkPage() {
 
         if (low.includes("produto desejado") || low.match(/^produto\s*:/)) {
           const val = extract(line);
-          if (val) { setProduto(val); filled++; }
+          if (val) {
+            // Pode ter múltiplos separados por vírgula ou "+"
+            const multi = val.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+            parsedProdutos.push(...(multi.length > 0 ? multi : [val]));
+            filled++;
+          }
         } else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
           const val = extract(line);
           if (val) {
-            // Parse "18x 582,00 cartão" → forma=Cartao Credito, parcelas=18
             const parcMatch = val.match(/(\d+)\s*x/i);
-            if (parcMatch) {
-              setParcelas(parcMatch[1]);
-              filled++;
-            }
+            if (parcMatch) { setParcelas(parcMatch[1]); filled++; }
             const lowVal = val.toLowerCase();
-            if (lowVal.includes("pix")) { setForma("Pix"); filled++; }
+            if (lowVal.includes("pix") && (lowVal.includes("cart") || parcMatch)) {
+              // "PIX + Cartão" ou "entrada pix + 18x cartão"
+              setForma("Pix + Cartao"); filled++;
+              // Tenta extrair valor do PIX
+              const pixVal = val.match(/pix\s*(?:de\s*)?R?\$?\s*([\d.,]+)/i);
+              if (pixVal) { setEntradaPix(formatPreco(pixVal[1].replace(/\./g, ""))); filled++; }
+            } else if (lowVal.includes("pix")) { setForma("Pix"); filled++; }
             else if (lowVal.includes("cart") || lowVal.includes("credito") || lowVal.includes("crédito") || parcMatch) { setForma("Cartao Credito"); filled++; }
             else if (lowVal.includes("debito") || lowVal.includes("débito")) { setForma("Cartao Debito"); filled++; }
             else if (lowVal.includes("espécie") || lowVal.includes("especie") || lowVal.includes("dinheiro")) { setForma("Especie"); filled++; }
             else if (lowVal.includes("link")) { setForma("Link de Pagamento"); filled++; }
           }
-        } else if ((low.includes("entrega") || low.includes("local")) && !low.includes("forma")) {
+        } else if (low.includes("entrada") && low.includes("pix")) {
+          const m = line.match(/R?\$?\s*([\d.,]+)/);
+          if (m) { setEntradaPix(formatPreco(m[1].replace(/\./g, ""))); filled++; }
+        } else if ((low.includes("entrega") || low.includes("local")) && !low.includes("forma") && !low.includes("pagamento")) {
           const val = extract(line);
           const lowVal = val.toLowerCase();
           if (lowVal.includes("shopping") || lowVal.includes("praia") || lowVal.includes("barra") || lowVal.includes("village") || lowVal.includes("mall")) {
@@ -120,8 +138,10 @@ export default function GerarLinkPage() {
         }
       }
 
+      if (parsedProdutos.length > 0) setProdutos(parsedProdutos);
+
       if (filled > 0) {
-        setPasteMsg(`Resumo colado! ${filled} campo(s) preenchido(s).`);
+        setPasteMsg(`Resumo colado! ${filled} campo(s), ${parsedProdutos.length} produto(s).`);
       } else {
         setPasteMsg("Nenhum campo reconhecido no texto.");
       }
@@ -132,8 +152,11 @@ export default function GerarLinkPage() {
     }
   }
 
-  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
+  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
   const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
+
+  const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Pix + Cartao";
+  const showEntradaPix = forma === "Pix + Cartao";
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
@@ -150,7 +173,7 @@ export default function GerarLinkPage() {
             onClick={colarResumo}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
           >
-            📋 Colar resumo Instagram
+            📋 Colar resumo
           </button>
         </div>
 
@@ -160,16 +183,25 @@ export default function GerarLinkPage() {
           </div>
         )}
 
-        <div>
-          <label className={labelCls}>Produto *</label>
-          <input
-            type="text"
-            value={produto}
-            onChange={(e) => setProduto(e.target.value)}
-            placeholder="Ex: iPhone 17 Pro Max 256GB Silver"
-            className={inputCls}
-          />
-        </div>
+        {/* Produtos dinâmicos */}
+        {produtos.map((prod, idx) => (
+          <div key={idx} className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className={labelCls}>{idx === 0 ? "Produto *" : `Produto ${idx + 1}`}</label>
+              <input
+                type="text"
+                value={prod}
+                onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
+                placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
+                className={inputCls}
+              />
+            </div>
+            {idx > 0 && (
+              <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg" title="Remover">✕</button>
+            )}
+          </div>
+        ))}
+        <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
           <label className={labelCls}>Preco (R$)</label>
@@ -178,24 +210,25 @@ export default function GerarLinkPage() {
             inputMode="numeric"
             value={preco}
             onChange={(e) => setPreco(formatPreco(e.target.value))}
-            placeholder="Ex: 8.797"
+            placeholder="Ex: 8.797 (valor total)"
             className={inputCls}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className={showParcelas ? "" : "col-span-2"}>
             <label className={labelCls}>Forma de Pagamento</label>
-            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!e.target.value.includes("Cartao")) setParcelas(""); }} className={inputCls}>
+            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!["Cartao Credito", "Cartao Debito", "Pix + Cartao"].includes(e.target.value)) { setParcelas(""); setEntradaPix(""); } }} className={inputCls}>
               <option value="">-- Opcional --</option>
               <option value="Pix">Pix</option>
               <option value="Cartao Credito">Cartao Credito</option>
               <option value="Cartao Debito">Cartao Debito</option>
+              <option value="Pix + Cartao">Pix + Cartao (entrada)</option>
               <option value="Especie">Especie</option>
               <option value="Link de Pagamento">Link de Pagamento</option>
             </select>
           </div>
-          {(forma === "Cartao Credito" || forma === "Cartao Debito") && (
+          {showParcelas && (
             <div>
               <label className={labelCls}>Parcelas</label>
               <select value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={inputCls}>
@@ -205,6 +238,20 @@ export default function GerarLinkPage() {
             </div>
           )}
         </div>
+
+        {showEntradaPix && (
+          <div>
+            <label className={labelCls}>Entrada no Pix (R$)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={entradaPix}
+              onChange={(e) => setEntradaPix(formatPreco(e.target.value))}
+              placeholder="Ex: 2.000"
+              className={inputCls}
+            />
+          </div>
+        )}
 
         <div>
           <label className={labelCls}>Local de Entrega</label>
@@ -229,7 +276,7 @@ export default function GerarLinkPage() {
 
         <button
           onClick={gerarLink}
-          disabled={!produto}
+          disabled={!produtos.some(Boolean)}
           className="w-full py-3 bg-[#E8740E] text-white font-bold rounded-xl hover:bg-[#D06A0D] active:bg-[#B85E0B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Gerar Link
