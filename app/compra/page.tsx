@@ -160,15 +160,17 @@ function CompraForm() {
 
   // Installment calculations
   const valorBase = preco > 0 ? (trocaNum > 0 ? preco - trocaNum : preco) : 0;
+  const entradaPixNum = parseFloat(entradaPixParam) || 0;
+  const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
-    if (valorBase <= 0) return [];
+    if (valorParcelar <= 0) return [];
     return Object.entries(TAXAS).map(([n, taxa]) => {
       const num = parseInt(n);
-      const total = Math.ceil(valorBase * (1 + taxa / 100));
+      const total = Math.ceil(valorParcelar * (1 + taxa / 100));
       const vp = Math.ceil(total / num);
       return { parcelas: num, valorParcela: vp, total };
     });
-  }, [valorBase]);
+  }, [valorParcelar]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
