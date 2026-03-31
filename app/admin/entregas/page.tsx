@@ -279,7 +279,54 @@ export default function EntregasPage() {
       {/* Formulário Nova Entrega */}
       {showForm && (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-bold text-[#1D1D1F]">Agendar Nova Entrega</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[#1D1D1F]">Agendar Nova Entrega</h2>
+            <button
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText();
+                  if (!text || text.length < 10) { setMsg("Nada no clipboard. Copie a mensagem do WhatsApp primeiro."); return; }
+                  const lines = text.split("\n").map(l => l.trim());
+                  const extract = (line: string) => line.replace(/^[✅⚠️📌🤔🔄💰📋🏷️]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
+                  const r: Record<string, string> = {};
+                  for (const line of lines) {
+                    const low = line.toLowerCase().replace(/[✅⚠️📌🤔*]/g, "").trim();
+                    if (!low || low.length < 3) continue;
+                    if (low.includes("nome completo") || low.match(/^nome\s*[:：]/)) r.cliente = extract(line);
+                    else if (low.includes("telefone") || low.includes("celular") || low.includes("whatsapp")) { const m = line.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/); if (m) r.telefone = m[0]; }
+                    else if (low.includes("bairro")) r.bairro = extract(line);
+                    else if (low.includes("endereço") || low.includes("endereco") || low.match(/^end[\s.:]/)) r.endereco = extract(line);
+                    else if (low.includes("cep")) { const m = line.match(/\d{5}[-.\s]?\d{3}/); if (m) r.cep = m[0]; }
+                    else if (low.includes("produto:") || low.includes("modelo escolhido") || low.includes("modelo:")) r.produto = extract(line);
+                    else if (low.includes("forma de pagamento") || low.includes("forma pagamento")) r.forma_pagamento = extract(line);
+                    else if ((low.includes("valor") || low.includes("total")) && !low.includes("pagamento")) { const m = line.match(/[\d.,]+/g); if (m) r.valor = m[m.length - 1].replace(/\./g, "").replace(",", "."); }
+                    else if (low.includes("horário") || low.includes("horario")) r.horario = extract(line);
+                    else if (low.includes("vendedor")) r.vendedor = extract(line);
+                    else if (low.includes("troca:") || low.includes("produto na troca")) r.detalhes_upgrade = extract(line);
+                    else if (low.includes("entrega") && low.includes("residencia")) { r.local_entrega = "RESIDÊNCIA"; r.tipo_pagamento = "ANTECIPADO"; }
+                    else if (low.includes("entrega") && low.includes("shopping")) { r.local_entrega = "SHOPPING"; }
+                    else if (low.includes("antecipado")) r.tipo_pagamento = "ANTECIPADO";
+                    else if (low.includes("pagar na entrega")) r.tipo_pagamento = "NA ENTREGA";
+                  }
+                  if (r.cliente) set("cliente", r.cliente);
+                  if (r.telefone) set("telefone", r.telefone);
+                  if (r.bairro) set("bairro", r.bairro);
+                  if (r.endereco) set("endereco", r.endereco);
+                  if (r.produto) set("produto", r.produto);
+                  if (r.forma_pagamento) set("forma_pagamento", r.forma_pagamento);
+                  if (r.valor) set("valor", r.valor);
+                  if (r.horario) set("horario", r.horario);
+                  if (r.vendedor) set("vendedor", r.vendedor);
+                  if (r.local_entrega) set("local_entrega", r.local_entrega);
+                  if (r.detalhes_upgrade) { set("tipo", "UPGRADE"); set("detalhes_upgrade", r.detalhes_upgrade); }
+                  setMsg(`✅ Dados colados! ${Object.keys(r).length} campos preenchidos.`);
+                } catch { setMsg("Erro ao ler clipboard. Permita o acesso."); }
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+            >
+              📋 Colar dados do cliente
+            </button>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
               <p className={labelCls}>Cliente</p>
