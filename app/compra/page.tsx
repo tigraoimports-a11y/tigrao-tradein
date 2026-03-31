@@ -162,6 +162,11 @@ function CompraForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    if (!produtoInput && !produtoParam) {
+      alert("Selecione o produto desejado antes de enviar.");
+      return;
+    }
+
     const localStr = local === "Loja" ? "Retirada em loja"
       : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
       : "Entrega - Residencia";
@@ -200,7 +205,8 @@ function CompraForm() {
       `*Endereco:* ${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`,
       `*Bairro:* ${bairro}`,
       "",
-      `*Produto:* ${produtoInput || produtoParam}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
+      ...(vendedor ? [`*Vendedor:* ${vendedor}`] : []),
+      `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
       `*Forma de pagamento:* ${pagStr}`,
       ...(origem ? [`*Como conheceu:* ${origem}`] : []),
     ];
