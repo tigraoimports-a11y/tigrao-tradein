@@ -98,6 +98,9 @@ export default function VendasPage() {
   // 2ª troca toggle
   const [showSegundaTroca, setShowSegundaTroca] = useState(false);
 
+  // Busca por serial number
+  const [serialBusca, setSerialBusca] = useState("");
+
   // CEP auto-fill
   const [cepLoading, setCepLoading] = useState(false);
   const fetchCep = useCallback(async (cep: string) => {
@@ -1692,19 +1695,19 @@ export default function VendasPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <p className={labelCls}>Categoria</p>
-                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); }} className={selectCls}>
+                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); setSerialBusca(""); }} className={selectCls}>
                       <option value="">Selecionar...</option>
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
-                  <option value="">— Selecionar —</option>
-                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-                </select></div>
+                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
                 {catSel && (() => {
+                  const filtrados = serialBusca.trim()
+                    ? produtosFiltrados.filter(p => p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase()))
+                    : produtosFiltrados;
                   // Limpar nome do produto: remover origem e chip
                   const stripOrigemVendas = (nome: string) => nome
                     .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
@@ -1714,7 +1717,7 @@ export default function VendasPage() {
                     .replace(/\s{2,}/g, " ")
                     .trim();
                   const grupos: Record<string, EstoqueItem[]> = {};
-                  for (const p of produtosFiltrados) {
+                  for (const p of filtrados) {
                     const key = stripOrigemVendas(p.produto);
                     if (!grupos[key]) grupos[key] = [];
                     grupos[key].push(p);
@@ -1722,7 +1725,7 @@ export default function VendasPage() {
                   const grupoKeys = Object.keys(grupos).sort();
 
                   if (grupoKeys.length === 0) return (
-                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Nenhum produto disponivel nesta categoria</div>
+                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto com esse serial" : "Nenhum produto disponivel nesta categoria"}</div>
                   );
 
                   // Extrair cor do nome do produto
