@@ -118,7 +118,7 @@ const fmtDate = (d: string | null | undefined): string => {
 };
 
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
-const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
+const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH_ATACADO", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 function getBaseCat(cat: string): string {
   // Seminovos usa mesmos campos de iPhones
   if (cat === "SEMINOVOS") return "IPHONES";
@@ -136,6 +136,7 @@ const CAT_LABELS: Record<string, string> = {
   MACBOOK: "MacBooks",
   MAC_MINI: "Mac Mini",
   APPLE_WATCH: "Apple Watch",
+  APPLE_WATCH_ATACADO: "Apple Watch Atacado",
   AIRPODS: "AirPods",
   ACESSORIOS: "Acessorios",
   SEMINOVOS: "Seminovos",
