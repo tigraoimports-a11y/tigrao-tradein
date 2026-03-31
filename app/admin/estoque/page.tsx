@@ -153,8 +153,15 @@ function getModeloBase(produto: string, categoria: string): string {
   const p = produto.toUpperCase().trim();
   const baseCat = getBaseCat(categoria);
 
-  // Helpers
-  const getMem = () => { const m = p.match(/(\d+)\s*(GB|TB)/i); return m ? ` ${m[1]}${m[2].toUpperCase()}` : ""; };
+  // Helpers — pega o MAIOR valor de GB/TB (armazenamento, não RAM)
+  const getMem = () => {
+    const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
+    if (all.length === 0) return "";
+    // Converter tudo pra GB e pegar o maior (armazenamento > RAM)
+    const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+    const biggest = vals.sort((a, b) => b.gb - a.gb)[0];
+    return ` ${biggest.raw}`;
+  };
   const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
 
   if (baseCat === "IPHONES") {
