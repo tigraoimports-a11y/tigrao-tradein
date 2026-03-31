@@ -1190,6 +1190,38 @@ export default function VendasPage() {
     }
   };
 
+  // Exportar dia para Excel (backup completo)
+  const [exportandoDia, setExportandoDia] = useState(false);
+  const handleExportarDia = async () => {
+    setExportandoDia(true);
+    try {
+      const dia = filtroDia
+        ? `${filtroAno}-${filtroMes}-${filtroDia.padStart(2, "0")}`
+        : `${filtroAno}-${filtroMes}-${String(new Date().getDate()).padStart(2, "0")}`;
+      const res = await fetch(`/api/admin/exportar?dia=${dia}`, {
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        alert(`Erro: ${json.error || "Falha ao exportar"}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tigrao-${dia}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erro ao exportar: ${err}`);
+    } finally {
+      setExportandoDia(false);
+    }
+  };
+
   // ── Duplicar Venda ──
   const handleDuplicar = (v: Venda) => {
     setForm({
@@ -1335,15 +1367,22 @@ export default function VendasPage() {
                 <option key={d} value={String(d).padStart(2, "0")}>{d}</option>
               ))}
             </select>
-            {tab === "finalizadas" && isAdmin && (
+            {tab === "finalizadas" && isAdmin && (<>
+              <button
+                onClick={handleExportarDia}
+                disabled={exportandoDia}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {exportandoDia ? "Exportando..." : `Exportar Dia${filtroDia ? ` ${filtroDia}` : ""}`}
+              </button>
               <button
                 onClick={handleExportar}
                 disabled={exportando}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap"
               >
-                {exportando ? "Exportando..." : "Exportar Mês"}
+                {exportando ? "Exportando..." : "Exportar Mes"}
               </button>
-            )}
+            </>)}
           </div>
         )}
       </div>
