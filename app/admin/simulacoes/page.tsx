@@ -846,7 +846,9 @@ const VENDEDORES_DEFAULT: { nome: string; label: string; numero: string }[] = [
 
 function WhatsAppConfigPanel({ password }: { password: string }) {
   const [principal, setPrincipal] = useState("5521967442665");
-  const [vendedores, setVendedores] = useState<Record<string, { numero: string; ativo: boolean }>>({});
+  const defaultVendedores: Record<string, { numero: string; ativo: boolean }> = {};
+  for (const v of VENDEDORES_DEFAULT) defaultVendedores[v.nome] = { numero: v.numero, ativo: true };
+  const [vendedores, setVendedores] = useState<Record<string, { numero: string; ativo: boolean }>>(defaultVendedores);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
