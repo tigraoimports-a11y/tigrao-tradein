@@ -74,6 +74,7 @@ export default function OrcamentoPage() {
   const [carrinho, setCarrinho] = useState<{ id: string; nome: string; preco: number; categoria: string }[]>([]);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
+  const [desconto, setDesconto] = useState("");
 
   useEffect(() => {
     if (!password) return;
@@ -189,7 +190,8 @@ export default function OrcamentoPage() {
       : [];
     const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco, 0);
     const trocaVal = parseFloat(trocaValor) || 0;
-    const precoPix = totalBruto - trocaVal;
+    const descontoVal = parseFloat(desconto) || 0;
+    const precoPix = totalBruto - trocaVal - descontoVal;
     const entradaVal = parseFloat(entrada) || 0;
     const restante = precoPix - entradaVal;
 
@@ -247,6 +249,10 @@ export default function OrcamentoPage() {
       );
     }
 
+    if (descontoVal > 0) {
+      linhas.push(`🏷️ *Desconto especial:* - R$ ${descontoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, ``);
+    }
+
     if (entradaVal > 0) {
       linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
       if (sorted.length === 1) {
@@ -294,7 +300,7 @@ export default function OrcamentoPage() {
   useEffect(() => {
     if (produtoSelecionado || carrinho.length > 0 || semiProduto) gerarOrcamento();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, tipoOrc, semiSel, semiPreco, semiObs]);
+  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, desconto, tipoOrc, semiSel, semiPreco, semiObs]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -497,6 +503,12 @@ export default function OrcamentoPage() {
                     <input type="text" inputMode="decimal" placeholder="Ex: 3500" value={trocaValor} onChange={e => setTrocaValor(e.target.value)} className={inputCls} />
                   </div>
                 )}
+              </div>
+
+              {/* Desconto */}
+              <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-purple-50 border border-purple-200"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-purple-400" : "text-purple-700"}`}>Desconto</p>
+                <input type="text" inputMode="decimal" placeholder="Ex: 200" value={desconto} onChange={e => setDesconto(e.target.value)} className={inputCls} />
               </div>
 
               {/* Entrada */}
