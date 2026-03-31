@@ -20,6 +20,27 @@ interface StepNewDeviceProps {
 
 function getLine(m: string): string { const x = m.match(/iPhone (\d+)/); return x ? x[1] : m; }
 
+// Categorias de produtos
+type ProductCategory = "iPhone" | "iPad" | "Mac" | "Apple Watch" | "AirPods" | "Acessorios";
+const CATEGORIES: { key: ProductCategory; label: string; icon: string }[] = [
+  { key: "iPhone", label: "iPhone", icon: "📱" },
+  { key: "iPad", label: "iPad", icon: "📱" },
+  { key: "Mac", label: "Mac", icon: "💻" },
+  { key: "Apple Watch", label: "Watch", icon: "⌚" },
+  { key: "AirPods", label: "AirPods", icon: "🎧" },
+];
+
+function getCategory(modelo: string): ProductCategory {
+  const m = modelo.toLowerCase();
+  if (m.startsWith("iphone")) return "iPhone";
+  if (m.startsWith("ipad")) return "iPad";
+  if (m.startsWith("mac") || m.includes("macbook")) return "Mac";
+  if (m.startsWith("apple watch")) return "Apple Watch";
+  if (m.startsWith("airpods") || m.startsWith("airtag")) return "AirPods";
+  if (m.includes("pencil") || m.includes("magic") || m.includes("cabo") || m.includes("fonte")) return "Acessorios";
+  return "iPhone";
+}
+
 const SEMINOVOS = [
   { modelo: "iPhone 15 Pro", storages: ["128GB", "256GB"] },
   { modelo: "iPhone 15 Pro Max", storages: ["256GB", "512GB"] },
@@ -29,6 +50,7 @@ const SEMINOVOS = [
 
 export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, whatsappNumber, condition, deviceType, tradeinConfig }: StepNewDeviceProps) {
   const [mode, setMode] = useState<"" | "lacrado" | "seminovo">("");
+  const [category, setCategory] = useState<ProductCategory | "">("");
   const [line, setLine] = useState(""); const [model, setModel] = useState(""); const [storage, setStorage] = useState("");
   const [compareMode, setCompareMode] = useState(false);
   const [lineB, setLineB] = useState(""); const [modelB, setModelB] = useState(""); const [storageB, setStorageB] = useState("");
@@ -44,14 +66,35 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
   }, [tradeinConfig]);
   const lbl = tradeinConfig?.labels || {};
 
-  const allModels = useMemo(() => getUniqueModels(products).filter((m) => /^iPhone \d/i.test(m)), [products]);
-  const lines = useMemo(() => { const s = new Set<string>(); allModels.forEach((m) => s.add(getLine(m))); return [...s].sort((a,b) => Number(a)-Number(b)); }, [allModels]);
-  const modelsInLine = useMemo(() => allModels.filter((m) => getLine(m) === line), [allModels, line]);
-  const storages_ = useMemo(() => (model ? getStoragesForModel(products, model) : []), [products, model]);
-  const price = useMemo(() => (model && storage ? getProductPrice(products, model, storage) : null), [products, model, storage]);
-  const modelsInLineB = useMemo(() => allModels.filter((m) => getLine(m) === lineB), [allModels, lineB]);
-  const storagesB = useMemo(() => (modelB ? getStoragesForModel(products, modelB) : []), [products, modelB]);
-  const priceB = useMemo(() => (modelB && storageB ? getProductPrice(products, modelB, storageB) : null), [products, modelB, storageB]);
+  // Categorias disponíveis (que tenham produtos no catálogo)
+  const availableCategories = useMemo(() => {
+    const cats = new Set<ProductCategory>();
+    products.forEach(p => cats.add(getCategory(p.modelo)));
+    return CATEGORIES.filter(c => cats.has(c.key));
+  }, [products]);
+
+  // Filtrar produtos pela categoria selecionada
+  const categoryProducts = useMemo(() =>
+    category ? products.filter(p => getCategory(p.modelo) === category) : products
+  , [products, category]);
+
+  const isIPhone = category === "iPhone" || !category;
+
+  // Para iPhones: agrupar por linha (13, 14, 15, 16, 17)
+  const allModels = useMemo(() => getUniqueModels(categoryProducts), [categoryProducts]);
+  const lines = useMemo(() => {
+    if (isIPhone) {
+      const s = new Set<string>(); allModels.filter(m => /^iPhone \d/i.test(m)).forEach((m) => s.add(getLine(m)));
+      return [...s].sort((a,b) => Number(a)-Number(b));
+    }
+    return []; // Não-iPhone não usa "linhas"
+  }, [allModels, isIPhone]);
+  const modelsInLine = useMemo(() => isIPhone ? allModels.filter((m) => getLine(m) === line) : allModels, [allModels, line, isIPhone]);
+  const storages_ = useMemo(() => (model ? getStoragesForModel(categoryProducts, model) : []), [categoryProducts, model]);
+  const price = useMemo(() => (model && storage ? getProductPrice(categoryProducts, model, storage) : null), [categoryProducts, model, storage]);
+  const modelsInLineB = useMemo(() => isIPhone ? allModels.filter((m) => getLine(m) === lineB) : allModels, [allModels, lineB, isIPhone]);
+  const storagesB = useMemo(() => (modelB ? getStoragesForModel(categoryProducts, modelB) : []), [categoryProducts, modelB]);
+  const priceB = useMemo(() => (modelB && storageB ? getProductPrice(categoryProducts, modelB, storageB) : null), [categoryProducts, modelB, storageB]);
 
   function hL(l: string) { setLine(l); setModel(""); setStorage(""); }
   function hM(m: string) { setModel(m); setStorage(""); }
@@ -61,8 +104,13 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
 
   function selectMode(m: "lacrado" | "seminovo") {
     setMode(m);
-    setLine(""); setModel(""); setStorage(""); cancelCmp();
+    setCategory(""); setLine(""); setModel(""); setStorage(""); cancelCmp();
     setSemiModel(""); setSemiStorage("");
+  }
+
+  function selectCategory(c: ProductCategory) {
+    setCategory(c);
+    setLine(""); setModel(""); setStorage(""); cancelCmp();
   }
 
   // Build WhatsApp message with full device condition
@@ -129,11 +177,20 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
       {/* ====== LACRADO ====== */}
       {mode === "lacrado" && (
         <div className="space-y-5 animate-fadeIn">
-          <Sec title="Linha do iPhone"><div className="grid grid-cols-3 gap-2">
-            {lines.map((l) => <Btn key={l} sel={line===l} onClick={() => hL(l)}>iPhone {l}</Btn>)}
+          {/* Categoria */}
+          <Sec title="Categoria"><div className="grid grid-cols-3 gap-2">
+            {availableCategories.map((c) => <Btn key={c.key} sel={category===c.key} onClick={() => selectCategory(c.key)}>{c.icon} {c.label}</Btn>)}
           </div></Sec>
 
-          {line && modelsInLine.length > 0 && <Sec title="Modelo"><div className="grid grid-cols-1 gap-2">
+          {/* Linha (só pra iPhone) */}
+          {category === "iPhone" && lines.length > 0 && (
+            <Sec title="Linha do iPhone"><div className="grid grid-cols-3 gap-2">
+              {lines.map((l) => <Btn key={l} sel={line===l} onClick={() => hL(l)}>iPhone {l}</Btn>)}
+            </div></Sec>
+          )}
+
+          {/* Modelo */}
+          {((category === "iPhone" && line) || (category && category !== "iPhone")) && modelsInLine.length > 0 && <Sec title="Modelo"><div className="grid grid-cols-1 gap-2">
             {modelsInLine.map((m) => <Btn key={m} sel={model===m} onClick={() => hM(m)} className="text-left">{m}</Btn>)}
           </div></Sec>}
 
@@ -164,8 +221,8 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                 <p className="text-[11px] font-semibold tracking-wider uppercase" style={{ color: "var(--ti-muted)" }}>Segundo modelo</p>
                 <button onClick={cancelCmp} className="text-[12px] transition-colors" style={{ color: "var(--ti-muted)" }}>Cancelar</button>
               </div>
-              <Sec title="Linha"><div className="grid grid-cols-3 gap-2">{lines.map((l) => <Btn key={l} sel={lineB===l} onClick={() => hLB(l)}>iPhone {l}</Btn>)}</div></Sec>
-              {lineB && modelsInLineB.length > 0 && <Sec title="Modelo"><div className="grid grid-cols-1 gap-2">{modelsInLineB.map((m) => <Btn key={m} sel={modelB===m} onClick={() => hMB(m)} className="text-left">{m}</Btn>)}</div></Sec>}
+              {isIPhone && lines.length > 0 && <Sec title="Linha"><div className="grid grid-cols-3 gap-2">{lines.map((l) => <Btn key={l} sel={lineB===l} onClick={() => hLB(l)}>iPhone {l}</Btn>)}</div></Sec>}
+              {((isIPhone && lineB) || !isIPhone) && modelsInLineB.length > 0 && <Sec title="Modelo"><div className="grid grid-cols-1 gap-2">{modelsInLineB.map((m) => <Btn key={m} sel={modelB===m} onClick={() => hMB(m)} className="text-left">{m}</Btn>)}</div></Sec>}
               {modelB && storagesB.length > 0 && <Sec title="Armazenamento"><div className="flex gap-2 flex-wrap">
                 {storagesB.map((s) => { const p = getProductPrice(products, modelB, s); return (
                   <button key={s} onClick={() => setStorageB(s)}
