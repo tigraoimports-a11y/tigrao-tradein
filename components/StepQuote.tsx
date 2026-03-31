@@ -243,14 +243,7 @@ export default function StepQuote(p: StepQuoteProps) {
         </div>
       </div>
 
-      {/* CTA */}
-      <button onClick={() => { onTrackAction?.("quote_whatsapp"); window.open(waUrl, "_blank"); salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag }); if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" }); }}
-        className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
-        style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>
-        DESEJO FECHAR MEU PEDIDO NO WHATSAPP
-      </button>
-
-      {/* Link do formulário de compra para o vendedor enviar */}
+      {/* CTA — leva pro formulário de compra preenchido */}
       {(() => {
         const condLines = getAnyConditionLines(deviceType, condition);
         const condStr = condLines.slice(0, 3).join(", ");
@@ -268,15 +261,15 @@ export default function StepQuote(p: StepQuoteProps) {
         });
         const compraUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/compra?${params.toString()}`;
         return (
-          <button onClick={async () => {
-            try { await navigator.clipboard.writeText(compraUrl); } catch { /* fallback */ const t = document.createElement("textarea"); t.value = compraUrl; document.body.appendChild(t); t.select(); document.execCommand("copy"); document.body.removeChild(t); }
-            const btn = document.getElementById("btn-copy-link");
-            if (btn) { btn.textContent = "✅ Link copiado!"; setTimeout(() => { btn.textContent = "📋 Copiar link do formulario de compra"; }, 2500); }
+          <button onClick={() => {
+            onTrackAction?.("quote_whatsapp");
+            salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag });
+            if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).fbq) (window as unknown as Record<string, (a: string, b: string, c: Record<string, unknown>) => void>).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" });
+            window.open(compraUrl, "_blank");
           }}
-            id="btn-copy-link"
-            className="block w-full py-3 rounded-2xl text-[13px] font-medium text-center transition-all duration-200 active:scale-[0.98] mt-2"
-            style={{ backgroundColor: "var(--ti-card-bg)", color: "var(--ti-accent)", border: "1px solid var(--ti-accent)" }}>
-            &#x1F4CB; Copiar link do formulario de compra
+            className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
+            style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>
+            DESEJO FECHAR MEU PEDIDO
           </button>
         );
       })()}
