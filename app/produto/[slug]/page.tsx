@@ -31,7 +31,7 @@ function formatBRL(value: number): string {
   return `R$ ${value.toLocaleString("pt-BR")}`;
 }
 
-const WHATSAPP_VENDEDOR = "5521995618747";
+const WHATSAPP_VENDEDOR = "5521967442665";
 const BARRA_LAT = -23.0003;
 const BARRA_LNG = -43.3650;
 const RAIO_EXPRESSA_KM = 70;

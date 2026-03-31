@@ -262,7 +262,12 @@ export default function StepQuote(p: StepQuoteProps) {
         });
         const compraUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/compra?${params.toString()}`;
         return (
-          <button onClick={() => { navigator.clipboard.writeText(compraUrl); }}
+          <button onClick={async () => {
+            try { await navigator.clipboard.writeText(compraUrl); } catch { /* fallback */ const t = document.createElement("textarea"); t.value = compraUrl; document.body.appendChild(t); t.select(); document.execCommand("copy"); document.body.removeChild(t); }
+            const btn = document.getElementById("btn-copy-link");
+            if (btn) { btn.textContent = "✅ Link copiado!"; setTimeout(() => { btn.textContent = "📋 Copiar link do formulario de compra"; }, 2500); }
+          }}
+            id="btn-copy-link"
             className="block w-full py-3 rounded-2xl text-[13px] font-medium text-center transition-all duration-200 active:scale-[0.98] mt-2"
             style={{ backgroundColor: "var(--ti-card-bg)", color: "var(--ti-accent)", border: "1px solid var(--ti-accent)" }}>
             &#x1F4CB; Copiar link do formulario de compra

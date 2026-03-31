@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 const VENDEDORES: Record<string, { nome: string; whatsapp: string }> = {
   andre: { nome: "André", whatsapp: "5521967442665" },
-  nicolas: { nome: "Nicolas", whatsapp: "5521995618747" },
+  nicolas: { nome: "Nicolas", whatsapp: "5521967442665" },
   bianca: { nome: "Bianca", whatsapp: "5521972461357" },
 };
 
