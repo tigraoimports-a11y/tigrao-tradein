@@ -167,8 +167,12 @@ function getModeloBase(produto: string, categoria: string): string {
   }
   if (baseCat === "IPADS") {
     if (p.includes("MINI")) return "iPad Mini";
-    if (p.includes("AIR")) return "iPad Air";
-    if (p.includes("PRO")) return "iPad Pro";
+    // Separar por tamanho (11", 13", etc)
+    const sizeMatch = p.match(/(\d{2})[""]/);
+    const size = sizeMatch ? ` ${sizeMatch[1]}"` : "";
+    if (p.includes("AIR")) return `iPad Air${size}`;
+    if (p.includes("PRO")) return `iPad Pro${size}`;
+    if (p.includes("A16")) return "iPad A16";
     return "iPad";
   }
   if (baseCat === "MAC_MINI") {
