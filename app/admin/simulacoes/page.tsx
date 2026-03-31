@@ -58,7 +58,7 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
@@ -195,11 +195,11 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
-      <div className="flex gap-2 items-center">
-        {(["simulacoes", "followup", "funil", "perguntas"] as const).map((t) => (
+      <div className="flex gap-2 items-center flex-wrap">
+        {(["simulacoes", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -222,6 +222,9 @@ export default function AdminPage() {
           <TradeInQuestionsAdmin password={password} />
         </div>
       )}
+
+      {/* WhatsApp Config tab */}
+      {mainTab === "whatsapp" && <WhatsAppConfigPanel password={password} />}
 
       {/* Follow-up tab */}
       {mainTab === "followup" && (() => {
@@ -830,6 +833,114 @@ export default function AdminPage() {
         </div>
       )}
       </>)}
+    </div>
+  );
+}
+
+/* ── WhatsApp Config Panel ── */
+function WhatsAppConfigPanel({ password }: { password: string }) {
+  const [principal, setPrincipal] = useState("");
+  const [vendedores, setVendedores] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [novoNome, setNovoNome] = useState("");
+  const [novoNum, setNovoNum] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/tradein-config", { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data) {
+          setPrincipal(j.data.whatsapp_principal || "5521967442665");
+          setVendedores(j.data.whatsapp_vendedores || {});
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [password]);
+
+  const salvar = async () => {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/tradein-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_vendedores: vendedores }),
+      });
+      const j = await res.json();
+      if (j.ok) setMsg("Salvo!");
+      else setMsg("Erro: " + (j.error || "desconhecido"));
+    } catch { setMsg("Erro de conexao"); }
+    setSaving(false);
+  };
+
+  if (loading) return <p className="text-sm text-[#86868B]">Carregando...</p>;
+
+  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
+
+  return (
+    <div className="space-y-4 max-w-lg">
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="font-bold text-[#1D1D1F] text-lg">WhatsApp Principal</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">Numero que recebe TODAS as mensagens (trade-in, formulario de compra, etc). Muda em tempo real.</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Numero principal (com DDI+DDD)</label>
+          <input type="text" inputMode="numeric" value={principal} onChange={e => setPrincipal(e.target.value.replace(/\D/g, ""))}
+            placeholder="5521967442665" className={inputCls} />
+        </div>
+
+        <button onClick={salvar} disabled={saving}
+          className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+          {saving ? "Salvando..." : "Salvar"}
+        </button>
+        {msg && <p className={`text-sm font-semibold ${msg.startsWith("Erro") ? "text-red-500" : "text-green-500"}`}>{msg}</p>}
+      </div>
+
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="font-bold text-[#1D1D1F]">Numeros por vendedor</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">Quando o link tem ?ref=nome, usa o numero desse vendedor. Se nao tiver, usa o principal.</p>
+        </div>
+
+        <div className="space-y-2">
+          {Object.entries(vendedores).sort(([a], [b]) => a.localeCompare(b)).map(([nome, num]) => (
+            <div key={nome} className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-[#1D1D1F] w-20">{nome}</span>
+              <input type="text" inputMode="numeric" value={num} onChange={e => setVendedores(prev => ({ ...prev, [nome]: e.target.value.replace(/\D/g, "") }))}
+                className={`${inputCls} flex-1`} />
+              <button onClick={() => { const v = { ...vendedores }; delete v[nome]; setVendedores(v); }}
+                className="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 rounded hover:bg-red-50">X</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 items-end border-t border-[#E8E8ED] pt-3">
+          <div className="flex-1">
+            <label className="block text-xs text-[#86868B] mb-1">Nome</label>
+            <input type="text" value={novoNome} onChange={e => setNovoNome(e.target.value.toLowerCase())} placeholder="ex: nicolas" className={inputCls} />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-[#86868B] mb-1">Numero</label>
+            <input type="text" inputMode="numeric" value={novoNum} onChange={e => setNovoNum(e.target.value.replace(/\D/g, ""))} placeholder="5521..." className={inputCls} />
+          </div>
+          <button onClick={() => {
+            if (novoNome && novoNum) {
+              setVendedores(prev => ({ ...prev, [novoNome]: novoNum }));
+              setNovoNome(""); setNovoNum("");
+            }
+          }} className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-green-500 text-white hover:bg-green-600">+</button>
+        </div>
+
+        <button onClick={salvar} disabled={saving}
+          className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+          {saving ? "Salvando..." : "Salvar vendedores"}
+        </button>
+      </div>
     </div>
   );
 }
