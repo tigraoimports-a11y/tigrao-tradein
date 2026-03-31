@@ -2224,6 +2224,33 @@ export default function EstoquePage() {
                         <span className={`text-[11px] ${textSecondary}`}>{items.length} variantes</span>
                         <span className={`text-[11px] font-medium ${textPrimary}`}>{items.reduce((s, p) => s + p.qnt, 0)} un.</span>
                         <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                        {/* Botão editar preço em massa — todas as unidades do grupo */}
+                        {isAdmin && (
+                          bulkCustoKey === modelo ? (
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <span className="text-[10px] text-white/30">R$</span>
+                              <input
+                                type="number"
+                                value={bulkCustoVal}
+                                onChange={(e) => setBulkCustoVal(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleBulkCusto(items); if (e.key === "Escape") { setBulkCustoKey(""); setBulkCustoVal(""); } }}
+                                className="w-24 px-2 py-1 rounded border border-[#0071E3] text-xs text-right bg-[#1A1A1A] text-white"
+                                placeholder="Novo preco"
+                                autoFocus
+                              />
+                              <button onClick={(e) => { e.stopPropagation(); handleBulkCusto(items); }} className="text-[11px] text-[#E8740E] font-bold">OK</button>
+                              <button onClick={(e) => { e.stopPropagation(); setBulkCustoKey(""); setBulkCustoVal(""); }} className="text-[11px] text-red-400">✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setBulkCustoKey(modelo); setBulkCustoVal(""); }}
+                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]"}`}
+                              title="Editar preco de todas as unidades"
+                            >
+                              Editar preco
+                            </button>
+                          )
+                        )}
                       </div>
                     </div>
                     <div className="overflow-x-auto">
