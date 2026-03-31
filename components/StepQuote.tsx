@@ -200,44 +200,53 @@ export default function StepQuote(p: StepQuoteProps) {
             </svg>
           </button>
 
+          {/* Modal popup de parcelas */}
           {showAllParc && (
-            <div className="mt-3 space-y-3 animate-fadeIn">
-              {/* Grid de parcelas — clique direto */}
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => setParc("pix")}
-                  className="flex flex-col items-center py-3 px-2 rounded-xl text-center transition-all"
-                  style={parc === "pix" ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid var(--ti-input-border, #D2D2D7)" }}>
-                  <span className="text-[12px] font-bold" style={{ color: "var(--ti-accent)" }}>PIX</span>
-                  <span className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(dif)}</span>
-                </button>
-                {parcOpts.filter(i => [2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(i.parcelas)).map((i) => (
-                  <button key={i.parcelas} onClick={() => setParc(String(i.parcelas))}
-                    className="flex flex-col items-center py-3 px-2 rounded-xl text-center transition-all"
-                    style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid var(--ti-input-border, #D2D2D7)" }}>
-                    <span className="text-[12px] font-bold" style={{ color: parc === String(i.parcelas) ? "var(--ti-accent)" : "var(--ti-text)" }}>{i.parcelas}x</span>
-                    <span className="text-[13px] font-semibold" style={{ color: parc === String(i.parcelas) ? "var(--ti-accent)" : "var(--ti-muted)" }}>{formatBRL(i.valorParcela)}</span>
-                  </button>
-                ))}
-              </div>
-
-              {instSel && (
-                <div className="rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
-                  {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
-                    <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
-                  </div>}
-                  <div className="flex justify-between text-[13px] mb-2">
-                    <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
-                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
-                  </div>
-                  <div className="flex justify-between text-[13px]">
-                    <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>{formatBRL(instSel.total)}</span>
-                  </div>
-                  {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
-                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
-                    <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
-                  </div>}
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAllParc(false)}>
+              <div className="w-full max-w-md mx-4 mb-4 sm:mb-0 rounded-2xl overflow-hidden animate-fadeIn" style={{ backgroundColor: "var(--ti-card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
+                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--ti-card-border, #E8E8ED)" }}>
+                  <p className="text-[15px] font-bold" style={{ color: "var(--ti-text)" }}>Escolha o parcelamento</p>
+                  <button onClick={() => setShowAllParc(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-[16px]" style={{ color: "var(--ti-muted)" }}>✕</button>
                 </div>
-              )}
+                <div className="px-4 py-3 max-h-[60vh] overflow-y-auto space-y-1.5">
+                  {/* PIX */}
+                  <button onClick={() => { setParc("pix"); setShowAllParc(false); }}
+                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all"
+                    style={parc === "pix" ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
+                    <span className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>PIX / A vista</span>
+                    <span className="text-[15px] font-bold" style={{ color: "var(--ti-accent)" }}>{formatBRL(dif)}</span>
+                  </button>
+                  {/* Parcelas */}
+                  {parcOpts.filter(i => [2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(i.parcelas)).map((i) => (
+                    <button key={i.parcelas} onClick={() => { setParc(String(i.parcelas)); setShowAllParc(false); }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+                      style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
+                      <span className="text-[14px] font-semibold" style={{ color: "var(--ti-text)" }}>{i.parcelas}x de {formatBRL(i.valorParcela)}</span>
+                      <span className="text-[12px]" style={{ color: "var(--ti-muted)" }}>(total {formatBRL(i.total)})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resumo da parcela selecionada — inline */}
+          {instSel && (
+            <div className="mt-3 rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+              {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
+                <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
+              </div>}
+              <div className="flex justify-between text-[13px] mb-2">
+                <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
+                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
+              </div>
+              <div className="flex justify-between text-[13px]">
+                <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>(total {formatBRL(instSel.total)})</span>
+              </div>
+              {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
+                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
+                <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
+              </div>}
             </div>
           )}
         </div>
@@ -349,11 +358,6 @@ export default function StepQuote(p: StepQuoteProps) {
         );
       })()}
 
-      <button onClick={onCotarOutro}
-        className="w-full py-4 rounded-2xl text-[15px] font-semibold transition-all duration-200 active:scale-[0.98]"
-        style={{ color: "#fff", backgroundColor: "#f97316", border: "1px solid #f97316" }}>
-        COTAR OUTRO MODELO
-      </button>
 
       {/* Edit buttons */}
       {onGoToStep && (
