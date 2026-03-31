@@ -1419,7 +1419,6 @@ export default function EstoquePage() {
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
-            { key: "seminovos", label: "Seminovos", count: seminovos.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
             { key: "reposicao", label: "Reposição", count: esgotados.length + acabando.length },
