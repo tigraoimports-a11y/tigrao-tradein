@@ -103,15 +103,40 @@ export default function OrcamentoPage() {
     })();
   }, [password, user]);
 
+  // Acessórios do estoque (não estão na tabela de preços)
+  const [acessoriosEstoque, setAcessoriosEstoque] = useState<Produto[]>([]);
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "admin") } })
+      .then(r => r.json())
+      .then(j => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const acess = (j.data ?? []).filter((p: any) => p.categoria === "ACESSORIOS" && p.tipo === "NOVO" && p.status === "EM ESTOQUE" && p.qnt > 0);
+        const seen = new Set<string>();
+        const mapped: Produto[] = [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const p of acess as any[]) {
+          if (!seen.has(p.produto)) {
+            seen.add(p.produto);
+            mapped.push({ id: p.id, modelo: p.produto, armazenamento: "", categoria: "ACESSORIOS", preco_pix: p.custo_unitario || 0, status: "ativo", nome: p.produto });
+          }
+        }
+        setAcessoriosEstoque(mapped);
+      }).catch(() => {});
+  }, [password, user]);
+
+  // Combinar produtos da tabela preços + acessórios do estoque
+  const todosProdutos = useMemo(() => [...produtos, ...acessoriosEstoque], [produtos, acessoriosEstoque]);
+
   const categorias = useMemo(() => {
-    const cats = [...new Set(produtos.map(p => p.categoria))].sort();
+    const cats = [...new Set(todosProdutos.map(p => p.categoria))].sort();
     return cats;
-  }, [produtos]);
+  }, [todosProdutos]);
 
   const produtosFiltrados = useMemo(() => {
-    if (!catSel) return produtos;
-    return produtos.filter(p => p.categoria === catSel);
-  }, [produtos, catSel]);
+    if (!catSel) return todosProdutos;
+    return todosProdutos.filter(p => p.categoria === catSel);
+  }, [todosProdutos, catSel]);
 
   const produtoSelecionado = useMemo(() => {
     return produtos.find(p => p.id === prodSel);
