@@ -113,6 +113,7 @@ function CompraForm() {
   const [shopping, setShopping] = useState("");
   const [formaPagamento, setFormaPagamento] = useState(formaParam);
   const [parcelas, setParcelas] = useState(parcelasParam);
+  const [editPagamento, setEditPagamento] = useState(!formaParam); // fechado se veio do trade-in
   const [origem, setOrigem] = useState("");
   const [instagram, setInstagram] = useState(instagramParam);
   const [cepLoading, setCepLoading] = useState(false);
@@ -374,6 +375,41 @@ function CompraForm() {
         {/* Pagamento */}
         <div className={cardCls}>
           <p className={sectionTitle}>Pagamento</p>
+
+          {/* Resumo fechado quando veio do trade-in */}
+          {!editPagamento && formaPagamento && (
+            <div className="space-y-2">
+              <div className="p-3 rounded-lg bg-green-50 border border-green-200 space-y-1.5">
+                {entradaPixParam && parseFloat(entradaPixParam) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#86868B]">Entrada no PIX</span>
+                    <span className="font-bold text-green-600">R$ {fmt(parseFloat(entradaPixParam))}</span>
+                  </div>
+                )}
+                {parcelas && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#86868B]">Parcelado</span>
+                    <span className="font-bold text-[#1D1D1F]">
+                      {parcelas}x{(() => { const p = parcOpts.find(o => o.parcelas === parseInt(parcelas)); return p ? ` de R$ ${fmt(p.valorParcela)} (total R$ ${fmt(p.total)})` : ""; })()}
+                    </span>
+                  </div>
+                )}
+                {formaPagamento === "PIX" && valorBase > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#86868B]">PIX a vista</span>
+                    <span className="font-bold text-green-600">R$ {fmt(valorBase)}</span>
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={() => setEditPagamento(true)}
+                className="w-full py-2 rounded-lg text-xs font-medium text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF5EB] transition-colors">
+                Editar forma de pagamento
+              </button>
+            </div>
+          )}
+
+          {/* Formulário completo de pagamento */}
+          {editPagamento && (<>
           <div>
             <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Forma de pagamento *</label>
             <div className="grid grid-cols-2 gap-2">
@@ -427,6 +463,7 @@ function CompraForm() {
               </div>
             </div>
           )}
+          </>)}
         </div>
 
         {/* Troca */}
