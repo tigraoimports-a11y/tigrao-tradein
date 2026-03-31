@@ -73,10 +73,13 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
     lines.push(`*DADOS DO CLIENTE:*`);
     lines.push(`Nome: ${semiNome || "Nao informado"}`);
     lines.push(`WhatsApp: ${semiWhatsapp || "Nao informado"}`);
-    lines.push("");
-    lines.push(`*MEU APARELHO ATUAL:*`);
-    lines.push(`Modelo: ${usedModel || "Nao informado"} ${usedStorage || ""}`);
-    lines.push(`Valor avaliado: R$ ${Math.round(tradeInValue).toLocaleString("pt-BR")}`);
+
+    if (usedModel || tradeInValue > 0) {
+      lines.push("");
+      lines.push(`*MEU APARELHO NA TROCA:*`);
+      lines.push(`Modelo: ${usedModel || "?"} ${usedStorage || ""}`);
+      if (tradeInValue > 0) lines.push(`Valor avaliado: R$ ${Math.round(tradeInValue).toLocaleString("pt-BR")}`);
+    }
 
     if (condition && deviceType) {
       lines.push("");
@@ -86,7 +89,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
     }
 
     lines.push("");
-    lines.push("Gostaria de saber o valor e condicoes de pagamento para a troca!");
+    lines.push("Gostaria de saber o valor e condicoes de pagamento!");
     return lines.join("\n");
   }
 
@@ -279,7 +282,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       formaPagamento: "WhatsApp Seminovo",
                     }),
                   }).catch(() => {});
-                  const waNum = whatsappNumber || "5521995618747";
+                  const waNum = whatsappNumber || "5521967442665";
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");
                 }}

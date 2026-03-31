@@ -21,12 +21,12 @@ interface UsedData {
 
 const VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:    "5521967442665",
-  nicolas:  "5521995618747",
+  nicolas:  "5521967442665",
   bianca:   "5521972461357",
-  anuncio:  "5521972461357",
-  direct:   "5521972461357",
-  story:    "5521972461357",
-  whatsapp: "5521972461357",
+  anuncio:  "5521967442665",
+  direct:   "5521967442665",
+  story:    "5521967442665",
+  whatsapp: "5521967442665",
 };
 
 export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }: { vendedor?: string | null; temaParam?: string | null }) {
