@@ -244,6 +244,32 @@ export default function StepQuote(p: StepQuoteProps) {
         DESEJO FECHAR MEU PEDIDO NO WHATSAPP
       </button>
 
+      {/* Link do formulário de compra para o vendedor enviar */}
+      {(() => {
+        const condLines = getAnyConditionLines(deviceType, condition);
+        const condStr = condLines.slice(0, 3).join(", ");
+        const params = new URLSearchParams({
+          produto: `${newModel} ${newStorage}`,
+          preco: String(Math.round(newPrice)),
+          whatsapp: whatsappNumero,
+          ...(vendedor ? { vendedor } : {}),
+          ...(usedModel ? { troca_produto: `${usedModel} ${usedStorage || ""}`.trim() } : {}),
+          ...(tradeInValue > 0 ? { troca_valor: String(Math.round(tradeInValue)) } : {}),
+          ...(condStr ? { troca_cond: condStr } : {}),
+          ...(clienteNome ? { nome: clienteNome } : {}),
+          ...(clienteWhatsApp ? { whatsapp_cliente: clienteWhatsApp } : {}),
+          ...(clienteInstagram ? { instagram: clienteInstagram } : {}),
+        });
+        const compraUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/compra?${params.toString()}`;
+        return (
+          <button onClick={() => { navigator.clipboard.writeText(compraUrl); }}
+            className="block w-full py-3 rounded-2xl text-[13px] font-medium text-center transition-all duration-200 active:scale-[0.98] mt-2"
+            style={{ backgroundColor: "var(--ti-card-bg)", color: "var(--ti-accent)", border: "1px solid var(--ti-accent)" }}>
+            &#x1F4CB; Copiar link do formulario de compra
+          </button>
+        );
+      })()}
+
       {/* Alternativas mais baratas */}
       {(() => {
         if (!allProducts || allProducts.length === 0) return null;
