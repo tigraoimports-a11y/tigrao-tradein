@@ -2212,18 +2212,7 @@ export default function EstoquePage() {
                                         </div>
                                       </td>
                                       <td className="px-4 py-2.5">
-                                        {isEditQnt ? (
-                                          <div className="flex items-center gap-1">
-                                            <input type="number" value={editingQnt[p.id]} onChange={(e) => setEditingQnt({ ...editingQnt, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0); if (e.key === "Escape") { const eq = { ...editingQnt }; delete eq[p.id]; setEditingQnt(eq); } }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-center" autoFocus />
-                                            <button onClick={() => handleUpdateQnt(p, parseInt(editingQnt[p.id]) || 0)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center gap-1">
-                                            {isAdmin && <button onClick={() => { if (p.qnt > 0) handleUpdateQnt(p, p.qnt - 1); }} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-red-100 hover:text-red-500 text-xs font-bold`}>-</button>}
-                                            <span className={`font-bold min-w-[24px] text-center ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""} ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`} onClick={() => isAdmin && setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) })}>{p.qnt}</span>
-                                            {isAdmin && <button onClick={() => handleUpdateQnt(p, p.qnt + 1)} className={`w-5 h-5 rounded ${bgSection} ${textSecondary} hover:bg-green-100 hover:text-green-600 text-xs font-bold`}>+</button>}
-                                          </div>
-                                        )}
+                                        <span className={`font-bold min-w-[24px] text-center ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`}>{p.qnt}</span>
                                       </td>
                                       <td className="px-4 py-2.5">
                                         {isEditCusto ? (
