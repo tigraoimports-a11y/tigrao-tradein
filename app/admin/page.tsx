@@ -78,6 +78,7 @@ export default function DashboardPage() {
         gastos: gastosArr,
         estoque: estoqueArr.filter((e: { tipo: string }) => e.tipo !== "PENDENCIA" && e.tipo !== "A_CAMINHO"),
         pendencias: estoqueArr.filter((e: { tipo: string }) => e.tipo === "PENDENCIA").length,
+        pendenciasItens: estoqueArr.filter((e: { tipo: string }) => e.tipo === "PENDENCIA"),
         aCaminho: estoqueArr.filter((e: { tipo: string }) => e.tipo === "A_CAMINHO"),
         d1Preview: d1Preview || null,
       });
@@ -263,7 +264,8 @@ export default function DashboardPage() {
   // Estoque — soma TUDO (todos os tipos/categorias)
   const valorEstoque = data.estoque.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
   const valorACaminho = data.aCaminho.reduce((s, e) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
-  const capitalProdutos = valorEstoque + valorACaminho;
+  const valorPendencias = (data.pendenciasItens || []).reduce((s: number, e: { qnt?: number; custo_unitario?: number }) => s + (e.qnt || 0) * (e.custo_unitario || 0), 0);
+  const capitalProdutos = valorEstoque + valorACaminho + valorPendencias;
   const patrimonio = capitalProdutos + saldoTotal; // d1Total adicionado abaixo após calcular
 
   // Fiado pendente
@@ -497,7 +499,7 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Patrimônio</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card icon="📦" title="Capital em Produtos" value={fmt(capitalProdutos)} color="text-blue-700" sub={`Estoque: ${fmt(valorEstoque)} | A caminho: ${fmt(valorACaminho)}`} />
+          <Card icon="📦" title="Capital em Produtos" value={fmt(capitalProdutos)} color="text-blue-700" sub={`Estoque: ${fmt(valorEstoque)} | A caminho: ${fmt(valorACaminho)}${valorPendencias > 0 ? ` | Pendências: ${fmt(valorPendencias)}` : ""}`} />
           <Card icon="⏳" title={`Vendas Pendentes (${vendasPendentes.length})`} value={fmt(valorPendente)} color="text-yellow-600" sub={vendasPendentes.slice(0, 3).map(v => v.cliente).join(" | ") || "Nenhuma"} />
           <Card icon="⚠️" title={`Pendências Troca`} value={String(data.pendencias)} color="text-red-600" sub="Aguardando devolução" />
         </div>
