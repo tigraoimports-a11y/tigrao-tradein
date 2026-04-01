@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [patrimonioBase, setPatrimonioBase] = useState<{ patrimonio_base: number; estoque_base: number; saldos_base: number; distribuicao_lucro: number } | null>(null);
   const [editingPatrimonio, setEditingPatrimonio] = useState(false);
   const [patInput, setPatInput] = useState({ base: "", retirada: "" });
+  const [dashMes, setDashMes] = useState(""); // "" = mês atual
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -99,7 +100,23 @@ export default function DashboardPage() {
   if (loading || !data) return <div className="p-8 text-center text-[#86868B]">Carregando dashboard...</div>;
 
   const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-  const mesAtual = hoje.slice(0, 7);
+  const mesAtual = dashMes || hoje.slice(0, 7);
+  const isCurrentMonth = mesAtual === hoje.slice(0, 7);
+
+  const MESES_PT = ["", "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const mesLabel = `${MESES_PT[parseInt(mesAtual.split("-")[1])]} ${mesAtual.split("-")[0]}`;
+
+  const prevMes = () => {
+    const [y, m] = mesAtual.split("-").map(Number);
+    const d = new Date(y, m - 2, 1);
+    setDashMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const nextMes = () => {
+    const [y, m] = mesAtual.split("-").map(Number);
+    const d = new Date(y, m, 1);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (next <= hoje.slice(0, 7)) setDashMes(next === hoje.slice(0, 7) ? "" : next);
+  };
 
   // Vendas do mês
   const vendasMes = data.vendas.filter(v => v.data?.startsWith(mesAtual) && v.status_pagamento !== "CANCELADO");
@@ -306,9 +323,24 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              const mes = new Date().toISOString().slice(0, 7);
-              window.open(`/admin/relatorio?month=${mes}`, "_blank");
+            onClick={async () => {
+              // Gerar PDF mensal (sem enviar email)
+              const res = await fetch(`/api/reports/mensal?mes=${mesAtual}&no_email=1`, {
+                headers: { "x-admin-password": password },
+              });
+              if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `tigrao_mensal_${mesAtual.replace("-", "_")}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } else {
+                alert("Erro ao gerar PDF");
+              }
             }}
             className="px-3 py-2 rounded-xl bg-[#F5F5F7] text-[#1D1D1F] text-sm font-medium hover:bg-[#E8E8ED] transition-colors"
           >
@@ -427,7 +459,12 @@ export default function DashboardPage() {
 
       {/* Resumo do Mês */}
       <div>
-        <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Março 2026</h2>
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={prevMes} className="text-[#86868B] hover:text-[#E8740E] transition-colors text-lg">◀</button>
+          <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider">{mesLabel.toUpperCase()}</h2>
+          {!isCurrentMonth && <button onClick={nextMes} className="text-[#86868B] hover:text-[#E8740E] transition-colors text-lg">▶</button>}
+          {!isCurrentMonth && <button onClick={() => setDashMes("")} className="text-[10px] text-[#E8740E] hover:underline">Mês atual</button>}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card icon="💰" title="Faturamento do Mês" value={fmt(totalVendidoMes)} color="text-blue-700" sub={`${vendasMes.length} vendas | Custo: ${fmt(totalCustoMes)}`} />
           <Card icon="📈" title="Lucro Bruto" value={fmt(lucroMes)} color="text-green-700" sub={`Margem média: ${margemMedia}%`} />

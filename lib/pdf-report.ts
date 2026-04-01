@@ -908,3 +908,386 @@ export async function generateWeeklyPDF(config: ReportConfig): Promise<Buffer> {
     doc.end();
   });
 }
+
+// ============================================
+// Monthly Report — PDF Completo
+// ============================================
+
+export interface MonthlyReportData {
+  mes: string; // "Marco 2026"
+  vendas: VendaSemana[];
+  gastos: GastoSemana[];
+  patrimonio?: { produtos: number; itau: number; infinite: number; mp: number; especie: number };
+  retiradaLucro?: number;
+}
+
+export async function generateMonthlyPDF(data: MonthlyReportData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 30, info: { Title: `Relatorio Mensal - ${data.mes}`, Author: "TigraoImports" } });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const W = 535; // content width (A4 - 2*30)
+    const margin = 30;
+
+    // Aggregations
+    const totalVendas = data.vendas.length;
+    const totalFat = data.vendas.reduce((s, v) => s + v.preco_vendido, 0);
+    const totalCusto = data.vendas.reduce((s, v) => s + v.custo, 0);
+    const totalLucro = data.vendas.reduce((s, v) => s + v.lucro, 0);
+    const margemMedia = totalFat > 0 ? (totalLucro / totalFat * 100) : 0;
+
+    // Gastos sem fornecedor e sem retirada
+    const fornecedor = data.gastos.filter(g => g.categoria === "FORNECEDOR").reduce((s, g) => s + g.valor, 0);
+    const transferencias = data.gastos.filter(g => g.categoria === "TRANSFERENCIA").reduce((s, g) => s + g.valor, 0);
+    const retirada = data.retiradaLucro || 0;
+    const gastosSemFornecedor = data.gastos.reduce((s, g) => s + g.valor, 0) - fornecedor;
+    const gastosOperacionais = gastosSemFornecedor - retirada - transferencias;
+    const lucroLiquido = totalLucro - gastosOperacionais;
+
+    // By type
+    const byTipo: Record<string, { qty: number; fat: number; lucro: number }> = {};
+    data.vendas.forEach(v => {
+      const t = v.tipo || "VENDA";
+      if (!byTipo[t]) byTipo[t] = { qty: 0, fat: 0, lucro: 0 };
+      byTipo[t].qty++; byTipo[t].fat += v.preco_vendido; byTipo[t].lucro += v.lucro;
+    });
+
+    // By forma
+    const byForma: Record<string, number> = {};
+    data.vendas.forEach(v => { byForma[v.forma || "OUTRO"] = (byForma[v.forma || "OUTRO"] || 0) + 1; });
+
+    // By origem
+    const byOrigem: Record<string, number> = {};
+    data.vendas.forEach(v => { byOrigem[v.origem || "N/I"] = (byOrigem[v.origem || "N/I"] || 0) + 1; });
+
+    // Top 10 produtos
+    const byProduto: Record<string, number> = {};
+    data.vendas.forEach(v => { const p = (v.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN).*$/i, "").trim(); byProduto[p] = (byProduto[p] || 0) + 1; });
+    const top10Prod = Object.entries(byProduto).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    // Top clientes CF vs Atacado
+    const clientesCF: Record<string, { qty: number; lucro: number; fat: number }> = {};
+    const clientesAT: Record<string, { qty: number; lucro: number; fat: number }> = {};
+    data.vendas.forEach(v => {
+      const c = (v.cliente || "Desconhecido").toUpperCase().trim();
+      const target = v.tipo === "ATACADO" ? clientesAT : clientesCF;
+      if (!target[c]) target[c] = { qty: 0, lucro: 0, fat: 0 };
+      target[c].qty++; target[c].lucro += v.lucro; target[c].fat += v.preco_vendido;
+    });
+    const top10CF = Object.entries(clientesCF).sort((a, b) => b[1].qty - a[1].qty).slice(0, 10);
+    const top10AT = Object.entries(clientesAT).sort((a, b) => b[1].qty - a[1].qty).slice(0, 10);
+
+    // By day
+    const byDay: Record<string, { qty: number; fat: number; lucro: number }> = {};
+    data.vendas.forEach(v => {
+      if (!byDay[v.data]) byDay[v.data] = { qty: 0, fat: 0, lucro: 0 };
+      byDay[v.data].qty++; byDay[v.data].fat += v.preco_vendido; byDay[v.data].lucro += v.lucro;
+    });
+
+    // Gastos by category
+    const gastosByCat: Record<string, number> = {};
+    data.gastos.forEach(g => {
+      if (g.categoria === "FORNECEDOR" || g.categoria === "TRANSFERENCIA") return;
+      const cat = g.categoria === "SALARIO" ? (g.descricao?.toUpperCase().includes("RETIRADA") ? "RETIRADA" : "SALARIO FUNC") : g.categoria;
+      if (cat === "RETIRADA") return;
+      gastosByCat[cat] = (gastosByCat[cat] || 0) + g.valor;
+    });
+
+    // Helpers
+    const fmt = (n: number) => fmtBRL(n);
+    const fmtS = (n: number) => fmtBRLShort(n);
+    let pageNum = 0;
+
+    function header(title: string) {
+      pageNum++;
+      if (pageNum > 1) doc.addPage();
+      // Orange bar
+      doc.save();
+      doc.rect(0, 0, 595, 55).fill(COLORS.accent);
+      doc.fontSize(18).font("Helvetica-Bold").fillColor("#FFFFFF").text("TigraoImports", margin, 12);
+      doc.fontSize(9).font("Helvetica").text(`Relatorio Financeiro — ${data.mes}`, margin, 33);
+      doc.fontSize(11).font("Helvetica-Bold").text(title, 595 - margin - 200, 20, { width: 200, align: "right" });
+      doc.restore();
+      doc.y = 70;
+    }
+
+    function footer() {
+      const now = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      doc.fontSize(7).font("Helvetica").fillColor(COLORS.textMuted);
+      doc.text(`Gerado em ${now} — TigraoImports — Confidencial`, margin, 810, { width: W, align: "center" });
+      doc.text(`Pagina ${pageNum}`, margin, 810, { width: W, align: "right" });
+    }
+
+    function section(title: string) {
+      if (doc.y > 750) { footer(); header(title); }
+      doc.fontSize(12).font("Helvetica-Bold").fillColor(COLORS.text).text(title, margin, doc.y + 5);
+      doc.moveTo(margin, doc.y + 3).lineTo(margin + title.length * 6.5, doc.y + 3).lineWidth(2).strokeColor(COLORS.accent).stroke();
+      doc.y += 10;
+      doc.lineWidth(1);
+    }
+
+    function kpiRow(items: { label: string; value: string; color?: string }[]) {
+      const cardW = W / items.length - 5;
+      const y0 = doc.y;
+      items.forEach((item, i) => {
+        const x = margin + i * (cardW + 5);
+        doc.save();
+        doc.roundedRect(x, y0, cardW, 48, 4).lineWidth(0.5).strokeColor(COLORS.grayBorder).fillAndStroke("#FAFAFA", COLORS.grayBorder);
+        doc.fontSize(7).font("Helvetica").fillColor(COLORS.textMuted).text(item.label, x + 8, y0 + 6, { width: cardW - 16 });
+        doc.fontSize(14).font("Helvetica-Bold").fillColor(item.color || COLORS.text).text(item.value, x + 8, y0 + 20, { width: cardW - 16 });
+        doc.restore();
+      });
+      doc.y = y0 + 55;
+    }
+
+    function tableRow(cols: { text: string; width: number; bold?: boolean; color?: string; align?: string }[]) {
+      const y0 = doc.y;
+      cols.forEach(col => {
+        doc.fontSize(8).font(col.bold ? "Helvetica-Bold" : "Helvetica").fillColor(col.color || COLORS.text);
+        const x = margin + cols.slice(0, cols.indexOf(col)).reduce((s, c) => s + c.width, 0);
+        if (col.align === "right") {
+          doc.text(col.text, x, y0, { width: col.width - 5, align: "right" });
+        } else {
+          doc.text(col.text, x, y0, { width: col.width });
+        }
+      });
+      doc.y = y0 + 14;
+    }
+
+    function hLine() {
+      doc.moveTo(margin, doc.y).lineTo(margin + W, doc.y).strokeColor(COLORS.grayBorder).stroke();
+      doc.y += 5;
+    }
+
+    function barInline(x: number, y: number, w: number, h: number, ratio: number, color: string) {
+      doc.save();
+      doc.roundedRect(x, y, w, h, 3).fill("#F0F0F0");
+      if (ratio > 0) doc.roundedRect(x, y, Math.max(w * ratio, 6), h, 3).fill(color);
+      doc.restore();
+    }
+
+    // ===== PAGE 1: RESUMO EXECUTIVO =====
+    header("Resumo Executivo");
+
+    kpiRow([
+      { label: "Faturamento", value: fmtS(totalFat), color: COLORS.blue },
+      { label: "Custo Total", value: fmtS(totalCusto) },
+      { label: "Lucro Bruto", value: fmt(totalLucro), color: COLORS.green },
+      { label: "Lucro Liquido", value: fmt(lucroLiquido), color: lucroLiquido > 0 ? COLORS.green : COLORS.red },
+    ]);
+
+    kpiRow([
+      { label: "Total Vendas", value: String(totalVendas) },
+      { label: "Ticket Medio", value: fmt(totalFat / (totalVendas || 1)) },
+      { label: "Margem Media", value: fmtPct(margemMedia) },
+      { label: "Media Diaria Lucro", value: fmt(totalLucro / 31), color: COLORS.green },
+    ]);
+
+    // Tipos de venda
+    section("Resultado por Tipo de Venda");
+    const tipoLabels: Record<string, string> = { VENDA: "Venda Normal", ATACADO: "Atacado", UPGRADE: "Upgrade (Troca)" };
+    const tipoColors: Record<string, string> = { VENDA: COLORS.blue, ATACADO: COLORS.purple, UPGRADE: COLORS.green };
+    for (const tipo of ["VENDA", "UPGRADE", "ATACADO"]) {
+      const info = byTipo[tipo] || { qty: 0, fat: 0, lucro: 0 };
+      tableRow([
+        { text: tipoLabels[tipo] || tipo, width: 160, bold: true },
+        { text: `${info.qty} vendas`, width: 80 },
+        { text: `Fat: ${fmt(info.fat)}`, width: 130 },
+        { text: `Lucro: ${fmt(info.lucro)}`, width: 130, bold: true, color: COLORS.green },
+      ]);
+    }
+    doc.y += 5;
+
+    // Formas de pagamento
+    section("Formas de Pagamento");
+    const maxForma = Math.max(...Object.values(byForma));
+    for (const [forma, qty] of Object.entries(byForma).sort((a, b) => b[1] - a[1])) {
+      const pct = qty / totalVendas * 100;
+      const y0 = doc.y;
+      doc.fontSize(9).font("Helvetica").fillColor(COLORS.text).text(forma, margin, y0, { width: 100 });
+      doc.text(`${qty} (${pct.toFixed(0)}%)`, margin + 100, y0, { width: 80 });
+      barInline(margin + 200, y0, 200, 12, qty / maxForma, COLORS.blue);
+      doc.y = y0 + 17;
+    }
+    doc.y += 5;
+
+    // Origens
+    section("Origem das Vendas");
+    const origLabels: Record<string, string> = { RECOMPRA: "Recompra", ATACADO: "Atacado", INDICACAO: "Indicacao", ANUNCIO: "Anuncio", NAO_INFORMARAM: "N/I" };
+    const maxOrig = Math.max(...Object.values(byOrigem));
+    for (const [orig, qty] of Object.entries(byOrigem).sort((a, b) => b[1] - a[1])) {
+      const y0 = doc.y;
+      doc.fontSize(9).font("Helvetica").fillColor(COLORS.text).text(origLabels[orig] || orig, margin, y0, { width: 120 });
+      doc.text(`${qty} (${(qty / totalVendas * 100).toFixed(0)}%)`, margin + 120, y0, { width: 80 });
+      barInline(margin + 220, y0, 180, 12, qty / maxOrig, COLORS.accent);
+      doc.y = y0 + 17;
+    }
+
+    footer();
+
+    // ===== PAGE 2: PRODUTOS E GASTOS =====
+    header("Produtos e Gastos");
+
+    section("Top 10 Produtos Mais Vendidos");
+    const maxProdQty = top10Prod[0]?.[1] || 1;
+    top10Prod.forEach(([nome, qty], i) => {
+      const y0 = doc.y;
+      doc.fontSize(8).font(i < 3 ? "Helvetica-Bold" : "Helvetica").fillColor(COLORS.text);
+      doc.text(`${i + 1}. ${nome.substring(0, 42)}`, margin, y0, { width: 320 });
+      doc.text(`${qty}x`, margin + 330, y0, { width: 30 });
+      barInline(margin + 370, y0, 130, 11, qty / maxProdQty, i < 3 ? COLORS.accent : COLORS.grayBorder);
+      doc.y = y0 + 15;
+    });
+    doc.y += 10;
+
+    // Gastos
+    section("Gastos Operacionais");
+    const maxGasto = Math.max(...Object.values(gastosByCat), 1);
+    for (const [cat, val] of Object.entries(gastosByCat).sort((a, b) => b[1] - a[1])) {
+      const y0 = doc.y;
+      doc.fontSize(8).font("Helvetica").fillColor(COLORS.text).text(cat, margin, y0, { width: 140 });
+      doc.text(fmt(val), margin + 150, y0, { width: 80, align: "right" });
+      barInline(margin + 250, y0, 200, 11, val / maxGasto, COLORS.red);
+      doc.y = y0 + 15;
+    }
+    doc.y += 3;
+    hLine();
+    doc.fontSize(9).font("Helvetica-Bold").fillColor(COLORS.text).text("Total Gastos Operacionais", margin, doc.y);
+    doc.fillColor(COLORS.red).text(fmt(gastosOperacionais), margin + 150, doc.y - 12, { width: 80, align: "right" });
+    doc.y += 15;
+
+    // DRE
+    section("DRE Simplificado");
+    const dreItems: [string, number, string][] = [
+      ["(+) Faturamento Bruto", totalFat, COLORS.text],
+      ["(-) Custo dos Produtos", totalCusto, COLORS.textLight],
+      ["(=) Lucro Bruto", totalLucro, COLORS.green],
+      ["(-) Gastos Operacionais", gastosOperacionais, COLORS.red],
+      ["(=) LUCRO LIQUIDO", lucroLiquido, lucroLiquido > 0 ? COLORS.green : COLORS.red],
+    ];
+    if (retirada > 0) {
+      dreItems.push(["", 0, ""]);
+      dreItems.push(["(-) Distribuicao de Lucros", retirada, COLORS.accent]);
+      dreItems.push(["(=) RESULTADO FINAL", lucroLiquido - retirada, (lucroLiquido - retirada) >= 0 ? COLORS.green : COLORS.red]);
+    }
+    for (const [label, val, color] of dreItems) {
+      if (!label) { doc.y += 5; continue; }
+      const bold = label.includes("LUCRO") || label.includes("Bruto") || label.includes("RESULTADO");
+      doc.fontSize(bold ? 10 : 9).font(bold ? "Helvetica-Bold" : "Helvetica").fillColor(color);
+      doc.text(label, margin, doc.y, { continued: false });
+      doc.text(fmt(Math.abs(val)), margin + 250, doc.y - 12, { width: 150, align: "right" });
+      if (bold) { doc.moveTo(margin, doc.y + 2).lineTo(margin + 400, doc.y + 2).strokeColor(COLORS.accent).stroke(); }
+      doc.y += 5;
+    }
+
+    footer();
+
+    // ===== PAGE 3: CLIENTES =====
+    header("Clientes");
+
+    section("Top 10 Clientes — Cliente Final");
+    tableRow([
+      { text: "#", width: 20, bold: true, color: COLORS.textMuted },
+      { text: "CLIENTE", width: 220, bold: true, color: COLORS.textMuted },
+      { text: "QTD", width: 40, bold: true, color: COLORS.textMuted },
+      { text: "FATURAMENTO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+      { text: "LUCRO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+    ]);
+    hLine();
+    top10CF.forEach(([nome, info], i) => {
+      tableRow([
+        { text: `${i + 1}`, width: 20, bold: i < 3 },
+        { text: nome.substring(0, 35), width: 220, bold: i < 3 },
+        { text: `${info.qty}x`, width: 40 },
+        { text: fmt(info.fat), width: 100, align: "right" },
+        { text: fmt(info.lucro), width: 100, bold: true, color: COLORS.green, align: "right" },
+      ]);
+    });
+    doc.y += 15;
+
+    section("Top 10 Clientes — Atacado");
+    tableRow([
+      { text: "#", width: 20, bold: true, color: COLORS.textMuted },
+      { text: "CLIENTE", width: 220, bold: true, color: COLORS.textMuted },
+      { text: "QTD", width: 40, bold: true, color: COLORS.textMuted },
+      { text: "FATURAMENTO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+      { text: "LUCRO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+    ]);
+    hLine();
+    top10AT.forEach(([nome, info], i) => {
+      tableRow([
+        { text: `${i + 1}`, width: 20, bold: i < 3 },
+        { text: nome.substring(0, 35), width: 220, bold: i < 3 },
+        { text: `${info.qty}x`, width: 40 },
+        { text: fmt(info.fat), width: 100, align: "right" },
+        { text: fmt(info.lucro), width: 100, bold: true, color: COLORS.accent, align: "right" },
+      ]);
+    });
+
+    footer();
+
+    // ===== PAGE 4: VENDAS DIARIAS =====
+    header("Vendas Diarias");
+    section(`Desempenho Diario — ${data.mes}`);
+
+    tableRow([
+      { text: "DIA", width: 70, bold: true, color: COLORS.textMuted },
+      { text: "QTD", width: 40, bold: true, color: COLORS.textMuted },
+      { text: "FATURAMENTO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+      { text: "LUCRO", width: 100, bold: true, color: COLORS.textMuted, align: "right" },
+      { text: "MARGEM", width: 60, bold: true, color: COLORS.textMuted },
+      { text: "", width: 130 },
+    ]);
+    hLine();
+
+    const maxDayFat = Math.max(...Object.values(byDay).map(d => d.fat), 1);
+    for (const [dia, dados] of Object.entries(byDay).sort()) {
+      if (doc.y > 760) { footer(); header("Vendas Diarias (cont.)"); }
+      const mg = dados.fat > 0 ? (dados.lucro / dados.fat * 100) : 0;
+      const y0 = doc.y;
+      doc.fontSize(8).font("Helvetica").fillColor(COLORS.text);
+      doc.text(`${dia.split("-")[2]}/${dia.split("-")[1]} ${dateToDiaSemana(dia)}`, margin, y0, { width: 70 });
+      doc.text(String(dados.qty), margin + 70, y0, { width: 40 });
+      doc.text(fmt(dados.fat), margin + 110, y0, { width: 100, align: "right" });
+      doc.fillColor(dados.lucro > 0 ? COLORS.green : COLORS.red).text(fmt(dados.lucro), margin + 210, y0, { width: 100, align: "right" });
+      doc.fillColor(COLORS.text).text(fmtPct(mg), margin + 310, y0, { width: 60 });
+      barInline(margin + 380, y0, 120, 10, dados.fat / maxDayFat, COLORS.accent);
+      doc.y = y0 + 14;
+    }
+
+    // Patrimônio (if available)
+    if (data.patrimonio) {
+      if (doc.y > 650) { footer(); header("Patrimonio"); }
+      doc.y += 10;
+      section(`Patrimonio — Inicio ${data.mes.split(" ")[0] === "Marco" ? "Abril" : ""} 2026`);
+      const p = data.patrimonio;
+      const totalContas = p.itau + p.infinite + p.mp + p.especie;
+      const totalPat = p.produtos + totalContas;
+      const patItems: [string, string][] = [
+        ["Capital em Produtos", fmt(p.produtos)],
+        ["Saldo Itau", fmt(p.itau)],
+        ["Saldo InfinitePay", fmt(p.infinite)],
+        ["Saldo Mercado Pago", fmt(p.mp)],
+        ["Saldo Especie", fmt(p.especie)],
+        ["Total em Contas", fmt(totalContas)],
+        ["PATRIMONIO TOTAL", fmt(totalPat)],
+      ];
+      for (const [label, value] of patItems) {
+        const isPat = label.includes("PATRIMONIO");
+        const isTot = label.includes("Total em Contas");
+        doc.fontSize(isPat ? 11 : 9).font(isPat || isTot ? "Helvetica-Bold" : "Helvetica");
+        doc.fillColor(isPat ? COLORS.accent : isTot ? COLORS.blue : COLORS.text);
+        doc.text(label, margin, doc.y, { continued: false });
+        doc.text(value, margin + 250, doc.y - (isPat ? 14 : 12), { width: 150, align: "right" });
+        if (isPat) { doc.moveTo(margin, doc.y + 2).lineTo(margin + 400, doc.y + 2).lineWidth(2).strokeColor(COLORS.accent).stroke(); doc.lineWidth(1); }
+        doc.y += 3;
+      }
+    }
+
+    footer();
+    doc.end();
+  });
+}
