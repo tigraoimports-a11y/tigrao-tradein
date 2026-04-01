@@ -1116,7 +1116,7 @@ export default function EstoquePage() {
     if (filterCat && p.categoria !== filterCat) return false;
     if (search) {
       const s = search.toLowerCase();
-      if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s)) && !(p.imei?.toLowerCase().includes(s))) return false;
+      if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s)) && !(p.imei?.toLowerCase().includes(s)) && !(p.serial_no?.toLowerCase().includes(s))) return false;
     }
     return true;
   });
@@ -2049,45 +2049,54 @@ export default function EstoquePage() {
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : !filterCat && ["estoque", "acaminho", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {categoriasState.map((cat) => {
                 const sourceList = tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : emEstoque;
-                const count = sourceList.filter((p) => p.categoria === cat.key).length;
-                const units = sourceList.filter((p) => p.categoria === cat.key).reduce((s, p) => s + p.qnt, 0);
+                const items = sourceList.filter((p) => p.categoria === cat.key);
+                const count = items.length;
+                const units = items.reduce((s, p) => s + p.qnt, 0);
+                const valorTotal = items.reduce((s, p) => s + (p.custo_unitario || 0) * p.qnt, 0);
                 if (count === 0) return null;
                 const isEditing = editingCatName === cat.key;
                 return (
-                  <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
+                  <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
                     {/* Edit button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingCatName(cat.key); setEditCatLabel(cat.label); }}
-                      className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F5F5F7] text-[#86868B]"} hover:text-[#E8740E]`}
+                      className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10 ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-white/80 text-[#86868B]"} hover:text-[#E8740E]`}
                       title="Editar nome"
                     >
                       ✏️
                     </button>
                     <div className="cursor-pointer" onClick={() => !isEditing && setFilterCat(cat.key)}>
-                      <div className="text-[40px] mb-4">{cat.emoji}</div>
-                      {isEditing ? (
-                        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            value={editCatLabel}
-                            onChange={(e) => setEditCatLabel(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleEditCategoriaEstoque(cat.key); if (e.key === "Escape") setEditingCatName(""); }}
-                            className={`w-full px-2 py-1.5 rounded-lg border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
-                            autoFocus
-                          />
-                          <div className="flex gap-1">
-                            <button onClick={() => handleEditCategoriaEstoque(cat.key)} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white">Salvar</button>
-                            <button onClick={() => setEditingCatName("")} className={`px-2 py-1 rounded text-[11px] ${textSecondary}`}>Cancelar</button>
-                          </div>
+                      <div className={`px-5 pt-5 pb-3 flex items-center gap-3`}>
+                        <span className="text-[32px]">{cat.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          {isEditing ? (
+                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                value={editCatLabel}
+                                onChange={(e) => setEditCatLabel(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleEditCategoriaEstoque(cat.key); if (e.key === "Escape") setEditingCatName(""); }}
+                                className={`w-full px-2 py-1.5 rounded-lg border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                                autoFocus
+                              />
+                              <div className="flex gap-1">
+                                <button onClick={() => handleEditCategoriaEstoque(cat.key)} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white">Salvar</button>
+                                <button onClick={() => setEditingCatName("")} className={`px-2 py-1 rounded text-[11px] ${textSecondary}`}>Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors truncate`}>{cat.label}</h3>
+                          )}
                         </div>
-                      ) : (
-                        <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className={`text-[12px] ${textSecondary}`}>{count} produtos</span>
-                        <span className={`text-[12px] ${textMuted}`}>{units} un.</span>
+                      </div>
+                      <div className={`px-5 pb-4 flex items-center justify-between`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs font-semibold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{units} un.</span>
+                          <span className={`text-[11px] ${textMuted}`}>{count} modelos</span>
+                        </div>
+                        {valorTotal > 0 && <span className={`text-[11px] font-medium ${textSecondary}`}>R$ {Math.round(valorTotal).toLocaleString("pt-BR")}</span>}
                       </div>
                     </div>
                   </div>
