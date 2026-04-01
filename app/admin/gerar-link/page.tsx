@@ -256,6 +256,34 @@ export default function GerarLinkPage() {
           />
         </div>
 
+        {/* Troca / Trade-in */}
+        <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Produto do cliente</label>
+              <input
+                type="text"
+                value={trocaProduto}
+                onChange={(e) => setTrocaProduto(e.target.value)}
+                placeholder="Ex: iPhone 15 Pro Max 256GB"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Valor da troca (R$)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={trocaValor}
+                onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
+                placeholder="Ex: 4.500"
+                className={inputCls}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className={showParcelas ? "" : "col-span-2"}>
             <label className={labelCls}>Forma de Pagamento</label>
@@ -334,34 +362,6 @@ export default function GerarLinkPage() {
               onChange={(e) => setDataEntrega(e.target.value)}
               className={inputCls}
             />
-          </div>
-        </div>
-
-        {/* Troca / Trade-in */}
-        <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
-          <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Produto do cliente</label>
-              <input
-                type="text"
-                value={trocaProduto}
-                onChange={(e) => setTrocaProduto(e.target.value)}
-                placeholder="Ex: iPhone 15 Pro Max 256GB"
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Valor da troca (R$)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={trocaValor}
-                onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
-                placeholder="Ex: 4.500"
-                className={inputCls}
-              />
-            </div>
           </div>
         </div>
 
