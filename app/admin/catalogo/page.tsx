@@ -536,7 +536,11 @@ function ModelosTab({ data, headers, reload }: TabProps) {
         getCatNome(m.categoria_key).toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      if (a.categoria_key !== b.categoria_key) return a.categoria_key.localeCompare(b.categoria_key);
+      if (a.categoria_key !== b.categoria_key) {
+        const catOrdemA = data.categorias.find((c) => c.key === a.categoria_key)?.ordem ?? 999;
+        const catOrdemB = data.categorias.find((c) => c.key === b.categoria_key)?.ordem ?? 999;
+        return catOrdemA - catOrdemB;
+      }
       return a.ordem - b.ordem;
     });
 
