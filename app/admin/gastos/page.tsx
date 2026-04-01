@@ -123,7 +123,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
 
   const startEdit = (p: any) => {
     setEditId(p.id);
-    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "" });
+    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "", custo_unitario: String(p.custo_unitario || ""), qnt: String(p.qnt || 1) });
   };
 
   const saveEdit = async () => {
@@ -134,9 +134,25 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
       const original = produtos.find((p: any) => p.id === editId);
       if (editFields.serial_no !== (original?.serial_no || "")) updates.serial_no = editFields.serial_no.toUpperCase() || null;
       if (editFields.imei !== (original?.imei || "")) updates.imei = editFields.imei || null;
-      if (editFields.produto !== (original?.produto || "")) updates.produto = editFields.produto.toUpperCase() || null;
-      if (editFields.observacao !== (original?.observacao || "")) updates.observacao = editFields.observacao || null;
       if (editFields.cor !== (original?.cor || "")) updates.cor = editFields.cor || null;
+      if (editFields.custo_unitario !== String(original?.custo_unitario || "")) updates.custo_unitario = parseFloat(editFields.custo_unitario) || 0;
+      if (editFields.qnt !== String(original?.qnt || 1)) updates.qnt = parseInt(editFields.qnt) || 1;
+      // Atualizar origem no nome do produto automaticamente
+      const origemMudou = editFields.observacao !== (original?.observacao || "");
+      if (origemMudou) {
+        updates.observacao = editFields.observacao || null;
+        // Trocar código de origem no nome: remover origem antiga e adicionar nova
+        let nome = editFields.produto || original?.produto || "";
+        // Remover origem antiga do nome (ex: " VC (CAN)", " LL (EUA)")
+        nome = nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
+        // Adicionar nova origem
+        const novaOrigem = editFields.observacao ? editFields.observacao.split(" ")[0] : "";
+        const origemPais = editFields.observacao?.match(/\(([^)]+)\)/)?.[1] || "";
+        if (novaOrigem) nome = `${nome} ${novaOrigem}${origemPais ? ` (${origemPais})` : ""}`;
+        updates.produto = nome.toUpperCase();
+      } else if (editFields.produto !== (original?.produto || "")) {
+        updates.produto = editFields.produto.toUpperCase() || null;
+      }
       if (Object.keys(updates).length > 0) {
         await fetch("/api/estoque", {
           method: "PATCH",
@@ -188,6 +204,14 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                       <option value="">— Sem origem —</option>
                       {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Custo (R$)</p>
+                    <input type="number" value={editFields.custo_unitario} onChange={(e) => setEditFields(f => ({ ...f, custo_unitario: e.target.value }))} placeholder="0" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Qtd</p>
+                    <input type="number" value={editFields.qnt} onChange={(e) => setEditFields(f => ({ ...f, qnt: e.target.value }))} placeholder="1" className={inputCls} />
                   </div>
                 </div>
                 <div className="flex gap-2">
