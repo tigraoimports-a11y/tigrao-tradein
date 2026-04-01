@@ -61,23 +61,25 @@ export default function GerarLinkPage() {
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
 
-    // Comprimir com deflate-raw via CompressionStream API
-    const json = JSON.stringify(shortData);
-    let b64: string;
+    // Salvar no banco e gerar código curto de 6 chars
     try {
-      const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
-      const compressed = await new Response(stream).arrayBuffer();
-      const bytes = new Uint8Array(compressed);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      b64 = "z" + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    } catch {
-      // Fallback: base64url sem compressão
-      b64 = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    }
+      const res = await fetch("/api/short-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: shortData }),
+      });
+      const json = await res.json();
+      if (json.code) {
+        setGeneratedLink(`${baseUrl}/c/${json.code}`);
+        setCopied(false);
+        return;
+      }
+    } catch { /* fallback below */ }
 
-    const link = `${baseUrl}/c/${b64}`;
-    setGeneratedLink(link);
+    // Fallback: base64url comprimido (se API falhar)
+    const jsonStr = JSON.stringify(shortData);
+    const b64 = btoa(unescape(encodeURIComponent(jsonStr))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    setGeneratedLink(`${baseUrl}/c/${b64}`);
     setCopied(false);
   }
 

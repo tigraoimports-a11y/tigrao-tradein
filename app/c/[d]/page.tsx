@@ -30,16 +30,27 @@ export default async function ShortLinkPage({ params }: { params: Promise<{ d: s
 
   let redirectUrl = "/compra";
   try {
-    let json: string;
-    if (d.startsWith("z")) {
+    let data: Record<string, string>;
+
+    if (d.length <= 8 && /^[A-Za-z0-9]+$/.test(d)) {
+      // Short code — fetch from API
+      const { supabase } = await import("@/lib/supabase");
+      const { data: row } = await supabase
+        .from("activity_log")
+        .select("detalhes")
+        .eq("entidade", "short_link")
+        .eq("acao", d)
+        .single();
+      data = row ? JSON.parse(row.detalhes) : {};
+    } else if (d.startsWith("z")) {
       // Compressed with deflate-raw (prefixed with "z")
       const zlib = await import("zlib");
       const buf = Buffer.from(d.slice(1).replace(/-/g, "+").replace(/_/g, "/"), "base64");
-      json = zlib.inflateRawSync(buf).toString("utf-8");
+      data = JSON.parse(zlib.inflateRawSync(buf).toString("utf-8"));
     } else {
-      json = Buffer.from(d.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+      // Plain base64url
+      data = JSON.parse(Buffer.from(d.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8"));
     }
-    const data = JSON.parse(json);
 
     const searchParams = new URLSearchParams();
     for (const [k, v] of Object.entries(data)) {
