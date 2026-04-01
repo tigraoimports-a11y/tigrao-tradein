@@ -208,7 +208,7 @@ export interface ProdutoSpec {
   ip_modelo: string; ip_linha: string; ip_storage: string; ip_origem: string;
   mb_modelo: string; mb_tela: string; mb_chip: string; mb_nucleos: string; mb_ram: string; mb_storage: string;
   mm_chip: string; mm_ram: string; mm_storage: string;
-  ipad_modelo: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
+  ipad_modelo: string; ipad_chip: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
   aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string;
   air_modelo: string;
 }
@@ -217,7 +217,7 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
   mb_modelo: "AIR", mb_tela: '13"', mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
   mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
-  ipad_modelo: "AIR", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
+  ipad_modelo: "AIR", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
   aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
   air_modelo: "AIRPODS 4",
 };
@@ -241,8 +241,9 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
+      const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
       const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
-      return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
+      return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
     }
     case "APPLE_WATCH": {
       const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
