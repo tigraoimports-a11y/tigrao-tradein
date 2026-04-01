@@ -62,7 +62,7 @@ const TAXAS_MP: Record<string, number> = {
   pix: 0, debito: 0,
   "1x": 3.25, "2x": 3.80, "3x": 4.55, "4x": 5.30,
   "5x": 6.05, "6x": 6.80, "7x": 7.55, "8x": 8.30,
-  "9x": 9.05, "10x": 9.80, "11x": 10.55, "12x": 11.34,
+  "9x": 9.05, "10x": 9.84, "11x": 10.55, "12x": 11.34,
 };
 
 const MAQUININHAS: Record<string, TaxaMap | Record<string, number>> = {
