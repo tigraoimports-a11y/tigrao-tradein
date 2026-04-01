@@ -929,6 +929,26 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
     }
   }
 
+  async function handleDeleteTipo(tipo: SpecTipo) {
+    if (!confirm(`Remover o tipo "${tipo.nome}" e todos os seus valores?`)) return;
+    setSaving(`tipo-${tipo.id}`);
+    try {
+      const res = await fetch(BASE, {
+        method: "DELETE",
+        headers: headers(),
+        body: JSON.stringify({ resource: "spec_tipos", id: tipo.id }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      if (selectedTipo?.id === tipo.id) setSelectedTipo(null);
+      reload();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function handleDeleteValor(id: string) {
     if (!confirm("Remover este valor?")) return;
     setSaving(id);
@@ -1028,23 +1048,32 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
 
           <div className="divide-y divide-[#F5F5F7]">
             {data.specTipos.map((tipo) => (
-              <button
+              <div
                 key={tipo.id}
-                onClick={() => setSelectedTipo(tipo)}
-                className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors ${
-                  selectedTipo?.id === tipo.id
-                    ? "bg-[#FFF5EB] text-[#E8740E]"
-                    : "hover:bg-[#F5F5F7] text-[#1D1D1F]"
+                className={`flex items-center justify-between px-4 py-3 transition-colors ${
+                  selectedTipo?.id === tipo.id ? "bg-[#FFF5EB]" : "hover:bg-[#F5F5F7]"
                 }`}
               >
-                <div>
-                  <span className="text-sm font-semibold">{tipo.nome}</span>
-                  <span className="ml-2 text-xs text-[#86868B] font-mono">{tipo.chave}</span>
-                </div>
-                <span className="text-xs text-[#86868B]">
-                  {data.specValores.filter((v) => v.tipo_chave === tipo.chave).length} valores
-                </span>
-              </button>
+                <button
+                  onClick={() => setSelectedTipo(tipo)}
+                  className="flex-1 text-left"
+                >
+                  <div>
+                    <span className={`text-sm font-semibold ${selectedTipo?.id === tipo.id ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{tipo.nome}</span>
+                    <span className="ml-2 text-xs text-[#86868B] font-mono">{tipo.chave}</span>
+                  </div>
+                  <span className="text-xs text-[#86868B]">
+                    {data.specValores.filter((v) => v.tipo_chave === tipo.chave).length} valores
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleDeleteTipo(tipo)}
+                  disabled={saving === `tipo-${tipo.id}`}
+                  className="p-1.5 rounded text-[#C7C7CC] hover:text-red-500 hover:bg-[#F5F5F7] transition-colors text-xs disabled:opacity-50 shrink-0"
+                >
+                  🗑️
+                </button>
+              </div>
             ))}
             {data.specTipos.length === 0 && (
               <div className="text-center py-6 text-[#86868B] text-sm">
