@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     description: "Preencha seus dados para finalizar sua compra. Entrega rapida no Rio de Janeiro!",
     siteName: "TigraoImports",
     type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
 };
 

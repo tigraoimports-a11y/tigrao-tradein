@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, Suspense } from "react";
-import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
+import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -63,7 +63,15 @@ function CompraForm() {
   const instagramParam = searchParams.get("instagram") || "";
 
   // Payment params (vindos do StepQuote)
-  const formaParam = searchParams.get("forma") || "";
+  // Normaliza forma de pagamento: gerador usa "Cartao Credito", form usa "Cartao de Credito"
+  const formaRaw = searchParams.get("forma") || "";
+  const FORMA_MAP: Record<string, string> = {
+    "Pix": "PIX", "pix": "PIX",
+    "Cartao Credito": "Cartao de Credito", "Cartao+Credito": "Cartao de Credito",
+    "Cartao Debito": "Debito", "Cartao+Debito": "Debito",
+    "Pix + Cartao": "PIX + Cartao", "Pix+%2B+Cartao": "PIX + Cartao",
+  };
+  const formaParam = FORMA_MAP[formaRaw] || formaRaw;
   const parcelasParam = searchParams.get("parcelas") || "";
   const entradaPixParam = searchParams.get("entrada_pix") || "";
 
@@ -89,7 +97,7 @@ function CompraForm() {
   const [whatsappConfig, setWhatsappConfig] = useState("");
   // Sempre André como default. Config sobrescreve se disponível.
   // Prioridade: param URL (do gerador de link) > config DB > fallback André
-  const whatsappFinal = whatsapp || whatsappConfig || WHATSAPP_DEFAULT;
+  const whatsappFinal = whatsapp || whatsappConfig || WHATSAPP_FORMULARIO;
 
   // Fetch products + config
   useEffect(() => {
