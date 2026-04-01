@@ -429,38 +429,101 @@ function CategoriasTab({ data, headers, reload }: TabProps) {
 // ─── Modelos Tab ──────────────────────────────────────────────────────────────
 
 function ModelosTab({ data, headers, reload }: TabProps) {
-  const [selectedCat, setSelectedCat] = useState<string>(
-    data.categorias[0]?.key ?? "IPHONES"
-  );
-  const [newNome, setNewNome] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedModelo, setSelectedModelo] = useState<Modelo | null>(null);
+  const [configs, setConfigs] = useState<Set<string>>(new Set());
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
-
-  const catModelos = data.modelos
-    .filter((m) => m.categoria_key === selectedCat)
-    .sort((a, b) => a.ordem - b.ordem);
+  const [savedMsg, setSavedMsg] = useState(false);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newNome, setNewNome] = useState("");
+  const [newCat, setNewCat] = useState(data.categorias[0]?.key ?? "IPHONES");
 
   const inputCls =
     "border border-[#E8E8ED] rounded-lg px-3 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
 
-  async function handleAdd(e: React.FormEvent) {
+  function getCatNome(key: string) {
+    return data.categorias.find((c) => c.key === key)?.nome ?? key;
+  }
+
+  const filteredModelos = data.modelos
+    .filter(
+      (m) =>
+        m.nome.toLowerCase().includes(search.toLowerCase()) ||
+        getCatNome(m.categoria_key).toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (a.categoria_key !== b.categoria_key) return a.categoria_key.localeCompare(b.categoria_key);
+      return a.ordem - b.ordem;
+    });
+
+  async function loadConfigs(modelo: Modelo) {
+    setSelectedModelo(modelo);
+    setLoadingConfigs(true);
+    setSavedMsg(false);
+    try {
+      const res = await fetch(`${BASE}?modelo_id=${modelo.id}`, { headers: headers() });
+      const json = await res.json();
+      if (json.configs) {
+        setConfigs(new Set(json.configs.map((c: { tipo_chave: string; valor: string }) => `${c.tipo_chave}:${c.valor}`)));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingConfigs(false);
+    }
+  }
+
+  async function saveConfigs() {
+    if (!selectedModelo) return;
+    setSaving("configs");
+    try {
+      const configList = Array.from(configs).map((k) => {
+        const idx = k.indexOf(":");
+        return { tipo_chave: k.slice(0, idx), valor: k.slice(idx + 1) };
+      });
+      const res = await fetch(BASE, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ resource: "modelo_configs", modelo_id: selectedModelo.id, configs: configList }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setSavedMsg(true);
+      setTimeout(() => setSavedMsg(false), 2500);
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  function toggleConfig(tipoChave: string, valor: string) {
+    const key = `${tipoChave}:${valor}`;
+    setConfigs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function handleAddModelo(e: React.FormEvent) {
     e.preventDefault();
     if (!newNome.trim()) return;
     setSaving("new");
     try {
+      const catModelos = data.modelos.filter((m) => m.categoria_key === newCat);
       const maxOrdem = catModelos.length > 0 ? Math.max(...catModelos.map((m) => m.ordem)) + 1 : 1;
       const res = await fetch(BASE, {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({
-          resource: "modelos",
-          categoria_key: selectedCat,
-          nome: newNome.trim().toUpperCase(),
-          ordem: maxOrdem,
-        }),
+        body: JSON.stringify({ resource: "modelos", categoria_key: newCat, nome: newNome.trim(), ordem: maxOrdem }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setNewNome("");
+      setShowNewForm(false);
       reload();
     } catch (e) {
       alert(String(e));
@@ -469,17 +532,18 @@ function ModelosTab({ data, headers, reload }: TabProps) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Remover este modelo?")) return;
-    setSaving(id);
+  async function handleDelete(m: Modelo) {
+    if (!confirm(`Remover "${m.nome}"?`)) return;
+    setSaving(m.id);
     try {
       const res = await fetch(BASE, {
         method: "DELETE",
         headers: headers(),
-        body: JSON.stringify({ resource: "modelos", id }),
+        body: JSON.stringify({ resource: "modelos", id: m.id }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      if (selectedModelo?.id === m.id) setSelectedModelo(null);
       reload();
     } catch (e) {
       alert(String(e));
@@ -488,96 +552,187 @@ function ModelosTab({ data, headers, reload }: TabProps) {
     }
   }
 
-  async function toggleAtivo(m: Modelo) {
-    setSaving(m.id);
-    try {
-      const res = await fetch(BASE, {
-        method: "PATCH",
-        headers: headers(),
-        body: JSON.stringify({ resource: "modelos", id: m.id, ativo: !m.ativo }),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      reload();
-    } catch (e) {
-      alert(String(e));
-    } finally {
-      setSaving(null);
-    }
-  }
+  const catSpecs = selectedModelo
+    ? data.categoriaSpecs
+        .filter((cs) => cs.categoria_key === selectedModelo.categoria_key)
+        .sort((a, b) => a.ordem - b.ordem)
+    : [];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-[#F5F5F7] flex items-center gap-3 flex-wrap">
-        <h2 className="font-semibold text-[#1D1D1F]">Modelos por Categoria</h2>
-        <select
-          value={selectedCat}
-          onChange={(e) => setSelectedCat(e.target.value)}
-          className={inputCls}
-        >
-          {data.categorias.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.emoji} {c.nome}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Add model */}
-      <form onSubmit={handleAdd} className="p-4 border-b border-[#F5F5F7] flex gap-2">
-        <input
-          value={newNome}
-          onChange={(e) => setNewNome(e.target.value)}
-          placeholder="Nome do novo modelo (ex: 17 PRO ULTRA)"
-          className={`${inputCls} flex-1`}
-        />
-        <button
-          type="submit"
-          disabled={saving === "new" || !newNome.trim()}
-          className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-50 transition-colors whitespace-nowrap"
-        >
-          {saving === "new" ? "Adicionando..." : "+ Adicionar"}
-        </button>
-      </form>
-
-      {/* Model list */}
-      <div className="p-4 flex flex-wrap gap-2 min-h-[80px]">
-        {catModelos.length === 0 && (
-          <span className="text-[#86868B] text-sm self-center">
-            Nenhum modelo para esta categoria.
-          </span>
-        )}
-        {catModelos.map((m) => (
-          <div
-            key={m.id}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-opacity ${
-              m.ativo
-                ? "bg-[#FFF5EB] text-[#E8740E] border-[#E8740E]/30"
-                : "bg-[#F5F5F7] text-[#86868B] border-[#E8E8ED] opacity-60"
-            } ${saving === m.id ? "opacity-50" : ""}`}
+    <div className="flex gap-4" style={{ minHeight: 600 }}>
+      {/* Left: Model list */}
+      <div className="w-80 shrink-0 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+          <h2 className="font-semibold text-[#1D1D1F]">Modelos</h2>
+          <button
+            onClick={() => setShowNewForm(!showNewForm)}
+            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
           >
-            <span>{m.nome}</span>
+            + Novo Modelo
+          </button>
+        </div>
+
+        {showNewForm && (
+          <form onSubmit={handleAddModelo} className="p-3 bg-[#FFF5EB] border-b border-[#E8740E]/20 space-y-2">
+            <select value={newCat} onChange={(e) => setNewCat(e.target.value)} className={`${inputCls} w-full`}>
+              {data.categorias.map((c) => (
+                <option key={c.key} value={c.key}>{c.emoji} {c.nome}</option>
+              ))}
+            </select>
+            <input
+              value={newNome}
+              onChange={(e) => setNewNome(e.target.value)}
+              placeholder="Nome do modelo"
+              className={`${inputCls} w-full`}
+              required
+            />
+            <div className="flex gap-2">
+              <button type="submit" disabled={saving === "new"} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white disabled:opacity-50">
+                {saving === "new" ? "..." : "Criar"}
+              </button>
+              <button type="button" onClick={() => setShowNewForm(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F5F7] text-[#1D1D1F]">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="p-3 border-b border-[#F5F5F7]">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar modelos..."
+            className={`${inputCls} w-full`}
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto divide-y divide-[#F5F5F7]">
+          {filteredModelos.map((m) => (
             <button
-              onClick={() => toggleAtivo(m)}
-              disabled={saving === m.id}
-              className="text-xs opacity-70 hover:opacity-100"
-              title={m.ativo ? "Desativar" : "Ativar"}
+              key={m.id}
+              onClick={() => loadConfigs(m)}
+              className={`w-full text-left px-4 py-3 flex items-start justify-between gap-2 transition-colors ${
+                selectedModelo?.id === m.id
+                  ? "bg-blue-600 text-white"
+                  : "hover:bg-[#F5F5F7] text-[#1D1D1F]"
+              }`}
             >
-              {m.ativo ? "●" : "○"}
+              <div className="min-w-0">
+                <div className="font-semibold text-sm truncate">{m.nome}</div>
+                <div className={`text-xs mt-0.5 ${selectedModelo?.id === m.id ? "text-blue-200" : "text-[#86868B]"}`}>
+                  {getCatNome(m.categoria_key)}
+                </div>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                  selectedModelo?.id === m.id
+                    ? "bg-blue-500 text-white"
+                    : m.ativo
+                    ? "bg-blue-100 text-blue-600"
+                    : "bg-gray-100 text-gray-500"
+                }`}>
+                  {m.ativo ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(m); }}
+                disabled={saving === m.id}
+                className={`shrink-0 mt-1 text-xs p-1 disabled:opacity-50 ${
+                  selectedModelo?.id === m.id ? "text-blue-200 hover:text-white" : "text-[#C7C7CC] hover:text-red-500"
+                }`}
+              >
+                🗑️
+              </button>
             </button>
-            <button
-              onClick={() => handleDelete(m.id)}
-              disabled={saving === m.id}
-              className="text-red-400 hover:text-red-600 text-xs ml-0.5 disabled:opacity-50"
-              title="Remover modelo"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+          ))}
+          {filteredModelos.length === 0 && (
+            <div className="text-center py-8 text-[#86868B] text-sm">Nenhum modelo encontrado.</div>
+          )}
+        </div>
       </div>
-      <div className="px-4 pb-3 text-xs text-[#86868B]">
-        {catModelos.length} modelo(s) para {selectedCat}
+
+      {/* Right: Config panel */}
+      <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+        {!selectedModelo && (
+          <div className="flex flex-col items-center justify-center flex-1 text-[#86868B]">
+            <div className="text-5xl mb-3">📦</div>
+            <p className="text-sm font-medium">Selecione um modelo</p>
+            <p className="text-xs mt-1">para configurar suas especificações</p>
+          </div>
+        )}
+
+        {selectedModelo && (
+          <>
+            <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-lg text-[#1D1D1F]">Configuração - {selectedModelo.nome}</h2>
+                <p className="text-sm text-[#86868B] mt-0.5">Categoria: {getCatNome(selectedModelo.categoria_key)}</p>
+              </div>
+              <button
+                onClick={saveConfigs}
+                disabled={saving === "configs" || loadingConfigs}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                  savedMsg ? "bg-green-500 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {savedMsg ? "✓ Salvo!" : saving === "configs" ? "Salvando..." : "💾 Salvar Configuração"}
+              </button>
+            </div>
+
+            {loadingConfigs && (
+              <div className="flex items-center justify-center flex-1 text-[#86868B] text-sm">
+                Carregando configurações...
+              </div>
+            )}
+
+            {!loadingConfigs && catSpecs.length === 0 && (
+              <div className="flex flex-col items-center justify-center flex-1 text-[#86868B] text-sm">
+                <p>Esta categoria não tem specs atribuídas.</p>
+              </div>
+            )}
+
+            {!loadingConfigs && catSpecs.length > 0 && (
+              <div className="p-5 space-y-6 overflow-y-auto flex-1">
+                {catSpecs.map((cs) => {
+                  const tipo = data.specTipos.find((t) => t.chave === cs.tipo_chave);
+                  const valores = data.specValores
+                    .filter((v) => v.tipo_chave === cs.tipo_chave)
+                    .sort((a, b) => a.ordem - b.ordem);
+                  if (!tipo || valores.length === 0) return null;
+                  const selectedCount = valores.filter((v) => configs.has(`${cs.tipo_chave}:${v.valor}`)).length;
+                  return (
+                    <div key={cs.tipo_chave} className="bg-[#F9F9FB] rounded-xl p-4">
+                      <h3 className="font-bold text-[#1D1D1F] mb-3">
+                        {tipo.nome} Disponíveis{" "}
+                        <span className="font-normal text-[#86868B] text-sm">
+                          ({selectedCount} de {valores.length} selecionados)
+                        </span>
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {valores.map((v) => {
+                          const checked = configs.has(`${cs.tipo_chave}:${v.valor}`);
+                          return (
+                            <label key={v.id} className="flex items-center gap-2 cursor-pointer group select-none">
+                              <div
+                                onClick={() => toggleConfig(cs.tipo_chave, v.valor)}
+                                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                  checked
+                                    ? "border-blue-500 bg-blue-500"
+                                    : "border-[#C7C7CC] group-hover:border-blue-400"
+                                }`}
+                              >
+                                {checked && <div className="w-2 h-2 rounded-full bg-white" />}
+                              </div>
+                              <span className="text-sm text-[#1D1D1F]">{v.valor}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
