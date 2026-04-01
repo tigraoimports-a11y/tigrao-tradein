@@ -423,6 +423,29 @@ export async function DELETE(req: NextRequest) {
         updated_at: new Date().toISOString(),
       }).eq("id", venda.estoque_id);
     }
+  } else if (venda && venda.produto) {
+    // Fallback: buscar produto no estoque pelo serial ou nome+cor e devolver
+    let found = false;
+    if (venda.serial_no) {
+      const { data: item } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).single();
+      if (item) {
+        await supabase.from("estoque").update({ qnt: Number(item.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", item.id);
+        found = true;
+      }
+    }
+    if (!found) {
+      // Buscar por nome do produto (e cor se disponível)
+      let query = supabase.from("estoque").select("id, qnt").eq("produto", venda.produto).eq("status", "EM ESTOQUE");
+      if (venda.cor) query = query.eq("cor", venda.cor);
+      const { data: items } = await query.order("qnt", { ascending: false }).limit(1);
+      if (items && items.length > 0) {
+        await supabase.from("estoque").update({ qnt: Number(items[0].qnt) + 1, updated_at: new Date().toISOString() }).eq("id", items[0].id);
+        found = true;
+      }
+    }
+    if (found) {
+      await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
+    }
   }
 
   // Se tinha produto na troca, remover o seminovo/pendencia do estoque
