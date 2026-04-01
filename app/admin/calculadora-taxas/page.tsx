@@ -27,14 +27,14 @@ export default function CalculadoraTaxasPage() {
     return Number(digits).toLocaleString("pt-BR");
   };
 
-  const debito = useMemo(() => valor > 0 ? Math.round(valor / (1 - TAXA_DEBITO / 100)) : 0, [valor]);
+  const debito = useMemo(() => valor > 0 ? Math.ceil(valor * (1 + TAXA_DEBITO / 100)) : 0, [valor]);
 
   const parcelas = useMemo(() => {
     if (valor <= 0) return [];
     return Object.entries(TAXAS).map(([p, taxa]) => {
       const n = Number(p);
-      const total = Math.round(valor / (1 - taxa / 100));
-      return { n, parcela: Math.round(total / n), total };
+      const total = Math.ceil(valor * (1 + taxa / 100));
+      return { n, parcela: Math.ceil(total / n), total };
     });
   }, [valor]);
 
