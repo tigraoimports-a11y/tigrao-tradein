@@ -17,6 +17,8 @@ export default function GerarLinkPage() {
   const [shoppingNome, setShoppingNome] = useState("");
   const [horario, setHorario] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
+  const [trocaProduto, setTrocaProduto] = useState("");
+  const [trocaValor, setTrocaValor] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
@@ -55,6 +57,9 @@ export default function GerarLinkPage() {
     if (shoppingNome) shortData.sh = shoppingNome;
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
+    if (trocaProduto) shortData.tp = trocaProduto;
+    const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
+    if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
 
     // Codifica em base64url
     const json = JSON.stringify(shortData);
@@ -154,6 +159,17 @@ export default function GerarLinkPage() {
           else if (lowVal.includes("tarde")) { setHorario("Tarde"); filled++; }
           else if (lowVal.includes("noite")) { setHorario("Noite"); filled++; }
           else if (val) { setHorario(val); filled++; }
+        } else if (low.includes("troca") || low.includes("trade")) {
+          const val = extract(line);
+          if (val) {
+            // Tenta extrair valor da troca
+            const valMatch = val.match(/R?\$?\s*([\d.,]+)/);
+            if (valMatch) { setTrocaValor(formatPreco(valMatch[1].replace(/\./g, ""))); }
+            // Produto na troca: texto antes do valor
+            const prodTroca = val.replace(/R?\$?\s*[\d.,]+/g, "").replace(/[-–]/g, "").trim();
+            if (prodTroca) setTrocaProduto(prodTroca);
+            filled++;
+          }
         } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
           const m = line.match(/R?\$?\s*([\d.,]+)/);
           if (m) {
@@ -318,6 +334,34 @@ export default function GerarLinkPage() {
               onChange={(e) => setDataEntrega(e.target.value)}
               className={inputCls}
             />
+          </div>
+        </div>
+
+        {/* Troca / Trade-in */}
+        <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Produto do cliente</label>
+              <input
+                type="text"
+                value={trocaProduto}
+                onChange={(e) => setTrocaProduto(e.target.value)}
+                placeholder="Ex: iPhone 15 Pro Max 256GB"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Valor da troca (R$)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={trocaValor}
+                onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
+                placeholder="Ex: 4.500"
+                className={inputCls}
+              />
+            </div>
           </div>
         </div>
 
