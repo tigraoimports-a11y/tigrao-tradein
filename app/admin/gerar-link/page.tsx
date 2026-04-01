@@ -34,14 +34,14 @@ export default function GerarLinkPage() {
 
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
-  function gerarLink() {
+  async function gerarLink() {
     const prodsFilled = produtos.filter(Boolean);
     if (prodsFilled.length === 0) return;
 
     const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
-    // Gerar link curto: comprime parâmetros em base64url
+    // Montar dados com keys curtas
     const shortData: Record<string, string> = {};
     shortData.p = prodsFilled[0];
     for (let i = 1; i < prodsFilled.length; i++) {
@@ -61,10 +61,20 @@ export default function GerarLinkPage() {
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
 
-    // Codifica em base64url
+    // Comprimir com deflate-raw via CompressionStream API
     const json = JSON.stringify(shortData);
-    const b64 = btoa(unescape(encodeURIComponent(json)))
-      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    let b64: string;
+    try {
+      const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+      const compressed = await new Response(stream).arrayBuffer();
+      const bytes = new Uint8Array(compressed);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      b64 = "z" + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    } catch {
+      // Fallback: base64url sem compressão
+      b64 = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
 
     const link = `${baseUrl}/c/${b64}`;
     setGeneratedLink(link);

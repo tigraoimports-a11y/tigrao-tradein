@@ -30,7 +30,15 @@ export default async function ShortLinkPage({ params }: { params: Promise<{ d: s
 
   let redirectUrl = "/compra";
   try {
-    const json = Buffer.from(d.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+    let json: string;
+    if (d.startsWith("z")) {
+      // Compressed with deflate-raw (prefixed with "z")
+      const zlib = await import("zlib");
+      const buf = Buffer.from(d.slice(1).replace(/-/g, "+").replace(/_/g, "/"), "base64");
+      json = zlib.inflateRawSync(buf).toString("utf-8");
+    } else {
+      json = Buffer.from(d.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
+    }
     const data = JSON.parse(json);
 
     const searchParams = new URLSearchParams();
