@@ -101,11 +101,13 @@ export async function POST(req: NextRequest) {
   const estoqueId = body._estoque_id;
   delete body._estoque_id;
 
-  // Se tem estoque_id, copiar IMEI do estoque para a venda (se existir)
+  // Se tem estoque_id, copiar IMEI e Serial do estoque para a venda (se existirem)
   let imeiFromEstoque: string | null = null;
-  if (estoqueId && !body.imei) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei").eq("id", estoqueId).single();
-    if (estoqueItem?.imei) imeiFromEstoque = estoqueItem.imei;
+  let serialFromEstoque: string | null = null;
+  if (estoqueId && (!body.imei || !body.serial_no)) {
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no").eq("id", estoqueId).single();
+    if (estoqueItem?.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
+    if (estoqueItem?.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
   }
 
   // Garantir nome do cliente em caixa alta
@@ -117,6 +119,7 @@ export async function POST(req: NextRequest) {
     ...body,
     estoque_id: estoqueId || null,
     ...(imeiFromEstoque ? { imei: imeiFromEstoque } : {}),
+    ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
