@@ -173,11 +173,12 @@ function getModeloBase(produto: string, categoria: string): string {
   if (baseCat === "IPADS") {
     const mem = getMem();
     const size = getSize();
-    if (p.includes("MINI")) return `iPad Mini${mem}`;
-    if (p.includes("AIR")) return `iPad Air${size}${mem}`;
-    if (p.includes("PRO")) return `iPad Pro${size}${mem}`;
-    if (p.includes("A16")) return `iPad A16${mem}`;
-    return `iPad${mem}`;
+    const chipMatch = p.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/i);
+    const chip = chipMatch ? ` ${chipMatch[1].toUpperCase()}` : "";
+    if (p.includes("MINI")) return `iPad Mini${chip}${size}${mem}`;
+    if (p.includes("AIR")) return `iPad Air${chip}${size}${mem}`;
+    if (p.includes("PRO")) return `iPad Pro${chip}${size}${mem}`;
+    return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
     const mem = getMem();
@@ -477,7 +478,9 @@ export default function EstoquePage() {
     if (baseCat === "IPADS") {
       const modelo = n.includes("AIR") ? "AIR" : n.includes("PRO") ? "PRO" : n.includes("MINI") ? "MINI" : "IPAD";
       const conn = n.includes("CELL") ? "WIFI+CELL" : "WIFI";
-      return { ipad_modelo: modelo, ipad_tela: tela || "11\"", ipad_storage: storage || "128GB", ipad_conn: conn };
+      const chipMatch = n.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/i);
+      const ipad_chip = chipMatch ? chipMatch[1].toUpperCase() : "";
+      return { ipad_modelo: modelo, ipad_chip, ipad_tela: tela || "11\"", ipad_storage: storage || "128GB", ipad_conn: conn };
     }
     if (baseCat === "IPHONES") {
       const numMatch = n.match(/IPHONE\s*(\d+)/);
@@ -554,7 +557,7 @@ export default function EstoquePage() {
     // MAC_MINI
     mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
     // IPADS
-    ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+    ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
     aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
     // AIRPODS
@@ -591,8 +594,9 @@ export default function EstoquePage() {
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
+        const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
         const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
-        return `${modelo} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
+        return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }
       case "APPLE_WATCH": {
         const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
@@ -1035,7 +1039,7 @@ export default function EstoquePage() {
           ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
           mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
-          ipad_modelo: "AIR", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+          ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
           aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
           air_modelo: "AIRPODS 4",
           semi_subtipo: "IPHONES",
@@ -1862,6 +1866,16 @@ export default function EstoquePage() {
               {!["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) && spec.ipad_modelo !== "IPAD" && (
                 <input value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
               )}</div>
+              <div><p className={labelCls}>Chip</p><select value={spec.ipad_chip || ""} onChange={(e) => setS("ipad_chip", e.target.value)} className={inputCls}>
+                <option value="">— Sem chip —</option>
+                <option value="M1">M1</option>
+                <option value="M2">M2</option>
+                <option value="M3">M3</option>
+                <option value="M4">M4</option>
+                <option value="M5">M5</option>
+                <option value="A16">A16</option>
+                <option value="A17 PRO">A17 Pro</option>
+              </select></div>
               <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
                 {['8.3"', '10.9"', '11"', '13"'].map((t) => <option key={t} value={t}>{t}</option>)}
               </select></div>

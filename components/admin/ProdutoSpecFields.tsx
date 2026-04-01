@@ -275,7 +275,7 @@ export default function ProdutoSpecFields({
       )}
 
       {row.categoria === "IPADS" && (
-        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 p-3 ${bgSection} rounded-lg`}>
+        <div className={`grid grid-cols-2 md:grid-cols-5 gap-3 p-3 ${bgSection} rounded-lg`}>
           <div>
             <p className={labelCls}>Modelo</p>
             <select value={row.spec.ipad_modelo} onChange={(e) => setSpec("ipad_modelo", e.target.value)} className={inputCls}>
@@ -283,6 +283,19 @@ export default function ProdutoSpecFields({
               <option value="MINI">iPad Mini</option>
               <option value="AIR">iPad Air</option>
               <option value="PRO">iPad Pro</option>
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Chip</p>
+            <select value={row.spec.ipad_chip} onChange={(e) => setSpec("ipad_chip", e.target.value)} className={inputCls}>
+              <option value="">— Sem chip —</option>
+              <option value="M1">M1</option>
+              <option value="M2">M2</option>
+              <option value="M3">M3</option>
+              <option value="M4">M4</option>
+              <option value="M5">M5</option>
+              <option value="A16">A16</option>
+              <option value="A17 PRO">A17 Pro</option>
             </select>
           </div>
           <div>
