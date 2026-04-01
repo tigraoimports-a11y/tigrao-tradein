@@ -16,6 +16,7 @@ interface DashData {
   gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string; is_dep_esp?: boolean }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
   pendencias: number;
+  pendenciasItens: { qnt: number; custo_unitario: number }[];
   aCaminho: { qnt: number; custo_unitario: number }[];
   d1Preview?: { data: string; d1_itau: number; d1_inf: number; d1_mp: number; total: number } | null;
 }
