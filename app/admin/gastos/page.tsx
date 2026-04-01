@@ -874,6 +874,10 @@ export default function GastosPage() {
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
                                 {bancoInputGrid(editBancoValores, editSetBanco, inputCls)}
                               </div>
+                              {/* Produtos vinculados ao gasto (editáveis) */}
+                              {g.pedido_fornecedor_id && (
+                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} />
+                              )}
                               <div className="flex items-center gap-3">
                                 <div className="flex-1" />
                                 <button onClick={() => setEditingKey(null)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
