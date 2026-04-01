@@ -699,7 +699,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                   if (!tipo || valores.length === 0) return null;
                   const selectedCount = valores.filter((v) => configs.has(`${cs.tipo_chave}:${v.valor}`)).length;
                   return (
-                    <div key={cs.tipo_chave} className="bg-[#F9F9FB] rounded-xl p-4">
+                    <div key={cs.tipo_chave} className="bg-[#FAFAFA] rounded-xl p-4">
                       <h3 className="font-bold text-[#1D1D1F] mb-3">
                         {tipo.nome} Disponíveis{" "}
                         <span className="font-normal text-[#86868B] text-sm">
