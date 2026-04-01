@@ -91,6 +91,7 @@ interface ProdutoEstoque {
   data_entrada: string | null;
   preco_sugerido: number | null;
   estoque_minimo: number | null;
+  pedido_fornecedor_id: string | null;
 }
 
 interface ImeiSearchResult {
