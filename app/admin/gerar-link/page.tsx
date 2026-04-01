@@ -333,22 +333,23 @@ export default function GerarLinkPage() {
 
         <div>
           <label className={labelCls}>Local de Entrega</label>
-          <select value={localEntrega} onChange={(e) => { setLocalEntrega(e.target.value); if (e.target.value !== "shopping") setShoppingNome(""); }} className={inputCls}>
+          <select value={localEntrega} onChange={(e) => { setLocalEntrega(e.target.value); if (e.target.value !== "shopping" && e.target.value !== "outro") setShoppingNome(""); }} className={inputCls}>
             <option value="">-- Opcional --</option>
             <option value="loja">Retirada em Loja</option>
             <option value="shopping">Entrega em Shopping</option>
             <option value="residencia">Entrega em Residencia</option>
+            <option value="outro">Outro local</option>
           </select>
         </div>
 
-        {localEntrega === "shopping" && (
+        {(localEntrega === "shopping" || localEntrega === "outro") && (
           <div>
-            <label className={labelCls}>Qual Shopping?</label>
+            <label className={labelCls}>{localEntrega === "shopping" ? "Qual Shopping?" : "Qual local?"}</label>
             <input
               type="text"
               value={shoppingNome}
               onChange={(e) => setShoppingNome(e.target.value)}
-              placeholder="Ex: BarraShopping, Village Mall..."
+              placeholder={localEntrega === "shopping" ? "Ex: BarraShopping, Village Mall..." : "Ex: Estação do metrô, escritório..."}
               className={inputCls}
             />
           </div>
