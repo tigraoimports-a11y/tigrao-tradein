@@ -2778,7 +2778,26 @@ export default function EstoquePage() {
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid ${canEdit ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
+                  {canEdit && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Quantidade</p>
+                      <input
+                        type="number" min={0}
+                        defaultValue={p.qnt}
+                        onBlur={async (e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val) && val >= 0 && val !== p.qnt) {
+                            await handleUpdateQnt(p, val);
+                            setDetailProduct({ ...p, qnt: val });
+                            setMsg("Quantidade atualizada!");
+                          }
+                        }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        className={`w-full text-[14px] font-bold mt-0.5 px-2 py-1 rounded-lg border text-center ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                    </div>
+                  )}
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanco</p><p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
