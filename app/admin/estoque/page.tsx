@@ -2685,7 +2685,7 @@ export default function EstoquePage() {
         const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
         const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
         const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
-        const isLac = p.tipo === "NOVO";
+        const isLac = p.tipo === "NOVO" || p.tipo === "A_CAMINHO";
         const dataE = p.data_entrada || p.data_compra;
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
