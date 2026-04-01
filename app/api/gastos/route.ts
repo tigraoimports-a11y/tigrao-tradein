@@ -84,6 +84,8 @@ export async function POST(req: NextRequest) {
       custo_unitario: number;
       cor?: string;
       fornecedor?: string;
+      serial_no?: string;
+      imei?: string;
     }) => ({
       produto: p.produto,
       categoria: p.categoria,
@@ -91,6 +93,8 @@ export async function POST(req: NextRequest) {
       custo_unitario: p.custo_unitario,
       cor: p.cor || null,
       fornecedor: p.fornecedor || null,
+      serial_no: p.serial_no ? p.serial_no.toUpperCase() : null,
+      imei: p.imei ? p.imei.toUpperCase() : null,
       status: "A CAMINHO",
       tipo: "A_CAMINHO",
       data_compra: dataCompra,
