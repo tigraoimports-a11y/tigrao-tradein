@@ -1144,7 +1144,7 @@ export default function VendasPage() {
     return r;
   };
 
-  const handlePasteConfirm = () => {
+  const handlePasteConfirm = async () => {
     const r = parseClienteText(pasteText);
     if (r.nome) set("cliente", r.nome);
     if (r.cpf) set("cpf", r.cpf);
@@ -1153,16 +1153,32 @@ export default function VendasPage() {
     if (r.endereco) set("endereco", r.endereco);
     if (r.cep) { set("cep", r.cep); fetchCep(r.cep.replace(/\D/g, "")); }
     if (r.bairro) set("bairro", r.bairro);
-    if (r.origem) set("origem", r.origem);
     if (r.local) set("local", r.local);
     if (r.forma) set("forma", r.forma);
     if (r.produto) set("produto", r.produto);
     if (r.valor) set("preco_vendido", r.valor);
+
+    // Detectar recompra: verificar se CPF ou nome já tem vendas anteriores
+    let isRecompra = false;
+    if (r.cpf || r.nome) {
+      try {
+        const searchParam = r.cpf ? `cpf=${encodeURIComponent(r.cpf)}` : `cliente=${encodeURIComponent(r.nome)}`;
+        const res = await fetch(`/api/vendas?action=check_recompra&${searchParam}`, {
+          headers: { "x-admin-password": password },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.recompra) isRecompra = true;
+        }
+      } catch { /* ignore */ }
+    }
+    set("origem", isRecompra ? "RECOMPRA" : (r.origem || ""));
+
     setShowPasteModal(false);
     setPasteText("");
     const tipo = r.cnpj ? "PJ" : "PF";
     const campos = Object.keys(r).length;
-    setMsg(r.nome ? `Dados ${tipo} preenchidos: ${r.nome} (${campos} campos)` : "Nenhum dado encontrado no texto");
+    setMsg(r.nome ? `Dados ${tipo} preenchidos: ${r.nome} (${campos} campos)${isRecompra ? " — RECOMPRA detectada!" : ""}` : "Nenhum dado encontrado no texto");
   };
 
   // Exportar mês para Excel

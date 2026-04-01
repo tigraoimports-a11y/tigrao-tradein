@@ -31,6 +31,24 @@ export async function GET(req: NextRequest) {
   if (!hasPermission(role, "vendas.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
+
+  // Check recompra: verifica se CPF ou nome já tem vendas
+  if (searchParams.get("action") === "check_recompra") {
+    const cpf = searchParams.get("cpf");
+    const cliente = searchParams.get("cliente");
+    let found = false;
+    if (cpf) {
+      const cleanCpf = cpf.replace(/[\.\-\/\s]/g, "");
+      const { data } = await supabase.from("vendas").select("id").ilike("cpf", `%${cleanCpf}%`).limit(1);
+      found = (data?.length || 0) > 0;
+    }
+    if (!found && cliente) {
+      const { data } = await supabase.from("vendas").select("id").ilike("cliente", `%${cliente}%`).limit(1);
+      found = (data?.length || 0) > 0;
+    }
+    return NextResponse.json({ recompra: found });
+  }
+
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const search = searchParams.get("search");
