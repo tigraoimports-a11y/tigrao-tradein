@@ -259,15 +259,15 @@ export default function GerarLinkPage() {
         {/* Troca / Trade-in */}
         <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
           <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <div>
-              <label className={labelCls}>Produto do cliente</label>
-              <input
-                type="text"
+              <label className={labelCls}>Detalhes do produto na troca</label>
+              <textarea
                 value={trocaProduto}
                 onChange={(e) => setTrocaProduto(e.target.value)}
-                placeholder="Ex: iPhone 15 Pro Max 256GB"
-                className={inputCls}
+                placeholder="Ex: iPhone 16 Plus 128GB, 100% bateria, sem marcas, com caixa e cabo, garantia Apple até Out/2026"
+                rows={3}
+                className={inputCls + " resize-none"}
               />
             </div>
             <div>
