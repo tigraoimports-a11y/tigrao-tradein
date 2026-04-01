@@ -543,6 +543,20 @@ export default function EstoquePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // ── Catálogo dinâmico de modelos ──────────────────────────────────────────
+  const [catalogoModelos, setCatalogoModelos] = useState<{categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(json => { if (Array.isArray(json.modelos)) setCatalogoModelos(json.modelos); })
+      .catch(() => {});
+  }, [password]);
+  function getCatModelos(catKey: string, fallback: string[]): string[] {
+    const db = catalogoModelos.filter(m => m.categoria_key === catKey && m.ativo !== false).sort((a, b) => a.ordem - b.ordem).map(m => m.nome);
+    return db.length > 0 ? db : fallback;
+  }
+
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
@@ -1797,7 +1811,7 @@ export default function EstoquePage() {
           {formBaseCat === "IPHONES" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Modelo</p><select value={spec.ip_modelo} onChange={(e) => { setS("ip_modelo", e.target.value); set("cor", ""); }} className={inputCls}>
-                {["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E", "17", "17 AIR", "17 PRO", "17 PRO MAX"].map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
+                {getCatModelos("IPHONES", ["11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX", "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX", "15", "15 PLUS", "15 PRO", "15 PRO MAX", "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E", "17", "17 AIR", "17 PRO", "17 PRO MAX"]).map((m) => <option key={m} value={m}>{`iPhone ${m}`}</option>)}
               </select></div>
               <div><p className={labelCls}>Armazenamento</p><select value={spec.ip_storage} onChange={(e) => setS("ip_storage", e.target.value)} className={inputCls}>
                 {["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"].map((s) => <option key={s}>{s}</option>)}
@@ -1811,14 +1825,18 @@ export default function EstoquePage() {
 
           {formBaseCat === "MACBOOK" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={["AIR", "PRO"].includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => setS("mb_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                <option value="AIR">MacBook Air</option>
-                <option value="PRO">MacBook Pro</option>
-                <option value="__custom__">Outro (digitar)</option>
-              </select>
-              {!["AIR", "PRO"].includes(spec.mb_modelo) && spec.mb_modelo !== "AIR" && (
-                <input value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
-              )}</div>
+              {(() => {
+                const mbMods = getCatModelos("MACBOOK", ["AIR", "PRO", "NEO"]);
+                return (
+                  <div><p className={labelCls}>Modelo</p><select value={mbMods.includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => setS("mb_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                    {mbMods.map((m) => <option key={m} value={m}>{m === "AIR" ? "MacBook Air" : m === "PRO" ? "MacBook Pro" : m === "NEO" ? "MacBook Neo" : `MacBook ${m}`}</option>)}
+                    <option value="__custom__">Outro (digitar)</option>
+                  </select>
+                  {!mbMods.includes(spec.mb_modelo) && spec.mb_modelo !== "" ? (
+                    <input value={spec.mb_modelo} onChange={(e) => setS("mb_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+                  ) : null}</div>
+                );
+              })()}
               <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
                 {spec.mb_modelo === "AIR"
                   ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
@@ -1857,16 +1875,19 @@ export default function EstoquePage() {
 
           {formBaseCat === "IPADS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                <option value="IPAD">iPad</option>
-                <option value="MINI">iPad Mini</option>
-                <option value="AIR">iPad Air</option>
-                <option value="PRO">iPad Pro</option>
-                <option value="__custom__">Outro (digitar)</option>
-              </select>
-              {!["IPAD", "MINI", "AIR", "PRO"].includes(spec.ipad_modelo) && spec.ipad_modelo !== "IPAD" && (
-                <input value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
-              )}</div>
+              {(() => {
+                const ipadMods = getCatModelos("IPADS", ["IPAD", "MINI", "AIR", "PRO"]);
+                const ipadKnown = [...ipadMods, "__custom__"];
+                return (
+                  <div><p className={labelCls}>Modelo</p><select value={ipadMods.includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                    {ipadMods.map((m) => <option key={m} value={m}>{m === "IPAD" ? "iPad" : m === "MINI" ? "iPad Mini" : m === "AIR" ? "iPad Air" : m === "PRO" ? "iPad Pro" : `iPad ${m}`}</option>)}
+                    <option value="__custom__">Outro (digitar)</option>
+                  </select>
+                  {!ipadKnown.includes(spec.ipad_modelo) || spec.ipad_modelo === "" ? (
+                    <input value={spec.ipad_modelo} onChange={(e) => setS("ipad_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+                  ) : null}</div>
+                );
+              })()}
               <div><p className={labelCls}>Chip</p><select value={spec.ipad_chip || ""} onChange={(e) => setS("ipad_chip", e.target.value)} className={inputCls}>
                 <option value="">— Sem chip —</option>
                 <option value="M1">M1</option>
@@ -1892,13 +1913,18 @@ export default function EstoquePage() {
 
           {formBaseCat === "APPLE_WATCH" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                {["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].map((m) => <option key={m}>{m}</option>)}
-                <option value="__custom__">Outro (digitar)</option>
-              </select>
-              {!["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"].includes(spec.aw_modelo) && spec.aw_modelo !== "SE 2" && (
-                <input value={spec.aw_modelo === "__custom__" ? "" : spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
-              )}</div>
+              {(() => {
+                const watchMods = getCatModelos("APPLE_WATCH", ["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"]);
+                return (
+                  <div><p className={labelCls}>Modelo</p><select value={watchMods.includes(spec.aw_modelo) ? spec.aw_modelo : "__custom__"} onChange={(e) => setS("aw_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                    {watchMods.map((m) => <option key={m}>{m}</option>)}
+                    <option value="__custom__">Outro (digitar)</option>
+                  </select>
+                  {!watchMods.includes(spec.aw_modelo) && spec.aw_modelo !== "" ? (
+                    <input value={spec.aw_modelo} onChange={(e) => setS("aw_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+                  ) : null}</div>
+                );
+              })()}
               <div><p className={labelCls}>Tamanho</p><select value={spec.aw_tamanho} onChange={(e) => setS("aw_tamanho", e.target.value)} className={inputCls}>
                 {["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"].map((t) => <option key={t}>{t}</option>)}
               </select></div>
@@ -1915,13 +1941,18 @@ export default function EstoquePage() {
 
           {formBaseCat === "AIRPODS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
-              <div><p className={labelCls}>Modelo</p><select value={["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].includes(spec.air_modelo) ? spec.air_modelo : "__custom__"} onChange={(e) => setS("air_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                {["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].map((m) => <option key={m}>{m}</option>)}
-                <option value="__custom__">Outro (digitar)</option>
-              </select>
-              {!["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"].includes(spec.air_modelo) && spec.air_modelo !== "AIRPODS 4" && (
-                <input value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
-              )}</div>
+              {(() => {
+                const airMods = getCatModelos("AIRPODS", ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"]);
+                return (
+                  <div><p className={labelCls}>Modelo</p><select value={airMods.includes(spec.air_modelo) ? spec.air_modelo : "__custom__"} onChange={(e) => setS("air_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                    {airMods.map((m) => <option key={m}>{m}</option>)}
+                    <option value="__custom__">Outro (digitar)</option>
+                  </select>
+                  {!airMods.includes(spec.air_modelo) && spec.air_modelo !== "" ? (
+                    <input value={spec.air_modelo} onChange={(e) => setS("air_modelo", e.target.value)} placeholder="Digite o modelo" className={`${inputCls} mt-2`} />
+                  ) : null}</div>
+                );
+              })()}
             </div>
           )}
 
