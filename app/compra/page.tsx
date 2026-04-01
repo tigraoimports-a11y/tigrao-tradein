@@ -77,6 +77,9 @@ function CompraForm() {
 
   // Local de entrega (vindo do gerador de link)
   const localParam = searchParams.get("local") || "";
+  const shoppingParam = searchParams.get("shopping") || "";
+  const horarioParam = searchParams.get("horario") || "";
+  const dataEntregaParam = searchParams.get("data_entrega") || "";
 
   // Produtos adicionais (vindo do gerador de link)
   const produtosExtras: string[] = [];
@@ -131,10 +134,11 @@ function CompraForm() {
   const [numero, setNumero] = useState("");
   const [complemento, setComplemento] = useState("");
   const [bairro, setBairro] = useState("");
-  const [horario, setHorario] = useState("");
+  const [horario, setHorario] = useState(horarioParam);
   const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
-  const [shopping, setShopping] = useState("");
+  const [shopping, setShopping] = useState(shoppingParam);
+  const [dataEntrega, setDataEntrega] = useState(dataEntregaParam);
   const [formaPagamento, setFormaPagamento] = useState(formaParam);
   const [parcelas, setParcelas] = useState(parcelasParam);
   const [editPagamento, setEditPagamento] = useState(!formaParam); // fechado se veio do trade-in
@@ -260,6 +264,10 @@ function CompraForm() {
     if (vendedor) lines.push(`*Vendedor:* ${vendedor}`);
     if (origem) lines.push(`*Como conheceu:* ${origem}`);
     lines.push(`*Horario:* ${horario}`);
+    if (dataEntrega) {
+      const [y, m, d] = dataEntrega.split("-");
+      lines.push(`*Data:* ${d}/${m}/${y}`);
+    }
     lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
 

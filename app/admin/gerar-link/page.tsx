@@ -14,6 +14,9 @@ export default function GerarLinkPage() {
   const [parcelas, setParcelas] = useState("");
   const [entradaPix, setEntradaPix] = useState("");
   const [localEntrega, setLocalEntrega] = useState("");
+  const [shoppingNome, setShoppingNome] = useState("");
+  const [horario, setHorario] = useState("");
+  const [dataEntrega, setDataEntrega] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
@@ -49,6 +52,9 @@ export default function GerarLinkPage() {
     if (parcelas) shortData.x = parcelas;
     if (rawEntrada && rawEntrada !== "0") shortData.e = rawEntrada;
     if (localEntrega) shortData.l = localEntrega;
+    if (shoppingNome) shortData.sh = shoppingNome;
+    if (horario) shortData.h = horario;
+    if (dataEntrega) shortData.dt = dataEntrega;
 
     // Codifica em base64url
     const json = JSON.stringify(shortData);
@@ -128,7 +134,12 @@ export default function GerarLinkPage() {
           const val = extract(line);
           const lowVal = val.toLowerCase();
           if (lowVal.includes("shopping") || lowVal.includes("praia") || lowVal.includes("barra") || lowVal.includes("village") || lowVal.includes("mall")) {
-            setLocalEntrega("shopping"); filled++;
+            setLocalEntrega("shopping");
+            // Tenta extrair nome do shopping
+            const shMatch = val.match(/(barra\s*shopping|village\s*mall|praia\s*shopping|shopping\s*\w+|mall\s*\w+)/i);
+            if (shMatch) setShoppingNome(shMatch[1].trim());
+            else setShoppingNome(val);
+            filled++;
           } else if (lowVal.includes("resid") || lowVal.includes("casa") || lowVal.includes("apartamento") || lowVal.includes("apt")) {
             setLocalEntrega("residencia"); filled++;
           } else if (lowVal.includes("loja") || lowVal.includes("retirada")) {
@@ -136,6 +147,13 @@ export default function GerarLinkPage() {
           } else if (val) {
             setLocalEntrega("shopping"); filled++;
           }
+        } else if (low.includes("horario") || low.includes("horário") || low.includes("periodo") || low.includes("período")) {
+          const val = extract(line);
+          const lowVal = val.toLowerCase();
+          if (lowVal.includes("manha") || lowVal.includes("manhã")) { setHorario("Manha"); filled++; }
+          else if (lowVal.includes("tarde")) { setHorario("Tarde"); filled++; }
+          else if (lowVal.includes("noite")) { setHorario("Noite"); filled++; }
+          else if (val) { setHorario(val); filled++; }
         } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
           const m = line.match(/R?\$?\s*([\d.,]+)/);
           if (m) {
@@ -261,12 +279,46 @@ export default function GerarLinkPage() {
 
         <div>
           <label className={labelCls}>Local de Entrega</label>
-          <select value={localEntrega} onChange={(e) => setLocalEntrega(e.target.value)} className={inputCls}>
+          <select value={localEntrega} onChange={(e) => { setLocalEntrega(e.target.value); if (e.target.value !== "shopping") setShoppingNome(""); }} className={inputCls}>
             <option value="">-- Opcional --</option>
             <option value="loja">Retirada em Loja</option>
             <option value="shopping">Entrega em Shopping</option>
             <option value="residencia">Entrega em Residencia</option>
           </select>
+        </div>
+
+        {localEntrega === "shopping" && (
+          <div>
+            <label className={labelCls}>Qual Shopping?</label>
+            <input
+              type="text"
+              value={shoppingNome}
+              onChange={(e) => setShoppingNome(e.target.value)}
+              placeholder="Ex: BarraShopping, Village Mall..."
+              className={inputCls}
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Horario</label>
+            <select value={horario} onChange={(e) => setHorario(e.target.value)} className={inputCls}>
+              <option value="">-- Opcional --</option>
+              <option value="Manha">Manha</option>
+              <option value="Tarde">Tarde</option>
+              <option value="Noite">Noite</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Data</label>
+            <input
+              type="date"
+              value={dataEntrega}
+              onChange={(e) => setDataEntrega(e.target.value)}
+              className={inputCls}
+            />
+          </div>
         </div>
 
         <div>

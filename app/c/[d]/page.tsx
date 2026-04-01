@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 const KEY_MAP: Record<string, string> = {
   p: "produto", v: "preco", w: "whatsapp", f: "forma",
   x: "parcelas", e: "entrada_pix", l: "local", s: "vendedor",
+  sh: "shopping", h: "horario", dt: "data_entrega",
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
 };
 
