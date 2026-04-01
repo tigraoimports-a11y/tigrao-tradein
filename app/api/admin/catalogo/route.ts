@@ -84,6 +84,7 @@ const TABLE_MAP: Record<SimpleResource, string> = {
   modelos: "catalogo_modelos",
   spec_tipos: "catalogo_spec_tipos",
   spec_valores: "catalogo_spec_valores",
+  categoria_specs_config: "catalogo_categoria_specs_config",
 };
 
 export async function POST(req: NextRequest) {

@@ -3429,8 +3429,8 @@ export default function VendasPage() {
                                           ✏️ Editar
                                         </button>
                                       </div>
-                                      {/* Nota Fiscal — drop zone + botão */}
-                                      <div className="flex gap-2 flex-wrap items-center">
+                                      {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO) */}
+                                      {v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
                                         {v.nota_fiscal_url ? (
                                           <>
                                             <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
@@ -3506,7 +3506,7 @@ export default function VendasPage() {
                                             }} />
                                           </label>
                                         )}
-                                      </div>
+                                      </div>}
                                       <div className="flex gap-2 flex-wrap">
                                         {v.status_pagamento === "AGUARDANDO" && (
                                           <button
