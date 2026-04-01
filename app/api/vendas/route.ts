@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
       : null;
 
   if (sem1 && sem1.produto) {
+    const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
     const { error: errSeminovo } = await supabase.from("estoque").insert({
       produto: sem1.produto,
       categoria: "IPHONES",
@@ -221,7 +222,8 @@ export async function POST(req: NextRequest) {
       cor: sem1.cor || null,
       observacao: sem1.observacao || null,
       bateria: sem1.bateria || null,
-      cliente: body.cliente || data?.cliente || null,
+      cliente: nomeCliente || null,
+      fornecedor: nomeCliente || null,
       data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
@@ -237,6 +239,7 @@ export async function POST(req: NextRequest) {
       : null;
 
   if (sem2 && sem2.produto) {
+    const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
     const { error: errSeminovo2 } = await supabase.from("estoque").insert({
       produto: sem2.produto,
       categoria: "IPHONES",
@@ -247,7 +250,8 @@ export async function POST(req: NextRequest) {
       cor: sem2.cor || null,
       observacao: sem2.observacao || null,
       bateria: sem2.bateria || null,
-      cliente: body.cliente || data?.cliente || null,
+      cliente: nomeCliente2 || null,
+      fornecedor: nomeCliente2 || null,
       data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
