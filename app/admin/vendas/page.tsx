@@ -1057,7 +1057,7 @@ export default function VendasPage() {
   const parseClienteText = (text: string) => {
     const lines = text.split("\n").map(l => l.trim());
     const r: Record<string, string> = {};
-    const extractValue = (line: string) => line.replace(/^[✅⚠️📌🤔]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
+    const extractValue = (line: string) => line.replace(/\*/g, "").replace(/^[✅⚠️📌🤔]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
