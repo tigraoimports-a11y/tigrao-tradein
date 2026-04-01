@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, Suspense } from "react";
+import { WHATSAPP_DEFAULT } from "@/lib/whatsapp-config";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -88,7 +89,7 @@ function CompraForm() {
   const [whatsappConfig, setWhatsappConfig] = useState("");
   // Sempre André como default. Config sobrescreve se disponível.
   // Prioridade: param URL (do gerador de link) > config DB > fallback André
-  const whatsappFinal = whatsapp || whatsappConfig || "5521967442665";
+  const whatsappFinal = whatsapp || whatsappConfig || WHATSAPP_DEFAULT;
 
   // Fetch products + config
   useEffect(() => {

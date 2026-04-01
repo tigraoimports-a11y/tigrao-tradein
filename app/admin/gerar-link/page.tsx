@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 
 export default function GerarLinkPage() {
   const { user } = useAdmin();
@@ -26,19 +27,13 @@ export default function GerarLinkPage() {
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
 
-  // WhatsApp por vendedor: André recebe os dele, resto vai pra Bianca
-  const WHATSAPP_VENDEDOR: Record<string, string> = {
-    Andre: "5521967442665",
-    Bianca: "5521972461357",
-    Nicolas: "5521972461357",
-    Nicole: "5521972461357",
-  };
+  // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
   function gerarLink() {
     const prodsFilled = produtos.filter(Boolean);
     if (prodsFilled.length === 0) return;
 
-    const whatsappDestino = WHATSAPP_VENDEDOR[vendedorNome] || "5521972461357";
+    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
     // Gerar link curto: comprime parâmetros em base64url

@@ -165,41 +165,56 @@ export async function POST(req: NextRequest) {
 
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
-  if (seminovoData && seminovoData.produto) {
+  // Fallback: se _seminovo não veio mas a venda tem troca_produto, criar pendência do campo da venda
+  const sem1 = seminovoData && seminovoData.produto
+    ? seminovoData
+    : (data?.troca_produto && (parseFloat(data?.produto_na_troca) || 0) > 0)
+      ? { produto: data.troca_produto, valor: parseFloat(data.produto_na_troca) || 0, cor: data.troca_cor || null, bateria: data.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data.troca_obs || null }
+      : null;
+
+  if (sem1 && sem1.produto) {
     const { error: errSeminovo } = await supabase.from("estoque").insert({
-      produto: seminovoData.produto,
+      produto: sem1.produto,
       categoria: "IPHONES",
       qnt: 1,
-      custo_unitario: seminovoData.valor || 0,
+      custo_unitario: sem1.valor || 0,
       status: "PENDENTE",
       tipo: "PENDENCIA",
-      cor: seminovoData.cor || null,
-      observacao: seminovoData.observacao || null,
-      bateria: seminovoData.bateria || null,
-      cliente: body.cliente || null,
-      data_compra: body.data || null,
+      cor: sem1.cor || null,
+      observacao: sem1.observacao || null,
+      bateria: sem1.bateria || null,
+      cliente: body.cliente || data?.cliente || null,
+      data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
     if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
+    else await logActivity(usuario, "Pendência troca criada (auto)", `${sem1.produto} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
   }
 
-  // 2º produto na troca — mesmo fluxo do primeiro
-  if (seminovoData2 && seminovoData2.produto) {
+  // 2º produto na troca — mesmo fluxo com fallback
+  const sem2 = seminovoData2 && seminovoData2.produto
+    ? seminovoData2
+    : (data?.troca_produto2 && (parseFloat(data?.produto_na_troca2) || 0) > 0)
+      ? { produto: data.troca_produto2, valor: parseFloat(data.produto_na_troca2) || 0, cor: data.troca_cor2 || null, bateria: data.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data.troca_obs2 || null }
+      : null;
+
+  if (sem2 && sem2.produto) {
     const { error: errSeminovo2 } = await supabase.from("estoque").insert({
-      produto: seminovoData2.produto,
+      produto: sem2.produto,
       categoria: "IPHONES",
       qnt: 1,
-      custo_unitario: seminovoData2.valor || 0,
+      custo_unitario: sem2.valor || 0,
       status: "PENDENTE",
       tipo: "PENDENCIA",
-      cor: seminovoData2.cor || null,
-      observacao: seminovoData2.observacao || null,
-      bateria: seminovoData2.bateria || null,
-      cliente: body.cliente || null,
-      data_compra: body.data || null,
+      cor: sem2.cor || null,
+      observacao: sem2.observacao || null,
+      bateria: sem2.bateria || null,
+      cliente: body.cliente || data?.cliente || null,
+      data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
     if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
+    else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${sem2.produto} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
   }
 
   // Auto-criar entrega quando local é ENTREGA

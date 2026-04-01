@@ -627,6 +627,7 @@ export default function VendasPage() {
       troca_obs2: prodFields.troca_obs2 || null,
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : null,
       status_pagamento: "AGUARDANDO",
+      vendedor: user?.nome || null,
     };
 
     if (prodFields._estoqueId) {

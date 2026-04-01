@@ -446,7 +446,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Operacional Hoje */}
+      {/* Operacional Hoje — só aparece quando no mês atual */}
+      {isCurrentMonth && (
       <div>
         <h2 className="text-sm font-semibold text-[#86868B] uppercase tracking-wider mb-3">Hoje — {new Date().toLocaleDateString("pt-BR")}</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -456,6 +457,7 @@ export default function DashboardPage() {
           <Card icon="📅" title={`Previsão ${proxDiaUtil.split("-").reverse().join("/")}`} value={fmt(d1AmanhaItau + d1AmanhaInf)} color="text-[#1D1D1F]" sub={`Itaú: ${fmt(d1AmanhaItau)} | Infinite: ${fmt(d1AmanhaInf)}`} />
         </div>
       </div>
+      )}
 
       {/* Resumo do Mês */}
       <div>
