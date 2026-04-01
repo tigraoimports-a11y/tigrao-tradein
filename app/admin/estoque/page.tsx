@@ -2878,10 +2878,10 @@ export default function EstoquePage() {
                     );
                   })()}
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
-                  {/* Cor */}
+                  {/* Cor — editável pelo admin em qualquer status */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {canEdit ? (
+                    {(canEdit || isAdmin) ? (
                       <input
                         type="text"
                         defaultValue={p.cor || ""}
