@@ -2741,36 +2741,51 @@ export default function EstoquePage() {
                             ))}
                           </div>
                           <button onClick={async () => {
-                            const serials: string[] = [];
+                            const filled: string[] = [];
                             for (let i = 0; i < qnt; i++) {
                               const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement;
                               const val = el?.value?.trim().toUpperCase() || "";
-                              if (!val) { setMsg(`Preencha o Serial ${i + 1}`); return; }
-                              serials.push(val);
+                              if (val) filled.push(val);
                             }
-                            // Primeiro registro: atualiza o existente com serial + qnt=1
-                            await apiPatch(p.id, { serial_no: serials[0], qnt: 1 });
-                            // Demais: cria novos registros individuais
+                            if (filled.length === 0) { setMsg("Preencha pelo menos 1 serial."); return; }
+                            const remaining = qnt - filled.length;
+                            // Primeiro serial: atualiza o registro existente com qnt=1
+                            await apiPatch(p.id, { serial_no: filled[0], qnt: 1 });
                             let created = 0;
-                            for (let i = 1; i < serials.length; i++) {
+                            // Demais seriais preenchidos: cria registros individuais
+                            for (let i = 1; i < filled.length; i++) {
                               const res = await fetch("/api/estoque", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
                                 body: JSON.stringify({
                                   produto: p.produto, categoria: p.categoria, qnt: 1,
                                   custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                  serial_no: serials[i], tipo: p.tipo, status: p.status,
+                                  serial_no: filled[i], tipo: p.tipo, status: p.status,
                                   data_compra: p.data_compra, data_entrada: p.data_entrada,
                                 }),
                               });
                               if (res.ok) created++;
                             }
-                            setMsg(`✅ ${serials.length} seriais salvos! (${created + 1} registros individuais)`);
+                            // Unidades sem serial: mantém agrupadas num registro só
+                            if (remaining > 0) {
+                              await fetch("/api/estoque", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                body: JSON.stringify({
+                                  produto: p.produto, categoria: p.categoria, qnt: remaining,
+                                  custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                  tipo: p.tipo, status: p.status,
+                                  data_compra: p.data_compra, data_entrada: p.data_entrada,
+                                }),
+                              });
+                            }
+                            setMsg(`✅ ${filled.length} serial(is) salvo(s)!${remaining > 0 ? ` ${remaining} unidade(s) sem serial mantidas.` : ""}`);
                             setDetailProduct(null);
                             await fetchEstoque();
                           }} className="w-full py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">
-                            💾 Salvar {qnt} seriais (separa em registros individuais)
+                            💾 Salvar seriais preenchidos
                           </button>
+                          <p className={`text-[10px] text-center ${mS}`}>Preencha só os que tiver agora. Os demais ficam agrupados sem serial.</p>
                         </div>
                       ) : isAdmin ? (
                         <div className="flex items-center gap-1.5 mt-0.5">
