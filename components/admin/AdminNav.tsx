@@ -96,6 +96,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/taxas", label: "Taxas Maquinas", icon: "\u{1F4B3}", pageKey: "taxas" },
       { href: "/admin/log", label: "Log de Atividades", icon: "\u{1F4CB}", pageKey: "log" },
       { href: "/admin/usuarios", label: "Usuarios", icon: "\u{1F465}", pageKey: "usuarios" },
+      { href: "/admin/configuracoes", label: "Configuracoes", icon: "⚙️", pageKey: "configuracoes" },
     ],
   },
 ];
