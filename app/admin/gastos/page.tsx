@@ -123,7 +123,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
 
   const startEdit = (p: any) => {
     setEditId(p.id);
-    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "", custo_unitario: String(p.custo_unitario || ""), qnt: String(p.qnt || 1) });
+    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "", custo_unitario: String(p.custo_unitario || ""), qnt: String(p.qnt || 1), tipo: p.tipo || "A_CAMINHO" });
   };
 
   const saveEdit = async () => {
@@ -137,6 +137,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
       if (editFields.cor !== (original?.cor || "")) updates.cor = editFields.cor || null;
       if (editFields.custo_unitario !== String(original?.custo_unitario || "")) updates.custo_unitario = parseFloat(editFields.custo_unitario) || 0;
       if (editFields.qnt !== String(original?.qnt || 1)) updates.qnt = parseInt(editFields.qnt) || 1;
+      if (editFields.tipo !== (original?.tipo || "A_CAMINHO")) updates.tipo = editFields.tipo;
       // Atualizar origem no nome do produto automaticamente
       const origemMudou = editFields.observacao !== (original?.observacao || "");
       if (origemMudou) {
@@ -203,6 +204,14 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                     <select value={editFields.observacao} onChange={(e) => setEditFields(f => ({ ...f, observacao: e.target.value }))} className={inputCls}>
                       <option value="">— Sem origem —</option>
                       {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Condicao</p>
+                    <select value={editFields.tipo} onChange={(e) => setEditFields(f => ({ ...f, tipo: e.target.value }))} className={inputCls}>
+                      <option value="NOVO">Lacrado (Novo)</option>
+                      <option value="SEMINOVO">Usado (Seminovo)</option>
+                      <option value="A_CAMINHO">A Caminho</option>
                     </select>
                   </div>
                   <div>

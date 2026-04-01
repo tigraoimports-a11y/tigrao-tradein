@@ -2529,7 +2529,7 @@ export default function EstoquePage() {
                                                         produto: p.produto, categoria: p.categoria, qnt: 1,
                                                         custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
                                                         serial_no: serials[i], tipo: "A_CAMINHO", status: "A CAMINHO",
-                                                        data_compra: p.data_compra,
+                                                        data_compra: p.data_compra, pedido_fornecedor_id: p.pedido_fornecedor_id,
                                                       }),
                                                     });
                                                     if (res.ok) created++;
@@ -2762,7 +2762,7 @@ export default function EstoquePage() {
                                   produto: p.produto, categoria: p.categoria, qnt: 1,
                                   custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
                                   serial_no: filled[i], tipo: p.tipo, status: p.status,
-                                  data_compra: p.data_compra, data_entrada: p.data_entrada,
+                                  data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
                                 }),
                               });
                               if (res.ok) created++;
@@ -2776,7 +2776,7 @@ export default function EstoquePage() {
                                   produto: p.produto, categoria: p.categoria, qnt: remaining,
                                   custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
                                   tipo: p.tipo, status: p.status,
-                                  data_compra: p.data_compra, data_entrada: p.data_entrada,
+                                  data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
                                 }),
                               });
                             }
