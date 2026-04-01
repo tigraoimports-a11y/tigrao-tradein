@@ -1472,8 +1472,8 @@ export default function EstoquePage() {
           ))}
         </div>
 
-        <div className="flex gap-2 items-center">
-          <button onClick={() => setTab("scan")} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "scan" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
+        <div className="flex gap-2 items-center overflow-x-auto">
+          <button onClick={() => setTab("scan")} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${tab === "scan" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Scan
           </button>
           {isAdmin && <button onClick={() => setTab("novo" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "novo" ? "bg-[#E8740E] text-white" : "bg-[#E8740E]/10 text-[#E8740E] border border-[#E8740E]/20 hover:bg-[#E8740E] hover:text-white"}`}>
@@ -2985,12 +2985,12 @@ export default function EstoquePage() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className={`text-xs font-bold ${mP}`}>Operacoes Relacionadas</p>
                   <div className="flex gap-2 flex-wrap">
-                    {(p.status === "PENDENTE" || p.tipo === "PENDENCIA") && (
+                    {(p.status === "PENDENTE" || p.tipo === "PENDENCIA" || p.status === "A CAMINHO") && (
                       <button
                         onClick={async () => {
                           if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
                           try {
-                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo;
+                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? "NOVO" : p.tipo;
                             const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo }) });
                             const json = await res.json();
                             if (json.error) { setMsg("Erro: " + json.error); return; }
