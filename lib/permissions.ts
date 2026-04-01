@@ -21,6 +21,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
       { key: "etiquetas", label: "Etiquetas" },
       { key: "etiquetas_preco", label: "Etiquetas de Preco" },
       { key: "agendamento_precos", label: "Agendar Precos" },
+      { key: "catalogo", label: "Catalogo" },
     ],
   },
   {
@@ -98,6 +99,7 @@ const PATH_TO_KEY: Record<string, string> = {
   "/admin/log": "log",
   "/admin/usuarios": "usuarios",
   "/admin/importar": "importar",
+  "/admin/catalogo": "catalogo",
 };
 
 /** Map page keys to legacy permission strings (for API route checks) */
@@ -131,6 +133,7 @@ const KEY_TO_LEGACY: Record<string, string> = {
   log: "log.read",
   usuarios: "usuarios.manage",
   importar: "importar.write",
+  catalogo: "catalogo.write",
 };
 
 /** Map nav href to page key */
