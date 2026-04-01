@@ -234,8 +234,15 @@ export default function DashboardPage() {
   const d1Inf = d1Credits.INFINITE;
   const d1MP = d1Credits.MERCADO_PAGO;
 
-  // Espécie recebido hoje (entrada_especie das vendas de hoje)
-  const especieHoje = vendasHoje.reduce((s, v) => s + (v.entrada_especie || 0), 0);
+  // Espécie recebido hoje: entrada_especie parcial + vendas 100% em dinheiro/espécie
+  const especieHoje = vendasHoje.reduce((s, v) => {
+    let esp = v.entrada_especie || 0;
+    // Se forma é DINHEIRO ou ESPECIE, o valor total foi pago em espécie
+    if ((v.forma === "DINHEIRO" || v.forma === "ESPECIE") && v.preco_vendido > 0) {
+      esp += v.preco_vendido;
+    }
+    return s + esp;
+  }, 0);
 
   // Gastos por banco hoje (todos — incluindo FORNECEDOR — porque SAI da conta)
   // Saídas por banco — inclui TUDO (fornecedor + operacional) pois pagamentos acontecem após base manhã
