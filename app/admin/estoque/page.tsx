@@ -2723,7 +2723,33 @@ export default function EstoquePage() {
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  {p.serial_no && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p><button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button></div>}
+                  {(p.serial_no || isAdmin) && <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
+                    {isAdmin ? (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <input
+                          type="text"
+                          defaultValue={p.serial_no || ""}
+                          placeholder="Digitar S/N"
+                          style={{ textTransform: "uppercase" }}
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim().toUpperCase() || null;
+                            if (val !== (p.serial_no || null)) {
+                              await apiPatch(p.id, { serial_no: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
+                              setDetailProduct({ ...p, serial_no: val });
+                              setMsg(val ? "Serial atualizado!" : "Serial removido!");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                        {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className="shrink-0 hover:text-[#E8740E]">{cpIco}</button>}
+                      </div>
+                    ) : (
+                      <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
+                    )}
+                  </div>}
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
                   {/* Cor */}
                   <div>
