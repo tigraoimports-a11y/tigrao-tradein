@@ -1267,7 +1267,7 @@ export default function VendasPage() {
       troca_cabo: "",
       troca_fonte: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
-      serial_no: "",
+      serial_no: v.serial_no || "",
       imei: v.imei || "",
       cep: "",
       bairro: "",
@@ -3556,8 +3556,84 @@ export default function VendasPage() {
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Detalhes</h4>
                                       <div className="text-xs space-y-1">
                                         <p><strong>Produto:</strong> {v.produto}</p>
-                                        {v.serial_no && <p><strong>Serial No.:</strong> <span className="font-mono">{v.serial_no}</span></p>}
-                                        {v.imei && <p><strong>IMEI:</strong> <span className="font-mono">{v.imei}</span></p>}
+                                        <p>
+                                          <strong>Serial No.:</strong>{" "}
+                                          {editingId === v.id + "-serial" ? (
+                                            <span className="inline-flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                              <input
+                                                autoFocus
+                                                defaultValue={v.serial_no || ""}
+                                                id={`serial-input-${v.id}`}
+                                                className={`px-1.5 py-0.5 border rounded font-mono text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                                placeholder="Ex: C39XXXXX"
+                                              />
+                                              <button
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const input = document.getElementById(`serial-input-${v.id}`) as HTMLInputElement;
+                                                  const newVal = input?.value.trim() || null;
+                                                  await fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify({ id: v.id, serial_no: newVal }),
+                                                  });
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, serial_no: newVal || "" } : r));
+                                                  setEditingId(null);
+                                                }}
+                                                className="px-2 py-0.5 rounded text-[10px] bg-blue-500 text-white font-semibold hover:bg-blue-600"
+                                              >OK</button>
+                                              <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="px-2 py-0.5 rounded text-[10px] border border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]">✕</button>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className={`font-mono ${v.serial_no ? "" : "text-[#86868B]"}`}>{v.serial_no || "—"}</span>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingId(v.id + "-serial"); }}
+                                                className="text-[10px] text-[#86868B] hover:text-[#E8740E] transition-colors"
+                                                title="Editar Serial"
+                                              >✏️</button>
+                                            </span>
+                                          )}
+                                        </p>
+                                        <p>
+                                          <strong>IMEI:</strong>{" "}
+                                          {editingId === v.id + "-imei" ? (
+                                            <span className="inline-flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                              <input
+                                                autoFocus
+                                                defaultValue={v.imei || ""}
+                                                id={`imei-input-${v.id}`}
+                                                className={`px-1.5 py-0.5 border rounded font-mono text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                                placeholder="Ex: 35XXXXXXXXXXXXXXX"
+                                              />
+                                              <button
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const input = document.getElementById(`imei-input-${v.id}`) as HTMLInputElement;
+                                                  const newVal = input?.value.trim() || null;
+                                                  await fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify({ id: v.id, imei: newVal }),
+                                                  });
+                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, imei: newVal || "" } : r));
+                                                  setEditingId(null);
+                                                }}
+                                                className="px-2 py-0.5 rounded text-[10px] bg-blue-500 text-white font-semibold hover:bg-blue-600"
+                                              >OK</button>
+                                              <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="px-2 py-0.5 rounded text-[10px] border border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]">✕</button>
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <span className={`font-mono ${v.imei ? "" : "text-[#86868B]"}`}>{v.imei || "—"}</span>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingId(v.id + "-imei"); }}
+                                                className="text-[10px] text-[#86868B] hover:text-[#E8740E] transition-colors"
+                                                title="Editar IMEI"
+                                              >✏️</button>
+                                            </span>
+                                          )}
+                                        </p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
