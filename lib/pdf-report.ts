@@ -987,6 +987,17 @@ export async function generateMonthlyPDF(data: MonthlyReportData): Promise<Buffe
       byDay[v.data].qty++; byDay[v.data].fat += v.preco_vendido; byDay[v.data].lucro += v.lucro;
     });
 
+    // Regiões (bairro) — só cliente final e upgrade (exclui atacado e sem bairro)
+    const byRegiao: Record<string, { qty: number; fat: number; lucro: number }> = {};
+    data.vendas.forEach(v => {
+      if (v.tipo === "ATACADO") return;
+      const bairro = ((v as unknown as { bairro?: string }).bairro || "").trim().toUpperCase();
+      if (!bairro || bairro === "-" || bairro === "N/A") return;
+      if (!byRegiao[bairro]) byRegiao[bairro] = { qty: 0, fat: 0, lucro: 0 };
+      byRegiao[bairro].qty++; byRegiao[bairro].fat += v.preco_vendido; byRegiao[bairro].lucro += v.lucro;
+    });
+    const topRegioes = Object.entries(byRegiao).sort((a, b) => b[1].qty - a[1].qty).slice(0, 12);
+
     // Gastos by category
     const gastosByCat: Record<string, number> = {};
     data.gastos.forEach(g => {

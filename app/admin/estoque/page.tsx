@@ -2294,7 +2294,7 @@ export default function EstoquePage() {
                                 <tr><td colSpan={10} className="h-2"></td></tr>
                                 {/* Header do produto */}
                                 {(() => {
-                                  const alwaysExpand = isEditableItemTab;
+                                  const alwaysExpand = isPendenciasTab;
                                   const isExpanded = alwaysExpand || expandedProducts.has(prodNome);
                                   const toggleExpand = () => {
                                     if (alwaysExpand) return;
@@ -2463,7 +2463,14 @@ export default function EstoquePage() {
                                         </div>
                                       </td>
                                       <td className="px-4 py-2.5">
-                                        <span className={`font-bold min-w-[24px] text-center ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary}`}>{p.qnt}</span>
+                                        {isEditQnt ? (
+                                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                            <input type="number" min="0" value={editingQnt[p.id]} onChange={(e) => setEditingQnt({ ...editingQnt, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { const v = parseInt(editingQnt[p.id]); if (!isNaN(v) && v >= 0) handleUpdateQnt(p, v); } if (e.key === "Escape") { const eq = { ...editingQnt }; delete eq[p.id]; setEditingQnt(eq); } }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-center font-bold" autoFocus />
+                                            <button onClick={() => { const v = parseInt(editingQnt[p.id]); if (!isNaN(v) && v >= 0) handleUpdateQnt(p, v); }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                          </div>
+                                        ) : (
+                                          <span className={`font-bold min-w-[24px] text-center ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) }); } }}>{p.qnt}</span>
+                                        )}
                                       </td>
                                       <td className="px-4 py-2.5">
                                         {isEditCusto ? (
