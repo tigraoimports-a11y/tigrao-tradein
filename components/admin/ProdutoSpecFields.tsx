@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   CATEGORIAS,
   CAT_LABELS,
@@ -25,9 +25,7 @@ import {
   DEFAULT_SPEC,
   buildProdutoName,
 } from "@/lib/produto-specs";
-import { useAdmin } from "@/components/admin/AdminShell";
-
-// Modelos atualizados (iguais ao estoque) — usados como fallback se DB indisponível
+// Modelos de produto (sincronizar com catálogo em /admin/catalogo)
 const IPHONE_MODELOS_FULL = [
   "11", "11 PRO", "11 PRO MAX", "12", "12 PRO", "12 PRO MAX",
   "13", "13 PRO", "13 PRO MAX", "14", "14 PLUS", "14 PRO", "14 PRO MAX",
@@ -35,69 +33,9 @@ const IPHONE_MODELOS_FULL = [
   "16", "16 PLUS", "16 PRO", "16 PRO MAX", "16E",
   "17", "17 AIR", "17 PRO", "17 PRO MAX",
 ];
-const MACBOOK_CHIPS_FULL = ["A18 PRO", "M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"];
 const WATCH_MODELOS_FULL = ["SE 2", "SE 3", "SERIES 11", "ULTRA 3", "ULTRA 3 MILANES"];
 const WATCH_TAMANHOS = ["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"];
 const IPAD_MODELOS_FULL = ["IPAD", "MINI", "AIR", "PRO"];
-
-// ── useCatalogo hook ──────────────────────────────────────────────────────────
-
-interface CatalogoModelo {
-  categoria_key: string;
-  nome: string;
-  ordem: number;
-  ativo: boolean;
-}
-
-interface CatalogoCache {
-  modelos: CatalogoModelo[];
-  fetchedAt: number;
-}
-
-// Module-level cache so we only fetch once per session
-let _catalogoCache: CatalogoCache | null = null;
-let _fetchPromise: Promise<CatalogoCache> | null = null;
-
-function useCatalogo(password: string) {
-  const [cache, setCache] = useState<CatalogoCache | null>(_catalogoCache);
-
-  useEffect(() => {
-    if (_catalogoCache) {
-      setCache(_catalogoCache);
-      return;
-    }
-    if (!_fetchPromise) {
-      _fetchPromise = fetch("/api/admin/catalogo", {
-        headers: { "x-admin-password": password },
-      })
-        .then((r) => r.json())
-        .then((json) => {
-          const result: CatalogoCache = {
-            modelos: (json.modelos ?? []) as CatalogoModelo[],
-            fetchedAt: Date.now(),
-          };
-          _catalogoCache = result;
-          return result;
-        })
-        .catch(() => {
-          const empty: CatalogoCache = { modelos: [], fetchedAt: Date.now() };
-          _catalogoCache = empty;
-          return empty;
-        });
-    }
-    _fetchPromise.then((result) => setCache(result));
-  }, [password]);
-
-  function getModelos(categoriaKey: string): string[] {
-    if (!cache || cache.modelos.length === 0) return [];
-    return cache.modelos
-      .filter((m) => m.categoria_key === categoriaKey && m.ativo)
-      .sort((a, b) => a.ordem - b.ordem)
-      .map((m) => m.nome);
-  }
-
-  return { getModelos };
-}
 
 export interface ProdutoRowState {
   categoria: string;
@@ -149,15 +87,11 @@ export default function ProdutoSpecFields({
   index,
 }: ProdutoSpecFieldsProps) {
   const bgSection = dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]";
-  const { password } = useAdmin();
-  const { getModelos } = useCatalogo(password);
-
-  // Resolve model lists: DB first, fallback to hardcoded
-  const iphoneModelos = getModelos("IPHONES").length > 0 ? getModelos("IPHONES") : IPHONE_MODELOS_FULL;
-  const ipadModelos = getModelos("IPADS").length > 0 ? getModelos("IPADS") : IPAD_MODELOS_FULL;
-  const macbookModelos = getModelos("MACBOOK").length > 0 ? getModelos("MACBOOK") : ["AIR", "PRO", "NEO"];
-  const watchModelos = getModelos("APPLE_WATCH").length > 0 ? getModelos("APPLE_WATCH") : WATCH_MODELOS_FULL;
-  const airpodsModelos = getModelos("AIRPODS").length > 0 ? getModelos("AIRPODS") : AIRPODS_MODELOS;
+  const iphoneModelos = IPHONE_MODELOS_FULL;
+  const ipadModelos = IPAD_MODELOS_FULL;
+  const macbookModelos = ["AIR", "PRO", "NEO"];
+  const watchModelos = WATCH_MODELOS_FULL;
+  const airpodsModelos = AIRPODS_MODELOS;
 
   const set = (field: keyof ProdutoRowState, value: string) => {
     const updated = { ...row, [field]: value };
@@ -298,7 +232,7 @@ export default function ProdutoSpecFields({
           <div>
             <p className={labelCls}>Chip</p>
             <select value={row.spec.mb_chip} onChange={(e) => setSpec("mb_chip", e.target.value)} className={inputCls}>
-              {MACBOOK_CHIPS_FULL.map((c) => <option key={c}>{c}</option>)}
+              {["A18 PRO", "M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"].map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
