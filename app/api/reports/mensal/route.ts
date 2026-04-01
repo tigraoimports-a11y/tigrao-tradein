@@ -97,10 +97,10 @@ export async function GET(req: NextRequest) {
     // Buscar estoque
     const { data: estoqueRaw } = await supabase
       .from("estoque")
-      .select("produto, quantidade, custo_unitario, categoria");
+      .select("produto, qnt, custo_unitario, categoria");
     const estoque: EstoqueItem[] = (estoqueRaw ?? []).map(e => ({
       produto: e.produto,
-      quantidade: Number(e.quantidade || 0),
+      quantidade: Number(e.qnt || 0),
       custo_unitario: Number(e.custo_unitario || 0),
       categoria: e.categoria || "",
     }));
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
         const [{ data: vendas }, { data: gastos }] = await Promise.all([
           supabase
             .from("vendas")
-            .select("data, cliente, produto, preco_vendido, custo, lucro, tipo, origem, forma, banco, parcelas, status_pagamento")
+            .select("data, cliente, produto, preco_vendido, custo, lucro, tipo, origem, forma, banco, qnt_parcelas, status_pagamento")
             .gte("data", s.inicio)
             .lte("data", s.fim)
             .neq("status_pagamento", "CANCELADO"),
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
             preco_vendido: Number(v.preco_vendido || 0),
             custo: Number(v.custo || 0),
             lucro: Number(v.lucro || 0),
-            parcelas: Number(v.parcelas || 0),
+            parcelas: Number(v.qnt_parcelas || 0),
           })) as VendaSemana[],
           gastos: (gastos ?? []).map(g => ({
             ...g,
