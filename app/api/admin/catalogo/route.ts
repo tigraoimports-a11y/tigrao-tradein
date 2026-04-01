@@ -145,7 +145,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { resource, id, ...data } = body as { resource: Resource; id: string; [key: string]: unknown };
 
-    const table = TABLE_MAP[resource];
+    const table = TABLE_MAP[resource as Exclude<Resource, "modelo_configs">];
     if (!table) {
       return NextResponse.json({ error: "Invalid resource" }, { status: 400 });
     }
@@ -174,7 +174,7 @@ export async function DELETE(req: NextRequest) {
     const body = await req.json();
     const { resource, id } = body as { resource: Resource; id: string };
 
-    const table = TABLE_MAP[resource];
+    const table = TABLE_MAP[resource as Exclude<Resource, "modelo_configs">];
     if (!table) {
       return NextResponse.json({ error: "Invalid resource" }, { status: 400 });
     }
