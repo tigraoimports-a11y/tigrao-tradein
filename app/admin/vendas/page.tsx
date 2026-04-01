@@ -476,9 +476,11 @@ export default function VendasPage() {
     const curForma = form.forma;
     const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
-    const trc1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
-    const trc2 = parseFloat(overrides.troca2 ?? form.produto_na_troca2) || 0;
-    const trc = trc1 + trc2;
+    // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
+    const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
+    const trcForm2 = parseFloat(overrides.troca2 ?? form.produto_na_troca2) || 0;
+    const trcCarrinho = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0), 0);
+    const trc = produtosCarrinho.length > 0 ? Math.max(trcCarrinho, trcForm1 + trcForm2) : trcForm1 + trcForm2;
 
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {

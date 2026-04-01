@@ -115,6 +115,23 @@ export async function POST(req: NextRequest) {
     body.cliente = body.cliente.toUpperCase();
   }
 
+  // Auto-preencher bairro/cidade/uf a partir do CEP se não informados
+  if (body.cep && body.cep !== "00000000" && !body.bairro) {
+    try {
+      const cepClean = String(body.cep).replace(/\D/g, "");
+      if (cepClean.length === 8) {
+        const res = await fetch(`https://viacep.com.br/ws/${cepClean}/json/`);
+        const cepData = await res.json();
+        if (!cepData.erro) {
+          if (!body.bairro) body.bairro = cepData.bairro || null;
+          if (!body.cidade) body.cidade = cepData.localidade || null;
+          if (!body.uf) body.uf = cepData.uf || null;
+          if (!body.endereco) body.endereco = cepData.logradouro || null;
+        }
+      }
+    } catch { /* ignore CEP lookup failure */ }
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
