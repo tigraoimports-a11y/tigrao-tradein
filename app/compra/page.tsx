@@ -160,9 +160,12 @@ function CompraForm() {
       .finally(() => setCepLoading(false));
   }, [cep]);
 
+  // PIX entry — pode vir do URL ou ser digitado pelo cliente no modo "PIX + Cartao"
+  const [entradaPixManual, setEntradaPixManual] = useState(entradaPixParam || "");
+
   // Installment calculations
   const valorBase = preco > 0 ? (trocaNum > 0 ? preco - trocaNum : preco) : 0;
-  const entradaPixNum = parseFloat(entradaPixParam) || 0;
+  const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
     if (valorParcelar <= 0) return [];
@@ -507,39 +510,57 @@ function CompraForm() {
             </div>
           )}
 
-          {/* Installment grid */}
-          {formaPagamento.includes("Cartao") && valorBase > 0 && (
+          {/* Campo entrada PIX quando "PIX + Cartao" selecionado */}
+          {formaPagamento === "PIX + Cartao" && (
             <div>
-              <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Escolha o parcelamento</label>
-              <div className="grid grid-cols-3 gap-2">
-                {parcOpts.filter(o => [1,2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(o.parcelas)).map(o => (
-                  <label key={o.parcelas} className={`flex flex-col items-center py-2.5 px-2 rounded-lg border-2 cursor-pointer transition-colors ${parcelas === String(o.parcelas) ? "border-[#E8740E] bg-[#FFF5EB]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
-                    <input type="radio" name="parcelas" value={o.parcelas} checked={parcelas === String(o.parcelas)} onChange={() => setParcelas(String(o.parcelas))} className="sr-only" />
-                    <span className={`text-xs font-bold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{o.parcelas}x</span>
-                    <span className={`text-[11px] font-semibold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#6E6E73]"}`}>R$ {fmt(o.valorParcela)}</span>
-                  </label>
-                ))}
-              </div>
-              {formaPagamento === "PIX + Cartao" && (
-                <p className="text-xs text-[#86868B] mt-2">Voce pode combinar PIX + Cartao. Informe os detalhes ao vendedor.</p>
+              <label className="block text-sm font-medium text-[#1D1D1F] mb-1">Valor de entrada no PIX (R$)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={entradaPixManual}
+                onChange={e => { setEntradaPixManual(e.target.value.replace(/\D/g, "")); setParcelas(""); }}
+                placeholder="Ex: 1000"
+                className={inputCls}
+              />
+              {entradaPixNum > 0 && valorParcelar > 0 && (
+                <p className="text-xs text-green-700 mt-1 font-medium">
+                  Entrada PIX: R$ {fmt(entradaPixNum)} — restante no cartão: R$ {fmt(valorParcelar)}
+                </p>
               )}
             </div>
           )}
 
-          {/* Fallback: no price, just number selector */}
-          {formaPagamento.includes("Cartao") && valorBase <= 0 && (
+          {/* Installment grid */}
+          {formaPagamento.includes("Cartao") && (valorParcelar > 0 || (formaPagamento === "PIX + Cartao" && entradaPixNum === 0)) && (
             <div>
-              <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Em quantas vezes?</label>
-              <div className="grid grid-cols-7 gap-1.5">
-                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => (
-                  <label key={n} className={`flex items-center justify-center py-2 rounded-lg border-2 cursor-pointer transition-colors text-xs font-bold ${parcelas === String(n) ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                    <input type="radio" name="parcelas" value={n} checked={parcelas === String(n)} onChange={() => setParcelas(String(n))} className="sr-only" />
-                    {n}x
-                  </label>
-                ))}
-              </div>
+              <label className="block text-sm font-medium text-[#1D1D1F] mb-2">
+                {formaPagamento === "PIX + Cartao" && entradaPixNum > 0
+                  ? `Parcelamento do restante (R$ ${fmt(valorParcelar)})`
+                  : "Escolha o parcelamento"}
+              </label>
+              {parcOpts.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {parcOpts.filter(o => [1,2,3,4,5,6,7,8,9,10,11,12,15,18,21].includes(o.parcelas)).map(o => (
+                    <label key={o.parcelas} className={`flex flex-col items-center py-2.5 px-2 rounded-lg border-2 cursor-pointer transition-colors ${parcelas === String(o.parcelas) ? "border-[#E8740E] bg-[#FFF5EB]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+                      <input type="radio" name="parcelas" value={o.parcelas} checked={parcelas === String(o.parcelas)} onChange={() => setParcelas(String(o.parcelas))} className="sr-only" />
+                      <span className={`text-xs font-bold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{o.parcelas}x</span>
+                      <span className={`text-[11px] font-semibold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#6E6E73]"}`}>R$ {fmt(o.valorParcela)}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].map(n => (
+                    <label key={n} className={`flex items-center justify-center py-2 rounded-lg border-2 cursor-pointer transition-colors text-xs font-bold ${parcelas === String(n) ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                      <input type="radio" name="parcelas" value={n} checked={parcelas === String(n)} onChange={() => setParcelas(String(n))} className="sr-only" />
+                      {n}x
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
           </>)}
         </div>
 

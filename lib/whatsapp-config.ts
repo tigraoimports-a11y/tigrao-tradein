@@ -4,8 +4,8 @@
 export const WHATSAPP_NUMBERS = {
   andre: "5521967442665",
   bianca: "5521972461357",
-  nicolas: "5521972461357", // Redireciona pra Bianca
-  nicole: "5521972461357",  // Redireciona pra Bianca
+  nicolas: "5521995618747",
+  nicole: "5521972461357",  // Nicole via Instagram — formulário vai pra Bianca
 } as const;
 
 // Número padrão (André)
