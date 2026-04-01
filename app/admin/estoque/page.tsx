@@ -2734,8 +2734,9 @@ export default function EstoquePage() {
                         <div className="mt-1 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
                             {Array.from({ length: qnt }, (_, i) => (
-                              <input key={i} id={`detail-serial-${p.id}-${i}`} placeholder={`Serial ${i + 1}`}
+                              <input key={i} id={`detail-serial-${p.id}-${i}`} placeholder={ocrLoading ? "Lendo..." : `Serial ${i + 1}`}
                                 style={{ textTransform: "uppercase" }}
+                                onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
                                 className={`text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                               />
                             ))}
@@ -2792,8 +2793,9 @@ export default function EstoquePage() {
                           <input
                             type="text"
                             defaultValue={p.serial_no || ""}
-                            placeholder="Digitar S/N"
+                            placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
                             style={{ textTransform: "uppercase" }}
+                            onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; (e.target as HTMLInputElement).dispatchEvent(new Event("change", { bubbles: true })); }, setOcrLoading)}
                             onBlur={async (e) => {
                               const val = e.target.value.trim().toUpperCase() || null;
                               if (val !== (p.serial_no || null)) {
