@@ -88,7 +88,11 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
     });
   }
 
-  result.sort((a, b) => b.data.localeCompare(a.data));
+  result.sort((a, b) => {
+    const cmpData = b.data.localeCompare(a.data);
+    if (cmpData !== 0) return cmpData;
+    return (b.hora || "00:00:00").localeCompare(a.hora || "00:00:00");
+  });
   return result;
 }
 

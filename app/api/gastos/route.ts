@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  let query = supabase.from("gastos").select("*").order("data", { ascending: false });
+  let query = supabase.from("gastos").select("*").order("data", { ascending: false }).order("hora", { ascending: false });
   if (from) query = query.gte("data", from);
   if (to) query = query.lte("data", to);
 
