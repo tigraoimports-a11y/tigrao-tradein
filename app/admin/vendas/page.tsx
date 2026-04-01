@@ -1127,8 +1127,9 @@ export default function VendasPage() {
         if (v.includes("instagram") || v.includes("insta")) r.origem = "ANUNCIO";
         else if (v.includes("amig") || v.includes("indicaç") || v.includes("indicac") || v.includes("conhecid")) r.origem = "INDICACAO";
         else if (v.includes("google") || v.includes("anuncio") || v.includes("anúncio")) r.origem = "ANUNCIO";
-        else if (v.includes("recompra") || v.includes("voltou") || v.includes("cliente antigo")) r.origem = "RECOMPRA";
-        else r.origem = "INDICACAO"; // default
+        else if (v.includes("recompra") || v.includes("voltou") || v.includes("cliente antigo") || v.includes("ja sou cliente") || v.includes("já sou cliente") || v.includes("ja comprei") || v.includes("já comprei")) r.origem = "RECOMPRA";
+        else if (v.includes("story") || v.includes("stories") || v.includes("post") || v.includes("reel")) r.origem = "ANUNCIO";
+        // default: não seta origem, deixa a detecção de recompra por CPF decidir
       }
       // Entrega ou Retirada
       else if (lower.includes("retirada") && lower.includes("entrega")) {
