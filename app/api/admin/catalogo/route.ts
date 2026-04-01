@@ -77,8 +77,9 @@ export async function GET(req: NextRequest) {
 // Body: { resource, ...fields }  (PATCH/DELETE also need `id`)
 
 type Resource = "categorias" | "modelos" | "spec_tipos" | "spec_valores" | "modelo_configs" | "categoria_specs_config";
+type SimpleResource = Exclude<Resource, "modelo_configs" | "categoria_specs_config">;
 
-const TABLE_MAP: Record<Exclude<Resource, "modelo_configs">, string> = {
+const TABLE_MAP: Record<SimpleResource, string> = {
   categorias: "catalogo_categorias",
   modelos: "catalogo_modelos",
   spec_tipos: "catalogo_spec_tipos",
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const table = TABLE_MAP[resource as Exclude<Resource, "modelo_configs">];
+    const table = TABLE_MAP[resource as SimpleResource];
     if (!table) {
       return NextResponse.json({ error: "Invalid resource" }, { status: 400 });
     }
@@ -168,7 +169,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { resource, id, ...data } = body as { resource: Resource; id: string; [key: string]: unknown };
 
-    const table = TABLE_MAP[resource as Exclude<Resource, "modelo_configs">];
+    const table = TABLE_MAP[resource as SimpleResource];
     if (!table) {
       return NextResponse.json({ error: "Invalid resource" }, { status: 400 });
     }
@@ -197,7 +198,7 @@ export async function DELETE(req: NextRequest) {
     const body = await req.json();
     const { resource, id } = body as { resource: Resource; id: string };
 
-    const table = TABLE_MAP[resource as Exclude<Resource, "modelo_configs">];
+    const table = TABLE_MAP[resource as SimpleResource];
     if (!table) {
       return NextResponse.json({ error: "Invalid resource" }, { status: 400 });
     }
