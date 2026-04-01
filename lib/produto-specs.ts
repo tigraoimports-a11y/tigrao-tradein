@@ -16,47 +16,48 @@ export const CAT_LABELS: Record<string, string> = {
 
 export const STRUCTURED_CATS = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS"];
 
-// ── Cores por categoria ──
+// ── Cores por categoria (PORTUGUÊS) ──
 
 /** Cores de iPhone por linha/modelo */
 export const IPHONE_CORES_POR_MODELO: Record<string, string[]> = {
-  "11":            ["Black", "Green", "Purple", "Red", "White", "Yellow"],
-  "11 PRO":        ["Gold", "Midnight Green", "Silver", "Space Gray"],
-  "11 PRO MAX":    ["Gold", "Midnight Green", "Silver", "Space Gray"],
-  "12":            ["Black", "Blue", "Green", "Purple", "Red", "White"],
-  "12 PRO":        ["Gold", "Graphite", "Pacific Blue", "Silver"],
-  "12 PRO MAX":    ["Gold", "Graphite", "Pacific Blue", "Silver"],
-  "13":            ["Blue", "Green", "Midnight", "Pink", "Red", "Starlight"],
-  "13 PRO":        ["Alpine Green", "Gold", "Graphite", "Sierra Blue", "Silver"],
-  "13 PRO MAX":    ["Alpine Green", "Gold", "Graphite", "Sierra Blue", "Silver"],
-  "14":            ["Blue", "Midnight", "Purple", "Red", "Starlight", "Yellow"],
-  "14 PLUS":       ["Blue", "Midnight", "Purple", "Red", "Starlight", "Yellow"],
-  "14 PRO":        ["Deep Purple", "Gold", "Silver", "Space Black"],
-  "14 PRO MAX":    ["Deep Purple", "Gold", "Silver", "Space Black"],
-  "15":            ["Black", "Blue", "Green", "Pink", "Yellow"],
-  "15 PLUS":       ["Black", "Blue", "Green", "Pink", "Yellow"],
-  "15 PRO":        ["Black Titanium", "Blue Titanium", "Natural Titanium", "White Titanium"],
-  "15 PRO MAX":    ["Black Titanium", "Blue Titanium", "Natural Titanium", "White Titanium"],
-  "16":            ["Black", "Pink", "Teal", "Ultramarine", "White"],
-  "16 PLUS":       ["Black", "Pink", "Teal", "Ultramarine", "White"],
-  "16 PRO":        ["Black Titanium", "Desert Titanium", "Natural Titanium", "White Titanium"],
-  "16 PRO MAX":    ["Black Titanium", "Desert Titanium", "Natural Titanium", "White Titanium"],
-  "16E":           ["Black", "White"],
-  "17":            ["Black", "Lavender", "Mist Blue", "Sage", "White"],
-  "17 AIR":        ["Cloud White", "Light Gold", "Sky Blue", "Space Black"],
-  "17 PRO":        ["Cosmic Orange", "Deep Blue", "Silver"],
-  "17 PRO MAX":    ["Cosmic Orange", "Deep Blue", "Silver"],
+  "11":            ["PRETO", "VERDE", "ROXO", "VERMELHO", "BRANCO", "AMARELO"],
+  "11 PRO":        ["DOURADO", "VERDE MEIA-NOITE", "PRATA", "CINZA ESPACIAL"],
+  "11 PRO MAX":    ["DOURADO", "VERDE MEIA-NOITE", "PRATA", "CINZA ESPACIAL"],
+  "12":            ["PRETO", "AZUL", "VERDE", "ROXO", "VERMELHO", "BRANCO"],
+  "12 PRO":        ["DOURADO", "GRAFITE", "AZUL PACIFICO", "PRATA"],
+  "12 PRO MAX":    ["DOURADO", "GRAFITE", "AZUL PACIFICO", "PRATA"],
+  "13":            ["AZUL", "VERDE", "MEIA-NOITE", "ROSA", "VERMELHO", "ESTELAR"],
+  "13 PRO":        ["VERDE ALPINO", "DOURADO", "GRAFITE", "AZUL SIERRA", "PRATA"],
+  "13 PRO MAX":    ["VERDE ALPINO", "DOURADO", "GRAFITE", "AZUL SIERRA", "PRATA"],
+  "14":            ["AZUL", "MEIA-NOITE", "ROXO", "VERMELHO", "ESTELAR", "AMARELO"],
+  "14 PLUS":       ["AZUL", "MEIA-NOITE", "ROXO", "VERMELHO", "ESTELAR", "AMARELO"],
+  "14 PRO":        ["ROXO PROFUNDO", "DOURADO", "PRATA", "PRETO ESPACIAL"],
+  "14 PRO MAX":    ["ROXO PROFUNDO", "DOURADO", "PRATA", "PRETO ESPACIAL"],
+  "15":            ["PRETO", "AZUL", "VERDE", "ROSA", "AMARELO"],
+  "15 PLUS":       ["PRETO", "AZUL", "VERDE", "ROSA", "AMARELO"],
+  "15 PRO":        ["TITANIO PRETO", "TITANIO AZUL", "TITANIO NATURAL", "TITANIO BRANCO"],
+  "15 PRO MAX":    ["TITANIO PRETO", "TITANIO AZUL", "TITANIO NATURAL", "TITANIO BRANCO"],
+  "16":            ["PRETO", "ROSA", "TEAL", "ULTRAMARINO", "BRANCO"],
+  "16 PLUS":       ["PRETO", "ROSA", "TEAL", "ULTRAMARINO", "BRANCO"],
+  "16 PRO":        ["TITANIO PRETO", "TITANIO DESERTO", "TITANIO NATURAL", "TITANIO BRANCO"],
+  "16 PRO MAX":    ["TITANIO PRETO", "TITANIO DESERTO", "TITANIO NATURAL", "TITANIO BRANCO"],
+  "16E":           ["PRETO", "BRANCO"],
+  "17":            ["PRETO", "LAVANDA", "AZUL NEVOA", "SAGE", "BRANCO"],
+  "17 AIR":        ["BRANCO NUVEM", "DOURADO CLARO", "AZUL CEU", "PRETO ESPACIAL"],
+  "17 PRO":        ["LARANJA COSMICO", "AZUL PROFUNDO", "PRATA"],
+  "17 PRO MAX":    ["LARANJA COSMICO", "AZUL PROFUNDO", "PRATA"],
 };
 
 /** Lista completa de todas as cores de iPhone (fallback) */
 export const IPHONE_CORES = [
-  "Alpine Green", "Black", "Blue", "Black Titanium", "Blue Titanium",
-  "Cloud White", "Cosmic Orange", "Deep Blue", "Deep Purple", "Desert Titanium",
-  "Gold", "Graphite", "Green", "Lavender", "Light Gold",
-  "Midnight", "Midnight Green", "Mist Blue", "Natural Titanium", "Pacific Blue",
-  "Pink", "Purple", "Red", "Sage", "Sierra Blue",
-  "Silver", "Sky Blue", "Space Black", "Space Gray", "Starlight",
-  "Teal", "Ultramarine", "White", "White Titanium", "Yellow",
+  "AMARELO", "AZUL", "AZUL CEU", "AZUL NEVOA", "AZUL PACIFICO", "AZUL PROFUNDO", "AZUL SIERRA",
+  "BRANCO", "BRANCO NUVEM", "CINZA ESPACIAL",
+  "DOURADO", "DOURADO CLARO", "ESTELAR",
+  "GRAFITE", "LARANJA COSMICO", "LAVANDA",
+  "MEIA-NOITE", "PRETO", "PRETO ESPACIAL", "PRATA",
+  "ROSA", "ROXO", "ROXO PROFUNDO", "SAGE",
+  "TEAL", "TITANIO AZUL", "TITANIO BRANCO", "TITANIO DESERTO", "TITANIO NATURAL", "TITANIO PRETO",
+  "ULTRAMARINO", "VERDE", "VERDE ALPINO", "VERDE MEIA-NOITE", "VERMELHO",
 ];
 
 /** Retorna as cores do iPhone baseado no modelo selecionado */
@@ -64,19 +65,19 @@ export function getIphoneCores(modelo: string): string[] {
   return IPHONE_CORES_POR_MODELO[modelo] || IPHONE_CORES;
 }
 
-export const MACBOOK_CORES = ["Midnight", "Silver", "Starlight", "Sky Blue", "Space Black"];
+export const MACBOOK_CORES = ["MEIA-NOITE", "PRATA", "ESTELAR", "AZUL CEU", "PRETO ESPACIAL"];
 
-export const IPAD_CORES = ["Blue", "Pink", "Purple", "Silver", "Space Black", "Space Gray", "Starlight", "Yellow"];
+export const IPAD_CORES = ["AZUL", "CINZA ESPACIAL", "ESTELAR", "ROXO"];
 
 export const WATCH_CORES = [
-  "Black Titanium", "Gold", "Graphite", "Jet Black", "Midnight",
-  "Natural", "Natural Titanium", "Pink", "Red", "Rose Gold",
-  "Silver", "Slate", "Space Gray", "Starlight",
+  "TITANIO PRETO", "DOURADO", "GRAFITE", "PRETO ONYX", "MEIA-NOITE",
+  "NATURAL", "TITANIO NATURAL", "ROSA", "VERMELHO", "OURO ROSA",
+  "PRATA", "ARDOSIA", "CINZA ESPACIAL", "ESTELAR",
 ];
 
-export const AIRPODS_CORES = ["Midnight", "Starlight"];
+export const AIRPODS_CORES = ["MEIA-NOITE", "ESTELAR"];
 
-export const ACESSORIOS_CORES = ["Black", "White"];
+export const ACESSORIOS_CORES = ["PRETO", "BRANCO"];
 
 /** Mapa de cores por categoria para lookup rápido */
 export const CORES_POR_CATEGORIA: Record<string, string[]> = {
@@ -186,11 +187,12 @@ export const IPAD_MODELOS = [
   { value: "AIR", label: "iPad Air" },
   { value: "PRO", label: "iPad Pro" },
 ];
+export const IPAD_CHIPS = ["A15", "A16", "M1", "M2", "M3", "M4"];
 export const IPAD_TELAS = ['8.3"', '10.9"', '11"', '13"'];
 export const IPAD_STORAGES = ["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"];
 export const IPAD_CONNS = [
-  { value: "WIFI", label: "WiFi" },
-  { value: "WIFI+CELL", label: "WiFi + Cellular (5G)" },
+  { value: "WIFI", label: "Wi-Fi" },
+  { value: "WIFI+CELL", label: "Wi-Fi + Cellular (5G)" },
 ];
 
 export const WATCH_MODELOS = ["SE", "SE 2ND", "SERIES 9", "SERIES 10", "SERIES 11", "ULTRA 2", "ULTRA 3"];
@@ -242,8 +244,8 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
       const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
-      const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
-      return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
+      const conn = spec.ipad_conn === "WIFI+CELL" ? " WI-FI+CELLULAR" : " WI-FI";
+      return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${c}${conn}`.toUpperCase();
     }
     case "APPLE_WATCH": {
       const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";

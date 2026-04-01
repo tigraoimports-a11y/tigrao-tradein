@@ -389,7 +389,9 @@ export default function GastosPage() {
     let payload;
     if (isFornecedor && pedidoProdutos.length > 0) {
       const produtos = pedidoProdutos.map((p) => {
-        const nome = p.produto || (STRUCTURED_CATS.includes(p.categoria) ? buildProdutoName(p.categoria, p.spec) : "");
+        // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora nome livre)
+        const isStructured = STRUCTURED_CATS.includes(p.categoria);
+        const nome = isStructured ? buildProdutoName(p.categoria, p.spec, p.cor) : (p.produto || "");
         return {
           produto: nome,
           categoria: p.categoria,

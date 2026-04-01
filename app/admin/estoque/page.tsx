@@ -941,7 +941,9 @@ export default function EstoquePage() {
     const mergeMessages: string[] = [];
 
     for (const p of pedidoProdutos) {
-      const nome = (p.produto || (STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria)) ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : "")).toUpperCase();
+      // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora p.produto livre)
+      const isStructured = STRUCTURED_CATS_LIST.includes(getBaseCat(p.categoria));
+      const nome = (isStructured ? buildProdutoNameFromSpec(p.categoria, p.spec, p.cor) : p.produto || "").toUpperCase();
       if (!nome) continue;
       const res = await fetch("/api/estoque", {
         method: "POST",

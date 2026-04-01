@@ -369,15 +369,21 @@ export default function ProdutoSpecFields({
         </div>
       )}
 
-      {/* Nome do produto (livre para categorias sem spec, auto-gerado para outras) */}
+      {/* Nome do produto: read-only para categorias estruturadas, livre para outras */}
       <div>
         <p className={labelCls}>Nome do Produto</p>
-        <input
-          value={row.produto || (hasStructured ? buildProdutoName(row.categoria, row.spec, row.cor) : "")}
-          onChange={(e) => set("produto", e.target.value)}
-          placeholder={hasStructured ? "Auto-gerado pelos specs" : "Ex: Cabo USB-C Lightning 1m"}
-          className={inputCls}
-        />
+        {hasStructured ? (
+          <p className={`${inputCls} bg-opacity-50 font-mono text-xs`} style={{ minHeight: "2.5rem", display: "flex", alignItems: "center" }}>
+            {buildProdutoName(row.categoria, row.spec, row.cor) || "← Selecione os specs acima"}
+          </p>
+        ) : (
+          <input
+            value={row.produto}
+            onChange={(e) => set("produto", e.target.value)}
+            placeholder="Ex: Cabo USB-C Lightning 1m"
+            className={inputCls}
+          />
+        )}
       </div>
 
       {/* Qtd + Custo + IMEI + Serial */}
