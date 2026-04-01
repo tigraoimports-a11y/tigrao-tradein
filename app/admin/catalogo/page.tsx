@@ -182,24 +182,94 @@ interface TabProps {
 // ─── Categorias Tab ───────────────────────────────────────────────────────────
 
 function CategoriasTab({ data, headers, reload }: TabProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [newCat, setNewCat] = useState({
-    key: "",
-    nome: "",
-    emoji: "📦",
-    usa_imei: false,
-    usa_cor: true,
-    tem_specs: true,
-  });
+  const [selectedCat, setSelectedCat] = useState<Categoria | null>(null);
+  const [localSpecs, setLocalSpecs] = useState<CategoriaSpec[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newCat, setNewCat] = useState({ key: "", nome: "", emoji: "📦", usa_imei: false, usa_cor: true, tem_specs: true });
+  const [editingCat, setEditingCat] = useState<Categoria | null>(null);
+  const [editForm, setEditForm] = useState({ nome: "", emoji: "" });
+  const [savingCat, setSavingCat] = useState<string | null>(null);
 
-  const inputCls =
-    "w-full border border-[#E8E8ED] rounded-lg px-3 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
+  const inputCls = "border border-[#E8E8ED] rounded-lg px-3 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
 
-  async function handleCreate(e: React.FormEvent) {
+  useEffect(() => {
+    if (selectedCat) {
+      const specs = data.categoriaSpecs
+        .filter((cs) => cs.categoria_key === selectedCat.key)
+        .sort((a, b) => a.ordem - b.ordem);
+      setLocalSpecs(specs);
+    }
+  }, [data.categoriaSpecs, selectedCat?.key]);
+
+  function selectCat(cat: Categoria) {
+    setSelectedCat(cat);
+    setSavedMsg(false);
+    const specs = data.categoriaSpecs
+      .filter((cs) => cs.categoria_key === cat.key)
+      .sort((a, b) => a.ordem - b.ordem);
+    setLocalSpecs(specs);
+  }
+
+  function toggleSpec(tipoChave: string) {
+    const existing = localSpecs.find((cs) => cs.tipo_chave === tipoChave);
+    if (existing) {
+      setLocalSpecs((prev) => prev.filter((cs) => cs.tipo_chave !== tipoChave));
+    } else {
+      const maxOrdem = localSpecs.length > 0 ? Math.max(...localSpecs.map((cs) => cs.ordem)) + 1 : 1;
+      setLocalSpecs((prev) => [
+        ...prev,
+        { id: `temp_${tipoChave}`, categoria_key: selectedCat!.key, tipo_chave: tipoChave, obrigatoria: false, ordem: maxOrdem },
+      ]);
+    }
+  }
+
+  function toggleObrigatoria(tipoChave: string) {
+    setLocalSpecs((prev) => prev.map((cs) => cs.tipo_chave === tipoChave ? { ...cs, obrigatoria: !cs.obrigatoria } : cs));
+  }
+
+  function handleDrop(targetIdx: number) {
+    if (dragIdx === null || dragIdx === targetIdx) { setDragIdx(null); setOverIdx(null); return; }
+    const next = [...localSpecs];
+    const [removed] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, removed);
+    setLocalSpecs(next.map((cs, i) => ({ ...cs, ordem: i + 1 })));
+    setDragIdx(null);
+    setOverIdx(null);
+  }
+
+  async function saveConfig() {
+    if (!selectedCat) return;
+    setSaving(true);
+    try {
+      const res = await fetch(BASE, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          resource: "categoria_specs_config",
+          categoria_key: selectedCat.key,
+          specs: localSpecs.map((cs, i) => ({ tipo_chave: cs.tipo_chave, obrigatoria: cs.obrigatoria, ordem: i + 1 })),
+        }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setSavedMsg(true);
+      setTimeout(() => setSavedMsg(false), 2500);
+      reload();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateCat(e: React.FormEvent) {
     e.preventDefault();
     if (!newCat.key || !newCat.nome) return;
-    setSaving("new");
+    setSavingCat("new");
     try {
       const res = await fetch(BASE, {
         method: "POST",
@@ -208,218 +278,228 @@ function CategoriasTab({ data, headers, reload }: TabProps) {
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      setShowForm(false);
+      setShowNewForm(false);
       setNewCat({ key: "", nome: "", emoji: "📦", usa_imei: false, usa_cor: true, tem_specs: true });
       reload();
     } catch (e) {
       alert(String(e));
     } finally {
-      setSaving(null);
+      setSavingCat(null);
     }
   }
 
-  async function toggleAtivo(cat: Categoria) {
-    setSaving(cat.id);
+  async function handleDeleteCat(cat: Categoria) {
+    if (!confirm(`Remover "${cat.nome}"?`)) return;
+    setSavingCat(cat.id);
     try {
       const res = await fetch(BASE, {
-        method: "PATCH",
+        method: "DELETE",
         headers: headers(),
-        body: JSON.stringify({ resource: "categorias", id: cat.id, ativo: !cat.ativo }),
+        body: JSON.stringify({ resource: "categorias", id: cat.id }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      if (selectedCat?.id === cat.id) setSelectedCat(null);
       reload();
     } catch (e) {
       alert(String(e));
     } finally {
-      setSaving(null);
+      setSavingCat(null);
     }
   }
 
-  async function updateField(cat: Categoria, field: string, value: string | boolean) {
-    setSaving(cat.id);
+  async function handleSaveEdit(cat: Categoria) {
+    setSavingCat(cat.id);
     try {
       const res = await fetch(BASE, {
         method: "PATCH",
         headers: headers(),
-        body: JSON.stringify({ resource: "categorias", id: cat.id, [field]: value }),
+        body: JSON.stringify({ resource: "categorias", id: cat.id, nome: editForm.nome, emoji: editForm.emoji }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      setEditingCat(null);
       reload();
     } catch (e) {
       alert(String(e));
     } finally {
-      setSaving(null);
+      setSavingCat(null);
     }
   }
+
+  const sortedCats = [...data.categorias].sort((a, b) => a.ordem - b.ordem);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
-        <h2 className="font-semibold text-[#1D1D1F]">Categorias ({data.categorias.length})</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
-        >
-          + Nova Categoria
-        </button>
+    <div className="flex gap-4" style={{ minHeight: 600 }}>
+      {/* Left: Category list */}
+      <div className="w-80 shrink-0 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+          <h2 className="font-semibold text-[#1D1D1F]">Categorias</h2>
+          <button
+            onClick={() => setShowNewForm(!showNewForm)}
+            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+          >
+            + Nova Categoria
+          </button>
+        </div>
+
+        {showNewForm && (
+          <form onSubmit={handleCreateCat} className="p-3 bg-[#FFF5EB] border-b border-[#E8740E]/20 space-y-2">
+            <div className="flex gap-2">
+              <input value={newCat.emoji} onChange={(e) => setNewCat((p) => ({ ...p, emoji: e.target.value }))} className={`${inputCls} w-12 text-center`} placeholder="📦" />
+              <input value={newCat.nome} onChange={(e) => setNewCat((p) => ({ ...p, nome: e.target.value }))} placeholder="Nome" className={`${inputCls} flex-1`} required />
+            </div>
+            <input value={newCat.key} onChange={(e) => setNewCat((p) => ({ ...p, key: e.target.value.toUpperCase().replace(/\s/g, "_") }))} placeholder="CHAVE_UNICA" className={`${inputCls} w-full font-mono text-xs`} required />
+            <div className="flex gap-3 text-xs text-[#1D1D1F]">
+              {[["usa_imei","IMEI"],["usa_cor","Cor"],["tem_specs","Specs"]].map(([k, l]) => (
+                <label key={k} className="flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" checked={newCat[k as keyof typeof newCat] as boolean} onChange={(e) => setNewCat((p) => ({ ...p, [k]: e.target.checked }))} className="accent-[#E8740E]" />
+                  {l}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={savingCat === "new"} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white disabled:opacity-50">{savingCat === "new" ? "..." : "Criar"}</button>
+              <button type="button" onClick={() => setShowNewForm(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5F5F7] text-[#1D1D1F]">Cancelar</button>
+            </div>
+          </form>
+        )}
+
+        <div className="flex-1 overflow-y-auto divide-y divide-[#F5F5F7]">
+          {sortedCats.map((cat) => (
+            <div key={cat.id}>
+              <button
+                onClick={() => selectCat(cat)}
+                className={`w-full text-left px-4 py-3 flex items-center justify-between gap-2 transition-colors ${
+                  selectedCat?.id === cat.id ? "bg-blue-50 border-l-4 border-blue-500" : "hover:bg-[#F5F5F7]"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  {editingCat?.id === cat.id ? (
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                      <input value={editForm.emoji} onChange={(e) => setEditForm((p) => ({ ...p, emoji: e.target.value }))} className="w-10 border border-[#E8E8ED] rounded px-1 text-sm text-center bg-white text-[#1D1D1F]" />
+                      <input value={editForm.nome} onChange={(e) => setEditForm((p) => ({ ...p, nome: e.target.value }))} className="flex-1 border border-[#E8E8ED] rounded px-2 text-sm bg-white text-[#1D1D1F]" autoFocus />
+                      <button onClick={() => handleSaveEdit(cat)} disabled={savingCat === cat.id} className="px-2 py-0.5 rounded text-xs bg-green-500 text-white disabled:opacity-50">✓</button>
+                      <button onClick={() => setEditingCat(null)} className="px-2 py-0.5 rounded text-xs bg-[#F5F5F7] text-[#1D1D1F]">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={`font-semibold text-sm ${selectedCat?.id === cat.id ? "text-blue-700" : "text-[#1D1D1F]"}`}>{cat.emoji} {cat.nome}</div>
+                      <div className="text-xs text-[#86868B] font-mono mt-0.5">{cat.key}</div>
+                    </>
+                  )}
+                </div>
+                {editingCat?.id !== cat.id && (
+                  <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => { setEditingCat(cat); setEditForm({ nome: cat.nome, emoji: cat.emoji }); }} className="p-1.5 rounded text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors text-xs">✏️</button>
+                    <button onClick={() => handleDeleteCat(cat)} disabled={savingCat === cat.id} className="p-1.5 rounded text-[#C7C7CC] hover:text-red-500 hover:bg-[#F5F5F7] transition-colors text-xs disabled:opacity-50">🗑️</button>
+                  </div>
+                )}
+              </button>
+            </div>
+          ))}
+          {sortedCats.length === 0 && (
+            <div className="text-center py-8 text-[#86868B] text-sm">Nenhuma categoria.</div>
+          )}
+        </div>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleCreate} className="p-4 bg-[#FFF5EB] border-b border-[#E8740E]/20 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-[#86868B] mb-1 block">Chave (KEY)</label>
-              <input
-                value={newCat.key}
-                onChange={(e) => setNewCat((p) => ({ ...p, key: e.target.value.toUpperCase().replace(/\s/g, "_") }))}
-                placeholder="EX: TABLETS"
-                className={inputCls}
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-[#86868B] mb-1 block">Nome</label>
-              <input
-                value={newCat.nome}
-                onChange={(e) => setNewCat((p) => ({ ...p, nome: e.target.value }))}
-                placeholder="Ex: Tablets"
-                className={inputCls}
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-[#86868B] mb-1 block">Emoji</label>
-              <input
-                value={newCat.emoji}
-                onChange={(e) => setNewCat((p) => ({ ...p, emoji: e.target.value }))}
-                placeholder="📦"
-                className={inputCls}
-              />
-            </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newCat.usa_imei}
-                  onChange={(e) => setNewCat((p) => ({ ...p, usa_imei: e.target.checked }))}
-                  className="w-4 h-4 accent-[#E8740E]"
-                />
-                Usa IMEI
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newCat.usa_cor}
-                  onChange={(e) => setNewCat((p) => ({ ...p, usa_cor: e.target.checked }))}
-                  className="w-4 h-4 accent-[#E8740E]"
-                />
-                Usa Cor
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newCat.tem_specs}
-                  onChange={(e) => setNewCat((p) => ({ ...p, tem_specs: e.target.checked }))}
-                  className="w-4 h-4 accent-[#E8740E]"
-                />
-                Tem Specs
-              </label>
-            </div>
+      {/* Right: Spec assignment panel */}
+      <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+        {!selectedCat && (
+          <div className="flex flex-col items-center justify-center flex-1 text-[#86868B]">
+            <div className="text-5xl mb-3">📋</div>
+            <p className="text-sm font-medium">Selecione uma categoria</p>
+            <p className="text-xs mt-1">para configurar suas especificações</p>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving === "new"}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-50 transition-colors"
-            >
-              {saving === "new" ? "Salvando..." : "Criar Categoria"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED] transition-colors"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
-      )}
+        )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-[#F5F5F7] text-xs text-[#86868B] font-semibold">
-              <th className="text-left px-4 py-2">Emoji</th>
-              <th className="text-left px-4 py-2">Key</th>
-              <th className="text-left px-4 py-2">Nome</th>
-              <th className="text-center px-4 py-2">IMEI</th>
-              <th className="text-center px-4 py-2">Cor</th>
-              <th className="text-center px-4 py-2">Specs</th>
-              <th className="text-center px-4 py-2">Ativo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.categorias.map((cat) => (
-              <tr key={cat.id} className="border-t border-[#F5F5F7] hover:bg-[#FAFAFA]">
-                <td className="px-4 py-2">
-                  <EditableCell
-                    value={cat.emoji}
-                    onSave={(v) => updateField(cat, "emoji", v)}
-                    disabled={saving === cat.id}
-                  />
-                </td>
-                <td className="px-4 py-2 font-mono text-xs text-[#6E6E73]">{cat.key}</td>
-                <td className="px-4 py-2">
-                  <EditableCell
-                    value={cat.nome}
-                    onSave={(v) => updateField(cat, "nome", v)}
-                    disabled={saving === cat.id}
-                  />
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <ToggleCell
-                    value={cat.usa_imei}
-                    onToggle={() => updateField(cat, "usa_imei", !cat.usa_imei)}
-                    disabled={saving === cat.id}
-                  />
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <ToggleCell
-                    value={cat.usa_cor}
-                    onToggle={() => updateField(cat, "usa_cor", !cat.usa_cor)}
-                    disabled={saving === cat.id}
-                  />
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <ToggleCell
-                    value={cat.tem_specs}
-                    onToggle={() => updateField(cat, "tem_specs", !cat.tem_specs)}
-                    disabled={saving === cat.id}
-                  />
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <button
-                    onClick={() => toggleAtivo(cat)}
-                    disabled={saving === cat.id}
-                    className={`w-12 h-6 rounded-full text-xs font-bold transition-colors disabled:opacity-50 ${
-                      cat.ativo
-                        ? "bg-green-500 text-white"
-                        : "bg-[#E8E8ED] text-[#86868B]"
-                    }`}
-                  >
-                    {cat.ativo ? "ON" : "OFF"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {data.categorias.length === 0 && (
-          <div className="text-center py-8 text-[#86868B] text-sm">
-            Nenhuma categoria. Execute a migration SQL primeiro.
-          </div>
+        {selectedCat && (
+          <>
+            <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-lg text-[#1D1D1F]">Especificações - {selectedCat.nome}</h2>
+                <p className="text-sm text-[#86868B] mt-0.5">Selecione quais especificações pertencem a esta categoria</p>
+              </div>
+              <button
+                onClick={saveConfig}
+                disabled={saving}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                  savedMsg ? "bg-green-500 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {savedMsg ? "✓ Salvo!" : saving ? "Salvando..." : "💾 Salvar Configuração"}
+              </button>
+            </div>
+
+            <div className="p-5 space-y-6 overflow-y-auto flex-1">
+              {/* Especificações Disponíveis */}
+              <div>
+                <h3 className="font-bold text-[#1D1D1F] mb-1">Especificações Disponíveis</h3>
+                <p className="text-sm text-[#86868B] mb-3">Selecione quais especificações pertencem a esta categoria</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[...data.specTipos].sort((a, b) => a.nome.localeCompare(b.nome)).map((tipo) => {
+                    const checked = localSpecs.some((cs) => cs.tipo_chave === tipo.chave);
+                    return (
+                      <label key={tipo.id} className="flex items-center gap-2 cursor-pointer group select-none">
+                        <div
+                          onClick={() => toggleSpec(tipo.chave)}
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            checked ? "border-blue-500 bg-blue-500" : "border-[#C7C7CC] group-hover:border-blue-400"
+                          }`}
+                        >
+                          {checked && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                        <span className="text-sm text-[#1D1D1F]">{tipo.nome}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ordem de Exibição */}
+              {localSpecs.length > 0 && (
+                <div>
+                  <h3 className="font-bold text-[#1D1D1F] mb-1">Ordem de Exibição</h3>
+                  <p className="text-sm text-[#86868B] mb-3">Arraste para reordenar como as especificações aparecerão no formulário</p>
+                  <div className="space-y-1">
+                    {localSpecs.map((cs, i) => {
+                      const tipo = data.specTipos.find((t) => t.chave === cs.tipo_chave);
+                      return (
+                        <div
+                          key={cs.tipo_chave}
+                          draggable
+                          onDragStart={() => setDragIdx(i)}
+                          onDragOver={(e) => { e.preventDefault(); setOverIdx(i); }}
+                          onDrop={() => handleDrop(i)}
+                          onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-grab active:cursor-grabbing ${
+                            overIdx === i && dragIdx !== i ? "border-blue-400 bg-blue-50" : "border-[#E8E8ED] bg-white hover:bg-[#FAFAFA]"
+                          }`}
+                        >
+                          <span className="text-[#C7C7CC] text-sm select-none">⠿⠿</span>
+                          <span className="flex-1 text-sm font-medium text-[#1D1D1F]">{tipo?.nome ?? cs.tipo_chave}</span>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <div
+                              onClick={() => toggleObrigatoria(cs.tipo_chave)}
+                              className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                cs.obrigatoria ? "border-orange-500 bg-orange-500" : "border-[#C7C7CC] hover:border-orange-400"
+                              }`}
+                            >
+                              {cs.obrigatoria && <div className="w-2 h-2 rounded-sm bg-white" />}
+                            </div>
+                            <span className={`text-xs font-medium ${cs.obrigatoria ? "text-orange-600" : "text-[#86868B]"}`}>
+                              Obrigatória{cs.obrigatoria ? " *" : ""}
+                            </span>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 // DELETE /api/admin/catalogo — delete record
 // Body: { resource, ...fields }  (PATCH/DELETE also need `id`)
 
-type Resource = "categorias" | "modelos" | "spec_tipos" | "spec_valores" | "modelo_configs";
+type Resource = "categorias" | "modelos" | "spec_tipos" | "spec_valores" | "modelo_configs" | "categoria_specs_config";
 
 const TABLE_MAP: Record<Exclude<Resource, "modelo_configs">, string> = {
   categorias: "catalogo_categorias",
@@ -94,6 +94,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { resource, ...rest } = body as { resource: Resource; [key: string]: unknown };
     const supabase = getSupabase();
+
+    // Special handler: save categoria specs (replace all for this categoria_key)
+    if (resource === "categoria_specs_config") {
+      const { categoria_key, specs } = rest as {
+        categoria_key: string;
+        specs: { tipo_chave: string; obrigatoria: boolean; ordem: number }[];
+      };
+      if (!categoria_key) return NextResponse.json({ error: "categoria_key required" }, { status: 400 });
+
+      const { error: delError } = await supabase
+        .from("catalogo_categoria_specs")
+        .delete()
+        .eq("categoria_key", categoria_key);
+      if (delError) return NextResponse.json({ error: delError.message }, { status: 500 });
+
+      if (specs && specs.length > 0) {
+        const rows = specs.map((s) => ({ categoria_key, tipo_chave: s.tipo_chave, obrigatoria: s.obrigatoria, ordem: s.ordem }));
+        const { error: insError } = await supabase.from("catalogo_categoria_specs").insert(rows);
+        if (insError) return NextResponse.json({ error: insError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true });
+    }
 
     // Special handler: save model configs (replace all for this modelo_id)
     if (resource === "modelo_configs") {
