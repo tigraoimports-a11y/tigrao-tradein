@@ -251,9 +251,9 @@ function CompraForm() {
       lines.push("");
       if (trocaProduto) {
         lines.push(`*Produto na troca:* ${trocaProduto}`);
-        if (trocaNum > 0) lines.push(`Avaliacao: R$ ${fmt(trocaNum)}`);
+        if (trocaNum > 0) lines.push(`Avaliacao do usado: R$ ${fmt(trocaNum)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
-        if (valorBase > 0) lines.push(`*(Valor da troca no Pix: R$${fmt(valorBase)})*`);
+        if (valorBase > 0) lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`);
       } else if (descTroca) {
         lines.push(`*Produto na troca:* ${descTroca}`);
       }
@@ -336,9 +336,10 @@ function CompraForm() {
             ))}
             {preco > 0 && (
               <div className="mt-2 space-y-1">
+                <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
                 <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
                 {trocaNum > 0 && (
-                  <p className="text-green-600 font-semibold text-sm">Com a troca: R$ {fmt(valorBase)}</p>
+                  <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>
                 )}
               </div>
             )}
@@ -368,7 +369,7 @@ function CompraForm() {
               <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
                 <p className="text-sm font-semibold text-[#1D1D1F]">{produtoInput}</p>
                 <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
-                {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Com a troca: R$ {fmt(valorBase)}</p>}
+                {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
               </div>
             )}
           </>
@@ -389,7 +390,8 @@ function CompraForm() {
             <span className="text-green-600 font-bold text-sm">&#x2705; Troca confirmada</span>
           </div>
           <p className="text-[#1D1D1F] font-semibold">{trocaProduto}</p>
-          {trocaNum > 0 && <p className="text-green-600 font-bold text-lg">Avaliacao: R$ {fmt(trocaNum)}</p>}
+          {trocaNum > 0 && <p className="text-green-600 font-bold text-lg">Avaliacao do usado: R$ {fmt(trocaNum)}</p>}
+          {trocaNum > 0 && preco > 0 && <p className="text-[#E8740E] font-bold text-lg">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
           {trocaCond && <p className="text-[#86868B] text-xs mt-1">{trocaCond}</p>}
         </div>
       )}

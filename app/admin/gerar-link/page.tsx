@@ -255,7 +255,7 @@ export default function GerarLinkPage() {
         <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
-          <label className={labelCls}>Preco (R$)</label>
+          <label className={labelCls}>Preco de Venda (R$)</label>
           <input
             type="text"
             inputMode="numeric"
@@ -281,7 +281,7 @@ export default function GerarLinkPage() {
               />
             </div>
             <div>
-              <label className={labelCls}>Valor da troca (R$)</label>
+              <label className={labelCls}>Valor de Avaliacao do Usado (R$)</label>
               <input
                 type="text"
                 inputMode="numeric"
