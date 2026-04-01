@@ -2125,7 +2125,7 @@ export default function EstoquePage() {
           ) : (
             <>
             {/* Barra de seleção em lote — A Caminho (admin only) */}
-            {isAdmin && tab === "acaminho" && filtered.length > 0 && (
+            {tab === "acaminho" && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
                 <input
                   type="checkbox"
@@ -2387,7 +2387,7 @@ export default function EstoquePage() {
                                       <td className="pl-2 py-2.5 select-none w-4">
                                         {balanceMode && tab === "seminovos" ? (
                                           <input type="checkbox" checked={balanceSelected.has(p.id)} onChange={() => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" onClick={e => e.stopPropagation()} />
-                                        ) : isAdmin && tab === "acaminho" ? (
+                                        ) : tab === "acaminho" ? (
                                           <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" onClick={e => e.stopPropagation()} />
                                         ) : selectMode ? (
                                           <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
