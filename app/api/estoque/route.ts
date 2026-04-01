@@ -268,7 +268,84 @@ export async function PATCH(req: NextRequest) {
   if (!hasPermission(role, "estoque.read", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
-  const { id, ...fields } = await req.json();
+  const body = await req.json();
+
+  // Rebalancear preço médio de um grupo de modelo
+  const action = new URL(req.url).searchParams.get("action");
+  if (action === "rebalance") {
+    const { categoria, modelo } = body;
+    if (!categoria || !modelo) return NextResponse.json({ error: "categoria and modelo required" }, { status: 400 });
+
+    // Buscar todos os itens EM ESTOQUE da mesma categoria
+    const { data: items } = await supabase
+      .from("estoque")
+      .select("id, produto, cor, qnt, custo_unitario, categoria")
+      .eq("categoria", categoria)
+      .eq("status", "EM ESTOQUE");
+
+    if (!items || items.length === 0) return NextResponse.json({ ok: true, rebalanced: 0 });
+
+    // Importar getModeloBase não é possível aqui (é client-side), então reimplementar a lógica de agrupamento
+    // Agrupar por modelo-base: extrair modelo+memória do nome do produto (sem cor)
+    function extractModeloBase(produto: string, cat: string): string {
+      const p = produto.toUpperCase().trim();
+      const getMem = () => {
+        const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
+        if (all.length === 0) return "";
+        const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+        return ` ${vals.sort((a, b) => b.gb - a.gb)[0].raw}`;
+      };
+      const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
+      if (cat === "IPHONES") {
+        const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
+        if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}${getMem()}`;
+      }
+      if (cat === "IPADS") {
+        const mem = getMem(); const size = getSize();
+        if (p.includes("MINI")) return `iPad Mini${size}${mem}`;
+        if (p.includes("AIR")) return `iPad Air${size}${mem}`;
+        if (p.includes("PRO")) return `iPad Pro${size}${mem}`;
+        return `iPad${mem}`;
+      }
+      if (cat === "APPLE_WATCH") {
+        const match = p.match(/(?:WATCH|APPLE\s*WATCH)\s*(S\d+|SE|ULTRA\s*\d*|SERIES\s*\d+)/i);
+        const size = getSize();
+        return match ? `Apple Watch ${match[1].trim()}${size}` : produto;
+      }
+      if (cat === "MAC_MINI") { return `Mac Mini${getMem()}`; }
+      return produto;
+    }
+
+    // Filtrar itens do mesmo modelo-base
+    const groupItems = items.filter(i => extractModeloBase(i.produto, i.categoria) === modelo);
+    if (groupItems.length <= 1) return NextResponse.json({ ok: true, rebalanced: 0 });
+
+    // Calcular preço médio ponderado
+    let totalCusto = 0, totalQnt = 0;
+    for (const i of groupItems) {
+      totalCusto += (i.custo_unitario || 0) * (i.qnt || 1);
+      totalQnt += (i.qnt || 1);
+    }
+    if (totalQnt === 0) return NextResponse.json({ ok: true, rebalanced: 0 });
+    const avgCost = Math.round(totalCusto / totalQnt);
+
+    // Verificar se precisa atualizar (algum tem preço diferente?)
+    const needsUpdate = groupItems.some(i => i.custo_unitario !== avgCost);
+    if (!needsUpdate) return NextResponse.json({ ok: true, rebalanced: 0, avgCost });
+
+    // Atualizar todos pro preço médio
+    const ids = groupItems.map(i => i.id);
+    const { error: ue } = await supabase
+      .from("estoque")
+      .update({ custo_unitario: avgCost, updated_at: new Date().toISOString() })
+      .in("id", ids);
+    if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
+
+    await logActivity(getUsuario(req), "Rebalance preço médio", `${modelo}: ${groupItems.length} itens → R$ ${avgCost}`, "estoque");
+    return NextResponse.json({ ok: true, rebalanced: groupItems.length, avgCost });
+  }
+
+  const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // Buscar estado anterior para o log

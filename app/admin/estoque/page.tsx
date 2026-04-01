@@ -883,17 +883,18 @@ export default function EstoquePage() {
     if (!etiquetaModal) return;
     const { item, items, batchItems } = etiquetaModal;
 
+    // Coleta produtos afetados pra rebalancear preço médio depois
+    const produtosAfetados = new Set<string>();
+
     if (batchItems && batchItems.length > 0) {
-      // Lote de produtos selecionados
       for (const p of batchItems) {
         const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
         await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+        produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
-      fetchEstoque();
     } else if (items && items.length > 1) {
-      // Múltiplas unidades (mesmo produto, seriais diferentes)
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
       await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
       for (let i = 1; i < items.length; i++) {
@@ -907,15 +908,27 @@ export default function EstoquePage() {
           }),
         });
       }
+      produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
-      fetchEstoque();
     } else {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
       await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
-      setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, tipo: novoTipo, status: "EM ESTOQUE" } : p));
+      produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
     }
+
+    // Rebalancear preço médio pra cada grupo de modelo afetado
+    for (const key of produtosAfetados) {
+      const [categoria, modelo] = key.split("|||");
+      await fetch("/api/estoque?action=rebalance", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+        body: JSON.stringify({ categoria, modelo }),
+      });
+    }
+
     setEtiquetaModal(null);
+    fetchEstoque();
   };
 
   const handleSubmitMulti = async () => {
