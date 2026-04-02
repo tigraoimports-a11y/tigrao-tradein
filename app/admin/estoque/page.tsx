@@ -2628,6 +2628,50 @@ export default function EstoquePage() {
                                             </div>
                                           );
                                         })()}
+                                        {/* Botão Etiqueta — só no tab A Caminho */}
+                                        {isACaminhoTab && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const qnt = p.qnt || 1;
+                                              const fmtCusto = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 0 });
+                                              const fmtDate = (d: string) => { try { const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}`; } catch { return d; } };
+                                              const labels = Array.from({ length: qnt }, () => `
+                                                <div class="label">
+                                                  <div class="produto">${p.produto}</div>
+                                                  ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+                                                  <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
+                                                  ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
+                                                  ${p.data_compra ? `<div class="data">${fmtDate(p.data_compra)}</div>` : ""}
+                                                </div>
+                                              `).join("");
+                                              const win = window.open("", "_blank", "width=400,height=400");
+                                              if (win) {
+                                                win.document.write(`<!DOCTYPE html><html><head>
+                                                  <title>Etiqueta - ${p.produto}</title>
+                                                  <style>
+                                                    *{margin:0;padding:0;box-sizing:border-box}
+                                                    body{font-family:Arial,sans-serif}
+                                                    .label{text-align:center;padding:3mm 4mm 2mm;page-break-after:always;width:62mm;height:45mm;display:flex;flex-direction:column;justify-content:center;align-items:center}
+                                                    .label:last-child{page-break-after:auto}
+                                                    .produto{font-size:11pt;font-weight:bold;line-height:1.2}
+                                                    .cor{font-size:8pt;color:#333;margin-top:1mm}
+                                                    .custo{font-size:12pt;font-weight:bold;color:#E8740E;margin-top:2mm}
+                                                    .fornecedor{font-size:7pt;color:#555;margin-top:1mm;text-transform:uppercase}
+                                                    .data{font-size:6pt;color:#888;margin-top:1mm}
+                                                    @page{size:62mm 45mm;margin:0}
+                                                  </style></head><body>${labels}
+                                                  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
+                                                </body></html>`);
+                                                win.document.close();
+                                              }
+                                            }}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}
+                                          >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                                            Etiqueta
+                                          </button>
+                                        )}
                                         <button
                                           onClick={(e) => { e.stopPropagation(); setDetailProduct(p); }}
                                           className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#F5A623] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
