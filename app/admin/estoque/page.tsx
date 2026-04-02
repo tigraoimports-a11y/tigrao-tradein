@@ -1154,15 +1154,15 @@ export default function EstoquePage() {
 
     if (batchItems && batchItems.length > 0) {
       for (const p of batchItems) {
-        const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
-        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+        const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
+        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
         produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
-      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
-      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE" });
+      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
           method: "POST",
@@ -1170,15 +1170,15 @@ export default function EstoquePage() {
           body: JSON.stringify({
             produto: item.produto, categoria: item.categoria, qnt: 1,
             custo_unitario: item.custo_unitario, cor: item.cor, fornecedor: item.fornecedor,
-            serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE",
+            serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR(),
           }),
         });
       }
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
-      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : "NOVO";
-      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE" });
+      const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
+      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
     }
@@ -1195,6 +1195,19 @@ export default function EstoquePage() {
 
     setEtiquetaModal(null);
     fetchEstoque();
+  };
+
+  /** Extrai a condição (NOVO/NAO_ATIVADO/SEMINOVO) do campo observacao de um produto A_CAMINHO */
+  const getCondicaoFromObs = (p: ProdutoEstoque): string => {
+    if (!p.observacao) return "NOVO";
+    const match = p.observacao.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/);
+    return match ? match[1] : "NOVO";
+  };
+
+  /** Limpa prefixo de condição do campo observacao para exibição */
+  const cleanObs = (obs: string | null): string | null => {
+    if (!obs) return null;
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\]\s*/, "") || null;
   };
 
   const handleSubmitMulti = async () => {
@@ -1226,6 +1239,10 @@ export default function EstoquePage() {
           imei: p.imei || null,
           serial_no: p.serial_no || null,
           data_entrada: hojeBR(),
+          // Quando A_CAMINHO, codifica a condição esperada no observacao para usar ao mover
+          observacao: (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO")
+            ? `[${p.condicao}]`
+            : null,
         }),
       });
       const json = await res.json();
@@ -2472,7 +2489,7 @@ export default function EstoquePage() {
                                     {displayNomeProduto(p.produto, p.cor, p.categoria)}
                                     {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
                                     {isRecebido
-                                      ? <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>
+                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{p.data_entrada && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada)}</span>}</>
                                       : (p.serial_no || p.imei) && (
                                         <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                           ✅ {p.serial_no || p.imei}
@@ -3654,11 +3671,13 @@ export default function EstoquePage() {
                   {(canEdit || isAdmin) ? (
                     <textarea
                       key={`obs-${p.id}`}
-                      defaultValue={p.observacao || ""}
+                      defaultValue={cleanObs(p.observacao) || ""}
                       placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
                       rows={2}
                       onBlur={async (e) => {
-                        const val = e.target.value.trim() || null;
+                        // Preserva prefixo de condição ao salvar observacao
+                        const condicaoPrefix = p.observacao?.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/)?.[0] || "";
+                        const val = e.target.value.trim() ? `${condicaoPrefix}${e.target.value.trim()}` : (condicaoPrefix || null);
                         if (val !== (p.observacao || null)) {
                           await apiPatch(p.id, { observacao: val });
                           setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
@@ -3668,8 +3687,8 @@ export default function EstoquePage() {
                       }}
                       className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none resize-none`}
                     />
-                  ) : p.observacao ? (
-                    <p className={`text-[13px] ${mP} mt-0.5`}>{p.observacao}</p>
+                  ) : cleanObs(p.observacao) ? (
+                    <p className={`text-[13px] ${mP} mt-0.5`}>{cleanObs(p.observacao)}</p>
                   ) : <p className={`text-[13px] ${mS} mt-0.5`}>—</p>}
                 </div>
               </div>
@@ -3688,8 +3707,8 @@ export default function EstoquePage() {
                           }
                           if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
                           try {
-                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? "NOVO" : p.tipo;
-                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo }) });
+                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
+                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: hojeBR() }) });
                             const json = await res.json();
                             if (json.error) { setMsg("Erro: " + json.error); return; }
                             setMsg("✅ Movido para estoque!");
