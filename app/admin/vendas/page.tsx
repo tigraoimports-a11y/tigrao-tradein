@@ -88,7 +88,7 @@ export default function VendasPage() {
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
-    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
   });
@@ -175,6 +175,10 @@ export default function VendasPage() {
     troca_categoria2: string;
     troca_bateria2: string;
     troca_obs2: string;
+    troca_grade2: string;
+    troca_caixa2: string;
+    troca_cabo2: string;
+    troca_fonte2: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -692,6 +696,10 @@ export default function VendasPage() {
         categoria: (prodFields.troca_categoria as string) || null,
         bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
         observacao: prodFields.troca_obs || null,
+        grade: prodFields.troca_grade || null,
+        caixa: prodFields.troca_caixa || null,
+        cabo: prodFields.troca_cabo || null,
+        fonte: prodFields.troca_fonte || null,
       };
     }
 
@@ -703,6 +711,10 @@ export default function VendasPage() {
         categoria: (prodFields.troca_categoria2 as string) || null,
         bateria: prodFields.troca_bateria2 ? parseInt(prodFields.troca_bateria2 as string) : null,
         observacao: prodFields.troca_obs2 || null,
+        grade: prodFields.troca_grade2 || null,
+        caixa: prodFields.troca_caixa2 || null,
+        cabo: prodFields.troca_cabo2 || null,
+        fonte: prodFields.troca_fonte2 || null,
       };
     }
 
@@ -737,6 +749,10 @@ export default function VendasPage() {
     troca_categoria2: form.troca_categoria2,
     troca_bateria2: form.troca_bateria2,
     troca_obs2: form.troca_obs2,
+    troca_grade2: form.troca_grade2,
+    troca_caixa2: form.troca_caixa2,
+    troca_cabo2: form.troca_cabo2,
+    troca_fonte2: form.troca_fonte2,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -843,7 +859,7 @@ export default function VendasPage() {
         allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte };
       }
       if ((parseFloat(globalTroca2) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca2) > 0)) {
-        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2 };
+        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2, troca_grade2: form.troca_grade2, troca_caixa2: form.troca_caixa2, troca_cabo2: form.troca_cabo2, troca_fonte2: form.troca_fonte2 };
       }
     }
     const payloads: Record<string, unknown>[] = [];
@@ -1312,7 +1328,7 @@ export default function VendasPage() {
       troca_caixa: "",
       troca_cabo: "",
       troca_fonte: "",
-      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
       serial_no: v.serial_no || "",
       imei: v.imei || "",
       cep: "",
@@ -1953,7 +1969,7 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -2555,7 +2571,7 @@ export default function VendasPage() {
                     type="button"
                     onClick={() => {
                       setShowSegundaTroca(false);
-                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "" }));
+                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
                   >
@@ -2583,6 +2599,14 @@ export default function VendasPage() {
                         />
                       </div>
                       <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria2} onChange={(e) => set("troca_bateria2", e.target.value)} placeholder="Ex: 85" className={inputCls} /></div>
+                      <div><p className={labelCls}>Grade</p><select value={form.troca_grade2} onChange={(e) => set("troca_grade2", e.target.value)} className={selectCls}>
+                        <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
+                      </select></div>
+                      <div className="flex gap-3 items-center">
+                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_caixa2 === "SIM"} onChange={(e) => set("troca_caixa2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Caixa</label>
+                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo2 === "SIM"} onChange={(e) => set("troca_cabo2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
+                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte2 === "SIM"} onChange={(e) => set("troca_fonte2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
+                      </div>
                       <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do 2º seminovo</p><input value={form.troca_obs2} onChange={(e) => set("troca_obs2", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
                     </>
                   )}
@@ -3407,7 +3431,7 @@ export default function VendasPage() {
                                               troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
                                               troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
                                               troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
-                                              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                                              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
@@ -3446,6 +3470,10 @@ export default function VendasPage() {
                                                 troca_categoria2: "",
                                                 troca_bateria2: (gv as unknown as Record<string, string>).troca_bateria2 || "",
                                                 troca_obs2: (gv as unknown as Record<string, string>).troca_obs2 || "",
+                                                troca_grade2: "",
+                                                troca_caixa2: "",
+                                                troca_cabo2: "",
+                                                troca_fonte2: "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
@@ -4026,7 +4054,7 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -4057,7 +4085,7 @@ export default function VendasPage() {
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
                     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });

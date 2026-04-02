@@ -223,6 +223,17 @@ export async function POST(req: NextRequest) {
 
   // Notificação Telegram movida para quando a venda for FINALIZADA (PATCH)
 
+  // Helper: monta observacao com tags de grade/caixa/cabo/fonte
+  const buildObsComTags = (obs: string | null, grade: string | null, caixa: string | null, cabo: string | null, fonte: string | null): string | null => {
+    const parts: string[] = [];
+    if (obs) parts.push(obs.trim());
+    if (grade) parts.push(`[GRADE_${grade === "A+" ? "APLUS" : grade}]`);
+    if (caixa === "SIM") parts.push("[COM_CAIXA]");
+    if (cabo === "SIM") parts.push("[COM_CABO]");
+    if (fonte === "SIM") parts.push("[COM_FONTE]");
+    return parts.length > 0 ? parts.join(" ") : null;
+  };
+
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
   // Fallback: se _seminovo não veio mas a venda tem valor de troca, criar pendência mesmo sem nome do produto
@@ -230,7 +241,7 @@ export async function POST(req: NextRequest) {
   const sem1 = seminovoData && (seminovoData.produto || (seminovoData.valor || 0) > 0)
     ? seminovoData
     : pTrocaValor1 > 0
-      ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null }
+      ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
   if (sem1 && (sem1.produto || (sem1.valor || 0) > 0)) {
@@ -244,7 +255,7 @@ export async function POST(req: NextRequest) {
       status: "PENDENTE",
       tipo: "PENDENCIA",
       cor: sem1.cor || null,
-      observacao: sem1.observacao || null,
+      observacao: buildObsComTags(sem1.observacao || null, sem1.grade || null, sem1.caixa || null, sem1.cabo || null, sem1.fonte || null),
       bateria: sem1.bateria || null,
       serial_no: sem1.serial_no || null,
       imei: sem1.imei || null,
@@ -262,7 +273,7 @@ export async function POST(req: NextRequest) {
   const sem2 = seminovoData2 && (seminovoData2.produto || (seminovoData2.valor || 0) > 0)
     ? seminovoData2
     : pTrocaValor2 > 0
-      ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null }
+      ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
   if (sem2 && (sem2.produto || (sem2.valor || 0) > 0)) {
@@ -276,7 +287,7 @@ export async function POST(req: NextRequest) {
       status: "PENDENTE",
       tipo: "PENDENCIA",
       cor: sem2.cor || null,
-      observacao: sem2.observacao || null,
+      observacao: buildObsComTags(sem2.observacao || null, sem2.grade || null, sem2.caixa || null, sem2.cabo || null, sem2.fonte || null),
       bateria: sem2.bateria || null,
       serial_no: sem2.serial_no || null,
       imei: sem2.imei || null,
