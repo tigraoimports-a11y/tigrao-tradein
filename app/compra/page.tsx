@@ -58,6 +58,10 @@ function CompraForm() {
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
   const trocaValorParam = searchParams.get("troca_valor") || "";
   const trocaCondParam = searchParams.get("troca_cond") || "";
+  // 2º produto na troca
+  const trocaProduto2Param = searchParams.get("troca_produto2") || "";
+  const trocaValor2Param = searchParams.get("troca_valor2") || "";
+  const trocaCond2Param = searchParams.get("troca_cond2") || "";
   const nomeParam = searchParams.get("nome") || "";
   const whatsappClienteParam = searchParams.get("whatsapp_cliente") || "";
   const instagramParam = searchParams.get("instagram") || "";
@@ -153,7 +157,9 @@ function CompraForm() {
   const [trocaValor, setTrocaValor] = useState(trocaValorParam);
   const [trocaCond, setTrocaCond] = useState(trocaCondParam);
   const [descTroca, setDescTroca] = useState("");
-  const trocaNum = parseFloat(trocaValor) || 0;
+  const trocaNum1 = parseFloat(trocaValor) || 0;
+  const trocaNum2 = parseFloat(trocaValor2Param) || 0;
+  const trocaNum = trocaNum1 + trocaNum2;
   const isFromTradeIn = !!trocaProdutoParam;
 
   // CEP auto-fill
@@ -254,12 +260,19 @@ function CompraForm() {
       lines.push("");
       if (trocaProduto) {
         lines.push(`*Produto na troca:* ${trocaProduto}`);
-        if (trocaNum > 0) lines.push(`Avaliacao do usado: R$ ${fmt(trocaNum)}`);
+        if (trocaNum > 0) lines.push(`Avaliacao: R$ ${fmt(trocaNum)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
-        if (valorBase > 0) lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`);
       } else if (descTroca) {
         lines.push(`*Produto na troca:* ${descTroca}`);
       }
+      // 2º produto na troca
+      if (trocaProduto2Param) {
+        lines.push("");
+        lines.push(`*Produto 2 na troca:* ${trocaProduto2Param}`);
+        if (parseFloat(trocaValor2Param) > 0) lines.push(`Avaliacao: R$ ${fmt(parseFloat(trocaValor2Param))}`);
+        if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
+      }
+      if (valorBase > 0) { lines.push(""); lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`); }
     }
 
     // Vendedor, origem, entrega
@@ -365,14 +378,23 @@ function CompraForm() {
 
       {/* Trade-in from URL (pre-filled) */}
       {isFromTradeIn && (
-        <div className="mx-4 mt-3 bg-green-50 rounded-xl p-4 shadow-sm border border-green-200">
+        <div className="mx-4 mt-3 bg-green-50 rounded-xl p-4 shadow-sm border border-green-200 space-y-3">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-green-600 font-bold text-sm">&#x2705; Troca confirmada</span>
+            <span className="text-green-600 font-bold text-sm">&#x2705; {trocaProduto2Param ? "Trocas confirmadas" : "Troca confirmada"}</span>
           </div>
-          <p className="text-[#1D1D1F] font-semibold">{trocaProduto}</p>
-          {trocaNum > 0 && <p className="text-green-600 font-bold text-lg">Avaliacao do usado: R$ {fmt(trocaNum)}</p>}
-          {trocaNum > 0 && preco > 0 && <p className="text-[#E8740E] font-bold text-lg">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
-          {trocaCond && <p className="text-[#86868B] text-xs mt-1">{trocaCond}</p>}
+          <div>
+            <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaProduto2Param ? " (1º)" : ""}</p>
+            {trocaNum > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum)}</p>}
+            {trocaCond && <p className="text-[#86868B] text-xs">{trocaCond}</p>}
+          </div>
+          {trocaProduto2Param && (
+            <div className="pt-2 border-t border-green-200">
+              <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param} (2º)</p>
+              {parseFloat(trocaValor2Param) > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(parseFloat(trocaValor2Param))}</p>}
+              {trocaCond2Param && <p className="text-[#86868B] text-xs">{trocaCond2Param}</p>}
+            </div>
+          )}
+          {preco > 0 && <p className="text-[#E8740E] font-bold text-lg pt-2 border-t border-green-200">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
         </div>
       )}
 
