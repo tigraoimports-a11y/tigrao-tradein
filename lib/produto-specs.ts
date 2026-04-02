@@ -115,6 +115,7 @@ export const IPHONE_ORIGENS = [
 // ── Pulseira Apple Watch ──
 
 export const WATCH_PULSEIRAS = ["S/M", "M/L", "One Size"];
+export const WATCH_BAND_MODELS = ["Sport Band", "Sport Loop", "Braided Solo Loop", "Solo Loop", "Milanese Loop", "Link Bracelet", "Alpine Loop", "Trail Loop", "Ocean Band"];
 
 // ── Opções por categoria ──
 
@@ -211,7 +212,7 @@ export interface ProdutoSpec {
   mb_modelo: string; mb_tela: string; mb_chip: string; mb_nucleos: string; mb_ram: string; mb_storage: string;
   mm_chip: string; mm_ram: string; mm_storage: string;
   ipad_modelo: string; ipad_chip: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
-  aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string;
+  aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string; aw_band: string;
   air_modelo: string;
 }
 
@@ -220,7 +221,7 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   mb_modelo: "AIR", mb_tela: '13"', mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
   mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
   ipad_modelo: "AIR", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
-  aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
+  aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
   air_modelo: "AIRPODS 4",
 };
 

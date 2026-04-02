@@ -82,6 +82,7 @@ export default function EntregasPage() {
   const { days, from, to } = getWeekRange(weekOffset);
 
   const [copied, setCopied] = useState(false);
+  const [editingEntregaId, setEditingEntregaId] = useState<string | null>(null);
 
   const emptyForm = {
     cliente: "",
@@ -188,10 +189,12 @@ export default function EntregasPage() {
 
     const produtosStr = produtos.filter(Boolean).join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
+    const isEdit = !!editingEntregaId;
     const res = await fetch("/api/admin/entregas", {
-      method: "POST",
+      method: isEdit ? "PATCH" : "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
+        ...(isEdit ? { id: editingEntregaId } : {}),
         ...form,
         telefone: form.telefone || null,
         endereco: form.endereco || null,
@@ -210,10 +213,11 @@ export default function EntregasPage() {
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg("Entrega agendada!");
+      setMsg(isEdit ? "Entrega atualizada!" : "Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
       setCatSel(""); setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setEditingEntregaId(null);
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -338,7 +342,10 @@ export default function EntregasPage() {
       {showForm && (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#1D1D1F]">Agendar Nova Entrega</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? "✏️ Editar Entrega" : "Agendar Nova Entrega"}</h2>
+              {editingEntregaId && <button onClick={() => { setEditingEntregaId(null); setForm({ ...emptyForm, data_entrega: hojeBR() }); setProdutos([""]); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setDesconto(""); }} className="text-xs text-red-500 hover:underline">Cancelar edição</button>}
+            </div>
             <button
               onClick={async () => {
                 try {
@@ -810,7 +817,7 @@ export default function EntregasPage() {
               disabled={saving}
               className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
             >
-              {saving ? "Salvando..." : "Agendar Entrega"}
+              {saving ? "Salvando..." : editingEntregaId ? "Salvar Alterações" : "Agendar Entrega"}
             </button>
           </div>
         </div>
@@ -1109,6 +1116,52 @@ export default function EntregasPage() {
 
                 {/* Acoes */}
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      // Carregar dados da entrega no formulário pra editar
+                      setForm({
+                        cliente: e.cliente || "",
+                        telefone: e.telefone || "",
+                        endereco: e.endereco || "",
+                        bairro: e.bairro || "",
+                        data_entrega: e.data_entrega || hojeBR(),
+                        horario: e.horario || "",
+                        entregador: e.entregador || "",
+                        observacao: e.observacao || "",
+                        tipo: e.tipo || "",
+                        forma_pagamento: e.forma_pagamento || "",
+                        valor: e.valor != null ? String(e.valor) : "",
+                        parcelas: "",
+                        maquina: "",
+                        forma_pagamento_2: "",
+                        valor_2: "",
+                        vendedor: e.vendedor || "",
+                        regiao: e.regiao || "",
+                        local_entrega: "",
+                      });
+                      if (e.produto) setProdutos(e.produto.split(" | ").filter(Boolean));
+                      if (e.detalhes_upgrade) {
+                        setTrocaAtiva(true);
+                        const lines = e.detalhes_upgrade.split("\n");
+                        setTrocaProduto(lines[0] || "");
+                        const corLine = lines.find(l => l.startsWith("Cor:"));
+                        if (corLine) setTrocaCor(corLine.replace("Cor:", "").trim());
+                        const batLine = lines.find(l => l.startsWith("Bateria:"));
+                        if (batLine) setTrocaBateria(batLine.replace("Bateria:", "").replace("%", "").trim());
+                        const valLine = lines.find(l => l.startsWith("Avaliação:"));
+                        if (valLine) { const m = valLine.match(/[\d.]+/); if (m) setTrocaValor(m[0]); }
+                        const obsLine = lines.find(l => !l.startsWith("Cor:") && !l.startsWith("Bateria:") && !l.startsWith("Avaliação:") && lines.indexOf(l) > 0);
+                        if (obsLine) setTrocaObs(obsLine);
+                      }
+                      setProdutoManual(true);
+                      setEditingEntregaId(e.id);
+                      setShowForm(true);
+                      setSelectedEntrega(null);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-center text-sm font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                  >
+                    ✏️ Editar
+                  </button>
                   {e.telefone && (
                     <a
                       href={`https://wa.me/55${e.telefone.replace(/\D/g, "")}`}
