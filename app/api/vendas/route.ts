@@ -150,6 +150,9 @@ export async function POST(req: NextRequest) {
     } catch { /* ignore CEP lookup failure */ }
   }
 
+  // Garantir que forma nunca é null (banco exige NOT NULL)
+  if (!body.forma) body.forma = "DEFINIR_DEPOIS";
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,

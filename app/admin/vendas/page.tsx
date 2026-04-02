@@ -182,6 +182,25 @@ export default function VendasPage() {
   const [estoqueId, setEstoqueId] = useState("");
   const [expandedVendaCor, setExpandedVendaCor] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
+
+  // Preencher produto a partir da URL (ex: vindo do estoque "Criar Venda")
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const produto = params.get("produto");
+    if (produto) {
+      setForm(f => ({
+        ...f,
+        produto: produto,
+        custo: params.get("custo") || f.custo,
+        serial_no: params.get("serial") || f.serial_no,
+        fornecedor: params.get("fornecedor") || f.fornecedor,
+      }));
+      const eid = params.get("estoque_id");
+      if (eid) setEstoqueId(eid);
+      setProdutoManual(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [scanMode, setScanMode] = useState(true); // Scan é o modo padrão — produto novo obrigatório bipar
   const [scanMsg, setScanMsg] = useState("");
 
