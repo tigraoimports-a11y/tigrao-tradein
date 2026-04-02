@@ -491,6 +491,7 @@ export default function EntregasPage() {
               <p className={labelCls}>Local de Entrega</p>
               <select value={form.local_entrega} onChange={(e) => set("local_entrega", e.target.value)} className={inputCls}>
                 <option value="">-- Selecionar --</option>
+                <option value="RETIRADA">Retirada em Loja</option>
                 <option value="RESIDÊNCIA">Residência</option>
                 <option value="SHOPPING">Shopping</option>
                 <option value="OUTRO">Outro</option>
