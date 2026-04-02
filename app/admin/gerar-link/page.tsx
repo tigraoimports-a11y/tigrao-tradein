@@ -26,21 +26,29 @@ export default function GerarLinkPage() {
 
   const categorias = useMemo(() => {
     const cats = new Map<string, string>();
-    estoque.forEach(p => { if (p.tipo !== "SEMINOVO") cats.set(p.categoria, p.categoria); });
+    estoque.forEach(p => {
+      const key = p.tipo === "SEMINOVO" ? `${p.categoria}_SEMI` : p.categoria;
+      const label = p.tipo === "SEMINOVO" ? `${p.categoria} (Seminovo)` : p.categoria;
+      if (!cats.has(key)) cats.set(key, label);
+    });
     return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [estoque]);
 
   const produtosFiltrados = useMemo(() => {
     if (!catSel) return [];
-    return estoque.filter(p => p.categoria === catSel && p.tipo !== "SEMINOVO");
+    const isSemi = catSel.endsWith("_SEMI");
+    const baseCat = isSemi ? catSel.replace("_SEMI", "") : catSel;
+    return estoque.filter(p => p.categoria === baseCat && (isSemi ? p.tipo === "SEMINOVO" : p.tipo !== "SEMINOVO"));
   }, [estoque, catSel]);
 
-  // Agrupar por modelo (sem cor/origem)
+  // Agrupar por modelo (sem cor/origem/chip info)
   const modelosAgrupados = useMemo(() => {
     const stripDetails = (nome: string) => nome
       .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
-      .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
-      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
+      .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+      .replace(/-\s*E-?SIM/gi, "")
+      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|MIDNIGHT|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
+      .replace(/\s*-\s*$/, "")
       .replace(/\s{2,}/g, " ").trim();
     const byModel: Record<string, { totalQnt: number; avgCost: number; items: EstoqueItem[] }> = {};
     produtosFiltrados.forEach(p => {
