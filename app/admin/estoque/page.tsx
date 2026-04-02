@@ -487,6 +487,14 @@ export default function EstoquePage() {
   const [editingDetailImei, setEditingDetailImei] = useState(false);
   const [recatMode, setRecatMode] = useState(false);
   const [recatRow, setRecatRow] = useState<ProdutoRowState>(createEmptyProdutoRow);
+  // Markup % para preço sugerido por tipo de produto
+  const [markupConfig, setMarkupConfig] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem("tigrao_markup_config") || "{}"); } catch { return {}; }
+  });
+  const saveMarkupConfig = (cfg: Record<string, number>) => {
+    setMarkupConfig(cfg);
+    localStorage.setItem("tigrao_markup_config", JSON.stringify(cfg));
+  };
   const [detailAppleId, setDetailAppleId] = useState("");
   const [entradaView, setEntradaView] = useState<{ data: string; fornecedor: string; produtos: ProdutoEstoque[] } | null>(null);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
@@ -1212,10 +1220,14 @@ export default function EstoquePage() {
     return match ? match[1] : "NOVO";
   };
 
-  /** Limpa prefixo de condição/caixa/grade do campo observacao para exibição */
+  /** Limpa tags de condição/caixa/grade do campo observacao para exibição */
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_[ABC]\])?\s*/, "") || null;
+    return obs
+      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA)\]/g, "")
+      .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || null;
   };
 
   const handleSubmitMulti = async () => {
@@ -1884,6 +1896,35 @@ export default function EstoquePage() {
           </>)}
         </div>
       </div>
+      )}
+
+      {/* Preços Sugeridos por tipo */}
+      {tab === "novo" && (
+        <div className={`mt-4 p-4 rounded-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E8E8ED]"}`}>
+          <p className={`text-xs font-bold uppercase tracking-wider ${textPrimary} mb-3`}>💰 Markup para Preço Sugerido</p>
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              { key: "NOVO", label: "Lacrado" },
+              { key: "SEMINOVO", label: "Seminovo" },
+              { key: "NAO_ATIVADO", label: "Não Ativado" },
+            ] as const).map(({ key, label }) => (
+              <div key={key}>
+                <p className={`text-[11px] ${textSecondary} mb-1`}>{label}</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min="0" max="200"
+                    value={markupConfig[key] || ""}
+                    onChange={(e) => saveMarkupConfig({ ...markupConfig, [key]: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                    className={`w-full px-2 py-1.5 rounded-lg border text-[13px] text-center ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                  <span className={`text-[13px] ${textSecondary}`}>%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className={`text-[10px] ${textSecondary} mt-2`}>Ex: custo R$ 2.000 com 50% → sugestão R$ 3.000</p>
+        </div>
       )}
 
       {/* Form criar categoria */}
@@ -3416,7 +3457,9 @@ export default function EstoquePage() {
                         )}
                         <button
                           onClick={async () => {
-                            const novoNome = recatRow.produto;
+                            // Gerar nome sem ip_origem (origin não deve aparecer no nome de seminovos/pendentes)
+                            const specSemOrigem = { ...recatRow.spec, ip_origem: "" };
+                            const novoNome = buildProdutoNameFromSpec(recatRow.categoria, specSemOrigem, recatRow.cor) || recatRow.produto;
                             if (!novoNome) { setMsg("Selecione o modelo para gerar o nome"); return; }
                             const novaCor = recatRow.cor || null;
                             const novaCategoria = recatRow.categoria || p.categoria;
@@ -3710,75 +3753,67 @@ export default function EstoquePage() {
                       ) : null}
                     </div>
                   )}
-                  {/* Grade — editável em pendentes */}
-                  {!isLac && (
-                    <div>
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
-                      {canEdit ? (
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {(["A+","A","AB","B"] as const).map((g) => {
-                            const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                            const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-                            const currentGrade = tagKey ? GRADE_TAG[tagKey]
-                              : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
-                            const isActive = currentGrade === g;
-                            const cls = isActive
-                              ? g === "A+" ? "bg-amber-500 text-white border-amber-500"
-                                : g === "A" ? "bg-green-500 text-white border-green-500"
-                                : g === "AB" ? "bg-yellow-500 text-white border-yellow-500"
-                                : "bg-orange-500 text-white border-orange-500"
-                              : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E]"
-                                : "bg-white border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]";
-                            return (
-                              <button key={g} type="button"
-                                onClick={async () => {
-                                  const obs = p.observacao || "";
-                                  const newGrade = isActive ? "" : g;
-                                  const newObs = obs
-                                    .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
-                                    .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
-                                    .trim();
-                                  const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
-                                  const finalObs = gradeTag ? `${newObs} ${gradeTag}`.trim() : (newObs || null);
-                                  await apiPatch(p.id, { observacao: finalObs });
-                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                                  setDetailProduct({ ...p, observacao: finalObs });
-                                  setMsg(`Grade ${newGrade || "removida"}!`);
-                                }}
-                                className={`px-2.5 h-9 min-w-[36px] rounded-xl text-sm font-bold border-2 transition-colors ${cls}`}
-                              >{g}</button>
-                            );
-                          })}
-                          {/* Caixa toggle */}
-                          <button type="button"
-                            onClick={async () => {
-                              const obs = p.observacao || "";
-                              const hasCaixa = obs.includes("[COM_CAIXA]");
-                              const newObs = hasCaixa
-                                ? obs.replace("[COM_CAIXA]", "").trim() || null
-                                : `${obs} [COM_CAIXA]`.trim();
-                              await apiPatch(p.id, { observacao: newObs });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
-                              setDetailProduct({ ...p, observacao: newObs });
-                              setMsg(hasCaixa ? "Caixa removida!" : "Com caixa salvo!");
-                            }}
-                            className={`ml-1 px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-colors ${
-                              (p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || ""))
-                                ? "bg-green-500 text-white border-green-500"
-                                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E]"
-                                : "bg-white border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
-                            }`}
-                          >📦 Caixa</button>
+                  {/* Grade + Caixa */}
+                  {!isLac && canEdit && (() => {
+                    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
+                    const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                    const currentGrade = tagKey ? GRADE_TAG[tagKey]
+                      : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
+                    const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    return (
+                      <div className="col-span-2 grid grid-cols-2 gap-2">
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
+                          <select value={currentGrade} onChange={async (e) => {
+                            const newGrade = e.target.value;
+                            const obs = p.observacao || "";
+                            const cleaned = obs
+                              .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+                              .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
+                              .trim();
+                            const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
+                            const finalObs = gradeTag ? `${cleaned} ${gradeTag}`.trim() : (cleaned || null);
+                            await apiPatch(p.id, { observacao: finalObs });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                            setDetailProduct({ ...p, observacao: finalObs });
+                            setMsg(`Grade ${newGrade || "removida"}!`);
+                          }} className={selCls}>
+                            <option value="">— Sem grade —</option>
+                            <option value="A+">A+</option>
+                            <option value="A">A</option>
+                            <option value="AB">AB</option>
+                            <option value="B">B</option>
+                          </select>
                         </div>
-                      ) : (() => {
-                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
-                          || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase();
-                        if (!g) return null;
-                        const cls = g === "A" ? "bg-green-100 text-green-700" : g === "B" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
-                        return <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span>;
-                      })()}
-                    </div>
-                  )}
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
+                          <select value={hasCaixa ? "SIM" : "NAO"} onChange={async (e) => {
+                            const wantCaixa = e.target.value === "SIM";
+                            const obs = p.observacao || "";
+                            const hadCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                            if (wantCaixa === hadCaixa) return;
+                            let newObs: string | null;
+                            if (!wantCaixa) {
+                              newObs = obs
+                                .replace("[COM_CAIXA]", "")
+                                .replace(/\bcom\s+caixa(\s+original)?\b/gi, "")
+                                .replace(/\s+/g, " ").trim() || null;
+                            } else {
+                              newObs = `${obs} [COM_CAIXA]`.trim();
+                            }
+                            await apiPatch(p.id, { observacao: newObs });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                            setDetailProduct({ ...p, observacao: newObs });
+                            setMsg(wantCaixa ? "Com caixa salvo!" : "Caixa removida!");
+                          }} className={selCls}>
+                            <option value="NAO">Sem caixa</option>
+                            <option value="SIM">📦 Com caixa</option>
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               {/* Financeiro */}
@@ -3834,9 +3869,25 @@ export default function EstoquePage() {
                   </div>
                 )}
                 {/* Preço sugerido — só para seminovos, editável pelo admin */}
-                {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && isAdmin && (
+                {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" || p.tipo === "NOVO" || p.tipo === "NAO_ATIVADO") && isAdmin && (
                   <div className="mt-3 pt-3 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
-                    <p className={`text-[10px] uppercase tracking-wider ${mS} mb-1`}>Preco Sugerido de Venda</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco Sugerido de Venda</p>
+                      {p.custo_unitario && markupConfig[p.tipo] ? (
+                        <button
+                          onClick={async () => {
+                            const sugestao = Math.round(p.custo_unitario! * (1 + markupConfig[p.tipo] / 100));
+                            await apiPatch(p.id, { preco_sugerido: sugestao });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, preco_sugerido: sugestao } : x));
+                            setDetailProduct({ ...p, preco_sugerido: sugestao });
+                            setMsg("Preço sugerido calculado!");
+                          }}
+                          className="text-[10px] font-semibold text-[#E8740E] hover:underline"
+                        >
+                          💡 Sugerir {markupConfig[p.tipo]}% → R$ {Math.round((p.custo_unitario || 0) * (1 + markupConfig[p.tipo] / 100)).toLocaleString("pt-BR")}
+                        </button>
+                      ) : null}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[13px] ${mS}`}>R$</span>
                       <input
