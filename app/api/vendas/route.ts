@@ -328,49 +328,67 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, finalizadas: updated?.length || 0 });
   }
 
-  // Sync troca_produto/troca_cor/troca_categoria em vendas vinculadas (por cliente + data OU produto antigo)
+  // Sync troca_produto/troca_cor/troca_categoria em vendas vinculadas
   if (body.action === "sync_by_cliente_data") {
-    const { cliente, data_compra, produto_antigo, produto, cor, categoria, troca_num } = body;
+    const { cliente, data_compra, produto, cor, categoria } = body;
     if (!cliente) return NextResponse.json({ error: "cliente obrigatorio" }, { status: 400 });
-    // troca_num: 1 (default) ou 2 — para suporte a 2 produtos na troca
-    const suffix = troca_num === 2 ? "2" : "";
-    const updates: Record<string, unknown> = {};
-    if (produto) updates[`troca_produto${suffix}`] = produto;
-    if (cor !== undefined) updates[`troca_cor${suffix}`] = cor;
-    if (categoria) updates[`troca_categoria${suffix}`] = categoria;
 
-    // Tentar por cliente + data primeiro
-    let updated: { id: string }[] | null = null;
+    const updates: Record<string, unknown> = {};
+    if (produto) updates.troca_produto = produto;
+    if (cor !== undefined) updates.troca_cor = cor;
+    if (categoria) updates.troca_categoria = categoria;
+
+    // 1) Tentar por cliente + data exata
     if (data_compra) {
       const { data: r1, error: e1 } = await supabase.from("vendas")
         .update(updates)
         .ilike("cliente", cliente)
         .eq("data", data_compra)
+        .not("troca_produto", "is", null)
         .select("id");
       if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
-      updated = r1;
+      if (r1 && r1.length > 0) return NextResponse.json({ ok: true, updated: r1.length });
     }
 
-    // Fallback: buscar por cliente + nome antigo do produto na troca (coluna 1 ou 2)
-    if ((!updated || updated.length === 0) && produto_antigo) {
-      // Tentar na troca 1
-      const { data: r2a, error: e2a } = await supabase.from("vendas")
-        .update(updates)
+    // 2) Fallback: buscar TODAS as vendas desse cliente com troca_produto preenchido
+    //    (seleciona primeiro, depois decide qual atualizar)
+    const { data: candidatas, error: eCand } = await supabase.from("vendas")
+      .select("id, data, troca_produto, troca_produto2")
+      .ilike("cliente", cliente)
+      .not("troca_produto", "is", null)
+      .order("data", { ascending: false });
+    if (eCand) return NextResponse.json({ error: eCand.message }, { status: 500 });
+
+    if (!candidatas || candidatas.length === 0) {
+      // 3) Último fallback: qualquer venda do cliente (inclusive sem troca_produto ainda)
+      //    atualiza apenas a mais recente
+      const { data: rFallback, error: eFallback } = await supabase.from("vendas")
+        .select("id, data")
         .ilike("cliente", cliente)
-        .ilike("troca_produto", produto_antigo)
-        .select("id");
-      if (e2a) return NextResponse.json({ error: e2a.message }, { status: 500 });
-      // Tentar na troca 2
-      const { data: r2b, error: e2b } = await supabase.from("vendas")
-        .update({ ...updates, [`troca_produto2`]: produto, [`troca_cor2`]: cor, [`troca_categoria2`]: categoria })
-        .ilike("cliente", cliente)
-        .ilike("troca_produto2", produto_antigo)
-        .select("id");
-      if (e2b) return NextResponse.json({ error: e2b.message }, { status: 500 });
-      updated = [...(r2a || []), ...(r2b || [])];
+        .order("data", { ascending: false })
+        .limit(1);
+      if (eFallback) return NextResponse.json({ error: eFallback.message }, { status: 500 });
+      if (!rFallback || rFallback.length === 0) return NextResponse.json({ ok: true, updated: 0 });
+      await supabase.from("vendas").update(updates).eq("id", rFallback[0].id);
+      return NextResponse.json({ ok: true, updated: 1, fallback: "latest" });
     }
 
-    return NextResponse.json({ ok: true, updated: updated?.length || 0 });
+    // Se só 1 candidata, atualiza direto
+    if (candidatas.length === 1) {
+      await supabase.from("vendas").update(updates).eq("id", candidatas[0].id);
+      return NextResponse.json({ ok: true, updated: 1 });
+    }
+
+    // Se há data_compra, tentar achar a candidata mais próxima da data
+    if (data_compra) {
+      const match = candidatas.find(v => v.data === data_compra) || candidatas[0];
+      await supabase.from("vendas").update(updates).eq("id", match.id);
+      return NextResponse.json({ ok: true, updated: 1 });
+    }
+
+    // Múltiplas sem data: atualiza a mais recente
+    await supabase.from("vendas").update(updates).eq("id", candidatas[0].id);
+    return NextResponse.json({ ok: true, updated: 1 });
   }
 
   const { id, ...fields } = body;
