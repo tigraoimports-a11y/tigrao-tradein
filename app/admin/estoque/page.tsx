@@ -2598,6 +2598,49 @@ export default function EstoquePage() {
                   </div>
                 );
               })}
+              {/* Produtos pendentes sem categoria válida — alerta + auto-fix */}
+              {tab === "pendencias" && isAdmin && (() => {
+                const semCat = pendencias.filter(p => !p.categoria || !CATEGORIAS.includes(p.categoria));
+                if (semCat.length === 0) return null;
+                return (
+                  <div className={`col-span-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border ${dm ? "bg-yellow-900/20 border-yellow-700/40 text-yellow-300" : "bg-yellow-50 border-yellow-200 text-yellow-800"}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg">⚠️</span>
+                      <div>
+                        <p className="text-xs font-bold">{semCat.length} produto{semCat.length > 1 ? "s" : ""} sem categoria válida</p>
+                        <p className="text-[11px] opacity-70">Esses itens não aparecem nas categorias acima</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const detectCat = (nome: string): string => {
+                          const n = (nome || "").toUpperCase();
+                          if (n.includes("MACBOOK") && CATEGORIAS.includes("MACBOOK")) return "MACBOOK";
+                          if (n.includes("MAC MINI") && CATEGORIAS.includes("MAC_MINI")) return "MAC_MINI";
+                          if (n.includes("MAC STUDIO") && CATEGORIAS.includes("MAC_STUDIO")) return "MAC_STUDIO";
+                          if (n.includes("IMAC") && CATEGORIAS.includes("IMAC")) return "IMAC";
+                          if (n.includes("IPAD") && CATEGORIAS.includes("IPADS")) return "IPADS";
+                          if (n.includes("APPLE WATCH") && CATEGORIAS.includes("APPLE_WATCH")) return "APPLE_WATCH";
+                          if (n.includes("AIRPOD") && CATEGORIAS.includes("AIRPODS")) return "AIRPODS";
+                          if (n.includes("IPHONE") && CATEGORIAS.includes("IPHONES")) return "IPHONES";
+                          return CATEGORIAS[0] || "IPHONES";
+                        };
+                        let fixed = 0;
+                        for (const p of semCat) {
+                          const cat = detectCat(p.produto);
+                          await apiPatch(p.id, { categoria: cat });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, categoria: cat } : x));
+                          fixed++;
+                        }
+                        setMsg(`✅ ${fixed} produto${fixed > 1 ? "s" : ""} corrigido${fixed > 1 ? "s" : ""}!`);
+                      }}
+                      className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
+                    >
+                      Corrigir automaticamente
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>

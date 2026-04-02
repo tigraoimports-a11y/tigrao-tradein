@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
     const nomeProduto1 = sem1.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     const { error: errSeminovo } = await supabase.from("estoque").insert({
       produto: nomeProduto1,
-      categoria: detectCategoriaSeminovo(sem1.produto),
+      categoria: sem1.categoria || detectCategoriaSeminovo(sem1.produto),
       qnt: 1,
       custo_unitario: sem1.valor || 0,
       status: "PENDENTE",
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
     const nomeProduto2 = sem2.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
     const { error: errSeminovo2 } = await supabase.from("estoque").insert({
       produto: nomeProduto2,
-      categoria: detectCategoriaSeminovo(sem2.produto),
+      categoria: sem2.categoria || detectCategoriaSeminovo(sem2.produto),
       qnt: 1,
       custo_unitario: sem2.valor || 0,
       status: "PENDENTE",
