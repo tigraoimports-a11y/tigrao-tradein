@@ -1393,7 +1393,7 @@ export default function EstoquePage() {
   };
 
   // Filtrar por tipo
-  const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
+  const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO" || p.tipo === "NAO_ATIVADO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
@@ -2043,6 +2043,7 @@ export default function EstoquePage() {
             ) : (
               <div><p className={labelCls}>Tipo</p><select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
                 <option value="NOVO">Novo (Lacrado)</option>
+                <option value="NAO_ATIVADO">Não Ativado</option>
                 <option value="SEMINOVO">Seminovo</option>
                 <option value="A_CAMINHO">A Caminho</option>
               </select></div>
@@ -2384,7 +2385,7 @@ export default function EstoquePage() {
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
           <button onClick={() => handleSubmit(false)} className="w-full py-4 rounded-2xl bg-[#E8740E] text-white text-[15px] font-semibold hover:bg-[#D06A0D] transition-colors shadow-sm active:scale-[0.99]">
-            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : "Adicionar Seminovo"}
+            {variacoes.length > 0 ? `Adicionar ${variacoes.length + 1} cores` : form.tipo === "NAO_ATIVADO" ? "Adicionar Não Ativado" : "Adicionar Seminovo"}
           </button>
           </>
           )}
@@ -2926,8 +2927,8 @@ export default function EstoquePage() {
                                           {isEditableItemTab && <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>}
                                           <div className="flex flex-wrap gap-1 items-center">
                                             {/* Condição: Lacrado / Usado */}
-                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : "Lacrado"}
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}`}>
+                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : p.tipo === "NAO_ATIVADO" ? "Não Ativado" : "Lacrado"}
                                             </span>
                                             {/* Bateria (só seminovo/pendência) */}
                                             {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
@@ -3230,7 +3231,7 @@ export default function EstoquePage() {
         const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
         const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
         const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
-        const isLac = p.tipo === "NOVO" || p.tipo === "A_CAMINHO";
+        const isLac = p.tipo === "NOVO" || p.tipo === "A_CAMINHO" || p.tipo === "NAO_ATIVADO";
         const dataE = p.data_entrada || p.data_compra;
         // reset serial/imei edit mode when a different product opens
         // (tracked via editingDetailSerial / editingDetailImei in page state)
@@ -3444,7 +3445,7 @@ export default function EstoquePage() {
                           )}
                         </div>
                       )}
-                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
+                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
