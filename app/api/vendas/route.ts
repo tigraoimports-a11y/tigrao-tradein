@@ -546,16 +546,39 @@ export async function DELETE(req: NextRequest) {
       }).eq("id", venda.estoque_id);
       await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
     } else {
-      // Item pode ter sido deletado (ex: seminovo com qnt=0) — tenta fallback por serial/nome
+      // Item foi deletado (ex: seminovo vendido, ou item removido manualmente)
+      // Tentar encontrar por serial primeiro
       let found = false;
       if (venda.serial_no) {
         const { data: bySerial } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).limit(1).single();
         if (bySerial) {
           await supabase.from("estoque").update({ qnt: Number(bySerial.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", bySerial.id);
           found = true;
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, por serial)", venda.produto, "estoque");
         }
       }
-      if (!found) await logActivity(usuario, "Cancelamento: item de estoque não encontrado (deletado?)", venda.produto || "?", "estoque");
+      // Se não achou por serial, RECRIAR o item com todos os dados da venda
+      if (!found && venda.produto) {
+        const novoItem: Record<string, unknown> = {
+          produto: venda.produto,
+          cor: venda.cor || null,
+          serial_no: venda.serial_no || null,
+          imei: venda.imei || null,
+          qnt: 1,
+          status: "EM ESTOQUE",
+          tipo: "SEMINOVO", // cancelamento = item voltou do cliente
+          categoria: venda.categoria || null,
+          custo_unitario: venda.custo || null,
+          fornecedor: venda.fornecedor || null,
+          updated_at: new Date().toISOString(),
+        };
+        const { error: errInsert } = await supabase.from("estoque").insert(novoItem);
+        if (!errInsert) {
+          await logActivity(usuario, "Recriou no estoque (cancelamento)", `${venda.produto} serial=${venda.serial_no || "?"}`, "estoque");
+        } else {
+          await logActivity(usuario, "Cancelamento: falha ao recriar no estoque", `${venda.produto}: ${errInsert.message}`, "estoque");
+        }
+      }
     }
   } else if (venda && venda.produto) {
     // Fallback: buscar produto no estoque pelo serial ou nome+cor e devolver
