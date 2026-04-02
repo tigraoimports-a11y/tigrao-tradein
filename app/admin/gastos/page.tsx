@@ -164,16 +164,32 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     setEditId(p.id);
     const fornNome = p.fornecedor || "";
     const isFornecedorCadastrado = fornecedores.some(f => f.nome === fornNome);
+
+    // Para produtos já em estoque (não A_CAMINHO), a condição real vem do tipo no DB
+    // Para A_CAMINHO, a condição esperada vem do observacao
+    const currentTipo = p.tipo || "A_CAMINHO";
+    let condicaoInicial: string;
+    if (currentTipo === "A_CAMINHO") {
+      condicaoInicial = getCondicaoFromObs(p.observacao);
+    } else if (currentTipo === "SEMINOVO" || currentTipo === "PENDENCIA") {
+      condicaoInicial = "SEMINOVO";
+    } else if (currentTipo === "NAO_ATIVADO") {
+      condicaoInicial = "NAO_ATIVADO";
+    } else {
+      // NOVO ou outro — pode ter observacao com condição
+      condicaoInicial = getCondicaoFromObs(p.observacao);
+    }
+
     setEditFields({
       serial_no: p.serial_no || "",
       imei: p.imei || "",
       produto: p.produto || "",
       origem: getOrigemFromObs(p.observacao),
-      condicao: getCondicaoFromObs(p.observacao),
+      condicao: condicaoInicial,
       cor: p.cor || "",
       custo_unitario: String(p.custo_unitario || ""),
       qnt: String(p.qnt || 1),
-      tipo: p.tipo || "A_CAMINHO",
+      tipo: currentTipo,
       fornecedor: fornNome,
       // se não está na lista de fornecedores cadastrados, tratar como cliente
       modo_origem: isFornecedorCadastrado || !fornNome ? "fornecedor" : "cliente",
@@ -198,10 +214,29 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const originalObs = original?.observacao || null;
       if (newObs !== originalObs) {
         updates.observacao = newObs;
-        // Atualizar tipo do produto no estoque conforme condição
-        if (editFields.condicao === "SEMINOVO") updates.tipo = "SEMINOVO";
-        else if (editFields.condicao === "NAO_ATIVADO") updates.tipo = "NAO_ATIVADO";
-        else updates.tipo = "A_CAMINHO";
+      }
+
+      // Atualizar tipo conforme condição — SEMPRE, independente do observacao
+      // Para A_CAMINHO: guarda na observacao, tipo só muda quando for movido para estoque
+      // Para já em estoque: atualiza tipo diretamente
+      const currentTipo = original?.tipo || "A_CAMINHO";
+      const isACaminho = currentTipo === "A_CAMINHO";
+      if (isACaminho) {
+        // Produto ainda em trânsito: tipo permanece A_CAMINHO, condição fica no observacao
+        // (nada a fazer no tipo)
+      } else {
+        // Produto já em estoque: tipo reflete a condição real
+        const targetTipo =
+          editFields.condicao === "SEMINOVO" ? "SEMINOVO" :
+          editFields.condicao === "NAO_ATIVADO" ? "NAO_ATIVADO" :
+          "NOVO";
+        if (targetTipo !== currentTipo) {
+          updates.tipo = targetTipo;
+          // Se estava em Pendências e agora tem condição definida, manter em EM ESTOQUE
+          if (currentTipo === "PENDENCIA") {
+            updates.status = "EM ESTOQUE";
+          }
+        }
       }
 
       // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
