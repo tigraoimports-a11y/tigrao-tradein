@@ -3445,34 +3445,26 @@ export default function EstoquePage() {
                     }
                     /* ── 1 unidade ── */
                     return (<>
-                      {(p.serial_no || isAdmin) && (
+                      {(p.serial_no || isAdmin || isPendente) && (
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
-                          {isAdmin ? (
+                          {isPendente ? (
+                            /* Campo direto para produtos pendentes — sem toggle de lápis */
+                            <input
+                              id={`serial-single-${p.id}`}
+                              type="text"
+                              defaultValue={p.serial_no || ""}
+                              placeholder="Digitar S/N"
+                              style={{ textTransform: "uppercase" }}
+                              onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
+                              onBlur={saveSerial}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveSerial(); } }}
+                              className={`w-full text-[13px] font-mono mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                            />
+                          ) : isAdmin ? (
                             <div className="flex items-center gap-1 mt-0.5">
-                              {editingDetailSerial ? (
-                                <>
-                                  <input
-                                    id={`serial-single-${p.id}`}
-                                    autoFocus
-                                    type="text"
-                                    defaultValue={p.serial_no || ""}
-                                    placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
-                                    style={{ textTransform: "uppercase" }}
-                                    onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
-                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveSerial(); } if (e.key === "Escape") setEditingDetailSerial(false); }}
-                                    className={`flex-1 ${inpCls}`}
-                                  />
-                                  <button onMouseDown={(e) => e.preventDefault()} onClick={saveSerial} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold" title="Salvar">✓</button>
-                                  <button onMouseDown={(e) => e.preventDefault()} onClick={() => setEditingDetailSerial(false)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"} hover:text-red-500 text-sm font-bold`} title="Cancelar">✕</button>
-                                </>
-                              ) : (
-                                <>
-                                  <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
-                                  {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
-                                  <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">{pencilIco}</button>
-                                </>
-                              )}
+                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
+                              {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
                             </div>
                           ) : (
                             <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
@@ -3485,9 +3477,10 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">📦 Com Caixa</span></div>
                       )}
-                      {/* Grade badge */}
+                      {/* Grade badge — detecta tag [GRADE_X] ou texto livre "GRADE A/B/C" */}
                       {(() => {
-                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1];
+                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
+                          || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase();
                         if (!g) return null;
                         const cls = g === "A" ? "bg-green-100 text-green-700" : g === "B" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
                         return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
@@ -3496,10 +3489,10 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — editável somente quando produto está pendente */}
+                  {/* Cor — editável para admin */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {canEdit ? (
+                    {(canEdit || isAdmin) ? (
                       <input
                         type="text"
                         defaultValue={p.cor || ""}
@@ -3522,31 +3515,21 @@ export default function EstoquePage() {
                   {(p.imei || isAdmin || canEditImei) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
-                      {(isAdmin || canEditImei) ? (
+                      {canEditImei ? (
+                        /* Campo direto para produtos pendentes */
+                        <input
+                          id={`imei-single-${p.id}`}
+                          type="text"
+                          defaultValue={p.imei || ""}
+                          placeholder="Digitar IMEI"
+                          onBlur={saveImei}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveImei(); } }}
+                          className={`w-full text-[13px] font-mono mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      ) : isAdmin ? (
                         <div className="flex items-center gap-1 mt-0.5">
-                          {editingDetailImei ? (
-                            <>
-                              <input
-                                id={`imei-single-${p.id}`}
-                                autoFocus
-                                type="text"
-                                defaultValue={p.imei || ""}
-                                placeholder="Digitar IMEI"
-                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveImei(); } if (e.key === "Escape") setEditingDetailImei(false); }}
-                                className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
-                              />
-                              <button onMouseDown={(e) => e.preventDefault()} onClick={saveImei} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold" title="Salvar">✓</button>
-                              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setEditingDetailImei(false)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"} hover:text-red-500 text-sm font-bold`} title="Cancelar">✕</button>
-                            </>
-                          ) : (
-                            <>
-                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={`${mS} text-xs`}>— obrigatório para mover</span>}</span>
-                              {p.imei && <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
-                              <button onClick={() => setEditingDetailImei(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar IMEI">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                              </button>
-                            </>
-                          )}
+                          <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={mS}>—</span>}</span>
+                          {p.imei && <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
                         </div>
                       ) : p.imei ? (
                         <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.imei} {cpIco}</button>
@@ -3696,12 +3679,12 @@ export default function EstoquePage() {
                         }} className={`flex-1 text-[13px] px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
                         {p.fornecedor && (
                           <button
-                            title="Ver dados do cliente/fornecedor"
+                            title="Ver perfil do cliente"
                             onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
-                            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors shadow-sm"
+                            className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/50 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            Ver cliente
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Ver perfil
                           </button>
                         )}
                       </div>
