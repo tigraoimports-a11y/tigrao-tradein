@@ -834,6 +834,10 @@ export default function EstoquePage() {
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
       body: JSON.stringify({ id, ...fields }),
     });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || `Erro ${res.status} ao salvar`);
+    }
     return res;
   };
 
@@ -3221,16 +3225,18 @@ export default function EstoquePage() {
                               style={{ textTransform: "uppercase" }}
                               onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; }, setOcrLoading)}
                               onBlur={async (e) => {
+                                const val = e.target.value.trim().toUpperCase() || null;
+                                if (val === (p.serial_no || null)) { setEditingDetailSerial(false); return; }
                                 try {
-                                  const val = e.target.value.trim().toUpperCase() || null;
-                                  if (val !== (p.serial_no || null)) {
-                                    await apiPatch(p.id, { serial_no: val });
-                                    setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
-                                    setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
-                                    setMsg(val ? "Serial atualizado!" : "Serial removido!");
-                                  }
-                                } finally {
+                                  await apiPatch(p.id, { serial_no: val });
+                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
+                                  setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
+                                  setMsg(val ? "✅ Serial salvo!" : "Serial removido!");
                                   setEditingDetailSerial(false);
+                                } catch (err) {
+                                  setMsg("❌ Erro ao salvar serial: " + String(err instanceof Error ? err.message : err));
+                                  // mantém editing aberto para o usuário tentar novamente
+                                  (e.target as HTMLInputElement).focus();
                                 }
                               }}
                               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailSerial(false); }}
@@ -3287,13 +3293,17 @@ export default function EstoquePage() {
                               placeholder="Digitar IMEI"
                               onBlur={async (e) => {
                                 const val = e.target.value.trim() || null;
-                                if (val !== (p.imei || null)) {
+                                if (val === (p.imei || null)) { setEditingDetailImei(false); return; }
+                                try {
                                   await apiPatch(p.id, { imei: val });
                                   setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, imei: val } : x));
-                                  setDetailProduct({ ...p, imei: val });
-                                  setMsg(val ? "IMEI atualizado!" : "IMEI removido!");
+                                  setDetailProduct(prev => prev ? { ...prev, imei: val } : null);
+                                  setMsg(val ? "✅ IMEI salvo!" : "IMEI removido!");
+                                  setEditingDetailImei(false);
+                                } catch (err) {
+                                  setMsg("❌ Erro ao salvar IMEI: " + String(err instanceof Error ? err.message : err));
+                                  (e.target as HTMLInputElement).focus();
                                 }
-                                setEditingDetailImei(false);
                               }}
                               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailImei(false); }}
                               className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
