@@ -374,8 +374,8 @@ export default function ProdutoSpecFields({
         </div>
       </div>
 
-      {/* Categoria + Cor + Fornecedor + Condição */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Categoria + Cor + Condição */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div>
           <p className={labelCls}>Categoria</p>
           <select value={row.categoria} onChange={(e) => set("categoria", e.target.value)} className={inputCls}>
@@ -396,13 +396,6 @@ export default function ProdutoSpecFields({
           )}
         </div>
         <div>
-          <p className={labelCls}>Fornecedor</p>
-          <select value={row.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls}>
-            <option value="">— Selecionar —</option>
-            {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-          </select>
-        </div>
-        <div>
           <p className={labelCls}>Condição</p>
           <select value={row.condicao || "NOVO"} onChange={(e) => set("condicao", e.target.value)} className={inputCls}>
             <option value="NOVO">Lacrado</option>
@@ -412,43 +405,82 @@ export default function ProdutoSpecFields({
         </div>
       </div>
 
-      {/* Cliente (compra de cliente registrado) */}
-      <div className="relative">
-        <p className={labelCls}>
-          Cliente (origem)
-          <span className={`ml-1.5 text-[10px] ${dm ? "text-[#636366]" : "text-[#AEAEB2]"}`}>— se comprado de cliente</span>
-        </p>
-        <input
-          value={clienteQuery}
-          onChange={(e) => handleClienteChange(e.target.value)}
-          onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
-          onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
-          placeholder="Buscar cliente cadastrado..."
-          className={inputCls}
-          autoComplete="off"
-        />
-        {row.cliente && (
-          <span className={`absolute right-2 top-[1.85rem] text-[10px] font-semibold text-[#30C66A]`}>✓ {row.cliente}</span>
+      {/* Origem da compra: Fornecedor OU Cliente cadastrado */}
+      <div className={`p-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]"} space-y-2`}>
+        <div className="flex items-center justify-between">
+          <p className={`${labelCls} mb-0`}>Origem da compra</p>
+          <div className={`flex rounded-lg overflow-hidden border text-[11px] font-semibold ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+            <button
+              type="button"
+              onClick={() => { set("cliente", ""); setClienteQuery(""); }}
+              className={`px-3 py-1 transition-colors ${!row.cliente ? "bg-[#E8740E] text-white" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              Fornecedor
+            </button>
+            <button
+              type="button"
+              onClick={() => { set("fornecedor", ""); }}
+              className={`px-3 py-1 transition-colors ${row.cliente ? "bg-[#0071E3] text-white" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              Cliente
+            </button>
+          </div>
+        </div>
+
+        {!row.cliente ? (
+          /* Modo Fornecedor */
+          <select value={row.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={inputCls}>
+            <option value="">— Selecionar fornecedor —</option>
+            {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+          </select>
+        ) : (
+          /* Modo Cliente — mostra cliente selecionado com botão de limpar */
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${dm ? "bg-[#0071E3]/20 border border-[#0071E3]/40" : "bg-blue-50 border border-blue-200"}`}>
+            <span className="text-blue-500 text-sm">👤</span>
+            <span className={`flex-1 text-sm font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>{row.cliente}</span>
+            <button
+              type="button"
+              onClick={() => { set("cliente", ""); setClienteQuery(""); }}
+              className="text-[10px] text-red-400 hover:text-red-600 font-bold"
+            >
+              ✕
+            </button>
+          </div>
         )}
-        {showClienteSugg && (clienteSuggestions.length > 0 || clienteLoading) && (
-          <div className={`absolute z-20 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden ${dm ? "bg-[#2C2C2E] border-[#4A4A4C]" : "bg-white border-[#D2D2D7]"}`}>
-            {clienteLoading && (
-              <p className={`px-3 py-2 text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Buscando...</p>
+
+        {/* Busca de cliente (aparece sempre que não há cliente selecionado e modo = cliente) */}
+        {!row.cliente && (
+          <div className="relative">
+            <input
+              value={clienteQuery}
+              onChange={(e) => handleClienteChange(e.target.value)}
+              onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
+              onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
+              placeholder="🔍 Buscar cliente cadastrado pelo nome..."
+              className={`${inputCls} text-xs`}
+              autoComplete="off"
+            />
+            {showClienteSugg && (clienteSuggestions.length > 0 || clienteLoading) && (
+              <div className={`absolute z-20 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden ${dm ? "bg-[#2C2C2E] border-[#4A4A4C]" : "bg-white border-[#D2D2D7]"}`}>
+                {clienteLoading && (
+                  <p className={`px-3 py-2 text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Buscando...</p>
+                )}
+                {clienteSuggestions.map((nome) => (
+                  <button
+                    key={nome}
+                    type="button"
+                    onMouseDown={() => {
+                      setClienteQuery(nome);
+                      set("cliente", nome);
+                      setShowClienteSugg(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}
+                  >
+                    👤 {nome}
+                  </button>
+                ))}
+              </div>
             )}
-            {clienteSuggestions.map((nome) => (
-              <button
-                key={nome}
-                type="button"
-                onMouseDown={() => {
-                  setClienteQuery(nome);
-                  set("cliente", nome);
-                  setShowClienteSugg(false);
-                }}
-                className={`w-full text-left px-3 py-2 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}
-              >
-                {nome}
-              </button>
-            ))}
           </div>
         )}
       </div>

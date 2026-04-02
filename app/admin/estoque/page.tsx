@@ -2961,10 +2961,13 @@ export default function EstoquePage() {
                                         <div className="flex flex-col gap-1">
                                           {isEditableItemTab && <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>}
                                           <div className="flex flex-wrap gap-1 items-center">
-                                            {/* Condição: Lacrado / Usado */}
-                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "bg-yellow-100 text-yellow-700" : p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}`}>
-                                              {p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA" ? "Usado" : p.tipo === "NAO_ATIVADO" ? "Não Ativado" : "Lacrado"}
-                                            </span>
+                                            {/* Condição: Lacrado / Usado — para A_CAMINHO ler do observacao */}
+                                            {(() => {
+                                              const cond = p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
+                                              if (cond === "SEMINOVO" || cond === "PENDENCIA") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-100 text-yellow-700">Usado</span>;
+                                              if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
+                                              return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">Lacrado</span>;
+                                            })()}
                                             {/* Bateria (só seminovo/pendência) */}
                                             {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
                                               isEditableItemTab && isEditingField(p.id, "bateria") ? (
