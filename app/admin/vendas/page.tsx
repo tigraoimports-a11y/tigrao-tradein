@@ -3474,6 +3474,11 @@ export default function VendasPage() {
                                             });
                                             setProdutoManual(true);
 
+                                            // Mostrar produto no campo de busca para que fique visível ao editar
+                                            if (grupoVendas.length === 1) {
+                                              setSerialBusca(v.serial_no || v.imei || primaryVenda.produto || "");
+                                            }
+
                                             // Restaurar ProdutoSpecFields das trocas com dados salvos
                                             if (trocaProd) {
                                               setTrocaRow({ ...createEmptyProdutoRow(), produto: trocaProd, cor: trocaCor, categoria: "" });

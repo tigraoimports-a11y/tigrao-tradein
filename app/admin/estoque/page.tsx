@@ -1435,6 +1435,8 @@ export default function EstoquePage() {
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
+  // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
+  const pendenciasMovidas = estoque.filter((p) => p.tipo === "SEMINOVO" && !!p.cliente);
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
@@ -1448,7 +1450,7 @@ export default function EstoquePage() {
     tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
     tab === "acaminho" ? aCaminho :
-    tab === "pendencias" ? pendencias :
+    tab === "pendencias" ? [...pendencias, ...pendenciasMovidas] :
     tab === "esgotados" ? esgotados :
     tab === "acabando" ? acabando :
     emEstoque;
@@ -1704,7 +1706,7 @@ export default function EstoquePage() {
           { label: "Unidades", value: totalUnidades, sub: "em estoque" },
           { label: "Valor Total", value: fmt(valorEstoque), sub: "investido" },
           { label: "Seminovos", value: seminovos.length, sub: fmt(valorSeminovos) },
-          { label: "Pendencias", value: pendencias.length, sub: "aguardando" },
+          { label: "Pendencias", value: pendencias.length, sub: pendenciasMovidas.length > 0 ? `${pendenciasMovidas.length} no estoque` : "aguardando" },
           { label: "A Caminho", value: aCaminho.length, sub: fmt(valorACaminho) },
         ].map((kpi) => (
           <div key={kpi.label} className={`${bgCard} border ${borderCard} rounded-2xl p-4 hover:shadow-md transition-shadow`}>
@@ -2584,7 +2586,7 @@ export default function EstoquePage() {
             /* TELA DE CATEGORIAS */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
-                const sourceList = tab === "pendencias" ? pendencias : emEstoque;
+                const sourceList = tab === "pendencias" ? [...pendencias, ...pendenciasMovidas] : emEstoque;
                 const items = sourceList.filter((p) => p.categoria === cat.key);
                 const count = items.length;
                 const units = items.reduce((s, p) => s + p.qnt, 0);
@@ -3042,6 +3044,8 @@ export default function EstoquePage() {
                                           <div className="flex flex-wrap gap-1 items-center">
                                             {/* Condição: Lacrado / Usado — para A_CAMINHO ler do observacao */}
                                             {(() => {
+                                              // Pendência já movida para estoque
+                                              if (tab === "pendencias" && p.tipo === "SEMINOVO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">✅ No estoque</span>;
                                               const cond = p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
                                               if (cond === "SEMINOVO" || cond === "PENDENCIA") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-100 text-yellow-700">Usado</span>;
                                               if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
