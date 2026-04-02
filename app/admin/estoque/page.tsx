@@ -198,27 +198,63 @@ const PT_TO_EN: Record<string, string> = {
   "LAVANDA": "Lavender",
 };
 
+const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
+
+/** Remove código de origem do final de qualquer string (ex: "AZUL PROFUNDO LL" → "AZUL PROFUNDO") */
+function stripCode(s: string): string {
+  const upper = s.trim().toUpperCase();
+  for (const code of ORIGEM_CODES) {
+    if (upper.endsWith(` ${code}`)) return s.trim().slice(0, -(code.length + 1)).trim();
+  }
+  return s.trim();
+}
+
 /** Remove o código de origem (LL, VC, BE...) do final do nome de iPhones — só para exibição */
 function stripOrigem(nome: string, categoria?: string | null): string {
   if (!nome) return nome;
   if (categoria && categoria !== "IPHONES") return nome;
-  const codes = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
-  const upper = nome.trim().toUpperCase();
-  for (const code of codes) {
-    if (upper.endsWith(` ${code}`)) return nome.trim().slice(0, -(code.length + 1)).trim();
+  return stripCode(nome);
+}
+
+/** Retorna o nome PT da cor embutida no nome do produto (quando cor=null) */
+function extractCorPT(nome: string): string | null {
+  if (!nome) return null;
+  const upper = nome.toUpperCase();
+  // Verifica do mais longo para o mais curto para evitar matches parciais
+  const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
+  for (const ptKey of ptKeys) {
+    if (upper.includes(ptKey)) {
+      return ptKey.charAt(0).toUpperCase() + ptKey.slice(1).toLowerCase();
+    }
   }
-  return nome.trim();
+  return null;
 }
 
 /**
  * Retorna o nome para exibição:
  * - Remove código de origem
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
+ * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
   let display = stripOrigem(nome, categoria);
-  if (!cor) return display;
-  const upper = cor.toUpperCase().trim();
+  if (!cor) {
+    // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
+    const upper = display.toUpperCase();
+    const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
+    for (const ptKey of ptKeys) {
+      if (upper.includes(ptKey)) {
+        const en = PT_TO_EN[ptKey];
+        const pattern = ptKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+        try { display = display.replace(new RegExp(pattern, "gi"), en.toUpperCase()); } catch { /* ignore */ }
+        break;
+      }
+    }
+    return display;
+  }
+  // Remove código de origem do campo cor também (ex: "AZUL PROFUNDO LL" → "AZUL PROFUNDO")
+  const corClean = (categoria === "IPHONES" || !categoria) ? stripCode(cor) : cor;
+  const upper = corClean.toUpperCase().trim();
   const en = PT_TO_EN[upper];
   if (en) {
     // Substitui a cor em PT pelo equivalente EN no nome (case-insensitive)
@@ -228,13 +264,19 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   return display;
 }
 
-/** Retorna só a tradução em português da cor (para exibir em cinza) */
-function corSoPT(cor: string | null | undefined): string | null {
-  if (!cor) return null;
-  const upper = cor.toUpperCase().trim();
+/** Retorna só a tradução em português da cor (para exibir em cinza ao lado do nome) */
+function corSoPT(cor: string | null | undefined, nome?: string | null): string | null {
+  if (!cor) {
+    // Sem campo cor: tenta extrair cor PT do nome do produto
+    if (nome) return extractCorPT(nome);
+    return null;
+  }
+  // Remove código de origem do campo cor antes de traduzir
+  const corClean = stripCode(cor);
+  const upper = corClean.toUpperCase().trim();
   const pt = COR_PT[upper]; // cor armazenada em EN → retorna PT
-  if (pt && pt.toLowerCase() !== cor.toLowerCase()) return pt;
-  if (PT_TO_EN[upper]) return cor.charAt(0).toUpperCase() + cor.slice(1).toLowerCase(); // armazenada em PT → retorna formatada
+  if (pt && pt.toLowerCase() !== upper.toLowerCase()) return pt;
+  if (PT_TO_EN[upper]) return corClean.charAt(0).toUpperCase() + corClean.slice(1).toLowerCase(); // armazenada em PT → retorna formatada
   return null;
 }
 
@@ -2395,7 +2437,7 @@ export default function EstoquePage() {
                                 onClick={() => setDetailProduct(p)}>
                                 <td className={`px-4 py-2.5 text-sm font-semibold ${textPrimary}`}>
                                   {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                                  {corSoPT(p.cor) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor)}</span>}
+                                  {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
                                   {(p.serial_no || p.imei) && (
                                     <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                       ✅ {p.serial_no || p.imei}
@@ -2714,7 +2756,7 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {corSoPT(prodItems[0]?.cor) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor)}</span>}
+                                          {corSoPT(prodItems[0]?.cor, prodItems[0]?.produto) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor, prodItems[0]?.produto)}</span>}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
