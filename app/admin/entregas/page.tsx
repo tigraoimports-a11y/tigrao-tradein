@@ -1,8 +1,11 @@
 "use client";
 import { hojeBR } from "@/lib/date-utils";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { getTaxa, calcularLiquido } from "@/lib/taxas";
+
+interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
 interface Entrega {
   id: string;
@@ -105,6 +108,55 @@ export default function EntregasPage() {
   const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
 
+  // Estoque picker states
+  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [catSel, setCatSel] = useState("");
+  const [serialBusca, setSerialBusca] = useState("");
+  const [estoqueId, setEstoqueId] = useState("");
+  const [produtoManual, setProdutoManual] = useState(false);
+  const [desconto, setDesconto] = useState("");
+  const [trocaAtiva, setTrocaAtiva] = useState(false);
+  const [trocaValor, setTrocaValor] = useState("");
+  const [trocaProduto, setTrocaProduto] = useState("");
+  const [trocaCor, setTrocaCor] = useState("");
+  const [trocaBateria, setTrocaBateria] = useState("");
+  const [trocaObs, setTrocaObs] = useState("");
+
+  // Fetch estoque
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/estoque", { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => setEstoque(j.data?.filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE") || []))
+      .catch(() => {});
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Categorias dinâmicas do estoque
+  const categorias = useMemo(() => {
+    const cats = new Map<string, string>();
+    estoque.forEach(p => {
+      const key = p.tipo === "SEMINOVO" ? `${p.categoria}_SEMI` : p.categoria;
+      const label = p.tipo === "SEMINOVO" ? `${p.categoria} (Seminovo)` : p.categoria;
+      if (!cats.has(key)) cats.set(key, label);
+    });
+    return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [estoque]);
+
+  // Produtos filtrados por categoria selecionada
+  const produtosFiltrados = useMemo(() => {
+    if (!catSel) return [];
+    const isSemi = catSel.endsWith("_SEMI");
+    const baseCat = isSemi ? catSel.replace("_SEMI", "") : catSel;
+    return estoque.filter(p => p.categoria === baseCat && (isSemi ? p.tipo === "SEMINOVO" : p.tipo !== "SEMINOVO"));
+  }, [estoque, catSel]);
+
+  // Valor base e final
+  const valorBase = parseFloat(form.valor) || 0;
+  const descontoNum = parseFloat(desconto) || 0;
+  const trocaNum = parseFloat(trocaValor) || 0;
+  const valorFinal = Math.max(0, valorBase - descontoNum);
+  const valorAPagar = Math.max(0, valorFinal - trocaNum);
+
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const fetchEntregas = useCallback(async () => {
@@ -135,7 +187,7 @@ export default function EntregasPage() {
     setMsg("");
 
     const produtosStr = produtos.filter(Boolean).join(" | ");
-    const trocasStr = trocas.filter(Boolean).join("\n---\n");
+    const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const res = await fetch("/api/admin/entregas", {
       method: "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
@@ -146,12 +198,12 @@ export default function EntregasPage() {
         bairro: form.bairro || null,
         horario: form.horario || null,
         entregador: form.entregador || null,
-        observacao: form.observacao || null,
+        observacao: form.observacao ? `${form.observacao}${descontoNum > 0 ? ` | Desconto: R$ ${descontoNum}` : ""}` : (descontoNum > 0 ? `Desconto: R$ ${descontoNum}` : null),
         produto: produtosStr || null,
-        tipo: form.tipo || null,
+        tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
         forma_pagamento: form.forma_pagamento || null,
-        valor: form.valor ? parseFloat(form.valor) : null,
+        valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
       }),
@@ -161,6 +213,7 @@ export default function EntregasPage() {
       setMsg("Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
+      setCatSel(""); setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -497,26 +550,108 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
-            {/* Produtos dinâmicos */}
-            {produtos.map((prod, idx) => (
-              <div key={idx} className="col-span-2 md:col-span-3 flex gap-2 items-end">
-                <div className="flex-1">
-                  <p className={labelCls}>{idx === 0 ? "Produto" : `Produto ${idx + 1}`}</p>
-                  <input
-                    value={prod}
-                    onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
-                    placeholder={idx === 0 ? "Ex: iPhone 17 256GB Lavanda" : `Produto ${idx + 1}...`}
-                    className={inputCls}
-                  />
-                </div>
-                {idx > 0 && (
-                  <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2 text-red-400 hover:text-red-600 text-lg" title="Remover">✕</button>
-                )}
+            {/* Produto — seleção do estoque ou manual */}
+            <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto</p>
+                <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) { setCatSel(""); setEstoqueId(""); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
+                  {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
+                </button>
               </div>
-            ))}
-            <div className="col-span-2 md:col-span-3">
-              <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+
+              {produtoManual ? (
+                /* Modo manual — texto livre */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {produtos.map((prod, idx) => (
+                    <div key={idx} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <input value={prod} onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }} placeholder="Ex: iPhone 17 256GB Lavanda" className={inputCls} />
+                      </div>
+                      {idx > 0 && <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-lg">✕</button>}
+                    </div>
+                  ))}
+                  <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+                </div>
+              ) : (
+                /* Modo estoque — seleção estruturada */
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={labelCls}>Categoria</p>
+                      <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); setProdutos([""]); set("valor", ""); setSerialBusca(""); }} className={inputCls}>
+                        <option value="">-- Selecionar --</option>
+                        {categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className={labelCls}>Buscar Serial</p>
+                      <input value={serialBusca} onChange={(e) => setSerialBusca(e.target.value)} placeholder="Digitar serial..." className={inputCls} />
+                    </div>
+                  </div>
+
+                  {catSel && (() => {
+                    const filtered = serialBusca.trim()
+                      ? produtosFiltrados.filter(p => p.serial_no?.toUpperCase().includes(serialBusca.trim().toUpperCase()))
+                      : produtosFiltrados;
+                    // Agrupar por nome do produto
+                    const byName: Record<string, EstoqueItem[]> = {};
+                    filtered.forEach(p => { const k = p.produto; if (!byName[k]) byName[k] = []; byName[k].push(p); });
+                    return (
+                      <div className="max-h-[250px] overflow-y-auto rounded-xl border border-[#D2D2D7] p-2 space-y-1">
+                        {Object.entries(byName).length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto disponível</p>}
+                        {Object.entries(byName).sort(([a],[b]) => a.localeCompare(b)).map(([nome, items]) => (
+                          <div key={nome}>
+                            <p className="text-[10px] font-bold text-[#86868B] px-2 py-1">{nome} — {items.reduce((s,p) => s+p.qnt, 0)} un.</p>
+                            <div className="flex flex-wrap gap-1 px-2">
+                              {items.map(p => {
+                                const sel = estoqueId === p.id;
+                                return (
+                                  <button key={p.id} onClick={() => {
+                                    if (sel) { setEstoqueId(""); setProdutos([""]); set("valor", ""); return; }
+                                    setEstoqueId(p.id);
+                                    setProdutos([p.produto]);
+                                    set("valor", String(p.custo_unitario || 0));
+                                  }} className={`px-3 py-1.5 rounded-lg text-xs transition-all ${sel ? "bg-[#E8740E] text-white font-bold" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#FFF5EB]"}`}>
+                                    {p.cor || "—"}{p.serial_no ? ` #${p.serial_no.slice(-4)}` : ""} {p.qnt > 1 ? `(${p.qnt})` : ""}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  {estoqueId && (() => {
+                    const sel = estoque.find(p => p.id === estoqueId);
+                    return sel ? (
+                      <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+                        <p className="font-semibold text-sm text-[#1D1D1F]">{sel.produto}</p>
+                        <p className="text-xs text-[#86868B]">{sel.cor || "—"} · {sel.serial_no || "S/N"} · {sel.fornecedor || "—"}</p>
+                        <p className="text-[#E8740E] font-bold text-lg mt-1">Valor Base: R$ {(sel.custo_unitario || 0).toLocaleString("pt-BR")}</p>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
+
+            {/* Desconto */}
+            <div>
+              <p className={labelCls}>Desconto (R$)</p>
+              <input type="number" value={desconto} onChange={(e) => setDesconto(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            {(descontoNum > 0 || trocaNum > 0) && valorBase > 0 && (
+              <div className="col-span-2 md:col-span-3 p-3 rounded-xl bg-[#FFF8F0] border border-[#F5D5B0]">
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span>Valor Base: <b>R$ {valorBase.toLocaleString("pt-BR")}</b></span>
+                  {descontoNum > 0 && <span className="text-red-500">Desconto: <b>-R$ {descontoNum.toLocaleString("pt-BR")}</b></span>}
+                  {trocaNum > 0 && <span className="text-green-600">Troca: <b>-R$ {trocaNum.toLocaleString("pt-BR")}</b></span>}
+                  <span className="text-[#E8740E] font-bold">A pagar: R$ {valorAPagar.toLocaleString("pt-BR")}</span>
+                </div>
+              </div>
+            )}
             <div>
               <p className={labelCls}>Tipo</p>
               <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
@@ -525,37 +660,41 @@ export default function EntregasPage() {
                 <option value="UPGRADE">Upgrade</option>
               </select>
             </div>
-            {form.tipo === "UPGRADE" && (
-              <>
-                <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
-                  <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-2">🔄 Produtos na troca</p>
+            {/* Produto na Troca */}
+            <div className="col-span-2 md:col-span-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={trocaAtiva} onChange={(e) => { setTrocaAtiva(e.target.checked); if (!e.target.checked) { setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); set("tipo", "VENDA NORMAL"); } else { set("tipo", "UPGRADE"); } }} className="w-4 h-4 accent-[#E8740E]" />
+                <span className="text-sm font-semibold">🔄 Produto na troca?</span>
+              </label>
+            </div>
+            {trocaAtiva && (
+              <div className="col-span-2 md:col-span-3 p-3 rounded-xl border border-green-200 bg-green-50 space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <p className={labelCls}>Produto do cliente</p>
+                    <input value={trocaProduto} onChange={(e) => setTrocaProduto(e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Valor Avaliação (R$)</p>
+                    <input type="number" value={trocaValor} onChange={(e) => setTrocaValor(e.target.value)} placeholder="0" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Cor</p>
+                    <input value={trocaCor} onChange={(e) => setTrocaCor(e.target.value)} placeholder="Ex: Preto" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Bateria (%)</p>
+                    <input type="number" value={trocaBateria} onChange={(e) => setTrocaBateria(e.target.value)} placeholder="Ex: 92" className={inputCls} />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Observação</p>
+                    <input value={trocaObs} onChange={(e) => setTrocaObs(e.target.value)} placeholder="Ex: Sem marcas, com caixa" className={inputCls} />
+                  </div>
                 </div>
-                {trocas.length === 0 && (
-                  <div className="col-span-2 md:col-span-3">
-                    <button onClick={() => setTrocas([""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto na troca</button>
-                  </div>
+                {trocaNum > 0 && valorBase > 0 && (
+                  <p className="text-sm font-bold text-[#E8740E]">Diferença a pagar: R$ {valorAPagar.toLocaleString("pt-BR")}</p>
                 )}
-                {trocas.map((troca, idx) => (
-                  <div key={idx} className="col-span-2 md:col-span-3 flex gap-2 items-start">
-                    <div className="flex-1">
-                      <p className={labelCls}>Troca {idx + 1}</p>
-                      <textarea
-                        value={troca}
-                        onChange={(e) => { const nt = [...trocas]; nt[idx] = e.target.value; setTrocas(nt); }}
-                        placeholder={`Ex: iPhone 16 256GB\n1 marca na lateral\nBateria 93%\nAvaliado R$5.000`}
-                        rows={3}
-                        className={inputCls + " resize-none"}
-                      />
-                    </div>
-                    <button onClick={() => setTrocas(trocas.filter((_, i) => i !== idx))} className="px-2 py-2 text-red-400 hover:text-red-600 text-lg mt-5" title="Remover">✕</button>
-                  </div>
-                ))}
-                {trocas.length > 0 && (
-                  <div className="col-span-2 md:col-span-3">
-                    <button onClick={() => setTrocas([...trocas, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar outra troca</button>
-                  </div>
-                )}
-              </>
+              </div>
             )}
             <div>
               <p className={labelCls}>Forma de Pagamento</p>
@@ -571,7 +710,7 @@ export default function EntregasPage() {
               </select>
             </div>
             <div>
-              <p className={labelCls}>Valor (R$)</p>
+              <p className={labelCls}>Valor Base (R$)</p>
               <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
             </div>
             {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && (<>
