@@ -3388,6 +3388,7 @@ export default function EstoquePage() {
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
                 <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
               </div>
+              {msg && <div className={`mx-4 mt-3 px-3 py-2 rounded-lg text-xs font-medium ${msg.includes("❌") || msg.includes("Erro") ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>{msg}</div>}
               {/* Produto — editável para pendências */}
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-start justify-between mb-4">
