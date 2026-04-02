@@ -5,7 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 
 export default function GerarLinkPage() {
-  const { user } = useAdmin();
+  const { user, password: adminPw, apiHeaders: adminHeaders } = useAdmin();
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
@@ -15,22 +15,21 @@ export default function GerarLinkPage() {
   // Fetch preços de venda (tabela precos com categoria)
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   useEffect(() => {
-    fetch("/api/produtos-disponiveis")
+    if (!adminPw) return;
+    fetch("/api/admin/precos", { headers: adminHeaders() })
       .then(r => r.json())
       .then(j => {
-        // Tenta formato com categorias
-        if (j.categorias) {
-          const all: typeof precosVenda = [];
-          Object.entries(j.categorias as Record<string, { modelo: string; armazenamento: string; precoPix: number }[]>).forEach(([cat, prods]) => {
-            (prods as { modelo: string; armazenamento: string; precoPix: number }[]).forEach(p => all.push({ modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.precoPix, categoria: cat }));
-          });
-          setPrecosVenda(all);
+        if (j.data && Array.isArray(j.data)) {
+          setPrecosVenda(j.data.filter((p: { status?: string; preco_pix: number }) => p.status !== "esgotado" && p.preco_pix > 0).map((p: { modelo: string; armazenamento: string; preco_pix: number; categoria: string }) => ({
+            modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.preco_pix, categoria: p.categoria || "OUTROS"
+          })));
         }
       })
       .catch(() => {});
-  }, []);
+  }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Categorias dos preços
+  // Categorias dos preços com labels amigáveis
+  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
   const categoriaPrecos = useMemo(() => {
     const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
     return cats;
@@ -300,7 +299,7 @@ export default function GerarLinkPage() {
           <div className="space-y-3">
             <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); }} className={inputCls}>
               <option value="">-- Categoria --</option>
-              {categoriaPrecos.map(c => <option key={c} value={c}>{c}</option>)}
+              {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
             </select>
             {catSel && (
               <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
