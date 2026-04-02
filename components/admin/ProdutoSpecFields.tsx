@@ -180,6 +180,7 @@ interface ProdutoSpecFieldsProps {
   labelCls: string;
   darkMode: boolean;
   index: number;
+  compactMode?: boolean; // oculta fornecedor, grade/caixa, qtd/custo/imei/serial — para seção de troca
 }
 
 export default function ProdutoSpecFields({
@@ -192,6 +193,7 @@ export default function ProdutoSpecFields({
   labelCls,
   darkMode: dm,
   index,
+  compactMode = false,
 }: ProdutoSpecFieldsProps) {
   const { password } = useAdmin();
   const bgSection = dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]";
@@ -359,9 +361,9 @@ export default function ProdutoSpecFields({
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#E8E8ED]"} space-y-3`}>
+    <div className={`${compactMode ? "" : `p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#E8E8ED]"}`} space-y-3`}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      {!compactMode && <div className="flex items-center justify-between">
         <span className={`text-xs font-bold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
           Produto {index + 1}
         </span>
@@ -376,10 +378,10 @@ export default function ProdutoSpecFields({
           )}
           <button onClick={onRemove} className="text-red-400 hover:text-red-600 text-sm font-bold transition-colors">✕</button>
         </div>
-      </div>
+      </div>}
 
       {/* Categoria + Cor + Condição */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${compactMode ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"}`}>
         <div>
           <p className={labelCls}>Categoria</p>
           <select value={row.categoria} onChange={(e) => set("categoria", e.target.value)} className={inputCls}>
@@ -399,18 +401,18 @@ export default function ProdutoSpecFields({
             <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul..." className={inputCls} />
           )}
         </div>
-        <div>
+        {!compactMode && <div>
           <p className={labelCls}>Condição</p>
           <select value={row.condicao || "NOVO"} onChange={(e) => set("condicao", e.target.value)} className={inputCls}>
             <option value="NOVO">Lacrado</option>
             <option value="NAO_ATIVADO">Não Ativado</option>
             <option value="SEMINOVO">Seminovo</option>
           </select>
-        </div>
+        </div>}
       </div>
 
-      {/* Caixa + Grade — só aparece quando não é Lacrado */}
-      {row.condicao !== "NOVO" && (
+      {/* Caixa + Grade — só aparece quando não é Lacrado e não é modo compacto */}
+      {!compactMode && row.condicao !== "NOVO" && (
         <div className="flex items-center gap-3">
           {/* Caixa toggle */}
           <button
@@ -447,8 +449,8 @@ export default function ProdutoSpecFields({
         </div>
       )}
 
-      {/* Origem da compra: Fornecedor OU Cliente cadastrado */}
-      <div className={`p-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]"} space-y-2`}>
+      {/* Origem da compra: Fornecedor OU Cliente cadastrado — oculto em modo compacto */}
+      {!compactMode && <div className={`p-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]"} space-y-2`}>
         <div className="flex items-center justify-between">
           <p className={`${labelCls} mb-0`}>Origem da compra</p>
           <div className={`flex rounded-lg overflow-hidden border text-[11px] font-semibold ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
@@ -525,7 +527,7 @@ export default function ProdutoSpecFields({
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Catalog model selector */}
       {categoryModelos.length > 0 && (
@@ -737,8 +739,8 @@ export default function ProdutoSpecFields({
         )}
       </div>
 
-      {/* Qtd + Custo + IMEI + Serial */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Qtd + Custo + IMEI + Serial — oculto em modo compacto */}
+      {!compactMode && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
           <p className={labelCls}>Quantidade</p>
           <input type="number" value={row.qnt} onChange={(e) => set("qnt", e.target.value)} min="1" className={inputCls} />
@@ -755,7 +757,7 @@ export default function ProdutoSpecFields({
           <p className={labelCls}>Serial</p>
           <input value={row.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional" className={inputCls} />
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

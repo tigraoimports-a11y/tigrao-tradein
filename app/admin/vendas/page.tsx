@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -209,6 +210,18 @@ export default function VendasPage() {
   const [notaFiscalFile, setNotaFiscalFile] = useState<File | null>(null);
   const [notaFiscalUploading, setNotaFiscalUploading] = useState(false);
   const [notaFiscalDragOver, setNotaFiscalDragOver] = useState(false);
+
+  // Troca — produto selecionado pelo catálogo
+  const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
+  const [trocaRow2, setTrocaRow2] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
+
+  // Sync trocaRow → form.troca_produto / troca_cor
+  useEffect(() => {
+    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor }));
+  }, [trocaRow.produto, trocaRow.cor]);
+  useEffect(() => {
+    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor }));
+  }, [trocaRow2.produto, trocaRow2.cor]);
 
   // Fornecedores
   interface Fornecedor { id: string; nome: string }
@@ -2500,8 +2513,19 @@ export default function VendasPage() {
               }} placeholder="0" className={inputCls} /></div>
               {temTroca && (
                 <>
-                  <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto} onChange={(e) => set("troca_produto", e.target.value)} placeholder="Ex: iPhone 15 Pro Max 256GB" className={inputCls} /></div>
-                  <div><p className={labelCls}>Cor</p><input value={form.troca_cor} onChange={(e) => set("troca_cor", e.target.value)} placeholder="Ex: Titânio Natural" className={inputCls} /></div>
+                  <div className="col-span-2 md:col-span-3">
+                    <ProdutoSpecFields
+                      row={trocaRow}
+                      onChange={setTrocaRow}
+                      onRemove={() => {}}
+                      fornecedores={fornecedores}
+                      inputCls={inputCls}
+                      labelCls={labelCls}
+                      darkMode={dm}
+                      index={0}
+                      compactMode
+                    />
+                  </div>
                   <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
                   <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
                     <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
@@ -2551,8 +2575,19 @@ export default function VendasPage() {
                   }} placeholder="0" className={inputCls} /></div>
                   {(parseFloat(form.produto_na_troca2) || 0) > 0 && (
                     <>
-                      <div><p className={labelCls}>Produto (modelo)</p><input value={form.troca_produto2} onChange={(e) => set("troca_produto2", e.target.value)} placeholder="Ex: iPhone 14 Pro 128GB" className={inputCls} /></div>
-                      <div><p className={labelCls}>Cor</p><input value={form.troca_cor2} onChange={(e) => set("troca_cor2", e.target.value)} placeholder="Ex: Preto" className={inputCls} /></div>
+                      <div className="col-span-2 md:col-span-3">
+                        <ProdutoSpecFields
+                          row={trocaRow2}
+                          onChange={setTrocaRow2}
+                          onRemove={() => {}}
+                          fornecedores={fornecedores}
+                          inputCls={inputCls}
+                          labelCls={labelCls}
+                          darkMode={dm}
+                          index={1}
+                          compactMode
+                        />
+                      </div>
                       <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria2} onChange={(e) => set("troca_bateria2", e.target.value)} placeholder="Ex: 85" className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do 2º seminovo</p><input value={form.troca_obs2} onChange={(e) => set("troca_obs2", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
                     </>
