@@ -1709,7 +1709,8 @@ export default function VendasPage() {
               {produtosCarrinho.map((p, i) => {
                 const pCusto = parseFloat(p.custo) || 0;
                 const pVendido = parseFloat(p.preco_vendido) || 0;
-                const pLucro = pVendido - pCusto;
+                const pTrocaVal = (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0);
+                const pLucro = pVendido + pTrocaVal - pCusto;
                 return (
                   <div key={i} className="px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl space-y-1">
                     <div className="flex items-center justify-between">
@@ -1756,12 +1757,17 @@ export default function VendasPage() {
               {(() => {
                 const cartTotalCusto = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
                 const cartTotalVendido = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0);
-                const cartTotalLucro = cartTotalVendido - cartTotalCusto;
-                const cartMargem = cartTotalVendido > 0 ? (cartTotalLucro / cartTotalVendido) * 100 : 0;
+                // Troca já nos itens do carrinho + troca global do form (ainda não em nenhum item)
+                const cartTrocaItens = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0), 0);
+                const formTroca = (parseFloat(form.produto_na_troca) || 0) + (parseFloat(form.produto_na_troca2) || 0);
+                const cartTotalTroca = cartTrocaItens + formTroca;
+                const cartTotalRecebido = cartTotalVendido + cartTotalTroca;
+                const cartTotalLucro = cartTotalRecebido - cartTotalCusto;
+                const cartMargem = cartTotalRecebido > 0 ? (cartTotalLucro / cartTotalRecebido) * 100 : 0;
                 return (
                   <div className="px-4 py-2.5 bg-[#1E1208] rounded-xl flex flex-wrap items-center gap-3 text-xs text-white/80">
                     <span>Total custo: <strong className="text-white">{fmt(cartTotalCusto)}</strong></span>
-                    <span>Total vendido: <strong className="text-white">{fmt(cartTotalVendido)}</strong></span>
+                    <span>Total vendido: <strong className="text-white">{fmt(cartTotalVendido)}{cartTotalTroca > 0 ? <span className="text-orange-400"> +{fmt(cartTotalTroca)} troca</span> : null}</strong></span>
                     <span>Lucro: <strong className={cartTotalLucro >= 0 ? "text-green-400" : "text-red-400"}>{fmt(cartTotalLucro)}</strong></span>
                     <span>Margem: <strong className={cartMargem >= 0 ? "text-green-400" : "text-red-400"}>{cartMargem.toFixed(1)}%</strong></span>
                   </div>
