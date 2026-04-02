@@ -1398,6 +1398,8 @@ export default function EstoquePage() {
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO");
+  // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
+  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
   const acabando = novos.filter((p) => p.qnt === 1);
 
   // Esgotados: qnt=0 em NOVO. Marcar se já está a caminho
@@ -2393,10 +2395,22 @@ export default function EstoquePage() {
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : tab === "acaminho" ? (
-            /* ── PLANILHA PRODUTOS A CAMINHO ── */
+            /* ── PLANILHA PRODUTOS A CAMINHO (com histórico de recebidos) ── */
             (() => {
-              const byDate: Record<string, typeof filtered> = {};
-              filtered.forEach(p => {
+              // Filtra itens recebidos respeitando filtros ativos
+              const recebidosFiltrados = pedidosRecebidos.filter(r => {
+                if (filterCat && r.categoria !== filterCat) return false;
+                if (filterDataCompra && r.data_compra !== filterDataCompra) return false;
+                if (search) {
+                  const s = search.toLowerCase();
+                  if (!r.produto.toLowerCase().includes(s) && !(r.cor?.toLowerCase().includes(s)) && !(r.imei?.toLowerCase().includes(s)) && !(r.serial_no?.toLowerCase().includes(s))) return false;
+                }
+                return true;
+              });
+              // Une pendentes + recebidos, agrupados por data_compra
+              const allItems = [...filtered, ...recebidosFiltrados];
+              const byDate: Record<string, typeof allItems> = {};
+              allItems.forEach(p => {
                 const d = p.data_compra || "Sem data";
                 if (!byDate[d]) byDate[d] = [];
                 byDate[d].push(p);
@@ -2412,14 +2426,25 @@ export default function EstoquePage() {
                 <div className="space-y-4">
                   {sortedDates.map(date => {
                     const items = byDate[date];
-                    const dateTotal = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
+                    const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
+                    const dateTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                     return (
                       <div key={date} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
-                        <div className="bg-[#E8740E] px-4 py-2.5 flex items-center justify-between">
+                        <div className={`px-4 py-2.5 flex items-center justify-between ${pendentes.length === 0 ? "bg-green-600" : "bg-[#E8740E]"}`}>
                           <span className="font-bold text-white text-[13px]">
                             Pedido {date !== "Sem data" ? date.split("-").reverse().join("/") : "Sem data"}
                           </span>
-                          <span className="text-white/80 text-[11px] font-medium">{items.length} {items.length === 1 ? "item" : "itens"}</span>
+                          <div className="flex items-center gap-2">
+                            {pendentes.length > 0 && (
+                              <span className="text-white/80 text-[11px] font-medium">{pendentes.length} a caminho</span>
+                            )}
+                            {recebidos.length > 0 && (
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pendentes.length > 0 ? "bg-white/20 text-white" : "bg-white/30 text-white"}`}>
+                                ✅ {recebidos.length} recebido{recebidos.length > 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <table className="w-full">
                           <thead>
@@ -2432,38 +2457,51 @@ export default function EstoquePage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {items.map(p => (
-                              <tr key={p.id} className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
-                                onClick={() => setDetailProduct(p)}>
-                                <td className={`px-4 py-2.5 text-sm font-semibold ${textPrimary}`}>
-                                  {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                                  {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
-                                  {(p.serial_no || p.imei) && (
-                                    <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
-                                      ✅ {p.serial_no || p.imei}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className={`px-4 py-2.5 text-center text-sm font-bold ${textPrimary}`}>{p.qnt}</td>
-                                <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
-                                <td className={`px-4 py-2.5 text-sm ${textSecondary}`}>{p.fornecedor || p.cliente || "—"}</td>
-                                <td className={`px-4 py-2.5 text-right text-sm font-bold ${textPrimary}`}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
-                              </tr>
-                            ))}
+                            {items.map(p => {
+                              const isRecebido = p.tipo !== "A_CAMINHO";
+                              return (
+                                <tr key={p.id}
+                                  className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${
+                                    isRecebido
+                                      ? (dm ? "hover:bg-green-900/10" : "hover:bg-green-50")
+                                      : (dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]")
+                                  }`}
+                                  onClick={() => setDetailProduct(p)}>
+                                  <td className={`px-4 py-2.5 text-sm font-semibold ${isRecebido ? (dm ? "text-[#98989D]" : "text-[#86868B]") : textPrimary}`}>
+                                    {displayNomeProduto(p.produto, p.cor, p.categoria)}
+                                    {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
+                                    {isRecebido
+                                      ? <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>
+                                      : (p.serial_no || p.imei) && (
+                                        <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
+                                          ✅ {p.serial_no || p.imei}
+                                        </span>
+                                      )
+                                    }
+                                  </td>
+                                  <td className={`px-4 py-2.5 text-center text-sm font-bold ${isRecebido ? "text-green-600" : textPrimary}`}>{p.qnt}</td>
+                                  <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                                  <td className={`px-4 py-2.5 text-sm ${textSecondary}`}>{p.fornecedor || p.cliente || "—"}</td>
+                                  <td className={`px-4 py-2.5 text-right text-sm font-bold ${isRecebido ? (dm ? "text-green-500/60" : "text-green-600/60") : textPrimary}`}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
-                          <tfoot>
-                            <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                              <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={4}>TOTAL DO PEDIDO</td>
-                              <td className="px-4 py-2 text-right text-sm font-bold text-green-600">{fmt(dateTotal)}</td>
-                            </tr>
-                          </tfoot>
+                          {pendentes.length > 0 && (
+                            <tfoot>
+                              <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={4}>TOTAL PENDENTE</td>
+                                <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]">{fmt(dateTotal)}</td>
+                              </tr>
+                            </tfoot>
+                          )}
                         </table>
                       </div>
                     );
                   })}
-                  {sortedDates.length > 1 && (
+                  {sortedDates.length > 1 && grandTotal > 0 && (
                     <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
-                      <span className={`text-xs font-bold ${textSecondary}`}>TOTAL GERAL ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"})</span>
+                      <span className={`text-xs font-bold ${textSecondary}`}>TOTAL PENDENTE ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"} a caminho)</span>
                       <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
                     </div>
                   )}
