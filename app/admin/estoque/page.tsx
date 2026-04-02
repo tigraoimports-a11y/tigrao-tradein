@@ -2434,20 +2434,10 @@ export default function EstoquePage() {
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : tab === "acaminho" ? (
-            /* ── PLANILHA PRODUTOS A CAMINHO (com histórico de recebidos) ── */
+            /* ── PLANILHA PRODUTOS A CAMINHO (só pendentes) ── */
             (() => {
-              // Filtra itens recebidos respeitando filtros ativos
-              const recebidosFiltrados = pedidosRecebidos.filter(r => {
-                if (filterCat && r.categoria !== filterCat) return false;
-                if (filterDataCompra && r.data_compra !== filterDataCompra) return false;
-                if (search) {
-                  const s = search.toLowerCase();
-                  if (!r.produto.toLowerCase().includes(s) && !(r.cor?.toLowerCase().includes(s)) && !(r.imei?.toLowerCase().includes(s)) && !(r.serial_no?.toLowerCase().includes(s))) return false;
-                }
-                return true;
-              });
-              // Une pendentes + recebidos, agrupados por data_compra
-              const allItems = [...filtered, ...recebidosFiltrados];
+              // Só itens que realmente estão a caminho (sem recebidos)
+              const allItems = [...filtered];
               const byDate: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
                 const d = p.data_compra || "Sem data";
