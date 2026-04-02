@@ -2490,10 +2490,13 @@ export default function EstoquePage() {
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : tab === "acaminho" ? (
-            /* ── PLANILHA PRODUTOS A CAMINHO (só pendentes) ── */
+            /* ── PLANILHA PRODUTOS A CAMINHO (pendentes + recebidos) ── */
             (() => {
-              // Só itens que realmente estão a caminho (sem recebidos)
-              const allItems = [...filtered];
+              // Inclui itens pendentes E os já recebidos (pedidosRecebidos), filtrados por data se selecionada
+              const recebidosFiltrados = filterDataCompra
+                ? pedidosRecebidos.filter(p => p.data_compra === filterDataCompra)
+                : pedidosRecebidos;
+              const allItems = [...filtered, ...recebidosFiltrados];
               const byDate: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
                 const d = p.data_compra || "Sem data";
