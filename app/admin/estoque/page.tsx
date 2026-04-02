@@ -485,6 +485,8 @@ export default function EstoquePage() {
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
   const [editingDetailImei, setEditingDetailImei] = useState(false);
+  const [recatMode, setRecatMode] = useState(false);
+  const [recatRow, setRecatRow] = useState<ProdutoRowState>(createEmptyProdutoRow);
   const [detailAppleId, setDetailAppleId] = useState("");
   const [entradaView, setEntradaView] = useState<{ data: string; fornecedor: string; produtos: ProdutoEstoque[] } | null>(null);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
@@ -3328,6 +3330,80 @@ export default function EstoquePage() {
                   </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
+                {/* Vincular ao catálogo — para pendências */}
+                {canEdit && (
+                  <div className="mb-3">
+                    <button
+                      onClick={() => {
+                        if (!recatMode) {
+                          setRecatRow({ ...createEmptyProdutoRow(), categoria: p.categoria || "IPHONES" });
+                          setRecatMode(true);
+                        } else {
+                          setRecatMode(false);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-xl border transition-colors ${
+                        recatMode
+                          ? "bg-[#E8740E]/10 border-[#E8740E]/40 text-[#E8740E]"
+                          : `border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E]`
+                      }`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                      {recatMode ? "Fechar catálogo" : "Vincular ao catálogo"}
+                    </button>
+                    {recatMode && (
+                      <div className={`mt-2 p-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
+                        <p className={`text-[11px] ${mS} mb-3`}>Selecione o modelo correto para gerar o nome estruturado:</p>
+                        <ProdutoSpecFields
+                          row={recatRow}
+                          onChange={setRecatRow}
+                          onRemove={() => setRecatMode(false)}
+                          fornecedores={[]}
+                          inputCls={`text-[13px] w-full px-2 py-1.5 rounded-lg border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          labelCls={`text-[10px] font-semibold uppercase tracking-wider ${mS} mb-0.5 block`}
+                          darkMode={dm}
+                          index={0}
+                          compactMode
+                        />
+                        {recatRow.produto && (
+                          <div className={`mt-2 p-2.5 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F0F0F5]"}`}>
+                            <p className={`text-[10px] ${mS}`}>Novo nome gerado:</p>
+                            <p className={`text-[13px] font-bold ${mP} mt-0.5`}>{recatRow.produto}</p>
+                          </div>
+                        )}
+                        <button
+                          onClick={async () => {
+                            const novoNome = recatRow.produto;
+                            if (!novoNome) { setMsg("Selecione o modelo para gerar o nome"); return; }
+                            const novaCor = recatRow.cor || null;
+                            const novaCategoria = recatRow.categoria || p.categoria;
+                            try {
+                              await apiPatch(p.id, { produto: novoNome, categoria: novaCategoria, cor: novaCor });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novoNome, categoria: novaCategoria, cor: novaCor } : x));
+                              setDetailProduct(prev => prev ? { ...prev, produto: novoNome, categoria: novaCategoria, cor: novaCor } : null);
+                              let vendaMsg = "";
+                              if (p.fornecedor && (p.data_entrada || p.data_compra)) {
+                                const res = await fetch("/api/vendas", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                  body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto: novoNome, cor: novaCor }),
+                                });
+                                const json = await res.json();
+                                vendaMsg = json.updated > 0 ? ` ${json.updated} venda(s) sincronizada(s).` : " Nenhuma venda vinculada encontrada.";
+                              }
+                              setMsg(`✅ Produto recategorizado!${vendaMsg}`);
+                              setRecatMode(false);
+                            } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                          }}
+                          disabled={!recatRow.produto}
+                          className="mt-2 w-full py-2 rounded-xl text-sm font-bold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          ✓ Aplicar e sincronizar venda
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Origem — apenas para iPhones, campo separado do nome */}
                 {p.categoria === "IPHONES" && isAdmin && (
                   <div className="mb-3">
