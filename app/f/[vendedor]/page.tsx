@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 const VENDEDORES: Record<string, { nome: string; whatsapp: string }> = {
   andre: { nome: "André", whatsapp: "5521967442665" },
-  nicolas: { nome: "Nicolas", whatsapp: "5521967442665" },
+  nicolas: { nome: "Nicolas", whatsapp: "5521995618747" },
   bianca: { nome: "Bianca", whatsapp: "5521972461357" },
 };
 
@@ -18,10 +18,13 @@ export default async function ShortLinkPage({ params, searchParams }: { params: 
   const qs = new URLSearchParams();
   qs.set("vendedor", v.nome);
   qs.set("whatsapp", v.whatsapp);
-  if (sp.p) qs.set("produto", sp.p);
-  if (sp.v) qs.set("preco", sp.v);
-  if (sp.produto) qs.set("produto", sp.produto);
-  if (sp.preco) qs.set("preco", sp.preco);
+  // Passar todos os params do URL original
+  for (const [k, val] of Object.entries(sp)) {
+    if (k === "p") qs.set("produto", val);
+    else if (k === "v") qs.set("preco", val);
+    else if (k === "produto" || k === "preco") qs.set(k, val);
+    else if (!qs.has(k)) qs.set(k, val);
+  }
 
   redirect(`/compra?${qs.toString()}`);
 }
