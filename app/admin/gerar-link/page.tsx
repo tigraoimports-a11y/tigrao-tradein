@@ -5,7 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 
 export default function GerarLinkPage() {
-  const { user, password: adminPw, apiHeaders: adminHeaders } = useAdmin();
+  const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
@@ -302,7 +302,7 @@ export default function GerarLinkPage() {
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
             </select>
             {catSel && (
-              <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+              <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
                 {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                 {produtosFiltradosPreco.map((m) => {
                   const sel = produtos[0] === m.nome;
@@ -311,9 +311,9 @@ export default function GerarLinkPage() {
                       if (sel) { setProdutos([""]); setPreco(""); return; }
                       setProdutos([m.nome]);
                       setPreco(m.preco.toLocaleString("pt-BR"));
-                    }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                      <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
-                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                    }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                      <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                     </button>
                   );
                 })}
