@@ -80,25 +80,87 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ log: data });
   }
 
-  // Desfazer última ação
+  // Desfazer última ação — busca no activity_log e reverte
   if (action === "undo") {
-    const { data: lastLog } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(1).single();
-    if (!lastLog) return NextResponse.json({ error: "Nenhuma acao para desfazer" }, { status: 400 });
+    // Buscar última ação relevante (excluir short_links e logs antigos)
+    const { data: lastAction } = await supabase
+      .from("activity_log")
+      .select("*")
+      .neq("entidade", "short_link")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
 
-    if (lastLog.acao === "alteracao" && lastLog.produto_id) {
+    if (!lastAction) return NextResponse.json({ error: "Nenhuma acao para desfazer" }, { status: 400 });
+
+    const { acao, entidade, entidade_id, detalhes } = lastAction;
+
+    // 1. Desfazer: "Adicionou ao estoque" → deletar o item
+    if (acao === "Adicionou ao estoque" && entidade_id) {
+      const { data: item } = await supabase.from("estoque").select("produto, qnt").eq("id", entidade_id).single();
+      if (item) {
+        await supabase.from("estoque").delete().eq("id", entidade_id);
+        await supabase.from("activity_log").delete().eq("id", lastAction.id);
+        return NextResponse.json({ ok: true, undone: `Removido do estoque: ${item.produto}` });
+      }
+    }
+
+    // 2. Desfazer: "Removeu do estoque (auto)" → restaurar quantidade
+    if (acao.includes("Removeu do estoque") && entidade_id) {
+      const { data: item } = await supabase.from("estoque").select("id, qnt, status").eq("id", entidade_id).single();
+      if (item) {
+        await supabase.from("estoque").update({ qnt: Number(item.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", entidade_id);
+        await supabase.from("activity_log").delete().eq("id", lastAction.id);
+        return NextResponse.json({ ok: true, undone: `Restaurado ao estoque: ${detalhes?.split("—")[0]?.trim() || entidade_id}` });
+      }
+    }
+
+    // 3. Desfazer: "Registrou venda" → deletar a venda e restaurar estoque
+    if (acao === "Registrou venda" && entidade_id) {
+      const { data: venda } = await supabase.from("vendas").select("*").eq("id", entidade_id).single();
+      if (venda) {
+        // Restaurar estoque se vinculado
+        if (venda.estoque_id) {
+          const { data: estoqueItem } = await supabase.from("estoque").select("qnt").eq("id", venda.estoque_id).single();
+          if (estoqueItem) {
+            await supabase.from("estoque").update({ qnt: Number(estoqueItem.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", venda.estoque_id);
+          }
+        }
+        // Deletar entrega vinculada
+        await supabase.from("entregas").delete().eq("venda_id", entidade_id);
+        // Deletar pendência de troca (se tinha)
+        if (venda.produto_na_troca && venda.cliente) {
+          await supabase.from("estoque").delete().eq("cliente", venda.cliente).in("tipo", ["PENDENCIA"]).eq("data_compra", venda.data);
+        }
+        // Deletar a venda
+        await supabase.from("vendas").delete().eq("id", entidade_id);
+        await supabase.from("activity_log").delete().eq("id", lastAction.id);
+        return NextResponse.json({ ok: true, undone: `Venda desfeita: ${venda.cliente} - ${venda.produto}` });
+      }
+    }
+
+    // 4. Desfazer: "Merge estoque (preço médio)" → reverter via estoque_log
+    if (acao.includes("Merge estoque") && entidade_id) {
+      const { data: lastEstoqueLog } = await supabase.from("estoque_log").select("*").eq("produto_id", entidade_id).order("created_at", { ascending: false }).limit(1).single();
+      if (lastEstoqueLog && lastEstoqueLog.valor_anterior) {
+        await supabase.from("estoque").update({ [lastEstoqueLog.campo]: lastEstoqueLog.valor_anterior, updated_at: new Date().toISOString() }).eq("id", entidade_id);
+        await supabase.from("estoque_log").delete().eq("id", lastEstoqueLog.id);
+        await supabase.from("activity_log").delete().eq("id", lastAction.id);
+        return NextResponse.json({ ok: true, undone: `Merge desfeito: ${lastEstoqueLog.produto_nome}` });
+      }
+    }
+
+    // 5. Desfazer: alteração via estoque_log (fallback antigo)
+    const { data: lastLog } = await supabase.from("estoque_log").select("*").order("created_at", { ascending: false }).limit(1).single();
+    if (lastLog && lastLog.acao === "alteracao" && lastLog.produto_id) {
       await supabase.from("estoque").update({ [lastLog.campo]: lastLog.valor_anterior, updated_at: new Date().toISOString() }).eq("id", lastLog.produto_id);
-      // Remover o log
       await supabase.from("estoque_log").delete().eq("id", lastLog.id);
       return NextResponse.json({ ok: true, undone: `${lastLog.produto_nome}: ${lastLog.campo} voltou para ${lastLog.valor_anterior}` });
     }
 
-    if (lastLog.acao === "exclusao" && lastLog.produto_id) {
-      // Não consegue restaurar item deletado sem os dados completos
-      await supabase.from("estoque_log").delete().eq("id", lastLog.id);
-      return NextResponse.json({ ok: true, undone: `Log de exclusao removido (produto nao pode ser restaurado)` });
-    }
-
-    return NextResponse.json({ error: "Acao nao pode ser desfeita" }, { status: 400 });
+    // Não conseguiu desfazer — remover o log pra não travar
+    await supabase.from("activity_log").delete().eq("id", lastAction.id);
+    return NextResponse.json({ ok: true, undone: `Ação "${acao}" removida do histórico (não reversível automaticamente)` });
   }
 
   // Buscar por pedido_fornecedor_id (usado pelo histórico de gastos)
