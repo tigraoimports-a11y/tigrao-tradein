@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface VendaResumo {
@@ -41,9 +42,10 @@ const fmtDate = (d: string) => {
 
 export default function ClientesPage() {
   const { password, darkMode: dm, apiHeaders } = useAdmin();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<"clientes" | "lojistas" | "notas">("clientes");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") || "");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [notas, setNotas] = useState<{ id: string; data: string; cliente: string; produto: string; preco_vendido: number; nota_fiscal_url: string }[]>([]);
   const [loading, setLoading] = useState(true);

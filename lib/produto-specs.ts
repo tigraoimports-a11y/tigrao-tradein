@@ -245,10 +245,60 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   air_modelo: "AIRPODS 4",
 };
 
+// ── Mapa de cores Português → Inglês (nomes comerciais Apple) ──
+export const COR_PT_TO_EN: Record<string, string> = {
+  "AMARELO": "YELLOW",
+  "AZUL": "BLUE",
+  "AZUL CEU": "SKY BLUE",
+  "AZUL NEVOA": "HAZE BLUE",
+  "AZUL PACIFICO": "PACIFIC BLUE",
+  "AZUL PROFUNDO": "DEEP BLUE",
+  "AZUL SIERRA": "SIERRA BLUE",
+  "BRANCO": "WHITE",
+  "BRANCO NUVEM": "CLOUD WHITE",
+  "CINZA ESPACIAL": "SPACE GRAY",
+  "DOURADO": "GOLD",
+  "DOURADO CLARO": "LIGHT GOLD",
+  "ESTELAR": "STARLIGHT",
+  "GRAFITE": "GRAPHITE",
+  "LARANJA COSMICO": "COSMIC ORANGE",
+  "LAVANDA": "LAVENDER",
+  "MEIA-NOITE": "MIDNIGHT",
+  "NATURAL": "NATURAL",
+  "PRETO": "BLACK",
+  "PRETO ESPACIAL": "SPACE BLACK",
+  "PRETO ONYX": "ONYX BLACK",
+  "PRATA": "SILVER",
+  "ROSA": "PINK",
+  "ROXO": "PURPLE",
+  "ROXO PROFUNDO": "DEEP PURPLE",
+  "SAGE": "SAGE",
+  "TEAL": "TEAL",
+  "TITANIO AZUL": "BLUE TITANIUM",
+  "TITANIO BRANCO": "WHITE TITANIUM",
+  "TITANIO DESERTO": "DESERT TITANIUM",
+  "TITANIO NATURAL": "NATURAL TITANIUM",
+  "TITANIO PRETO": "BLACK TITANIUM",
+  "ULTRAMARINO": "ULTRAMARINE",
+  "VERDE": "GREEN",
+  "VERDE ALPINO": "ALPINE GREEN",
+  "VERDE MEIA-NOITE": "MIDNIGHT GREEN",
+  "VERMELHO": "RED",
+  "ARDOSIA": "SLATE",
+  "OURO ROSA": "ROSE GOLD",
+};
+
+/** Converte cor em português para inglês (nome comercial Apple) */
+export function corToEn(cor: string): string {
+  return COR_PT_TO_EN[cor.toUpperCase()] || cor.toUpperCase();
+}
+
 // ── Gera o nome do produto a partir dos specs (mesmo formato do estoque) ──
 
 export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): string {
-  const c = cor ? ` ${cor.toUpperCase()}` : "";
+  // Para iPhones: usar nome da cor em inglês (Apple commercial name) no nome do produto
+  // O campo `cor` separado continua em português (para display/filtro)
+  const c = cor ? ` ${cat === "IPHONES" ? corToEn(cor) : cor.toUpperCase()}` : "";
   switch (cat) {
     case "IPHONES": {
       const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";

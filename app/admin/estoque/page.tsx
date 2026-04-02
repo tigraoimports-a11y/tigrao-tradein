@@ -3668,16 +3668,33 @@ export default function EstoquePage() {
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p>
                     {isAdmin ? (
-                      <input type="text" defaultValue={p.fornecedor || ""} placeholder="Ex: MIAMI ZONE" onBlur={async (e) => {
-                        const val = e.target.value.trim().toUpperCase() || null;
-                        if (val !== (p.fornecedor || null)) {
-                          await apiPatch(p.id, { fornecedor: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, fornecedor: val } : x));
-                          setDetailProduct({ ...p, fornecedor: val });
-                          setMsg("Fornecedor atualizado!");
-                        }
-                      }} className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
-                    ) : <p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p>}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <input type="text" defaultValue={p.fornecedor || ""} placeholder="Ex: MIAMI ZONE" onBlur={async (e) => {
+                          const val = e.target.value.trim().toUpperCase() || null;
+                          if (val !== (p.fornecedor || null)) {
+                            await apiPatch(p.id, { fornecedor: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, fornecedor: val } : x));
+                            setDetailProduct({ ...p, fornecedor: val });
+                            setMsg("Fornecedor atualizado!");
+                          }
+                        }} className={`flex-1 text-[13px] px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
+                        {p.fornecedor && (
+                          <button
+                            title="Ver dados do cliente/fornecedor"
+                            onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
+                            className={`flex-shrink-0 px-2 py-1 rounded-lg text-[12px] font-semibold border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E]/30 text-[#E8740E]"} hover:opacity-80 transition-opacity`}
+                          >↗ Ver</button>
+                        )}
+                      </div>
+                    ) : p.fornecedor ? (
+                      <button
+                        onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
+                        className={`text-[13px] mt-0.5 font-medium text-[#E8740E] hover:underline text-left`}
+                      >
+                        {p.fornecedor}
+                        <span className={`ml-1 text-[10px] ${textMuted}`}>↗</span>
+                      </button>
+                    ) : <p className={`text-[13px] ${mP} mt-0.5`}>Não informado</p>}
                   </div>
                 </div>
                 <div className="mt-3">
