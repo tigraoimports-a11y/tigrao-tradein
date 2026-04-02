@@ -3268,6 +3268,9 @@ export default function EstoquePage() {
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
+        // IMEI editável para qualquer usuário em produtos pendentes (obrigatório para mover ao estoque)
+        const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
+        const canEditImei = isPendente;
         const saveSerial = async () => {
           const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement;
           const val = el?.value?.trim().toUpperCase() || null;
@@ -3477,10 +3480,10 @@ export default function EstoquePage() {
                         </div>
                       )}
                       <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
-                      {/* Caixa badge */}
-                      {p.observacao?.includes("[COM_CAIXA]") && (
+                      {/* Caixa badge — detecta tag estruturada ou texto livre */}
+                      {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
-                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">Com Caixa</span></div>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">📦 Com Caixa</span></div>
                       )}
                       {/* Grade badge */}
                       {(() => {
@@ -3493,10 +3496,10 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — editável pelo admin em qualquer status */}
+                  {/* Cor — editável somente quando produto está pendente */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (
+                    {canEdit ? (
                       <input
                         type="text"
                         defaultValue={p.cor || ""}
@@ -3516,10 +3519,10 @@ export default function EstoquePage() {
                       <p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p>
                     ) : null}
                   </div>
-                  {(p.imei || isAdmin) && (
+                  {(p.imei || isAdmin || canEditImei) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
-                      {isAdmin ? (
+                      {(isAdmin || canEditImei) ? (
                         <div className="flex items-center gap-1 mt-0.5">
                           {editingDetailImei ? (
                             <>
@@ -3537,7 +3540,7 @@ export default function EstoquePage() {
                             </>
                           ) : (
                             <>
-                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={mS}>—</span>}</span>
+                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={`${mS} text-xs`}>— obrigatório para mover</span>}</span>
                               {p.imei && <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
                               <button onClick={() => setEditingDetailImei(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar IMEI">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
@@ -3695,8 +3698,11 @@ export default function EstoquePage() {
                           <button
                             title="Ver dados do cliente/fornecedor"
                             onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
-                            className={`flex-shrink-0 px-2 py-1 rounded-lg text-[12px] font-semibold border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E]/30 text-[#E8740E]"} hover:opacity-80 transition-opacity`}
-                          >↗ Ver</button>
+                            className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors shadow-sm"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Ver cliente
+                          </button>
                         )}
                       </div>
                     ) : p.fornecedor ? (
