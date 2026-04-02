@@ -2821,14 +2821,21 @@ export default function VendasPage() {
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
+          const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
           const filtered = [...filteredRaw].sort((a, b) => {
-            // Vendas do mesmo grupo ficam juntas
-            if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
-            if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
-            if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
             if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
             if (ordenar === "cliente") return (a.cliente || "").localeCompare(b.cliente || "");
-            return 0;
+            // 1. Tipo: UPGRADE → VENDA → ATACADO
+            const tDiff = tipoOrder(a.tipo) - tipoOrder(b.tipo);
+            if (tDiff !== 0) return tDiff;
+            // 2. Agrupa mesmo cliente junto
+            const cDiff = (a.cliente || "").localeCompare(b.cliente || "");
+            if (cDiff !== 0) return cDiff;
+            // 3. Mesmo grupo_id fica colado
+            if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
+            // 4. Data
+            if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
+            return (b.created_at || "").localeCompare(a.created_at || "");
           });
 
           // Mapa de grupo_id → vendas do mesmo grupo
