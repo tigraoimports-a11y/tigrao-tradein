@@ -537,16 +537,29 @@ export async function DELETE(req: NextRequest) {
 
   // Devolver ao estoque se a venda veio de produto cadastrado
   if (venda && venda.estoque_id) {
-    const { data: item } = await supabase.from("estoque").select("qnt").eq("id", venda.estoque_id).single();
+    const { data: item } = await supabase.from("estoque").select("id, qnt, tipo").eq("id", venda.estoque_id).single();
     if (item) {
       await supabase.from("estoque").update({
         qnt: Number(item.qnt) + 1,
         status: "EM ESTOQUE",
         updated_at: new Date().toISOString(),
       }).eq("id", venda.estoque_id);
+      await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
+    } else {
+      // Item pode ter sido deletado (ex: seminovo com qnt=0) — tenta fallback por serial/nome
+      let found = false;
+      if (venda.serial_no) {
+        const { data: bySerial } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).limit(1).single();
+        if (bySerial) {
+          await supabase.from("estoque").update({ qnt: Number(bySerial.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", bySerial.id);
+          found = true;
+        }
+      }
+      if (!found) await logActivity(usuario, "Cancelamento: item de estoque não encontrado (deletado?)", venda.produto || "?", "estoque");
     }
   } else if (venda && venda.produto) {
     // Fallback: buscar produto no estoque pelo serial ou nome+cor e devolver
+    // Inclui "ESGOTADO" pois o item pode ter ficado com qnt=0 após a venda
     let found = false;
     if (venda.serial_no) {
       const { data: item } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).single();
@@ -556,17 +569,19 @@ export async function DELETE(req: NextRequest) {
       }
     }
     if (!found) {
-      // Buscar por nome do produto (e cor se disponível)
-      let query = supabase.from("estoque").select("id, qnt").eq("produto", venda.produto).eq("status", "EM ESTOQUE");
+      // Buscar por nome do produto — inclui EM ESTOQUE e ESGOTADO
+      let query = supabase.from("estoque").select("id, qnt, status").eq("produto", venda.produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
       if (venda.cor) query = query.eq("cor", venda.cor);
       const { data: items } = await query.order("qnt", { ascending: false }).limit(1);
       if (items && items.length > 0) {
-        await supabase.from("estoque").update({ qnt: Number(items[0].qnt) + 1, updated_at: new Date().toISOString() }).eq("id", items[0].id);
+        await supabase.from("estoque").update({ qnt: Number(items[0].qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", items[0].id);
         found = true;
       }
     }
     if (found) {
       await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
+    } else {
+      await logActivity(usuario, "Cancelamento: produto não encontrado no estoque", venda.produto || "?", "estoque");
     }
   }
 
