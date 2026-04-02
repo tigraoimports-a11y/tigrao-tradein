@@ -3106,6 +3106,30 @@ export default function EstoquePage() {
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
+        const saveSerial = async () => {
+          const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement;
+          const val = el?.value?.trim().toUpperCase() || null;
+          if (val === (p.serial_no || null)) { setEditingDetailSerial(false); return; }
+          try {
+            await apiPatch(p.id, { serial_no: val });
+            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
+            setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
+            setMsg(val ? "✅ Serial salvo!" : "Serial removido!");
+            setEditingDetailSerial(false);
+          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+        };
+        const saveImei = async () => {
+          const el = document.getElementById(`imei-single-${p.id}`) as HTMLInputElement;
+          const val = el?.value?.trim() || null;
+          if (val === (p.imei || null)) { setEditingDetailImei(false); return; }
+          try {
+            await apiPatch(p.id, { imei: val });
+            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, imei: val } : x));
+            setDetailProduct(prev => prev ? { ...prev, imei: val } : null);
+            setMsg(val ? "✅ IMEI salvo!" : "IMEI removido!");
+            setEditingDetailImei(false);
+          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+        };
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDetailProduct(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailProduct(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
             <div className={`w-full max-w-lg mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
@@ -3140,123 +3164,137 @@ export default function EstoquePage() {
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  {(p.serial_no || isAdmin) && (() => {
+                  {(() => {
                     const qnt = p.qnt || 1;
                     const needsMultiple = isAdmin && !p.serial_no && qnt > 1;
                     const pencilIco = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>;
-                    return (
-                    <div className={needsMultiple ? "col-span-2" : ""}>
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
-                      {isAdmin && needsMultiple ? (
-                        /* Múltiplas unidades sem serial: botão ▼ expande inputs por unidade */
-                        <div className="mt-1 space-y-2">
+                    const inpCls = `text-[13px] font-mono px-2 py-1.5 rounded-lg border w-full ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`;
+                    if (needsMultiple) {
+                      /* ── Múltiplas unidades: serial + IMEI por aparelho ── */
+                      return (
+                        <div className="col-span-2">
                           <button
                             onClick={() => setEditingDetailSerial(v => !v)}
                             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${editingDetailSerial ? "bg-[#E8740E] text-white border-[#E8740E]" : `${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"}`}`}
                           >
-                            {editingDetailSerial ? "▲" : "▼"} Registrar seriais ({qnt} unidades)
+                            {editingDetailSerial ? "▲ Fechar" : "▼ Registrar seriais e IMEIs"} ({qnt} aparelhos)
                           </button>
                           {editingDetailSerial && (
-                            <>
-                              <div className="grid grid-cols-2 gap-2">
-                                {Array.from({ length: qnt }, (_, i) => (
-                                  <input key={i} id={`detail-serial-${p.id}-${i}`} placeholder={ocrLoading ? "Lendo..." : `Serial ${i + 1}`}
+                            <div className="mt-3 space-y-2">
+                              {/* Header */}
+                              <div className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
+                                <span className={`text-[10px] uppercase ${mS} w-16`}></span>
+                                <span className={`text-[10px] uppercase font-semibold ${mS}`}>Serial</span>
+                                <span className={`text-[10px] uppercase font-semibold ${mS}`}>IMEI</span>
+                              </div>
+                              {Array.from({ length: qnt }, (_, i) => (
+                                <div key={i} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
+                                  <span className={`text-[11px] font-semibold ${mS} w-16`}>#{i + 1}</span>
+                                  <input
+                                    id={`detail-serial-${p.id}-${i}`}
+                                    placeholder="Serial"
                                     style={{ textTransform: "uppercase" }}
                                     onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
                                     className={`text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                                   />
-                                ))}
-                              </div>
+                                  <input
+                                    id={`detail-imei-${p.id}-${i}`}
+                                    placeholder="IMEI"
+                                    className={`text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                                  />
+                                </div>
+                              ))}
                               <button onClick={async () => {
-                                const filled: string[] = [];
+                                type UnitData = { serial: string; imei: string };
+                                const units: UnitData[] = [];
                                 for (let i = 0; i < qnt; i++) {
-                                  const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement;
-                                  const val = el?.value?.trim().toUpperCase() || "";
-                                  if (val) filled.push(val);
+                                  const sEl = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement;
+                                  const iEl = document.getElementById(`detail-imei-${p.id}-${i}`) as HTMLInputElement;
+                                  const serial = sEl?.value?.trim().toUpperCase() || "";
+                                  const imei = iEl?.value?.trim() || "";
+                                  if (serial || imei) units.push({ serial, imei });
                                 }
-                                if (filled.length === 0) { setMsg("Preencha pelo menos 1 serial."); return; }
-                                const remaining = qnt - filled.length;
-                                await apiPatch(p.id, { serial_no: filled[0], qnt: 1 });
-                                let created = 0;
-                                for (let i = 1; i < filled.length; i++) {
-                                  const res = await fetch("/api/estoque", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                    body: JSON.stringify({
-                                      produto: p.produto, categoria: p.categoria, qnt: 1,
-                                      custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                      serial_no: filled[i], tipo: p.tipo, status: p.status,
-                                      data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
-                                    }),
-                                  });
-                                  if (res.ok) created++;
-                                }
-                                if (remaining > 0) {
-                                  await fetch("/api/estoque", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                    body: JSON.stringify({
-                                      produto: p.produto, categoria: p.categoria, qnt: remaining,
-                                      custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                      tipo: p.tipo, status: p.status,
-                                      data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
-                                    }),
-                                  });
-                                }
-                                setMsg(`✅ ${filled.length} serial(is) salvo(s)!${remaining > 0 ? ` ${remaining} unidade(s) sem serial mantidas.` : ""}`);
-                                setDetailProduct(null);
-                                await fetchEstoque();
-                              }} className="w-full py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">
-                                💾 Salvar seriais preenchidos
-                              </button>
-                              <p className={`text-[10px] text-center ${mS}`}>Preencha só os que tiver. Os demais ficam agrupados sem serial.</p>
-                            </>
-                          )}
-                        </div>
-                      ) : isAdmin ? (
-                        /* 1 unidade: exibe read-only + botão lápis pra editar */
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {editingDetailSerial ? (
-                            <input
-                              autoFocus
-                              type="text"
-                              defaultValue={p.serial_no || ""}
-                              placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
-                              style={{ textTransform: "uppercase" }}
-                              onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; }, setOcrLoading)}
-                              onBlur={async (e) => {
-                                const val = e.target.value.trim().toUpperCase() || null;
-                                if (val === (p.serial_no || null)) { setEditingDetailSerial(false); return; }
+                                if (units.length === 0) { setMsg("Preencha pelo menos 1 serial ou IMEI."); return; }
+                                const remaining = qnt - units.length;
                                 try {
-                                  await apiPatch(p.id, { serial_no: val });
-                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
-                                  setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
-                                  setMsg(val ? "✅ Serial salvo!" : "Serial removido!");
-                                  setEditingDetailSerial(false);
-                                } catch (err) {
-                                  setMsg("❌ Erro ao salvar serial: " + String(err instanceof Error ? err.message : err));
-                                  // mantém editing aberto para o usuário tentar novamente
-                                  (e.target as HTMLInputElement).focus();
-                                }
-                              }}
-                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailSerial(false); }}
-                              className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
-                            />
-                          ) : (
-                            <>
-                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
-                              {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
-                              <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">{pencilIco}</button>
-                            </>
+                                  await apiPatch(p.id, { serial_no: units[0].serial || null, imei: units[0].imei || null, qnt: 1 });
+                                  for (let i = 1; i < units.length; i++) {
+                                    await fetch("/api/estoque", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                      body: JSON.stringify({
+                                        produto: p.produto, categoria: p.categoria, qnt: 1,
+                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                        serial_no: units[i].serial || null, imei: units[i].imei || null,
+                                        tipo: p.tipo, status: p.status,
+                                        data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
+                                      }),
+                                    });
+                                  }
+                                  if (remaining > 0) {
+                                    await fetch("/api/estoque", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                      body: JSON.stringify({
+                                        produto: p.produto, categoria: p.categoria, qnt: remaining,
+                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                        tipo: p.tipo, status: p.status,
+                                        data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
+                                      }),
+                                    });
+                                  }
+                                  setMsg(`✅ ${units.length} aparelho(s) registrado(s)!${remaining > 0 ? ` ${remaining} sem serial/IMEI mantidos.` : ""}`);
+                                  setDetailProduct(null);
+                                  await fetchEstoque();
+                                } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                              }} className="w-full py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors mt-1">
+                                💾 Salvar aparelhos
+                              </button>
+                              <p className={`text-[10px] text-center ${mS}`}>Deixe em branco os que não tiver. Eles ficam agrupados sem serial/IMEI.</p>
+                            </div>
                           )}
                         </div>
-                      ) : (
-                        <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
+                      );
+                    }
+                    /* ── 1 unidade ── */
+                    return (<>
+                      {(p.serial_no || isAdmin) && (
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
+                          {isAdmin ? (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {editingDetailSerial ? (
+                                <>
+                                  <input
+                                    id={`serial-single-${p.id}`}
+                                    autoFocus
+                                    type="text"
+                                    defaultValue={p.serial_no || ""}
+                                    placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
+                                    style={{ textTransform: "uppercase" }}
+                                    onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveSerial(); } if (e.key === "Escape") setEditingDetailSerial(false); }}
+                                    className={`flex-1 ${inpCls}`}
+                                  />
+                                  <button onMouseDown={(e) => e.preventDefault()} onClick={saveSerial} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold" title="Salvar">✓</button>
+                                  <button onMouseDown={(e) => e.preventDefault()} onClick={() => setEditingDetailSerial(false)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"} hover:text-red-500 text-sm font-bold`} title="Cancelar">✕</button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
+                                  {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                                  <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">{pencilIco}</button>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
+                          )}
+                        </div>
                       )}
-                    </div>
-                    );
+                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
+                    </>);
                   })()}
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
                   {/* Cor — editável pelo admin em qualquer status */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
@@ -3284,30 +3322,21 @@ export default function EstoquePage() {
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
                       {isAdmin ? (
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1 mt-0.5">
                           {editingDetailImei ? (
-                            <input
-                              autoFocus
-                              type="text"
-                              defaultValue={p.imei || ""}
-                              placeholder="Digitar IMEI"
-                              onBlur={async (e) => {
-                                const val = e.target.value.trim() || null;
-                                if (val === (p.imei || null)) { setEditingDetailImei(false); return; }
-                                try {
-                                  await apiPatch(p.id, { imei: val });
-                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, imei: val } : x));
-                                  setDetailProduct(prev => prev ? { ...prev, imei: val } : null);
-                                  setMsg(val ? "✅ IMEI salvo!" : "IMEI removido!");
-                                  setEditingDetailImei(false);
-                                } catch (err) {
-                                  setMsg("❌ Erro ao salvar IMEI: " + String(err instanceof Error ? err.message : err));
-                                  (e.target as HTMLInputElement).focus();
-                                }
-                              }}
-                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailImei(false); }}
-                              className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
-                            />
+                            <>
+                              <input
+                                id={`imei-single-${p.id}`}
+                                autoFocus
+                                type="text"
+                                defaultValue={p.imei || ""}
+                                placeholder="Digitar IMEI"
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveImei(); } if (e.key === "Escape") setEditingDetailImei(false); }}
+                                className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
+                              />
+                              <button onMouseDown={(e) => e.preventDefault()} onClick={saveImei} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-bold" title="Salvar">✓</button>
+                              <button onMouseDown={(e) => e.preventDefault()} onClick={() => setEditingDetailImei(false)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"} hover:text-red-500 text-sm font-bold`} title="Cancelar">✕</button>
+                            </>
                           ) : (
                             <>
                               <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={mS}>—</span>}</span>
