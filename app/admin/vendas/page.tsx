@@ -87,8 +87,8 @@ export default function VendasPage() {
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "",
-    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
   });
@@ -170,6 +170,7 @@ export default function VendasPage() {
     troca_fonte: string;
     troca_serial_no: string;
     troca_imei: string;
+    troca_origem: string;
     // 2º produto na troca
     produto_na_troca2: string;
     troca_produto2: string;
@@ -183,6 +184,7 @@ export default function VendasPage() {
     troca_fonte2: string;
     troca_serial_no2: string;
     troca_imei2: string;
+    troca_origem2: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -225,12 +227,12 @@ export default function VendasPage() {
   const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
   const [trocaRow2, setTrocaRow2] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
 
-  // Sync trocaRow → form.troca_produto / troca_cor / troca_categoria
+  // Sync trocaRow → form.troca_produto / troca_cor / troca_categoria / troca_origem
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor, troca_categoria: trocaRow.categoria }));
-  }, [trocaRow.produto, trocaRow.cor, trocaRow.categoria]);
+    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor, troca_categoria: trocaRow.categoria, troca_origem: trocaRow.spec?.ip_origem || "" }));
+  }, [trocaRow.produto, trocaRow.cor, trocaRow.categoria, trocaRow.spec?.ip_origem]);
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor, troca_categoria2: trocaRow2.categoria }));
+    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor, troca_categoria2: trocaRow2.categoria, troca_origem2: trocaRow2.spec?.ip_origem || "" }));
   }, [trocaRow2.produto, trocaRow2.cor, trocaRow2.categoria]);
 
   // Fornecedores
@@ -706,6 +708,7 @@ export default function VendasPage() {
         fonte: prodFields.troca_fonte || null,
         serial_no: (prodFields.troca_serial_no as string) || null,
         imei: (prodFields.troca_imei as string) || null,
+        origem: prodFields.troca_origem || null,
       };
     }
 
@@ -723,6 +726,7 @@ export default function VendasPage() {
         fonte: prodFields.troca_fonte2 || null,
         serial_no: (prodFields.troca_serial_no2 as string) || null,
         imei: (prodFields.troca_imei2 as string) || null,
+        origem: prodFields.troca_origem2 || null,
       };
     }
 
@@ -753,6 +757,7 @@ export default function VendasPage() {
     troca_fonte: form.troca_fonte,
     troca_serial_no: form.troca_serial_no,
     troca_imei: form.troca_imei,
+    troca_origem: form.troca_origem,
     produto_na_troca2: form.produto_na_troca2,
     troca_produto2: form.troca_produto2,
     troca_cor2: form.troca_cor2,
@@ -765,6 +770,7 @@ export default function VendasPage() {
     troca_fonte2: form.troca_fonte2,
     troca_serial_no2: form.troca_serial_no2,
     troca_imei2: form.troca_imei2,
+    troca_origem2: form.troca_origem2,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -775,9 +781,9 @@ export default function VendasPage() {
       custo: "", preco_vendido: "",
       serial_no: "", imei: "",
       produto_na_troca: "", troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "",
-      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "",
+      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
-      troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+      troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
     }));
     setCatSel("");
     setEstoqueId("");
@@ -872,10 +878,10 @@ export default function VendasPage() {
       const globalTroca1 = form.produto_na_troca;
       const globalTroca2 = form.produto_na_troca2;
       if ((parseFloat(globalTroca1) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca) > 0)) {
-        allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte, troca_serial_no: form.troca_serial_no, troca_imei: form.troca_imei };
+        allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte, troca_serial_no: form.troca_serial_no, troca_imei: form.troca_imei, troca_origem: form.troca_origem };
       }
       if ((parseFloat(globalTroca2) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca2) > 0)) {
-        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2, troca_grade2: form.troca_grade2, troca_caixa2: form.troca_caixa2, troca_cabo2: form.troca_cabo2, troca_fonte2: form.troca_fonte2, troca_serial_no2: form.troca_serial_no2, troca_imei2: form.troca_imei2 };
+        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2, troca_grade2: form.troca_grade2, troca_caixa2: form.troca_caixa2, troca_cabo2: form.troca_cabo2, troca_fonte2: form.troca_fonte2, troca_serial_no2: form.troca_serial_no2, troca_imei2: form.troca_imei2, troca_origem2: form.troca_origem2 };
       }
     }
     const payloads: Record<string, unknown>[] = [];
@@ -1343,8 +1349,8 @@ export default function VendasPage() {
       troca_grade: "",
       troca_caixa: "",
       troca_cabo: "",
-      troca_fonte: "", troca_serial_no: "", troca_imei: "",
-      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+      troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
       serial_no: v.serial_no || "",
       imei: v.imei || "",
       cep: "",
@@ -1990,8 +1996,8 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -2595,7 +2601,7 @@ export default function VendasPage() {
                     type="button"
                     onClick={() => {
                       setShowSegundaTroca(false);
-                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "" }));
+                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
                   >
@@ -3457,8 +3463,8 @@ export default function VendasPage() {
                                               troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
                                               troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
                                               troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
-                                              troca_serial_no: "", troca_imei: "",
-                                              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+                                              troca_serial_no: "", troca_imei: "", troca_origem: "",
+                                              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
@@ -3498,6 +3504,7 @@ export default function VendasPage() {
                                                 troca_fonte: "",
                                                 troca_serial_no: "",
                                                 troca_imei: "",
+                                                troca_origem: "",
                                                 produto_na_troca2: String((gv as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                                 troca_produto2: (gv as unknown as Record<string, string>).troca_produto2 || "",
                                                 troca_cor2: (gv as unknown as Record<string, string>).troca_cor2 || "",
@@ -3510,6 +3517,7 @@ export default function VendasPage() {
                                                 troca_fonte2: "",
                                                 troca_serial_no2: "",
                                                 troca_imei2: "",
+                                                troca_origem2: "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
@@ -4089,8 +4097,8 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -4120,8 +4128,8 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
