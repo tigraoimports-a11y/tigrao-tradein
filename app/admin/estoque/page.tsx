@@ -391,6 +391,8 @@ export default function EstoquePage() {
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
   const [editingQnt, setEditingQnt] = useState<Record<string, string>>({});
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
@@ -2550,9 +2552,9 @@ export default function EstoquePage() {
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
                     className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
-                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-grab active:cursor-grabbing group/card`}>
+                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
-                        <span className={`${textMuted} text-xs select-none opacity-40`}>⠿</span>
+                        <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
                         {editingCardTitle === modelo ? (
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -2576,8 +2578,19 @@ export default function EstoquePage() {
                           </h3>
                         )}
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className={`text-[11px] ${textSecondary}`}>{items.length} variantes</span>
+                      <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
+                        {(() => {
+                          // Agrupar por cor pra mostrar resumo no header
+                          const colorSummary: Record<string, number> = {};
+                          items.forEach(p => { const c = p.cor || "—"; colorSummary[c] = (colorSummary[c] || 0) + p.qnt; });
+                          return (
+                            <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
+                              {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
+                                <span key={c}>{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                              ))}
+                            </span>
+                          );
+                        })()}
                         <span className={`text-[11px] font-medium ${textPrimary}`}>{items.reduce((s, p) => s + p.qnt, 0)} un.</span>
                         <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
                         {/* Botão editar preço em massa — todas as unidades do grupo */}
@@ -2609,7 +2622,7 @@ export default function EstoquePage() {
                         )}
                       </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    {expandedModels.has(modelo) && <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <tbody>
                           {produtoEntries.map(([prodNome, prodItems]) => {
@@ -2617,29 +2630,26 @@ export default function EstoquePage() {
                             const showMover = isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                            const corKey = `${modelo}::${prodNome}`;
 
                             return (
                               <React.Fragment key={prodNome}>
-                                {/* Espaçador entre produtos */}
-                                <tr><td colSpan={10} className="h-2"></td></tr>
-                                {/* Header do produto */}
+                                {/* Sub-row de cor — clicável pra expandir itens individuais */}
                                 {(() => {
-                                  const alwaysExpand = false;
-                                  const isExpanded = alwaysExpand || expandedProducts.has(prodNome);
+                                  const isExpanded = expandedColors.has(corKey);
                                   const toggleExpand = () => {
-                                    if (alwaysExpand) return;
-                                    setExpandedProducts(prev => {
+                                    setExpandedColors(prev => {
                                       const s = new Set(prev);
-                                      s.has(prodNome) ? s.delete(prodNome) : s.add(prodNome);
+                                      s.has(corKey) ? s.delete(corKey) : s.add(corKey);
                                       return s;
                                     });
                                   };
                                   return (<>
-                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"} ${!alwaysExpand ? "cursor-pointer" : ""}`} onClick={toggleExpand}>
+                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"} cursor-pointer`} onClick={toggleExpand}>
                                   <td className="w-1" style={{ background: "#E8740E" }}></td>
-                                  <td className="px-3 py-3 font-bold text-[13px] text-white" colSpan={1}>
+                                  <td className="px-3 py-2.5 font-semibold text-[12px] text-white" colSpan={1}>
                                     <div className="flex items-center gap-2">
-                                      {!alwaysExpand && <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>}
+                                      <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>
                                     {(() => {
                                       const canEditNome = isPendenciasTab;
                                       return editingNome[prodItems[0]?.id] !== undefined && canEditNome ? (
@@ -2997,7 +3007,7 @@ export default function EstoquePage() {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </div>}
                   </div>
                   );
                 });
