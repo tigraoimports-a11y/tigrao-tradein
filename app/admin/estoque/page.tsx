@@ -3449,18 +3449,20 @@ export default function EstoquePage() {
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
                           {isPendente ? (
-                            /* Campo direto para produtos pendentes — sem toggle de lápis */
-                            <input
-                              id={`serial-single-${p.id}`}
-                              type="text"
-                              defaultValue={p.serial_no || ""}
-                              placeholder="Digitar S/N"
-                              style={{ textTransform: "uppercase" }}
-                              onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
-                              onBlur={saveSerial}
-                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveSerial(); } }}
-                              className={`w-full text-[13px] font-mono mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                            />
+                            /* Campo direto para produtos pendentes — salva ao pressionar ✓ ou Enter */
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <input
+                                id={`serial-single-${p.id}`}
+                                type="text"
+                                defaultValue={p.serial_no || ""}
+                                placeholder="Digitar S/N"
+                                style={{ textTransform: "uppercase" }}
+                                onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveSerial(); } }}
+                                className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                              />
+                              <button onMouseDown={(e) => e.preventDefault()} onClick={saveSerial} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm" title="Salvar serial">✓</button>
+                            </div>
                           ) : isAdmin ? (
                             <div className="flex items-center gap-1 mt-0.5">
                               <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
@@ -3516,16 +3518,18 @@ export default function EstoquePage() {
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
                       {canEditImei ? (
-                        /* Campo direto para produtos pendentes */
-                        <input
-                          id={`imei-single-${p.id}`}
-                          type="text"
-                          defaultValue={p.imei || ""}
-                          placeholder="Digitar IMEI"
-                          onBlur={saveImei}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveImei(); } }}
-                          className={`w-full text-[13px] font-mono mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                        />
+                        /* Campo direto para produtos pendentes — salva ao pressionar ✓ ou Enter */
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <input
+                            id={`imei-single-${p.id}`}
+                            type="text"
+                            defaultValue={p.imei || ""}
+                            placeholder="Digitar IMEI"
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveImei(); } }}
+                            className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          />
+                          <button onMouseDown={(e) => e.preventDefault()} onClick={saveImei} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm" title="Salvar IMEI">✓</button>
+                        </div>
                       ) : isAdmin ? (
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={mS}>—</span>}</span>
