@@ -3059,12 +3059,38 @@ export default function EstoquePage() {
               {/* Datas + Observação */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p><p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(dataE)}</p></div>
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p></div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data de Entrada</p>
+                    {isAdmin ? (
+                      <input type="date" defaultValue={p.data_entrada || p.data_compra || ""} onBlur={async (e) => {
+                        const val = e.target.value || null;
+                        if (val !== (p.data_entrada || p.data_compra || null)) {
+                          await apiPatch(p.id, { data_entrada: val });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, data_entrada: val } : x));
+                          setDetailProduct({ ...p, data_entrada: val });
+                          setMsg("Data atualizada!");
+                        }
+                      }} className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
+                    ) : <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(dataE)}</p>}
+                  </div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p>
+                    {isAdmin ? (
+                      <input type="text" defaultValue={p.fornecedor || ""} placeholder="Ex: MIAMI ZONE" onBlur={async (e) => {
+                        const val = e.target.value.trim().toUpperCase() || null;
+                        if (val !== (p.fornecedor || null)) {
+                          await apiPatch(p.id, { fornecedor: val });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, fornecedor: val } : x));
+                          setDetailProduct({ ...p, fornecedor: val });
+                          setMsg("Fornecedor atualizado!");
+                        }
+                      }} className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
+                    ) : <p className={`text-[13px] ${mP} mt-0.5`}>{p.fornecedor || "Nao informado"}</p>}
+                  </div>
                 </div>
                 <div className="mt-3">
                   <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p>
-                  {canEdit ? (
+                  {(canEdit || isAdmin) ? (
                     <textarea
                       defaultValue={p.observacao || ""}
                       placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
