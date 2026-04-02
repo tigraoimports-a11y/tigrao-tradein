@@ -72,6 +72,145 @@ function handleSerialPaste(
 
 const EtiquetasContent = lazy(() => import("@/app/admin/etiquetas/page").then(m => ({ default: m.EtiquetasContent })));
 
+// ── Tradução de cores para português ──────────────────────────────────────────
+const COR_PT: Record<string, string> = {
+  "MIDNIGHT": "Meia-noite",
+  "SILVER": "Prata",
+  "STARLIGHT": "Estelar",
+  "LAVENDER": "Lavanda",
+  "SPACE BLACK": "Preto Espacial",
+  "SPACE GRAY": "Cinza Espacial",
+  "SPACE GREY": "Cinza Espacial",
+  "NATURAL": "Natural",
+  "WHITE": "Branco",
+  "BLACK": "Preto",
+  "BLUE": "Azul",
+  "GREEN": "Verde",
+  "YELLOW": "Amarelo",
+  "RED": "Vermelho",
+  "PURPLE": "Roxo",
+  "PINK": "Rosa",
+  "GOLD": "Dourado",
+  "TITANIUM": "Titânio",
+  "DESERT TITANIUM": "Titânio Deserto",
+  "BLACK TITANIUM": "Titânio Preto",
+  "WHITE TITANIUM": "Titânio Branco",
+  "NATURAL TITANIUM": "Titânio Natural",
+  "ROSE GOLD": "Ouro Rosa",
+  "CORAL": "Coral",
+  "PRODUCT RED": "Vermelho",
+  "(PRODUCT)RED": "Vermelho",
+  "TEAL": "Azul-petróleo",
+  "ULTRAMARINE": "Ultramarino",
+  "PEBBLE": "Pedregulho",
+  "LIGHT BLUE": "Azul Claro",
+  "DARK BLUE": "Azul Escuro",
+  "PRETO": "Preto",
+  "BRANCO": "Branco",
+  "AZUL": "Azul",
+  "VERDE": "Verde",
+  "ROSA": "Rosa",
+  "ROXO": "Roxo",
+  "VERMELHO": "Vermelho",
+  "AMARELO": "Amarelo",
+  "DOURADO": "Dourado",
+  "ESTELAR": "Estelar",
+  "MEIA-NOITE": "Meia-noite",
+  "CINZA": "Cinza",
+  "LARANJA": "Laranja",
+  "COSMIC ORANGE": "Laranja Cósmico",
+  "ORANGE": "Laranja",
+  "DEEP PURPLE": "Roxo Profundo",
+  "ALPINE GREEN": "Verde Alpino",
+  "SIERRA BLUE": "Azul Serra",
+  "PACIFIC BLUE": "Azul Pacífico",
+  "MIDNIGHT GREEN": "Verde Meia-Noite",
+  "GRAPHITE": "Grafite",
+  "BLUE TITANIUM": "Titânio Azul",
+  "STORM BLUE": "Azul Tempestade",
+  "CYPRUS GREEN": "Verde Chipre",
+  "MULBERRY": "Amora",
+  "SAND": "Areia",
+  "LIGHT PINK": "Rosa Claro",
+  "OLIVE": "Oliva",
+  "PRATA": "Prata",
+  "PRATEADO": "Prata",
+  "ESTELR": "Estelar",
+  "BRONZE": "Bronze",
+  "CLAY": "Argila",
+  "DENIM": "Jeans",
+  "STEALTH BLACK": "Preto Furtivo",
+  "SILVER BLUE": "Azul Prata",
+};
+
+function traduzirCor(cor: string | null | undefined): string {
+  if (!cor) return "—";
+  const upper = cor.toUpperCase().trim();
+  return COR_PT[upper] || cor;
+}
+// Mapa reverso: Português → Inglês (para cores gravadas em PT)
+const PT_TO_EN: Record<string, string> = {
+  "PRATA": "Silver",
+  "PRATEADO": "Silver",
+  "PRETO": "Black",
+  "BRANCO": "White",
+  "AZUL": "Blue",
+  "VERDE": "Green",
+  "ROSA": "Pink",
+  "ROXO": "Purple",
+  "VERMELHO": "Red",
+  "AMARELO": "Yellow",
+  "DOURADO": "Gold",
+  "LARANJA": "Orange",
+  "CINZA": "Gray",
+  "ESTELAR": "Starlight",
+  "MEIA-NOITE": "Midnight",
+  "GRAFITE": "Graphite",
+  "CORAL": "Coral",
+  "AREIA": "Sand",
+  "OLIVA": "Olive",
+  "JEANS": "Denim",
+  "BRONZE": "Bronze",
+  "ARGILA": "Clay",
+  "AMORA": "Mulberry",
+  "AZUL PROFUNDO": "Deep Blue",
+  "AZUL PACÍFICO": "Pacific Blue",
+  "AZUL SIERRA": "Sierra Blue",
+  "AZUL TEMPESTADE": "Storm Blue",
+  "AZUL PRATA": "Silver Blue",
+  "VERDE ALPINO": "Alpine Green",
+  "VERDE CHIPRE": "Cyprus Green",
+  "VERDE MEIA-NOITE": "Midnight Green",
+  "ROXO PROFUNDO": "Deep Purple",
+  "LARANJA CÓSMICO": "Cosmic Orange",
+  "ROSA CLARO": "Light Pink",
+  "PRETO FURTIVO": "Stealth Black",
+  "PRETO ESPACIAL": "Space Black",
+  "CINZA ESPACIAL": "Space Gray",
+  "TITÂNIO NATURAL": "Natural Titanium",
+  "TITÂNIO PRETO": "Black Titanium",
+  "TITÂNIO BRANCO": "White Titanium",
+  "TITÂNIO DESERTO": "Desert Titanium",
+  "TITÂNIO AZUL": "Blue Titanium",
+  "TITÂNIO": "Titanium",
+  "NATURAL": "Natural",
+  "ULTRAMARINO": "Ultramarine",
+  "LAVANDA": "Lavender",
+};
+
+/** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
+function corBilingual(cor: string | null | undefined): string {
+  if (!cor) return "—";
+  const upper = cor.toUpperCase().trim();
+  // EN → PT
+  const pt = COR_PT[upper];
+  if (pt && pt.toLowerCase() !== cor.toLowerCase()) return `${cor} · ${pt}`;
+  // PT → EN (cores gravadas em português)
+  const en = PT_TO_EN[upper];
+  if (en) return `${en} · ${cor.charAt(0).toUpperCase() + cor.slice(1).toLowerCase()}`;
+  return cor;
+}
+
 interface ProdutoEstoque {
   id: string;
   produto: string;
@@ -246,6 +385,7 @@ export default function EstoquePage() {
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
+  const [filterDataCompra, setFilterDataCompra] = useState("");
   const [msg, setMsg] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
@@ -258,6 +398,9 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  const [editingDetailSerial, setEditingDetailSerial] = useState(false);
+  const [editingDetailImei, setEditingDetailImei] = useState(false);
+  const [detailAppleId, setDetailAppleId] = useState("");
   const [entradaView, setEntradaView] = useState<{ data: string; fornecedor: string; produtos: ProdutoEstoque[] } | null>(null);
   const [showNovoFornecedor, setShowNovoFornecedor] = useState(false);
   const [novoFornecedorNome, setNovoFornecedorNome] = useState("");
@@ -574,7 +717,7 @@ export default function EstoquePage() {
     // IPADS
     ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
-    aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
+    aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
     // AIRPODS
     air_modelo: "AIRPODS 4",
     // SEMINOVOS — subtipo define quais campos mostrar
@@ -648,6 +791,19 @@ export default function EstoquePage() {
   }, [password]);
 
   useEffect(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
+
+  // Reset estados de edição quando abre novo produto no modal
+  useEffect(() => {
+    setEditingDetailSerial(false);
+    setEditingDetailImei(false);
+    // Extrai Apple ID do observacao se houver (formato "APPLE ID: xxx\n...")
+    if (detailProduct?.observacao) {
+      const match = detailProduct.observacao.match(/^APPLE ID:\s*(.+?)(\n|$)/im);
+      setDetailAppleId(match ? match[1].trim() : "");
+    } else {
+      setDetailAppleId("");
+    }
+  }, [detailProduct?.id]);
 
   const handleAddFornecedor = async () => {
     if (!novoFornecedorNome.trim()) return;
@@ -766,11 +922,33 @@ export default function EstoquePage() {
   // handleDuplicar referência legada — usa handleDuplicarProduto
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
+  // Categorias que NÃO precisam de IMEI (só serial)
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
+  // Categorias que NÃO precisam de serial (completamente opcional)
+  const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
+
+  // Valida se seminovo tem serial/IMEI obrigatórios para sair de pendência
+  const validarSeminovoParaEstoque = (item: ProdutoEstoque): string | null => {
+    // AirPods dentro de ACESSORIOS ou categoria AIRPODS: serial obrigatório
+    const isAirpods = item.categoria === "AIRPODS" || item.produto?.toUpperCase().includes("AIRPOD");
+    const precisaSerial = !CATS_SEM_SERIAL.includes(item.categoria) || isAirpods;
+    if (precisaSerial && !item.serial_no) {
+      return `Preencha o número de série de "${item.produto}" antes de mover para estoque.`;
+    }
+    if (!CATS_SEM_IMEI.includes(item.categoria) && !item.imei) {
+      return `Preencha o IMEI de "${item.produto}" antes de mover para estoque.`;
+    }
+    if (!item.fornecedor || item.fornecedor.trim() === "") {
+      return `Preencha o fornecedor de "${item.produto}" antes de mover para estoque.`;
+    }
+    return null;
+  };
+
   // Abre modal de etiqueta obrigatória antes de mover
   const handleMoverParaEstoque = (item: ProdutoEstoque) => {
-    const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
-    if (!item.serial_no && !catsSemSerial.includes(item.categoria)) {
-      setMsg(`Preencha o numero de serie de "${item.produto}" antes de mover para estoque.`);
+    const erro = item.tipo === "PENDENCIA" ? validarSeminovoParaEstoque(item) : null;
+    if (erro) {
+      setMsg(erro);
       return;
     }
     // Etiqueta interna = preço de custo (custo_unitario)
@@ -788,11 +966,10 @@ export default function EstoquePage() {
 
   // Mover selecionados em lote
   const handleMoverSelecionados = () => {
-    const catsSemSerial = ["MAC_MINI", "ACESSORIOS", "OUTROS"];
     const itens = aCaminho.filter(p => selectedACaminho.has(p.id));
     if (itens.length === 0) { setMsg("Selecione pelo menos 1 produto"); return; }
-    // Verificar se todos têm serial (exceto categorias sem serial)
-    const semSerial = itens.filter(p => !p.serial_no && !catsSemSerial.includes(p.categoria));
+    // Verificar serial obrigatório
+    const semSerial = itens.filter(p => !p.serial_no && !CATS_SEM_SERIAL.includes(p.categoria));
     if (semSerial.length > 0) {
       setMsg(`Preencha o serial de: ${semSerial.map(p => p.produto).join(", ")}`);
       return;
@@ -1070,7 +1247,7 @@ export default function EstoquePage() {
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
           mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
           ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
-          aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
+          aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
           air_modelo: "AIRPODS 4",
           semi_subtipo: "IPHONES",
         });
@@ -1148,6 +1325,7 @@ export default function EstoquePage() {
 
   const filtered = currentList.filter((p) => {
     if (filterCat && p.categoria !== filterCat) return false;
+    if (filterDataCompra && tab === "acaminho" && p.data_compra !== filterDataCompra) return false;
     if (search) {
       const s = search.toLowerCase();
       if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s)) && !(p.imei?.toLowerCase().includes(s)) && !(p.serial_no?.toLowerCase().includes(s))) return false;
@@ -1490,6 +1668,7 @@ export default function EstoquePage() {
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
+            { key: "seminovos", label: "Seminovos", count: seminovos.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
             { key: "reposicao", label: "Reposição", count: esgotados.length + acabando.length },
@@ -1551,6 +1730,22 @@ export default function EstoquePage() {
                 {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
               </select>
             )}
+            {tab === "acaminho" && (() => {
+              // Datas únicas de pedido disponíveis
+              const datasDisponiveis = [...new Set(aCaminho.map(p => p.data_compra).filter(Boolean))].sort().reverse() as string[];
+              return (
+                <select
+                  value={filterDataCompra}
+                  onChange={(e) => setFilterDataCompra(e.target.value)}
+                  className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+                >
+                  <option value="">Todos os pedidos</option>
+                  {datasDisponiveis.map(d => (
+                    <option key={d} value={d}>{d.split("-").reverse().join("/")}</option>
+                  ))}
+                </select>
+              );
+            })()}
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-[11px] w-44 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#E5E5EA]"}`} />
             <button onClick={() => setShowNewCat(!showNewCat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}>
               + Categoria
@@ -2108,11 +2303,89 @@ export default function EstoquePage() {
         <div className="space-y-4">
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
-          ) : !filterCat && ["estoque", "acaminho", "pendencias"].includes(tab) ? (
+          ) : tab === "acaminho" ? (
+            /* ── PLANILHA PRODUTOS A CAMINHO ── */
+            (() => {
+              const byDate: Record<string, typeof filtered> = {};
+              filtered.forEach(p => {
+                const d = p.data_compra || "Sem data";
+                if (!byDate[d]) byDate[d] = [];
+                byDate[d].push(p);
+              });
+              const sortedDates = Object.keys(byDate).sort().reverse();
+              if (sortedDates.length === 0) return (
+                <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
+                  <p className={textSecondary}>Nenhum produto a caminho.</p>
+                </div>
+              );
+              const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+              return (
+                <div className="space-y-4">
+                  {sortedDates.map(date => {
+                    const items = byDate[date];
+                    const dateTotal = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    return (
+                      <div key={date} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                        <div className="bg-[#E8740E] px-4 py-2.5 flex items-center justify-between">
+                          <span className="font-bold text-white text-[13px]">
+                            Pedido {date !== "Sem data" ? date.split("-").reverse().join("/") : "Sem data"}
+                          </span>
+                          <span className="text-white/80 text-[11px] font-medium">{items.length} {items.length === 1 ? "item" : "itens"}</span>
+                        </div>
+                        <table className="w-full">
+                          <thead>
+                            <tr className={`text-[10px] font-bold uppercase tracking-wider border-b ${dm ? "border-[#3A3A3C] text-[#6E6E73]" : "border-[#F0F0F5] text-[#86868B]"}`}>
+                              <th className="px-4 py-2 text-left">Modelo</th>
+                              <th className="px-4 py-2 text-center w-16">Qtd.</th>
+                              <th className="px-4 py-2 text-right w-28">Valor unit.</th>
+                              <th className="px-4 py-2 text-left w-36">Fornecedor</th>
+                              <th className="px-4 py-2 text-right w-28">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map(p => (
+                              <tr key={p.id} className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
+                                onClick={() => setDetailProduct(p)}>
+                                <td className={`px-4 py-2.5 text-sm font-semibold ${textPrimary}`}>
+                                  {p.produto}
+                                  {p.cor ? <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corBilingual(p.cor)}</span> : null}
+                                  {(p.serial_no || p.imei) && (
+                                    <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
+                                      ✅ {p.serial_no || p.imei}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-2.5 text-center text-sm font-bold ${textPrimary}`}>{p.qnt}</td>
+                                <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                                <td className={`px-4 py-2.5 text-sm ${textSecondary}`}>{p.fornecedor || p.cliente || "—"}</td>
+                                <td className={`px-4 py-2.5 text-right text-sm font-bold ${textPrimary}`}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                              <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={4}>TOTAL DO PEDIDO</td>
+                              <td className="px-4 py-2 text-right text-sm font-bold text-green-600">{fmt(dateTotal)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    );
+                  })}
+                  {sortedDates.length > 1 && (
+                    <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
+                      <span className={`text-xs font-bold ${textSecondary}`}>TOTAL GERAL ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"})</span>
+                      <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          ) : !filterCat && ["estoque", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
-                const sourceList = tab === "acaminho" ? aCaminho : tab === "pendencias" ? pendencias : emEstoque;
+                const sourceList = tab === "pendencias" ? pendencias : emEstoque;
                 const items = sourceList.filter((p) => p.categoria === cat.key);
                 const count = items.length;
                 const units = items.reduce((s, p) => s + p.qnt, 0);
@@ -2120,63 +2393,53 @@ export default function EstoquePage() {
                 if (count === 0) return null;
                 const isEditing = editingCatName === cat.key;
                 return (
-                  <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden hover:border-[#E8740E] hover:shadow-lg transition-all group relative`}>
+                  <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden hover:border-[#E8740E] hover:shadow-md transition-all group relative cursor-pointer`} onClick={() => !isEditing && setFilterCat(cat.key)}>
+                    {/* Accent bar */}
+                    <div className="h-1 w-full bg-gradient-to-r from-[#E8740E] to-[#F5A623] opacity-0 group-hover:opacity-100 transition-opacity" />
                     {/* Edit button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingCatName(cat.key); setEditCatLabel(cat.label); }}
-                      className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity z-10 ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-white/80 text-[#86868B]"} hover:text-[#E8740E]`}
+                      className={`absolute top-3 right-3 w-6 h-6 rounded-md flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-10 ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"} hover:text-[#E8740E]`}
                       title="Editar nome"
                     >
                       ✏️
                     </button>
-                    <div className="cursor-pointer" onClick={() => !isEditing && setFilterCat(cat.key)}>
-                      <div className={`px-5 pt-5 pb-3 flex items-center gap-3`}>
-                        <span className="text-[32px]">{cat.emoji}</span>
-                        <div className="flex-1 min-w-0">
+                    <div className="p-4">
+                      {/* Emoji + Label */}
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="text-[28px] leading-none mt-0.5">{cat.emoji}</span>
+                        <div className="flex-1 min-w-0 pt-0.5">
                           {isEditing ? (
                             <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                               <input
                                 value={editCatLabel}
                                 onChange={(e) => setEditCatLabel(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") handleEditCategoriaEstoque(cat.key); if (e.key === "Escape") setEditingCatName(""); }}
-                                className={`w-full px-2 py-1.5 rounded-lg border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                                className={`w-full px-2 py-1 rounded-lg border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
                                 autoFocus
                               />
                               <div className="flex gap-1">
-                                <button onClick={() => handleEditCategoriaEstoque(cat.key)} className="px-2 py-1 rounded text-[11px] font-semibold bg-[#E8740E] text-white">Salvar</button>
-                                <button onClick={() => setEditingCatName("")} className={`px-2 py-1 rounded text-[11px] ${textSecondary}`}>Cancelar</button>
+                                <button onClick={() => handleEditCategoriaEstoque(cat.key)} className="px-2 py-1 rounded text-[10px] font-semibold bg-[#E8740E] text-white">Salvar</button>
+                                <button onClick={() => setEditingCatName("")} className={`px-2 py-1 rounded text-[10px] ${textSecondary}`}>Cancelar</button>
                               </div>
                             </div>
                           ) : (
-                            <h3 className={`font-bold text-[15px] ${textPrimary} group-hover:text-[#E8740E] transition-colors truncate`}>{cat.label}</h3>
+                            <h3 className={`font-semibold text-[13px] leading-tight ${textPrimary} group-hover:text-[#E8740E] transition-colors`}>{cat.label}</h3>
                           )}
                         </div>
                       </div>
-                      <div className={`px-5 pb-4 flex items-center justify-between`}>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-xs font-semibold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{units} un.</span>
-                          <span className={`text-[11px] ${textMuted}`}>{count} modelos</span>
+                      {/* Stats */}
+                      <div className={`flex items-center justify-between pt-2 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[13px] font-bold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{units} un.</span>
+                          <span className={`text-[11px] ${textMuted}`}>· {count} mod.</span>
                         </div>
-                        {valorTotal > 0 && <span className={`text-[11px] font-medium ${textSecondary}`}>R$ {Math.round(valorTotal).toLocaleString("pt-BR")}</span>}
+                        {valorTotal > 0 && <span className={`text-[10px] font-medium ${textMuted}`}>R$ {Math.round(valorTotal).toLocaleString("pt-BR")}</span>}
                       </div>
                     </div>
                   </div>
                 );
               })}
-              {/* Card Seminovos — só na aba estoque (lacrados) */}
-              {tab === "estoque" && seminovos.length > 0 && (
-                <div
-                  className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm text-left hover:border-[#E8740E] hover:shadow-lg transition-all cursor-pointer`}
-                  onClick={() => setTab("seminovos")}
-                >
-                  <div className="text-[40px] mb-4">📱</div>
-                  <h3 className={`font-bold text-[15px] ${textPrimary} hover:text-[#E8740E] transition-colors`}>Seminovos</h3>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className={`text-[12px] ${textSecondary}`}>{seminovos.length} produtos</span>
-                    <span className={`text-[12px] ${textMuted}`}>{seminovos.reduce((s, p) => s + p.qnt, 0)} un.</span>
-                  </div>
-                </div>
-              )}
             </div>
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
@@ -2185,7 +2448,7 @@ export default function EstoquePage() {
           ) : (
             <>
             {/* Barra de seleção em lote — A Caminho (admin only) */}
-            {tab === "acaminho" && filtered.length > 0 && (
+            {false && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
                 <input
                   type="checkbox"
@@ -2252,6 +2515,8 @@ export default function EstoquePage() {
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
+                    // No estoque (lacrados): ocultar itens com qnt=0
+                    if (tab === "estoque" && p.qnt === 0) return;
                     const groupKey = stripOrigem(p.produto);
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
@@ -2263,12 +2528,16 @@ export default function EstoquePage() {
                     const val = parseInt(m[1]);
                     return m[2].toUpperCase() === "TB" ? val * 1024 : val;
                   }
-                  const produtoEntries = Object.entries(byProduto).sort(([a], [b]) => {
-                    const sa = storageToNum(a);
-                    const sb = storageToNum(b);
-                    if (sa !== sb) return sa - sb;
-                    return a.localeCompare(b);
-                  });
+                  const produtoEntries = Object.entries(byProduto)
+                    .filter(([, arr]) => arr.length > 0)
+                    .sort(([a], [b]) => {
+                      const sa = storageToNum(a);
+                      const sb = storageToNum(b);
+                      if (sa !== sb) return sa - sb;
+                      return a.localeCompare(b);
+                    });
+                  // No estoque: ocultar card inteiramente se todos os itens foram filtrados
+                  if (tab === "estoque" && produtoEntries.length === 0) return null;
                   const isCardDragging = dragCardKey === modelo;
 
                   return (
@@ -2345,7 +2614,7 @@ export default function EstoquePage() {
                         <tbody>
                           {produtoEntries.map(([prodNome, prodItems]) => {
                             const showObs = tab === "seminovos" || isEditableItemTab;
-                            const showMover = tab === "acaminho" || isPendenciasTab;
+                            const showMover = isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
 
@@ -2372,7 +2641,7 @@ export default function EstoquePage() {
                                     <div className="flex items-center gap-2">
                                       {!alwaysExpand && <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>}
                                     {(() => {
-                                      const canEditNome = isPendenciasTab || tab === "acaminho";
+                                      const canEditNome = isPendenciasTab;
                                       return editingNome[prodItems[0]?.id] !== undefined && canEditNome ? (
                                         <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                           <input
@@ -2429,10 +2698,39 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
                                 </tr>
-                                {/* Linhas de cada cor — só quando expandido */}
-                                {isExpanded && prodItems.map((p) => {
+                                {/* Linhas de cada cor */}
+                                {isExpanded && prodItems
+                                  .filter(p => tab !== "estoque" || p.qnt > 0) // no estoque: ocultar qnt=0
+                                  .map((p) => {
                                   const isEditCusto = editingCusto[p.id] !== undefined;
                                   const isEditQnt = editingQnt[p.id] !== undefined;
+
+                                  // ── Vista simplificada: só nome + cor (PT) + qtd ────────────────
+                                  if (tab === "estoque") {
+                                    return (
+                                      <tr
+                                        key={p.id}
+                                        onClick={() => setDetailProduct(p)}
+                                        className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
+                                      >
+                                        <td className="pl-3 py-2.5 w-4">
+                                          <span className={`w-2.5 h-2.5 rounded-full inline-block ${p.qnt === 1 ? "bg-yellow-400" : "bg-green-500"}`} />
+                                        </td>
+                                        <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
+                                          {traduzirCor(p.cor)}
+                                        </td>
+                                        <td className={`px-3 py-2.5 text-right`}>
+                                          <span className={`text-sm font-bold ${p.qnt === 1 ? "text-yellow-500" : "text-green-500"}`}>
+                                            {p.qnt} {p.qnt === 1 ? "un." : "un."}
+                                          </span>
+                                        </td>
+                                        <td colSpan={5} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
+                                          {(p.imei || p.serial_no) && <span className="opacity-50">#{p.serial_no || p.imei}</span>}
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+
                                   return (
                                     <tr
                                       key={p.id}
@@ -2447,8 +2745,6 @@ export default function EstoquePage() {
                                       <td className="pl-2 py-2.5 select-none w-4">
                                         {balanceMode && tab === "seminovos" ? (
                                           <input type="checkbox" checked={balanceSelected.has(p.id)} onChange={() => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" onClick={e => e.stopPropagation()} />
-                                        ) : tab === "acaminho" ? (
-                                          <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" onClick={e => e.stopPropagation()} />
                                         ) : selectMode ? (
                                           <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
                                         ) : (
@@ -2463,7 +2759,7 @@ export default function EstoquePage() {
                                               <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                             </div>
                                           ) : (
-                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {p.cor || "—"}</span>
+                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {traduzirCor(p.cor)}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
@@ -2792,6 +3088,8 @@ export default function EstoquePage() {
         const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
         const isLac = p.tipo === "NOVO" || p.tipo === "A_CAMINHO";
         const dataE = p.data_entrada || p.data_compra;
+        // reset serial/imei edit mode when a different product opens
+        // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
         return (
@@ -2831,92 +3129,113 @@ export default function EstoquePage() {
                   {(p.serial_no || isAdmin) && (() => {
                     const qnt = p.qnt || 1;
                     const needsMultiple = isAdmin && !p.serial_no && qnt > 1;
+                    const pencilIco = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>;
                     return (
                     <div className={needsMultiple ? "col-span-2" : ""}>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
                       {isAdmin && needsMultiple ? (
-                        /* Múltiplas unidades sem serial: inputs pra cada + botão salvar (separa em registros individuais) */
+                        /* Múltiplas unidades sem serial: botão ▼ expande inputs por unidade */
                         <div className="mt-1 space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            {Array.from({ length: qnt }, (_, i) => (
-                              <input key={i} id={`detail-serial-${p.id}-${i}`} placeholder={ocrLoading ? "Lendo..." : `Serial ${i + 1}`}
-                                style={{ textTransform: "uppercase" }}
-                                onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
-                                className={`text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                              />
-                            ))}
-                          </div>
-                          <button onClick={async () => {
-                            const filled: string[] = [];
-                            for (let i = 0; i < qnt; i++) {
-                              const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement;
-                              const val = el?.value?.trim().toUpperCase() || "";
-                              if (val) filled.push(val);
-                            }
-                            if (filled.length === 0) { setMsg("Preencha pelo menos 1 serial."); return; }
-                            const remaining = qnt - filled.length;
-                            // Primeiro serial: atualiza o registro existente com qnt=1
-                            await apiPatch(p.id, { serial_no: filled[0], qnt: 1 });
-                            let created = 0;
-                            // Demais seriais preenchidos: cria registros individuais
-                            for (let i = 1; i < filled.length; i++) {
-                              const res = await fetch("/api/estoque", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                body: JSON.stringify({
-                                  produto: p.produto, categoria: p.categoria, qnt: 1,
-                                  custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                  serial_no: filled[i], tipo: p.tipo, status: p.status,
-                                  data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
-                                }),
-                              });
-                              if (res.ok) created++;
-                            }
-                            // Unidades sem serial: mantém agrupadas num registro só
-                            if (remaining > 0) {
-                              await fetch("/api/estoque", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                body: JSON.stringify({
-                                  produto: p.produto, categoria: p.categoria, qnt: remaining,
-                                  custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                  tipo: p.tipo, status: p.status,
-                                  data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
-                                }),
-                              });
-                            }
-                            setMsg(`✅ ${filled.length} serial(is) salvo(s)!${remaining > 0 ? ` ${remaining} unidade(s) sem serial mantidas.` : ""}`);
-                            setDetailProduct(null);
-                            await fetchEstoque();
-                          }} className="w-full py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">
-                            💾 Salvar seriais preenchidos
+                          <button
+                            onClick={() => setEditingDetailSerial(v => !v)}
+                            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${editingDetailSerial ? "bg-[#E8740E] text-white border-[#E8740E]" : `${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"}`}`}
+                          >
+                            {editingDetailSerial ? "▲" : "▼"} Registrar seriais ({qnt} unidades)
                           </button>
-                          <p className={`text-[10px] text-center ${mS}`}>Preencha só os que tiver agora. Os demais ficam agrupados sem serial.</p>
+                          {editingDetailSerial && (
+                            <>
+                              <div className="grid grid-cols-2 gap-2">
+                                {Array.from({ length: qnt }, (_, i) => (
+                                  <input key={i} id={`detail-serial-${p.id}-${i}`} placeholder={ocrLoading ? "Lendo..." : `Serial ${i + 1}`}
+                                    style={{ textTransform: "uppercase" }}
+                                    onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement; if (el) el.value = v; }, setOcrLoading)}
+                                    className={`text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                                  />
+                                ))}
+                              </div>
+                              <button onClick={async () => {
+                                const filled: string[] = [];
+                                for (let i = 0; i < qnt; i++) {
+                                  const el = document.getElementById(`detail-serial-${p.id}-${i}`) as HTMLInputElement;
+                                  const val = el?.value?.trim().toUpperCase() || "";
+                                  if (val) filled.push(val);
+                                }
+                                if (filled.length === 0) { setMsg("Preencha pelo menos 1 serial."); return; }
+                                const remaining = qnt - filled.length;
+                                await apiPatch(p.id, { serial_no: filled[0], qnt: 1 });
+                                let created = 0;
+                                for (let i = 1; i < filled.length; i++) {
+                                  const res = await fetch("/api/estoque", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                    body: JSON.stringify({
+                                      produto: p.produto, categoria: p.categoria, qnt: 1,
+                                      custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                      serial_no: filled[i], tipo: p.tipo, status: p.status,
+                                      data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
+                                    }),
+                                  });
+                                  if (res.ok) created++;
+                                }
+                                if (remaining > 0) {
+                                  await fetch("/api/estoque", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                                    body: JSON.stringify({
+                                      produto: p.produto, categoria: p.categoria, qnt: remaining,
+                                      custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
+                                      tipo: p.tipo, status: p.status,
+                                      data_compra: p.data_compra, data_entrada: p.data_entrada, pedido_fornecedor_id: p.pedido_fornecedor_id,
+                                    }),
+                                  });
+                                }
+                                setMsg(`✅ ${filled.length} serial(is) salvo(s)!${remaining > 0 ? ` ${remaining} unidade(s) sem serial mantidas.` : ""}`);
+                                setDetailProduct(null);
+                                await fetchEstoque();
+                              }} className="w-full py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">
+                                💾 Salvar seriais preenchidos
+                              </button>
+                              <p className={`text-[10px] text-center ${mS}`}>Preencha só os que tiver. Os demais ficam agrupados sem serial.</p>
+                            </>
+                          )}
                         </div>
                       ) : isAdmin ? (
+                        /* 1 unidade: exibe read-only + botão lápis pra editar */
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <input
-                            type="text"
-                            defaultValue={p.serial_no || ""}
-                            placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
-                            style={{ textTransform: "uppercase" }}
-                            onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; (e.target as HTMLInputElement).dispatchEvent(new Event("change", { bubbles: true })); }, setOcrLoading)}
-                            onBlur={async (e) => {
-                              const val = e.target.value.trim().toUpperCase() || null;
-                              if (val !== (p.serial_no || null)) {
-                                await apiPatch(p.id, { serial_no: val });
-                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
-                                setDetailProduct({ ...p, serial_no: val });
-                                setMsg(val ? "Serial atualizado!" : "Serial removido!");
-                              }
-                            }}
-                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                            className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                          />
-                          {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className="shrink-0 hover:text-[#E8740E]">{cpIco}</button>}
+                          {editingDetailSerial ? (
+                            <input
+                              autoFocus
+                              type="text"
+                              defaultValue={p.serial_no || ""}
+                              placeholder={ocrLoading ? "Lendo imagem..." : "Digitar S/N"}
+                              style={{ textTransform: "uppercase" }}
+                              onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; }, setOcrLoading)}
+                              onBlur={async (e) => {
+                                try {
+                                  const val = e.target.value.trim().toUpperCase() || null;
+                                  if (val !== (p.serial_no || null)) {
+                                    await apiPatch(p.id, { serial_no: val });
+                                    setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
+                                    setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
+                                    setMsg(val ? "Serial atualizado!" : "Serial removido!");
+                                  }
+                                } finally {
+                                  setEditingDetailSerial(false);
+                                }
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailSerial(false); }}
+                              className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
+                            />
+                          ) : (
+                            <>
+                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
+                              {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                              <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">{pencilIco}</button>
+                            </>
+                          )}
                         </div>
                       ) : (
-                        <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
+                        <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
                       )}
                     </div>
                     );
@@ -2945,31 +3264,71 @@ export default function EstoquePage() {
                       <p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p>
                     ) : null}
                   </div>
-                  {p.imei && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p><button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado`); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.imei} {cpIco}</button></div>}
-                  {/* Bateria */}
-                  <div>
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%)</p>
-                    {canEdit ? (
-                      <input
-                        type="number"
-                        min={0} max={100}
-                        defaultValue={p.bateria || ""}
-                        placeholder="Ex: 92"
-                        onBlur={async (e) => {
-                          const val = e.target.value ? parseInt(e.target.value) : null;
-                          if (val !== p.bateria) {
-                            await apiPatch(p.id, { bateria: val });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, bateria: val } : x));
-                            setDetailProduct({ ...p, bateria: val });
-                            setMsg("Bateria atualizada!");
-                          }
-                        }}
-                        className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                      />
-                    ) : p.bateria ? (
-                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p>
-                    ) : null}
-                  </div>
+                  {(p.imei || isAdmin) && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
+                      {isAdmin ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {editingDetailImei ? (
+                            <input
+                              autoFocus
+                              type="text"
+                              defaultValue={p.imei || ""}
+                              placeholder="Digitar IMEI"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim() || null;
+                                if (val !== (p.imei || null)) {
+                                  await apiPatch(p.id, { imei: val });
+                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, imei: val } : x));
+                                  setDetailProduct({ ...p, imei: val });
+                                  setMsg(val ? "IMEI atualizado!" : "IMEI removido!");
+                                }
+                                setEditingDetailImei(false);
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingDetailImei(false); }}
+                              className={`flex-1 text-[13px] font-mono px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`}
+                            />
+                          ) : (
+                            <>
+                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.imei || <span className={mS}>—</span>}</span>
+                              {p.imei && <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                              <button onClick={() => setEditingDetailImei(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar IMEI">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : p.imei ? (
+                        <button onClick={() => { navigator.clipboard.writeText(p.imei || ""); setMsg("IMEI copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.imei} {cpIco}</button>
+                      ) : null}
+                    </div>
+                  )}
+                  {/* Bateria — só para seminovos/usados */}
+                  {!isLac && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%)</p>
+                      {canEdit ? (
+                        <input
+                          type="number"
+                          min={0} max={100}
+                          defaultValue={p.bateria || ""}
+                          placeholder="Ex: 92"
+                          onBlur={async (e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : null;
+                            if (val !== p.bateria) {
+                              await apiPatch(p.id, { bateria: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, bateria: val } : x));
+                              setDetailProduct({ ...p, bateria: val });
+                              setMsg("Bateria atualizada!");
+                            }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      ) : p.bateria ? (
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Financeiro */}
@@ -2996,7 +3355,6 @@ export default function EstoquePage() {
                     </div>
                   )}
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Balanco</p><p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
                 {/* Estoque mínimo — para lacrados, editável pelo admin */}
@@ -3092,6 +3450,7 @@ export default function EstoquePage() {
                   <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p>
                   {(canEdit || isAdmin) ? (
                     <textarea
+                      key={`obs-${p.id}`}
                       defaultValue={p.observacao || ""}
                       placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
                       rows={2}
@@ -3100,7 +3459,7 @@ export default function EstoquePage() {
                         if (val !== (p.observacao || null)) {
                           await apiPatch(p.id, { observacao: val });
                           setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
-                          setDetailProduct({ ...p, observacao: val });
+                          setDetailProduct(prev => prev ? { ...prev, observacao: val } : null);
                           setMsg("Observacao atualizada!");
                         }
                       }}
@@ -3119,6 +3478,11 @@ export default function EstoquePage() {
                     {(p.status === "PENDENTE" || p.tipo === "PENDENCIA" || p.status === "A CAMINHO") && (
                       <button
                         onClick={async () => {
+                          // Validar serial/IMEI/fornecedor antes de mover pendência para estoque
+                          if (p.tipo === "PENDENCIA") {
+                            const erro = validarSeminovoParaEstoque(p);
+                            if (erro) { setMsg(erro); return; }
+                          }
                           if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
                           try {
                             const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? "NOVO" : p.tipo;
