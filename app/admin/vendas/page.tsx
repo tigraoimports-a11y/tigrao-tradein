@@ -1017,7 +1017,7 @@ export default function VendasPage() {
       setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulario.`);
       fetchVendas();
       fetchEstoque();
-      if (savedVendaIds.length > 0) setNotaFiscalVendaIds(savedVendaIds);
+      // NF é adicionada depois nas vendas pendentes, não no momento do registro
 
       // Auto-criar entrega quando local === "ENTREGA"
       if (form.local === "ENTREGA" && savedVendaIds.length > 0) {
