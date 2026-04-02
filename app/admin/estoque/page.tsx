@@ -198,6 +198,19 @@ const PT_TO_EN: Record<string, string> = {
   "LAVANDA": "Lavender",
 };
 
+/** Remove o código de origem (LL, VC, BE...) do final do nome de iPhones — só para exibição */
+function stripOrigem(nome: string, categoria?: string | null): string {
+  if (!nome) return nome;
+  if (categoria && categoria !== "IPHONES") return nome;
+  // Códigos de origem: primeiro token de cada entrada de IPHONE_ORIGENS
+  const codes = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
+  const upper = nome.trim().toUpperCase();
+  for (const code of codes) {
+    if (upper.endsWith(` ${code}`)) return nome.trim().slice(0, -(code.length + 1)).trim();
+  }
+  return nome.trim();
+}
+
 /** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
 function corBilingual(cor: string | null | undefined): string {
   if (!cor) return "—";
@@ -2354,7 +2367,7 @@ export default function EstoquePage() {
                               <tr key={p.id} className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                 onClick={() => setDetailProduct(p)}>
                                 <td className={`px-4 py-2.5 text-sm font-semibold ${textPrimary}`}>
-                                  {p.produto}
+                                  {stripOrigem(p.produto, p.categoria)}
                                   {p.cor ? <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corBilingual(p.cor)}</span> : null}
                                   {(p.serial_no || p.imei) && (
                                     <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
@@ -2673,7 +2686,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
-                                          {prodNome}
+                                          {stripOrigem(prodNome, categoria)}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
@@ -2732,7 +2745,7 @@ export default function EstoquePage() {
                                           <span className={`w-2.5 h-2.5 rounded-full inline-block ${p.qnt === 1 ? "bg-yellow-400" : "bg-green-500"}`} />
                                         </td>
                                         <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
-                                          {traduzirCor(p.cor)}
+                                          {corBilingual(p.cor)}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right`}>
                                           <span className={`text-sm font-bold ${p.qnt === 1 ? "text-yellow-500" : "text-green-500"}`}>
