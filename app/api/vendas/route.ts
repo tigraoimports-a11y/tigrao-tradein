@@ -453,6 +453,48 @@ export async function PATCH(req: NextRequest) {
   const vendaData = data?.[0]?.data || fields.data;
   if (vendaData) recalcularSaldoDia(supabase, vendaData).catch(() => {});
 
+  // Sync automático para pendências no estoque quando troca é editada na venda
+  if (data?.[0]) {
+    const venda = data[0];
+    const trocaFields = ["troca_produto", "troca_cor", "troca_categoria", "troca_produto2", "troca_cor2", "troca_categoria2"];
+    const hasTrocaChange = trocaFields.some(f => f in fields);
+    if (hasTrocaChange && venda.cliente) {
+      // Buscar pendências do cliente (fornecedor = cliente da venda)
+      const { data: pendencias } = await supabase
+        .from("estoque")
+        .select("id, produto, data_compra")
+        .ilike("fornecedor", venda.cliente)
+        .eq("status", "PENDENTE")
+        .order("data_compra", { ascending: false });
+
+      if (pendencias && pendencias.length > 0) {
+        // Troca 1
+        if ((fields.troca_produto || fields.troca_cor || fields.troca_categoria) && venda.troca_produto) {
+          // Tentar achar a pendência com data igual ou a primeira da lista
+          const p1 = pendencias.find(p => p.data_compra === venda.data) || pendencias[0];
+          const upd1: Record<string, unknown> = {};
+          if (fields.troca_produto) upd1.produto = fields.troca_produto;
+          if (fields.troca_cor !== undefined) upd1.cor = fields.troca_cor;
+          if (fields.troca_categoria) upd1.categoria = fields.troca_categoria;
+          if (Object.keys(upd1).length > 0) {
+            await supabase.from("estoque").update(upd1).eq("id", p1.id);
+          }
+        }
+        // Troca 2
+        if ((fields.troca_produto2 || fields.troca_cor2 || fields.troca_categoria2) && venda.troca_produto2 && pendencias.length >= 2) {
+          const p2 = pendencias.find(p => p.data_compra === venda.data && p.id !== pendencias[0]?.id) || pendencias[1];
+          const upd2: Record<string, unknown> = {};
+          if (fields.troca_produto2) upd2.produto = fields.troca_produto2;
+          if (fields.troca_cor2 !== undefined) upd2.cor = fields.troca_cor2;
+          if (fields.troca_categoria2) upd2.categoria = fields.troca_categoria2;
+          if (Object.keys(upd2).length > 0) {
+            await supabase.from("estoque").update(upd2).eq("id", p2.id);
+          }
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, updated: data });
 }
 
