@@ -1671,7 +1671,12 @@ export default function EstoquePage() {
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
-  const pendenciasMovidas: typeof estoque = []; // removido — pendências saem ao mover para estoque
+  // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
+  const pendenciasMovidas = estoque.filter((p) =>
+    p.tipo === "SEMINOVO" && (
+      p.observacao?.includes("[EX_PENDENCIA]") || !!p.cliente
+    )
+  );
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
