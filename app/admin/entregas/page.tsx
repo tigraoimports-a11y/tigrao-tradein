@@ -580,65 +580,57 @@ export default function EntregasPage() {
                   <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
                 </div>
               ) : (
-                /* Modo estoque — seleção estruturada */
+                /* Modo simplificado — modelo + preço (sem cor/serial/origem) */
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className={labelCls}>Categoria</p>
-                      <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); setProdutos([""]); set("valor", ""); setSerialBusca(""); }} className={inputCls}>
-                        <option value="">-- Selecionar --</option>
-                        {categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <p className={labelCls}>Buscar Serial</p>
-                      <input value={serialBusca} onChange={(e) => setSerialBusca(e.target.value)} placeholder="Digitar serial..." className={inputCls} />
-                    </div>
+                  <div>
+                    <p className={labelCls}>Categoria</p>
+                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); setProdutos([""]); set("valor", ""); }} className={inputCls}>
+                      <option value="">-- Selecionar --</option>
+                      {categorias.filter(([k]) => !k.endsWith("_SEMI")).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
                   </div>
 
                   {catSel && (() => {
-                    const filtered = serialBusca.trim()
-                      ? produtosFiltrados.filter(p => p.serial_no?.toUpperCase().includes(serialBusca.trim().toUpperCase()))
-                      : produtosFiltrados;
-                    // Agrupar por nome do produto
-                    const byName: Record<string, EstoqueItem[]> = {};
-                    filtered.forEach(p => { const k = p.produto; if (!byName[k]) byName[k] = []; byName[k].push(p); });
+                    // Agrupar por modelo base (sem cor, sem origem) e pegar preço médio
+                    const stripDetails = (nome: string) => nome
+                      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
+                      .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
+                      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
+                      .replace(/\s{2,}/g, " ").trim();
+                    const byModel: Record<string, { totalQnt: number; avgCost: number; items: EstoqueItem[] }> = {};
+                    produtosFiltrados.forEach(p => {
+                      const model = stripDetails(p.produto);
+                      if (!byModel[model]) byModel[model] = { totalQnt: 0, avgCost: 0, items: [] };
+                      byModel[model].totalQnt += p.qnt;
+                      byModel[model].items.push(p);
+                    });
+                    // Calcular preço médio por modelo
+                    Object.values(byModel).forEach(g => {
+                      const totalVal = g.items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                      g.avgCost = g.totalQnt > 0 ? Math.round(totalVal / g.totalQnt) : 0;
+                    });
+                    const modelEntries = Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
                     return (
-                      <div className="max-h-[250px] overflow-y-auto rounded-xl border border-[#D2D2D7] p-2 space-y-1">
-                        {Object.entries(byName).length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto disponível</p>}
-                        {Object.entries(byName).sort(([a],[b]) => a.localeCompare(b)).map(([nome, items]) => (
-                          <div key={nome}>
-                            <p className="text-[10px] font-bold text-[#86868B] px-2 py-1">{nome} — {items.reduce((s,p) => s+p.qnt, 0)} un.</p>
-                            <div className="flex flex-wrap gap-1 px-2">
-                              {items.map(p => {
-                                const sel = estoqueId === p.id;
-                                return (
-                                  <button key={p.id} onClick={() => {
-                                    if (sel) { setEstoqueId(""); setProdutos([""]); set("valor", ""); return; }
-                                    setEstoqueId(p.id);
-                                    setProdutos([p.produto]);
-                                    set("valor", String(p.custo_unitario || 0));
-                                  }} className={`px-3 py-1.5 rounded-lg text-xs transition-all ${sel ? "bg-[#E8740E] text-white font-bold" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#FFF5EB]"}`}>
-                                    {p.cor || "—"}{p.serial_no ? ` #${p.serial_no.slice(-4)}` : ""} {p.qnt > 1 ? `(${p.qnt})` : ""}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                        {modelEntries.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto disponível</p>}
+                        {modelEntries.map(([model, { totalQnt, avgCost }]) => {
+                          const sel = produtos[0] === model;
+                          return (
+                            <button key={model} onClick={() => {
+                              if (sel) { setProdutos([""]); set("valor", ""); return; }
+                              setProdutos([model]);
+                              set("valor", String(avgCost));
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                              <div>
+                                <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{model}</p>
+                                <p className="text-[10px] text-[#86868B]">{totalQnt} un. disponíveis</p>
+                              </div>
+                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {avgCost.toLocaleString("pt-BR")}</p>
+                            </button>
+                          );
+                        })}
                       </div>
                     );
-                  })()}
-
-                  {estoqueId && (() => {
-                    const sel = estoque.find(p => p.id === estoqueId);
-                    return sel ? (
-                      <div className="p-3 rounded-xl bg-green-50 border border-green-200">
-                        <p className="font-semibold text-sm text-[#1D1D1F]">{sel.produto}</p>
-                        <p className="text-xs text-[#86868B]">{sel.cor || "—"} · {sel.serial_no || "S/N"} · {sel.fornecedor || "—"}</p>
-                        <p className="text-[#E8740E] font-bold text-lg mt-1">Valor Base: R$ {(sel.custo_unitario || 0).toLocaleString("pt-BR")}</p>
-                      </div>
-                    ) : null;
                   })()}
                 </div>
               )}
