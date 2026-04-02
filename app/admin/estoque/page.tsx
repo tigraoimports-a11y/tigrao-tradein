@@ -517,7 +517,12 @@ export default function EstoquePage() {
     loading: boolean;
     precoCustom: string;
     tamanho: "pequena" | "media" | "grande";
+    dataEntrada: string; // data de entrada no estoque (editável)
   } | null>(null);
+
+  // Confirmação de "Mover para Estoque" com seleção de data no modal de detalhe
+  const [moveConfirmId, setMoveConfirmId] = useState<string | null>(null);
+  const [moveConfirmData, setMoveConfirmData] = useState<string>(hojeBR());
 
   // Seleção em lote na aba A Caminho
   const [selectedACaminho, setSelectedACaminho] = useState<Set<string>>(new Set());
@@ -1041,7 +1046,7 @@ export default function EstoquePage() {
       return;
     }
     // Etiqueta interna = preço de custo (custo_unitario)
-    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
+    setEtiquetaModal({ item, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media", dataEntrada: hojeBR() });
   };
 
   // Abre modal para múltiplas unidades com seriais
@@ -1050,7 +1055,7 @@ export default function EstoquePage() {
       item: { ...item, serial_no: s, id: i === 0 ? item.id : `new-${i}` },
       serial: s,
     }));
-    setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
+    setEtiquetaModal({ item, items, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media", dataEntrada: hojeBR() });
   };
 
   // Mover selecionados em lote
@@ -1063,7 +1068,7 @@ export default function EstoquePage() {
       setMsg(`Preencha o serial de: ${semSerial.map(p => p.produto).join(", ")}`);
       return;
     }
-    setEtiquetaModal({ item: itens[0], batchItems: itens, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media" });
+    setEtiquetaModal({ item: itens[0], batchItems: itens, precoVenda: null, printed: false, loading: false, precoCustom: "", tamanho: "media", dataEntrada: hojeBR() });
   };
 
   // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm continuous tape
@@ -1152,17 +1157,18 @@ export default function EstoquePage() {
     // Coleta produtos afetados pra rebalancear preço médio depois
     const produtosAfetados = new Set<string>();
 
+    const dataEntrada = etiquetaModal.dataEntrada || hojeBR();
     if (batchItems && batchItems.length > 0) {
       for (const p of batchItems) {
         const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
-        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
+        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
         produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
+      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
           method: "POST",
@@ -1170,7 +1176,7 @@ export default function EstoquePage() {
           body: JSON.stringify({
             produto: item.produto, categoria: item.categoria, qnt: 1,
             custo_unitario: item.custo_unitario, cor: item.cor, fornecedor: item.fornecedor,
-            serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR(),
+            serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada,
           }),
         });
       }
@@ -1178,7 +1184,7 @@ export default function EstoquePage() {
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: hojeBR() });
+      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
     }
@@ -1519,7 +1525,18 @@ export default function EstoquePage() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t flex gap-3" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+            <div className="px-6 py-4 border-t space-y-3" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+              {/* Data de entrada editável */}
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-semibold shrink-0 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>📅 Data de entrada:</span>
+                <input
+                  type="date"
+                  value={etiquetaModal.dataEntrada}
+                  onChange={(e) => setEtiquetaModal(prev => prev ? { ...prev, dataEntrada: e.target.value } : null)}
+                  className={`flex-1 px-3 py-1.5 rounded-lg border text-sm font-semibold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                />
+              </div>
+              <div className="flex gap-3">
               {!etiquetaModal.printed ? (
                 <>
                   <button onClick={() => setEtiquetaModal(null)} className={`flex-1 px-4 py-3 rounded-xl font-semibold text-sm ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
@@ -1556,6 +1573,7 @@ export default function EstoquePage() {
                   </button>
                 </>
               )}
+              </div>
             </div>
           </div>
         </div>
@@ -3698,29 +3716,53 @@ export default function EstoquePage() {
                   <p className={`text-xs font-bold ${mP}`}>Operacoes Relacionadas</p>
                   <div className="flex gap-2 flex-wrap">
                     {(p.status === "PENDENTE" || p.tipo === "PENDENCIA" || p.status === "A CAMINHO") && (
-                      <button
-                        onClick={async () => {
-                          // Validar serial/IMEI/fornecedor antes de mover pendência para estoque
-                          if (p.tipo === "PENDENCIA") {
-                            const erro = validarSeminovoParaEstoque(p);
-                            if (erro) { setMsg(erro); return; }
-                          }
-                          if (!confirm("Confirmar mover para EM ESTOQUE?")) return;
-                          try {
-                            const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
-                            const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: hojeBR() }) });
-                            const json = await res.json();
-                            if (json.error) { setMsg("Erro: " + json.error); return; }
-                            setMsg("✅ Movido para estoque!");
-                            setDetailProduct(null);
-                            fetchEstoque();
-                          } catch { setMsg("Erro ao mover"); }
-                        }}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        Mover para Estoque
-                      </button>
+                      moveConfirmId === p.id ? (
+                        /* Confirmação inline com seleção de data */
+                        <div className={`flex items-center gap-2 p-2 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]"}`}>
+                          <span className={`text-[11px] font-semibold shrink-0 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>📅 Entrada:</span>
+                          <input
+                            type="date"
+                            value={moveConfirmData}
+                            onChange={(e) => setMoveConfirmData(e.target.value)}
+                            className={`flex-1 px-2 py-1 rounded-lg border text-xs font-semibold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          />
+                          <button
+                            onClick={async () => {
+                              if (p.tipo === "PENDENCIA") {
+                                const erro = validarSeminovoParaEstoque(p);
+                                if (erro) { setMsg(erro); return; }
+                              }
+                              try {
+                                const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
+                                const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() }) });
+                                const json = await res.json();
+                                if (json.error) { setMsg("Erro: " + json.error); return; }
+                                setMsg("✅ Movido para estoque!");
+                                setMoveConfirmId(null);
+                                setDetailProduct(null);
+                                fetchEstoque();
+                              } catch { setMsg("Erro ao mover"); }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600 transition-colors shrink-0"
+                          >✓ Confirmar</button>
+                          <button onClick={() => setMoveConfirmId(null)} className={`px-2 py-1 rounded-lg text-xs font-bold ${dm ? "text-[#98989D] hover:text-red-400" : "text-[#86868B] hover:text-red-500"} transition-colors`}>✕</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (p.tipo === "PENDENCIA") {
+                              const erro = validarSeminovoParaEstoque(p);
+                              if (erro) { setMsg(erro); return; }
+                            }
+                            setMoveConfirmData(hojeBR());
+                            setMoveConfirmId(p.id);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          Mover para Estoque
+                        </button>
+                      )
                     )}
                     {/* Mover para Pendências — quando item está EM ESTOQUE e admin quer reclassificar como usado */}
                     {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && p.tipo !== "SEMINOVO" && (
