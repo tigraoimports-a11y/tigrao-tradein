@@ -97,13 +97,36 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
 }
 
 // Componente para mostrar produtos vinculados no histórico
-function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornecedorId: string; password: string; dm: boolean }) {
+function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: { pedidoFornecedorId: string; password: string; dm: boolean; fornecedores: { id: string; nome: string }[] }) {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const [produtos, setProdutos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // Client search for edit form
+  const [clienteQuery, setClienteQuery] = useState("");
+  const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
+  const [showClienteSugg, setShowClienteSugg] = useState(false);
+  const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleClienteSearch = (q: string) => {
+    setClienteQuery(q);
+    setEditFields(f => ({ ...f, fornecedor: q, modo_origem: "cliente" }));
+    setShowClienteSugg(true);
+    if (clienteDebounceRef.current) clearTimeout(clienteDebounceRef.current);
+    if (q.length < 2) { setClienteSuggestions([]); return; }
+    clienteDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(q)}`, { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setClienteSuggestions((json.contatos || []).map((c: { nome: string }) => c.nome).slice(0, 8));
+        }
+      } catch { /* ignore */ }
+    }, 350);
+  };
 
   const reload = async () => {
     try {
@@ -139,6 +162,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
 
   const startEdit = (p: any) => {
     setEditId(p.id);
+    const fornNome = p.fornecedor || "";
+    const isFornecedorCadastrado = fornecedores.some(f => f.nome === fornNome);
     setEditFields({
       serial_no: p.serial_no || "",
       imei: p.imei || "",
@@ -149,7 +174,11 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
       custo_unitario: String(p.custo_unitario || ""),
       qnt: String(p.qnt || 1),
       tipo: p.tipo || "A_CAMINHO",
+      fornecedor: fornNome,
+      // se não está na lista de fornecedores cadastrados, tratar como cliente
+      modo_origem: isFornecedorCadastrado || !fornNome ? "fornecedor" : "cliente",
     });
+    setClienteQuery(isFornecedorCadastrado || !fornNome ? "" : fornNome);
   };
 
   const saveEdit = async () => {
@@ -186,6 +215,11 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
         updates.produto = nome.toUpperCase();
       } else if (editFields.produto !== (original?.produto || "")) {
         updates.produto = editFields.produto.toUpperCase() || null;
+      }
+
+      // Fornecedor/Cliente
+      if (editFields.fornecedor !== (original?.fornecedor || "")) {
+        updates.fornecedor = editFields.fornecedor || null;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -232,6 +266,54 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                       <option value="NAO_ATIVADO">Não Ativado</option>
                       <option value="SEMINOVO">Seminovo</option>
                     </select>
+                  </div>
+                  {/* Fornecedor / Cliente */}
+                  <div className="md:col-span-3">
+                    <div className="flex items-center gap-3 mb-1">
+                      <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem da compra</p>
+                      <div className={`flex rounded border text-[10px] font-semibold overflow-hidden ${dm ? "border-[#4A4A4C]" : "border-[#D2D2D7]"}`}>
+                        <button type="button" onClick={() => { setEditFields(f => ({ ...f, modo_origem: "fornecedor", fornecedor: "" })); setClienteQuery(""); setClienteSuggestions([]); }}
+                          className={`px-2 py-0.5 transition-colors ${editFields.modo_origem !== "cliente" ? "bg-[#E8740E] text-white" : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          Fornecedor
+                        </button>
+                        <button type="button" onClick={() => setEditFields(f => ({ ...f, modo_origem: "cliente", fornecedor: "" }))}
+                          className={`px-2 py-0.5 transition-colors ${editFields.modo_origem === "cliente" ? "bg-[#0071E3] text-white" : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                          Cliente
+                        </button>
+                      </div>
+                    </div>
+                    {editFields.modo_origem === "cliente" ? (
+                      <div className="relative">
+                        <input
+                          value={clienteQuery}
+                          onChange={(e) => handleClienteSearch(e.target.value)}
+                          onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
+                          onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
+                          placeholder="🔍 Buscar cliente cadastrado..."
+                          className={inputCls}
+                          autoComplete="off"
+                        />
+                        {editFields.fornecedor && (
+                          <span className="ml-2 text-[10px] text-green-500 font-semibold">✓ {editFields.fornecedor}</span>
+                        )}
+                        {showClienteSugg && clienteSuggestions.length > 0 && (
+                          <div className={`absolute z-20 left-0 right-0 mt-1 rounded border shadow-lg overflow-hidden ${dm ? "bg-[#2C2C2E] border-[#4A4A4C]" : "bg-white border-[#D2D2D7]"}`}>
+                            {clienteSuggestions.map((nome) => (
+                              <button key={nome} type="button"
+                                onMouseDown={() => { setClienteQuery(nome); setEditFields(f => ({ ...f, fornecedor: nome })); setShowClienteSugg(false); }}
+                                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}>
+                                👤 {nome}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <select value={editFields.fornecedor || ""} onChange={(e) => setEditFields(f => ({ ...f, fornecedor: e.target.value }))} className={inputCls}>
+                        <option value="">— Sem fornecedor —</option>
+                        {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial No.</p>
@@ -914,7 +996,7 @@ export default function GastosPage() {
                               )}
                               {/* Produtos vinculados */}
                               {g.pedido_fornecedor_id && (
-                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} />
+                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} fornecedores={fornecedores} />
                               )}
                             </div>
                           </td>
@@ -941,7 +1023,7 @@ export default function GastosPage() {
                               </div>
                               {/* Produtos vinculados ao gasto (editáveis) */}
                               {g.pedido_fornecedor_id && (
-                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} />
+                                <ProdutosVinculados pedidoFornecedorId={g.pedido_fornecedor_id} password={password} dm={dm} fornecedores={fornecedores} />
                               )}
                               <div className="flex items-center gap-3">
                                 <div className="flex-1" />

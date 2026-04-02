@@ -115,7 +115,27 @@ export const IPHONE_ORIGENS = [
 // ── Pulseira Apple Watch ──
 
 export const WATCH_PULSEIRAS = ["S/M", "M/L", "One Size"];
-export const WATCH_BAND_MODELS = ["Sport Band", "Sport Loop", "Braided Solo Loop", "Solo Loop", "Milanese Loop", "Link Bracelet", "Alpine Loop", "Trail Loop", "Ocean Band"];
+
+export const WATCH_BAND_MODELS = [
+  "Pulseira Esportiva Azul",
+  "Pulseira Esportiva Estelar",
+  "Pulseira Esportiva Preta",
+  "Pulseira esportiva roxo-névoa",
+  "Pulseira loop Alpina azul-clara",
+  "Pulseira loop Alpina índigo",
+  "Pulseira loop Alpina preta",
+  "Pulseira loop Alpina verde",
+  "Pulseira loop esportiva azul-âncora",
+  "Pulseira loop esportiva cinza-escura",
+  "Pulseira loop Trail azul/azul-brilhante",
+  "Pulseira loop Trail azul/preta",
+  "Pulseira loop Trail preta/carvão",
+  "Pulseira natural estilo milanês",
+  "Pulseira Ocean Azul",
+  "Pulseira Ocean Preta",
+  "Pulseira preta estilo milanês",
+  "Puseira Ocean Verde-Neón",
+];
 
 // ── Opções por categoria ──
 
@@ -232,26 +252,37 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
   switch (cat) {
     case "IPHONES": {
       const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
-      const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : ""; // só código (ex: "LL")
-      return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
+      const storage = spec.ip_storage ? ` ${spec.ip_storage}` : "";
+      const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : "";
+      return `IPHONE ${spec.ip_modelo}${linha}${storage}${c}${origem}`.toUpperCase();
     }
-    case "MAC_MINI":
-      return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
+    case "MAC_MINI": {
+      const ram = spec.mm_ram ? ` ${spec.mm_ram}` : "";
+      const storage = spec.mm_storage ? ` ${spec.mm_storage}` : "";
+      return `MAC MINI ${spec.mm_chip}${ram}${storage}`.toUpperCase();
+    }
     case "MACBOOK": {
-      const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
+      const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
       const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
-      return `${tipo} ${spec.mb_chip}${nucleos} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
+      const tela = spec.mb_tela ? ` ${spec.mb_tela}` : "";
+      const ram = spec.mb_ram ? ` ${spec.mb_ram}` : "";
+      const storage = spec.mb_storage ? ` ${spec.mb_storage}` : "";
+      return `${tipo} ${spec.mb_chip}${nucleos}${tela}${ram}${storage}${c}`.toUpperCase();
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
       const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
-      const conn = spec.ipad_conn === "WIFI+CELL" ? " WI-FI+CELLULAR" : " WI-FI";
-      return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${c}${conn}`.toUpperCase();
+      const tela = spec.ipad_tela ? ` ${spec.ipad_tela}` : "";
+      const storage = spec.ipad_storage ? ` ${spec.ipad_storage}` : "";
+      const conn = spec.ipad_conn === "WIFI+CELL" ? " WI-FI+CELLULAR" : spec.ipad_conn === "WIFI" ? " WI-FI" : "";
+      return `${modelo}${chip}${tela}${storage}${c}${conn}`.toUpperCase();
     }
     case "APPLE_WATCH": {
-      const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
+      const tamanho = spec.aw_tamanho ? ` ${spec.aw_tamanho}` : "";
+      const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : spec.aw_conn === "GPS" ? " GPS" : "";
       const pulseira = spec.aw_pulseira ? ` ${spec.aw_pulseira}` : "";
-      return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}${c}${pulseira}`.toUpperCase();
+      const band = spec.aw_band ? ` ${spec.aw_band}` : "";
+      return `APPLE WATCH ${spec.aw_modelo}${tamanho}${conn}${c}${pulseira}${band}`.toUpperCase();
     }
     case "AIRPODS":
       return `${spec.air_modelo}${c}`.toUpperCase();
