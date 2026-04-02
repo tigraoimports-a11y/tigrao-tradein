@@ -145,7 +145,7 @@ export interface ProdutoRowState {
   serial_no: string;
   condicao: string; // "NOVO" | "NAO_ATIVADO" | "SEMINOVO"
   caixa: boolean;   // tem caixa original?
-  grade: string;    // grade de qualidade: "A" | "B" | "C" | ""
+  grade: string;    // grade de qualidade: "A+" | "A" | "AB" | "B" | ""
 }
 
 export function createEmptyProdutoRow(): ProdutoRowState {
@@ -429,16 +429,17 @@ export default function ProdutoSpecFields({
           {/* Grade select */}
           <div className="flex items-center gap-1.5">
             <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
-            {(["A", "B", "C"] as const).map((g) => (
+            {(["A+", "A", "AB", "B"] as const).map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => set("grade", row.grade === g ? "" : g)}
-                className={`w-7 h-7 rounded-lg text-xs font-bold border transition-colors ${
+                className={`px-2 h-7 min-w-[28px] rounded-lg text-xs font-bold border transition-colors ${
                   row.grade === g
-                    ? g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
-                      : g === "B" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
-                      : "bg-red-500/15 border-red-500/40 text-red-600"
+                    ? g === "A+" ? "bg-amber-500/15 border-amber-500/40 text-amber-600"
+                      : g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
+                      : g === "AB" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
+                      : "bg-orange-500/15 border-orange-500/40 text-orange-600"
                     : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
                 }`}
               >

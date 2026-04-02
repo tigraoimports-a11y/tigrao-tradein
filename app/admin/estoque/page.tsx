@@ -3479,12 +3479,17 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">📦 Com Caixa</span></div>
                       )}
-                      {/* Grade badge — detecta tag [GRADE_X] ou texto livre "GRADE A/B/C" */}
+                      {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
-                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
-                          || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase();
+                        const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
+                        const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                        const g = tagKey ? GRADE_TAG[tagKey]
+                          : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase();
                         if (!g) return null;
-                        const cls = g === "A" ? "bg-green-100 text-green-700" : g === "B" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
+                        const cls = g === "A+" ? "bg-amber-100 text-amber-700"
+                          : g === "A" ? "bg-green-100 text-green-700"
+                          : g === "AB" ? "bg-yellow-100 text-yellow-700"
+                          : "bg-orange-100 text-orange-700";
                         return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span></div>;
                       })()}
@@ -3592,33 +3597,36 @@ export default function EstoquePage() {
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
                       {canEdit ? (
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          {(["A","B","C"] as const).map((g) => {
-                            const currentGrade = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
-                              || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase() || "";
+                          {(["A+","A","AB","B"] as const).map((g) => {
+                            const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
+                            const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                            const currentGrade = tagKey ? GRADE_TAG[tagKey]
+                              : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                             const isActive = currentGrade === g;
                             const cls = isActive
-                              ? g === "A" ? "bg-green-500 text-white border-green-500"
-                                : g === "B" ? "bg-yellow-500 text-white border-yellow-500"
-                                : "bg-red-500 text-white border-red-500"
+                              ? g === "A+" ? "bg-amber-500 text-white border-amber-500"
+                                : g === "A" ? "bg-green-500 text-white border-green-500"
+                                : g === "AB" ? "bg-yellow-500 text-white border-yellow-500"
+                                : "bg-orange-500 text-white border-orange-500"
                               : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E]"
                                 : "bg-white border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]";
                             return (
                               <button key={g} type="button"
                                 onClick={async () => {
                                   const obs = p.observacao || "";
-                                  // Remove grade anterior e insere nova (ou remove se clicar na mesma)
                                   const newGrade = isActive ? "" : g;
                                   const newObs = obs
-                                    .replace(/\[GRADE_[ABC]\]/g, "")
-                                    .replace(/\bGRADE\s*[ABC]\b/gi, "")
+                                    .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+                                    .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
                                     .trim();
-                                  const finalObs = newGrade ? `${newObs} [GRADE_${newGrade}]`.trim() : (newObs || null);
+                                  const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
+                                  const finalObs = gradeTag ? `${newObs} ${gradeTag}`.trim() : (newObs || null);
                                   await apiPatch(p.id, { observacao: finalObs });
                                   setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
                                   setDetailProduct({ ...p, observacao: finalObs });
                                   setMsg(`Grade ${newGrade || "removida"}!`);
                                 }}
-                                className={`w-9 h-9 rounded-xl text-sm font-bold border-2 transition-colors ${cls}`}
+                                className={`px-2.5 h-9 min-w-[36px] rounded-xl text-sm font-bold border-2 transition-colors ${cls}`}
                               >{g}</button>
                             );
                           })}
