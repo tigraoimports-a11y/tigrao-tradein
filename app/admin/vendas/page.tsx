@@ -30,6 +30,7 @@ export default function VendasPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
+  const [editandoGrupoVinculo, setEditandoGrupoVinculo] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
@@ -1032,6 +1033,40 @@ export default function VendasPage() {
             fetchVendas();
             fetchEstoque();
           }
+        } else if (editandoGrupoIds.length === 1 && allProducts.length > 1) {
+          // Edição simples mas usuário adicionou mais produtos
+          const gVinculo = editandoGrupoVinculo || crypto.randomUUID();
+          const groupPayloads2: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
+          for (const p of groupPayloads2) p.grupo_id = gVinculo;
+          // PATCH o produto original
+          const resOrig = await fetch("/api/vendas", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ id: editandoGrupoIds[0], ...groupPayloads2[0] }),
+          });
+          const jsonOrig = await resOrig.json();
+          if (!jsonOrig.ok && !jsonOrig.data) {
+            setMsg("Erro ao atualizar: " + (jsonOrig.error || "erro desconhecido"));
+            setSaving(false);
+            return;
+          }
+          // POST novos produtos
+          for (let i = 1; i < groupPayloads2.length; i++) {
+            await fetch("/api/vendas", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-admin-password": password },
+              body: JSON.stringify(groupPayloads2[i]),
+            });
+          }
+          setEditandoVendaId(null);
+          setEditandoGrupoIds([]);
+          setEditandoGrupoVinculo(null);
+          setDuplicadoInfo(null);
+          setProdutosCarrinho([]);
+          clearProductFields();
+          setMsg(`Venda atualizada + ${allProducts.length - 1} produto(s) adicionado(s)!`);
+          fetchVendas();
+          fetchEstoque();
         } else {
           // Edição simples (1 produto)
           const prod = allProducts[0];
@@ -1045,6 +1080,7 @@ export default function VendasPage() {
           if (json.ok || json.data) {
             setEditandoVendaId(null);
             setEditandoGrupoIds([]);
+            setEditandoGrupoVinculo(null);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
             clearProductFields();
@@ -1528,6 +1564,7 @@ export default function VendasPage() {
                 onClick={() => {
                   setEditandoVendaId(null);
                   setEditandoGrupoIds([]);
+                  setEditandoGrupoVinculo(null);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
                   setMsg("");
@@ -3430,17 +3467,17 @@ export default function VendasPage() {
                                               pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: primaryVenda.origem || "",
                                               tipo: primaryVenda.tipo || "",
-                                              produto: grupoVendas.length > 1 ? "" : v.produto,
-                                              fornecedor: grupoVendas.length > 1 ? "" : (v.fornecedor || ""),
-                                              custo: grupoVendas.length > 1 ? "" : String(v.custo || ""),
-                                              preco_vendido: grupoVendas.length > 1 ? "" : String(v.preco_vendido || ""),
+                                              produto: "",
+                                              fornecedor: "",
+                                              custo: "",
+                                              preco_vendido: "",
                                               valor_comprovante_input: String(grupoVendas.reduce((s, gv) => s + (gv.valor_comprovante || 0), 0) || ""),
                                               banco: primaryVenda.banco || "ITAU",
                                               forma: primaryVenda.forma || "",
                                               qnt_parcelas: String(primaryVenda.qnt_parcelas || ""),
                                               bandeira: primaryVenda.bandeira || "",
                                               local: primaryVenda.local || "",
-                                              produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || ""),
+                                              produto_na_troca: "",
                                               entrada_pix: String(primaryVenda.entrada_pix || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
@@ -3454,35 +3491,25 @@ export default function VendasPage() {
                                               comp_alt: String(primaryVenda.comp_alt || ""),
                                               sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
                                               banco_sinal: primaryVenda.banco_sinal || "",
-                                              troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
-                                              troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
+                                              troca_produto: "",
+                                              troca_cor: "",
                                               troca_categoria: "",
-                                              troca_bateria: grupoVendas.length > 1 ? "" : trocaBat,
-                                              troca_obs: grupoVendas.length > 1 ? "" : trocaObs,
-                                              troca_grade: grupoVendas.length > 1 ? "" : trocaGrade,
-                                              troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
-                                              troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
-                                              troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
+                                              troca_bateria: "",
+                                              troca_obs: "",
+                                              troca_grade: "",
+                                              troca_caixa: "",
+                                              troca_cabo: "",
+                                              troca_fonte: "",
                                               troca_serial_no: "", troca_imei: "", troca_origem: "",
                                               produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
-                                              serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
-                                              imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
+                                              serial_no: "",
+                                              imei: "",
                                               cep: primaryVenda.cep || "",
                                               bairro: primaryVenda.bairro || "",
                                               cidade: primaryVenda.cidade || "",
                                               uf: primaryVenda.uf || "",
                                             });
                                             setProdutoManual(true);
-
-                                            // Mostrar produto no campo de busca para que fique visível ao editar
-                                            if (grupoVendas.length === 1) {
-                                              setSerialBusca(v.serial_no || v.imei || primaryVenda.produto || "");
-                                            }
-
-                                            // Restaurar ProdutoSpecFields das trocas com dados salvos
-                                            if (trocaProd) {
-                                              setTrocaRow({ ...createEmptyProdutoRow(), produto: trocaProd, cor: trocaCor, categoria: "" });
-                                            }
 
                                             // Se grupo: carregar outros produtos no carrinho
                                             if (grupoVendas.length > 1) {
@@ -3529,9 +3556,48 @@ export default function VendasPage() {
                                               setEditandoVendaId(grupoVendas[0].id); // sinaliza modo edição
                                               // Campos de produto/troca já foram limpos no setForm acima (grupoVendas.length > 1 ? "" : ...)
                                             } else {
-                                              setProdutosCarrinho([]);
-                                              setEditandoGrupoIds([]);
+                                              // Produto original vai para o carrinho, igual ao fluxo de grupo
+                                              setProdutosCarrinho([{
+                                                produto: v.produto,
+                                                fornecedor: v.fornecedor || "",
+                                                custo: String(v.custo || ""),
+                                                preco_vendido: String(v.preco_vendido || ""),
+                                                local: primaryVenda.local || "",
+                                                serial_no: v.serial_no || "",
+                                                imei: v.imei || "",
+                                                _estoqueId: "",
+                                                _catSel: "",
+                                                _produtoManual: true,
+                                                produto_na_troca: String(primaryVenda.produto_na_troca || ""),
+                                                troca_produto: trocaProd,
+                                                troca_cor: trocaCor,
+                                                troca_categoria: "",
+                                                troca_bateria: trocaBat,
+                                                troca_obs: trocaObs,
+                                                troca_grade: trocaGrade,
+                                                troca_caixa: trocaCaixa,
+                                                troca_cabo: trocaCabo,
+                                                troca_fonte: trocaFonte,
+                                                troca_serial_no: "",
+                                                troca_imei: "",
+                                                troca_origem: "",
+                                                produto_na_troca2: String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || ""),
+                                                troca_produto2: (primaryVenda as unknown as Record<string, string>).troca_produto2 || "",
+                                                troca_cor2: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "",
+                                                troca_categoria2: "",
+                                                troca_bateria2: (primaryVenda as unknown as Record<string, string>).troca_bateria2 || "",
+                                                troca_obs2: (primaryVenda as unknown as Record<string, string>).troca_obs2 || "",
+                                                troca_grade2: "",
+                                                troca_caixa2: "",
+                                                troca_cabo2: "",
+                                                troca_fonte2: "",
+                                                troca_serial_no2: "",
+                                                troca_imei2: "",
+                                                troca_origem2: "",
+                                              }]);
+                                              setEditandoGrupoIds([v.id]);
                                               setEditandoVendaId(v.id);
+                                              setEditandoGrupoVinculo(primaryVenda.grupo_id || null);
                                             }
                                             setTab("nova");
                                             window.scrollTo({ top: 0, behavior: "smooth" });
