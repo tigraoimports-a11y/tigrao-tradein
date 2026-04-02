@@ -24,11 +24,11 @@ export async function GET(req: NextRequest) {
     .order("data_entrada", { ascending: false })
     .limit(30);
 
-  // ── 2. Buscar nas vendas ──
+  // ── 2. Buscar nas vendas (inclui fornecedor para entradas/recompras) ──
   const { data: vendasResults } = await supabase
     .from("vendas")
-    .select("id, produto, cliente, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem, serial_no, imei, cpf, email")
-    .or(`produto.ilike.${searchTerm},cliente.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
+    .select("id, produto, cliente, fornecedor, preco_vendido, custo, data, forma, banco, status_pagamento, tipo, origem, serial_no, imei, cpf, email")
+    .or(`produto.ilike.${searchTerm},cliente.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm},fornecedor.ilike.${searchTerm}`)
     .neq("status_pagamento", "CANCELADO")
     .order("data", { ascending: false })
     .limit(includeHistory ? 100 : 30);
@@ -58,18 +58,39 @@ export async function GET(req: NextRequest) {
   // Filtrar contatos que realmente combinam com a busca (por nome)
   const contatos = [...contatosMap.values()].filter(c => c.nome.includes(q.toUpperCase())).slice(0, 15);
 
+  const qUpper = q.toUpperCase();
+
   // ── 4. Montar operações (vendas agrupadas por cliente+data) ──
   const opMap = new Map<string, {
-    contato: string; data: string; tipo: "Saída"; total_itens: number; valor_total: number; created_at: string;
+    contato: string; data: string; tipo: "Saída" | "Entrada"; total_itens: number; valor_total: number; created_at: string;
   }>();
   for (const v of vendasResults ?? []) {
-    const key = `${v.data}|${(v.cliente || "").toUpperCase()}`;
-    if (!opMap.has(key)) {
-      opMap.set(key, { contato: v.cliente || "?", data: v.data, tipo: "Saída", total_itens: 0, valor_total: 0, created_at: v.data });
+    const isTradein =
+      v.fornecedor && v.fornecedor.toUpperCase().includes(qUpper) &&
+      !(v.cliente || "").toUpperCase().includes(qUpper) &&
+      !(v.produto || "").toUpperCase().includes(qUpper) &&
+      !(v.serial_no || "").toUpperCase().includes(qUpper) &&
+      !(v.imei || "").toUpperCase().includes(qUpper);
+
+    if (isTradein) {
+      // Agrupar como Entrada do fornecedor (trade-in recebido)
+      const key = `TRADEIN|${v.data}|${(v.fornecedor || "").toUpperCase()}`;
+      if (!opMap.has(key)) {
+        opMap.set(key, { contato: v.fornecedor || "?", data: v.data, tipo: "Entrada", total_itens: 0, valor_total: 0, created_at: v.data });
+      }
+      const op = opMap.get(key)!;
+      op.total_itens++;
+      op.valor_total += Number(v.custo || 0);
+    } else {
+      // Venda normal — agrupar por cliente+data
+      const key = `${v.data}|${(v.cliente || "").toUpperCase()}`;
+      if (!opMap.has(key)) {
+        opMap.set(key, { contato: v.cliente || "?", data: v.data, tipo: "Saída", total_itens: 0, valor_total: 0, created_at: v.data });
+      }
+      const op = opMap.get(key)!;
+      op.total_itens++;
+      op.valor_total += Number(v.preco_vendido || 0);
     }
-    const op = opMap.get(key)!;
-    op.total_itens++;
-    op.valor_total += Number(v.preco_vendido || 0);
   }
   // Também agrupar entradas do estoque por fornecedor+data
   for (const e of estoqueResults ?? []) {
@@ -113,22 +134,33 @@ export async function GET(req: NextRequest) {
   }));
 
   // ── 6. Montar resultados de vendas ──
-  const vendas = (vendasResults ?? []).slice(0, includeHistory ? 50 : 20).map(v => ({
-    id: v.id,
-    produto: v.produto,
-    status: v.status_pagamento || "FINALIZADO",
-    custo: v.custo,
-    cliente: v.cliente,
-    preco_vendido: v.preco_vendido,
-    lucro: v.preco_vendido && v.custo ? v.preco_vendido - v.custo : undefined,
-    data: v.data,
-    forma: v.forma,
-    banco: v.banco,
-    tipo_venda: v.tipo,
-    origem: v.origem,
-    serial_no: v.serial_no,
-    imei: v.imei,
-  }));
+  const vendas = (vendasResults ?? []).slice(0, includeHistory ? 50 : 20).map(v => {
+    // Detecta se o match foi pelo fornecedor (entrada/recompra) e não pelo cliente
+    const matchedByFornecedor =
+      v.fornecedor && v.fornecedor.toUpperCase().includes(qUpper) &&
+      !(v.cliente || "").toUpperCase().includes(qUpper) &&
+      !(v.produto || "").toUpperCase().includes(qUpper) &&
+      !(v.serial_no || "").toUpperCase().includes(qUpper) &&
+      !(v.imei || "").toUpperCase().includes(qUpper);
+    return {
+      id: v.id,
+      produto: v.produto,
+      status: v.status_pagamento || "FINALIZADO",
+      custo: v.custo,
+      cliente: v.cliente,
+      fornecedor: v.fornecedor,
+      preco_vendido: v.preco_vendido,
+      lucro: v.preco_vendido && v.custo ? v.preco_vendido - v.custo : undefined,
+      data: v.data,
+      forma: v.forma,
+      banco: v.banco,
+      tipo_venda: v.tipo,
+      origem: v.origem,
+      serial_no: v.serial_no,
+      imei: v.imei,
+      is_entrada: matchedByFornecedor,
+    };
+  });
 
   return NextResponse.json({ operacoes, contatos, estoque, vendas });
 }

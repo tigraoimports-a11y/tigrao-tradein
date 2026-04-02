@@ -3491,26 +3491,46 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — editável para admin */}
+                  {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (
-                      <input
-                        type="text"
-                        defaultValue={p.cor || ""}
-                        placeholder="Ex: TITANIO NATURAL"
-                        onBlur={async (e) => {
-                          const val = e.target.value.trim().toUpperCase() || null;
-                          if (val !== (p.cor || null)) {
+                    {(canEdit || isAdmin) ? (() => {
+                      const coresCat = p.categoria === "IPHONES"
+                        ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
+                        : CORES_POR_CATEGORIA[p.categoria || ""] || [];
+                      return coresCat.length > 0 ? (
+                        <select
+                          value={p.cor || ""}
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
                             await apiPatch(p.id, { cor: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
                             setDetailProduct({ ...p, cor: val });
                             setMsg("Cor atualizada!");
-                          }
-                        }}
-                        className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                      />
-                    ) : p.cor ? (
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        >
+                          <option value="">— Selecionar —</option>
+                          {coresCat.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          defaultValue={p.cor || ""}
+                          placeholder="Ex: TITANIO NATURAL"
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim().toUpperCase() || null;
+                            if (val !== (p.cor || null)) {
+                              await apiPatch(p.id, { cor: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
+                              setDetailProduct({ ...p, cor: val });
+                              setMsg("Cor atualizada!");
+                            }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      );
+                    })() : p.cor ? (
                       <p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p>
                     ) : null}
                   </div>
@@ -3564,6 +3584,72 @@ export default function EstoquePage() {
                       ) : p.bateria ? (
                         <p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p>
                       ) : null}
+                    </div>
+                  )}
+                  {/* Grade — editável em pendentes */}
+                  {!isLac && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
+                      {canEdit ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {(["A","B","C"] as const).map((g) => {
+                            const currentGrade = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
+                              || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase() || "";
+                            const isActive = currentGrade === g;
+                            const cls = isActive
+                              ? g === "A" ? "bg-green-500 text-white border-green-500"
+                                : g === "B" ? "bg-yellow-500 text-white border-yellow-500"
+                                : "bg-red-500 text-white border-red-500"
+                              : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E]"
+                                : "bg-white border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]";
+                            return (
+                              <button key={g} type="button"
+                                onClick={async () => {
+                                  const obs = p.observacao || "";
+                                  // Remove grade anterior e insere nova (ou remove se clicar na mesma)
+                                  const newGrade = isActive ? "" : g;
+                                  const newObs = obs
+                                    .replace(/\[GRADE_[ABC]\]/g, "")
+                                    .replace(/\bGRADE\s*[ABC]\b/gi, "")
+                                    .trim();
+                                  const finalObs = newGrade ? `${newObs} [GRADE_${newGrade}]`.trim() : (newObs || null);
+                                  await apiPatch(p.id, { observacao: finalObs });
+                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                                  setDetailProduct({ ...p, observacao: finalObs });
+                                  setMsg(`Grade ${newGrade || "removida"}!`);
+                                }}
+                                className={`w-9 h-9 rounded-xl text-sm font-bold border-2 transition-colors ${cls}`}
+                              >{g}</button>
+                            );
+                          })}
+                          {/* Caixa toggle */}
+                          <button type="button"
+                            onClick={async () => {
+                              const obs = p.observacao || "";
+                              const hasCaixa = obs.includes("[COM_CAIXA]");
+                              const newObs = hasCaixa
+                                ? obs.replace("[COM_CAIXA]", "").trim() || null
+                                : `${obs} [COM_CAIXA]`.trim();
+                              await apiPatch(p.id, { observacao: newObs });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                              setDetailProduct({ ...p, observacao: newObs });
+                              setMsg(hasCaixa ? "Caixa removida!" : "Com caixa salvo!");
+                            }}
+                            className={`ml-1 px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-colors ${
+                              (p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || ""))
+                                ? "bg-green-500 text-white border-green-500"
+                                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E]"
+                                : "bg-white border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"
+                            }`}
+                          >📦 Caixa</button>
+                        </div>
+                      ) : (() => {
+                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1]
+                          || p.observacao?.match(/\bGRADE\s*([ABC])\b/i)?.[1]?.toUpperCase();
+                        if (!g) return null;
+                        const cls = g === "A" ? "bg-green-100 text-green-700" : g === "B" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
+                        return <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span>;
+                      })()}
                     </div>
                   )}
                 </div>
@@ -3671,7 +3757,7 @@ export default function EstoquePage() {
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p>
                     {isAdmin ? (
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="mt-0.5 space-y-1.5">
                         <input type="text" defaultValue={p.fornecedor || ""} placeholder="Ex: MIAMI ZONE" onBlur={async (e) => {
                           const val = e.target.value.trim().toUpperCase() || null;
                           if (val !== (p.fornecedor || null)) {
@@ -3680,15 +3766,14 @@ export default function EstoquePage() {
                             setDetailProduct({ ...p, fornecedor: val });
                             setMsg("Fornecedor atualizado!");
                           }
-                        }} className={`flex-1 text-[13px] px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
+                        }} className={`w-full text-[13px] px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
                         {p.fornecedor && (
                           <button
-                            title="Ver perfil do cliente"
                             onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
-                            className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/50 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                            className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/60 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            Ver perfil
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Ver perfil do cliente
                           </button>
                         )}
                       </div>

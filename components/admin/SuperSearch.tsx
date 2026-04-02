@@ -8,6 +8,213 @@ type SearchResult = Record<string, any>;
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
+const tipoBadgeColors: Record<string, string> = {
+  "VENDA": "bg-green-100 text-green-700",
+  "UPGRADE": "bg-purple-100 text-purple-700",
+  "ATACADO": "bg-blue-100 text-blue-700",
+};
+const tipoBadgeFn = (tipo: string) => tipoBadgeColors[tipo] || "";
+
+function OperacaoDetail({ op, vendas, onClose, dm }: { op: SearchResult; vendas: SearchResult[]; onClose: () => void; dm: boolean }) {
+  const bgCard = dm ? "bg-[#1C1C1E]" : "bg-white";
+  const bgSection = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+  const textPrimary = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const textSecondary = dm ? "text-[#98989D]" : "text-[#86868B]";
+  const divider = dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]";
+
+  const opItems = vendas.filter(v => {
+    const dataMatch = v.data === op.data;
+    if (op.tipo === "Entrada") {
+      return dataMatch && v.is_entrada && (v.fornecedor || "").toUpperCase() === op.contato.toUpperCase();
+    } else {
+      return dataMatch && !v.is_entrada && (v.cliente || "").toUpperCase() === op.contato.toUpperCase();
+    }
+  });
+
+  const totalLucro = opItems.reduce((s: number, v: SearchResult) => s + (v.lucro || 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className={`w-full max-w-lg mx-4 ${bgCard} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${divider}`}>
+          <div className="flex items-center gap-2">
+            <span className={`text-xl ${op.tipo === "Entrada" ? "text-green-500" : "text-blue-500"}`}>{op.tipo === "Entrada" ? "↓" : "↑"}</span>
+            <div>
+              <h3 className={`text-sm font-bold ${textPrimary}`}>Detalhes da Operação</h3>
+              <p className={`text-xs ${textSecondary}`}>{op.data?.split("-").reverse().join("/")} · {op.tipo}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className={`text-lg ${textSecondary} hover:text-[#E8740E]`}>✕</button>
+        </div>
+
+        <div className={`mx-4 mt-4 p-4 rounded-xl border ${bgSection}`}>
+          <p className={`text-[10px] uppercase tracking-wider ${textSecondary} mb-1`}>Contato</p>
+          <p className={`text-sm font-bold ${textPrimary}`}>{op.contato}</p>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>{op.tipo}</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600">Concluída</span>
+          </div>
+        </div>
+
+        <div className="mx-4 mt-3">
+          <p className={`text-xs font-bold ${textPrimary} mb-2`}>Produtos da Operação · {opItems.length > 0 ? opItems.length : op.total_itens} {(opItems.length || op.total_itens) === 1 ? "item" : "itens"}</p>
+          <div className={`rounded-xl border ${bgSection} overflow-hidden`}>
+            {opItems.length === 0 ? (
+              <p className={`px-4 py-3 text-sm ${textSecondary}`}>Ative &quot;Incluir histórico completo&quot; para ver todos os itens</p>
+            ) : opItems.map((item: SearchResult, i: number) => (
+              <div key={i} className={`px-4 py-3 ${i > 0 ? `border-t ${divider}` : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${textPrimary} leading-snug`}>{item.produto}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {item.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadgeFn(item.tipo_venda)}`}>{item.tipo_venda}</span>}
+                      {item.origem && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{item.origem}</span>}
+                    </div>
+                    <div className={`text-[11px] ${textSecondary} mt-1 flex gap-2 flex-wrap`}>
+                      {item.serial_no && <span className="font-mono text-purple-500">SN: {item.serial_no}</span>}
+                      {item.imei && <span className="font-mono text-blue-500">IMEI: {item.imei}</span>}
+                      {item.forma && <span>{item.forma}{item.banco ? ` · ${item.banco}` : ""}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {op.tipo === "Entrada" ? (
+                      item.custo ? <p className="text-sm font-bold text-green-600">{fmt(item.custo)}</p> : null
+                    ) : (
+                      <>
+                        {item.custo ? <p className={`text-[10px] ${textSecondary}`}>Custo: {fmt(item.custo)}</p> : null}
+                        {item.preco_vendido ? <p className="text-sm font-bold text-[#E8740E]">{fmt(item.preco_vendido)}</p> : null}
+                        {item.lucro !== undefined ? <p className={`text-[10px] font-semibold ${item.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{item.lucro >= 0 ? "+" : ""}{fmt(item.lucro)}</p> : null}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={`mx-4 mt-3 mb-4 p-4 rounded-xl border ${bgSection}`}>
+          <div className="flex items-center justify-between">
+            <p className={`text-xs font-bold ${textPrimary}`}>{op.tipo === "Entrada" ? "Custo Total (Trade-in)" : "Valor Total"}</p>
+            <p className={`text-base font-bold ${op.tipo === "Entrada" ? "text-green-600" : "text-[#E8740E]"}`}>{fmt(op.valor_total)}</p>
+          </div>
+          {op.tipo === "Saída" && opItems.length > 0 && (() => {
+            const totalCusto = opItems.reduce((s: number, v: SearchResult) => s + (v.custo || 0), 0);
+            return totalCusto > 0 ? (
+              <div className={`mt-2 pt-2 border-t ${divider} flex justify-between`}>
+                <p className={`text-xs ${textSecondary}`}>Lucro total</p>
+                <p className={`text-xs font-bold ${totalLucro >= 0 ? "text-green-600" : "text-red-500"}`}>{totalLucro >= 0 ? "+" : ""}{fmt(totalLucro)}</p>
+              </div>
+            ) : null;
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContatoDetail({ contato, vendas, onClose, dm }: { contato: SearchResult; vendas: SearchResult[]; onClose: () => void; dm: boolean }) {
+  const bgCard = dm ? "bg-[#1C1C1E]" : "bg-white";
+  const bgSection = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+  const textPrimary = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const textSecondary = dm ? "text-[#98989D]" : "text-[#86868B]";
+  const divider = dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]";
+
+  const compras = vendas.filter(v => !v.is_entrada && (v.cliente || "").toUpperCase() === contato.nome.toUpperCase());
+  const tradeins = vendas.filter(v => v.is_entrada && (v.fornecedor || "").toUpperCase() === contato.nome.toUpperCase());
+  const totalGasto = compras.reduce((s: number, v: SearchResult) => s + (v.preco_vendido || 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className={`w-full max-w-lg mx-4 ${bgCard} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${divider}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">👤</span>
+            <h3 className={`text-sm font-bold ${textPrimary}`}>{contato.nome}</h3>
+          </div>
+          <button onClick={onClose} className={`text-lg ${textSecondary} hover:text-[#E8740E]`}>✕</button>
+        </div>
+
+        <div className={`mx-4 mt-4 p-4 rounded-xl border ${bgSection} grid grid-cols-2 gap-3`}>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>CPF</p>
+            <p className={`text-sm ${textPrimary}`}>{contato.cpf || "—"}</p>
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Email</p>
+            <p className={`text-sm ${textPrimary} truncate`}>{contato.email || "—"}</p>
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Total de compras</p>
+            <p className={`text-sm font-bold ${textPrimary}`}>{contato.total_compras}</p>
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Total gasto</p>
+            <p className="text-sm font-bold text-[#E8740E]">{totalGasto > 0 ? fmt(totalGasto) : "—"}</p>
+          </div>
+        </div>
+
+        {compras.length > 0 && (
+          <div className="mx-4 mt-3">
+            <p className={`text-xs font-bold ${textPrimary} mb-2`}>Compras ({compras.length})</p>
+            <div className={`rounded-xl border ${bgSection} overflow-hidden`}>
+              {compras.map((v: SearchResult, i: number) => (
+                <div key={i} className={`px-4 py-3 ${i > 0 ? `border-t ${divider}` : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${textPrimary} leading-snug`}>{v.produto}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {v.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadgeFn(v.tipo_venda)}`}>{v.tipo_venda}</span>}
+                        <span className={`text-[11px] ${textSecondary}`}>{v.data?.split("-").reverse().join("/")}</span>
+                        {v.serial_no && <span className="font-mono text-[11px] text-purple-500">SN: {v.serial_no}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {v.preco_vendido ? <p className="text-sm font-bold text-[#E8740E]">{fmt(v.preco_vendido)}</p> : null}
+                      {v.lucro !== undefined ? <p className={`text-[10px] font-semibold ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{v.lucro >= 0 ? "+" : ""}{fmt(v.lucro)}</p> : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tradeins.length > 0 && (
+          <div className="mx-4 mt-3 mb-4">
+            <p className={`text-xs font-bold ${textPrimary} mb-2`}>Trade-ins entregues ({tradeins.length})</p>
+            <div className={`rounded-xl border ${bgSection} overflow-hidden`}>
+              {tradeins.map((v: SearchResult, i: number) => (
+                <div key={i} className={`px-4 py-3 ${i > 0 ? `border-t ${divider}` : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${textPrimary} leading-snug`}>{v.produto}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">TRADE-IN</span>
+                        <span className={`text-[11px] ${textSecondary}`}>{v.data?.split("-").reverse().join("/")}</span>
+                        {v.serial_no && <span className="font-mono text-[11px] text-purple-500">SN: {v.serial_no}</span>}
+                        {v.cliente && <span className={`text-[11px] ${textSecondary}`}>→ {v.cliente}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {v.custo ? <p className="text-sm font-bold text-green-600">{fmt(v.custo)}</p> : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {compras.length === 0 && tradeins.length === 0 && (
+          <p className={`mx-4 mt-3 mb-4 text-sm ${textSecondary}`}>Ative &quot;Incluir histórico completo&quot; para ver o histórico</p>
+        )}
+        {(compras.length > 0 || tradeins.length > 0) && <div className="h-4" />}
+      </div>
+    </div>
+  );
+}
+
 function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClose: () => void; onSave: (id: string, fields: Record<string, any>) => void; dm: boolean }) {
   const bgCard = dm ? "bg-[#1C1C1E]" : "bg-white";
   const bgSection = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
@@ -238,6 +445,8 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
   const [loading, setLoading] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
   const [detailItem, setDetailItem] = useState<SearchResult | null>(null);
+  const [selectedOp, setSelectedOp] = useState<SearchResult | null>(null);
+  const [selectedContato, setSelectedContato] = useState<SearchResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasResults = results.operacoes.length + results.contatos.length + results.estoque.length + results.vendas.length > 0;
@@ -326,14 +535,7 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
     return colors[status] || "bg-gray-100 text-gray-700";
   };
 
-  const tipoBadge = (tipo: string) => {
-    const colors: Record<string, string> = {
-      "VENDA": "bg-green-100 text-green-700",
-      "UPGRADE": "bg-purple-100 text-purple-700",
-      "ATACADO": "bg-blue-100 text-blue-700",
-    };
-    return colors[tipo] || "";
-  };
+  const tipoBadge = tipoBadgeFn;
 
   return (
     <>
@@ -380,7 +582,8 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                       <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Operacoes ({results.operacoes.length})</span>
                     </div>
                     {results.operacoes.map((op, i) => (
-                      <div key={`op-${i}`} className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}>
+                      <div key={`op-${i}`} className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}
+                        onClick={() => setSelectedOp(op)}>
                         <div className="flex items-center gap-3">
                           <span className={`text-lg ${op.tipo === "Entrada" ? "text-green-500" : "text-blue-500"}`}>
                             {op.tipo === "Entrada" ? "↓" : "↑"}
@@ -392,7 +595,7 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-600">{op.status}</span>
                             </div>
                             <div className={`text-xs ${textSecondary} mt-0.5`}>
-                              {op.data?.split("-").reverse().join("/")} · {op.total_itens} {op.total_itens === 1 ? "item" : "itens"}
+                              {op.data?.split("-").reverse().join("/")} · {op.total_itens} {op.total_itens === 1 ? "item" : "itens"} · <span className="text-[#E8740E]">clique para detalhes</span>
                             </div>
                           </div>
                           <p className="text-sm font-bold text-green-600 shrink-0">{fmt(op.valor_total)}</p>
@@ -409,7 +612,8 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                       <span className={`text-[11px] font-bold uppercase tracking-wider ${textSecondary}`}>Contatos ({results.contatos.length})</span>
                     </div>
                     {results.contatos.map((c, i) => (
-                      <div key={`ct-${i}`} className={`px-5 py-3 ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}>
+                      <div key={`ct-${i}`} className={`px-5 py-3 cursor-pointer ${bgHover} transition-colors border-b ${dm ? "border-[#2C2C2E]" : "border-[#F0F0F5]"}`}
+                        onClick={() => setSelectedContato(c)}>
                         <div className="flex items-center gap-3">
                           <span className="text-lg">👤</span>
                           <div className="flex-1 min-w-0">
@@ -421,6 +625,7 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                               {c.cpf && <span>{c.cpf}</span>}
                               {c.email && <span>{c.email}</span>}
                               <span>{c.total_compras} {c.total_compras === 1 ? "compra" : "compras"}</span>
+                              <span className="text-[#E8740E]">clique para detalhes</span>
                             </div>
                           </div>
                         </div>
@@ -475,28 +680,48 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
                         onClick={() => setDetailItem({ ...r, tipo: "venda" })}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-lg">💰</span>
+                          <span className="text-lg">{r.is_entrada ? "📲" : "💰"}</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-sm font-semibold ${textPrimary} truncate`}>{r.produto}</span>
-                              {r.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadge(r.tipo_venda)}`}>{r.tipo_venda}</span>}
+                              {r.is_entrada
+                                ? <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">TRADE-IN</span>
+                                : r.tipo_venda && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${tipoBadge(r.tipo_venda)}`}>{r.tipo_venda}</span>
+                              }
                               {r.origem && <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{r.origem}</span>}
                             </div>
                             <div className={`text-xs ${textSecondary} mt-0.5 flex items-center gap-2 flex-wrap`}>
-                              {r.cliente && <span>{r.cliente}</span>}
+                              {r.is_entrada
+                                ? <>
+                                    <span className="text-green-600 font-medium">De: {r.fornecedor}</span>
+                                    {r.cliente && <span>→ {r.cliente}</span>}
+                                  </>
+                                : r.cliente && <span>{r.cliente}</span>
+                              }
                               {r.data && <span>{r.data.split("-").reverse().join("/")}</span>}
                               {r.serial_no && <span className="font-mono text-purple-500">SN: {r.serial_no}</span>}
                             </div>
                           </div>
-                          <div className="text-right shrink-0">
-                            {r.preco_vendido ? (
-                              <div>
-                                <p className="text-sm font-bold text-[#E8740E]">{fmt(r.preco_vendido)}</p>
-                                {r.lucro !== undefined && (
-                                  <p className={`text-[10px] font-semibold ${r.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}</p>
+                          <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                            {r.is_entrada ? (
+                              /* Trade-in: mostrar valor recebido (custo) */
+                              r.custo ? <p className="text-sm font-bold text-green-600">{fmt(r.custo)}</p> : null
+                            ) : (
+                              /* Venda normal: custo + preco + lucro */
+                              <>
+                                {r.custo && (
+                                  <p className={`text-[10px] ${textSecondary}`}>Custo: {fmt(r.custo)}</p>
                                 )}
-                              </div>
-                            ) : null}
+                                {r.preco_vendido && (
+                                  <p className="text-sm font-bold text-[#E8740E]">{fmt(r.preco_vendido)}</p>
+                                )}
+                                {r.lucro !== undefined && (
+                                  <p className={`text-[10px] font-semibold ${r.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {r.lucro >= 0 ? "+" : ""}{fmt(r.lucro)}
+                                  </p>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -509,12 +734,32 @@ export default function SuperSearch({ open, onClose }: { open: boolean; onClose:
         </div>
       </div>
 
-      {/* Detail Modal */}
+      {/* Detail Modal (estoque) */}
       {detailItem && (
         <DetailModal
           item={detailItem}
           onClose={() => setDetailItem(null)}
           onSave={handleSave}
+          dm={dm}
+        />
+      )}
+
+      {/* Operação Detail Modal */}
+      {selectedOp && (
+        <OperacaoDetail
+          op={selectedOp}
+          vendas={results.vendas}
+          onClose={() => setSelectedOp(null)}
+          dm={dm}
+        />
+      )}
+
+      {/* Contato Detail Modal */}
+      {selectedContato && (
+        <ContatoDetail
+          contato={selectedContato}
+          vendas={results.vendas}
+          onClose={() => setSelectedContato(null)}
           dm={dm}
         />
       )}

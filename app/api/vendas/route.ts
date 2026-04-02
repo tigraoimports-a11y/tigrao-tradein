@@ -11,6 +11,26 @@ function auth(req: NextRequest) {
   return pw === process.env.ADMIN_PASSWORD;
 }
 
+/** Converte valor da troca em número, suportando "R$ 2.300,00" e "2300" */
+function parseTrocaValor(val: string | null | undefined): number {
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[^0-9.,]/g, "").replace(",", ".");
+  return parseFloat(cleaned) || 0;
+}
+
+/** Detecta categoria do produto a partir do nome */
+function detectCategoriaSeminovo(produto: string | null | undefined): string {
+  const p = (produto || "").toUpperCase();
+  if (p.includes("MACBOOK")) return "MACBOOK";
+  if (p.includes("MAC MINI")) return "MAC_MINI";
+  if (p.includes("MAC STUDIO")) return "MAC_STUDIO";
+  if (p.includes("IMAC")) return "IMAC";
+  if (p.includes("IPAD")) return "IPADS";
+  if (p.includes("APPLE WATCH")) return "APPLE_WATCH";
+  if (p.includes("AIRPODS")) return "AIRPODS";
+  return "IPHONES";
+}
+
 function getUsuario(req: NextRequest): string {
   const raw = req.headers.get("x-admin-user") || "sistema";
   try { return decodeURIComponent(raw); } catch { return raw; }
@@ -215,18 +235,20 @@ export async function POST(req: NextRequest) {
 
   // Se tem produto na troca, criar item como PENDENCIA
   // (cliente ainda tem o aparelho, devolve em 24h)
-  // Fallback: se _seminovo não veio mas a venda tem troca_produto, criar pendência do campo da venda
-  const sem1 = seminovoData && seminovoData.produto
+  // Fallback: se _seminovo não veio mas a venda tem valor de troca, criar pendência mesmo sem nome do produto
+  const pTrocaValor1 = parseTrocaValor(data?.produto_na_troca);
+  const sem1 = seminovoData && (seminovoData.produto || (seminovoData.valor || 0) > 0)
     ? seminovoData
-    : (data?.troca_produto && (parseFloat(data?.produto_na_troca) || 0) > 0)
-      ? { produto: data.troca_produto, valor: parseFloat(data.produto_na_troca) || 0, cor: data.troca_cor || null, bateria: data.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data.troca_obs || null }
+    : pTrocaValor1 > 0
+      ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null }
       : null;
 
-  if (sem1 && sem1.produto) {
+  if (sem1 && (sem1.produto || (sem1.valor || 0) > 0)) {
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
+    const nomeProduto1 = sem1.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     const { error: errSeminovo } = await supabase.from("estoque").insert({
-      produto: sem1.produto,
-      categoria: "IPHONES",
+      produto: nomeProduto1,
+      categoria: detectCategoriaSeminovo(sem1.produto),
       qnt: 1,
       custo_unitario: sem1.valor || 0,
       status: "PENDENTE",
@@ -234,27 +256,31 @@ export async function POST(req: NextRequest) {
       cor: sem1.cor || null,
       observacao: sem1.observacao || null,
       bateria: sem1.bateria || null,
+      serial_no: sem1.serial_no || null,
+      imei: sem1.imei || null,
       cliente: nomeCliente || null,
       fornecedor: nomeCliente || null,
       data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
     if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
-    else await logActivity(usuario, "Pendência troca criada (auto)", `${sem1.produto} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
+    else await logActivity(usuario, "Pendência troca criada (auto)", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
   }
 
   // 2º produto na troca — mesmo fluxo com fallback
-  const sem2 = seminovoData2 && seminovoData2.produto
+  const pTrocaValor2 = parseTrocaValor(data?.produto_na_troca2);
+  const sem2 = seminovoData2 && (seminovoData2.produto || (seminovoData2.valor || 0) > 0)
     ? seminovoData2
-    : (data?.troca_produto2 && (parseFloat(data?.produto_na_troca2) || 0) > 0)
-      ? { produto: data.troca_produto2, valor: parseFloat(data.produto_na_troca2) || 0, cor: data.troca_cor2 || null, bateria: data.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data.troca_obs2 || null }
+    : pTrocaValor2 > 0
+      ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null }
       : null;
 
-  if (sem2 && sem2.produto) {
+  if (sem2 && (sem2.produto || (sem2.valor || 0) > 0)) {
     const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
+    const nomeProduto2 = sem2.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
     const { error: errSeminovo2 } = await supabase.from("estoque").insert({
-      produto: sem2.produto,
-      categoria: "IPHONES",
+      produto: nomeProduto2,
+      categoria: detectCategoriaSeminovo(sem2.produto),
       qnt: 1,
       custo_unitario: sem2.valor || 0,
       status: "PENDENTE",
@@ -262,13 +288,15 @@ export async function POST(req: NextRequest) {
       cor: sem2.cor || null,
       observacao: sem2.observacao || null,
       bateria: sem2.bateria || null,
+      serial_no: sem2.serial_no || null,
+      imei: sem2.imei || null,
       cliente: nomeCliente2 || null,
       fornecedor: nomeCliente2 || null,
       data_compra: body.data || data?.data || null,
       updated_at: new Date().toISOString(),
     });
     if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
-    else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${sem2.produto} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
+    else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
   }
 
   // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
