@@ -130,6 +130,9 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
   const VALID_ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
   const origemCode = origemInicial.split(" ")[0].toUpperCase();
   if (origemInicial && VALID_ORIGIN_CODES.includes(origemCode)) spec.ip_origem = origemCode;
+  const caixaInicial = !!(p.observacao && p.observacao.includes("[COM_CAIXA]"));
+  const gradeMatch = p.observacao?.match(/\[GRADE_([ABC])\]/);
+  const gradeInicial = gradeMatch ? gradeMatch[1] : "";
   const fornNome = p.fornecedor || "";
   const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
   return {
@@ -146,6 +149,8 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     imei: p.imei || "",
     serial_no: p.serial_no || "",
     condicao: condicaoInicial,
+    caixa: caixaInicial,
+    grade: gradeInicial,
   };
 }
 
@@ -183,11 +188,21 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   };
   const getOrigemFromObs = (obs: string | null): string => {
     if (!obs) return "";
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\]\s*/, "");
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_[ABC]\])?\s*/, "");
   };
-  const buildObs = (condicao: string, origem: string): string | null => {
+  const getCaixaFromObs = (obs: string | null): boolean => {
+    return !!(obs && obs.includes("[COM_CAIXA]"));
+  };
+  const getGradeFromObs = (obs: string | null): string => {
+    const m = obs?.match(/\[GRADE_([ABC])\]/);
+    return m ? m[1] : "";
+  };
+  const buildObs = (condicao: string, origem: string, caixa?: boolean, grade?: string): string | null => {
     const prefix = condicao && condicao !== "NOVO" ? `[${condicao}]` : "";
-    const combined = prefix ? (origem ? `${prefix} ${origem}` : prefix) : origem;
+    const caixaTag = caixa ? "[COM_CAIXA]" : "";
+    const gradeTag = grade ? `[GRADE_${grade}]` : "";
+    const tags = `${prefix}${caixaTag}${gradeTag}`;
+    const combined = tags ? (origem ? `${tags} ${origem}` : tags) : origem;
     return combined || null;
   };
 
@@ -254,8 +269,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
       if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
 
-      // Observacao: condição + origem (usa origemNova do spec)
-      const newObs = buildObs(editRowState.condicao || "NOVO", origemNova);
+      // Observacao: condição + caixa + grade + origem (usa origemNova do spec)
+      const newObs = buildObs(editRowState.condicao || "NOVO", origemNova, editRowState.caixa, editRowState.grade);
       if (newObs !== originalObs) updates.observacao = newObs;
 
       // Tipo: SEMPRE atualizado conforme condição para produtos já em estoque
@@ -501,8 +516,13 @@ export default function GastosPage() {
         // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora nome livre)
         const isStructured = STRUCTURED_CATS.includes(p.categoria);
         const nome = isStructured ? buildProdutoName(p.categoria, p.spec, p.cor) : (p.produto || "");
-        // Condição → prefixo no observacao
-        const obsCondicao = (p.condicao && p.condicao !== "NOVO") ? `[${p.condicao}]` : null;
+        // Condição + caixa + grade → prefixo no observacao
+        const _cond = p.condicao || "NOVO";
+        const _prefix = _cond !== "NOVO" ? `[${_cond}]` : "";
+        const _caixaTag = p.caixa ? "[COM_CAIXA]" : "";
+        const _gradeTag = p.grade ? `[GRADE_${p.grade}]` : "";
+        const _tags = `${_prefix}${_caixaTag}${_gradeTag}`;
+        const obsCondicao = _tags || null;
         // Cliente registrado sobrescreve fornecedor
         const fornecedorFinal = p.cliente?.trim() || p.fornecedor || null;
         return {

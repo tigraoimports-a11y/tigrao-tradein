@@ -1210,10 +1210,10 @@ export default function EstoquePage() {
     return match ? match[1] : "NOVO";
   };
 
-  /** Limpa prefixo de condição do campo observacao para exibição */
+  /** Limpa prefixo de condição/caixa/grade do campo observacao para exibição */
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\]\s*/, "") || null;
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_[ABC]\])?\s*/, "") || null;
   };
 
   const handleSubmitMulti = async () => {
@@ -3477,6 +3477,19 @@ export default function EstoquePage() {
                         </div>
                       )}
                       <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
+                      {/* Caixa badge */}
+                      {p.observacao?.includes("[COM_CAIXA]") && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">Com Caixa</span></div>
+                      )}
+                      {/* Grade badge */}
+                      {(() => {
+                        const g = p.observacao?.match(/\[GRADE_([ABC])\]/)?.[1];
+                        if (!g) return null;
+                        const cls = g === "A" ? "bg-green-100 text-green-700" : g === "B" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
+                        return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span></div>;
+                      })()}
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}

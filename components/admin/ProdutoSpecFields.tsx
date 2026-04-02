@@ -144,6 +144,8 @@ export interface ProdutoRowState {
   imei: string;
   serial_no: string;
   condicao: string; // "NOVO" | "NAO_ATIVADO" | "SEMINOVO"
+  caixa: boolean;   // tem caixa original?
+  grade: string;    // grade de qualidade: "A" | "B" | "C" | ""
 }
 
 export function createEmptyProdutoRow(): ProdutoRowState {
@@ -161,6 +163,8 @@ export function createEmptyProdutoRow(): ProdutoRowState {
     imei: "",
     serial_no: "",
     condicao: "NOVO",
+    caixa: false,
+    grade: "",
   };
 }
 
@@ -288,7 +292,7 @@ export default function ProdutoSpecFields({
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
 
-  const set = (field: keyof ProdutoRowState, value: string) => {
+  const set = (field: keyof ProdutoRowState, value: string | boolean) => {
     const updated = { ...row, [field]: value };
     if (field === "categoria") {
       updated.spec = { ...DEFAULT_SPEC };
@@ -298,7 +302,7 @@ export default function ProdutoSpecFields({
       updated.catalogo_modelo_nome = "";
     }
     if (field === "cor" && STRUCTURED_CATS.includes(row.categoria)) {
-      updated.produto = buildProdutoName(row.categoria, row.spec, value);
+      updated.produto = buildProdutoName(row.categoria, row.spec, value as string);
     }
     onChange(updated);
   };
@@ -404,6 +408,44 @@ export default function ProdutoSpecFields({
           </select>
         </div>
       </div>
+
+      {/* Caixa + Grade — só aparece quando não é Lacrado */}
+      {row.condicao !== "NOVO" && (
+        <div className="flex items-center gap-3">
+          {/* Caixa toggle */}
+          <button
+            type="button"
+            onClick={() => set("caixa", !row.caixa)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+              row.caixa
+                ? "bg-green-500/15 border-green-500/40 text-green-600"
+                : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+            }`}
+          >
+            📦 {row.caixa ? "Com caixa" : "Sem caixa"}
+          </button>
+          {/* Grade select */}
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Grade</span>
+            {(["A", "B", "C"] as const).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => set("grade", row.grade === g ? "" : g)}
+                className={`w-7 h-7 rounded-lg text-xs font-bold border transition-colors ${
+                  row.grade === g
+                    ? g === "A" ? "bg-green-500/15 border-green-500/40 text-green-600"
+                      : g === "B" ? "bg-yellow-500/15 border-yellow-500/40 text-yellow-600"
+                      : "bg-red-500/15 border-red-500/40 text-red-600"
+                    : dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Origem da compra: Fornecedor OU Cliente cadastrado */}
       <div className={`p-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]"} space-y-2`}>
