@@ -1168,17 +1168,22 @@ export default function EstoquePage() {
     const produtosAfetados = new Set<string>();
 
     const dataEntrada = etiquetaModal.dataEntrada || hojeBR();
+    const addExPendenciaTag = (obs: string | null, eraPendencia: boolean) =>
+      eraPendencia ? ((obs || "").includes("[EX_PENDENCIA]") ? obs : ((obs ? obs + " " : "") + "[EX_PENDENCIA]")) : obs;
+
     if (batchItems && batchItems.length > 0) {
       for (const p of batchItems) {
         const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
-        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
+        const novaObs = addExPendenciaTag(p.observacao, p.tipo === "PENDENCIA");
+        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== p.observacao ? { observacao: novaObs } : {}) });
         produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
+      const novaObs = addExPendenciaTag(item.observacao, item.tipo === "PENDENCIA");
+      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== item.observacao ? { observacao: novaObs } : {}) });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
           method: "POST",
@@ -1187,6 +1192,7 @@ export default function EstoquePage() {
             produto: item.produto, categoria: item.categoria, qnt: 1,
             custo_unitario: item.custo_unitario, cor: item.cor, fornecedor: item.fornecedor,
             serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada,
+            observacao: novaObs,
           }),
         });
       }
@@ -1194,7 +1200,8 @@ export default function EstoquePage() {
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
+      const novaObs = addExPendenciaTag(item.observacao, item.tipo === "PENDENCIA");
+      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== item.observacao ? { observacao: novaObs } : {}) });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
     }
@@ -1436,7 +1443,11 @@ export default function EstoquePage() {
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
-  const pendenciasMovidas = estoque.filter((p) => p.tipo === "SEMINOVO" && !!p.cliente);
+  const pendenciasMovidas = estoque.filter((p) =>
+    p.tipo === "SEMINOVO" && (
+      p.observacao?.includes("[EX_PENDENCIA]") || !!p.cliente
+    )
+  );
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
@@ -4024,7 +4035,12 @@ export default function EstoquePage() {
                               }
                               try {
                                 const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
-                                const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() }) });
+                                const obsComTag = p.tipo === "PENDENCIA"
+                                  ? ((p.observacao || "").includes("[EX_PENDENCIA]") ? p.observacao : ((p.observacao ? p.observacao + " " : "") + "[EX_PENDENCIA]"))
+                                  : p.observacao;
+                                const patchBody: Record<string, unknown> = { id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() };
+                                if (obsComTag !== p.observacao) patchBody.observacao = obsComTag;
+                                const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify(patchBody) });
                                 const json = await res.json();
                                 if (json.error) { setMsg("Erro: " + json.error); return; }
                                 setMsg("✅ Movido para estoque!");
