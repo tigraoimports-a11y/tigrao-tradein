@@ -202,13 +202,40 @@ const PT_TO_EN: Record<string, string> = {
 function stripOrigem(nome: string, categoria?: string | null): string {
   if (!nome) return nome;
   if (categoria && categoria !== "IPHONES") return nome;
-  // Códigos de origem: primeiro token de cada entrada de IPHONE_ORIGENS
   const codes = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
   const upper = nome.trim().toUpperCase();
   for (const code of codes) {
     if (upper.endsWith(` ${code}`)) return nome.trim().slice(0, -(code.length + 1)).trim();
   }
   return nome.trim();
+}
+
+/**
+ * Retorna o nome para exibição:
+ * - Remove código de origem
+ * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
+ */
+function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
+  let display = stripOrigem(nome, categoria);
+  if (!cor) return display;
+  const upper = cor.toUpperCase().trim();
+  const en = PT_TO_EN[upper];
+  if (en) {
+    // Substitui a cor em PT pelo equivalente EN no nome (case-insensitive)
+    const pattern = upper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    try { display = display.replace(new RegExp(pattern, "gi"), en.toUpperCase()); } catch { /* ignore */ }
+  }
+  return display;
+}
+
+/** Retorna só a tradução em português da cor (para exibir em cinza) */
+function corSoPT(cor: string | null | undefined): string | null {
+  if (!cor) return null;
+  const upper = cor.toUpperCase().trim();
+  const pt = COR_PT[upper]; // cor armazenada em EN → retorna PT
+  if (pt && pt.toLowerCase() !== cor.toLowerCase()) return pt;
+  if (PT_TO_EN[upper]) return cor.charAt(0).toUpperCase() + cor.slice(1).toLowerCase(); // armazenada em PT → retorna formatada
+  return null;
 }
 
 /** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
@@ -2367,8 +2394,8 @@ export default function EstoquePage() {
                               <tr key={p.id} className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
                                 onClick={() => setDetailProduct(p)}>
                                 <td className={`px-4 py-2.5 text-sm font-semibold ${textPrimary}`}>
-                                  {stripOrigem(p.produto, p.categoria)}
-                                  {p.cor ? <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corBilingual(p.cor)}</span> : null}
+                                  {displayNomeProduto(p.produto, p.cor, p.categoria)}
+                                  {corSoPT(p.cor) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor)}</span>}
                                   {(p.serial_no || p.imei) && (
                                     <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                       ✅ {p.serial_no || p.imei}
@@ -2686,7 +2713,8 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
-                                          {stripOrigem(prodNome, categoria)}
+                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, categoria)}
+                                          {corSoPT(prodItems[0]?.cor) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor)}</span>}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
@@ -2745,7 +2773,15 @@ export default function EstoquePage() {
                                           <span className={`w-2.5 h-2.5 rounded-full inline-block ${p.qnt === 1 ? "bg-yellow-400" : "bg-green-500"}`} />
                                         </td>
                                         <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
-                                          {corBilingual(p.cor)}
+                                          {(() => {
+                                            if (!p.cor) return "—";
+                                            const upper = p.cor.toUpperCase().trim();
+                                            const en = PT_TO_EN[upper];
+                                            const pt = COR_PT[upper];
+                                            if (en) return <>{en.charAt(0).toUpperCase() + en.slice(1).toLowerCase()}<span className={`ml-1 text-[12px] ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
+                                            if (pt && pt.toLowerCase() !== p.cor.toLowerCase()) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{pt}</span></>;
+                                            return p.cor;
+                                          })()}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right`}>
                                           <span className={`text-sm font-bold ${p.qnt === 1 ? "text-yellow-500" : "text-green-500"}`}>
