@@ -3472,7 +3472,7 @@ export default function EstoquePage() {
                                 const res = await fetch("/api/vendas", {
                                   method: "PATCH",
                                   headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                  body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto: novoNome, cor: novaCor }),
+                                  body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto: novoNome, cor: novaCor, categoria: novaCategoria }),
                                 });
                                 const json = await res.json();
                                 vendaMsg = json.updated > 0 ? ` ${json.updated} venda(s) sincronizada(s).` : " Nenhuma venda vinculada encontrada.";

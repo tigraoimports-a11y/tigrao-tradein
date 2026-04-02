@@ -328,18 +328,21 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, finalizadas: updated?.length || 0 });
   }
 
-  // Sync produto/cor em vendas vinculadas (por cliente + data de compra)
+  // Sync troca_produto/troca_cor/troca_categoria em vendas vinculadas (por cliente + data)
   if (body.action === "sync_by_cliente_data") {
-    const { cliente, data_compra, produto, cor } = body;
+    const { cliente, data_compra, produto, cor, categoria, troca_num } = body;
     if (!cliente || !data_compra) return NextResponse.json({ error: "cliente e data_compra obrigatorios" }, { status: 400 });
+    // troca_num: 1 (default) ou 2 — para suporte a 2 produtos na troca
+    const suffix = troca_num === 2 ? "2" : "";
     const updates: Record<string, unknown> = {};
-    if (produto) updates.produto = produto;
-    if (cor !== undefined) updates.cor = cor;
+    if (produto) updates[`troca_produto${suffix}`] = produto;
+    if (cor !== undefined) updates[`troca_cor${suffix}`] = cor;
+    if (categoria) updates[`troca_categoria${suffix}`] = categoria;
     const { data: updated, error } = await supabase.from("vendas")
       .update(updates)
       .ilike("cliente", cliente)
       .eq("data", data_compra)
-      .select("id, produto");
+      .select("id, troca_produto");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, updated: updated?.length || 0 });
   }
