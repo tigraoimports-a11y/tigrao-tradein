@@ -4,65 +4,30 @@ import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 
-interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; status: string; }
-
 export default function GerarLinkPage() {
-  const { user, password, apiHeaders } = useAdmin();
+  const { user } = useAdmin();
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
 
-  // Fetch estoque
-  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  // Fetch preços de venda (tabela precos)
+  const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number }[]>([]);
   useEffect(() => {
-    if (!password) return;
-    fetch("/api/estoque", { headers: apiHeaders() })
+    fetch("/api/produtos")
       .then(r => r.json())
-      .then(j => setEstoque(j.data?.filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE") || []))
+      .then(j => { if (Array.isArray(j)) setPrecosVenda(j.map((p: { modelo: string; armazenamento: string; precoPix: number }) => ({ modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.precoPix }))); })
       .catch(() => {});
-  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  const categorias = useMemo(() => {
-    const cats = new Map<string, string>();
-    estoque.forEach(p => {
-      const key = p.tipo === "SEMINOVO" ? `${p.categoria}_SEMI` : p.categoria;
-      const label = p.tipo === "SEMINOVO" ? `${p.categoria} (Seminovo)` : p.categoria;
-      if (!cats.has(key)) cats.set(key, label);
-    });
-    return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [estoque]);
-
-  const produtosFiltrados = useMemo(() => {
-    if (!catSel) return [];
-    const isSemi = catSel.endsWith("_SEMI");
-    const baseCat = isSemi ? catSel.replace("_SEMI", "") : catSel;
-    return estoque.filter(p => p.categoria === baseCat && (isSemi ? p.tipo === "SEMINOVO" : p.tipo !== "SEMINOVO"));
-  }, [estoque, catSel]);
-
-  // Agrupar por modelo (sem cor/origem/chip info)
+  // Agrupar preços por modelo+armazenamento
   const modelosAgrupados = useMemo(() => {
-    const stripDetails = (nome: string) => nome
-      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
-      .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-      .replace(/-\s*E-?SIM/gi, "")
-      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|MIDNIGHT|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
-      .replace(/\s*-\s*$/, "")
-      .replace(/\s{2,}/g, " ").trim();
-    const byModel: Record<string, { totalQnt: number; avgCost: number; items: EstoqueItem[] }> = {};
-    produtosFiltrados.forEach(p => {
-      const model = stripDetails(p.produto);
-      if (!byModel[model]) byModel[model] = { totalQnt: 0, avgCost: 0, items: [] };
-      byModel[model].totalQnt += p.qnt;
-      byModel[model].items.push(p);
-    });
-    Object.values(byModel).forEach(g => {
-      const totalVal = g.items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-      g.avgCost = g.totalQnt > 0 ? Math.round(totalVal / g.totalQnt) : 0;
-    });
-    return Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
-  }, [produtosFiltrados]);
+    return precosVenda.map(p => ({
+      nome: `${p.modelo} ${p.armazenamento}`.trim(),
+      preco: p.preco_pix,
+    })).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [precosVenda]);
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
@@ -317,37 +282,39 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); }} className={inputCls}>
-              <option value="">-- Categoria --</option>
-              {categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
-            {catSel && (
-              <div className="max-h-[250px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                {modelosAgrupados.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                {modelosAgrupados.map(([model, { totalQnt, avgCost }]) => {
-                  const sel = produtos[0] === model;
+            <input
+              value={catSel}
+              onChange={(e) => setCatSel(e.target.value)}
+              placeholder="Buscar produto... (ex: iPhone 17 Pro)"
+              className={inputCls}
+            />
+            <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+              {(() => {
+                const filtered = catSel
+                  ? modelosAgrupados.filter(m => m.nome.toLowerCase().includes(catSel.toLowerCase()))
+                  : modelosAgrupados;
+                if (filtered.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto encontrado</p>;
+                return filtered.map((m) => {
+                  const sel = produtos[0] === m.nome;
                   return (
-                    <button key={model} onClick={() => {
+                    <button key={m.nome} onClick={() => {
                       if (sel) { setProdutos([""]); setPreco(""); return; }
-                      setProdutos([model]);
-                      setPreco(avgCost.toLocaleString("pt-BR"));
+                      setProdutos([m.nome]);
+                      setPreco(m.preco.toLocaleString("pt-BR"));
                     }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                      <div>
-                        <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{model}</p>
-                        <p className="text-[10px] text-[#86868B]">{totalQnt} un.</p>
-                      </div>
-                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {avgCost.toLocaleString("pt-BR")}</p>
+                      <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
+                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                     </button>
                   );
-                })}
-              </div>
-            )}
+                });
+              })()}
+            </div>
           </div>
         )}
         <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
-          <label className={labelCls}>Preco de Venda (R$)</label>
+          <label className={labelCls}>Preco Base (R$)</label>
           <input
             type="text"
             inputMode="numeric"
