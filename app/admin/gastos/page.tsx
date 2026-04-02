@@ -126,7 +126,10 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
   const cat = p.categoria || "IPHONES";
   const spec = inferSpecFromProduto(p.produto || "", cat);
   // Origem de região do iPhone (LL, VC, etc.) vai pro spec.ip_origem
-  if (origemInicial) spec.ip_origem = origemInicial.split(" ")[0]; // ex: "LL (EUA)" → "LL"
+  // Validar que é um código de origem real antes de setar (evita "CLIENTE" no nome)
+  const VALID_ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
+  const origemCode = origemInicial.split(" ")[0].toUpperCase();
+  if (origemInicial && VALID_ORIGIN_CODES.includes(origemCode)) spec.ip_origem = origemCode;
   const fornNome = p.fornecedor || "";
   const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
   return {

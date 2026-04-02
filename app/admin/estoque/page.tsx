@@ -462,8 +462,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "seminovos", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "naoativados", "seminovos", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "naoativados" | "seminovos" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -1416,7 +1416,8 @@ export default function EstoquePage() {
   };
 
   // Filtrar por tipo
-  const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO" || p.tipo === "NAO_ATIVADO");
+  const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
+  const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
@@ -1430,6 +1431,7 @@ export default function EstoquePage() {
   const esgotados = novos.filter((p) => p.qnt === 0);
 
   const currentList =
+    tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
     tab === "acaminho" ? aCaminho :
     tab === "pendencias" ? pendencias :
@@ -1794,6 +1796,7 @@ export default function EstoquePage() {
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
+            { key: "naoativados", label: "Não Ativados", count: naoAtivados.length },
             { key: "seminovos", label: "Seminovos", count: seminovos.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
