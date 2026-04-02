@@ -669,10 +669,9 @@ export default function VendasPage() {
       payload._estoque_id = prodFields._estoqueId;
     }
 
-    if (pTemTroca) {
-      // Sempre envia _seminovo quando há troca, mesmo sem nome do produto
+    if (pTemTroca && prodFields.troca_produto) {
       payload._seminovo = {
-        produto: prodFields.troca_produto || null,
+        produto: prodFields.troca_produto,
         valor: pValorTroca1,
         cor: prodFields.troca_cor || null,
         bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
@@ -680,10 +679,9 @@ export default function VendasPage() {
       };
     }
 
-    if (pValorTroca2 > 0) {
-      // Sempre envia _seminovo2 quando há 2ª troca, mesmo sem nome do produto
+    if (pValorTroca2 > 0 && prodFields.troca_produto2) {
       payload._seminovo2 = {
-        produto: prodFields.troca_produto2 || null,
+        produto: prodFields.troca_produto2,
         valor: pValorTroca2,
         cor: prodFields.troca_cor2 || null,
         bateria: prodFields.troca_bateria2 ? parseInt(prodFields.troca_bateria2 as string) : null,
@@ -806,30 +804,6 @@ export default function VendasPage() {
     if (allProducts.length === 0) {
       setMsg("Adicione pelo menos um produto");
       return;
-    }
-
-    // Validação: serial, IMEI e fornecedor obrigatórios por categoria
-    const CATS_SEM_IMEI_VENDA = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
-    const CATS_SEM_SERIAL_VENDA = ["ACESSORIOS", "OUTROS"];
-    for (const prod of allProducts) {
-      // categoria fica em _catSel (ex: "IPHONES__NOVO"), pegar só a parte antes do "__"
-      const cat = ((prod._catSel || "IPHONES").split("__")[0]).toUpperCase();
-      const nomeProd = prod.produto || "";
-      const isAirpods = cat === "AIRPODS" || nomeProd.toUpperCase().includes("AIRPOD");
-      const precisaSerial = !CATS_SEM_SERIAL_VENDA.includes(cat) || isAirpods;
-      const precisaImei = !CATS_SEM_IMEI_VENDA.includes(cat);
-
-      if (!prod.fornecedor || prod.fornecedor.trim() === "") {
-        setMsg(`⚠️ Preencha o FORNECEDOR do produto: ${nomeProd || cat}`);
-        setSaving(false);
-        return;
-      }
-      if (precisaSerial && !prod.serial_no) {
-        setMsg(`⚠️ Preencha o NÚMERO DE SÉRIE do produto: ${nomeProd || cat}`);
-        setSaving(false);
-        return;
-      }
-      // IMEI é opcional — recomendado mas não bloqueia
     }
 
     // Validação: comprovante obrigatório para vendas no CARTÃO
