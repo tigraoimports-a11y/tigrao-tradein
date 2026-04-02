@@ -415,6 +415,63 @@ export default function GastosPage() {
     });
     const json = await res.json();
     if (json.ok) {
+      // Gerar etiquetas automaticamente para produtos do fornecedor
+      if (isFornecedor && pedidoProdutos.length > 0) {
+        const dataCompra = form.data || new Date().toISOString().slice(0, 10);
+        const etiquetas: { produto: string; cor: string; custo: number; fornecedor: string; data: string; qnt: number }[] = [];
+        for (const p of pedidoProdutos) {
+          const isStructured = STRUCTURED_CATS.includes(p.categoria);
+          const nome = isStructured ? buildProdutoName(p.categoria, p.spec, p.cor) : (p.produto || "");
+          const qnt = parseInt(p.qnt) || 1;
+          for (let i = 0; i < qnt; i++) {
+            etiquetas.push({
+              produto: nome,
+              cor: p.cor || "",
+              custo: parseFloat(p.custo_unitario) || 0,
+              fornecedor: p.fornecedor || form.descricao || "",
+              data: dataCompra,
+              qnt: 1,
+            });
+          }
+        }
+        // Abrir janela de impressão com etiquetas
+        if (etiquetas.length > 0) {
+          const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 0 });
+          const fmtDate = (d: string) => { const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}`; };
+          const labelsHtml = etiquetas.map((e) => `
+            <div class="label">
+              <div class="produto">${e.produto}</div>
+              ${e.cor ? `<div class="cor">${e.cor}</div>` : ""}
+              <div class="custo">R$ ${fmt(e.custo)}</div>
+              <div class="fornecedor">${e.fornecedor}</div>
+              <div class="data">${fmtDate(e.data)}</div>
+            </div>
+          `).join("");
+          const win = window.open("", "_blank", "width=400,height=600");
+          if (win) {
+            win.document.write(`<!DOCTYPE html><html><head>
+              <title>Etiquetas - Pedido Fornecedor</title>
+              <style>
+                *{margin:0;padding:0;box-sizing:border-box}
+                html,body{margin:0;padding:0;width:100%}
+                body{font-family:Arial,Helvetica,sans-serif}
+                .label{text-align:center;padding:3mm 4mm 2mm;page-break-after:always;width:62mm;height:45mm;display:flex;flex-direction:column;justify-content:center;align-items:center}
+                .label:last-child{page-break-after:auto}
+                .produto{font-size:11pt;font-weight:bold;line-height:1.2}
+                .cor{font-size:8pt;color:#333;margin-top:1mm}
+                .custo{font-size:12pt;font-weight:bold;color:#E8740E;margin-top:2mm}
+                .fornecedor{font-size:7pt;color:#555;margin-top:1mm;text-transform:uppercase}
+                .data{font-size:6pt;color:#888;margin-top:1mm}
+                @page{size:62mm 45mm;margin:0}
+                @media print{.label{width:62mm;height:45mm}}
+              </style></head><body>${labelsHtml}
+              <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
+            </body></html>`);
+            win.document.close();
+          }
+        }
+      }
+
       const prodMsg = isFornecedor && pedidoProdutos.length > 0
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
