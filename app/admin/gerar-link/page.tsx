@@ -65,6 +65,27 @@ export default function GerarLinkPage() {
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
+  const rawTrocaVal = trocaValor.replace(/\./g, "").replace(",", ".");
+
+  // Taxas de parcelamento (mesma tabela do sistema)
+  const TAXAS: Record<number, number> = {
+    1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+    7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+    13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+    19: 20, 20: 21, 21: 22,
+  };
+
+  // Cálculos
+  const precoBase = parseFloat(rawPreco) || 0;
+  const trocaNum = parseFloat(rawTrocaVal) || 0;
+  const entradaNum = parseFloat(rawEntrada) || 0;
+  const valorSemTaxa = Math.max(0, precoBase - trocaNum);
+  const valorParcelar = Math.max(0, valorSemTaxa - entradaNum);
+  const numParcelas = parseInt(parcelas) || 0;
+  const taxa = (forma === "Cartao Credito" && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
+  const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
+  const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
+  const valorTotal = entradaNum + valorComTaxa;
 
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
@@ -455,6 +476,57 @@ export default function GerarLinkPage() {
             <option value="Nicole">Nicole</option>
           </select>
         </div>
+
+        {/* Resumo do valor total */}
+        {precoBase > 0 && (
+          <div className={`p-4 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E5E5EA]"}`}>
+            <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Resumo do Pedido</p>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Preço Base (PIX)</span>
+                <span className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>R$ {precoBase.toLocaleString("pt-BR")}</span>
+              </div>
+              {trocaNum > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-green-500">Troca (avaliação)</span>
+                  <span className="font-semibold text-green-500">- R$ {trocaNum.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+              {trocaNum > 0 && (
+                <div className="flex justify-between">
+                  <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Subtotal</span>
+                  <span className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>R$ {valorSemTaxa.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+              {entradaNum > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-blue-500">Entrada PIX</span>
+                  <span className="font-semibold text-blue-500">R$ {entradaNum.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+              {taxa > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Valor a parcelar</span>
+                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorParcelar.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-red-400">Taxa cartão ({taxa}%)</span>
+                    <span className="font-semibold text-red-400">+ R$ {(valorComTaxa - valorParcelar).toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Parcelamento</span>
+                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                  </div>
+                </>
+              )}
+              <div className={`flex justify-between pt-2 border-t ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+                <span className="font-bold text-[#E8740E]">VALOR TOTAL A PAGAR</span>
+                <span className="font-bold text-[#E8740E] text-lg">R$ {valorTotal.toLocaleString("pt-BR")}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <button
           onClick={gerarLink}
