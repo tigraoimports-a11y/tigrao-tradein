@@ -7,7 +7,7 @@ import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
-import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS } from "@/lib/produto-specs";
+import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type ProdutoSpec } from "@/lib/produto-specs";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -97,36 +97,62 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
 }
 
 // Componente para mostrar produtos vinculados no histórico
+// Infere ProdutoSpec a partir do nome do produto em estoque
+function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
+  const spec = { ...DEFAULT_SPEC };
+  if (!produto) return spec;
+  const upper = produto.toUpperCase();
+  if (categoria === "IPHONES") {
+    const noPrefix = upper.replace(/^IPHONE\s+/, "");
+    const storageMatch = noPrefix.match(/\b(\d+[GT]B)\b/);
+    if (storageMatch) spec.ip_storage = storageMatch[1];
+    // Remove storage and origin code to get model
+    let model = noPrefix
+      .replace(/\b\d+[GT]B\b/, "")
+      .replace(/\s+(AA|BE|BR|BZ|CH|E|HN|J|LL|LZ|N|QL|VC|ZD|ZP)\b.*/i, "")
+      .trim();
+    spec.ip_modelo = model || "17 PRO MAX";
+  } else if (categoria === "MACBOOK") {
+    if (/AIR/i.test(upper)) spec.mb_modelo = "AIR";
+    else if (/NEO/i.test(upper)) spec.mb_modelo = "NEO";
+    else spec.mb_modelo = "PRO";
+    const chip = upper.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
+    if (chip) spec.mb_chip = chip[1];
+  }
+  return spec;
+}
+
+function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string }[], condicaoInicial: string): ProdutoRowState {
+  const cat = p.categoria || "IPHONES";
+  const spec = inferSpecFromProduto(p.produto || "", cat);
+  const fornNome = p.fornecedor || "";
+  const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
+  return {
+    categoria: cat,
+    catalogo_modelo_id: "",
+    catalogo_modelo_nome: "",
+    spec,
+    produto: p.produto || "",
+    cor: p.cor || "",
+    qnt: String(p.qnt || 1),
+    custo_unitario: String(p.custo_unitario || ""),
+    fornecedor: isFornCadastrado ? fornNome : "",
+    cliente: isFornCadastrado ? "" : fornNome,
+    imei: p.imei || "",
+    serial_no: p.serial_no || "",
+    condicao: condicaoInicial,
+  };
+}
+
 function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: { pedidoFornecedorId: string; password: string; dm: boolean; fornecedores: { id: string; nome: string }[] }) {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const [produtos, setProdutos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
+  const [editRowState, setEditRowState] = useState<ProdutoRowState | null>(null);
+  // Keep editFields for non-spec fields (origem, custo, qnt) that ProdutoSpecFields doesn't cover
   const [editFields, setEditFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  // Client search for edit form
-  const [clienteQuery, setClienteQuery] = useState("");
-  const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
-  const [showClienteSugg, setShowClienteSugg] = useState(false);
-  const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleClienteSearch = (q: string) => {
-    setClienteQuery(q);
-    setEditFields(f => ({ ...f, fornecedor: q, modo_origem: "cliente" }));
-    setShowClienteSugg(true);
-    if (clienteDebounceRef.current) clearTimeout(clienteDebounceRef.current);
-    if (q.length < 2) { setClienteSuggestions([]); return; }
-    clienteDebounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(q)}`, { headers: { "x-admin-password": password } });
-        if (res.ok) {
-          const json = await res.json();
-          setClienteSuggestions((json.contatos || []).map((c: { nome: string }) => c.nome).slice(0, 8));
-        }
-      } catch { /* ignore */ }
-    }, 350);
-  };
 
   const reload = async () => {
     try {
@@ -180,81 +206,66 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       condicaoInicial = getCondicaoFromObs(p.observacao);
     }
 
+    // editFields guarda apenas campos fora do ProdutoSpecFields
     setEditFields({
-      serial_no: p.serial_no || "",
-      imei: p.imei || "",
-      produto: p.produto || "",
       origem: getOrigemFromObs(p.observacao),
-      condicao: condicaoInicial,
-      cor: p.cor || "",
-      custo_unitario: String(p.custo_unitario || ""),
-      qnt: String(p.qnt || 1),
       tipo: currentTipo,
-      fornecedor: fornNome,
-      // se não está na lista de fornecedores cadastrados, tratar como cliente
-      modo_origem: isFornecedorCadastrado || !fornNome ? "fornecedor" : "cliente",
     });
-    setClienteQuery(isFornecedorCadastrado || !fornNome ? "" : fornNome);
+    // editRowState alimenta o ProdutoSpecFields (produto, cor, modelo, condição, fornecedor/cliente, imei, serial, qnt, custo)
+    setEditRowState(produtoToRowState(p, fornecedores, condicaoInicial));
   };
 
   const saveEdit = async () => {
-    if (!editId) return;
+    if (!editId || !editRowState) return;
     setSaving(true);
     try {
       const updates: Record<string, any> = {};
       const original = produtos.find((p: any) => p.id === editId);
-      if (editFields.serial_no !== (original?.serial_no || "")) updates.serial_no = editFields.serial_no.toUpperCase() || null;
-      if (editFields.imei !== (original?.imei || "")) updates.imei = editFields.imei || null;
-      if (editFields.cor !== (original?.cor || "")) updates.cor = editFields.cor || null;
-      if (editFields.custo_unitario !== String(original?.custo_unitario || "")) updates.custo_unitario = parseFloat(editFields.custo_unitario) || 0;
-      if (editFields.qnt !== String(original?.qnt || 1)) updates.qnt = parseInt(editFields.qnt) || 1;
 
-      // Reconstruir observacao com condição + origem
-      const newObs = buildObs(editFields.condicao || "NOVO", editFields.origem || "");
-      const originalObs = original?.observacao || null;
-      if (newObs !== originalObs) {
-        updates.observacao = newObs;
-      }
-
-      // Atualizar tipo conforme condição — SEMPRE, independente do observacao
-      // Para A_CAMINHO: guarda na observacao, tipo só muda quando for movido para estoque
-      // Para já em estoque: atualiza tipo diretamente
-      const currentTipo = original?.tipo || "A_CAMINHO";
-      const isACaminho = currentTipo === "A_CAMINHO";
-      if (isACaminho) {
-        // Produto ainda em trânsito: tipo permanece A_CAMINHO, condição fica no observacao
-        // (nada a fazer no tipo)
-      } else {
-        // Produto já em estoque: tipo reflete a condição real
-        const targetTipo =
-          editFields.condicao === "SEMINOVO" ? "SEMINOVO" :
-          editFields.condicao === "NAO_ATIVADO" ? "NAO_ATIVADO" :
-          "NOVO";
-        if (targetTipo !== currentTipo) {
-          updates.tipo = targetTipo;
-          // Se estava em Pendências e agora tem condição definida, manter em EM ESTOQUE
-          if (currentTipo === "PENDENCIA") {
-            updates.status = "EM ESTOQUE";
-          }
-        }
-      }
+      // Produto: nome do catálogo ou texto livre
+      const isStructured = STRUCTURED_CATS.includes(editRowState.categoria);
+      const newProduto = isStructured
+        ? buildProdutoName(editRowState.categoria, editRowState.spec, editRowState.cor)
+        : editRowState.produto;
 
       // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
+      const originalObs = original?.observacao || null;
       const origemOriginal = getOrigemFromObs(originalObs);
-      if (editFields.origem !== origemOriginal) {
-        let nome = editFields.produto || original?.produto || "";
-        nome = nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
-        const novaOrigem = editFields.origem ? editFields.origem.split(" ")[0] : "";
-        const origemPais = editFields.origem?.match(/\(([^)]+)\)/)?.[1] || "";
-        if (novaOrigem) nome = `${nome} ${novaOrigem}${origemPais ? ` (${origemPais})` : ""}`;
-        updates.produto = nome.toUpperCase();
-      } else if (editFields.produto !== (original?.produto || "")) {
-        updates.produto = editFields.produto.toUpperCase() || null;
+      const origemNova = editFields.origem || "";
+      let nomeFinal = newProduto.toUpperCase();
+      if (origemNova !== origemOriginal) {
+        // Remover origem antiga e inserir nova no nome
+        nomeFinal = nomeFinal.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
+        const code = origemNova.split(" ")[0];
+        const pais = origemNova.match(/\(([^)]+)\)/)?.[1] || "";
+        if (code) nomeFinal = `${nomeFinal} ${code}${pais ? ` (${pais})` : ""}`;
       }
+      if (nomeFinal !== (original?.produto || "")) updates.produto = nomeFinal;
+      if (editRowState.cor !== (original?.cor || "")) updates.cor = editRowState.cor || null;
+      if (editRowState.categoria !== (original?.categoria || "")) updates.categoria = editRowState.categoria;
+      if (editRowState.serial_no !== (original?.serial_no || "")) updates.serial_no = editRowState.serial_no.toUpperCase() || null;
+      if (editRowState.imei !== (original?.imei || "")) updates.imei = editRowState.imei || null;
+      if (editRowState.custo_unitario !== String(original?.custo_unitario || "")) updates.custo_unitario = parseFloat(editRowState.custo_unitario) || 0;
+      if (editRowState.qnt !== String(original?.qnt || 1)) updates.qnt = parseInt(editRowState.qnt) || 1;
 
-      // Fornecedor/Cliente
-      if (editFields.fornecedor !== (original?.fornecedor || "")) {
-        updates.fornecedor = editFields.fornecedor || null;
+      // Fornecedor: cliente tem prioridade sobre fornecedor
+      const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
+      if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
+
+      // Observacao: condição + origem
+      const newObs = buildObs(editRowState.condicao || "NOVO", origemNova);
+      if (newObs !== originalObs) updates.observacao = newObs;
+
+      // Tipo: SEMPRE atualizado conforme condição para produtos já em estoque
+      const currentTipo = original?.tipo || "A_CAMINHO";
+      if (currentTipo !== "A_CAMINHO") {
+        const targetTipo =
+          editRowState.condicao === "SEMINOVO" ? "SEMINOVO" :
+          editRowState.condicao === "NAO_ATIVADO" ? "NAO_ATIVADO" : "NOVO";
+        if (targetTipo !== currentTipo) {
+          updates.tipo = targetTipo;
+          if (currentTipo === "PENDENCIA") updates.status = "EM ESTOQUE";
+        }
       }
 
       if (Object.keys(updates).length > 0) {
@@ -268,6 +279,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     } catch { /* ignore */ }
     setSaving(false);
     setEditId(null);
+    setEditRowState(null);
   };
 
   const inputCls = `w-full px-2 py-1 rounded border text-xs ${dm ? "bg-[#2C2C2E] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:outline-none focus:border-[#E8740E]`;
@@ -283,102 +295,34 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       <div className="space-y-1.5">
         {produtos.map((p: any) => (
           <div key={p.id} className={`px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
-            {editId === p.id ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div className="md:col-span-2">
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Produto</p>
-                    <input value={editFields.produto} onChange={(e) => setEditFields(f => ({ ...f, produto: e.target.value }))} className={inputCls} />
-                  </div>
+            {editId === p.id && editRowState ? (
+              <div className="space-y-3">
+                {/* ProdutoSpecFields: catálogo, modelo, cor, condição, fornecedor/cliente, serial, imei, qtd, custo */}
+                <ProdutoSpecFields
+                  row={editRowState}
+                  onChange={setEditRowState}
+                  onRemove={() => { setEditId(null); setEditRowState(null); }}
+                  fornecedores={fornecedores}
+                  inputCls={inputCls}
+                  labelCls={`text-[10px] font-semibold uppercase tracking-wider mb-1 block ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}
+                  darkMode={dm}
+                  index={0}
+                />
+                {/* Origem (código de região iPhone: LL, VC, etc.) */}
+                {editRowState.categoria === "IPHONES" && (
                   <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor</p>
-                    <input value={editFields.cor} onChange={(e) => setEditFields(f => ({ ...f, cor: e.target.value }))} placeholder="Ex: Silver" className={inputCls} />
-                  </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Condição</p>
-                    <select value={editFields.condicao || "NOVO"} onChange={(e) => setEditFields(f => ({ ...f, condicao: e.target.value }))} className={inputCls}>
-                      <option value="NOVO">Lacrado</option>
-                      <option value="NAO_ATIVADO">Não Ativado</option>
-                      <option value="SEMINOVO">Seminovo</option>
-                    </select>
-                  </div>
-                  {/* Fornecedor / Cliente */}
-                  <div className="md:col-span-3">
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem da compra</p>
-                      <div className={`flex rounded border text-[10px] font-semibold overflow-hidden ${dm ? "border-[#4A4A4C]" : "border-[#D2D2D7]"}`}>
-                        <button type="button" onClick={() => { setEditFields(f => ({ ...f, modo_origem: "fornecedor", fornecedor: "" })); setClienteQuery(""); setClienteSuggestions([]); }}
-                          className={`px-2 py-0.5 transition-colors ${editFields.modo_origem !== "cliente" ? "bg-[#E8740E] text-white" : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                          Fornecedor
-                        </button>
-                        <button type="button" onClick={() => setEditFields(f => ({ ...f, modo_origem: "cliente", fornecedor: "" }))}
-                          className={`px-2 py-0.5 transition-colors ${editFields.modo_origem === "cliente" ? "bg-[#0071E3] text-white" : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-                          Cliente
-                        </button>
-                      </div>
-                    </div>
-                    {editFields.modo_origem === "cliente" ? (
-                      <div className="relative">
-                        <input
-                          value={clienteQuery}
-                          onChange={(e) => handleClienteSearch(e.target.value)}
-                          onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
-                          onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
-                          placeholder="🔍 Buscar cliente cadastrado..."
-                          className={inputCls}
-                          autoComplete="off"
-                        />
-                        {editFields.fornecedor && (
-                          <span className="ml-2 text-[10px] text-green-500 font-semibold">✓ {editFields.fornecedor}</span>
-                        )}
-                        {showClienteSugg && clienteSuggestions.length > 0 && (
-                          <div className={`absolute z-20 left-0 right-0 mt-1 rounded border shadow-lg overflow-hidden ${dm ? "bg-[#2C2C2E] border-[#4A4A4C]" : "bg-white border-[#D2D2D7]"}`}>
-                            {clienteSuggestions.map((nome) => (
-                              <button key={nome} type="button"
-                                onMouseDown={() => { setClienteQuery(nome); setEditFields(f => ({ ...f, fornecedor: nome })); setShowClienteSugg(false); }}
-                                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}>
-                                👤 {nome}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <select value={editFields.fornecedor || ""} onChange={(e) => setEditFields(f => ({ ...f, fornecedor: e.target.value }))} className={inputCls}>
-                        <option value="">— Sem fornecedor —</option>
-                        {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-                      </select>
-                    )}
-                  </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial No.</p>
-                    <input value={editFields.serial_no} onChange={(e) => setEditFields(f => ({ ...f, serial_no: e.target.value }))} placeholder="Ex: C39XXXXX..." className={inputCls} />
-                  </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>IMEI</p>
-                    <input value={editFields.imei} onChange={(e) => setEditFields(f => ({ ...f, imei: e.target.value }))} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} />
-                  </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem</p>
+                    <p className={`text-[10px] uppercase font-semibold mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem</p>
                     <select value={editFields.origem || ""} onChange={(e) => setEditFields(f => ({ ...f, origem: e.target.value }))} className={inputCls}>
                       <option value="">— Sem origem —</option>
                       {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Custo (R$)</p>
-                    <input type="number" value={editFields.custo_unitario} onChange={(e) => setEditFields(f => ({ ...f, custo_unitario: e.target.value }))} placeholder="0" className={inputCls} />
-                  </div>
-                  <div>
-                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Qtd</p>
-                    <input type="number" value={editFields.qnt} onChange={(e) => setEditFields(f => ({ ...f, qnt: e.target.value }))} placeholder="1" className={inputCls} />
-                  </div>
-                </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={saveEdit} disabled={saving} className="px-3 py-1 rounded bg-[#E8740E] text-white text-[10px] font-semibold hover:bg-[#D06A0D]">
                     {saving ? "Salvando..." : "Salvar"}
                   </button>
-                  <button onClick={() => setEditId(null)} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  <button onClick={() => { setEditId(null); setEditRowState(null); }} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
                     Cancelar
                   </button>
                 </div>
