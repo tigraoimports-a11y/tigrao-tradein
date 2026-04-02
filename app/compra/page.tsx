@@ -160,7 +160,7 @@ function CompraForm() {
   const trocaNum1 = parseFloat(trocaValor) || 0;
   const trocaNum2 = parseFloat(trocaValor2Param) || 0;
   const trocaNum = trocaNum1 + trocaNum2;
-  const isFromTradeIn = !!trocaProdutoParam;
+  const isFromTradeIn = !!trocaProdutoParam || (parseFloat(trocaValorParam) || 0) > 0;
 
   // CEP auto-fill
   useEffect(() => {
@@ -498,10 +498,13 @@ function CompraForm() {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => setEditPagamento(true)}
-                className="w-full py-2 rounded-lg text-xs font-medium text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF5EB] transition-colors">
-                Editar forma de pagamento
-              </button>
+              {/* Esconder edição de pagamento quando veio do link (valores acordados) */}
+              {!formaParam && (
+                <button type="button" onClick={() => setEditPagamento(true)}
+                  className="w-full py-2 rounded-lg text-xs font-medium text-[#E8740E] border border-[#E8740E] bg-white hover:bg-[#FFF5EB] transition-colors">
+                  Editar forma de pagamento
+                </button>
+              )}
             </div>
           )}
 
