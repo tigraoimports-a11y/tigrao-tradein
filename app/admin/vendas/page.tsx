@@ -1757,42 +1757,30 @@ export default function VendasPage() {
           {/* Row 2: Produto */}
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-sm font-bold text-[#1D1D1F]">Produto</p>
-              <button
-                onClick={() => { setScanMode(false); setProdutoManual(true); setEstoqueId(""); setCatSel(""); }}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${produtoManual ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
-              >
-                ✏️ Digitar manual
-              </button>
+              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Produto</p>
             </div>
 
-            {produtoManual ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
-                <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
-                  <option value="">— Selecionar —</option>
-                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-                </select></div>
-                <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
-              </div>
-            ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <p className={labelCls}>Categoria</p>
                     <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); setSerialBusca(""); }} className={selectCls}>
-                      <option value="">Selecionar...</option>
+                      <option value="">Todas as categorias</option>
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
+                  <div><p className={labelCls}>Buscar Serial ou Produto</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Serial, IMEI ou nome..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
-                {catSel && (() => {
-                  const filtrados = serialBusca.trim()
-                    ? produtosFiltrados.filter(p => p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase()))
+                {(catSel || serialBusca.trim()) && (() => {
+                  const s = serialBusca.trim().toUpperCase();
+                  const filtrados = s
+                    ? estoque.filter(p =>
+                        (p.serial_no?.toUpperCase().includes(s)) ||
+                        (p.imei?.toUpperCase().includes(s)) ||
+                        p.produto.toUpperCase().includes(s)
+                      )
                     : produtosFiltrados;
                   // Limpar nome do produto: remover origem e chip
                   const stripOrigemVendas = (nome: string) => nome
@@ -1811,7 +1799,7 @@ export default function VendasPage() {
                   const grupoKeys = Object.keys(grupos).sort();
 
                   if (grupoKeys.length === 0) return (
-                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto com esse serial" : "Nenhum produto disponivel nesta categoria"}</div>
+                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto encontrado com esse serial ou nome" : "Nenhum produto disponível nesta categoria"}</div>
                   );
 
                   // Extrair cor do nome do produto
@@ -1947,7 +1935,6 @@ export default function VendasPage() {
                   </div>
                 )}
               </div>
-            )}
 
             {/* Serial No. e IMEI movidos para seção de troca */}
 

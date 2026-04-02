@@ -265,6 +265,45 @@ export async function POST(req: NextRequest) {
   const categoriaNome = String(body.categoria || "").trim();
   const hasSerial = !!body.serial_no;
 
+  // Verificar serial duplicado: se serial já existe em estoque (qualquer status), bloquear ou restaurar
+  if (hasSerial) {
+    const serialUpper = (body.serial_no as string).toUpperCase();
+    const { data: existingSerial } = await supabase
+      .from("estoque")
+      .select("id, status, produto, qnt")
+      .eq("serial_no", serialUpper)
+      .limit(1)
+      .single();
+
+    if (existingSerial) {
+      // Bloquear se produto ainda está ativo no sistema (não foi vendido)
+      if (existingSerial.status !== "ESGOTADO") {
+        return NextResponse.json(
+          { error: `Serial ${serialUpper} já existe no sistema como "${existingSerial.produto}" (status: ${existingSerial.status}). Só é possível re-registrar um serial após o produto ter sido vendido.` },
+          { status: 409 }
+        );
+      }
+      // Serial está ESGOTADO (foi vendido) — restaurar o item original preservando rastreabilidade
+      const usuario = getUsuario(req);
+      const updateData: Record<string, unknown> = { status: "EM ESTOQUE", qnt: 1, updated_at: new Date().toISOString() };
+      // Atualizar apenas campos fornecidos no body (mantém dados originais para os demais)
+      const allowedFields = ["produto", "cor", "categoria", "custo_unitario", "fornecedor", "data_entrada", "data_compra", "observacao", "tipo", "bateria", "preco_sugerido", "imei"];
+      for (const f of allowedFields) {
+        if (body[f] !== undefined && body[f] !== null && body[f] !== "") updateData[f] = body[f];
+      }
+      const { error: ue } = await supabase.from("estoque").update(updateData).eq("id", existingSerial.id);
+      if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
+      await logActivity(
+        usuario,
+        "Restaurou ao estoque (serial rastreado)",
+        `${existingSerial.produto} → serial ${serialUpper} voltou ao estoque`,
+        "estoque",
+        existingSerial.id
+      );
+      return NextResponse.json({ ok: true, restored: true, id: existingSerial.id });
+    }
+  }
+
   if (produtoNome && !hasSerial) {
     let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome).in("status", ["EM ESTOQUE", "ESGOTADO"]);
     if (categoriaNome) existQuery = existQuery.eq("categoria", categoriaNome);

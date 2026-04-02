@@ -195,30 +195,20 @@ export async function POST(req: NextRequest) {
     const { data: item } = await supabase.from("estoque").select("qnt,produto,tipo").eq("id", estoqueId).single();
     if (item) {
       const novaQnt = Math.max(0, Number(item.qnt) - 1);
-      if (novaQnt === 0 && item.tipo === "SEMINOVO") {
-        // Seminovos vendidos são removidos do estoque (não reabastecidos)
-        await supabase.from("estoque").delete().eq("id", estoqueId);
-        await logActivity(
-          usuario,
-          "Removeu seminovo do estoque (auto)",
-          `${item.produto || body.produto || "?"} — vendido, removido do estoque`,
-          "estoque",
-          estoqueId
-        );
-      } else {
-        await supabase.from("estoque").update({
-          qnt: novaQnt,
-          status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
-          updated_at: new Date().toISOString(),
-        }).eq("id", estoqueId);
-        await logActivity(
-          usuario,
-          "Removeu do estoque (auto)",
-          `${item.produto || body.produto || "?"} — restam ${novaQnt} un.`,
-          "estoque",
-          estoqueId
-        );
-      }
+      // Seminovos e Novos: marcar como ESGOTADO ao chegar em qnt=0 (nunca deletar)
+      // Isso preserva o ID do item e permite rastreabilidade completa (retorno ao estoque na devolução)
+      await supabase.from("estoque").update({
+        qnt: novaQnt,
+        status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", estoqueId);
+      await logActivity(
+        usuario,
+        novaQnt === 0 ? "Esgotou do estoque (auto)" : "Removeu do estoque (auto)",
+        `${item.produto || body.produto || "?"} — restam ${novaQnt} un.`,
+        "estoque",
+        estoqueId
+      );
     }
   }
 
@@ -546,18 +536,29 @@ export async function DELETE(req: NextRequest) {
       }).eq("id", venda.estoque_id);
       await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
     } else {
-      // Item foi deletado (ex: seminovo vendido, ou item removido manualmente)
-      // Tentar encontrar por serial primeiro
+      // Item foi deletado ou não encontrado pelo estoque_id
+      // Tentar recuperar pelo serial_no (qualquer status — preserva rastreabilidade)
       let found = false;
       if (venda.serial_no) {
-        const { data: bySerial } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).limit(1).single();
+        const { data: bySerial } = await supabase.from("estoque").select("id, qnt, status").eq("serial_no", venda.serial_no).limit(1).single();
         if (bySerial) {
-          await supabase.from("estoque").update({ qnt: Number(bySerial.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", bySerial.id);
+          await supabase.from("estoque").update({ qnt: 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", bySerial.id);
           found = true;
-          await logActivity(usuario, "Devolveu ao estoque (cancelamento, por serial)", venda.produto, "estoque");
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, serial rastreado)", `${venda.produto} serial=${venda.serial_no}`, "estoque", bySerial.id);
         }
       }
-      // Se não achou por serial, RECRIAR o item com todos os dados da venda
+      // Se não achou por serial, tentar por produto+cor (ESGOTADO conta)
+      if (!found && venda.produto) {
+        let q = supabase.from("estoque").select("id, qnt, status").eq("produto", venda.produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
+        if (venda.cor) q = q.eq("cor", venda.cor);
+        const { data: byName } = await q.order("qnt", { ascending: false }).limit(1);
+        if (byName && byName.length > 0) {
+          await supabase.from("estoque").update({ qnt: Number(byName[0].qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", byName[0].id);
+          found = true;
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, por produto)", venda.produto, "estoque", byName[0].id);
+        }
+      }
+      // Último recurso: recriar (apenas se produto não existe em nenhuma forma no estoque)
       if (!found && venda.produto) {
         const novoItem: Record<string, unknown> = {
           produto: venda.produto,
@@ -566,7 +567,7 @@ export async function DELETE(req: NextRequest) {
           imei: venda.imei || null,
           qnt: 1,
           status: "EM ESTOQUE",
-          tipo: "SEMINOVO", // cancelamento = item voltou do cliente
+          tipo: "SEMINOVO",
           categoria: venda.categoria || null,
           custo_unitario: venda.custo || null,
           fornecedor: venda.fornecedor || null,
