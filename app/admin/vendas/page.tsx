@@ -3470,16 +3470,17 @@ export default function VendasPage() {
                                             <button
                                               onClick={async (e) => {
                                                 e.stopPropagation();
-                                                if (!confirm("Remover nota fiscal?")) return;
+                                                if (!confirm("Remover nota fiscal atual? Depois pode anexar outra.")) return;
                                                 await fetch("/api/vendas", {
                                                   method: "PATCH",
                                                   headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                                   body: JSON.stringify({ id: v.id, nota_fiscal_url: null }),
                                                 });
                                                 setVendas(prev => prev.map(r => r.id === v.id ? { ...r, nota_fiscal_url: "" } : r));
+                                                setMsg("NF removida. Agora pode anexar a correta.");
                                               }}
-                                              className="px-2 py-1.5 rounded-lg text-[10px] text-red-400 hover:text-red-600"
-                                            >✕</button>
+                                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors inline-flex items-center gap-1"
+                                            >🔄 Trocar NF</button>
                                           </>
                                         ) : (
                                           <label
