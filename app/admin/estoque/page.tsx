@@ -2713,7 +2713,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
-                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, categoria)}
+                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {corSoPT(prodItems[0]?.cor) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor)}</span>}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
