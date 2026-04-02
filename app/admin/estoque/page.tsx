@@ -3476,7 +3476,9 @@ export default function EstoquePage() {
                                   body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto_antigo: nomeAntigo, produto: novoNome, cor: novaCor, categoria: novaCategoria }),
                                 });
                                 const json = await res.json();
-                                vendaMsg = json.updated > 0 ? ` ${json.updated} venda(s) sincronizada(s).` : " Nenhuma venda vinculada encontrada.";
+                                vendaMsg = json.updated > 0
+                                  ? ` ${json.updated} venda(s) sincronizada(s).`
+                                  : ` Nenhuma venda encontrada para "${p.fornecedor}" (data: ${p.data_entrada || p.data_compra || "—"}).`;
                               }
                               setMsg(`✅ Produto recategorizado!${vendaMsg}`);
                               setRecatMode(false);
