@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
   delete body._seminovo2;
 
   // Extrair estoque_id antes de inserir
-  const estoqueId = body._estoque_id;
+  let estoqueId = body._estoque_id;
   delete body._estoque_id;
 
   // Se tem estoque_id, copiar IMEI e Serial do estoque para a venda (se existirem)
@@ -157,6 +157,15 @@ export async function POST(req: NextRequest) {
     ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Se não tem estoque_id mas tem serial, buscar automaticamente no estoque
+  if (!estoqueId && body.serial_no) {
+    const { data: foundBySerial } = await supabase.from("estoque").select("id").eq("serial_no", body.serial_no.toUpperCase()).eq("status", "EM ESTOQUE").limit(1).single();
+    if (foundBySerial) {
+      estoqueId = foundBySerial.id;
+      await supabase.from("vendas").update({ estoque_id: estoqueId }).eq("id", data?.id);
+    }
+  }
 
   // Descontar do estoque se veio de um produto cadastrado
   if (estoqueId) {
