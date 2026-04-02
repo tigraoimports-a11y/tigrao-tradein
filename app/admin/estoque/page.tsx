@@ -543,7 +543,7 @@ export default function EstoquePage() {
   }
 
   // ── Catálogo dinâmico de modelos ──────────────────────────────────────────
-  const [catalogoModelos, setCatalogoModelos] = useState<{categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
+  const [catalogoModelos, setCatalogoModelos] = useState<{id?: string; categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
   useEffect(() => {
     if (!password) return;
     fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } })
@@ -555,6 +555,13 @@ export default function EstoquePage() {
     const db = catalogoModelos.filter(m => m.categoria_key === catKey && m.ativo !== false).sort((a, b) => a.ordem - b.ordem).map(m => m.nome);
     return db.length > 0 ? db : fallback;
   }
+  async function reloadCatalogoModelos() {
+    if (!password) return;
+    const r = await fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } });
+    const json = await r.json();
+    if (Array.isArray(json.modelos)) setCatalogoModelos(json.modelos);
+  }
+
 
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
@@ -571,7 +578,7 @@ export default function EstoquePage() {
     // MAC_MINI
     mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
     // IPADS
-    ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+    ipad_modelo: "AIR", ipad_chip: "M4", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
     aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
     // AIRPODS
@@ -1053,7 +1060,7 @@ export default function EstoquePage() {
           ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
           mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
-          ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
+          ipad_modelo: "AIR", ipad_chip: "M4", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
           aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "",
           air_modelo: "AIRPODS 4",
           semi_subtipo: "IPHONES",
@@ -1878,7 +1885,12 @@ export default function EstoquePage() {
                 const ipadMods = getCatModelos("IPADS", ["IPAD", "MINI", "AIR", "PRO"]);
                 const ipadKnown = [...ipadMods, "__custom__"];
                 return (
-                  <div><p className={labelCls}>Modelo</p><select value={ipadMods.includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                  <div><p className={labelCls}>Modelo</p><select value={ipadMods.includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => {
+                    const val = e.target.value === "__custom__" ? "" : e.target.value;
+                    setS("ipad_modelo", val);
+                    // Auto-set chip when switching to PRO/AIR with no chip
+                    if ((val === "PRO" || val === "AIR") && !spec.ipad_chip) setS("ipad_chip", "M4");
+                  }} className={inputCls}>
                     {ipadMods.map((m) => <option key={m} value={m}>{m === "IPAD" ? "iPad" : m === "MINI" ? "iPad Mini" : m === "AIR" ? "iPad Air" : m === "PRO" ? "iPad Pro" : `iPad ${m}`}</option>)}
                     <option value="__custom__">Outro (digitar)</option>
                   </select>
@@ -1887,16 +1899,24 @@ export default function EstoquePage() {
                   ) : null}</div>
                 );
               })()}
-              <div><p className={labelCls}>Chip</p><select value={spec.ipad_chip || ""} onChange={(e) => setS("ipad_chip", e.target.value)} className={inputCls}>
-                <option value="">— Sem chip —</option>
-                <option value="M1">M1</option>
-                <option value="M2">M2</option>
-                <option value="M3">M3</option>
-                <option value="M4">M4</option>
-                <option value="M5">M5</option>
-                <option value="A16">A16</option>
-                <option value="A17 PRO">A17 Pro</option>
-              </select></div>
+              <div>
+                <p className={labelCls}>
+                  Chip
+                  {(spec.ipad_modelo === "PRO" || spec.ipad_modelo === "AIR") && !spec.ipad_chip && (
+                    <span className="ml-1.5 text-[9px] font-bold text-red-500 uppercase">obrigatório</span>
+                  )}
+                </p>
+                <select value={spec.ipad_chip || ""} onChange={(e) => setS("ipad_chip", e.target.value)} className={`${inputCls} ${(spec.ipad_modelo === "PRO" || spec.ipad_modelo === "AIR") && !spec.ipad_chip ? "border-red-400 ring-1 ring-red-300" : ""}`}>
+                  {spec.ipad_modelo !== "PRO" && spec.ipad_modelo !== "AIR" && <option value="">— Sem chip —</option>}
+                  <option value="M1">M1</option>
+                  <option value="M2">M2</option>
+                  <option value="M3">M3</option>
+                  <option value="M4">M4</option>
+                  <option value="M5">M5</option>
+                  <option value="A16">A16</option>
+                  <option value="A17 PRO">A17 Pro</option>
+                </select>
+              </div>
               <div><p className={labelCls}>Tela</p><select value={spec.ipad_tela} onChange={(e) => setS("ipad_tela", e.target.value)} className={inputCls}>
                 {['8.3"', '10.9"', '11"', '13"'].map((t) => <option key={t} value={t}>{t}</option>)}
               </select></div>
@@ -2356,7 +2376,7 @@ export default function EstoquePage() {
                                     <div className="flex items-center gap-2">
                                       {!alwaysExpand && <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>}
                                     {(() => {
-                                      const canEditNome = isPendenciasTab || tab === "acaminho";
+                                      const canEditNome = isAdmin;
                                       return editingNome[prodItems[0]?.id] !== undefined && canEditNome ? (
                                         <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                           <input
