@@ -12,22 +12,38 @@ export default function GerarLinkPage() {
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
 
-  // Fetch preços de venda (tabela precos)
-  const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number }[]>([]);
+  // Fetch preços de venda (tabela precos com categoria)
+  const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   useEffect(() => {
-    fetch("/api/produtos")
+    fetch("/api/produtos-disponiveis")
       .then(r => r.json())
-      .then(j => { if (Array.isArray(j)) setPrecosVenda(j.map((p: { modelo: string; armazenamento: string; precoPix: number }) => ({ modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.precoPix }))); })
+      .then(j => {
+        // Tenta formato com categorias
+        if (j.categorias) {
+          const all: typeof precosVenda = [];
+          Object.entries(j.categorias as Record<string, { modelo: string; armazenamento: string; precoPix: number }[]>).forEach(([cat, prods]) => {
+            (prods as { modelo: string; armazenamento: string; precoPix: number }[]).forEach(p => all.push({ modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.precoPix, categoria: cat }));
+          });
+          setPrecosVenda(all);
+        }
+      })
       .catch(() => {});
   }, []);
 
-  // Agrupar preços por modelo+armazenamento
-  const modelosAgrupados = useMemo(() => {
-    return precosVenda.map(p => ({
-      nome: `${p.modelo} ${p.armazenamento}`.trim(),
-      preco: p.preco_pix,
-    })).sort((a, b) => a.nome.localeCompare(b.nome));
+  // Categorias dos preços
+  const categoriaPrecos = useMemo(() => {
+    const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
+    return cats;
   }, [precosVenda]);
+
+  // Produtos filtrados por categoria
+  const produtosFiltradosPreco = useMemo(() => {
+    if (!catSel) return [];
+    return precosVenda
+      .filter(p => p.categoria === catSel)
+      .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [precosVenda, catSel]);
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
@@ -282,19 +298,14 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <input
-              value={catSel}
-              onChange={(e) => setCatSel(e.target.value)}
-              placeholder="Buscar produto... (ex: iPhone 17 Pro)"
-              className={inputCls}
-            />
-            <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-              {(() => {
-                const filtered = catSel
-                  ? modelosAgrupados.filter(m => m.nome.toLowerCase().includes(catSel.toLowerCase()))
-                  : modelosAgrupados;
-                if (filtered.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto encontrado</p>;
-                return filtered.map((m) => {
+            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); }} className={inputCls}>
+              <option value="">-- Categoria --</option>
+              {categoriaPrecos.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {catSel && (
+              <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                {produtosFiltradosPreco.map((m) => {
                   const sel = produtos[0] === m.nome;
                   return (
                     <button key={m.nome} onClick={() => {
@@ -306,9 +317,9 @@ export default function GerarLinkPage() {
                       <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                     </button>
                   );
-                });
-              })()}
-            </div>
+                })}
+              </div>
+            )}
           </div>
         )}
         <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
