@@ -140,6 +140,7 @@ export interface ProdutoRowState {
   qnt: string;
   custo_unitario: string;
   fornecedor: string;
+  cliente: string; // quando comprado de um cliente registrado (sobrescreve fornecedor)
   imei: string;
   serial_no: string;
   condicao: string; // "NOVO" | "NAO_ATIVADO" | "SEMINOVO"
@@ -156,6 +157,7 @@ export function createEmptyProdutoRow(): ProdutoRowState {
     qnt: "1",
     custo_unitario: "",
     fornecedor: "",
+    cliente: "",
     imei: "",
     serial_no: "",
     condicao: "NOVO",
@@ -192,6 +194,13 @@ export default function ProdutoSpecFields({
 
   const [allModelos, setAllModelos] = useState<CatalogoModelo[]>([]);
   const [modeloConfigs, setModeloConfigs] = useState<Record<string, string[]>>({});
+
+  // Client search state
+  const [clienteQuery, setClienteQuery] = useState(row.cliente || "");
+  const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
+  const [clienteLoading, setClienteLoading] = useState(false);
+  const [showClienteSugg, setShowClienteSugg] = useState(false);
+  const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch all catalog models once
   useEffect(() => {
@@ -320,6 +329,29 @@ export default function ProdutoSpecFields({
 
   const hasStructured = STRUCTURED_CATS.includes(row.categoria);
 
+  // Client search handler
+  const handleClienteChange = (q: string) => {
+    setClienteQuery(q);
+    set("cliente", q);
+    setShowClienteSugg(true);
+    if (clienteDebounceRef.current) clearTimeout(clienteDebounceRef.current);
+    if (q.length < 2) { setClienteSuggestions([]); return; }
+    clienteDebounceRef.current = setTimeout(async () => {
+      setClienteLoading(true);
+      try {
+        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(q)}`, {
+          headers: { "x-admin-password": password },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const names: string[] = (json.contatos || []).map((c: { nome: string }) => c.nome);
+          setClienteSuggestions(names.slice(0, 8));
+        }
+      } catch { /* ignore */ }
+      setClienteLoading(false);
+    }, 350);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -378,6 +410,47 @@ export default function ProdutoSpecFields({
             <option value="SEMINOVO">Seminovo</option>
           </select>
         </div>
+      </div>
+
+      {/* Cliente (compra de cliente registrado) */}
+      <div className="relative">
+        <p className={labelCls}>
+          Cliente (origem)
+          <span className={`ml-1.5 text-[10px] ${dm ? "text-[#636366]" : "text-[#AEAEB2]"}`}>— se comprado de cliente</span>
+        </p>
+        <input
+          value={clienteQuery}
+          onChange={(e) => handleClienteChange(e.target.value)}
+          onFocus={() => clienteQuery.length >= 2 && setShowClienteSugg(true)}
+          onBlur={() => setTimeout(() => setShowClienteSugg(false), 200)}
+          placeholder="Buscar cliente cadastrado..."
+          className={inputCls}
+          autoComplete="off"
+        />
+        {row.cliente && (
+          <span className={`absolute right-2 top-[1.85rem] text-[10px] font-semibold text-[#30C66A]`}>✓ {row.cliente}</span>
+        )}
+        {showClienteSugg && (clienteSuggestions.length > 0 || clienteLoading) && (
+          <div className={`absolute z-20 left-0 right-0 mt-1 rounded-lg border shadow-lg overflow-hidden ${dm ? "bg-[#2C2C2E] border-[#4A4A4C]" : "bg-white border-[#D2D2D7]"}`}>
+            {clienteLoading && (
+              <p className={`px-3 py-2 text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Buscando...</p>
+            )}
+            {clienteSuggestions.map((nome) => (
+              <button
+                key={nome}
+                type="button"
+                onMouseDown={() => {
+                  setClienteQuery(nome);
+                  set("cliente", nome);
+                  setShowClienteSugg(false);
+                }}
+                className={`w-full text-left px-3 py-2 text-xs transition-colors ${dm ? "hover:bg-[#3A3A3C] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`}
+              >
+                {nome}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Catalog model selector */}

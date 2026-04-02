@@ -121,9 +121,35 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
     reload().then(() => setLoading(false));
   }, [pedidoFornecedorId, password]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Helpers para condição no prefixo do observacao
+  const getCondicaoFromObs = (obs: string | null): string => {
+    if (!obs) return "NOVO";
+    const m = obs.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/);
+    return m ? m[1] : "NOVO";
+  };
+  const getOrigemFromObs = (obs: string | null): string => {
+    if (!obs) return "";
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\]\s*/, "");
+  };
+  const buildObs = (condicao: string, origem: string): string | null => {
+    const prefix = condicao && condicao !== "NOVO" ? `[${condicao}]` : "";
+    const combined = prefix ? (origem ? `${prefix} ${origem}` : prefix) : origem;
+    return combined || null;
+  };
+
   const startEdit = (p: any) => {
     setEditId(p.id);
-    setEditFields({ serial_no: p.serial_no || "", imei: p.imei || "", produto: p.produto || "", observacao: p.observacao || "", cor: p.cor || "", custo_unitario: String(p.custo_unitario || ""), qnt: String(p.qnt || 1), tipo: p.tipo || "A_CAMINHO" });
+    setEditFields({
+      serial_no: p.serial_no || "",
+      imei: p.imei || "",
+      produto: p.produto || "",
+      origem: getOrigemFromObs(p.observacao),
+      condicao: getCondicaoFromObs(p.observacao),
+      cor: p.cor || "",
+      custo_unitario: String(p.custo_unitario || ""),
+      qnt: String(p.qnt || 1),
+      tipo: p.tipo || "A_CAMINHO",
+    });
   };
 
   const saveEdit = async () => {
@@ -137,22 +163,31 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
       if (editFields.cor !== (original?.cor || "")) updates.cor = editFields.cor || null;
       if (editFields.custo_unitario !== String(original?.custo_unitario || "")) updates.custo_unitario = parseFloat(editFields.custo_unitario) || 0;
       if (editFields.qnt !== String(original?.qnt || 1)) updates.qnt = parseInt(editFields.qnt) || 1;
-      // Atualizar origem no nome do produto automaticamente
-      const origemMudou = editFields.observacao !== (original?.observacao || "");
-      if (origemMudou) {
-        updates.observacao = editFields.observacao || null;
-        // Trocar código de origem no nome: remover origem antiga e adicionar nova
+
+      // Reconstruir observacao com condição + origem
+      const newObs = buildObs(editFields.condicao || "NOVO", editFields.origem || "");
+      const originalObs = original?.observacao || null;
+      if (newObs !== originalObs) {
+        updates.observacao = newObs;
+        // Atualizar tipo do produto no estoque conforme condição
+        if (editFields.condicao === "SEMINOVO") updates.tipo = "SEMINOVO";
+        else if (editFields.condicao === "NAO_ATIVADO") updates.tipo = "NAO_ATIVADO";
+        else updates.tipo = "A_CAMINHO";
+      }
+
+      // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
+      const origemOriginal = getOrigemFromObs(originalObs);
+      if (editFields.origem !== origemOriginal) {
         let nome = editFields.produto || original?.produto || "";
-        // Remover origem antiga do nome (ex: " VC (CAN)", " LL (EUA)")
         nome = nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
-        // Adicionar nova origem
-        const novaOrigem = editFields.observacao ? editFields.observacao.split(" ")[0] : "";
-        const origemPais = editFields.observacao?.match(/\(([^)]+)\)/)?.[1] || "";
+        const novaOrigem = editFields.origem ? editFields.origem.split(" ")[0] : "";
+        const origemPais = editFields.origem?.match(/\(([^)]+)\)/)?.[1] || "";
         if (novaOrigem) nome = `${nome} ${novaOrigem}${origemPais ? ` (${origemPais})` : ""}`;
         updates.produto = nome.toUpperCase();
       } else if (editFields.produto !== (original?.produto || "")) {
         updates.produto = editFields.produto.toUpperCase() || null;
       }
+
       if (Object.keys(updates).length > 0) {
         await fetch("/api/estoque", {
           method: "PATCH",
@@ -191,6 +226,14 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                     <input value={editFields.cor} onChange={(e) => setEditFields(f => ({ ...f, cor: e.target.value }))} placeholder="Ex: Silver" className={inputCls} />
                   </div>
                   <div>
+                    <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Condição</p>
+                    <select value={editFields.condicao || "NOVO"} onChange={(e) => setEditFields(f => ({ ...f, condicao: e.target.value }))} className={inputCls}>
+                      <option value="NOVO">Lacrado</option>
+                      <option value="NAO_ATIVADO">Não Ativado</option>
+                      <option value="SEMINOVO">Seminovo</option>
+                    </select>
+                  </div>
+                  <div>
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial No.</p>
                     <input value={editFields.serial_no} onChange={(e) => setEditFields(f => ({ ...f, serial_no: e.target.value }))} placeholder="Ex: C39XXXXX..." className={inputCls} />
                   </div>
@@ -200,7 +243,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
                   </div>
                   <div>
                     <p className={`text-[10px] uppercase ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem</p>
-                    <select value={editFields.observacao} onChange={(e) => setEditFields(f => ({ ...f, observacao: e.target.value }))} className={inputCls}>
+                    <select value={editFields.origem || ""} onChange={(e) => setEditFields(f => ({ ...f, origem: e.target.value }))} className={inputCls}>
                       <option value="">— Sem origem —</option>
                       {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
@@ -226,17 +269,30 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm }: { pedidoFornec
             ) : (
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : p.status === "PENDENTE" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}>
                       {p.status}
                     </span>
+                    {(() => {
+                      const cond = getCondicaoFromObs(p.observacao);
+                      if (cond === "SEMINOVO") return <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">Seminovo</span>;
+                      if (cond === "NAO_ATIVADO") return <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">Não Ativado</span>;
+                      return null;
+                    })()}
                     <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}{p.observacao ? ` · ${p.observacao.split(" ")[0]}${p.observacao.includes("(") ? " " + p.observacao.match(/\([^)]+\)/)?.[0] : ""}` : ""}
+                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}{(() => {
+                        const origem = getOrigemFromObs(p.observacao);
+                        if (!origem) return "";
+                        const code = origem.split(" ")[0];
+                        const pais = origem.match(/\(([^)]+)\)/)?.[1];
+                        return ` · ${code}${pais ? ` (${pais})` : ""}`;
+                      })()}
                     </span>
                   </div>
                   <div className={`mt-1 flex items-center gap-3 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
                     {p.serial_no ? <span className="font-mono text-purple-500">SN: {p.serial_no}</span> : <span className="font-mono opacity-50">S/N</span>}
                     {p.imei && <span className="font-mono text-blue-500">IMEI: {p.imei}</span>}
+                    {p.fornecedor && <span className="text-[10px] opacity-60">📦 {p.fornecedor}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -392,15 +448,22 @@ export default function GastosPage() {
         // Para categorias estruturadas, SEMPRE usar buildProdutoName (ignora nome livre)
         const isStructured = STRUCTURED_CATS.includes(p.categoria);
         const nome = isStructured ? buildProdutoName(p.categoria, p.spec, p.cor) : (p.produto || "");
+        // Condição → prefixo no observacao
+        const obsCondicao = (p.condicao && p.condicao !== "NOVO") ? `[${p.condicao}]` : null;
+        // Cliente registrado sobrescreve fornecedor
+        const fornecedorFinal = p.cliente?.trim() || p.fornecedor || null;
         return {
           produto: nome,
           categoria: p.categoria,
           qnt: parseInt(p.qnt) || 1,
           custo_unitario: parseFloat(p.custo_unitario) || 0,
           cor: p.cor || null,
-          fornecedor: p.fornecedor || null,
+          fornecedor: fornecedorFinal,
+          cliente_origem: p.cliente?.trim() || null,
           imei: p.imei || null,
           serial_no: p.serial_no || null,
+          observacao: obsCondicao,
+          condicao: p.condicao || "NOVO",
         };
       });
       payload = { gastos: gastoItems, produtos };

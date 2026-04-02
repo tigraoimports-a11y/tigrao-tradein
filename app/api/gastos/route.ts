@@ -84,17 +84,21 @@ export async function POST(req: NextRequest) {
       custo_unitario: number;
       cor?: string;
       fornecedor?: string;
+      cliente_origem?: string;
       serial_no?: string;
       imei?: string;
+      observacao?: string;
+      condicao?: string;
     }) => ({
       produto: p.produto,
       categoria: p.categoria,
       qnt: p.qnt,
       custo_unitario: p.custo_unitario,
       cor: p.cor || null,
-      fornecedor: p.fornecedor || null,
+      fornecedor: p.cliente_origem?.trim() || p.fornecedor || null,
       serial_no: p.serial_no ? p.serial_no.toUpperCase() : null,
       imei: p.imei ? p.imei.toUpperCase() : null,
+      observacao: p.observacao || null,
       status: "A CAMINHO",
       tipo: "A_CAMINHO",
       data_compra: dataCompra,
