@@ -274,30 +274,7 @@ function CompraForm() {
     lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
 
-    // Se é entrega, criar automaticamente na aba de entregas
-    if (local === "Entrega") {
-      const enderecoCompleto = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-      const tipoEntregaStr = tipoEntrega === "Shopping" ? `Shopping: ${shopping}` : "Residencia";
-      const pagInfo = tipoEntrega === "Residencia" ? "PAGAMENTO ANTECIPADO" : "PAGAR NA ENTREGA";
-      fetch("/api/entrega-formulario", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: "tigrao-form-2026",
-          cliente: nome,
-          telefone,
-          endereco: enderecoCompleto,
-          bairro,
-          produto: [produtoInput || produtoParam, ...produtosExtras].filter(Boolean).join(" | "),
-          forma_pagamento: `${pagStr} — ${pagInfo}`,
-          valor: valorBase > 0 ? valorBase : null,
-          horario,
-          tipo: tipoEntregaStr,
-          vendedor: vendedor || null,
-          observacao: trocaProduto ? `Troca: ${trocaProduto} (R$ ${fmt(trocaNum)})` : null,
-        }),
-      }).catch(() => {});
-    }
+    // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
     window.open(url, "_blank");
