@@ -122,9 +122,11 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
   return spec;
 }
 
-function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string }[], condicaoInicial: string): ProdutoRowState {
+function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string }[], condicaoInicial: string, origemInicial: string): ProdutoRowState {
   const cat = p.categoria || "IPHONES";
   const spec = inferSpecFromProduto(p.produto || "", cat);
+  // Origem de região do iPhone (LL, VC, etc.) vai pro spec.ip_origem
+  if (origemInicial) spec.ip_origem = origemInicial.split(" ")[0]; // ex: "LL (EUA)" → "LL"
   const fornNome = p.fornecedor || "";
   const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
   return {
@@ -206,13 +208,11 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       condicaoInicial = getCondicaoFromObs(p.observacao);
     }
 
-    // editFields guarda apenas campos fora do ProdutoSpecFields
-    setEditFields({
-      origem: getOrigemFromObs(p.observacao),
-      tipo: currentTipo,
-    });
-    // editRowState alimenta o ProdutoSpecFields (produto, cor, modelo, condição, fornecedor/cliente, imei, serial, qnt, custo)
-    setEditRowState(produtoToRowState(p, fornecedores, condicaoInicial));
+    const origemInicial = getOrigemFromObs(p.observacao);
+    // editFields guarda apenas o tipo original (para lógica de saveEdit)
+    setEditFields({ tipo: currentTipo });
+    // editRowState alimenta o ProdutoSpecFields com todos os campos incluindo spec.ip_origem
+    setEditRowState(produtoToRowState(p, fornecedores, condicaoInicial, origemInicial));
   };
 
   const saveEdit = async () => {
@@ -231,14 +231,13 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
       const originalObs = original?.observacao || null;
       const origemOriginal = getOrigemFromObs(originalObs);
-      const origemNova = editFields.origem || "";
+      // Origem vem do spec.ip_origem dentro do ProdutoSpecFields
+      const origemNova = editRowState.spec.ip_origem || "";
       let nomeFinal = newProduto.toUpperCase();
-      if (origemNova !== origemOriginal) {
+      if (origemNova !== origemOriginal.split(" ")[0]) {
         // Remover origem antiga e inserir nova no nome
         nomeFinal = nomeFinal.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
-        const code = origemNova.split(" ")[0];
-        const pais = origemNova.match(/\(([^)]+)\)/)?.[1] || "";
-        if (code) nomeFinal = `${nomeFinal} ${code}${pais ? ` (${pais})` : ""}`;
+        if (origemNova) nomeFinal = `${nomeFinal} ${origemNova}`;
       }
       if (nomeFinal !== (original?.produto || "")) updates.produto = nomeFinal;
       if (editRowState.cor !== (original?.cor || "")) updates.cor = editRowState.cor || null;
@@ -252,7 +251,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
       if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
 
-      // Observacao: condição + origem
+      // Observacao: condição + origem (usa origemNova do spec)
       const newObs = buildObs(editRowState.condicao || "NOVO", origemNova);
       if (newObs !== originalObs) updates.observacao = newObs;
 
@@ -308,16 +307,6 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                   darkMode={dm}
                   index={0}
                 />
-                {/* Origem (código de região iPhone: LL, VC, etc.) */}
-                {editRowState.categoria === "IPHONES" && (
-                  <div>
-                    <p className={`text-[10px] uppercase font-semibold mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Origem</p>
-                    <select value={editFields.origem || ""} onChange={(e) => setEditFields(f => ({ ...f, origem: e.target.value }))} className={inputCls}>
-                      <option value="">— Sem origem —</option>
-                      {IPHONE_ORIGENS.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                )}
                 <div className="flex gap-2">
                   <button onClick={saveEdit} disabled={saving} className="px-3 py-1 rounded bg-[#E8740E] text-white text-[10px] font-semibold hover:bg-[#D06A0D]">
                     {saving ? "Salvando..." : "Salvar"}
