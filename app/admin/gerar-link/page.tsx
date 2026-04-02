@@ -1,14 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 
+interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; status: string; }
+
 export default function GerarLinkPage() {
-  const { user } = useAdmin();
+  const { user, password, apiHeaders } = useAdmin();
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
+  const [produtoManual, setProdutoManual] = useState(false);
+  const [catSel, setCatSel] = useState("");
+
+  // Fetch estoque
+  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/estoque", { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => setEstoque(j.data?.filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE") || []))
+      .catch(() => {});
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const categorias = useMemo(() => {
+    const cats = new Map<string, string>();
+    estoque.forEach(p => { if (p.tipo !== "SEMINOVO") cats.set(p.categoria, p.categoria); });
+    return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [estoque]);
+
+  const produtosFiltrados = useMemo(() => {
+    if (!catSel) return [];
+    return estoque.filter(p => p.categoria === catSel && p.tipo !== "SEMINOVO");
+  }, [estoque, catSel]);
+
+  // Agrupar por modelo (sem cor/origem)
+  const modelosAgrupados = useMemo(() => {
+    const stripDetails = (nome: string) => nome
+      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
+      .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
+      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
+      .replace(/\s{2,}/g, " ").trim();
+    const byModel: Record<string, { totalQnt: number; avgCost: number; items: EstoqueItem[] }> = {};
+    produtosFiltrados.forEach(p => {
+      const model = stripDetails(p.produto);
+      if (!byModel[model]) byModel[model] = { totalQnt: 0, avgCost: 0, items: [] };
+      byModel[model].totalQnt += p.qnt;
+      byModel[model].items.push(p);
+    });
+    Object.values(byModel).forEach(g => {
+      const totalVal = g.items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+      g.avgCost = g.totalQnt > 0 ? Math.round(totalVal / g.totalQnt) : 0;
+    });
+    return Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
+  }, [produtosFiltrados]);
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
@@ -236,24 +282,60 @@ export default function GerarLinkPage() {
           </div>
         )}
 
-        {/* Produtos dinâmicos */}
-        {produtos.map((prod, idx) => (
-          <div key={idx} className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className={labelCls}>{idx === 0 ? "Produto *" : `Produto ${idx + 1}`}</label>
-              <input
-                type="text"
-                value={prod}
-                onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
-                placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
-                className={inputCls}
-              />
-            </div>
-            {idx > 0 && (
-              <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg" title="Remover">✕</button>
+        {/* Produto — seleção do estoque ou manual */}
+        <div className="flex items-center justify-between">
+          <label className={labelCls}>Produto *</label>
+          <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) setCatSel(""); }} className="text-xs text-[#E8740E] font-medium hover:underline">
+            {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
+          </button>
+        </div>
+
+        {produtoManual ? (
+          <>
+            {produtos.map((prod, idx) => (
+              <div key={idx} className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={prod}
+                    onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
+                    placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
+                    className={inputCls}
+                  />
+                </div>
+                {idx > 0 && <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="space-y-3">
+            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); }} className={inputCls}>
+              <option value="">-- Categoria --</option>
+              {categorias.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            {catSel && (
+              <div className="max-h-[250px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                {modelosAgrupados.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                {modelosAgrupados.map(([model, { totalQnt, avgCost }]) => {
+                  const sel = produtos[0] === model;
+                  return (
+                    <button key={model} onClick={() => {
+                      if (sel) { setProdutos([""]); setPreco(""); return; }
+                      setProdutos([model]);
+                      setPreco(avgCost.toLocaleString("pt-BR"));
+                    }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                      <div>
+                        <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{model}</p>
+                        <p className="text-[10px] text-[#86868B]">{totalQnt} un.</p>
+                      </div>
+                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {avgCost.toLocaleString("pt-BR")}</p>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
-        ))}
+        )}
         <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
