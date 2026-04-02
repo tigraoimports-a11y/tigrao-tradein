@@ -3702,6 +3702,24 @@ export default function EstoquePage() {
                         Mover para Estoque
                       </button>
                     )}
+                    {/* Mover para Pendências — quando item está EM ESTOQUE e admin quer reclassificar como usado */}
+                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && p.tipo !== "SEMINOVO" && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Mover para Pendências (seminovo/usado)?")) return;
+                          try {
+                            await apiPatch(p.id, { tipo: "PENDENCIA", status: "PENDENTE" });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: "PENDENCIA", status: "PENDENTE" } : x));
+                            setDetailProduct(null);
+                            setMsg(`${p.produto} movido para Pendências!`);
+                          } catch { setMsg("Erro ao mover"); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-yellow-900/30 text-yellow-400 hover:bg-yellow-700" : "bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Mover para Pendencias
+                      </button>
+                    )}
                     <button
                       onClick={() => { setDetailProduct(null); const params = new URLSearchParams({ tab: "nova", produto: p.produto, custo: String(p.custo_unitario || 0), categoria: p.categoria || "", estoque_id: p.id }); if (p.serial_no) params.set("serial", p.serial_no); if (p.cor) params.set("cor", p.cor); if (p.fornecedor) params.set("fornecedor", p.fornecedor); window.location.href = `/admin/vendas?${params.toString()}`; }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] transition-colors"
