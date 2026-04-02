@@ -85,16 +85,30 @@ export default function VendasPage() {
     parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
-    // Dados do aparelho na troca (para criar seminovo)
     troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "",
     troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
-    // 2º produto na troca
     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
-    // Serial e IMEI
     serial_no: "", imei: "",
-    // CEP e endereço
     cep: "", bairro: "", cidade: "", uf: "",
   });
+  // Restaurar rascunho do localStorage ao montar
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tigrao_venda_draft");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.cliente) setForm(f => ({ ...f, ...parsed, data: hojeBR() }));
+      }
+    } catch {}
+  }, []);
+
+  // Auto-save rascunho da venda no localStorage
+  useEffect(() => {
+    if (form.cliente || form.produto || form.custo) {
+      localStorage.setItem("tigrao_venda_draft", JSON.stringify(form));
+    }
+  }, [form]);
 
   // 2ª troca toggle
   const [showSegundaTroca, setShowSegundaTroca] = useState(false);
@@ -1013,6 +1027,7 @@ export default function VendasPage() {
       setLastClienteData(clienteInfo);
       setProdutosCarrinho([]);
       clearProductFields();
+      localStorage.removeItem("tigrao_venda_draft");
       const plural = successCount > 1 ? "s" : "";
       setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulario.`);
       fetchVendas();
@@ -1950,6 +1965,7 @@ export default function VendasPage() {
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
                   setMsg("");
+                  localStorage.removeItem("tigrao_venda_draft");
                 }}
                 className="w-full py-2 rounded-xl text-xs font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
               >
