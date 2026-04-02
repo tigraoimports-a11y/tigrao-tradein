@@ -231,6 +231,7 @@ interface ProdutoEstoque {
   preco_sugerido: number | null;
   estoque_minimo: number | null;
   pedido_fornecedor_id: string | null;
+  origem: string | null;
 }
 
 interface ImeiSearchResult {
@@ -3163,37 +3164,28 @@ export default function EstoquePage() {
                   </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
-                {/* Origem — apenas para iPhones */}
-                {p.categoria === "IPHONES" && isAdmin && (() => {
-                  const origemCodes = IPHONE_ORIGENS.map(o => o.split(" ")[0]);
-                  const currentOrigemFull = IPHONE_ORIGENS.find(o => p.produto.toUpperCase().endsWith(` ${o.split(" ")[0]}`)) ?? "";
-                  return (
-                    <div className="mb-3">
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
-                      <select
-                        value={currentOrigemFull}
-                        onChange={async (e) => {
-                          const newCode = e.target.value ? e.target.value.split(" ")[0] : "";
-                          let base = p.produto.toUpperCase();
-                          for (const code of origemCodes) {
-                            if (base.endsWith(` ${code}`)) { base = base.slice(0, -(code.length + 1)); break; }
-                          }
-                          const newProduto = newCode ? `${base} ${newCode}` : base;
-                          try {
-                            await apiPatch(p.id, { produto: newProduto });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: newProduto } : x));
-                            setDetailProduct(prev => prev ? { ...prev, produto: newProduto } : null);
-                            setMsg("✅ Origem atualizada!");
-                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                        }}
-                        className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                      >
-                        <option value="">— Sem origem —</option>
-                        {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                  );
-                })()}
+                {/* Origem — apenas para iPhones, campo separado do nome */}
+                {p.categoria === "IPHONES" && isAdmin && (
+                  <div className="mb-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
+                    <select
+                      value={p.origem ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value || null;
+                        try {
+                          await apiPatch(p.id, { origem: val });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                          setMsg("✅ Origem atualizada!");
+                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                      }}
+                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                    >
+                      <option value="">— Sem origem —</option>
+                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     const qnt = p.qnt || 1;
@@ -3324,6 +3316,7 @@ export default function EstoquePage() {
                         </div>
                       )}
                       <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${isLac ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{isLac ? "Lacrado" : "Usado"}</span></div>
+                      {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
                   {/* Cor — editável pelo admin em qualquer status */}
