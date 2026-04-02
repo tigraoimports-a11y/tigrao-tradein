@@ -3464,15 +3464,16 @@ export default function EstoquePage() {
                             const novaCor = recatRow.cor || null;
                             const novaCategoria = recatRow.categoria || p.categoria;
                             try {
+                              const nomeAntigo = p.produto; // guardar antes de atualizar
                               await apiPatch(p.id, { produto: novoNome, categoria: novaCategoria, cor: novaCor });
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novoNome, categoria: novaCategoria, cor: novaCor } : x));
                               setDetailProduct(prev => prev ? { ...prev, produto: novoNome, categoria: novaCategoria, cor: novaCor } : null);
                               let vendaMsg = "";
-                              if (p.fornecedor && (p.data_entrada || p.data_compra)) {
+                              if (p.fornecedor) {
                                 const res = await fetch("/api/vendas", {
                                   method: "PATCH",
                                   headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                  body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto: novoNome, cor: novaCor, categoria: novaCategoria }),
+                                  body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto_antigo: nomeAntigo, produto: novoNome, cor: novaCor, categoria: novaCategoria }),
                                 });
                                 const json = await res.json();
                                 vendaMsg = json.updated > 0 ? ` ${json.updated} venda(s) sincronizada(s).` : " Nenhuma venda vinculada encontrada.";

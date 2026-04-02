@@ -328,22 +328,48 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, finalizadas: updated?.length || 0 });
   }
 
-  // Sync troca_produto/troca_cor/troca_categoria em vendas vinculadas (por cliente + data)
+  // Sync troca_produto/troca_cor/troca_categoria em vendas vinculadas (por cliente + data OU produto antigo)
   if (body.action === "sync_by_cliente_data") {
-    const { cliente, data_compra, produto, cor, categoria, troca_num } = body;
-    if (!cliente || !data_compra) return NextResponse.json({ error: "cliente e data_compra obrigatorios" }, { status: 400 });
+    const { cliente, data_compra, produto_antigo, produto, cor, categoria, troca_num } = body;
+    if (!cliente) return NextResponse.json({ error: "cliente obrigatorio" }, { status: 400 });
     // troca_num: 1 (default) ou 2 — para suporte a 2 produtos na troca
     const suffix = troca_num === 2 ? "2" : "";
     const updates: Record<string, unknown> = {};
     if (produto) updates[`troca_produto${suffix}`] = produto;
     if (cor !== undefined) updates[`troca_cor${suffix}`] = cor;
     if (categoria) updates[`troca_categoria${suffix}`] = categoria;
-    const { data: updated, error } = await supabase.from("vendas")
-      .update(updates)
-      .ilike("cliente", cliente)
-      .eq("data", data_compra)
-      .select("id, troca_produto");
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Tentar por cliente + data primeiro
+    let updated: { id: string }[] | null = null;
+    if (data_compra) {
+      const { data: r1, error: e1 } = await supabase.from("vendas")
+        .update(updates)
+        .ilike("cliente", cliente)
+        .eq("data", data_compra)
+        .select("id");
+      if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
+      updated = r1;
+    }
+
+    // Fallback: buscar por cliente + nome antigo do produto na troca (coluna 1 ou 2)
+    if ((!updated || updated.length === 0) && produto_antigo) {
+      // Tentar na troca 1
+      const { data: r2a, error: e2a } = await supabase.from("vendas")
+        .update(updates)
+        .ilike("cliente", cliente)
+        .ilike("troca_produto", produto_antigo)
+        .select("id");
+      if (e2a) return NextResponse.json({ error: e2a.message }, { status: 500 });
+      // Tentar na troca 2
+      const { data: r2b, error: e2b } = await supabase.from("vendas")
+        .update({ ...updates, [`troca_produto2`]: produto, [`troca_cor2`]: cor, [`troca_categoria2`]: categoria })
+        .ilike("cliente", cliente)
+        .ilike("troca_produto2", produto_antigo)
+        .select("id");
+      if (e2b) return NextResponse.json({ error: e2b.message }, { status: 500 });
+      updated = [...(r2a || []), ...(r2b || [])];
+    }
+
     return NextResponse.json({ ok: true, updated: updated?.length || 0 });
   }
 
