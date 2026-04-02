@@ -2355,7 +2355,7 @@ export default function EstoquePage() {
                                 <tr><td colSpan={10} className="h-2"></td></tr>
                                 {/* Header do produto */}
                                 {(() => {
-                                  const alwaysExpand = isPendenciasTab;
+                                  const alwaysExpand = false;
                                   const isExpanded = alwaysExpand || expandedProducts.has(prodNome);
                                   const toggleExpand = () => {
                                     if (alwaysExpand) return;
