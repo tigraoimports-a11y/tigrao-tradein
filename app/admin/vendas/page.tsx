@@ -3529,9 +3529,17 @@ export default function VendasPage() {
                                             // Detectar se faz parte de um grupo
                                             const grupoVendas = v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id) : [v];
                                             const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
-                                            // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca (só para venda simples)
-                                            let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
-                                            if (grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
+                                            // Usar dados de troca direto da venda (troca_produto, troca_cor, etc.)
+                                            let trocaProd = (v as unknown as Record<string, string>).troca_produto || "";
+                                            let trocaCor = (v as unknown as Record<string, string>).troca_cor || "";
+                                            let trocaBat = String((v as unknown as Record<string, unknown>).troca_bateria || "");
+                                            let trocaObs = (v as unknown as Record<string, string>).troca_obs || "";
+                                            const trocaGrade = (v as unknown as Record<string, string>).troca_grade || "";
+                                            const trocaCaixa = (v as unknown as Record<string, string>).troca_caixa || "";
+                                            const trocaCabo = (v as unknown as Record<string, string>).troca_cabo || "";
+                                            const trocaFonte = (v as unknown as Record<string, string>).troca_fonte || "";
+                                            // Fallback: buscar no estoque se troca_produto não está preenchido na venda
+                                            if (!trocaProd && grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
                                               try {
                                                 const res = await fetch("/api/estoque", {
                                                   headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -3627,16 +3635,16 @@ export default function VendasPage() {
                                                 produto_na_troca: String(gv.produto_na_troca || ""),
                                                 troca_produto: gv.troca_produto || "",
                                                 troca_cor: gv.troca_cor || "",
-                                                troca_categoria: "",
+                                                troca_categoria: (gv as unknown as Record<string, string>).troca_categoria || "",
                                                 troca_bateria: gv.troca_bateria || "",
                                                 troca_obs: gv.troca_obs || "",
-                                                troca_grade: "",
-                                                troca_caixa: "",
-                                                troca_cabo: "",
-                                                troca_fonte: "",
-                                                troca_serial_no: "",
-                                                troca_imei: "",
-                                                troca_origem: "",
+                                                troca_grade: (gv as unknown as Record<string, string>).troca_grade || "",
+                                                troca_caixa: (gv as unknown as Record<string, string>).troca_caixa || "",
+                                                troca_cabo: (gv as unknown as Record<string, string>).troca_cabo || "",
+                                                troca_fonte: (gv as unknown as Record<string, string>).troca_fonte || "",
+                                                troca_serial_no: (gv as unknown as Record<string, string>).troca_serial_no || "",
+                                                troca_imei: (gv as unknown as Record<string, string>).troca_imei || "",
+                                                troca_origem: (gv as unknown as Record<string, string>).troca_origem || "",
                                                 produto_na_troca2: String((gv as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                                 troca_produto2: (gv as unknown as Record<string, string>).troca_produto2 || "",
                                                 troca_cor2: (gv as unknown as Record<string, string>).troca_cor2 || "",
