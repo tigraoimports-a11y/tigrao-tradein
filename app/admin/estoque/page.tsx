@@ -3099,6 +3099,12 @@ export default function EstoquePage() {
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel || "" })); }}
                                                 title="Clique para editar a cor"
                                               >{ptLabel}</span>
+                                            ) : canEditNome && prodItems[0]?.cor ? (
+                                              <span
+                                                className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || "" })); }}
+                                                title="Adicionar nome em PT"
+                                              >+PT</span>
                                             ) : null;
                                           })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
@@ -3716,8 +3722,8 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones, campo separado do nome */}
-                {p.categoria === "IPHONES" && isAdmin && (
+                {/* Origem — apenas para iPhones, campo separado do nome; ocultar se já está no nome do produto */}
+                {p.categoria === "IPHONES" && isAdmin && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
                   <div className="mb-3">
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
                     <select
