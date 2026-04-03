@@ -806,6 +806,8 @@ export default function EstoquePage() {
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "",
   });
+  // Seriais/IMEIs adicionais para quando qnt > 1
+  const [multiSerials, setMultiSerials] = useState<Array<{serial_no: string; imei: string}>>([]);
 
   // Campos estruturados por categoria
   const [spec, setSpec] = useState({
@@ -938,7 +940,16 @@ export default function EstoquePage() {
     }
   };
 
-  const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
+  const set = (field: string, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    if (field === "qnt") {
+      const n = Math.max(0, (parseInt(value) || 1) - 1);
+      setMultiSerials(prev => {
+        if (n <= prev.length) return prev.slice(0, n);
+        return [...prev, ...Array.from({ length: n - prev.length }, () => ({ serial_no: "", imei: "" }))];
+      });
+    }
+  };
 
   const apiPatch = async (id: string, fields: Record<string, unknown>) => {
     const res = await fetch("/api/estoque", {
@@ -1360,20 +1371,49 @@ export default function EstoquePage() {
   const handleSubmit = async (keepForm = false) => {
     const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
+
+    // Se há múltiplos seriais preenchidos, criar registros individuais (qnt=1 cada)
+    const filledExtras = multiSerials.filter(s => s.serial_no || s.imei);
+    const totalQnt = parseInt(form.qnt) || 1;
+    const hasMultiSerials = filledExtras.length > 0 && totalQnt > 1;
+
+    const basePayload = {
+      produto: nomeProduto, categoria: form.categoria,
+      custo_unitario: parseFloat(form.custo_unitario) || 0,
+      status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+      cor: form.cor || null, observacao: form.observacao || null,
+      tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
+      cliente: form.cliente || null, fornecedor: form.fornecedor || null,
+      data_entrada: hojeBR(),
+    };
+
+    // Todos os registros a criar: unidade 1 + extras
+    const toCreate: Array<Record<string, unknown>> = hasMultiSerials
+      ? [
+          { ...basePayload, qnt: 1, imei: form.imei || null, serial_no: form.serial_no || null },
+          ...filledExtras.map(s => ({ ...basePayload, qnt: 1, imei: s.imei || null, serial_no: s.serial_no || null })),
+          // Se sobrou qnt sem serial, criar 1 registro com o restante
+          ...(totalQnt - 1 - filledExtras.length > 0
+            ? [{ ...basePayload, qnt: totalQnt - 1 - filledExtras.length }]
+            : []),
+        ]
+      : [{ ...basePayload, qnt: totalQnt, imei: form.imei || null, serial_no: form.serial_no || null }];
+
     const res = await fetch("/api/estoque", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-      body: JSON.stringify({
-        produto: nomeProduto, categoria: form.categoria,
-        qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
-        status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
-        cor: form.cor || null, observacao: form.observacao || null,
-        tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
-        cliente: form.cliente || null, fornecedor: form.fornecedor || null,
-        imei: form.imei || null, serial_no: form.serial_no || null,
-        data_entrada: hojeBR(),
-      }),
+      body: JSON.stringify(toCreate[0]),
     });
+    // Criar registros extras (se multi-serial)
+    if (toCreate.length > 1) {
+      for (let i = 1; i < toCreate.length; i++) {
+        await fetch("/api/estoque", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+          body: JSON.stringify(toCreate[i]),
+        });
+      }
+    }
     const json = await res.json();
     if (json.ok) {
       // Se houve merge (preço médio), mostrar mensagem detalhada
@@ -1437,9 +1477,11 @@ export default function EstoquePage() {
       if (keepForm) {
         // Duplicar: mantém specs, cor, fornecedor, custo — limpa só IMEI, Serial e quantidade
         setForm((f) => ({ ...f, imei: "", serial_no: "", qnt: "1" }));
+        setMultiSerials([]);
         setMsg("Produto adicionado! Preencha IMEI/Serial do proximo.");
       } else {
         setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "" }));
+        setMultiSerials([]);
         setSpec({
           ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
@@ -2448,17 +2490,42 @@ export default function EstoquePage() {
             );
           })()}
 
-          {/* IMEI e Serial */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className={labelCls}>IMEI</p>
-              <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
-            </div>
-            <div>
-              <p className={labelCls}>Serial No {ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo serial...</span>}</p>
-              <input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional — cole imagem ou digite" className={inputCls}
-                onPaste={(e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading)} />
-            </div>
+          {/* IMEI e Serial — 1 par por unidade quando qnt > 1 */}
+          <div className="space-y-2">
+            {(() => {
+              const qnt = parseInt(form.qnt) || 1;
+              const rows = [{ serial_no: form.serial_no, imei: form.imei, label: qnt > 1 ? "Unidade 1" : "" }];
+              multiSerials.forEach((s, i) => rows.push({ ...s, label: `Unidade ${i + 2}` }));
+              return rows.map((row, i) => (
+                <div key={i} className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className={labelCls}>IMEI{row.label ? ` — ${row.label}` : ""}</p>
+                    <input
+                      value={row.imei}
+                      onChange={(e) => {
+                        if (i === 0) set("imei", e.target.value);
+                        else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, imei: e.target.value } : s));
+                      }}
+                      placeholder="Opcional"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Serial No{row.label ? ` — ${row.label}` : ""} {i === 0 && ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo...</span>}</p>
+                    <input
+                      value={row.serial_no}
+                      onChange={(e) => {
+                        if (i === 0) set("serial_no", e.target.value);
+                        else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, serial_no: e.target.value } : s));
+                      }}
+                      placeholder="Opcional"
+                      className={inputCls}
+                      onPaste={i === 0 ? (e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading) : undefined}
+                    />
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
 
           {/* Custo e Fornecedor */}
