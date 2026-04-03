@@ -280,18 +280,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
               onClick={() => setExpandedId(isExpanded ? null : q.id)}
             >
               {/* Reorder arrows */}
-              <div className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-col gap-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleReorder(idx, "up")}
                   disabled={idx === 0}
-                  className="text-[10px] text-[#86868B] hover:text-[#E8740E] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-7 h-7 flex items-center justify-center rounded-t-lg text-sm font-bold text-[#86868B] hover:text-[#E8740E] hover:bg-[#FFF5EB] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                   ▲
                 </button>
                 <button
                   onClick={() => handleReorder(idx, "down")}
                   disabled={idx === questions.length - 1}
-                  className="text-[10px] text-[#86868B] hover:text-[#E8740E] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-7 h-7 flex items-center justify-center rounded-b-lg text-sm font-bold text-[#86868B] hover:text-[#E8740E] hover:bg-[#FFF5EB] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                   ▼
                 </button>
