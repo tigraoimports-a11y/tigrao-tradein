@@ -2622,7 +2622,7 @@ export default function EstoquePage() {
                                     {displayNomeProduto(p.produto, p.cor, p.categoria)}
                                     {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
                                     {isRecebido
-                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{p.data_entrada && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada)}</span>}</>
+                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{(p.data_entrada || p.data_compra) && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada || p.data_compra || "")}</span>}</>
                                       : (p.serial_no || p.imei) && (
                                         <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                           ✅ {p.serial_no || p.imei}
