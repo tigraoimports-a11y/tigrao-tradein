@@ -214,6 +214,30 @@ export default function ProdutoSpecFields({
     fetchAllModelos(password).then(setAllModelos);
   }, [password]);
 
+  // Auto-match produto to catalog model when models load and catalogo_modelo_id is still empty
+  useEffect(() => {
+    if (!allModelos.length || row.catalogo_modelo_id || !row.produto) return;
+    const catalogKeys = CAT_TO_CATALOG[row.categoria] || [];
+    const catModelos = allModelos.filter((m) => catalogKeys.includes(m.categoria_key));
+    if (!catModelos.length) return;
+    const prodUpper = row.produto.toUpperCase();
+    // Find the longest catalog model name that appears in the product name
+    const match = catModelos
+      .map((m) => ({ m, nome: m.nome.replace(/^iPhone\s+/i, "").toUpperCase() }))
+      .filter(({ nome }) => prodUpper.includes(nome))
+      .sort((a, b) => b.nome.length - a.nome.length)[0];
+    if (match) {
+      const specFromCatalog = inferSpecFromCatalogModel(match.m.nome, row.categoria);
+      onChange({
+        ...row,
+        catalogo_modelo_id: match.m.id,
+        catalogo_modelo_nome: match.m.nome,
+        spec: { ...row.spec, ...specFromCatalog },
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allModelos]);
+
   // Fetch configs when catalog model changes
   useEffect(() => {
     const modeloId = row.catalogo_modelo_id;
