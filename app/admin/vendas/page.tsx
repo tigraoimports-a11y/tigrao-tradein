@@ -645,7 +645,8 @@ export default function VendasPage() {
       preco_vendido: pPrecoVendido,
       banco: pBancoFinal,
       forma: !gForma ? null : gForma === "LINK" ? "CARTAO" : gForma === "ESPECIE" ? "DINHEIRO" : gForma,
-      recebimento: !gForma ? null : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : gForma === "DEBITO" ? "D+1" : "D+1",
+      recebimento: !gForma ? null : gForma === "FIADO" ? (form.fiado_data_inicio || null) : gForma === "PIX" || gForma === "ESPECIE" ? "D+0" : gForma === "LINK" ? "D+0" : gForma === "DEBITO" ? "D+1" : "D+1",
+      data_recebimento_fiado: gForma === "FIADO" && form.fiado_data_inicio ? form.fiado_data_inicio : null,
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
@@ -653,8 +654,14 @@ export default function VendasPage() {
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
       entrada_especie: gEntradaEspecie,
-      entrada_fiado: parseFloat(form.entrada_fiado) || 0,
+      entrada_fiado: gForma === "FIADO" ? (gValorComprovanteInput || pCusto) : (parseFloat(form.entrada_fiado) || 0),
       fiado_parcelas: (() => {
+        // Se forma principal é FIADO, criar 1 parcela na data de recebimento
+        if (gForma === "FIADO") {
+          const total = gValorComprovanteInput || pCusto;
+          if (!total || !form.fiado_data_inicio) return [];
+          return [{ valor: total, data: form.fiado_data_inicio, pago: false }];
+        }
         const total = parseFloat(form.entrada_fiado) || 0;
         if (total <= 0) return [];
         const n = parseInt(form.fiado_qnt_parcelas) || 1;
@@ -2098,6 +2105,22 @@ export default function VendasPage() {
                 <option value="ESPECIE">Especie (Dinheiro)</option>
                 <option value="FIADO">Fiado</option>
               </select></div>
+
+              {form.forma === "FIADO" && (
+                <>
+                <div><p className={labelCls}>Data do recebimento</p><input type="date" value={form.fiado_data_inicio || ""} onChange={(e) => setForm(f => ({ ...f, fiado_data_inicio: e.target.value }))} className={inputCls} /></div>
+                <div><p className={labelCls}>Forma de recebimento</p><select value={form.banco || ""} onChange={(e) => set("banco", e.target.value)} className={selectCls}>
+                  <option value="">— Selecionar —</option>
+                  <option value="PIX_ITAU">PIX Itau</option>
+                  <option value="PIX_INFINITE">PIX Infinite</option>
+                  <option value="PIX_MP">PIX Mercado Pago</option>
+                  <option value="CARTAO">Cartao</option>
+                  <option value="ESPECIE">Especie</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
+                </select></div>
+                <div><p className={labelCls}>Valor (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.valor_comprovante_input)} onChange={(e) => { setMoney("valor_comprovante_input", e.target.value); }} placeholder="Valor total" className={inputCls} /></div>
+                </>
+              )}
 
               {form.forma === "PIX" && (
                 <>
