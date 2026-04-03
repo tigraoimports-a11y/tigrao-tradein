@@ -4421,26 +4421,37 @@ export default function EstoquePage() {
                 </div>
                 <div className="mt-3">
                   <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao {saved("obs")}</p>
-                  {(canEdit || isAdmin) ? (
-                    <textarea
-                      key={`obs-${p.id}`}
-                      defaultValue={cleanObs(p.observacao) || ""}
-                      placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
-                      rows={2}
-                      onBlur={async (e) => {
-                        // Preserva prefixo de condição ao salvar observacao
-                        const condicaoPrefix = p.observacao?.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/)?.[0] || "";
-                        const val = e.target.value.trim() ? `${condicaoPrefix}${e.target.value.trim()}` : (condicaoPrefix || null);
-                        if (val !== (p.observacao || null)) {
-                          await apiPatch(p.id, { observacao: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
-                          setDetailProduct(prev => prev ? { ...prev, observacao: val } : null);
-                          showSaved("obs");
-                        }
-                      }}
-                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none resize-none`}
-                    />
-                  ) : cleanObs(p.observacao) ? (
+                  {(canEdit || isAdmin) ? (() => {
+                    const saveObs = async () => {
+                      const el = document.getElementById(`obs-${p.id}`) as HTMLTextAreaElement;
+                      const condicaoPrefix = p.observacao?.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/)?.[0] || "";
+                      const val = el?.value?.trim() ? `${condicaoPrefix}${el.value.trim()}` : (condicaoPrefix || null);
+                      if (val !== (p.observacao || null)) {
+                        await apiPatch(p.id, { observacao: val });
+                        setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
+                        setDetailProduct(prev => prev ? { ...prev, observacao: val } : null);
+                        showSaved("obs");
+                      }
+                    };
+                    return (
+                    <div className="flex gap-1 mt-0.5">
+                      <textarea
+                        id={`obs-${p.id}`}
+                        key={`obs-${p.id}`}
+                        defaultValue={cleanObs(p.observacao) || ""}
+                        placeholder="Ex: GARANTIA APPLE AGOSTO - LEVES MARCAS NA TELA"
+                        rows={2}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveObs(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none resize-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={saveObs}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm self-end"
+                        title="Salvar observação"
+                      >✓</button>
+                    </div>);
+                  })() : cleanObs(p.observacao) ? (
                     <p className={`text-[13px] ${mP} mt-0.5`}>{cleanObs(p.observacao)}</p>
                   ) : <p className={`text-[13px] ${mS} mt-0.5`}>—</p>}
                 </div>
