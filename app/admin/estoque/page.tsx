@@ -681,8 +681,11 @@ export default function EstoquePage() {
     dragOverRef.current = null;
   }
 
-  // Reordenação de cards (modelo inteiro) via botões ▲/▼
+  // Reordenação de cards (modelo inteiro) via drag-and-drop + botões ▲/▼
   const [cardOrderVersion, setCardOrderVersion] = useState(0);
+  const dragCardRef = useRef<string | null>(null);
+  const dragOverCardRef = useRef<string | null>(null);
+  const [dragCardKey, setDragCardKey] = useState<string | null>(null);
   // Guardar ordem dos cards por categoria em localStorage
   function getCardOrder(cat: string): string[] {
     if (typeof window === "undefined") return [];
@@ -711,6 +714,22 @@ export default function EstoquePage() {
     [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
     saveCardOrder(cat, keys);
     setCardOrderVersion(v => v + 1);
+  }
+  function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
+    if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
+      setDragCardKey(null); return;
+    }
+    const keys = modeloEntries.map(([m]) => m);
+    const fromIdx = keys.indexOf(dragCardRef.current);
+    const toIdx = keys.indexOf(dragOverCardRef.current);
+    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); return; }
+    keys.splice(fromIdx, 1);
+    keys.splice(toIdx, 0, dragCardRef.current);
+    saveCardOrder(cat, keys);
+    setCardOrderVersion(v => v + 1);
+    setDragCardKey(null);
+    dragCardRef.current = null;
+    dragOverCardRef.current = null;
   }
 
   // Duplicar produto do estoque
@@ -2855,10 +2874,16 @@ export default function EstoquePage() {
                   // No estoque: ocultar card inteiramente se todos os itens foram filtrados
                   if (tab === "estoque" && produtoEntries.length === 0) return null;
 
+                  const isCardDragging = dragCardKey === modelo;
                   return (
                   <div
                     key={modelo}
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${borderCard}`}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
+                    onDragEnter={(e) => { e.stopPropagation(); e.preventDefault(); dragOverCardRef.current = modelo; }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E] border-2" : borderCard}`}
                   >
                     <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
@@ -3372,6 +3397,40 @@ export default function EstoquePage() {
           >
             Selecionar todos ({filtered.length})
           </button>
+          {tab === "estoque" && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Mover ${selectedIds.size} produto(s) para Atacado?`)) return;
+                const ids = Array.from(selectedIds);
+                for (const id of ids) {
+                  await apiPatch(id, { tipo: "ATACADO" });
+                }
+                setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, tipo: "ATACADO" } : p));
+                setMsg(`${ids.length} produto(s) movido(s) para Atacado!`);
+                setSelectedIds(new Set()); setSelectMode(false);
+              }}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+            >
+              → Atacado ({selectedIds.size})
+            </button>
+          )}
+          {tab === "estoque" && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Mover ${selectedIds.size} produto(s) para Pendências?`)) return;
+                const ids = Array.from(selectedIds);
+                for (const id of ids) {
+                  await apiPatch(id, { tipo: "PENDENCIA", status: "PENDENTE" });
+                }
+                setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, tipo: "PENDENCIA", status: "PENDENTE" } : p));
+                setMsg(`${ids.length} produto(s) movido(s) para Pendências!`);
+                setSelectedIds(new Set()); setSelectMode(false);
+              }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${dm ? "bg-yellow-900/50 text-yellow-400 hover:bg-yellow-700" : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"}`}
+            >
+              → Pendências ({selectedIds.size})
+            </button>
+          )}
           <button
             onClick={handleBulkDelete}
             disabled={bulkDeleting}
