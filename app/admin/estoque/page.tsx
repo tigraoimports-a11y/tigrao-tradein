@@ -492,6 +492,7 @@ export default function EstoquePage() {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
+  const [editingCorPT, setEditingCorPT] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
@@ -3008,7 +3009,50 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {corSoPT(prodItems[0]?.cor, prodItems[0]?.produto) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor, prodItems[0]?.produto)}</span>}
+                                          {(() => {
+                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
+                                            const editKey = `${prodItems[0]?.id}_corpt`;
+                                            if (editingCorPT[editKey] !== undefined) {
+                                              return (
+                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
+                                                  <input
+                                                    value={editingCorPT[editKey]}
+                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const newCor = editingCorPT[editKey];
+                                                        if (newCor) {
+                                                          await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                          setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                        }
+                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                      }
+                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                    }}
+                                                    className={`w-24 px-1 py-0.5 rounded border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                                                    autoFocus
+                                                    placeholder="Cor em PT..."
+                                                  />
+                                                  <button onClick={async () => {
+                                                    const newCor = editingCorPT[editKey];
+                                                    if (newCor) {
+                                                      await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                      setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                    }
+                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                  }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                                  <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
+                                                </span>
+                                              );
+                                            }
+                                            return ptLabel ? (
+                                              <span
+                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel || "" })); }}
+                                                title="Clique para editar a cor"
+                                              >{ptLabel}</span>
+                                            ) : null;
+                                          })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
