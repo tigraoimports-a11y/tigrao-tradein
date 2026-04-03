@@ -101,23 +101,34 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
 function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
   const spec = { ...DEFAULT_SPEC };
   if (!produto) return spec;
-  const upper = produto.toUpperCase();
+  const n = produto.toUpperCase();
+  const storageMatch = n.match(/\b(\d+[GT]B)\b/);
+  if (storageMatch) {
+    if (categoria === "IPHONES") spec.ip_storage = storageMatch[1];
+    else if (categoria === "MACBOOK") spec.mb_storage = storageMatch[1];
+    else if (categoria === "MAC_MINI") spec.mm_storage = storageMatch[1];
+  }
   if (categoria === "IPHONES") {
-    const noPrefix = upper.replace(/^IPHONE\s+/, "");
-    const storageMatch = noPrefix.match(/\b(\d+[GT]B)\b/);
-    if (storageMatch) spec.ip_storage = storageMatch[1];
-    // Remove storage and origin code to get model
-    let model = noPrefix
-      .replace(/\b\d+[GT]B\b/, "")
-      .replace(/\s+(AA|BE|BR|BZ|CH|E|HN|J|LL|LZ|N|QL|VC|ZD|ZP)\b.*/i, "")
-      .trim();
-    spec.ip_modelo = model || "17 PRO MAX";
+    const numMatch = n.match(/IPHONE\s*(\d+(?:\s+AIR)?)/);
+    spec.ip_modelo = numMatch ? numMatch[1].trim() : "17";
+    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : n.includes(" E") ? "E" : "";
+    const ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP","ZA","IN"];
+    const originMatch = n.match(new RegExp("\\b(" + ORIGIN_CODES.join("|") + ")\\b"));
+    if (originMatch) spec.ip_origem = originMatch[1];
   } else if (categoria === "MACBOOK") {
-    if (/AIR/i.test(upper)) spec.mb_modelo = "AIR";
-    else if (/NEO/i.test(upper)) spec.mb_modelo = "NEO";
-    else spec.mb_modelo = "PRO";
-    const chip = upper.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
+    spec.mb_modelo = /NEO/i.test(n) ? "NEO" : /PRO/i.test(n) ? "PRO" : "AIR";
+    const chip = n.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
     if (chip) spec.mb_chip = chip[1];
+    const ram = n.match(/\b(\d+GB)\b.*(?:RAM|GB)/);
+    if (ram) spec.mb_ram = ram[1];
+  } else if (categoria === "MAC_MINI") {
+    const chip = n.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
+    if (chip) spec.mm_chip = chip[1];
+  } else if (categoria === "APPLE_WATCH") {
+    const modeloM = n.match(/(SERIES\s*\d+|SE|ULTRA\s*\d*)/i);
+    if (modeloM) spec.aw_modelo = modeloM[1].toUpperCase();
+    const tamM = n.match(/(\d+mm)/i);
+    if (tamM) spec.aw_tamanho = tamM[1].toLowerCase();
   }
   return spec;
 }
