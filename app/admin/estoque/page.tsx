@@ -3890,7 +3890,7 @@ export default function EstoquePage() {
                   {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (() => {
+                    {canEdit ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
