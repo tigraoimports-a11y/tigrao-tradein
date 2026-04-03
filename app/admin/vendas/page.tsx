@@ -1855,15 +1855,50 @@ export default function VendasPage() {
                       <span>Lucro: <strong className={pLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(pLucro)}</strong></span>
                       {p.fornecedor && <><span>|</span><span>{p.fornecedor}</span></>}
                     </div>
-                    {parseFloat(p.produto_na_troca) > 0 && (
-                      <span className="text-[10px] text-orange-600 font-medium block">
-                        Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
-                      </span>
+                    {/* Troca inline editável */}
+                    {(parseFloat(p.produto_na_troca) > 0 || p.troca_produto) && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="text-[10px] text-orange-500 font-semibold">🔄 Troca:</span>
+                        <input
+                          type="text"
+                          value={p.troca_produto || ""}
+                          onChange={(e) => setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, troca_produto: e.target.value.toUpperCase() } : item))}
+                          placeholder="Produto na troca"
+                          className="flex-1 min-w-[120px] px-1.5 py-0.5 text-[10px] text-orange-700 font-medium bg-orange-50 border border-orange-200 rounded"
+                        />
+                        <span className="text-[10px] text-orange-500">R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          value={fmtMil(p.produto_na_troca)}
+                          onChange={(e) => {
+                            const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                            setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, produto_na_troca: clean } : item));
+                          }}
+                          className="w-20 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded"
+                        />
+                      </div>
                     )}
-                    {parseFloat(p.produto_na_troca2) > 0 && (
-                      <span className="text-[10px] text-orange-600 font-medium block">
-                        2ª Troca: {p.troca_produto2} ({fmt(parseFloat(p.produto_na_troca2))})
-                      </span>
+                    {(parseFloat(p.produto_na_troca2) > 0 || p.troca_produto2) && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="text-[10px] text-orange-500 font-semibold">🔄 2ª Troca:</span>
+                        <input
+                          type="text"
+                          value={p.troca_produto2 || ""}
+                          onChange={(e) => setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, troca_produto2: e.target.value.toUpperCase() } : item))}
+                          placeholder="2º produto na troca"
+                          className="flex-1 min-w-[120px] px-1.5 py-0.5 text-[10px] text-orange-700 font-medium bg-orange-50 border border-orange-200 rounded"
+                        />
+                        <span className="text-[10px] text-orange-500">R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          value={fmtMil(p.produto_na_troca2)}
+                          onChange={(e) => {
+                            const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                            setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, produto_na_troca2: clean } : item));
+                          }}
+                          className="w-20 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded"
+                        />
+                      </div>
                     )}
                   </div>
                 );
