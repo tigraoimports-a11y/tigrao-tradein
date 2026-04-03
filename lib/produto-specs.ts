@@ -326,7 +326,7 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
-      const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
+      const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : (spec.ipad_modelo === "AIR" ? " M3" : "");
       const tela = spec.ipad_tela ? ` ${spec.ipad_tela}` : "";
       const storage = spec.ipad_storage ? ` ${spec.ipad_storage}` : "";
       const conn = spec.ipad_conn === "WIFI+CELL" ? " WI-FI+CELLULAR" : spec.ipad_conn === "WIFI" ? " WI-FI" : "";

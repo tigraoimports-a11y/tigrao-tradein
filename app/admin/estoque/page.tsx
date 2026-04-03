@@ -105,6 +105,7 @@ const COR_PT: Record<string, string> = {
   "CLOUD WHITE": "Branco",
   "SKY BLUE": "Azul Céu",
   "SAGE": "Verde",
+  "DEEP BLUE": "Azul Profundo",
   "MIST BLUE": "Azul",
   "HAZE BLUE": "Azul",
   "BLUSH": "Rosa",
@@ -210,7 +211,9 @@ const PT_TO_EN: Record<string, string> = {
   "AZUL CÉU": "Sky Blue",
   "AZUL NEVOA": "Mist Blue",
   "AZUL NÉVOA": "Mist Blue",
+  "LARANJA COSMICO": "Cosmic Orange",
   "INDIGO": "Indigo",
+  "ÍNDIGO": "Indigo",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -487,8 +490,8 @@ function getModeloBase(produto: string, categoria: string): string {
     const chipMatch = p.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/i);
     const chip = chipMatch ? ` ${chipMatch[1].toUpperCase()}` : "";
     if (p.includes("MINI")) return `iPad Mini${chip}${size}${mem}`;
-    if (p.includes("AIR")) return `iPad Air${chip}${size}${mem}`;
-    if (p.includes("PRO")) return `iPad Pro${chip}${size}${mem}`;
+    if (p.includes("AIR")) return `iPad Air${chip || " M3"}${size}${mem}`;
+    if (p.includes("PRO")) return `iPad Pro${chip || " M5"}${size}${mem}`;
     return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
@@ -500,7 +503,6 @@ function getModeloBase(produto: string, categoria: string): string {
     // MacBook Neo: detectar por "NEO" ou chip A18 (exclusivo do Neo)
     if (p.includes("NEO") || /\bA18\b/i.test(p)) return `MacBook Neo${size}${mem}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
-    if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
     return `MacBook${chip}${mem}`;
   }
@@ -952,12 +954,12 @@ export default function EstoquePage() {
       case "MAC_MINI":
         return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
       case "MACBOOK": {
-        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
+        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
         return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
-        const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
+        const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : (spec.ipad_modelo === "AIR" ? " M3" : "");
         const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
         return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }
@@ -1474,9 +1476,22 @@ export default function EstoquePage() {
     const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
 
+    const totalQnt = parseInt(form.qnt) || 1;
+    const isACaminho = form.tipo === "A_CAMINHO";
+    const isIphone = form.categoria === "IPHONES";
+
+    // Validar serial/IMEI obrigatórios para produtos A CAMINHO com qty > 1
+    if (isACaminho && totalQnt > 1) {
+      if (!form.serial_no) { setMsg("Preencha o serial da Unidade 1"); return; }
+      if (isIphone && !form.imei) { setMsg("Preencha o IMEI da Unidade 1"); return; }
+      for (let i = 0; i < multiSerials.length; i++) {
+        if (!multiSerials[i].serial_no) { setMsg(`Preencha o serial da Unidade ${i + 2}`); return; }
+        if (isIphone && !multiSerials[i].imei) { setMsg(`Preencha o IMEI da Unidade ${i + 2}`); return; }
+      }
+    }
+
     // Se há múltiplos seriais preenchidos, criar registros individuais (qnt=1 cada)
     const filledExtras = multiSerials.filter(s => s.serial_no || s.imei);
-    const totalQnt = parseInt(form.qnt) || 1;
     const hasMultiSerials = filledExtras.length > 0 && totalQnt > 1;
 
     const basePayload = {
@@ -2597,31 +2612,33 @@ export default function EstoquePage() {
           <div className="space-y-2">
             {(() => {
               const qnt = parseInt(form.qnt) || 1;
+              const obrigatorio = form.tipo === "A_CAMINHO" && qnt > 1;
+              const isIphoneForm = form.categoria === "IPHONES";
               const rows = [{ serial_no: form.serial_no, imei: form.imei, label: qnt > 1 ? "Unidade 1" : "" }];
               multiSerials.forEach((s, i) => rows.push({ ...s, label: `Unidade ${i + 2}` }));
               return rows.map((row, i) => (
                 <div key={i} className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className={labelCls}>IMEI{row.label ? ` — ${row.label}` : ""}</p>
+                    <p className={labelCls}>IMEI{row.label ? ` — ${row.label}` : ""}{obrigatorio && isIphoneForm && <span className="text-red-500 ml-0.5">*</span>}</p>
                     <input
                       value={row.imei}
                       onChange={(e) => {
                         if (i === 0) set("imei", e.target.value);
                         else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, imei: e.target.value } : s));
                       }}
-                      placeholder="Opcional"
+                      placeholder={obrigatorio && isIphoneForm ? "Obrigatório" : "Opcional"}
                       className={inputCls}
                     />
                   </div>
                   <div>
-                    <p className={labelCls}>Serial No{row.label ? ` — ${row.label}` : ""} {i === 0 && ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo...</span>}</p>
+                    <p className={labelCls}>Serial No{row.label ? ` — ${row.label}` : ""}{obrigatorio && <span className="text-red-500 ml-0.5">*</span>} {i === 0 && ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo...</span>}</p>
                     <input
                       value={row.serial_no}
                       onChange={(e) => {
                         if (i === 0) set("serial_no", e.target.value);
                         else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, serial_no: e.target.value } : s));
                       }}
-                      placeholder="Opcional"
+                      placeholder={obrigatorio ? "Obrigatório" : "Opcional"}
                       className={inputCls}
                       onPaste={i === 0 ? (e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading) : undefined}
                     />
@@ -3061,7 +3078,7 @@ export default function EstoquePage() {
                   items.forEach((p) => {
                     // No estoque (lacrados): ocultar itens com qnt=0
                     if (tab === "estoque" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto);
+                    const groupKey = stripOrigem(p.produto).replace(/\bMACMINI\b/gi, "MAC MINI");
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
@@ -4327,7 +4344,7 @@ export default function EstoquePage() {
                             className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/60 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            Ver perfil do cliente
+                            Ver perfil
                           </button>
                         )}
                       </div>
