@@ -681,10 +681,8 @@ export default function EstoquePage() {
     dragOverRef.current = null;
   }
 
-  // Drag-and-drop para cards (modelo inteiro)
-  const dragCardRef = useRef<string | null>(null);
-  const dragOverCardRef = useRef<string | null>(null);
-  const [dragCardKey, setDragCardKey] = useState<string | null>(null);
+  // Reordenação de cards (modelo inteiro) via botões ▲/▼
+  const [cardOrderVersion, setCardOrderVersion] = useState(0);
   // Guardar ordem dos cards por categoria em localStorage
   function getCardOrder(cat: string): string[] {
     if (typeof window === "undefined") return [];
@@ -706,22 +704,13 @@ export default function EstoquePage() {
       return ia - ib;
     });
   }
-  function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
-    if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
-      setDragCardKey(null); return;
-    }
+  function moveCard(cat: string, modeloEntries: [string, ProdutoEstoque[]][], index: number, direction: "up" | "down") {
     const keys = modeloEntries.map(([m]) => m);
-    const fromIdx = keys.indexOf(dragCardRef.current);
-    const toIdx = keys.indexOf(dragOverCardRef.current);
-    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); return; }
-    keys.splice(fromIdx, 1);
-    keys.splice(toIdx, 0, dragCardRef.current);
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= keys.length) return;
+    [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
     saveCardOrder(cat, keys);
-    // Forçar re-render
-    setEstoque((prev) => [...prev]);
-    setDragCardKey(null);
-    dragCardRef.current = null;
-    dragOverCardRef.current = null;
+    setCardOrderVersion(v => v + 1);
   }
 
   // Duplicar produto do estoque
@@ -2831,7 +2820,7 @@ export default function EstoquePage() {
                 {(() => {
                   const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
-                  return modeloEntries.map(([modelo, items]) => {
+                  return modeloEntries.map(([modelo, items], cardIdx) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
                     .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
@@ -2865,17 +2854,11 @@ export default function EstoquePage() {
                     });
                   // No estoque: ocultar card inteiramente se todos os itens foram filtrados
                   if (tab === "estoque" && produtoEntries.length === 0) return null;
-                  const isCardDragging = dragCardKey === modelo;
 
                   return (
                   <div
                     key={modelo}
-                    draggable
-                    onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
-                    onDragEnter={(e) => { e.stopPropagation(); dragOverCardRef.current = modelo; }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${borderCard}`}
                   >
                     <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
@@ -2901,6 +2884,12 @@ export default function EstoquePage() {
                               title="Editar título do card"
                             >✏️</button>
                           </h3>
+                        )}
+                        {modeloEntries.length > 1 && (
+                          <div className="flex flex-col gap-0 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                            <button disabled={cardIdx === 0} onClick={() => moveCard(cat, modeloEntries, cardIdx, "up")} className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === 0 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`} title="Mover para cima">▲</button>
+                            <button disabled={cardIdx === modeloEntries.length - 1} onClick={() => moveCard(cat, modeloEntries, cardIdx, "down")} className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === modeloEntries.length - 1 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`} title="Mover para baixo">▼</button>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
