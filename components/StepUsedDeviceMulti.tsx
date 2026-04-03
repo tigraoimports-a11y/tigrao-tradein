@@ -222,14 +222,12 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       </div>
 
       <Section title="">
-        <div className="grid grid-cols-3 gap-2" style={{ justifyItems: "center" }}>
-          {lines.map((l, i) => {
+        <div className={`grid gap-3 ${lines.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : lines.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`} style={{ justifyItems: "center" }}>
+          {lines.map((l) => {
             const popular = deviceType === "iphone" ? ["15", "16", "17"].includes(l) : false;
-            const isLast = i === lines.length - 1 && lines.length % 3 !== 0;
             return (
               <Btn key={l} sel={line===l} onClick={() => handleLineChange(l)}
-                className={`w-full ${popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""}`}
-                style={isLast && lines.length % 3 === 1 ? { gridColumn: "2" } : undefined}>
+                className={`w-full text-center ${popular ? "ring-2 ring-[var(--ti-accent)]/20" : ""} ${lines.length <= 2 ? "py-5 text-[16px]" : ""}`}>
                 {getLineDisplayName(l, deviceType)}
               </Btn>
             );
