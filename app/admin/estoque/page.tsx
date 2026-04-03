@@ -1371,7 +1371,6 @@ export default function EstoquePage() {
       .trim() || null;
   };
 
-<<<<<<< HEAD
   /** Reconstrói o nome do produto trocando a cor (mantém formato com origem para iPhones) */
   const rebuildNomeComCor = (nome: string, oldCor: string | null, newCor: string | null, cat: string): string => {
     // Coletar todas as strings de cor que podem aparecer no nome
