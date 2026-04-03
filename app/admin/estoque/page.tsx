@@ -1365,7 +1365,7 @@ export default function EstoquePage() {
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
     return obs
-      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA)\]/g, "")
+      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|EX_PENDENCIA)\]/g, "")
       .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
