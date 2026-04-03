@@ -762,7 +762,6 @@ export default function EntregasPage() {
                 <option value="">-- Selecionar --</option>
                 <option value="Andre">Andre</option>
                 <option value="Bianca">Bianca</option>
-                <option value="Nicolas">Nicolas</option>
               </select>
             </div>
             <div>

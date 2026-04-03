@@ -6,7 +6,6 @@ import { useAdmin } from "@/components/admin/AdminShell";
 const VENDEDORES_PADRAO = [
   { nome: "André",   numero: "5521967442665" },
   { nome: "Bianca",  numero: "5521972461357" },
-  { nome: "Nicolas", numero: "5521995618747" },
   { nome: "Nicole",  numero: "" },
 ];
 

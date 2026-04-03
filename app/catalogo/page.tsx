@@ -89,7 +89,7 @@ export default function CatalogoPage() {
         <div className="text-center text-xs text-gray-400 mt-12 pt-4 border-t">
           <p>TigraoImports — Barra da Tijuca, Rio de Janeiro</p>
           <p className="mt-1">Precos validos por 24h | Sujeitos a disponibilidade</p>
-          <p className="mt-1">WhatsApp: (21) 99561-8747 | @tigraoimports</p>
+          <p className="mt-1">WhatsApp: (21) 97246-1357 | @tigraoimports</p>
         </div>
       </div>
 
