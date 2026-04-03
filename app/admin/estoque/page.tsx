@@ -148,8 +148,6 @@ const COR_PT: Record<string, string> = {
   "JET BLACK": "Preto Brilhante",
   "CLOUD WHITE": "Branco Nuvem",
   "SKY BLUE": "Azul Céu",
-  "TEAL": "Verde-azulado",
-  "DEEP BLUE": "Azul Profundo",
 };
 
 function traduzirCor(cor: string | null | undefined): string {
@@ -214,7 +212,6 @@ const PT_TO_EN: Record<string, string> = {
   "AZUL CÉU": "Sky Blue",
   "AZUL CEU": "Sky Blue",
   "VERDE-AZULADO": "Teal",
-  "AZUL PROFUNDO": "Deep Blue",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -2504,14 +2501,42 @@ export default function EstoquePage() {
               + Outra cor
             </button>
           </div>
-          {form.tipo === "SEMINOVO" && (
+          {form.tipo === "SEMINOVO" && (() => {
+            const cat = form.categoria || "";
+            const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
+            const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+            return (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
               <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
+              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] === "APLUS" ? "A+" : form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
+                const obs = form.observacao || "";
+                const cleaned = obs.replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "").trim();
+                const tag = e.target.value ? `[GRADE_${e.target.value === "A+" ? "APLUS" : e.target.value}]` : "";
+                set("observacao", tag ? `${cleaned} ${tag}`.trim() : cleaned || "");
+              }} className={inputCls}>
+                <option value="">— Sem grade —</option>
+                <option value="A+">A+</option><option value="A">A</option><option value="AB">AB</option><option value="B">B</option>
+              </select></div>
+              <div className="flex gap-3 items-end flex-wrap">
+                <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_CAIXA]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_CAIXA]`.trim() : obs.replace("[COM_CAIXA]", "").trim());
+                }} className="accent-[#E8740E]" /> 📦 Caixa</label>
+                {showCabo && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_CABO]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_CABO]`.trim() : obs.replace("[COM_CABO]", "").trim());
+                }} className="accent-[#E8740E]" /> 🔌 Cabo</label>}
+                {showCarregador && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_FONTE]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_FONTE]`.trim() : obs.replace("[COM_FONTE]", "").trim());
+                }} className="accent-[#E8740E]" /> 🔋 Carregador</label>}
+              </div>
               <div><p className={labelCls}>Cliente (comprado de)</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className={inputCls} /></div>
-              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Grade, caixa..." className={inputCls} /></div>
+              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
             </div>
-          )}
+            );
+          })()}
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
@@ -3871,10 +3896,20 @@ export default function EstoquePage() {
                         </div>
                       )}
                       <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
-                      {/* Caixa badge — detecta tag estruturada ou texto livre */}
+                      {/* Caixa badge */}
                       {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">📦 Com Caixa</span></div>
+                      )}
+                      {/* Cabo badge */}
+                      {(p.observacao?.includes("[COM_CABO]") || /com\s+cabo/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔌 Com Cabo</span></div>
+                      )}
+                      {/* Carregador badge */}
+                      {(p.observacao?.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
                       )}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
@@ -4015,14 +4050,35 @@ export default function EstoquePage() {
                       )}
                     </div>
                   )}
-                  {/* Grade + Caixa */}
-                  {!isLac && canEdit && (() => {
+                  {/* Grade + Caixa + Cabo + Carregador */}
+                  {!isLac && (canEdit || isAdmin) && (() => {
                     const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
                     const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
                     const currentGrade = tagKey ? GRADE_TAG[tagKey]
                       : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
+                    const hasCabo = p.observacao?.includes("[COM_CABO]") || /com\s+cabo/i.test(p.observacao || "");
+                    const hasFonte = p.observacao?.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(p.observacao || "");
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    const cat = p.categoria || "";
+                    // Cabo: iPhones, MacBook, iPad, Apple Watch
+                    const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
+                    // Carregador: MacBook, iPad
+                    const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+                    const toggleTag = async (tag: string, label: string, has: boolean, want: boolean) => {
+                      if (want === has) return;
+                      const obs = p.observacao || "";
+                      let newObs: string | null;
+                      if (!want) {
+                        newObs = obs.replace(`[${tag}]`, "").replace(/\s+/g, " ").trim() || null;
+                      } else {
+                        newObs = `${obs} [${tag}]`.trim();
+                      }
+                      await apiPatch(p.id, { observacao: newObs });
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                      setDetailProduct({ ...p, observacao: newObs });
+                      setMsg(want ? `${label} salvo!` : `${label} removido!`);
+                    };
                     return (
                       <div className="col-span-2 grid grid-cols-2 gap-2">
                         <div>
@@ -4050,29 +4106,29 @@ export default function EstoquePage() {
                         </div>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
-                          <select value={hasCaixa ? "SIM" : "NAO"} onChange={async (e) => {
-                            const wantCaixa = e.target.value === "SIM";
-                            const obs = p.observacao || "";
-                            const hadCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
-                            if (wantCaixa === hadCaixa) return;
-                            let newObs: string | null;
-                            if (!wantCaixa) {
-                              newObs = obs
-                                .replace("[COM_CAIXA]", "")
-                                .replace(/\bcom\s+caixa(\s+original)?\b/gi, "")
-                                .replace(/\s+/g, " ").trim() || null;
-                            } else {
-                              newObs = `${obs} [COM_CAIXA]`.trim();
-                            }
-                            await apiPatch(p.id, { observacao: newObs });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
-                            setDetailProduct({ ...p, observacao: newObs });
-                            setMsg(wantCaixa ? "Com caixa salvo!" : "Caixa removida!");
-                          }} className={selCls}>
+                          <select value={hasCaixa ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CAIXA", "Com caixa", hasCaixa, e.target.value === "SIM")} className={selCls}>
                             <option value="NAO">Sem caixa</option>
                             <option value="SIM">📦 Com caixa</option>
                           </select>
                         </div>
+                        {showCabo && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo</p>
+                            <select value={hasCabo ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CABO", "Com cabo", hasCabo, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem cabo</option>
+                              <option value="SIM">🔌 Com cabo</option>
+                            </select>
+                          </div>
+                        )}
+                        {showCarregador && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
+                            <select value={hasFonte ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_FONTE", "Com carregador", hasFonte, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem carregador</option>
+                              <option value="SIM">🔋 Com carregador</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}

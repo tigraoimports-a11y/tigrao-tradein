@@ -175,6 +175,7 @@ export default function VendasPage() {
     troca_fonte: string;
     troca_serial: string;
     troca_imei: string;
+    troca_garantia: string;
     // 2º produto na troca
     produto_na_troca2: string;
     troca_produto2: string;
@@ -184,6 +185,7 @@ export default function VendasPage() {
     troca_obs2: string;
     troca_serial2: string;
     troca_imei2: string;
+    troca_garantia2: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -748,6 +750,7 @@ export default function VendasPage() {
     troca_fonte: form.troca_fonte,
     troca_serial: form.troca_serial,
     troca_imei: form.troca_imei,
+    troca_garantia: form.troca_garantia,
     produto_na_troca2: form.produto_na_troca2,
     troca_produto2: form.troca_produto2,
     troca_cor2: form.troca_cor2,
@@ -756,6 +759,7 @@ export default function VendasPage() {
     troca_obs2: form.troca_obs2,
     troca_serial2: form.troca_serial2,
     troca_imei2: form.troca_imei2,
+    troca_garantia2: form.troca_garantia2,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -1353,6 +1357,7 @@ export default function VendasPage() {
       troca_caixa: "",
       troca_cabo: "",
       troca_fonte: "",
+      troca_garantia: "",
       troca_serial: "", troca_imei: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
       troca_serial2: "", troca_imei2: "", troca_garantia2: "",
@@ -3517,6 +3522,7 @@ export default function VendasPage() {
                                               troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
                                               troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
                                               troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
+                                              troca_garantia: "",
                                               troca_serial: "", troca_imei: "",
                                               produto_na_troca2: String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                               troca_produto2: (primaryVenda as unknown as Record<string, string>).troca_produto2 || "",
@@ -3558,6 +3564,7 @@ export default function VendasPage() {
                                                 troca_cabo: "",
                                                 troca_fonte: "",
                                                 troca_serial: "", troca_imei: "",
+                                                troca_garantia: "",
                                                 produto_na_troca2: String((gv as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                                 troca_produto2: (gv as unknown as Record<string, string>).troca_produto2 || "",
                                                 troca_cor2: (gv as unknown as Record<string, string>).troca_cor2 || "",
