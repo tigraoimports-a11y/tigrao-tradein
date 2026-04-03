@@ -3608,7 +3608,7 @@ export default function EstoquePage() {
         // reset serial/imei edit mode when a different product opens
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
-        const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
+        const canEdit = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         // IMEI editável para qualquer usuário em produtos pendentes (obrigatório para mover ao estoque)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         const canEditImei = isPendente;
@@ -3747,10 +3747,10 @@ export default function EstoquePage() {
                   </div>
                 )}
                 {/* Origem — para iPhones: admin edita, outros visualizam */}
-                {p.categoria === "IPHONES" && (isAdmin || p.origem) && (
+                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && (
                   <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{isAdmin ? " (opcional)" : ""}</p>
-                    {isAdmin ? (
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""}</p>
+                    {(isAdmin || canEdit) ? (
                       <select
                         value={p.origem ?? ""}
                         onChange={async (e) => {
@@ -4137,8 +4137,8 @@ export default function EstoquePage() {
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
-                <div className={`grid ${canEdit ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
-                  {canEdit && (
+                <div className={`grid ${canEdit && isAdmin ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
+                  {canEdit && isAdmin && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Quantidade</p>
                       <input
