@@ -770,13 +770,25 @@ export default function EstoquePage() {
     if (typeof window === "undefined") return;
     localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
   }
+  /** Ordena cards: usa ordem manual (drag) se existir, senão ordena por storage numérico */
   function sortByCardOrder(entries: [string, ProdutoEstoque[]][], cat: string): [string, ProdutoEstoque[]][] {
+    // Ordenação natural por storage (256GB < 512GB < 1TB < 2TB)
+    const storageSort = (a: string, b: string) => {
+      const toNum = (s: string) => {
+        const m = s.match(/(\d+)\s*(GB|TB)/i);
+        if (!m) return 0;
+        return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]);
+      };
+      const sa = toNum(a), sb = toNum(b);
+      if (sa !== sb) return sa - sb;
+      return a.localeCompare(b);
+    };
     const order = getCardOrder(cat);
-    if (!order.length) return entries;
+    if (!order.length) return [...entries].sort(([a], [b]) => storageSort(a, b));
     return [...entries].sort(([a], [b]) => {
       const ia = order.indexOf(a);
       const ib = order.indexOf(b);
-      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1 && ib === -1) return storageSort(a, b);
       if (ia === -1) return 1;
       if (ib === -1) return -1;
       return ia - ib;
@@ -3034,7 +3046,7 @@ export default function EstoquePage() {
                 </h2>
 
                 {(() => {
-                  const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
+                  const modeloEntriesRaw = Object.entries(modelos);
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
