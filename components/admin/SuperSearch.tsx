@@ -413,6 +413,25 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
           )}
         </div>
 
+        {/* Botão "Ver operação" — apenas para vendas (não estoque) */}
+        {!isEstoque && item.id && !editing && (
+          <div className="mx-4 mt-3 mb-1">
+            <button
+              onClick={() => {
+                const d = item.data || "";
+                const [ano, mes, dia] = d.split("-");
+                const url = `/admin/vendas?venda_id=${item.id}${ano ? `&ano=${ano}` : ""}${mes ? `&mes=${mes}` : ""}${dia ? `&dia=${dia}` : ""}`;
+                onClose();
+                window.location.href = url;
+              }}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E8] text-[#E8740E] border border-[#E8740E]/30 hover:bg-[#E8740E] hover:text-white"}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              Ver operação
+            </button>
+          </div>
+        )}
+
         {/* Botão salvar edição */}
         {editing && (
           <div className="mx-4 mt-3 mb-4 flex gap-2">

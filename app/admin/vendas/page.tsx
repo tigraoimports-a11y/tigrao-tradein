@@ -66,6 +66,7 @@ export default function VendasPage() {
   const [filtroDia, setFiltroDia] = useState("");
   const [filtroCpf, setFiltroCpf] = useState("");
   const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
+  const [highlightVendaId, setHighlightVendaId] = useState<string | null>(null);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [finalizandoLote, setFinalizandoLote] = useState(false);
 
@@ -213,6 +214,23 @@ export default function VendasPage() {
       if (eid) setEstoqueId(eid);
       setProdutoManual(true);
       window.history.replaceState({}, "", window.location.pathname);
+    }
+    // Navegação direta a uma venda pelo SuperSearch
+    const vendaId = params.get("venda_id");
+    const pAno = params.get("ano");
+    const pMes = params.get("mes");
+    const pDia = params.get("dia");
+    if (vendaId) {
+      if (pAno) setFiltroAno(pAno);
+      if (pMes) setFiltroMes(pMes);
+      if (pDia) setFiltroDia(pDia);
+      setHighlightVendaId(vendaId);
+      window.history.replaceState({}, "", window.location.pathname);
+      // Scroll após carregar
+      setTimeout(() => {
+        const el = document.getElementById(`venda-row-${vendaId}`);
+        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("ring-2", "ring-[#E8740E]"); setTimeout(() => el.classList.remove("ring-2", "ring-[#E8740E]"), 3000); }
+      }, 1200);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [scanMode, setScanMode] = useState(true); // Scan é o modo padrão — produto novo obrigatório bipar
@@ -3055,7 +3073,8 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""}`}
+                              id={`venda-row-${v.id}`}
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""} ${highlightVendaId === v.id ? "ring-2 ring-inset ring-[#E8740E]" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
                               {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
