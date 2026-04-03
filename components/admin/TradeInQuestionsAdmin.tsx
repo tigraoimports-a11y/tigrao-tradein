@@ -170,13 +170,45 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
   return (
     <div className="space-y-4">
       {/* Device type tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {DEVICE_TABS.map(t => (
           <button key={t.key} onClick={() => setDeviceTab(t.key)}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${deviceTab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>
             {t.label}
           </button>
         ))}
+        {questions.length <= 1 && (
+          <button
+            onClick={async () => {
+              setSaving("seed");
+              try {
+                // Buscar perguntas padrão do fallback
+                const res = await fetch(`/api/tradein-perguntas?device_type=${deviceTab}`);
+                const json = await res.json();
+                const defaults = json.data || [];
+                if (defaults.length === 0) { setMsg("Nenhuma pergunta padrao encontrada."); setSaving(null); return; }
+                // Inserir cada uma no banco (que ainda não existe)
+                let inserted = 0;
+                for (const q of defaults) {
+                  // Verificar se já existe no banco por slug+device_type
+                  const exists = questions.find(existing => existing.slug === q.slug);
+                  if (exists) continue;
+                  const body = { slug: q.slug, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
+                  await fetch("/api/admin/tradein-perguntas", { method: "POST", headers: getHeaders(), body: JSON.stringify(body) });
+                  inserted++;
+                }
+                setMsg(`${inserted} perguntas padrao carregadas no banco!`);
+                setTimeout(() => setMsg(""), 3000);
+                fetchQuestions(deviceTab);
+              } catch { setMsg("Erro ao carregar perguntas padrao"); }
+              setSaving(null);
+            }}
+            disabled={saving === "seed"}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            {saving === "seed" ? "Carregando..." : "⚡ Carregar perguntas padrao"}
+          </button>
+        )}
       </div>
       {msg && (
         <div
