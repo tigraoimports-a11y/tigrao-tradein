@@ -105,8 +105,8 @@ const COR_PT: Record<string, string> = {
   "CLOUD WHITE": "Branco",
   "SKY BLUE": "Azul Céu",
   "SAGE": "Verde",
-  "MIST BLUE": "Azul Névoa",
-  "HAZE BLUE": "Azul Névoa",
+  "MIST BLUE": "Azul",
+  "HAZE BLUE": "Azul",
   "BLUSH": "Rosa",
   "CITRUS": "Cítrico",
   "INDIGO": "Índigo",
@@ -235,11 +235,19 @@ function stripOrigem(nome: string, categoria?: string | null): string {
 function extractCorPT(nome: string): string | null {
   if (!nome) return null;
   const upper = nome.toUpperCase();
-  // Verifica do mais longo para o mais curto para evitar matches parciais
+  // 1. Tenta encontrar cor em PT no nome
   const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
   for (const ptKey of ptKeys) {
     if (upper.includes(ptKey)) {
       return ptKey.charAt(0).toUpperCase() + ptKey.slice(1).toLowerCase();
+    }
+  }
+  // 2. Tenta encontrar cor em EN no nome e retorna tradução PT
+  const enKeys = Object.keys(COR_PT).sort((a, b) => b.length - a.length);
+  for (const enKey of enKeys) {
+    if (upper.includes(enKey)) {
+      const pt = COR_PT[enKey];
+      if (pt && pt.toUpperCase() !== enKey) return pt;
     }
   }
   return null;
@@ -251,6 +259,24 @@ function extractCorPT(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
+/** Extrai a origem de um iPhone a partir do nome do produto ou da observação */
+function extractOrigem(produto: string, observacao?: string | null): string | null {
+  // 1. Tentar extrair da observação (ex: "HN (IN) - Chip Fisico + E-sim")
+  if (observacao) {
+    for (const orig of IPHONE_ORIGENS) {
+      const code = orig.split(" ")[0]; // "HN", "LL", etc.
+      if (observacao.toUpperCase().startsWith(code)) return orig;
+    }
+  }
+  // 2. Tentar extrair do final do nome do produto (ex: "IPHONE 16 128GB BLACK HN")
+  const upper = produto.toUpperCase().trim();
+  for (const orig of IPHONE_ORIGENS) {
+    const code = orig.split(" ")[0];
+    if (upper.endsWith(` ${code}`)) return orig;
+  }
+  return null;
+}
+
 /** Corrige nomes de produto que foram cadastrados com formato antigo/errado */
 function fixProdutoName(nome: string, categoria?: string | null): string {
   let n = nome;
@@ -262,11 +288,44 @@ function fixProdutoName(nome: string, categoria?: string | null): string {
   if (categoria === "IPADS" && /IPAD\s+PRO\s+\d/i.test(n) && !/IPAD\s+PRO\s+[MA]\d/i.test(n)) {
     n = n.replace(/IPAD\s+PRO\s+/gi, "IPAD PRO M5 ");
   }
+  // iPhones: corrigir cores em PT que ficaram no nome (ex: "SKY AZUL" → "SKY BLUE", "MIST AZUL" → "MIST BLUE")
+  if (categoria === "IPHONES") {
+    // Cores compostas PT→EN que podem ter ficado no nome
+    const ptToEnInline: [RegExp, string][] = [
+      [/\bAZUL\s+CEU\b/gi, "SKY BLUE"],
+      [/\bAZUL\s+CÉU\b/gi, "SKY BLUE"],
+      [/\bSKY\s+AZUL\b/gi, "SKY BLUE"],
+      [/\bMIST\s+AZUL\b/gi, "MIST BLUE"],
+      [/\bAZUL\s+NEVOA\b/gi, "MIST BLUE"],
+      [/\bAZUL\s+NÉVOA\b/gi, "MIST BLUE"],
+      [/\bBRANCO\s+NUVEM\b/gi, "CLOUD WHITE"],
+      [/\bCINZA\s+ESPACIAL\s+PRETO\b/gi, "SPACE BLACK"],
+      [/\bPRETO\s+ESPACIAL\b/gi, "SPACE BLACK"],
+      [/\bCINZA\s+ESPACIAL\b/gi, "SPACE GRAY"],
+      [/\bLARANJA\s+C[OÓ]SMICO\b/gi, "COSMIC ORANGE"],
+      [/\bROXO\s+PROFUNDO\b/gi, "DEEP PURPLE"],
+      [/\bAZUL\s+PROFUNDO\b/gi, "DEEP BLUE"],
+      [/\bVERDE\s+ALPINO\b/gi, "ALPINE GREEN"],
+    ];
+    for (const [pat, en] of ptToEnInline) n = n.replace(pat, en);
+  }
   return n;
 }
 
+/** Remove toda referência de origem do nome de iPhones (ex: "LL", "(EUA)", "(IN)", "(JPA)") */
+function stripAllOrigem(nome: string): string {
+  return nome
+    .replace(/\s+\([^)]*\)/g, "")  // Remove qualquer coisa entre parênteses: (EUA), (IN), (JPA), (BR)
+    .replace(/\s+(AA|BE|BR|BZ|CH|E|HN|J|LL|LZ|N|QL|VC|ZD|ZP)(?=\s|$)/gi, "")  // Remove códigos soltos
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
-  let display = stripOrigem(fixProdutoName(nome, categoria), categoria);
+  let display = fixProdutoName(nome, categoria);
+  // iPhones: remover TODA referência de origem
+  if (!categoria || categoria === "IPHONES") display = stripAllOrigem(display);
+  display = stripOrigem(display, categoria);
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
@@ -507,6 +566,7 @@ export default function EstoquePage() {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
+  const [editingCorPT, setEditingCorPT] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
@@ -710,13 +770,25 @@ export default function EstoquePage() {
     if (typeof window === "undefined") return;
     localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
   }
+  /** Ordena cards: usa ordem manual (drag) se existir, senão ordena por storage numérico */
   function sortByCardOrder(entries: [string, ProdutoEstoque[]][], cat: string): [string, ProdutoEstoque[]][] {
+    // Ordenação natural por storage (256GB < 512GB < 1TB < 2TB)
+    const storageSort = (a: string, b: string) => {
+      const toNum = (s: string) => {
+        const m = s.match(/(\d+)\s*(GB|TB)/i);
+        if (!m) return 0;
+        return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]);
+      };
+      const sa = toNum(a), sb = toNum(b);
+      if (sa !== sb) return sa - sb;
+      return a.localeCompare(b);
+    };
     const order = getCardOrder(cat);
-    if (!order.length) return entries;
+    if (!order.length) return [...entries].sort(([a], [b]) => storageSort(a, b));
     return [...entries].sort(([a], [b]) => {
       const ia = order.indexOf(a);
       const ib = order.indexOf(b);
-      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1 && ib === -1) return storageSort(a, b);
       if (ia === -1) return 1;
       if (ib === -1) return -1;
       return ia - ib;
@@ -2974,7 +3046,7 @@ export default function EstoquePage() {
                 </h2>
 
                 {(() => {
-                  const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
+                  const modeloEntriesRaw = Object.entries(modelos);
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
@@ -3144,7 +3216,48 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {corSoPT(prodItems[0]?.cor, prodItems[0]?.produto) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor, prodItems[0]?.produto)}</span>}
+                                          {(() => {
+                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
+                                            const editKey = `${prodItems[0]?.id}_corpt`;
+                                            if (editingCorPT[editKey] !== undefined) {
+                                              return (
+                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
+                                                  <input
+                                                    value={editingCorPT[editKey]}
+                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const newCor = editingCorPT[editKey];
+                                                        if (newCor) {
+                                                          await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                          setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                        }
+                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                      }
+                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                    }}
+                                                    className="w-20 px-1 py-0 rounded border border-[#0071E3] text-[10px] bg-[#1A1A1A] text-white/80"
+                                                    autoFocus
+                                                  />
+                                                  <button onClick={async () => {
+                                                    const newCor = editingCorPT[editKey];
+                                                    if (newCor) {
+                                                      await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                      setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                    }
+                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                  }} className="text-[9px] text-[#E8740E] font-bold">OK</button>
+                                                </span>
+                                              );
+                                            }
+                                            return ptLabel ? (
+                                              <span
+                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel })); }}
+                                                title="Clique para editar cor"
+                                              >{ptLabel}</span>
+                                            ) : null;
+                                          })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
@@ -3731,28 +3844,44 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones, campo separado do nome */}
-                {p.categoria === "IPHONES" && isAdmin && (
-                  <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
-                    <select
-                      value={p.origem ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value || null;
-                        try {
-                          await apiPatch(p.id, { origem: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
-                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                          setMsg("✅ Origem atualizada!");
-                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                      }}
-                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                    >
-                      <option value="">— Sem origem —</option>
-                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                )}
+                {/* Origem — apenas para iPhones */}
+                {p.categoria === "IPHONES" && (() => {
+                  const origemDetected = p.origem || extractOrigem(p.produto, p.observacao);
+                  if (canEdit) {
+                    // Editável em pendências/a caminho
+                    return (
+                      <div className="mb-3">
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
+                        <select
+                          value={p.origem ?? origemDetected ?? ""}
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
+                            try {
+                              await apiPatch(p.id, { origem: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                              setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                              setMsg("✅ Origem atualizada!");
+                            } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        >
+                          <option value="">— Sem origem —</option>
+                          {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    );
+                  }
+                  // Read-only no estoque
+                  if (origemDetected) {
+                    return (
+                      <div className="mb-3">
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{origemDetected}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     const qnt = p.qnt || 1;
@@ -3899,10 +4028,10 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — dropdown pelo catálogo da categoria */}
+                  {/* Cor — editável só em pendências/a caminho, read-only no estoque */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (() => {
+                    {canEdit ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
