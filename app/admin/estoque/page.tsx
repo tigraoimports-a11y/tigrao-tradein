@@ -777,6 +777,7 @@ export default function EstoquePage() {
   }
 
   // Reordenação de cards (modelo inteiro) via botões ▲/▼
+  const [cardOrderVersion, setCardOrderVersion] = useState(0);
   // Guardar ordem dos cards por categoria em localStorage
   function getCardOrder(cat: string): string[] {
     if (typeof window === "undefined") return [];
@@ -816,7 +817,7 @@ export default function EstoquePage() {
     if (targetIdx < 0 || targetIdx >= keys.length) return;
     [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
     saveCardOrder(cat, keys);
-    setEstoque((prev) => [...prev]);
+    setCardOrderVersion(v => v + 1);
   }
 
   // Duplicar produto do estoque
@@ -3131,9 +3132,10 @@ export default function EstoquePage() {
                   const modeloEntriesRaw = Object.entries(modelos);
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items], cardIdx) => {
-                  // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
+                  // Sub-agrupar por nome do produto (sem origem, e-sim, chip info)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
+                    .replace(/\s+(VC|LL|J|JA|BE|BR|HN|IN|ZA|BZ|ZP|ZD|LZ|CH|N|E|QL|AA)(?=\s|$|\()/gi, "")
+                    .replace(/\s*\([^)]*\)/g, "")  // Remove (JPA), (EUA), (IN), (BR), etc.
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
