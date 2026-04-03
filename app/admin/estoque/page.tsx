@@ -1483,13 +1483,16 @@ export default function EstoquePage() {
     return true;
   });
 
-  // Agrupar por categoria, depois por modelo base
+  // Agrupar por categoria (ou por cliente/fornecedor nas pendências), depois por modelo base
   const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
   filtered.forEach((p) => {
-    if (!byCat[p.categoria]) byCat[p.categoria] = {};
+    const catKey = tab === "pendencias"
+      ? (p.fornecedor || p.cliente || "Sem fornecedor").toUpperCase()
+      : p.categoria;
+    if (!byCat[catKey]) byCat[catKey] = {};
     const modelo = getModeloBase(p.produto, p.categoria);
-    if (!byCat[p.categoria][modelo]) byCat[p.categoria][modelo] = [];
-    byCat[p.categoria][modelo].push(p);
+    if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
+    byCat[catKey][modelo].push(p);
   });
 
   // KPIs
@@ -2831,9 +2834,14 @@ export default function EstoquePage() {
             {Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                  {dynamicCatLabels[cat] || cat}
+                  {tab === "pendencias" ? (
+                    <span className="flex items-center gap-2">
+                      <span className={`text-sm ${textSecondary}`}>👤</span>
+                      {cat}
+                    </span>
+                  ) : (dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
-                    {Object.values(modelos).flat().length} produtos | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
+                    {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
                 </h2>
 
@@ -3856,6 +3864,7 @@ export default function EstoquePage() {
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                         >
                           <option value="">— Selecionar —</option>
+                          {p.cor && !coresCat.includes(p.cor) && <option key={p.cor} value={p.cor}>{p.cor}</option>}
                           {coresCat.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                       ) : (
@@ -4114,22 +4123,14 @@ export default function EstoquePage() {
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor</p>
                     {isAdmin ? (
                       <div className="mt-0.5 space-y-1.5">
-                        <input type="text" defaultValue={p.fornecedor || ""} placeholder="Ex: MIAMI ZONE" onBlur={async (e) => {
-                          const val = e.target.value.trim().toUpperCase() || null;
-                          if (val !== (p.fornecedor || null)) {
-                            await apiPatch(p.id, { fornecedor: val });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, fornecedor: val } : x));
-                            setDetailProduct({ ...p, fornecedor: val });
-                            setMsg("Fornecedor atualizado!");
-                          }
-                        }} className={`w-full text-[13px] px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
+                        <p className={`text-[13px] ${mP} mt-0.5 font-medium`}>{p.fornecedor || "—"}</p>
                         {p.fornecedor && (
                           <button
                             onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(p.fornecedor!)}`; }}
                             className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/60 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            Ver perfil do cliente
+                            Ver perfil
                           </button>
                         )}
                       </div>
