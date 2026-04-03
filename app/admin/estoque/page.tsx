@@ -516,6 +516,8 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const showSaved = (field: string) => { setSavedField(field); setTimeout(() => setSavedField(null), 1800); };
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
   const [editingDetailImei, setEditingDetailImei] = useState(false);
   const [recatMode, setRecatMode] = useState(false);
@@ -3631,6 +3633,7 @@ export default function EstoquePage() {
         // IMEI editável para qualquer usuário em produtos pendentes (obrigatório para mover ao estoque)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         const canEditImei = isPendente;
+        const saved = (f: string) => savedField === f ? <span className="ml-1 text-[10px] font-semibold text-green-500 animate-pulse">Salvo!</span> : null;
         const saveSerial = async () => {
           const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement;
           const val = el?.value?.trim().toUpperCase() || null;
@@ -3639,7 +3642,7 @@ export default function EstoquePage() {
             await apiPatch(p.id, { serial_no: val });
             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x));
             setDetailProduct(prev => prev ? { ...prev, serial_no: val } : null);
-            setMsg(val ? "✅ Serial salvo!" : "Serial removido!");
+            showSaved("serial");
             setEditingDetailSerial(false);
           } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
         };
@@ -3651,7 +3654,7 @@ export default function EstoquePage() {
             await apiPatch(p.id, { imei: val });
             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, imei: val } : x));
             setDetailProduct(prev => prev ? { ...prev, imei: val } : null);
-            setMsg(val ? "✅ IMEI salvo!" : "IMEI removido!");
+            showSaved("imei");
             setEditingDetailImei(false);
           } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
         };
@@ -3666,7 +3669,7 @@ export default function EstoquePage() {
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 mr-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Produto (modelo + memoria)</p>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Produto (modelo + memoria) {saved("produto")}</p>
                     {canEdit ? (
                       <input
                         type="text"
@@ -3677,7 +3680,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { produto: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: val } : x));
                             setDetailProduct({ ...p, produto: val });
-                            setMsg("Produto atualizado!");
+                            showSaved("produto");
                           }
                         }}
                         className={`w-full text-[15px] font-bold mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -3768,7 +3771,7 @@ export default function EstoquePage() {
                 {/* Origem — para iPhones: admin/pendências editam, outros visualizam; ocultar se já no nome */}
                 {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
                   <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""}</p>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""} {saved("origem")}</p>
                     {(isAdmin || canEdit) ? (
                       <select
                         value={p.origem ?? ""}
@@ -3778,7 +3781,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { origem: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
                             setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                            setMsg("✅ Origem atualizada!");
+                            showSaved("origem");
                           } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
                         }}
                         className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -3888,7 +3891,7 @@ export default function EstoquePage() {
                     return (<>
                       {(p.serial_no || isAdmin || isPendente) && (
                         <div>
-                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Numero de Serie {saved("serial")}</p>
                           {isPendente ? (
                             /* Campo direto para produtos pendentes — salva ao pressionar ✓ ou Enter */
                             <div className="flex items-center gap-1 mt-0.5">
@@ -3997,7 +4000,7 @@ export default function EstoquePage() {
                   })()}
                   {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor {saved("cor")}</p>
                     {canEdit ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
@@ -4010,7 +4013,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { cor: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
                             setDetailProduct({ ...p, cor: val });
-                            setMsg("Cor atualizada!");
+                            showSaved("cor");
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                         >
@@ -4029,7 +4032,7 @@ export default function EstoquePage() {
                               await apiPatch(p.id, { cor: val });
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
                               setDetailProduct({ ...p, cor: val });
-                              setMsg("Cor atualizada!");
+                              showSaved("cor");
                             }
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -4041,7 +4044,7 @@ export default function EstoquePage() {
                   </div>
                   {(p.imei || isAdmin || canEditImei) && (
                     <div>
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI {saved("imei")}</p>
                       {canEditImei ? (
                         /* Campo direto para produtos pendentes — salva ao pressionar ✓ ou Enter */
                         <div className="flex items-center gap-1 mt-0.5">
@@ -4068,7 +4071,7 @@ export default function EstoquePage() {
                   {/* Bateria — só para seminovos/usados */}
                   {!isLac && (
                     <div>
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%)</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%) {saved("bateria")}</p>
                       {canEdit ? (
                         <input
                           type="number"
@@ -4081,7 +4084,7 @@ export default function EstoquePage() {
                               await apiPatch(p.id, { bateria: val });
                               setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, bateria: val } : x));
                               setDetailProduct({ ...p, bateria: val });
-                              setMsg("Bateria atualizada!");
+                              showSaved("bateria");
                             }
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -4094,7 +4097,7 @@ export default function EstoquePage() {
                   {/* Garantia — seminovos/usados */}
                   {!isLac && (p.garantia || isAdmin || canEdit) && (
                     <div>
-                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Garantia</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Garantia {saved("garantia")}</p>
                       {(canEdit || isAdmin) ? (() => {
                         const saveGarantia = async () => {
                           const el = document.getElementById(`garantia-${p.id}`) as HTMLInputElement;
@@ -4103,13 +4106,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { garantia: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
                             setDetailProduct({ ...p, garantia: val });
-                            // Flash inline feedback
-                            const btn = document.getElementById(`garantia-btn-${p.id}`);
-                            if (btn) {
-                              btn.textContent = "✅";
-                              btn.classList.add("bg-emerald-600");
-                              setTimeout(() => { btn.textContent = "✓"; btn.classList.remove("bg-emerald-600"); }, 1500);
-                            }
+                            showSaved("garantia");
                           }
                         };
                         return (
@@ -4168,12 +4165,12 @@ export default function EstoquePage() {
                       await apiPatch(p.id, { observacao: newObs });
                       setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
                       setDetailProduct({ ...p, observacao: newObs });
-                      setMsg(want ? `${label} salvo!` : `${label} removido!`);
+                      showSaved(tag.toLowerCase());
                     };
                     return (
                       <div className="col-span-2 grid grid-cols-2 gap-2">
                         <div>
-                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade {saved("grade")}</p>
                           <select value={currentGrade} onChange={async (e) => {
                             const newGrade = e.target.value;
                             const obs = p.observacao || "";
@@ -4186,7 +4183,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { observacao: finalObs });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
                             setDetailProduct({ ...p, observacao: finalObs });
-                            setMsg(`Grade ${newGrade || "removida"}!`);
+                            showSaved("grade");
                           }} className={selCls}>
                             <option value="">— Sem grade —</option>
                             <option value="A+">A+</option>
@@ -4196,7 +4193,7 @@ export default function EstoquePage() {
                           </select>
                         </div>
                         <div>
-                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa {saved("com_caixa")}</p>
                           <select value={hasCaixa ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CAIXA", "Com caixa", hasCaixa, e.target.value === "SIM")} className={selCls}>
                             <option value="NAO">Sem caixa</option>
                             <option value="SIM">📦 Com caixa</option>
@@ -4204,7 +4201,7 @@ export default function EstoquePage() {
                         </div>
                         {showCabo && (
                           <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo</p>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo {saved("com_cabo")}</p>
                             <select value={hasCabo ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CABO", "Com cabo", hasCabo, e.target.value === "SIM")} className={selCls}>
                               <option value="NAO">Sem cabo</option>
                               <option value="SIM">🔌 Com cabo</option>
@@ -4213,7 +4210,7 @@ export default function EstoquePage() {
                         )}
                         {showCarregador && (
                           <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador {saved("com_fonte")}</p>
                             <select value={hasFonte ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_FONTE", "Com carregador", hasFonte, e.target.value === "SIM")} className={selCls}>
                               <option value="NAO">Sem carregador</option>
                               <option value="SIM">🔋 Com carregador</option>
@@ -4222,7 +4219,7 @@ export default function EstoquePage() {
                         )}
                         {showPulseira && (
                           <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira {saved("com_pulseira")}</p>
                             <select value={hasPulseira ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_PULSEIRA", "Com pulseira", hasPulseira, e.target.value === "SIM")} className={selCls}>
                               <option value="NAO">Sem pulseira</option>
                               <option value="SIM">⌚ Com pulseira</option>
@@ -4231,7 +4228,7 @@ export default function EstoquePage() {
                         )}
                         {showCiclos && (
                           <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos de Bateria</p>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos de Bateria {saved("ciclos")}</p>
                             <input
                               type="number" min={0}
                               defaultValue={currentCiclos}
@@ -4245,7 +4242,7 @@ export default function EstoquePage() {
                                   await apiPatch(p.id, { observacao: finalObs });
                                   setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
                                   setDetailProduct({ ...p, observacao: finalObs });
-                                  setMsg(val ? `Ciclos: ${val}` : "Ciclos removido!");
+                                  showSaved("ciclos");
                                 }
                               }}
                               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
@@ -4273,7 +4270,7 @@ export default function EstoquePage() {
                           if (!isNaN(val) && val >= 0 && val !== p.qnt) {
                             await handleUpdateQnt(p, val);
                             setDetailProduct({ ...p, qnt: val });
-                            setMsg("Quantidade atualizada!");
+                            showSaved("qnt");
                           }
                         }}
                         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
@@ -4299,7 +4296,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { estoque_minimo: val });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, estoque_minimo: val } : x));
                             setDetailProduct({ ...p, estoque_minimo: val });
-                            setMsg("Estoque minimo atualizado!");
+                            showSaved("estoque_min");
                           }
                         }}
                         className={`w-24 px-3 py-2 rounded-lg border text-[14px] font-bold text-center ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-blue-400" : "bg-white border-[#D2D2D7] text-blue-600"} focus:border-[#E8740E] focus:outline-none`}
@@ -4343,7 +4340,7 @@ export default function EstoquePage() {
                             await apiPatch(p.id, { preco_sugerido: num });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, preco_sugerido: num } : x));
                             setDetailProduct({ ...p, preco_sugerido: num });
-                            setMsg("Preco sugerido atualizado!");
+                            showSaved("preco_sug");
                           }
                         }}
                         className={`flex-1 px-3 py-2 rounded-lg border text-[14px] font-bold ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-green-400" : "bg-white border-[#D2D2D7] text-green-600"} focus:border-[#E8740E] focus:outline-none`}
@@ -4369,7 +4366,7 @@ export default function EstoquePage() {
                           await apiPatch(p.id, { data_entrada: val });
                           setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, data_entrada: val } : x));
                           setDetailProduct({ ...p, data_entrada: val });
-                          setMsg("Data atualizada!");
+                          showSaved("data");
                         }
                       }} className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`} />
                     ) : <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(dataE)}</p>}
@@ -4401,7 +4398,7 @@ export default function EstoquePage() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao</p>
+                  <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao {saved("obs")}</p>
                   {(canEdit || isAdmin) ? (
                     <textarea
                       key={`obs-${p.id}`}
@@ -4416,7 +4413,7 @@ export default function EstoquePage() {
                           await apiPatch(p.id, { observacao: val });
                           setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
                           setDetailProduct(prev => prev ? { ...prev, observacao: val } : null);
-                          setMsg("Observacao atualizada!");
+                          showSaved("obs");
                         }
                       }}
                       className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none resize-none`}
