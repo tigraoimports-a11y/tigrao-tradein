@@ -8,7 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, COR_PT_TO_EN, corToEn, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -100,18 +100,8 @@ const COR_PT: Record<string, string> = {
   "CORAL": "Coral",
   "PRODUCT RED": "Vermelho",
   "(PRODUCT)RED": "Vermelho",
-  "TEAL": "Verde",
-  "ULTRAMARINE": "Azul",
-  "CLOUD WHITE": "Branco",
-  "SKY BLUE": "Azul Céu",
-  "SAGE": "Verde",
-  "DEEP BLUE": "Azul Profundo",
-  "MIST BLUE": "Azul",
-  "HAZE BLUE": "Azul",
-  "BLUSH": "Rosa",
-  "CITRUS": "Cítrico",
-  "INDIGO": "Índigo",
-  "BRANCO NUVEM": "Branco",
+  "TEAL": "Azul-petróleo",
+  "ULTRAMARINE": "Ultramarino",
   "PEBBLE": "Pedregulho",
   "LIGHT BLUE": "Azul Claro",
   "DARK BLUE": "Azul Escuro",
@@ -206,14 +196,6 @@ const PT_TO_EN: Record<string, string> = {
   "NATURAL": "Natural",
   "ULTRAMARINO": "Ultramarine",
   "LAVANDA": "Lavender",
-  "BRANCO NUVEM": "Cloud White",
-  "AZUL CEU": "Sky Blue",
-  "AZUL CÉU": "Sky Blue",
-  "AZUL NEVOA": "Mist Blue",
-  "AZUL NÉVOA": "Mist Blue",
-  "LARANJA COSMICO": "Cosmic Orange",
-  "INDIGO": "Indigo",
-  "ÍNDIGO": "Indigo",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -238,19 +220,11 @@ function stripOrigem(nome: string, categoria?: string | null): string {
 function extractCorPT(nome: string): string | null {
   if (!nome) return null;
   const upper = nome.toUpperCase();
-  // 1. Tenta encontrar cor em PT no nome
+  // Verifica do mais longo para o mais curto para evitar matches parciais
   const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
   for (const ptKey of ptKeys) {
     if (upper.includes(ptKey)) {
       return ptKey.charAt(0).toUpperCase() + ptKey.slice(1).toLowerCase();
-    }
-  }
-  // 2. Tenta encontrar cor em EN no nome e retorna tradução PT
-  const enKeys = Object.keys(COR_PT).sort((a, b) => b.length - a.length);
-  for (const enKey of enKeys) {
-    if (upper.includes(enKey)) {
-      const pt = COR_PT[enKey];
-      if (pt && pt.toUpperCase() !== enKey) return pt;
     }
   }
   return null;
@@ -262,71 +236,8 @@ function extractCorPT(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
-/** Extrai a origem de um iPhone a partir do nome do produto ou da observação */
-function extractOrigem(produto: string, observacao?: string | null): string | null {
-  // 1. Tentar extrair da observação (ex: "HN (IN) - Chip Fisico + E-sim")
-  if (observacao) {
-    for (const orig of IPHONE_ORIGENS) {
-      const code = orig.split(" ")[0]; // "HN", "LL", etc.
-      if (observacao.toUpperCase().startsWith(code)) return orig;
-    }
-  }
-  // 2. Tentar extrair do final do nome do produto (ex: "IPHONE 16 128GB BLACK HN")
-  const upper = produto.toUpperCase().trim();
-  for (const orig of IPHONE_ORIGENS) {
-    const code = orig.split(" ")[0];
-    if (upper.endsWith(` ${code}`)) return orig;
-  }
-  return null;
-}
-
-/** Corrige nomes de produto que foram cadastrados com formato antigo/errado */
-function fixProdutoName(nome: string, categoria?: string | null): string {
-  let n = nome;
-  // MacBook Neo: "MACBOOK PRO A18 PRO ..." → "MACBOOK NEO ..."
-  if (categoria === "MACBOOK" && /\bA18\b/i.test(n)) {
-    n = n.replace(/MACBOOK\s+PRO\s+A18\s*PRO?\s*/gi, "MACBOOK NEO ");
-  }
-  // iPad Air: "IPAD AIR 11"" sem chip → não assumir chip, manter como está
-  // iPad Pro: "IPAD PRO 11"" sem chip → não assumir chip, manter como está
-  // iPhones: corrigir cores em PT que ficaram no nome (ex: "SKY AZUL" → "SKY BLUE", "MIST AZUL" → "MIST BLUE")
-  if (categoria === "IPHONES") {
-    // Cores compostas PT→EN que podem ter ficado no nome
-    const ptToEnInline: [RegExp, string][] = [
-      [/\bAZUL\s+CEU\b/gi, "SKY BLUE"],
-      [/\bAZUL\s+CÉU\b/gi, "SKY BLUE"],
-      [/\bSKY\s+AZUL\b/gi, "SKY BLUE"],
-      [/\bMIST\s+AZUL\b/gi, "MIST BLUE"],
-      [/\bAZUL\s+NEVOA\b/gi, "MIST BLUE"],
-      [/\bAZUL\s+NÉVOA\b/gi, "MIST BLUE"],
-      [/\bBRANCO\s+NUVEM\b/gi, "CLOUD WHITE"],
-      [/\bCINZA\s+ESPACIAL\s+PRETO\b/gi, "SPACE BLACK"],
-      [/\bPRETO\s+ESPACIAL\b/gi, "SPACE BLACK"],
-      [/\bCINZA\s+ESPACIAL\b/gi, "SPACE GRAY"],
-      [/\bLARANJA\s+C[OÓ]SMICO\b/gi, "COSMIC ORANGE"],
-      [/\bROXO\s+PROFUNDO\b/gi, "DEEP PURPLE"],
-      [/\bAZUL\s+PROFUNDO\b/gi, "DEEP BLUE"],
-      [/\bVERDE\s+ALPINO\b/gi, "ALPINE GREEN"],
-    ];
-    for (const [pat, en] of ptToEnInline) n = n.replace(pat, en);
-  }
-  return n;
-}
-
-/** Remove toda referência de origem do nome de iPhones (ex: "LL", "(EUA)", "(IN)", "(JPA)") */
-function stripAllOrigem(nome: string): string {
-  return nome
-    .replace(/\s+\([^)]*\)/g, "")  // Remove qualquer coisa entre parênteses: (EUA), (IN), (JPA), (BR)
-    .replace(/\s+(AA|BE|BR|BZ|CH|E|HN|J|LL|LZ|N|QL|VC|ZD|ZP)(?=\s|$)/gi, "")  // Remove códigos soltos
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
-  let display = fixProdutoName(nome, categoria);
-  // iPhones: remover TODA referência de origem
-  if (!categoria || categoria === "IPHONES") display = stripAllOrigem(display);
-  display = stripOrigem(display, categoria);
+  let display = stripOrigem(nome, categoria);
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
@@ -485,26 +396,22 @@ function getModeloBase(produto: string, categoria: string): string {
   if (baseCat === "IPADS") {
     const mem = getMem();
     const size = getSize();
-    // Chip (M2, M3, M4, A16, etc.)
     const chipMatch = p.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/i);
     const chip = chipMatch ? ` ${chipMatch[1].toUpperCase()}` : "";
-    // Geração (4º, 5º, 6º, 9º, 10º, 11º)
-    const genMatch = !chip ? p.match(/(\d+)[ºo]\s/i) : null;
-    const gen = genMatch ? ` ${genMatch[1]}º` : "";
-    if (p.includes("MINI")) return `iPad Mini${chip || gen}${size}${mem}`;
-    if (p.includes("AIR")) return `iPad Air${chip || gen}${size}${mem}`;
-    if (p.includes("PRO")) return `iPad Pro${chip || gen}${size}${mem}`;
-    return `iPad${chip || gen}${mem}`;
+    if (p.includes("MINI")) return `iPad Mini${chip}${size}${mem}`;
+    if (p.includes("AIR")) return `iPad Air${chip}${size}${mem}`;
+    if (p.includes("PRO")) return `iPad Pro${chip}${size}${mem}`;
+    return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
     const mem = getMem();
     const size = getSize();
-    // Extrair chip M-series (M4, M5, M4 Pro, M5 Pro)
+    // Extrair chip (M4, M5, M4 Pro, M5 Pro)
     const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
     const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    // MacBook Neo: detectar por "NEO" ou chip A18 (exclusivo do Neo)
-    if (p.includes("NEO") || /\bA18\b/i.test(p)) return `MacBook Neo${size}${mem}`;
+    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${mem}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
+    if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
     return `MacBook${chip}${mem}`;
   }
@@ -515,36 +422,21 @@ function getModeloBase(produto: string, categoria: string): string {
     return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
-    // Watch não tem memória relevante, agrupar por modelo + geração + tamanho
+    // Watch não tem memória relevante, agrupar por modelo + tamanho
     const sizeW = p.match(/(\d{2})\s*MM/i);
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
-    // Ultra com geração (Ultra 2, Ultra 3)
-    const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
-    if (ultraMatch) {
-      const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
-      return `Apple Watch Ultra${gen}${sz}`;
-    }
-    // SE com geração (SE 2, SE 3)
-    const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}`;
+    if (p.includes("ULTRA")) return `Apple Watch Ultra${sz}`;
     if (p.includes("SE")) return `Apple Watch SE${sz}`;
-    // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
-    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}`;
+    if (p.includes("S11") || p.includes("SERIES 11")) return `Apple Watch Series 11${sz}`;
+    if (p.includes("S10") || p.includes("SERIES 10")) return `Apple Watch Series 10${sz}`;
     return `Apple Watch${sz}`;
   }
   if (baseCat === "AIRPODS") {
-    // AirPods com geração (Pro 2, Pro 3, Max 2024, 4º)
-    if (p.includes("PRO")) {
-      const genMatch = p.match(/PRO\s*(\d+)/);
-      return genMatch ? `AirPods Pro ${genMatch[1]}` : "AirPods Pro";
-    }
-    if (p.includes("MAX")) {
-      const yearMatch = p.match(/MAX\s*(\d{4})/);
-      return yearMatch ? `AirPods Max ${yearMatch[1]}` : "AirPods Max";
-    }
-    const genMatch = p.match(/AIRPODS?\s*(\d+)/);
-    if (genMatch) return `AirPods ${genMatch[1]}`;
+    if (p.includes("PRO 3")) return "AirPods Pro 3";
+    if (p.includes("PRO 2")) return "AirPods Pro 2";
+    if (p.includes("PRO")) return "AirPods Pro";
+    if (p.includes("MAX")) return "AirPods Max";
+    if (p.includes("4")) return "AirPods 4";
     return "AirPods";
   }
   return produto;
@@ -585,14 +477,12 @@ export default function EstoquePage() {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
-  const [editingCorPT, setEditingCorPT] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
-  const [detailVenda, setDetailVenda] = useState<{ cliente: string; data: string; preco_vendido: number } | null>(null);
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
   const [editingDetailImei, setEditingDetailImei] = useState(false);
   const [recatMode, setRecatMode] = useState(false);
@@ -776,8 +666,10 @@ export default function EstoquePage() {
     dragOverRef.current = null;
   }
 
-  // Reordenação de cards (modelo inteiro) via botões ▲/▼
-  const [cardOrderVersion, setCardOrderVersion] = useState(0);
+  // Drag-and-drop para cards (modelo inteiro)
+  const dragCardRef = useRef<string | null>(null);
+  const dragOverCardRef = useRef<string | null>(null);
+  const [dragCardKey, setDragCardKey] = useState<string | null>(null);
   // Guardar ordem dos cards por categoria em localStorage
   function getCardOrder(cat: string): string[] {
     if (typeof window === "undefined") return [];
@@ -787,37 +679,34 @@ export default function EstoquePage() {
     if (typeof window === "undefined") return;
     localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
   }
-  /** Ordena cards: usa ordem manual (drag) se existir, senão ordena por storage numérico */
   function sortByCardOrder(entries: [string, ProdutoEstoque[]][], cat: string): [string, ProdutoEstoque[]][] {
-    // Ordenação natural por storage (256GB < 512GB < 1TB < 2TB)
-    const storageSort = (a: string, b: string) => {
-      const toNum = (s: string) => {
-        const m = s.match(/(\d+)\s*(GB|TB)/i);
-        if (!m) return 0;
-        return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]);
-      };
-      const sa = toNum(a), sb = toNum(b);
-      if (sa !== sb) return sa - sb;
-      return a.localeCompare(b);
-    };
     const order = getCardOrder(cat);
-    if (!order.length) return [...entries].sort(([a], [b]) => storageSort(a, b));
+    if (!order.length) return entries;
     return [...entries].sort(([a], [b]) => {
       const ia = order.indexOf(a);
       const ib = order.indexOf(b);
-      if (ia === -1 && ib === -1) return storageSort(a, b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
       if (ia === -1) return 1;
       if (ib === -1) return -1;
       return ia - ib;
     });
   }
-  function moveCard(cat: string, modeloEntries: [string, ProdutoEstoque[]][], index: number, direction: "up" | "down") {
+  function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
+    if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
+      setDragCardKey(null); return;
+    }
     const keys = modeloEntries.map(([m]) => m);
-    const targetIdx = direction === "up" ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= keys.length) return;
-    [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
+    const fromIdx = keys.indexOf(dragCardRef.current);
+    const toIdx = keys.indexOf(dragOverCardRef.current);
+    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); return; }
+    keys.splice(fromIdx, 1);
+    keys.splice(toIdx, 0, dragCardRef.current);
     saveCardOrder(cat, keys);
-    setCardOrderVersion(v => v + 1);
+    // Forçar re-render
+    setEstoque((prev) => [...prev]);
+    setDragCardKey(null);
+    dragCardRef.current = null;
+    dragOverCardRef.current = null;
   }
 
   // Duplicar produto do estoque
@@ -916,8 +805,6 @@ export default function EstoquePage() {
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "",
   });
-  // Seriais/IMEIs adicionais para quando qnt > 1
-  const [multiSerials, setMultiSerials] = useState<Array<{serial_no: string; imei: string}>>([]);
 
   // Campos estruturados por categoria
   const [spec, setSpec] = useState({
@@ -960,7 +847,7 @@ export default function EstoquePage() {
       case "MAC_MINI":
         return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
       case "MACBOOK": {
-        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
+        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
         return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
@@ -1009,25 +896,12 @@ export default function EstoquePage() {
   useEffect(() => {
     setEditingDetailSerial(false);
     setEditingDetailImei(false);
-    setDetailVenda(null);
     // Extrai Apple ID do observacao se houver (formato "APPLE ID: xxx\n...")
     if (detailProduct?.observacao) {
       const match = detailProduct.observacao.match(/^APPLE ID:\s*(.+?)(\n|$)/im);
       setDetailAppleId(match ? match[1].trim() : "");
     } else {
       setDetailAppleId("");
-    }
-    // Busca venda relacionada quando item está ESGOTADO
-    if (detailProduct?.id && detailProduct.status === "ESGOTADO") {
-      fetch(`/api/vendas?estoque_id=${detailProduct.id}&select=cliente,data,preco_vendido&limit=1`, {
-        headers: { "x-admin-password": password },
-      })
-        .then(r => r.json())
-        .then(json => {
-          const v = Array.isArray(json) ? json[0] : (json?.data?.[0] ?? json?.vendas?.[0]);
-          if (v?.cliente) setDetailVenda({ cliente: v.cliente, data: v.data, preco_vendido: v.preco_vendido });
-        })
-        .catch(() => {});
     }
   }, [detailProduct?.id]);
 
@@ -1050,16 +924,7 @@ export default function EstoquePage() {
     }
   };
 
-  const set = (field: string, value: string) => {
-    setForm((f) => ({ ...f, [field]: value }));
-    if (field === "qnt") {
-      const n = Math.max(0, (parseInt(value) || 1) - 1);
-      setMultiSerials(prev => {
-        if (n <= prev.length) return prev.slice(0, n);
-        return [...prev, ...Array.from({ length: n - prev.length }, () => ({ serial_no: "", imei: "" }))];
-      });
-    }
-  };
+  const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const apiPatch = async (id: string, fields: Record<string, unknown>) => {
     const res = await fetch("/api/estoque", {
@@ -1217,6 +1082,63 @@ export default function EstoquePage() {
   };
 
   // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm continuous tape
+  // Imprimir etiqueta(s) avulsa — pode ser 1 item ou array de items
+  const handlePrintEtiquetaDirect = (produtosParaImprimir: ProdutoEstoque[]) => {
+    if (produtosParaImprimir.length === 0) return;
+    const win = window.open("", "_blank", "width=600,height=400");
+    if (!win) return;
+
+    const labelsHtml = produtosParaImprimir.map((p, idx) => {
+      const serial = p.serial_no || "";
+      const imei = p.imei || "";
+      const qrData = serial || imei || p.id;
+      const cor = p.cor || "";
+      const fornecedor = p.fornecedor || "";
+      return `<div class="label" style="page-break-after:${idx < produtosParaImprimir.length - 1 ? "always" : "auto"}">
+        <table style="width:100%;height:100%"><tr>
+          <td style="width:38%;vertical-align:middle;text-align:center;padding:1mm">
+            <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+          </td>
+          <td style="width:62%;vertical-align:middle;padding:1mm 1.5mm 1mm 0">
+            <div style="font-size:7pt;font-weight:bold;line-height:1.2;margin-bottom:1mm;overflow:hidden">${p.produto}</div>
+            ${cor ? `<div style="font-size:6pt;color:#444;line-height:1.1;margin-bottom:0.5mm">Cor: ${cor}</div>` : ""}
+            ${serial ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.5mm">S/N: ${serial}</div>` : ""}
+            ${imei ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.5mm">IMEI: ${imei}</div>` : ""}
+            ${fornecedor ? `<div style="font-size:5.5pt;color:#666;line-height:1.1">Forn: ${fornecedor}</div>` : ""}
+          </td>
+        </tr></table>
+      </div>`;
+    }).join("");
+
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Etiqueta</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{margin:0;padding:0}
+        body{font-family:Arial,Helvetica,sans-serif}
+        .label{width:62mm;height:29mm;overflow:hidden}
+        table{border-collapse:collapse;table-layout:fixed}
+        canvas{display:block;width:20mm;height:20mm;margin:0 auto}
+        @page{size:62mm 29mm;margin:0}
+        @media print{html,body{width:62mm;margin:0;padding:0}}
+      </style></head><body>
+      ${labelsHtml}
+      <script>
+        document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
+          var data=canvas.getAttribute('data-qr');
+          var qr=qrcode(0,'M');qr.addData(data);qr.make();
+          var size=200;canvas.width=size;canvas.height=size;
+          var ctx=canvas.getContext('2d');var cells=qr.getModuleCount();var cs=size/cells;
+          ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
+          for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
+            if(qr.isDark(r,c))ctx.fillRect(c*cs,r*cs,cs+.5,cs+.5);
+        });
+        window.onload=function(){setTimeout(function(){window.print()},300)};
+      <\/script></body></html>`);
+    win.document.close();
+  };
+
   const handlePrintEtiquetaModal = () => {
     if (!etiquetaModal) return;
     const { item, items, batchItems } = etiquetaModal;
@@ -1227,70 +1149,7 @@ export default function EstoquePage() {
         ? items.map(i => i.item)
         : [item];
 
-    const total = produtosParaImprimir.length;
-    // Up to 3 per row on the 62mm tape; wrap to next row if more
-    const perRow = Math.min(total, 3);
-    // Each QR cell gets equal percentage width
-    const cellWidth = Math.floor(100 / perRow);
-
-    const win = window.open("", "_blank", "width=800,height=400");
-    if (!win) return;
-
-    // Build rows of up to 3 QR codes each
-    let rowsHtml = "";
-    for (let i = 0; i < total; i += 3) {
-      const rowItems = produtosParaImprimir.slice(i, i + 3);
-      const cellsHtml = rowItems.map((p, idx) => {
-        const serial = p.serial_no || "";
-        const imei = p.imei || "";
-        const qrData = serial || imei || p.id;
-        const globalIdx = i + idx;
-        return `<td style="width:${cellWidth}%;text-align:center;vertical-align:top;padding:0">
-          <canvas id="qr-${globalIdx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
-          <div style="font-size:4pt;font-family:monospace;color:#333;margin-top:0;line-height:1">${serial || imei || ""}</div>
-        </td>`;
-      }).join("");
-      rowsHtml += `<tr>${cellsHtml}</tr>`;
-    }
-
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>QR - ${item.produto}</title>
-      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
-      <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0;width:100%;height:100%}
-        body{font-family:Arial,sans-serif}
-        table{width:100%;border-collapse:collapse;table-layout:fixed}
-        td{padding:0}
-        canvas{display:block;margin:0 auto;width:90%;height:auto}
-        @page{size:62mm 25mm;margin:0}
-        @media print{
-          html,body{width:62mm;margin:0;padding:0;overflow:hidden}
-          table{width:100%}
-          canvas{width:90%;height:auto}
-        }
-      </style></head><body>
-      <table>${rowsHtml}</table>
-      <script>
-        document.querySelectorAll('canvas[data-qr]').forEach(function(canvas) {
-          var data = canvas.getAttribute('data-qr');
-          var qr = qrcode(0, 'M');
-          qr.addData(data);
-          qr.make();
-          var size = 200;
-          canvas.width = size; canvas.height = size;
-          var ctx = canvas.getContext('2d');
-          var cells = qr.getModuleCount();
-          var cellSize = size / cells;
-          ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
-          ctx.fillStyle = '#000';
-          for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
-            if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
-        });
-        window.onload=function(){setTimeout(function(){window.print();},300)};
-      <\/script></body></html>`);
-    win.document.close();
-
+    handlePrintEtiquetaDirect(produtosParaImprimir);
     setEtiquetaModal(prev => prev ? { ...prev, printed: true } : null);
   };
 
@@ -1303,22 +1162,17 @@ export default function EstoquePage() {
     const produtosAfetados = new Set<string>();
 
     const dataEntrada = etiquetaModal.dataEntrada || hojeBR();
-    const addExPendenciaTag = (obs: string | null, eraPendencia: boolean) =>
-      eraPendencia ? ((obs || "").includes("[EX_PENDENCIA]") ? obs : ((obs ? obs + " " : "") + "[EX_PENDENCIA]")) : obs;
-
     if (batchItems && batchItems.length > 0) {
       for (const p of batchItems) {
         const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : "NOVO";
-        const novaObs = addExPendenciaTag(p.observacao, p.tipo === "PENDENCIA");
-        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== p.observacao ? { observacao: novaObs } : {}) });
+        await apiPatch(p.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
         produtosAfetados.add(`${p.categoria}|||${getModeloBase(p.produto, p.categoria)}`);
       }
       setMsg(`${batchItems.length} produtos movidos para estoque com etiquetas!`);
       setSelectedACaminho(new Set());
     } else if (items && items.length > 1) {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      const novaObs = addExPendenciaTag(item.observacao, item.tipo === "PENDENCIA");
-      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== item.observacao ? { observacao: novaObs } : {}) });
+      await apiPatch(item.id, { serial_no: items[0].serial, qnt: 1, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       for (let i = 1; i < items.length; i++) {
         await fetch("/api/estoque", {
           method: "POST",
@@ -1327,7 +1181,6 @@ export default function EstoquePage() {
             produto: item.produto, categoria: item.categoria, qnt: 1,
             custo_unitario: item.custo_unitario, cor: item.cor, fornecedor: item.fornecedor,
             serial_no: items[i].serial, tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada,
-            observacao: novaObs,
           }),
         });
       }
@@ -1335,8 +1188,7 @@ export default function EstoquePage() {
       setMsg(`${items.length} unidades movidas para estoque com etiquetas!`);
     } else {
       const novoTipo = item.tipo === "PENDENCIA" ? "SEMINOVO" : item.tipo === "A_CAMINHO" ? getCondicaoFromObs(item) : "NOVO";
-      const novaObs = addExPendenciaTag(item.observacao, item.tipo === "PENDENCIA");
-      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada, ...(novaObs !== item.observacao ? { observacao: novaObs } : {}) });
+      await apiPatch(item.id, { tipo: novoTipo, status: "EM ESTOQUE", data_entrada: dataEntrada });
       produtosAfetados.add(`${item.categoria}|||${getModeloBase(item.produto, item.categoria)}`);
       setMsg(`${item.produto} movido para estoque com etiqueta impressa!`);
     }
@@ -1366,59 +1218,8 @@ export default function EstoquePage() {
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
     return obs
-      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|EX_PENDENCIA)\]/g, "")
+      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA)\]/g, "")
       .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
-      .replace(/\s+/g, " ")
-      .trim() || null;
-  };
-
-  /** Reconstrói o nome do produto trocando a cor (mantém formato com origem para iPhones) */
-  const rebuildNomeComCor = (nome: string, oldCor: string | null, newCor: string | null, cat: string): string => {
-    // Coletar todas as strings de cor que podem aparecer no nome
-    const enValues = Object.values(COR_PT_TO_EN); // strings em inglês
-    const ptKeys = Object.keys(COR_PT_TO_EN); // strings em português
-    const allColorStrings = [...new Set([...enValues, ...ptKeys])].sort((a, b) => b.length - a.length); // mais longos primeiro
-
-    // Remover cor atual do nome
-    let stripped = nome;
-    const oldColorStr = oldCor ? (cat === "IPHONES" ? corToEn(oldCor) : oldCor.toUpperCase()) : null;
-    if (oldColorStr) {
-      stripped = stripped.replace(new RegExp(`\\b${oldColorStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"), "").replace(/\s+/g, " ").trim();
-    } else {
-      // Tentar remover qualquer cor conhecida do nome
-      for (const c of allColorStrings) {
-        const r = new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-        if (r.test(stripped)) { stripped = stripped.replace(r, "").replace(/\s+/g, " ").trim(); break; }
-      }
-    }
-
-    if (!newCor) return stripped;
-    const newColorStr = cat === "IPHONES" ? corToEn(newCor) : newCor.toUpperCase();
-
-    // Para iPhones: cor vai ANTES da sigla de origem (ex: "HN", "LL", "BE" no final)
-    if (cat === "IPHONES") {
-      const originMatch = stripped.match(/\s+([A-Z]{2,3})$/);
-      if (originMatch) {
-        return stripped.replace(/\s+([A-Z]{2,3})$/, ` ${newColorStr} ${originMatch[1]}`);
-      }
-    }
-    return `${stripped} ${newColorStr}`;
-  };
-
-  /** Converte tags internas do observacao em texto legível para exibição */
-  const formatObsDisplay = (obs: string | null): string | null => {
-    if (!obs) return null;
-    return obs
-      .replace(/\[EX_PENDENCIA\]/g, "")
-      .replace(/\[NAO_ATIVADO\]/g, "")
-      .replace(/\[SEMINOVO\]/g, "")
-      .replace(/\[GRADE_APLUS\]/g, "A+")
-      .replace(/\[GRADE_AB\]/g, "AB")
-      .replace(/\[GRADE_A\]/g, "A")
-      .replace(/\[GRADE_B\]/g, "B")
-      .replace(/\[COM_CAIXA\]/g, "Com Caixa")
-      .replace(/\[COM_CABO\]/g, "Com Cabo")
-      .replace(/\[COM_FONTE\]/g, "Com Fonte")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
@@ -1481,62 +1282,20 @@ export default function EstoquePage() {
   const handleSubmit = async (keepForm = false) => {
     const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
-
-    const totalQnt = parseInt(form.qnt) || 1;
-    const isACaminho = form.tipo === "A_CAMINHO";
-    const isIphone = form.categoria === "IPHONES";
-
-    // Validar serial/IMEI obrigatórios para produtos A CAMINHO com qty > 1
-    if (isACaminho && totalQnt > 1) {
-      if (!form.serial_no) { setMsg("Preencha o serial da Unidade 1"); return; }
-      if (isIphone && !form.imei) { setMsg("Preencha o IMEI da Unidade 1"); return; }
-      for (let i = 0; i < multiSerials.length; i++) {
-        if (!multiSerials[i].serial_no) { setMsg(`Preencha o serial da Unidade ${i + 2}`); return; }
-        if (isIphone && !multiSerials[i].imei) { setMsg(`Preencha o IMEI da Unidade ${i + 2}`); return; }
-      }
-    }
-
-    // Se há múltiplos seriais preenchidos, criar registros individuais (qnt=1 cada)
-    const filledExtras = multiSerials.filter(s => s.serial_no || s.imei);
-    const hasMultiSerials = filledExtras.length > 0 && totalQnt > 1;
-
-    const basePayload = {
-      produto: nomeProduto, categoria: form.categoria,
-      custo_unitario: parseFloat(form.custo_unitario) || 0,
-      status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
-      cor: form.cor || null, observacao: form.observacao || null,
-      tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
-      cliente: form.cliente || null, fornecedor: form.fornecedor || null,
-      data_entrada: hojeBR(),
-    };
-
-    // Todos os registros a criar: unidade 1 + extras
-    const toCreate: Array<Record<string, unknown>> = hasMultiSerials
-      ? [
-          { ...basePayload, qnt: 1, imei: form.imei || null, serial_no: form.serial_no || null },
-          ...filledExtras.map(s => ({ ...basePayload, qnt: 1, imei: s.imei || null, serial_no: s.serial_no || null })),
-          // Se sobrou qnt sem serial, criar 1 registro com o restante
-          ...(totalQnt - 1 - filledExtras.length > 0
-            ? [{ ...basePayload, qnt: totalQnt - 1 - filledExtras.length }]
-            : []),
-        ]
-      : [{ ...basePayload, qnt: totalQnt, imei: form.imei || null, serial_no: form.serial_no || null }];
-
     const res = await fetch("/api/estoque", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-      body: JSON.stringify(toCreate[0]),
+      body: JSON.stringify({
+        produto: nomeProduto, categoria: form.categoria,
+        qnt: parseInt(form.qnt) || 0, custo_unitario: parseFloat(form.custo_unitario) || 0,
+        status: form.tipo === "A_CAMINHO" ? "A CAMINHO" : form.tipo === "PENDENCIA" ? "PENDENTE" : "EM ESTOQUE",
+        cor: form.cor || null, observacao: form.observacao || null,
+        tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
+        cliente: form.cliente || null, fornecedor: form.fornecedor || null,
+        imei: form.imei || null, serial_no: form.serial_no || null,
+        data_entrada: hojeBR(),
+      }),
     });
-    // Criar registros extras (se multi-serial)
-    if (toCreate.length > 1) {
-      for (let i = 1; i < toCreate.length; i++) {
-        await fetch("/api/estoque", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-          body: JSON.stringify(toCreate[i]),
-        });
-      }
-    }
     const json = await res.json();
     if (json.ok) {
       // Se houve merge (preço médio), mostrar mensagem detalhada
@@ -1600,11 +1359,9 @@ export default function EstoquePage() {
       if (keepForm) {
         // Duplicar: mantém specs, cor, fornecedor, custo — limpa só IMEI, Serial e quantidade
         setForm((f) => ({ ...f, imei: "", serial_no: "", qnt: "1" }));
-        setMultiSerials([]);
         setMsg("Produto adicionado! Preencha IMEI/Serial do proximo.");
       } else {
         setForm((f) => ({ ...f, produto: "", qnt: "1", custo_unitario: "", cor: "", observacao: "", bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "" }));
-        setMultiSerials([]);
         setSpec({
           ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
@@ -1672,10 +1429,6 @@ export default function EstoquePage() {
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
-  // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
-  const pendenciasMovidas = estoque.filter((p) =>
-    p.tipo === "SEMINOVO" && p.observacao?.includes("[EX_PENDENCIA]")
-  );
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
@@ -1704,16 +1457,13 @@ export default function EstoquePage() {
     return true;
   });
 
-  // Agrupar por categoria (ou por cliente/fornecedor nas pendências), depois por modelo base
+  // Agrupar por categoria, depois por modelo base
   const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
   filtered.forEach((p) => {
-    const catKey = tab === "pendencias"
-      ? (p.fornecedor || p.cliente || "Sem fornecedor").toUpperCase()
-      : p.categoria;
-    if (!byCat[catKey]) byCat[catKey] = {};
+    if (!byCat[p.categoria]) byCat[p.categoria] = {};
     const modelo = getModeloBase(p.produto, p.categoria);
-    if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
-    byCat[catKey][modelo].push(p);
+    if (!byCat[p.categoria][modelo]) byCat[p.categoria][modelo] = [];
+    byCat[p.categoria][modelo].push(p);
   });
 
   // KPIs
@@ -1730,7 +1480,6 @@ export default function EstoquePage() {
   const isPendenciasTab = tab === "pendencias";
   const isACaminhoTab = tab === "acaminho";
   const isEditableItemTab = isPendenciasTab || isACaminhoTab;
-  const isBateriaEditable = isEditableItemTab || tab === "seminovos" || tab === "estoque";
 
   // renderProductRow removido — agora renderizado inline com agrupamento por produto/cor
 
@@ -2212,7 +1961,7 @@ export default function EstoquePage() {
       {/* ===== ABA REPOSIÇÃO ===== */}
       {tab === "reposicao" ? (() => {
         const stripOrigemRepo = (nome: string) => nome
-          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
+          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
           .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
           .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
           .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
@@ -2617,44 +2366,17 @@ export default function EstoquePage() {
             );
           })()}
 
-          {/* IMEI e Serial — 1 par por unidade quando qnt > 1 */}
-          <div className="space-y-2">
-            {(() => {
-              const qnt = parseInt(form.qnt) || 1;
-              const obrigatorio = form.tipo === "A_CAMINHO" && qnt > 1;
-              const isIphoneForm = form.categoria === "IPHONES";
-              const rows = [{ serial_no: form.serial_no, imei: form.imei, label: qnt > 1 ? "Unidade 1" : "" }];
-              multiSerials.forEach((s, i) => rows.push({ ...s, label: `Unidade ${i + 2}` }));
-              return rows.map((row, i) => (
-                <div key={i} className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className={labelCls}>IMEI{row.label ? ` — ${row.label}` : ""}{obrigatorio && isIphoneForm && <span className="text-red-500 ml-0.5">*</span>}</p>
-                    <input
-                      value={row.imei}
-                      onChange={(e) => {
-                        if (i === 0) set("imei", e.target.value);
-                        else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, imei: e.target.value } : s));
-                      }}
-                      placeholder={obrigatorio && isIphoneForm ? "Obrigatório" : "Opcional"}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <p className={labelCls}>Serial No{row.label ? ` — ${row.label}` : ""}{obrigatorio && <span className="text-red-500 ml-0.5">*</span>} {i === 0 && ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo...</span>}</p>
-                    <input
-                      value={row.serial_no}
-                      onChange={(e) => {
-                        if (i === 0) set("serial_no", e.target.value);
-                        else setMultiSerials(prev => prev.map((s, j) => j === i - 1 ? { ...s, serial_no: e.target.value } : s));
-                      }}
-                      placeholder={obrigatorio ? "Obrigatório" : "Opcional"}
-                      className={inputCls}
-                      onPaste={i === 0 ? (e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading) : undefined}
-                    />
-                  </div>
-                </div>
-              ));
-            })()}
+          {/* IMEI e Serial */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className={labelCls}>IMEI</p>
+              <input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional — preencha quando chegar" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Serial No {ocrLoading && <span className="text-xs text-orange-500 ml-1">Lendo serial...</span>}</p>
+              <input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional — cole imagem ou digite" className={inputCls}
+                onPaste={(e) => handleSerialPaste(e, (v) => set("serial_no", v), setOcrLoading)} />
+            </div>
           </div>
 
           {/* Custo e Fornecedor */}
@@ -2749,19 +2471,10 @@ export default function EstoquePage() {
           {loading ? (
             <div className="py-12 text-center text-[#86868B]">Carregando...</div>
           ) : tab === "acaminho" ? (
-            /* ── PLANILHA PRODUTOS A CAMINHO (pendentes + recebidos) ── */
+            /* ── PLANILHA PRODUTOS A CAMINHO (só pendentes) ── */
             (() => {
-              // Inclui itens pendentes E os já recebidos (pedidosRecebidos), filtrados por data e categoria
-              const recebidosFiltrados = pedidosRecebidos.filter(p => {
-                if (filterDataCompra && p.data_compra !== filterDataCompra) return false;
-                if (filterCat && p.categoria !== filterCat) return false;
-                if (search) {
-                  const s = search.toLowerCase();
-                  if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s))) return false;
-                }
-                return true;
-              });
-              const allItems = [...filtered, ...recebidosFiltrados];
+              // Só itens que realmente estão a caminho (sem recebidos)
+              const allItems = [...filtered];
               const byDate: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
                 const d = p.data_compra || "Sem data";
@@ -2799,16 +2512,23 @@ export default function EstoquePage() {
                             )}
                           </div>
                         </div>
+                        {/* Barra de ações em lote */}
+                        {selectedACaminho.size > 0 && (
+                          <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-[#FFF5EB] border border-[#E8740E]/30"}`}>
+                            <span className={`text-xs font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{selectedACaminho.size} selecionado{selectedACaminho.size > 1 ? "s" : ""}</span>
+                            <button onClick={() => {
+                              const itens = pendentes.filter(p => selectedACaminho.has(p.id));
+                              if (itens.length === 0) return;
+                              handlePrintEtiquetaDirect(itens);
+                            }} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️ Imprimir Etiquetas</button>
+                            <button onClick={handleMoverSelecionados} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors">📦 Mover → Estoque</button>
+                            <button onClick={() => setSelectedACaminho(new Set())} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"} transition-colors`}>Limpar</button>
+                          </div>
+                        )}
                         <table className="w-full">
                           <thead>
                             <tr className={`text-[10px] font-bold uppercase tracking-wider border-b ${dm ? "border-[#3A3A3C] text-[#6E6E73]" : "border-[#F0F0F5] text-[#86868B]"}`}>
-                              {isAdmin && <th className="pl-4 pr-1 py-2 w-8">
-                                <input type="checkbox" checked={items.filter(i => i.tipo === "A_CAMINHO").every(i => selectedACaminho.has(i.id)) && items.some(i => i.tipo === "A_CAMINHO")} onChange={() => {
-                                  const pending = items.filter(i => i.tipo === "A_CAMINHO");
-                                  const allSel = pending.every(i => selectedACaminho.has(i.id));
-                                  setSelectedACaminho(prev => { const n = new Set(prev); pending.forEach(i => allSel ? n.delete(i.id) : n.add(i.id)); return n; });
-                                }} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
-                              </th>}
+                              <th className="px-2 py-2 w-8"><input type="checkbox" checked={pendentes.length > 0 && pendentes.every(p => selectedACaminho.has(p.id))} onChange={() => { if (pendentes.every(p => selectedACaminho.has(p.id))) { setSelectedACaminho(new Set()); } else { setSelectedACaminho(new Set(pendentes.map(p => p.id))); } }} className="accent-[#E8740E]" /></th>
                               <th className="px-4 py-2 text-left">Modelo</th>
                               <th className="px-4 py-2 text-center w-16">Qtd.</th>
                               <th className="px-4 py-2 text-right w-28">Valor unit.</th>
@@ -2822,30 +2542,31 @@ export default function EstoquePage() {
                               return (
                                 <tr key={p.id}
                                   className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${
+                                    selectedACaminho.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") :
                                     isRecebido
                                       ? (dm ? "hover:bg-green-900/10" : "hover:bg-green-50")
                                       : (dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]")
-                                  }`}
-                                  onClick={() => setDetailProduct(p)}>
-                                  {isAdmin && <td className="pl-4 pr-1 py-2.5" onClick={(e) => e.stopPropagation()}>
-                                    {!isRecebido && <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />}
-                                  </td>}
-                                  <td className={`px-4 py-2.5 text-sm font-semibold ${isRecebido ? (dm ? "text-[#98989D]" : "text-[#86868B]") : textPrimary}`}>
+                                  }`}>
+                                  <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                    {!isRecebido && <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => { setSelectedACaminho(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }} className="accent-[#E8740E]" />}
+                                  </td>
+                                  <td className={`px-4 py-2.5 text-sm font-semibold ${isRecebido ? (dm ? "text-[#98989D]" : "text-[#86868B]") : textPrimary}`} onClick={() => setDetailProduct(p)}>
                                     {displayNomeProduto(p.produto, p.cor, p.categoria)}
                                     {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
                                     {isRecebido
-                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{(p.data_entrada || p.data_compra) && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada || p.data_compra || "")}</span>}</>
+                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{p.data_entrada && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada)}</span>}</>
                                       : (p.serial_no || p.imei) && (
                                         <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                           ✅ {p.serial_no || p.imei}
+                                          <button onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaDirect([p]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors" title="Imprimir etiqueta">🏷️</button>
                                         </span>
                                       )
                                     }
                                   </td>
-                                  <td className={`px-4 py-2.5 text-center text-sm font-bold ${isRecebido ? "text-green-600" : textPrimary}`}>{p.qnt}</td>
-                                  <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
-                                  <td className={`px-4 py-2.5 text-sm ${textSecondary}`}>{p.fornecedor || p.cliente || "—"}</td>
-                                  <td className={`px-4 py-2.5 text-right text-sm font-bold ${isRecebido ? (dm ? "text-green-500/60" : "text-green-600/60") : textPrimary}`}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
+                                  <td className={`px-4 py-2.5 text-center text-sm font-bold ${isRecebido ? "text-green-600" : textPrimary}`} onClick={() => setDetailProduct(p)}>{p.qnt}</td>
+                                  <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                                  <td className={`px-4 py-2.5 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || p.cliente || "—"}</td>
+                                  <td className={`px-4 py-2.5 text-right text-sm font-bold ${isRecebido ? (dm ? "text-green-500/60" : "text-green-600/60") : textPrimary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
                                 </tr>
                               );
                             })}
@@ -2873,39 +2594,14 @@ export default function EstoquePage() {
             })()
           ) : !filterCat && ["estoque", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
-            (() => {
-              // Reverse map: EN → PT for display
-              const COR_EN_TO_PT: Record<string, string> = {
-                ...Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])),
-                // Overrides de display: EN → PT simplificado
-                "TEAL": "VERDE",
-                "ULTRAMARINE": "AZUL",
-                "CLOUD WHITE": "BRANCO",
-                "SKY BLUE": "AZUL CÉU",
-                "SPACE BLACK": "PRETO ESPACIAL",
-              };
-              const corToPt = (cor: string) => COR_EN_TO_PT[cor.toUpperCase()] || cor;
-              return (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
-                const sourceList = tab === "pendencias" ? [...pendencias, ...pendenciasMovidas] : emEstoque;
+                const sourceList = tab === "pendencias" ? pendencias : emEstoque;
                 const items = sourceList.filter((p) => p.categoria === cat.key);
                 const count = items.length;
                 const units = items.reduce((s, p) => s + p.qnt, 0);
                 const valorTotal = items.reduce((s, p) => s + (p.custo_unitario || 0) * p.qnt, 0);
                 if (count === 0) return null;
-                // Top models breakdown for preview
-                const modelMap: Record<string, Record<string, number>> = {};
-                items.forEach(p => {
-                  const m = p.produto || "—";
-                  if (!modelMap[m]) modelMap[m] = {};
-                  const corPt = corToPt(p.cor || "—");
-                  modelMap[m][corPt] = (modelMap[m][corPt] || 0) + p.qnt;
-                });
-                const topModels = Object.entries(modelMap)
-                  .map(([nome, colors]) => ({ nome, colors, total: Object.values(colors).reduce((s, n) => s + n, 0) }))
-                  .sort((a, b) => b.total - a.total)
-                  .slice(0, 4);
                 const isEditing = editingCatName === cat.key;
                 return (
                   <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden hover:border-[#E8740E] hover:shadow-md transition-all group relative cursor-pointer`} onClick={() => !isEditing && setFilterCat(cat.key)}>
@@ -2943,29 +2639,8 @@ export default function EstoquePage() {
                           )}
                         </div>
                       </div>
-                      {/* Top models preview */}
-                      {topModels.length > 0 && (
-                        <div className={`mt-2 space-y-1.5 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"} pt-2`}>
-                          {topModels.map(({ nome, colors, total }) => (
-                            <div key={nome} className="flex flex-col gap-0.5">
-                              <div className="flex items-center justify-between gap-1">
-                                <span className={`text-[11px] font-semibold ${textPrimary} truncate leading-tight`} title={nome}>{nome}</span>
-                                <span className={`text-[10px] font-bold shrink-0 ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{total}u</span>
-                              </div>
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                                {Object.entries(colors).sort(([a],[b]) => a.localeCompare(b)).map(([cor, qty]) => (
-                                  <span key={cor} className={`text-[9.5px] ${textMuted}`}>{cor}: <span className="font-semibold">{qty}</span></span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                          {Object.keys(modelMap).length > 4 && (
-                            <span className={`text-[9.5px] ${textMuted} italic`}>+{Object.keys(modelMap).length - 4} modelos</span>
-                          )}
-                        </div>
-                      )}
                       {/* Stats */}
-                      <div className={`flex items-center justify-between pt-2 mt-1 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
+                      <div className={`flex items-center justify-between pt-2 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
                         <div className="flex items-center gap-2">
                           <span className={`text-[13px] font-bold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{units} un.</span>
                           <span className={`text-[11px] ${textMuted}`}>· {count} mod.</span>
@@ -3020,8 +2695,6 @@ export default function EstoquePage() {
                 );
               })()}
             </div>
-              );
-            })()
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
               <p className={textSecondary}>Nenhum produto encontrado.</p>
@@ -3029,7 +2702,7 @@ export default function EstoquePage() {
           ) : (
             <>
             {/* Barra de seleção em lote — A Caminho (admin only) */}
-            {isACaminhoTab && isAdmin && filtered.length > 0 && (
+            {false && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
                 <input
                   type="checkbox"
@@ -3056,47 +2729,6 @@ export default function EstoquePage() {
                       Mover {selectedACaminho.size} → Estoque
                     </button>
                     <button
-                      onClick={() => {
-                        const itens = filtered.filter(p => selectedACaminho.has(p.id));
-                        if (!itens.length) return;
-                        const fmtCusto = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 0 });
-                        const fmtDateEtq = (d: string) => { try { const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}`; } catch { return d; } };
-                        const labels = itens.flatMap(p => Array.from({ length: p.qnt || 1 }, () => `
-                          <div class="label">
-                            <div class="produto">${p.produto}</div>
-                            ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
-                            <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
-                            ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
-                            ${p.data_compra ? `<div class="data">${fmtDateEtq(p.data_compra)}</div>` : ""}
-                          </div>
-                        `)).join("");
-                        const win = window.open("", "_blank", "width=400,height=400");
-                        if (win) {
-                          win.document.write(`<!DOCTYPE html><html><head>
-                            <title>Etiquetas (${itens.length} produtos)</title>
-                            <style>
-                              *{margin:0;padding:0;box-sizing:border-box}
-                              body{font-family:Arial,sans-serif}
-                              .label{text-align:center;padding:3mm 4mm 2mm;page-break-after:always;width:62mm;height:45mm;display:flex;flex-direction:column;justify-content:center;align-items:center}
-                              .label:last-child{page-break-after:auto}
-                              .produto{font-size:11pt;font-weight:bold;line-height:1.2}
-                              .cor{font-size:8pt;color:#333;margin-top:1mm}
-                              .custo{font-size:12pt;font-weight:bold;color:#E8740E;margin-top:2mm}
-                              .fornecedor{font-size:7pt;color:#555;margin-top:1mm;text-transform:uppercase}
-                              .data{font-size:6pt;color:#888;margin-top:1mm}
-                              @page{size:62mm 45mm;margin:0}
-                            </style></head><body>${labels}
-                            <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
-                          </body></html>`);
-                          win.document.close();
-                        }
-                      }}
-                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                      Etiquetas ({selectedACaminho.size})
-                    </button>
-                    <button
                       onClick={async () => {
                         if (!confirm(`Excluir ${selectedACaminho.size} produto(s) selecionado(s)?`)) return;
                         const ids = [...selectedACaminho];
@@ -3117,25 +2749,19 @@ export default function EstoquePage() {
             {Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                  {tab === "pendencias" ? (
-                    <span className="flex items-center gap-2">
-                      <span className={`text-sm ${textSecondary}`}>👤</span>
-                      {cat}
-                    </span>
-                  ) : (dynamicCatLabels[cat] || cat)}
+                  {dynamicCatLabels[cat] || cat}
                   <span className={`text-xs font-normal ${textSecondary}`}>
-                    {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
+                    {Object.values(modelos).flat().length} produtos | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
                 </h2>
 
                 {(() => {
-                  const modeloEntriesRaw = Object.entries(modelos);
+                  const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
-                  return modeloEntries.map(([modelo, items], cardIdx) => {
-                  // Sub-agrupar por nome do produto (sem origem, e-sim, chip info)
+                  return modeloEntries.map(([modelo, items]) => {
+                  // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|JA|BE|BR|HN|IN|ZA|BZ|ZP|ZD|LZ|CH|N|E|QL|AA)(?=\s|$|\()/gi, "")
-                    .replace(/\s*\([^)]*\)/g, "")  // Remove (JPA), (EUA), (IN), (BR), etc.
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
@@ -3145,7 +2771,7 @@ export default function EstoquePage() {
                   items.forEach((p) => {
                     // No estoque (lacrados): ocultar itens com qnt=0
                     if (tab === "estoque" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto).replace(/\bMACMINI\b/gi, "MAC MINI");
+                    const groupKey = stripOrigem(p.produto);
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
@@ -3166,11 +2792,17 @@ export default function EstoquePage() {
                     });
                   // No estoque: ocultar card inteiramente se todos os itens foram filtrados
                   if (tab === "estoque" && produtoEntries.length === 0) return null;
+                  const isCardDragging = dragCardKey === modelo;
 
                   return (
                   <div
                     key={modelo}
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${borderCard}`}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
+                    onDragEnter={(e) => { e.stopPropagation(); dragOverCardRef.current = modelo; }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E]" : borderCard}`}
                   >
                     <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
@@ -3197,33 +2829,12 @@ export default function EstoquePage() {
                             >✏️</button>
                           </h3>
                         )}
-                        {modeloEntries.length > 1 && (
-                          <div className="flex flex-col gap-0 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              disabled={cardIdx === 0}
-                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "up")}
-                              className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === 0 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`}
-                              title="Mover para cima"
-                            >▲</button>
-                            <button
-                              disabled={cardIdx === modeloEntries.length - 1}
-                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "down")}
-                              className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === modeloEntries.length - 1 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`}
-                              title="Mover para baixo"
-                            >▼</button>
-                          </div>
-                        )}
                       </div>
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
-                          // Agrupar por cor pra mostrar resumo no header (em português)
-                          const _enToPt: Record<string, string> = { ...Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])), "TEAL": "VERDE", "ULTRAMARINE": "AZUL", "CLOUD WHITE": "BRANCO", "SKY BLUE": "AZUL CÉU", "SPACE BLACK": "PRETO ESPACIAL" };
+                          // Agrupar por cor pra mostrar resumo no header
                           const colorSummary: Record<string, number> = {};
-                          items.forEach(p => {
-                            const raw = (p.cor || "—").toUpperCase();
-                            const c = _enToPt[raw] || raw;
-                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
-                          });
+                          items.forEach(p => { const c = p.cor || "—"; colorSummary[c] = (colorSummary[c] || 0) + p.qnt; });
                           return (
                             <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
                               {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
@@ -3310,48 +2921,7 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {(() => {
-                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
-                                            const editKey = `${prodItems[0]?.id}_corpt`;
-                                            if (editingCorPT[editKey] !== undefined) {
-                                              return (
-                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
-                                                  <input
-                                                    value={editingCorPT[editKey]}
-                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                                    onKeyDown={async (e) => {
-                                                      if (e.key === "Enter") {
-                                                        const newCor = editingCorPT[editKey];
-                                                        if (newCor) {
-                                                          await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
-                                                          setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
-                                                        }
-                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                      }
-                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                    }}
-                                                    className="w-20 px-1 py-0 rounded border border-[#0071E3] text-[10px] bg-[#1A1A1A] text-white/80"
-                                                    autoFocus
-                                                  />
-                                                  <button onClick={async () => {
-                                                    const newCor = editingCorPT[editKey];
-                                                    if (newCor) {
-                                                      await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
-                                                      setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
-                                                    }
-                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                  }} className="text-[9px] text-[#E8740E] font-bold">OK</button>
-                                                </span>
-                                              );
-                                            }
-                                            return ptLabel ? (
-                                              <span
-                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel })); }}
-                                                title="Clique para editar cor"
-                                              >{ptLabel}</span>
-                                            ) : null;
-                                          })()}
+                                          {corSoPT(prodItems[0]?.cor, prodItems[0]?.produto) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor, prodItems[0]?.produto)}</span>}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
@@ -3484,8 +3054,6 @@ export default function EstoquePage() {
                                           <div className="flex flex-wrap gap-1 items-center">
                                             {/* Condição: Lacrado / Usado — para A_CAMINHO ler do observacao */}
                                             {(() => {
-                                              // Pendência já movida para estoque
-                                              if (tab === "pendencias" && p.tipo === "SEMINOVO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">✅ No estoque</span>;
                                               const cond = p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
                                               if (cond === "SEMINOVO" || cond === "PENDENCIA") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-100 text-yellow-700">Usado</span>;
                                               if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
@@ -3493,12 +3061,12 @@ export default function EstoquePage() {
                                             })()}
                                             {/* Bateria (só seminovo/pendência) */}
                                             {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                              isBateriaEditable && isEditingField(p.id, "bateria") ? (
+                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
                                                 <div className="flex items-center gap-0.5">
                                                   <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : isBateriaEditable ? (
+                                              ) : isEditableItemTab ? (
                                                 <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
@@ -3514,10 +3082,10 @@ export default function EstoquePage() {
                                               </div>
                                             ) : isEditableItemTab ? (
                                               <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
-                                                {formatObsDisplay(p.observacao) || "+ Origem"}
+                                                {p.observacao || "+ Origem"}
                                               </button>
                                             ) : p.observacao ? (
-                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{formatObsDisplay(p.observacao)}</span>
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{p.observacao}</span>
                                             ) : null}
                                           </div>
                                           {!isEditableItemTab && p.data_entrada && (
@@ -3832,7 +3400,6 @@ export default function EstoquePage() {
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
                 <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
               </div>
-              {msg && <div className={`mx-4 mt-3 px-3 py-2 rounded-lg text-xs font-medium ${msg.includes("❌") || msg.includes("Erro") ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}>{msg}</div>}
               {/* Produto — editável para pendências */}
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-start justify-between mb-4">
@@ -3921,9 +3488,7 @@ export default function EstoquePage() {
                                   body: JSON.stringify({ action: "sync_by_cliente_data", cliente: p.fornecedor, data_compra: p.data_entrada || p.data_compra, produto_antigo: nomeAntigo, produto: novoNome, cor: novaCor, categoria: novaCategoria }),
                                 });
                                 const json = await res.json();
-                                vendaMsg = json.updated > 0
-                                  ? ` ${json.updated} venda(s) sincronizada(s).`
-                                  : ` Nenhuma venda encontrada para "${p.fornecedor}" (data: ${p.data_entrada || p.data_compra || "—"}).`;
+                                vendaMsg = json.updated > 0 ? ` ${json.updated} venda(s) sincronizada(s).` : " Nenhuma venda vinculada encontrada.";
                               }
                               setMsg(`✅ Produto recategorizado!${vendaMsg}`);
                               setRecatMode(false);
@@ -3938,44 +3503,28 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones */}
-                {p.categoria === "IPHONES" && (() => {
-                  const origemDetected = p.origem || extractOrigem(p.produto, p.observacao);
-                  if (canEdit) {
-                    // Editável em pendências/a caminho
-                    return (
-                      <div className="mb-3">
-                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
-                        <select
-                          value={p.origem ?? origemDetected ?? ""}
-                          onChange={async (e) => {
-                            const val = e.target.value || null;
-                            try {
-                              await apiPatch(p.id, { origem: val });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
-                              setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                              setMsg("✅ Origem atualizada!");
-                            } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                          }}
-                          className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                        >
-                          <option value="">— Sem origem —</option>
-                          {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      </div>
-                    );
-                  }
-                  // Read-only no estoque
-                  if (origemDetected) {
-                    return (
-                      <div className="mb-3">
-                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
-                        <p className={`text-[13px] ${mP} mt-0.5`}>{origemDetected}</p>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                {/* Origem — apenas para iPhones, campo separado do nome */}
+                {p.categoria === "IPHONES" && isAdmin && (
+                  <div className="mb-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
+                    <select
+                      value={p.origem ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value || null;
+                        try {
+                          await apiPatch(p.id, { origem: val });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                          setMsg("✅ Origem atualizada!");
+                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                      }}
+                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                    >
+                      <option value="">— Sem origem —</option>
+                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     const qnt = p.qnt || 1;
@@ -4122,10 +3671,10 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — editável só em pendências/a caminho, read-only no estoque */}
+                  {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {canEdit ? (() => {
+                    {(canEdit || isAdmin) ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
@@ -4134,12 +3683,9 @@ export default function EstoquePage() {
                           value={p.cor || ""}
                           onChange={async (e) => {
                             const val = e.target.value || null;
-                            const novoNome = rebuildNomeComCor(p.produto, p.cor, val, p.categoria || "");
-                            const patch: Record<string, unknown> = { cor: val };
-                            if (novoNome !== p.produto) patch.produto = novoNome;
-                            await apiPatch(p.id, patch);
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val, produto: novoNome } : x));
-                            setDetailProduct({ ...p, cor: val, produto: novoNome });
+                            await apiPatch(p.id, { cor: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
+                            setDetailProduct({ ...p, cor: val });
                             setMsg("Cor atualizada!");
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -4155,12 +3701,9 @@ export default function EstoquePage() {
                           onBlur={async (e) => {
                             const val = e.target.value.trim().toUpperCase() || null;
                             if (val !== (p.cor || null)) {
-                              const novoNome = rebuildNomeComCor(p.produto, p.cor, val, p.categoria || "");
-                              const patch: Record<string, unknown> = { cor: val };
-                              if (novoNome !== p.produto) patch.produto = novoNome;
-                              await apiPatch(p.id, patch);
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val, produto: novoNome } : x));
-                              setDetailProduct({ ...p, cor: val, produto: novoNome });
+                              await apiPatch(p.id, { cor: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
+                              setDetailProduct({ ...p, cor: val });
                               setMsg("Cor atualizada!");
                             }
                           }}
@@ -4421,7 +3964,7 @@ export default function EstoquePage() {
                             className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold border transition-colors ${dm ? "bg-[#3A3A3C] border-[#E8740E]/60 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "bg-[#FFF3E8] border-[#E8740E] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                            Ver perfil
+                            Ver perfil do cliente
                           </button>
                         )}
                       </div>
@@ -4462,37 +4005,6 @@ export default function EstoquePage() {
                   ) : <p className={`text-[13px] ${mS} mt-0.5`}>—</p>}
                 </div>
               </div>
-              {/* Vendido para — exibido quando ESGOTADO */}
-              {p.status === "ESGOTADO" && (
-                <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
-                  <p className={`text-xs font-bold ${mP} mb-3`}>Saída</p>
-                  {detailVenda ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Vendido Para</p>
-                        <button
-                          onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(detailVenda.cliente)}`; }}
-                          className={`text-[13px] mt-0.5 font-medium text-[#E8740E] hover:underline text-left`}
-                        >
-                          {detailVenda.cliente}<span className={`ml-1 text-[10px] ${mS}`}>↗</span>
-                        </button>
-                      </div>
-                      <div>
-                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data da Venda</p>
-                        <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(detailVenda.data)}</p>
-                      </div>
-                      {detailVenda.preco_vendido > 0 && (
-                        <div>
-                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Venda</p>
-                          <p className={`text-[13px] font-bold text-[#E8740E] mt-0.5`}>{fmt(detailVenda.preco_vendido)}</p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className={`text-[12px] ${mS}`}>Buscando...</p>
-                  )}
-                </div>
-              )}
               {/* Operações Relacionadas */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -4517,12 +4029,7 @@ export default function EstoquePage() {
                               }
                               try {
                                 const novoTipo = p.tipo === "PENDENCIA" ? "SEMINOVO" : p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
-                                const obsComTag = p.tipo === "PENDENCIA"
-                                  ? ((p.observacao || "").includes("[EX_PENDENCIA]") ? p.observacao : ((p.observacao ? p.observacao + " " : "") + "[EX_PENDENCIA]"))
-                                  : p.observacao;
-                                const patchBody: Record<string, unknown> = { id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() };
-                                if (obsComTag !== p.observacao) patchBody.observacao = obsComTag;
-                                const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify(patchBody) });
+                                const res = await fetch("/api/estoque", { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, status: "EM ESTOQUE", tipo: novoTipo, data_entrada: moveConfirmData || hojeBR() }) });
                                 const json = await res.json();
                                 if (json.error) { setMsg("Erro: " + json.error); return; }
                                 setMsg("✅ Movido para estoque!");

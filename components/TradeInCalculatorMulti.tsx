@@ -7,11 +7,13 @@ import { formatBRL } from "@/lib/calculations";
 import { getTemaTI, temaTICSSVars } from "@/lib/temas-tradein";
 import { useTradeInAnalytics } from "@/lib/useTradeInAnalytics";
 import StepBar from "./StepBar";
-import StepUsedDevice from "./StepUsedDevice";
+import StepUsedDeviceMulti from "./StepUsedDeviceMulti";
 import StepNewDevice from "./StepNewDevice";
 import StepClientData from "./StepClientData";
 import StepQuote from "./StepQuote";
 import ExitIntentPopup from "./ExitIntentPopup";
+
+type MultiDeviceType = DeviceType | "watch";
 
 interface UsedData {
   usedValues: UsedDeviceValue[];
@@ -19,7 +21,7 @@ interface UsedData {
   modelDiscounts: Record<string, ModelDiscounts>;
 }
 
-// Fallback hardcoded — será sobrescrito por tradeinConfig.whatsapp_vendedores se existir
+// Fallback hardcoded — sera sobrescrito por tradeinConfig.whatsapp_vendedores se existir
 const DEFAULT_VENDEDOR_WHATSAPP: Record<string, string> = {
   andre:    "5521967442665",
   bianca:   "5521972461357",
@@ -29,7 +31,14 @@ const DEFAULT_VENDEDOR_WHATSAPP: Record<string, string> = {
   whatsapp: "5521972461357",
 };
 
-export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }: { vendedor?: string | null; temaParam?: string | null }) {
+const DEVICE_OPTIONS: { type: MultiDeviceType; emoji: string; label: string }[] = [
+  { type: "iphone", emoji: "\u{1F4F1}", label: "iPhone" },
+  { type: "ipad", emoji: "\u{1F4F1}", label: "iPad" },
+  { type: "macbook", emoji: "\u{1F4BB}", label: "MacBook" },
+  { type: "watch", emoji: "\u{231A}", label: "Apple Watch" },
+];
+
+export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaParam }: { vendedor?: string | null; temaParam?: string | null }) {
   const [vendedor] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const ref = new URLSearchParams(window.location.search).get("ref")?.toLowerCase();
@@ -38,14 +47,14 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     return vendedorProp ?? null;
   });
 
-  // Theme — from URL ?tema= or admin config with auto night mode (18h–6h)
+  // Theme — from URL ?tema= or admin config with auto night mode (18h-6h)
   const [temaDia, setTemaDia] = useState<string>("clean");
   const [temaNoite, setTemaNoite] = useState<string>("tigrao");
   const [temaKey, setTemaKey] = useState<string>(temaParam || "tigrao");
   const tema = useMemo(() => getTemaTI(temaKey), [temaKey]);
   const cssVars = useMemo(() => temaTICSSVars(tema), [tema]);
 
-  // Auto switch theme based on time of day (19h–6h = night)
+  // Auto switch theme based on time of day (19h-6h = night)
   useEffect(() => {
     if (temaParam) return; // URL override — don't auto switch
     function pickByHour() {
@@ -60,19 +69,20 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   const { trackStep, trackQuestion, trackComplete, trackAction } = useTradeInAnalytics();
 
-  // Meta Pixel helper — dispara eventos de conversão
+  // Meta Pixel helper — dispara eventos de conversao
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fbq = (...args: any[]) => { if (typeof window !== "undefined" && (window as any).fbq) (window as any).fbq(...args); };
 
   const [started, setStarted] = useState(false);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [selectedDeviceType, setSelectedDeviceType] = useState<MultiDeviceType | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   // Track step views
   useEffect(() => {
-    const mappedStep = step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4;
+    const mappedStep = step === 0 ? 0 : step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4;
     trackStep(mappedStep);
   }, [step, trackStep]);
 
@@ -95,15 +105,14 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
-  // Mapa dinâmico de WhatsApp por vendedor — usa DB se disponível
+  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
+  // Mapa dinamico de WhatsApp por vendedor — usa DB se disponivel
   const VENDEDOR_WHATSAPP = useMemo(() => {
     const dbMap = tradeinConfig?.whatsapp_vendedores;
     return dbMap && Object.keys(dbMap).length > 0 ? { ...DEFAULT_VENDEDOR_WHATSAPP, ...dbMap } : DEFAULT_VENDEDOR_WHATSAPP;
   }, [tradeinConfig]);
-  // WhatsApp formulários — usa campo dedicado se disponível, senão principal
+  // WhatsApp principal — usa DB se disponivel
   const whatsappPrincipal: string = tradeinConfig?.whatsapp_principal || config.whatsappNumero;
-  const whatsappFormularios: string = tradeinConfig?.whatsapp_formularios || whatsappPrincipal;
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -135,15 +144,17 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   const totalTradeInValue = tradeInValue + (hasSecondDevice ? tradeInValue2 : 0);
 
+  // Map MultiDeviceType to API device_type param
+  const apiDeviceType: DeviceType = selectedDeviceType === "watch" ? "iphone" : (selectedDeviceType || "iphone");
+
   useEffect(() => {
     async function load() {
       try {
-        const [prodRes, usedRes, configRes, lojaRes, questionsRes, tiConfigRes] = await Promise.all([
+        const [prodRes, usedRes, configRes, lojaRes, tiConfigRes] = await Promise.all([
           fetch("/api/produtos"),
           fetch("/api/usados"),
           fetch("/api/config"),
           fetch("/api/loja?format=grouped").catch(() => null),
-          fetch("/api/tradein-perguntas?device_type=iphone").catch(() => null),
           fetch("/api/tradein-config").catch(() => null),
         ]);
         const [prodData, usedResData, configData] = await Promise.all([
@@ -154,11 +165,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         setProducts(prodData);
         setUsedData(usedResData);
         setConfig(configData);
-        // Load trade-in questions config
-        try {
-          const qData = questionsRes ? await questionsRes.json() : null;
-          if (qData?.data && qData.data.length > 0) setQuestionsConfig(qData.data);
-        } catch { /* use hardcoded fallback */ }
         // Load trade-in form config (seminovos, labels, origens)
         try {
           const tiCfgData = tiConfigRes ? await tiConfigRes.json() : null;
@@ -179,6 +185,27 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     }
     load();
   }, [temaParam]);
+
+  // Fetch questions dynamically when device type changes
+  useEffect(() => {
+    if (!selectedDeviceType) return;
+    async function loadQuestions() {
+      try {
+        const res = await fetch(`/api/tradein-perguntas?device_type=${apiDeviceType}`);
+        const data = await res.json();
+        if (data?.data && data.data.length > 0) setQuestionsConfig(data.data);
+        else setQuestionsConfig(null);
+      } catch { /* use hardcoded fallback */ }
+    }
+    loadQuestions();
+  }, [selectedDeviceType, apiDeviceType]);
+
+  function handleDeviceSelect(dt: MultiDeviceType) {
+    setSelectedDeviceType(dt);
+    trackAction(`device_type_${dt}`);
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function handleStep1Complete(data: {
     usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
@@ -223,7 +250,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   }
 
   function handleReset() {
-    setStep(1); setResetKey(k => k + 1);
+    setStep(0); setResetKey(k => k + 1);
+    setSelectedDeviceType(null);
     setDeviceType("iphone"); setDeviceType2("iphone");
     setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
     setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
@@ -232,6 +260,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
     setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setClienteNome(""); setClienteWhatsApp(""); setClienteInstagram(""); setClienteOrigem("");
     setNewModel(""); setNewStorage(""); setNewPrice(0);
+    setQuestionsConfig(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -268,11 +297,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
       <main className="min-h-dvh flex flex-col items-center justify-center px-4" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
         <div className="w-full max-w-[440px] text-center space-y-6 animate-fadeIn">
           {/* Logo */}
-          <div className="text-[48px]">📱</div>
+          <div className="text-[48px]">{"\u{1F34E}"}</div>
 
           <div>
             <h1 className="text-[28px] font-bold tracking-tight leading-tight" style={{ color: tema.text }}>
-              Troque seu aparelho usado<br />por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>novo</span> e pague<br />apenas a diferenca!
+              Troque seu produto Apple usado por um <span style={{ color: "var(--ti-accent, #E8740E)" }}>novo</span> e pague<br />em ate <span style={{ color: "var(--ti-accent, #E8740E)" }}>21x</span> no cartao!
             </h1>
           </div>
 
@@ -282,7 +311,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
           {/* CTA */}
           <button
-            onClick={() => { setStarted(true); trackStep(1); }}
+            onClick={() => { setStarted(true); setStep(0); trackStep(0); }}
             className="w-full py-4 rounded-2xl text-[18px] font-bold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
             style={{ backgroundColor: "#22c55e" }}
           >
@@ -292,15 +321,15 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           {/* Social proof */}
           <div className="flex items-center justify-center gap-2 pt-2">
             <div className="flex -space-x-1">
-              <span className="text-lg">⭐⭐⭐⭐⭐</span>
+              <span className="text-lg">{"\u2B50\u2B50\u2B50\u2B50\u2B50"}</span>
             </div>
             <span className="text-[13px] font-medium" style={{ color: tema.textMuted }}>+400 trocas realizadas</span>
           </div>
 
           <div className="flex items-center justify-center gap-4 text-[12px] pt-1" style={{ color: tema.textMuted }}>
-            <span>✅ Produtos lacrados</span>
-            <span>✅ Nota fiscal</span>
-            <span>✅ Garantia Apple</span>
+            <span>{"\u2705"} Produtos lacrados</span>
+            <span>{"\u2705"} Nota fiscal</span>
+            <span>{"\u2705"} Garantia Apple</span>
           </div>
 
           {/* Footer */}
@@ -312,6 +341,11 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
       </main>
     );
   }
+
+  // Progress bar logic — 5 steps: 0=Dispositivo, 1=Seu aparelho, 2=Aparelho novo, 3=Seus dados, 4=Cotacao
+  const progressStep = step === 0 ? 0 : step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4;
+  const progressLabels = ["Dispositivo", "Seu aparelho", "Aparelho novo", "Seus dados", "Cotacao"];
+  const totalSteps = 5;
 
   return (
     <main className="min-h-dvh flex flex-col items-center px-4 py-8" style={{ backgroundColor: tema.pageBg, ...cssVars }}>
@@ -325,23 +359,51 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
         {/* Barra de progresso simples */}
         <div className="mb-8">
           <div className="flex justify-between text-[11px] font-medium mb-2" style={{ color: tema.textMuted }}>
-            <span>Etapa {step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4} de 4</span>
-            <span>{step <= 1.7 ? "Seu aparelho" : step === 2 ? "Aparelho novo" : step === 3 ? "Seus dados" : "Cotacao"}</span>
+            <span>Etapa {progressStep + 1} de {totalSteps}</span>
+            <span>{progressLabels[progressStep]}</span>
           </div>
           <div className="w-full h-[6px] rounded-full" style={{ backgroundColor: "var(--ti-card-border)" }}>
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((step <= 1.7 ? 1 : step === 2 ? 2 : step === 3 ? 3 : 4) / 4) * 100}%`, backgroundColor: "var(--ti-accent)" }} />
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((progressStep + 1) / totalSteps) * 100}%`, backgroundColor: "var(--ti-accent)" }} />
           </div>
         </div>
 
         <div className="animate-fadeIn">
-          {step === 1 && (
-            <StepUsedDevice
+          {/* Step 0 — Device type selector */}
+          {step === 0 && (
+            <div className="space-y-8">
+              <div className="text-center">
+                <h2 className="text-[22px] font-bold" style={{ color: "var(--ti-text)" }}>Qual aparelho voce quer avaliar?</h2>
+                <p className="text-[14px] mt-1" style={{ color: "var(--ti-muted)" }}>Selecione o tipo de dispositivo</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {DEVICE_OPTIONS.map((d) => (
+                  <button
+                    key={d.type}
+                    onClick={() => handleDeviceSelect(d.type)}
+                    className="flex flex-col items-center gap-2 px-4 py-6 rounded-2xl text-[15px] font-semibold transition-all duration-200 active:scale-[0.98]"
+                    style={{
+                      backgroundColor: "var(--ti-btn-bg)",
+                      color: "var(--ti-btn-text)",
+                      border: "1px solid var(--ti-btn-border)",
+                    }}
+                  >
+                    <span className="text-[32px]">{d.emoji}</span>
+                    <span>{d.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 1 && selectedDeviceType && (
+            <StepUsedDeviceMulti
               key={resetKey}
               usedValues={usedData.usedValues}
               excludedModels={usedData.excludedModels}
               modelDiscounts={usedData.modelDiscounts}
               warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
               questionsConfig={questionsConfig}
+              deviceType={selectedDeviceType}
               onNext={handleStep1Complete}
               onTrackQuestion={trackQuestion}
             />
@@ -376,19 +438,20 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
             </div>
           )}
 
-          {step === 1.7 && (
+          {step === 1.7 && selectedDeviceType && (
             <div>
               <div className="rounded-xl px-4 py-3 mb-4" style={{ backgroundColor: tema.successLight, border: `1px solid ${tema.success}40` }}>
                 <p className="text-xs font-medium" style={{ color: tema.success }}>1o aparelho: {usedModel} {usedStorage} — {formatBRL(tradeInValue)}</p>
               </div>
               <p className="text-[17px] font-bold mb-4" style={{ color: tema.text }}>Agora avalie o 2o aparelho:</p>
-              <StepUsedDevice
+              <StepUsedDeviceMulti
                 key={resetKey + 100}
                 usedValues={usedData.usedValues}
                 excludedModels={usedData.excludedModels}
                 modelDiscounts={usedData.modelDiscounts}
                 warrantyBonuses={{ ate3m: config.bonusGarantiaAte3m, de3a6m: config.bonusGarantia3a6m, acima6m: config.bonusGarantia6mMais }}
                 questionsConfig={questionsConfig}
+                deviceType={selectedDeviceType}
                 onNext={handleStep1Complete}
                 onTrackQuestion={trackQuestion}
               />
@@ -396,7 +459,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 2 && (
-            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig} />
+            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig} />
           )}
 
           {step === 3 && (
@@ -416,7 +479,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
-              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios}
+              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappPrincipal}
               validadeHoras={config.validadeHoras} vendedor={vendedor}
               onReset={handleReset} onCotarOutro={handleCotarOutro}
               onGoToStep={handleGoToStep}

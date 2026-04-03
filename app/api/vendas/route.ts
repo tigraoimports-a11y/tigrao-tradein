@@ -174,8 +174,8 @@ export async function POST(req: NextRequest) {
     } catch { /* ignore CEP lookup failure */ }
   }
 
-  // Garantir que forma nunca é null (banco exige NOT NULL)
-  if (!body.forma) body.forma = "DEFINIR_DEPOIS";
+  // forma pode ser null (pagamento a definir depois)
+  if (!body.forma) body.forma = null;
 
   const { data, error } = await supabase.from("vendas").insert({
     ...body,

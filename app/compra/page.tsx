@@ -99,6 +99,8 @@ function CompraForm() {
   const [catSel, setCatSel] = useState("");
   const [produtoInput, setProdutoInput] = useState(produtoParam);
   const [precoAuto, setPrecoAuto] = useState(precoParam ? parseInt(precoParam) : 0);
+  const [corSel, setCorSel] = useState("");
+  const [coresDisponiveis, setCoresDisponiveis] = useState<string[]>([]);
 
   // WhatsApp pode vir do URL ou ser buscado da config
   const [whatsappFormConfig, setWhatsappFormConfig] = useState("");
@@ -126,6 +128,35 @@ function CompraForm() {
     const match = allProducts.find(p => `${p.modelo} ${p.armazenamento}` === produtoInput || p.modelo === produtoInput);
     if (match) setPrecoAuto(match.precoPix);
   }, [produtoInput, allProducts, precoParam]);
+
+  // Fetch cores disponíveis do estoque para o produto selecionado
+  useEffect(() => {
+    const prod = produtoInput || produtoParam;
+    if (!prod) { setCoresDisponiveis([]); return; }
+    // Buscar no catálogo já carregado
+    const cores = new Set<string>();
+    for (const items of Object.values(catalogo)) {
+      for (const item of items) {
+        if (item.cor && item.produto.startsWith(prod)) {
+          cores.add(item.cor.toUpperCase());
+        }
+      }
+    }
+    if (cores.size > 0) { setCoresDisponiveis([...cores].sort()); return; }
+    // Fallback: buscar todas as cores do catálogo cujo nome base corresponde
+    const prodLower = prod.toLowerCase();
+    for (const items of Object.values(catalogo)) {
+      for (const item of items) {
+        if (item.cor) {
+          const baseName = item.produto.replace(/ - .+$/, "").toLowerCase();
+          if (baseName === prodLower || prodLower.includes(baseName) || baseName.includes(prodLower)) {
+            cores.add(item.cor.toUpperCase());
+          }
+        }
+      }
+    }
+    setCoresDisponiveis([...cores].sort());
+  }, [produtoInput, produtoParam, catalogo]);
 
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
@@ -251,7 +282,7 @@ function CompraForm() {
       `*Bairro:* ${bairro}`,
       "",
       // Produto e pagamento
-      `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
+      `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${corSel ? ` — ${corSel}` : ""}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
       ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
       `*Forma de pagamento:* ${pagStr}`,
     ];
@@ -337,6 +368,20 @@ function CompraForm() {
                 )}
               </div>
             )}
+            {/* Seleção de cor — cores reais do estoque */}
+            {coresDisponiveis.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#E8E8ED]">
+                <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold mb-2">Escolha a cor</p>
+                <div className="flex flex-wrap gap-2">
+                  {coresDisponiveis.map(cor => (
+                    <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                      {cor}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : Object.keys(catalogo).length > 0 ? (
           <>
@@ -361,9 +406,23 @@ function CompraForm() {
             )}
             {produtoInput && preco > 0 && (
               <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
-                <p className="text-sm font-semibold text-[#1D1D1F]">{produtoInput}</p>
+                <p className="text-sm font-semibold text-[#1D1D1F]">{produtoInput}{corSel ? ` — ${corSel}` : ""}</p>
                 <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
                 {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
+              </div>
+            )}
+            {/* Seleção de cor — cores reais do estoque */}
+            {produtoInput && coresDisponiveis.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold mb-2">Escolha a cor</p>
+                <div className="flex flex-wrap gap-2">
+                  {coresDisponiveis.map(cor => (
+                    <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-[#F5F5F7] text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                      {cor}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </>

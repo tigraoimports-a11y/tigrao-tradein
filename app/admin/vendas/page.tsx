@@ -30,7 +30,6 @@ export default function VendasPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
-  const [editandoGrupoVinculo, setEditandoGrupoVinculo] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [vendasUnlocked, setVendasUnlocked] = useState(false);
@@ -66,7 +65,6 @@ export default function VendasPage() {
   const [filtroDia, setFiltroDia] = useState("");
   const [filtroCpf, setFiltroCpf] = useState("");
   const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
-  const [highlightVendaId, setHighlightVendaId] = useState<string | null>(null);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [finalizandoLote, setFinalizandoLote] = useState(false);
 
@@ -89,8 +87,10 @@ export default function VendasPage() {
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+    troca_serial: "", troca_imei: "",
+    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+    troca_serial2: "", troca_imei2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
   });
@@ -106,10 +106,13 @@ export default function VendasPage() {
     } catch {}
   }, []);
 
-  // Auto-save rascunho da venda no localStorage
+  // Auto-save rascunho da venda no localStorage (só se tem dados relevantes)
   useEffect(() => {
     if (form.cliente || form.produto || form.custo) {
       localStorage.setItem("tigrao_venda_draft", JSON.stringify(form));
+    } else {
+      // Form foi limpo — remover rascunho
+      localStorage.removeItem("tigrao_venda_draft");
     }
   }, [form]);
 
@@ -156,7 +159,6 @@ export default function VendasPage() {
     local: string;
     serial_no: string;
     imei: string;
-    tipo: string;
     _estoqueId: string;
     _catSel: string;
     _produtoManual: boolean;
@@ -171,9 +173,8 @@ export default function VendasPage() {
     troca_caixa: string;
     troca_cabo: string;
     troca_fonte: string;
-    troca_serial_no: string;
+    troca_serial: string;
     troca_imei: string;
-    troca_origem: string;
     // 2º produto na troca
     produto_na_troca2: string;
     troca_produto2: string;
@@ -181,13 +182,8 @@ export default function VendasPage() {
     troca_categoria2: string;
     troca_bateria2: string;
     troca_obs2: string;
-    troca_grade2: string;
-    troca_caixa2: string;
-    troca_cabo2: string;
-    troca_fonte2: string;
-    troca_serial_no2: string;
+    troca_serial2: string;
     troca_imei2: string;
-    troca_origem2: string;
   }
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
@@ -216,23 +212,6 @@ export default function VendasPage() {
       setProdutoManual(true);
       window.history.replaceState({}, "", window.location.pathname);
     }
-    // Navegação direta a uma venda pelo SuperSearch
-    const vendaId = params.get("venda_id");
-    const pAno = params.get("ano");
-    const pMes = params.get("mes");
-    const pDia = params.get("dia");
-    if (vendaId) {
-      if (pAno) setFiltroAno(pAno);
-      if (pMes) setFiltroMes(pMes);
-      if (pDia) setFiltroDia(pDia);
-      setHighlightVendaId(vendaId);
-      window.history.replaceState({}, "", window.location.pathname);
-      // Scroll após carregar
-      setTimeout(() => {
-        const el = document.getElementById(`venda-row-${vendaId}`);
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("ring-2", "ring-[#E8740E]"); setTimeout(() => el.classList.remove("ring-2", "ring-[#E8740E]"), 3000); }
-      }, 1200);
-    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [scanMode, setScanMode] = useState(true); // Scan é o modo padrão — produto novo obrigatório bipar
   const [scanMsg, setScanMsg] = useState("");
@@ -247,12 +226,12 @@ export default function VendasPage() {
   const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
   const [trocaRow2, setTrocaRow2] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
 
-  // Sync trocaRow → form.troca_produto / troca_cor / troca_categoria / troca_origem
+  // Sync trocaRow → form.troca_produto / troca_cor / troca_categoria
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor, troca_categoria: trocaRow.categoria, troca_origem: trocaRow.spec?.ip_origem || "" }));
-  }, [trocaRow.produto, trocaRow.cor, trocaRow.categoria, trocaRow.spec?.ip_origem]);
+    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor, troca_categoria: trocaRow.categoria }));
+  }, [trocaRow.produto, trocaRow.cor, trocaRow.categoria]);
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor, troca_categoria2: trocaRow2.categoria, troca_origem2: trocaRow2.spec?.ip_origem || "" }));
+    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor, troca_categoria2: trocaRow2.categoria }));
   }, [trocaRow2.produto, trocaRow2.cor, trocaRow2.categoria]);
 
   // Fornecedores
@@ -722,13 +701,8 @@ export default function VendasPage() {
         categoria: (prodFields.troca_categoria as string) || null,
         bateria: prodFields.troca_bateria ? parseInt(prodFields.troca_bateria as string) : null,
         observacao: prodFields.troca_obs || null,
-        grade: prodFields.troca_grade || null,
-        caixa: prodFields.troca_caixa || null,
-        cabo: prodFields.troca_cabo || null,
-        fonte: prodFields.troca_fonte || null,
-        serial_no: (prodFields.troca_serial_no as string) || null,
-        imei: (prodFields.troca_imei as string) || null,
-        origem: prodFields.troca_origem || null,
+        serial_no: prodFields.troca_serial || null,
+        imei: prodFields.troca_imei || null,
       };
     }
 
@@ -740,13 +714,8 @@ export default function VendasPage() {
         categoria: (prodFields.troca_categoria2 as string) || null,
         bateria: prodFields.troca_bateria2 ? parseInt(prodFields.troca_bateria2 as string) : null,
         observacao: prodFields.troca_obs2 || null,
-        grade: prodFields.troca_grade2 || null,
-        caixa: prodFields.troca_caixa2 || null,
-        cabo: prodFields.troca_cabo2 || null,
-        fonte: prodFields.troca_fonte2 || null,
-        serial_no: (prodFields.troca_serial_no2 as string) || null,
-        imei: (prodFields.troca_imei2 as string) || null,
-        origem: prodFields.troca_origem2 || null,
+        serial_no: prodFields.troca_serial2 || null,
+        imei: prodFields.troca_imei2 || null,
       };
     }
 
@@ -762,7 +731,6 @@ export default function VendasPage() {
     local: form.local,
     serial_no: form.serial_no,
     imei: form.imei,
-    tipo: estoque.find(e => e.id === estoqueId)?.tipo || "NOVO",
     _estoqueId: estoqueId,
     _catSel: catSel,
     _produtoManual: produtoManual,
@@ -776,22 +744,16 @@ export default function VendasPage() {
     troca_caixa: form.troca_caixa,
     troca_cabo: form.troca_cabo,
     troca_fonte: form.troca_fonte,
-    troca_serial_no: form.troca_serial_no,
+    troca_serial: form.troca_serial,
     troca_imei: form.troca_imei,
-    troca_origem: form.troca_origem,
     produto_na_troca2: form.produto_na_troca2,
     troca_produto2: form.troca_produto2,
     troca_cor2: form.troca_cor2,
     troca_categoria2: form.troca_categoria2,
     troca_bateria2: form.troca_bateria2,
     troca_obs2: form.troca_obs2,
-    troca_grade2: form.troca_grade2,
-    troca_caixa2: form.troca_caixa2,
-    troca_cabo2: form.troca_cabo2,
-    troca_fonte2: form.troca_fonte2,
-    troca_serial_no2: form.troca_serial_no2,
+    troca_serial2: form.troca_serial2,
     troca_imei2: form.troca_imei2,
-    troca_origem2: form.troca_origem2,
   });
 
   // Helper: clear product fields in form (keeps payment fields intact for multi-product)
@@ -802,17 +764,15 @@ export default function VendasPage() {
       custo: "", preco_vendido: "",
       serial_no: "", imei: "",
       produto_na_troca: "", troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "",
-      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
+      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+      troca_serial: "", troca_imei: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
-      troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+      troca_serial2: "", troca_imei2: "",
     }));
     setCatSel("");
     setEstoqueId("");
     setProdutoManual(false);
     setShowSegundaTroca(false);
-    // Resetar ProdutoSpecFields das trocas para evitar bleed-over entre produtos do carrinho
-    setTrocaRow(createEmptyProdutoRow());
-    setTrocaRow2(createEmptyProdutoRow());
   };
 
   // Add current product to cart
@@ -843,49 +803,10 @@ export default function VendasPage() {
       preco_vendido: p.preco_vendido,
       serial_no: p.serial_no,
       imei: p.imei,
-      // Troca primária
-      produto_na_troca: p.produto_na_troca || "",
-      troca_produto: p.troca_produto || "",
-      troca_cor: p.troca_cor || "",
-      troca_categoria: p.troca_categoria || "",
-      troca_bateria: p.troca_bateria || "",
-      troca_obs: p.troca_obs || "",
-      troca_grade: p.troca_grade || "",
-      troca_caixa: p.troca_caixa || "",
-      troca_cabo: p.troca_cabo || "",
-      troca_fonte: p.troca_fonte || "",
-      troca_serial_no: p.troca_serial_no || "",
-      troca_imei: p.troca_imei || "",
-      troca_origem: p.troca_origem || "",
-      // 2ª troca
-      produto_na_troca2: p.produto_na_troca2 || "",
-      troca_produto2: p.troca_produto2 || "",
-      troca_cor2: p.troca_cor2 || "",
-      troca_categoria2: p.troca_categoria2 || "",
-      troca_bateria2: p.troca_bateria2 || "",
-      troca_obs2: p.troca_obs2 || "",
-      troca_grade2: p.troca_grade2 || "",
-      troca_caixa2: p.troca_caixa2 || "",
-      troca_cabo2: p.troca_cabo2 || "",
-      troca_fonte2: p.troca_fonte2 || "",
-      troca_serial_no2: p.troca_serial_no2 || "",
-      troca_imei2: p.troca_imei2 || "",
-      troca_origem2: p.troca_origem2 || "",
     }));
     if (p._catSel) setCatSel(p._catSel);
     if (p._estoqueId) setEstoqueId(p._estoqueId);
     setProdutoManual(!!p._produtoManual);
-    // Restaura trocaRow para o seletor de produto funcionar
-    if (p.troca_produto) {
-      setTrocaRow(r => ({ ...r, produto: p.troca_produto, cor: p.troca_cor || "", categoria: p.troca_categoria || r.categoria }));
-    } else {
-      setTrocaRow(createEmptyProdutoRow());
-    }
-    if (p.troca_produto2) {
-      setTrocaRow2(r => ({ ...r, produto: p.troca_produto2, cor: p.troca_cor2 || "", categoria: p.troca_categoria2 || r.categoria }));
-    } else {
-      setTrocaRow2(createEmptyProdutoRow());
-    }
     // Remove from cart (will be re-added when user clicks "Adicionar")
     setProdutosCarrinho(prev => prev.filter((_, i) => i !== index));
     setMsg(`Editando produto: ${p.produto}. Faça as alterações e adicione de volta ao carrinho.`);
@@ -933,15 +854,15 @@ export default function VendasPage() {
     setMsg("");
 
     // Build payloads for all products
-    // Atribuir troca global do form ao primeiro produto do carrinho (para 1 ou mais produtos)
-    if (allProducts.length >= 1) {
+    // Se tem carrinho, atribuir a troca global ao primeiro produto
+    if (allProducts.length > 1) {
       const globalTroca1 = form.produto_na_troca;
       const globalTroca2 = form.produto_na_troca2;
       if ((parseFloat(globalTroca1) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca) > 0)) {
-        allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte, troca_serial_no: form.troca_serial_no, troca_imei: form.troca_imei, troca_origem: form.troca_origem };
+        allProducts[0] = { ...allProducts[0], produto_na_troca: globalTroca1, troca_produto: form.troca_produto, troca_cor: form.troca_cor, troca_bateria: form.troca_bateria, troca_obs: form.troca_obs, troca_grade: form.troca_grade, troca_caixa: form.troca_caixa, troca_cabo: form.troca_cabo, troca_fonte: form.troca_fonte };
       }
       if ((parseFloat(globalTroca2) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca2) > 0)) {
-        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2, troca_grade2: form.troca_grade2, troca_caixa2: form.troca_caixa2, troca_cabo2: form.troca_cabo2, troca_fonte2: form.troca_fonte2, troca_serial_no2: form.troca_serial_no2, troca_imei2: form.troca_imei2, troca_origem2: form.troca_origem2 };
+        allProducts[0] = { ...allProducts[0], produto_na_troca2: globalTroca2, troca_produto2: form.troca_produto2, troca_cor2: form.troca_cor2, troca_bateria2: form.troca_bateria2, troca_obs2: form.troca_obs2 };
       }
     }
     const payloads: Record<string, unknown>[] = [];
@@ -1092,40 +1013,6 @@ export default function VendasPage() {
             fetchVendas();
             fetchEstoque();
           }
-        } else if (editandoGrupoIds.length === 1 && allProducts.length > 1) {
-          // Edição simples mas usuário adicionou mais produtos
-          const gVinculo = editandoGrupoVinculo || crypto.randomUUID();
-          const groupPayloads2: Record<string, unknown>[] = allProducts.map(p => buildPayload(p));
-          for (const p of groupPayloads2) p.grupo_id = gVinculo;
-          // PATCH o produto original
-          const resOrig = await fetch("/api/vendas", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", "x-admin-password": password },
-            body: JSON.stringify({ id: editandoGrupoIds[0], ...groupPayloads2[0] }),
-          });
-          const jsonOrig = await resOrig.json();
-          if (!jsonOrig.ok && !jsonOrig.data) {
-            setMsg("Erro ao atualizar: " + (jsonOrig.error || "erro desconhecido"));
-            setSaving(false);
-            return;
-          }
-          // POST novos produtos
-          for (let i = 1; i < groupPayloads2.length; i++) {
-            await fetch("/api/vendas", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "x-admin-password": password },
-              body: JSON.stringify(groupPayloads2[i]),
-            });
-          }
-          setEditandoVendaId(null);
-          setEditandoGrupoIds([]);
-          setEditandoGrupoVinculo(null);
-          setDuplicadoInfo(null);
-          setProdutosCarrinho([]);
-          clearProductFields();
-          setMsg(`Venda atualizada + ${allProducts.length - 1} produto(s) adicionado(s)!`);
-          fetchVendas();
-          fetchEstoque();
         } else {
           // Edição simples (1 produto)
           const prod = allProducts[0];
@@ -1139,7 +1026,6 @@ export default function VendasPage() {
           if (json.ok || json.data) {
             setEditandoVendaId(null);
             setEditandoGrupoIds([]);
-            setEditandoGrupoVinculo(null);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
             clearProductFields();
@@ -1194,13 +1080,33 @@ export default function VendasPage() {
 
     if (successCount > 0) {
       setDuplicadoInfo(null);
-      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
-      setLastClienteData(clienteInfo);
+      setLastClienteData(null);
       setProdutosCarrinho([]);
-      clearProductFields();
+      // Limpar TODOS os campos do formulário para a próxima venda
+      setForm({
+        data: hojeBR(),
+        cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+        custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+        qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+        entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+        parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+        entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+        valor_total_venda: "",
+        troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+        troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+        troca_serial: "", troca_imei: "",
+        produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+        troca_serial2: "", troca_imei2: "",
+        serial_no: "", imei: "",
+        cep: "", bairro: "", cidade: "", uf: "",
+      });
+      setCatSel("");
+      setEstoqueId("");
+      setProdutoManual(false);
+      setShowSegundaTroca(false);
       localStorage.removeItem("tigrao_venda_draft");
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""} Adicione outro produto para ${clienteInfo.cliente.split(" ")[0]} ou limpe o formulario.`);
+      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
@@ -1444,8 +1350,10 @@ export default function VendasPage() {
       troca_grade: "",
       troca_caixa: "",
       troca_cabo: "",
-      troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+      troca_fonte: "",
+      troca_serial: "", troca_imei: "",
+      produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+      troca_serial2: "", troca_imei2: "",
       serial_no: v.serial_no || "",
       imei: v.imei || "",
       cep: "",
@@ -1623,7 +1531,6 @@ export default function VendasPage() {
                 onClick={() => {
                   setEditandoVendaId(null);
                   setEditandoGrupoIds([]);
-                  setEditandoGrupoVinculo(null);
                   setProdutosCarrinho([]);
                   setForm(f => ({ ...f, cliente: "", produto: "", custo: "", preco_vendido: "", forma: "" }));
                   setMsg("");
@@ -1638,12 +1545,41 @@ export default function VendasPage() {
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6`}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-base sm:text-lg font-bold text-[#1D1D1F]">Registrar Nova Venda</h2>
-            <button
-              onClick={() => setShowPasteModal(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF8F0] transition-colors"
-            >
-              📋 Colar dados cliente
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setForm({
+                    data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+                    custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+                    qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+                    entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+                    valor_total_venda: "",
+                    troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_serial: "", troca_imei: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    troca_serial2: "", troca_imei2: "",
+                    serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
+                  });
+                  setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+                  setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  localStorage.removeItem("tigrao_venda_draft");
+                  setMsg("Formulario limpo!");
+                  setTimeout(() => setMsg(""), 2000);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${dm ? "text-[#98989D] border-[#3A3A3C] hover:text-red-400 hover:border-red-400" : "text-[#86868B] border-[#D2D2D7] hover:text-red-500 hover:border-red-500"} border`}
+              >
+                🗑️ Limpar
+              </button>
+              <button
+                onClick={() => setShowPasteModal(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E] hover:bg-[#FFF8F0] transition-colors"
+              >
+                📋 Colar dados cliente
+              </button>
+            </div>
           </div>
 
           {/* Indicador de venda duplicada */}
@@ -1827,17 +1763,11 @@ export default function VendasPage() {
               {produtosCarrinho.map((p, i) => {
                 const pCusto = parseFloat(p.custo) || 0;
                 const pVendido = parseFloat(p.preco_vendido) || 0;
-                const pTrocaVal = (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0);
-                const pLucro = pVendido + pTrocaVal - pCusto;
+                const pLucro = pVendido - pCusto;
                 return (
                   <div key={i} className="px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-[#1D1D1F] truncate flex items-center gap-2">
-                        {p.produto}
-                        {p.tipo === "SEMINOVO" && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-yellow-100 text-yellow-700 shrink-0">Seminovo</span>}
-                        {p.tipo === "NAO_ATIVADO" && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-700 shrink-0">Não Ativado</span>}
-                        {(p.tipo === "NOVO" || !p.tipo) && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-green-100 text-green-700 shrink-0">Lacrado</span>}
-                      </span>
+                      <span className="text-sm font-medium text-[#1D1D1F] truncate">{p.produto}</span>
                       <div className="ml-3 flex gap-1 flex-shrink-0">
                         <button onClick={() => handleEditFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-blue-500 hover:bg-blue-50 transition-colors" title="Editar produto">✏️</button>
                         <button onClick={() => handleRemoveFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors" title="Remover produto">✕</button>
@@ -1862,50 +1792,15 @@ export default function VendasPage() {
                       <span>Lucro: <strong className={pLucro >= 0 ? "text-green-600" : "text-red-500"}>{fmt(pLucro)}</strong></span>
                       {p.fornecedor && <><span>|</span><span>{p.fornecedor}</span></>}
                     </div>
-                    {/* Troca inline editável */}
-                    {(parseFloat(p.produto_na_troca) > 0 || p.troca_produto) && (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <span className="text-[10px] text-orange-500 font-semibold">🔄 Troca:</span>
-                        <input
-                          type="text"
-                          value={p.troca_produto || ""}
-                          onChange={(e) => setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, troca_produto: e.target.value.toUpperCase() } : item))}
-                          placeholder="Produto na troca"
-                          className="flex-1 min-w-[120px] px-1.5 py-0.5 text-[10px] text-orange-700 font-medium bg-orange-50 border border-orange-200 rounded"
-                        />
-                        <span className="text-[10px] text-orange-500">R$</span>
-                        <input
-                          type="text" inputMode="numeric"
-                          value={fmtMil(p.produto_na_troca)}
-                          onChange={(e) => {
-                            const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
-                            setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, produto_na_troca: clean } : item));
-                          }}
-                          className="w-20 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded"
-                        />
-                      </div>
+                    {parseFloat(p.produto_na_troca) > 0 && (
+                      <span className="text-[10px] text-orange-600 font-medium block">
+                        Troca: {p.troca_produto} ({fmt(parseFloat(p.produto_na_troca))})
+                      </span>
                     )}
-                    {(parseFloat(p.produto_na_troca2) > 0 || p.troca_produto2) && (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <span className="text-[10px] text-orange-500 font-semibold">🔄 2ª Troca:</span>
-                        <input
-                          type="text"
-                          value={p.troca_produto2 || ""}
-                          onChange={(e) => setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, troca_produto2: e.target.value.toUpperCase() } : item))}
-                          placeholder="2º produto na troca"
-                          className="flex-1 min-w-[120px] px-1.5 py-0.5 text-[10px] text-orange-700 font-medium bg-orange-50 border border-orange-200 rounded"
-                        />
-                        <span className="text-[10px] text-orange-500">R$</span>
-                        <input
-                          type="text" inputMode="numeric"
-                          value={fmtMil(p.produto_na_troca2)}
-                          onChange={(e) => {
-                            const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
-                            setProdutosCarrinho(prev => prev.map((item, idx) => idx === i ? { ...item, produto_na_troca2: clean } : item));
-                          }}
-                          className="w-20 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded"
-                        />
-                      </div>
+                    {parseFloat(p.produto_na_troca2) > 0 && (
+                      <span className="text-[10px] text-orange-600 font-medium block">
+                        2ª Troca: {p.troca_produto2} ({fmt(parseFloat(p.produto_na_troca2))})
+                      </span>
                     )}
                   </div>
                 );
@@ -1915,17 +1810,12 @@ export default function VendasPage() {
               {(() => {
                 const cartTotalCusto = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.custo) || 0), 0);
                 const cartTotalVendido = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.preco_vendido) || 0), 0);
-                // Troca já nos itens do carrinho + troca global do form (ainda não em nenhum item)
-                const cartTrocaItens = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0), 0);
-                const formTroca = (parseFloat(form.produto_na_troca) || 0) + (parseFloat(form.produto_na_troca2) || 0);
-                const cartTotalTroca = cartTrocaItens + formTroca;
-                const cartTotalRecebido = cartTotalVendido + cartTotalTroca;
-                const cartTotalLucro = cartTotalRecebido - cartTotalCusto;
-                const cartMargem = cartTotalRecebido > 0 ? (cartTotalLucro / cartTotalRecebido) * 100 : 0;
+                const cartTotalLucro = cartTotalVendido - cartTotalCusto;
+                const cartMargem = cartTotalVendido > 0 ? (cartTotalLucro / cartTotalVendido) * 100 : 0;
                 return (
                   <div className="px-4 py-2.5 bg-[#1E1208] rounded-xl flex flex-wrap items-center gap-3 text-xs text-white/80">
                     <span>Total custo: <strong className="text-white">{fmt(cartTotalCusto)}</strong></span>
-                    <span>Total vendido: <strong className="text-white">{fmt(cartTotalVendido)}{cartTotalTroca > 0 ? <span className="text-orange-400"> +{fmt(cartTotalTroca)} troca</span> : null}</strong></span>
+                    <span>Total vendido: <strong className="text-white">{fmt(cartTotalVendido)}</strong></span>
                     <span>Lucro: <strong className={cartTotalLucro >= 0 ? "text-green-400" : "text-red-400"}>{fmt(cartTotalLucro)}</strong></span>
                     <span>Margem: <strong className={cartMargem >= 0 ? "text-green-400" : "text-red-400"}>{cartMargem.toFixed(1)}%</strong></span>
                   </div>
@@ -1937,30 +1827,42 @@ export default function VendasPage() {
           {/* Row 2: Produto */}
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
-              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Produto</p>
+              <p className="text-sm font-bold text-[#1D1D1F]">Produto</p>
+              <button
+                onClick={() => { setScanMode(false); setProdutoManual(true); setEstoqueId(""); setCatSel(""); }}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${produtoManual ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}
+              >
+                ✏️ Digitar manual
+              </button>
             </div>
 
+            {produtoManual ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="col-span-2"><p className={labelCls}>Produto</p><input value={form.produto} onChange={(e) => set("produto", e.target.value)} placeholder="Ex: iPhone 16 Pro Max 256GB" className={inputCls} /></div>
+                <div><p className={labelCls}>Fornecedor</p><select value={form.fornecedor} onChange={(e) => set("fornecedor", e.target.value)} className={selectCls}>
+                  <option value="">— Selecionar —</option>
+                  {fornecedores.map((f) => <option key={f.id} value={f.nome}>{f.nome}</option>)}
+                </select></div>
+                <div><p className={labelCls}>Serial No.</p><input value={form.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
+                <div><p className={labelCls}>IMEI</p><input value={form.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Ex: 35XXXXXXXXXXXXX" className={inputCls} /></div>
+              </div>
+            ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <p className={labelCls}>Categoria</p>
                     <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); setSerialBusca(""); }} className={selectCls}>
-                      <option value="">Todas as categorias</option>
+                      <option value="">Selecionar...</option>
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial ou Produto</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Serial, IMEI ou nome..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
+                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
-                {(catSel || serialBusca.trim()) && (() => {
-                  const s = serialBusca.trim().toUpperCase();
-                  const filtrados = s
-                    ? estoque.filter(p =>
-                        (p.serial_no?.toUpperCase().includes(s)) ||
-                        (p.imei?.toUpperCase().includes(s)) ||
-                        p.produto.toUpperCase().includes(s)
-                      )
+                {catSel && (() => {
+                  const filtrados = serialBusca.trim()
+                    ? produtosFiltrados.filter(p => p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase()))
                     : produtosFiltrados;
                   // Limpar nome do produto: remover origem e chip
                   const stripOrigemVendas = (nome: string) => nome
@@ -1979,7 +1881,7 @@ export default function VendasPage() {
                   const grupoKeys = Object.keys(grupos).sort();
 
                   if (grupoKeys.length === 0) return (
-                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto encontrado com esse serial ou nome" : "Nenhum produto disponível nesta categoria"}</div>
+                    <div className={`p-4 rounded-xl text-center text-sm ${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{serialBusca.trim() ? "Nenhum produto com esse serial" : "Nenhum produto disponivel nesta categoria"}</div>
                   );
 
                   // Extrair cor do nome do produto
@@ -2115,6 +2017,7 @@ export default function VendasPage() {
                   </div>
                 )}
               </div>
+            )}
 
             {/* Serial No. e IMEI movidos para seção de troca */}
 
@@ -2132,8 +2035,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_serial: "", troca_imei: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    troca_serial2: "", troca_imei2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -2709,9 +2614,9 @@ export default function VendasPage() {
                     <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo === "SIM"} onChange={(e) => set("troca_cabo", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
                     <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte === "SIM"} onChange={(e) => set("troca_fonte", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
                   </div>
-                  <div><p className={labelCls}>Serial No.</p><input value={form.troca_serial_no} onChange={(e) => set("troca_serial_no", e.target.value.toUpperCase())} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                  <div><p className={labelCls}>IMEI</p><input value={form.troca_imei} onChange={(e) => set("troca_imei", e.target.value)} placeholder="Ex: 35XXXXX..." className={inputCls} /></div>
                   <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do seminovo</p><input value={form.troca_obs} onChange={(e) => set("troca_obs", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
+                  <div><p className={labelCls}>Serial</p><input value={form.troca_serial} onChange={(e) => set("troca_serial", e.target.value.toUpperCase())} placeholder="Ex: F2LX..." className={inputCls} /></div>
+                  <div><p className={labelCls}>IMEI</p><input value={form.troca_imei} onChange={(e) => set("troca_imei", e.target.value.replace(/\D/g, "").slice(0, 15))} placeholder="Ex: 35938..." className={inputCls} inputMode="numeric" /></div>
                 </>
               )}
             </div>
@@ -2737,7 +2642,7 @@ export default function VendasPage() {
                     type="button"
                     onClick={() => {
                       setShowSegundaTroca(false);
-                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "" }));
+                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_serial2: "", troca_imei2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
                   >
@@ -2765,17 +2670,9 @@ export default function VendasPage() {
                         />
                       </div>
                       <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria2} onChange={(e) => set("troca_bateria2", e.target.value)} placeholder="Ex: 85" className={inputCls} /></div>
-                      <div><p className={labelCls}>Grade</p><select value={form.troca_grade2} onChange={(e) => set("troca_grade2", e.target.value)} className={selectCls}>
-                        <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
-                      </select></div>
-                      <div className="flex gap-3 items-center">
-                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_caixa2 === "SIM"} onChange={(e) => set("troca_caixa2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Caixa</label>
-                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_cabo2 === "SIM"} onChange={(e) => set("troca_cabo2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Cabo</label>
-                        <label className="flex items-center gap-1 text-xs text-[#86868B]"><input type="checkbox" checked={form.troca_fonte2 === "SIM"} onChange={(e) => set("troca_fonte2", e.target.checked ? "SIM" : "")} className="accent-[#E8740E]" /> Fonte</label>
-                      </div>
-                      <div><p className={labelCls}>Serial No.</p><input value={form.troca_serial_no2} onChange={(e) => set("troca_serial_no2", e.target.value.toUpperCase())} placeholder="Ex: C39XXXXX..." className={inputCls} /></div>
-                      <div><p className={labelCls}>IMEI</p><input value={form.troca_imei2} onChange={(e) => set("troca_imei2", e.target.value)} placeholder="Ex: 35XXXXX..." className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do 2º seminovo</p><input value={form.troca_obs2} onChange={(e) => set("troca_obs2", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
+                      <div><p className={labelCls}>Serial</p><input value={form.troca_serial2} onChange={(e) => set("troca_serial2", e.target.value.toUpperCase())} placeholder="Ex: F2LX..." className={inputCls} /></div>
+                      <div><p className={labelCls}>IMEI</p><input value={form.troca_imei2} onChange={(e) => set("troca_imei2", e.target.value.replace(/\D/g, "").slice(0, 15))} placeholder="Ex: 35938..." className={inputCls} inputMode="numeric" /></div>
                     </>
                   )}
                 </div>
@@ -2920,21 +2817,14 @@ export default function VendasPage() {
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
-          const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
           const filtered = [...filteredRaw].sort((a, b) => {
+            // Vendas do mesmo grupo ficam juntas
+            if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
+            if (ordenar === "recente") return (b.created_at || "").localeCompare(a.created_at || "");
+            if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
             if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
             if (ordenar === "cliente") return (a.cliente || "").localeCompare(b.cliente || "");
-            // 1. Tipo: UPGRADE → VENDA → ATACADO
-            const tDiff = tipoOrder(a.tipo) - tipoOrder(b.tipo);
-            if (tDiff !== 0) return tDiff;
-            // 2. Agrupa mesmo cliente junto
-            const cDiff = (a.cliente || "").localeCompare(b.cliente || "");
-            if (cDiff !== 0) return cDiff;
-            // 3. Mesmo grupo_id fica colado
-            if (a.grupo_id && b.grupo_id && a.grupo_id === b.grupo_id) return 0;
-            // 4. Data
-            if (ordenar === "antigo") return (a.created_at || "").localeCompare(b.created_at || "");
-            return (b.created_at || "").localeCompare(a.created_at || "");
+            return 0;
           });
 
           // Mapa de grupo_id → vendas do mesmo grupo
@@ -3154,8 +3044,7 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              id={`venda-row-${v.id}`}
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""} ${highlightVendaId === v.id ? "ring-2 ring-inset ring-[#E8740E]" : ""}`}
+                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
                               {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
@@ -3536,17 +3425,9 @@ export default function VendasPage() {
                                             // Detectar se faz parte de um grupo
                                             const grupoVendas = v.grupo_id ? vendas.filter(gv => gv.grupo_id === v.grupo_id) : [v];
                                             const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
-                                            // Usar dados de troca direto da venda (troca_produto, troca_cor, etc.)
-                                            let trocaProd = (v as unknown as Record<string, string>).troca_produto || "";
-                                            let trocaCor = (v as unknown as Record<string, string>).troca_cor || "";
-                                            let trocaBat = String((v as unknown as Record<string, unknown>).troca_bateria || "");
-                                            let trocaObs = (v as unknown as Record<string, string>).troca_obs || "";
-                                            const trocaGrade = (v as unknown as Record<string, string>).troca_grade || "";
-                                            const trocaCaixa = (v as unknown as Record<string, string>).troca_caixa || "";
-                                            const trocaCabo = (v as unknown as Record<string, string>).troca_cabo || "";
-                                            const trocaFonte = (v as unknown as Record<string, string>).troca_fonte || "";
-                                            // Fallback: buscar no estoque se troca_produto não está preenchido na venda
-                                            if (!trocaProd && grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
+                                            // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca (só para venda simples)
+                                            let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
+                                            if (grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
                                               try {
                                                 const res = await fetch("/api/estoque", {
                                                   headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -3567,9 +3448,19 @@ export default function VendasPage() {
                                                     trocaBat = String(pendencia.bateria || "");
                                                     trocaObs = pendencia.observacao || "";
                                                   }
+                                                  // Fallback: usar dados salvos na própria venda se estoque não retornou
+                                                  if (!trocaProd) trocaProd = primaryVenda.troca_produto || "";
+                                                  if (!trocaCor) trocaCor = primaryVenda.troca_cor || "";
+                                                  if (!trocaBat) trocaBat = String(primaryVenda.troca_bateria || "");
+                                                  if (!trocaObs) trocaObs = primaryVenda.troca_obs || "";
                                                 }
                                               } catch { /* ignore */ }
                                             }
+                                            // Garantir fallback dos dados da troca da própria venda
+                                            if (!trocaProd) trocaProd = primaryVenda.troca_produto || "";
+                                            if (!trocaCor) trocaCor = primaryVenda.troca_cor || "";
+                                            if (!trocaBat) trocaBat = String(primaryVenda.troca_bateria || "");
+                                            if (!trocaObs) trocaObs = primaryVenda.troca_obs || "";
 
                                             // Preencher formulário Nova Venda com dados da venda para edição completa
                                             setForm({
@@ -3582,17 +3473,17 @@ export default function VendasPage() {
                                               pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: primaryVenda.origem || "",
                                               tipo: primaryVenda.tipo || "",
-                                              produto: "",
-                                              fornecedor: "",
-                                              custo: "",
-                                              preco_vendido: "",
+                                              produto: grupoVendas.length > 1 ? "" : v.produto,
+                                              fornecedor: grupoVendas.length > 1 ? "" : (v.fornecedor || ""),
+                                              custo: grupoVendas.length > 1 ? "" : String(v.custo || ""),
+                                              preco_vendido: grupoVendas.length > 1 ? "" : String(v.preco_vendido || ""),
                                               valor_comprovante_input: String(grupoVendas.reduce((s, gv) => s + (gv.valor_comprovante || 0), 0) || ""),
                                               banco: primaryVenda.banco || "ITAU",
                                               forma: primaryVenda.forma || "",
                                               qnt_parcelas: String(primaryVenda.qnt_parcelas || ""),
                                               bandeira: primaryVenda.bandeira || "",
                                               local: primaryVenda.local || "",
-                                              produto_na_troca: grupoVendas.length === 1 ? String(primaryVenda.produto_na_troca || "") : "",
+                                              produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || ""),
                                               entrada_pix: String(primaryVenda.entrada_pix || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
@@ -3606,27 +3497,25 @@ export default function VendasPage() {
                                               comp_alt: String(primaryVenda.comp_alt || ""),
                                               sinal_antecipado: String(primaryVenda.sinal_antecipado || ""),
                                               banco_sinal: primaryVenda.banco_sinal || "",
-                                              troca_produto: grupoVendas.length === 1 ? trocaProd : "",
-                                              troca_cor: grupoVendas.length === 1 ? trocaCor : "",
-                                              troca_categoria: grupoVendas.length === 1 ? ((v as unknown as Record<string, string>).troca_categoria || "IPHONES") : "",
-                                              troca_bateria: grupoVendas.length === 1 ? trocaBat : "",
-                                              troca_obs: grupoVendas.length === 1 ? trocaObs : "",
-                                              troca_grade: grupoVendas.length === 1 ? trocaGrade : "",
-                                              troca_caixa: grupoVendas.length === 1 ? trocaCaixa : "",
-                                              troca_cabo: grupoVendas.length === 1 ? trocaCabo : "",
-                                              troca_fonte: grupoVendas.length === 1 ? trocaFonte : "",
-                                              troca_serial_no: grupoVendas.length === 1 ? ((v as unknown as Record<string, string>).troca_serial_no || "") : "",
-                                              troca_imei: grupoVendas.length === 1 ? ((v as unknown as Record<string, string>).troca_imei || "") : "",
-                                              troca_origem: grupoVendas.length === 1 ? ((v as unknown as Record<string, string>).troca_origem || "") : "",
-                                              produto_na_troca2: grupoVendas.length === 1 ? String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || "") : "",
-                                              troca_produto2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_produto2 || "") : "",
-                                              troca_cor2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_cor2 || "") : "",
-                                              troca_categoria2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_categoria2 || "IPHONES") : "",
-                                              troca_bateria2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_bateria2 || "") : "",
-                                              troca_obs2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_obs2 || "") : "",
-                                              troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
-                                              serial_no: "",
-                                              imei: "",
+                                              troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
+                                              troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
+                                              troca_categoria: "",
+                                              troca_bateria: grupoVendas.length > 1 ? "" : trocaBat,
+                                              troca_obs: grupoVendas.length > 1 ? "" : trocaObs,
+                                              troca_grade: grupoVendas.length > 1 ? "" : trocaGrade,
+                                              troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
+                                              troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
+                                              troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
+                                              troca_serial: "", troca_imei: "",
+                                              produto_na_troca2: String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || ""),
+                                              troca_produto2: (primaryVenda as unknown as Record<string, string>).troca_produto2 || "",
+                                              troca_cor2: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "",
+                                              troca_categoria2: "",
+                                              troca_bateria2: (primaryVenda as unknown as Record<string, string>).troca_bateria2 || "",
+                                              troca_obs2: (primaryVenda as unknown as Record<string, string>).troca_obs2 || "",
+                                              troca_serial2: "", troca_imei2: "",
+                                              serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
+                                              imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
                                               bairro: primaryVenda.bairro || "",
                                               cidade: primaryVenda.cidade || "",
@@ -3644,72 +3533,36 @@ export default function VendasPage() {
                                                 local: gv.local || "",
                                                 serial_no: gv.serial_no || "",
                                                 imei: gv.imei || "",
-                                                tipo: (gv as unknown as Record<string, string>).tipo || "NOVO",
                                                 _estoqueId: "",
                                                 _catSel: "",
                                                 _produtoManual: true,
                                                 produto_na_troca: String(gv.produto_na_troca || ""),
                                                 troca_produto: gv.troca_produto || "",
                                                 troca_cor: gv.troca_cor || "",
-                                                troca_categoria: (gv as unknown as Record<string, string>).troca_categoria || "",
+                                                troca_categoria: "",
                                                 troca_bateria: gv.troca_bateria || "",
                                                 troca_obs: gv.troca_obs || "",
-                                                troca_grade: (gv as unknown as Record<string, string>).troca_grade || "",
-                                                troca_caixa: (gv as unknown as Record<string, string>).troca_caixa || "",
-                                                troca_cabo: (gv as unknown as Record<string, string>).troca_cabo || "",
-                                                troca_fonte: (gv as unknown as Record<string, string>).troca_fonte || "",
-                                                troca_serial_no: (gv as unknown as Record<string, string>).troca_serial_no || "",
-                                                troca_imei: (gv as unknown as Record<string, string>).troca_imei || "",
-                                                troca_origem: (gv as unknown as Record<string, string>).troca_origem || "",
+                                                troca_grade: "",
+                                                troca_caixa: "",
+                                                troca_cabo: "",
+                                                troca_fonte: "",
+                                                troca_serial: "", troca_imei: "",
                                                 produto_na_troca2: String((gv as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                                 troca_produto2: (gv as unknown as Record<string, string>).troca_produto2 || "",
                                                 troca_cor2: (gv as unknown as Record<string, string>).troca_cor2 || "",
                                                 troca_categoria2: "",
                                                 troca_bateria2: (gv as unknown as Record<string, string>).troca_bateria2 || "",
                                                 troca_obs2: (gv as unknown as Record<string, string>).troca_obs2 || "",
-                                                troca_grade2: "",
-                                                troca_caixa2: "",
-                                                troca_cabo2: "",
-                                                troca_fonte2: "",
-                                                troca_serial_no2: "",
-                                                troca_imei2: "",
-                                                troca_origem2: "",
+                                                troca_serial2: "", troca_imei2: "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
                                               setEditandoVendaId(grupoVendas[0].id); // sinaliza modo edição
                                               // Campos de produto/troca já foram limpos no setForm acima (grupoVendas.length > 1 ? "" : ...)
                                             } else {
-                                              // Produto original vai para o carrinho, igual ao fluxo de grupo
-                                              setProdutosCarrinho([{
-                                                produto: v.produto,
-                                                fornecedor: v.fornecedor || "",
-                                                custo: String(v.custo || ""),
-                                                preco_vendido: String(v.preco_vendido || ""),
-                                                local: primaryVenda.local || "",
-                                                serial_no: v.serial_no || "",
-                                                imei: v.imei || "",
-                                                tipo: (v as unknown as Record<string, string>).tipo || "NOVO",
-                                                _estoqueId: "",
-                                                _catSel: "",
-                                                _produtoManual: true,
-                                                // Troca fica no form principal (não no item do carrinho) para venda única
-                                                produto_na_troca: "", troca_produto: "", troca_cor: "", troca_categoria: "",
-                                                troca_bateria: "", troca_obs: "", troca_grade: "", troca_caixa: "",
-                                                troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-                                                produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "",
-                                                troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "",
-                                                troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
-                                              }]);
-                                              setEditandoGrupoIds([v.id]);
+                                              setProdutosCarrinho([]);
+                                              setEditandoGrupoIds([]);
                                               setEditandoVendaId(v.id);
-                                              // Restaurar trocaRow para o seletor funcionar — resetar catalogo_modelo_id para auto-match rodar
-                                              const trocaCat = (v as unknown as Record<string, string>).troca_categoria || "IPHONES";
-                                              if (trocaProd) setTrocaRow(r => ({ ...r, catalogo_modelo_id: "", catalogo_modelo_nome: "", produto: trocaProd, cor: trocaCor, categoria: trocaCat }));
-                                              const tp2 = (primaryVenda as unknown as Record<string, string>).troca_produto2 || "";
-                                              const trocaCat2 = (primaryVenda as unknown as Record<string, string>).troca_categoria2 || "IPHONES";
-                                              if (tp2) setTrocaRow2(r => ({ ...r, catalogo_modelo_id: "", catalogo_modelo_nome: "", produto: tp2, cor: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "", categoria: trocaCat2 }));
-                                              setEditandoGrupoVinculo(primaryVenda.grupo_id || null);
                                             }
                                             setTab("nova");
                                             window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4280,8 +4133,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_serial: "", troca_imei: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    troca_serial2: "", troca_imei2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -4311,8 +4166,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_serial_no: "", troca_imei: "", troca_origem: "",
-                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_serial: "", troca_imei: "",
+                    produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
+                    troca_serial2: "", troca_imei2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });

@@ -22,56 +22,79 @@ const TIPO_COLORS: Record<string, string> = {
   multiselect: "bg-orange-100 text-orange-700",
 };
 
+const DEVICE_TABS = [
+  { key: "iphone", label: "iPhone" },
+  { key: "ipad", label: "iPad" },
+  { key: "macbook", label: "MacBook" },
+  { key: "watch", label: "Apple Watch" },
+];
+
 export default function TradeInQuestionsAdmin({ password }: Props) {
   const [questions, setQuestions] = useState<TradeInQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
+  const [deviceTab, setDeviceTab] = useState("iphone");
 
   function getHeaders() {
     return { "x-admin-password": password, "Content-Type": "application/json" };
   }
 
-  useEffect(() => {
-    // Fetch from admin API to include inactive questions
-    fetch("/api/admin/tradein-perguntas?device_type=iphone", { headers: getHeaders() })
+  function fetchQuestions(dt: string) {
+    setLoading(true);
+    setExpandedId(null);
+    fetch(`/api/admin/tradein-perguntas?device_type=${dt}`, { headers: getHeaders() })
       .then(r => r.json())
       .then(json => {
-        setQuestions(json.data || []);
-        if (!json.data || json.data.length === 0) {
-          // Fallback to public API
-          return fetch("/api/tradein-perguntas?device_type=iphone")
+        if (json.data && json.data.length > 0) {
+          setQuestions(json.data);
+        } else {
+          // Fallback: buscar perguntas padrão (hardcoded) e gerar IDs fake
+          return fetch(`/api/tradein-perguntas?device_type=${dt}`)
             .then(r => r.json())
             .then(json2 => {
-              setQuestions(json2.data || []);
-              if (!json2.data || json2.data.length === 0) {
-                setMsg("Nenhuma pergunta encontrada na API.");
+              const qs = (json2.data || []).map((q: TradeInQuestion, i: number) => ({
+                ...q,
+                id: q.id || `fallback-${dt}-${i}`,
+              }));
+              setQuestions(qs);
+              if (qs.length > 0) {
+                setMsg("Perguntas padrao carregadas. Edite e salve pra gravar no banco.");
+                setTimeout(() => setMsg(""), 4000);
               }
             });
         }
       })
       .catch(err => setMsg("Erro: " + String(err)))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetchQuestions(deviceTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [deviceTab]);
 
   async function handleSave(q: TradeInQuestion) {
     setSaving(q.id);
     try {
+      // Se o ID parece ser do fallback (não é UUID válido), criar no banco via POST
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q.id);
+      const method = isUUID ? "PUT" : "POST";
+      const body = isUUID
+        ? { id: q.id, titulo: q.titulo, opcoes: q.opcoes, config: q.config, ativo: q.ativo }
+        : { slug: q.slug, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
       const res = await fetch("/api/admin/tradein-perguntas", {
-        method: "PUT",
+        method,
         headers: getHeaders(),
-        body: JSON.stringify({
-          id: q.id,
-          titulo: q.titulo,
-          opcoes: q.opcoes,
-          config: q.config,
-          ativo: q.ativo,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (json.ok) {
+        // Se criou no banco, atualizar o ID local com o UUID real
+        if (!isUUID && json.data?.id) {
+          setQuestions(prev => prev.map(p => p.id === q.id ? { ...p, id: json.data.id } : p));
+        }
         setMsg(`"${q.titulo}" salvo!`);
         setTimeout(() => setMsg(""), 3000);
       } else {
@@ -146,6 +169,15 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Device type tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {DEVICE_TABS.map(t => (
+          <button key={t.key} onClick={() => setDeviceTab(t.key)}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${deviceTab === t.key ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
       {msg && (
         <div
           className="rounded-xl px-4 py-3 text-sm font-medium"
@@ -168,8 +200,38 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
 
       <div className="border-t border-[#E5E5EA] my-6" />
 
-      <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider px-1 mb-2">
-        Perguntas de Avaliação do Aparelho
+      <div className="flex items-center justify-between px-1 mb-2">
+        <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+          Perguntas de Avaliação do Aparelho
+        </div>
+        <button
+          onClick={async () => {
+            const titulo = prompt("Titulo da nova pergunta:");
+            if (!titulo) return;
+            const tipo = prompt("Tipo (yesno, selection, numeric, multiselect, conditional_date):", "yesno");
+            if (!tipo) return;
+            const slug = titulo.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 30);
+            const ordem = questions.length + 1;
+            try {
+              const res = await fetch("/api/admin/tradein-perguntas", {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({ slug, titulo, tipo, opcoes: tipo === "yesno" ? [{ value: "yes", label: "Sim", discount: 0 }, { value: "no", label: "Nao", discount: 0 }] : [], ordem, ativo: true, config: {}, device_type: deviceTab }),
+              });
+              const json = await res.json();
+              if (json.ok && json.data) {
+                setQuestions(prev => [...prev, json.data]);
+                setMsg("Pergunta criada! Clique nela pra editar opcoes e descontos.");
+                setTimeout(() => setMsg(""), 4000);
+              } else {
+                setMsg("Erro: " + (json.error || "falha ao criar"));
+              }
+            } catch { setMsg("Erro de rede ao criar pergunta"); }
+          }}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+        >
+          + Nova Pergunta
+        </button>
       </div>
 
       {questions.map((q, idx) => {
@@ -227,6 +289,26 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Delete button */}
+              <div onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Excluir pergunta "${q.titulo}"?`)) return;
+                    const isUUID = /^[0-9a-f]{8}-/i.test(q.id);
+                    if (isUUID) {
+                      try {
+                        await fetch("/api/admin/tradein-perguntas", { method: "DELETE", headers: getHeaders(), body: JSON.stringify({ id: q.id }) });
+                      } catch { /* ignore */ }
+                    }
+                    setQuestions(prev => prev.filter(p => p.id !== q.id));
+                    setMsg("Pergunta excluida!");
+                    setTimeout(() => setMsg(""), 2000);
+                  }}
+                  className="text-[#D2D2D7] hover:text-red-500 text-xs transition-colors"
+                  title="Excluir pergunta"
+                >🗑️</button>
               </div>
 
               {/* Expand icon */}

@@ -74,6 +74,7 @@ const NAV: NavEntry[] = [
     items: [
       { href: "/admin/mostruario", label: "Mostruario", icon: "\u{1F5BC}\uFE0F", pageKey: "mostruario" },
       { href: "/admin/simulacoes", label: "Simulacoes", icon: "\u{1F4F1}", pageKey: "simulacoes" },
+      { href: "/admin/tradein-precos", label: "Precos Trade-In", icon: "\u{1F4B0}", pageKey: "tradein_precos" },
       { href: "/admin/analytics", label: "Funil Trade-In", icon: "\u{1F4C8}", pageKey: "funil_tradein" },
     ],
   },

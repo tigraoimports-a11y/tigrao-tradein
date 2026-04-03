@@ -43,6 +43,44 @@ export default function GerarLinkPage() {
       .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel]);
+  const [corSel, setCorSel] = useState("");
+
+  // Fetch estoque para obter cores reais disponíveis
+  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number }[]>([]);
+  useEffect(() => {
+    if (!adminPw) return;
+    fetch("/api/estoque", { headers: adminHeaders() })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data && Array.isArray(j.data)) {
+          setEstoqueItems(
+            j.data
+              .filter((p: { status?: string; qnt?: number }) => p.status === "EM ESTOQUE" && (p.qnt || 0) > 0)
+              .map((p: { produto: string; cor: string | null; qnt: number }) => ({
+                produto: p.produto, cor: p.cor, qnt: p.qnt
+              }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cores reais do estoque para o produto selecionado
+  const coresDisponiveis = useMemo(() => {
+    if (!produtos[0]) return [];
+    const prodSel = produtos[0].toLowerCase();
+    // Buscar itens do estoque cujo nome do produto contenha o modelo selecionado
+    const cores = new Set<string>();
+    for (const item of estoqueItems) {
+      const prodEstoque = item.produto.toLowerCase();
+      // Match: produto do estoque contém o nome selecionado (ex: "iPhone 17 Pro 256GB" match "iPhone 17 Pro 256GB Prata")
+      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+      }
+    }
+    return [...cores].sort();
+  }, [produtos, estoqueItems]);
+
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
@@ -98,7 +136,8 @@ export default function GerarLinkPage() {
 
     // Montar dados com keys curtas
     const shortData: Record<string, string> = {};
-    shortData.p = prodsFilled[0];
+    // Incluir cor no nome do produto se selecionada
+    shortData.p = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
     for (let i = 1; i < prodsFilled.length; i++) {
       shortData[`p${i + 1}`] = prodsFilled[i];
     }
@@ -318,7 +357,7 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); }} className={inputCls}>
+            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); }} className={inputCls}>
               <option value="">-- Categoria --</option>
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
             </select>
@@ -328,14 +367,29 @@ export default function GerarLinkPage() {
                 {produtosFiltradosPreco.map((m) => {
                   const sel = produtos[0] === m.nome;
                   return (
-                    <button key={m.nome} onClick={() => {
-                      if (sel) { setProdutos([""]); setPreco(""); return; }
-                      setProdutos([m.nome]);
-                      setPreco(m.preco.toLocaleString("pt-BR"));
-                    }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                      <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                      <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
-                    </button>
+                    <div key={m.nome}>
+                      <button onClick={() => {
+                        if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
+                        setProdutos([m.nome]);
+                        setPreco(m.preco.toLocaleString("pt-BR"));
+                        setCorSel("");
+                      }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                        <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                        <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                      </button>
+                      {sel && coresDisponiveis.length > 0 && (
+                        <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
+                          <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {coresDisponiveis.map(cor => (
+                              <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                              >{cor}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -472,7 +526,6 @@ export default function GerarLinkPage() {
             <option value="">-- Selecionar --</option>
             <option value="Andre">Andre</option>
             <option value="Bianca">Bianca</option>
-            <option value="Nicolas">Nicolas</option>
             <option value="Nicole">Nicole</option>
           </select>
         </div>
