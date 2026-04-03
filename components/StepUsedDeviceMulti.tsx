@@ -309,11 +309,57 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       ) : null}
 
       {model && !isExcluded && storages.length > 0 && (
-        <Section title="Armazenamento">
-          <div className="flex gap-2 flex-wrap">
-            {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => { setStorage(s); tq("storage"); }} className="flex-1 min-w-[80px]">{s}</Btn>)}
-          </div>
-        </Section>
+        deviceType === "macbook" ? (
+          // MacBook: agrupar por RAM e mostrar SSD separado
+          (() => {
+            // storages são tipo "256GB/8GB", "512GB/8GB", "256GB/16GB" etc.
+            const parsed = storages.map(s => {
+              const parts = s.split("/");
+              const ssd = parts[0] || s;
+              const ram = parts[1] || "";
+              return { raw: s, ssd, ram };
+            });
+            // Agrupar por RAM
+            const byRam: Record<string, typeof parsed> = {};
+            for (const p of parsed) {
+              const key = p.ram || "default";
+              if (!byRam[key]) byRam[key] = [];
+              byRam[key].push(p);
+            }
+            const ramGroups = Object.entries(byRam).sort(([a], [b]) => {
+              const na = parseInt(a) || 0;
+              const nb = parseInt(b) || 0;
+              return na - nb;
+            });
+            return (
+              <Section title="Qual a configuracao do seu MacBook?">
+                <div className="space-y-4">
+                  {ramGroups.map(([ram, items]) => (
+                    <div key={ram}>
+                      {ram && ram !== "default" && ramGroups.length > 1 && (
+                        <p className="text-[13px] font-semibold mb-2 text-center" style={{ color: "var(--ti-text)" }}>{ram} RAM</p>
+                      )}
+                      <div className={`grid gap-2 ${items.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}>
+                        {items.map(({ raw, ssd, ram: r }) => (
+                          <Btn key={raw} sel={storage === raw} onClick={() => { setStorage(raw); tq("storage"); }}
+                            className="w-full text-center">
+                            {r ? `${r} RAM / ${ssd} SSD` : ssd}
+                          </Btn>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            );
+          })()
+        ) : (
+          <Section title="Armazenamento">
+            <div className="flex gap-2 flex-wrap">
+              {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => { setStorage(s); tq("storage"); }} className="flex-1 min-w-[80px]">{s}</Btn>)}
+            </div>
+          </Section>
+        )
       )}
 
       {model && storage && !isExcluded && isQActive(qc, "hasDamage") && (
