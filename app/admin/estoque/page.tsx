@@ -148,8 +148,6 @@ const COR_PT: Record<string, string> = {
   "JET BLACK": "Preto Brilhante",
   "CLOUD WHITE": "Branco Nuvem",
   "SKY BLUE": "Azul Céu",
-  "TEAL": "Verde-azulado",
-  "DEEP BLUE": "Azul Profundo",
 };
 
 function traduzirCor(cor: string | null | undefined): string {
@@ -214,7 +212,6 @@ const PT_TO_EN: Record<string, string> = {
   "AZUL CÉU": "Sky Blue",
   "AZUL CEU": "Sky Blue",
   "VERDE-AZULADO": "Teal",
-  "AZUL PROFUNDO": "Deep Blue",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
