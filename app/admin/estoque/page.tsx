@@ -272,10 +272,21 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   const corClean = (categoria === "IPHONES" || !categoria) ? stripCode(cor) : cor;
   const upper = corClean.toUpperCase().trim();
   const en = PT_TO_EN[upper];
+  const corEN = en ? en.toUpperCase() : upper; // cor em inglês (ou original se não tem tradução)
   if (en) {
     // Substitui a cor em PT pelo equivalente EN no nome (case-insensitive)
     const pattern = upper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-    try { display = display.replace(new RegExp(pattern, "gi"), en.toUpperCase()); } catch { /* ignore */ }
+    const before = display;
+    try { display = display.replace(new RegExp(pattern, "gi"), corEN); } catch { /* ignore */ }
+    // Se não substituiu (cor não estava no nome), anexar a cor EN ao final
+    if (display === before && !display.toUpperCase().includes(corEN)) {
+      display = `${display} ${corEN}`;
+    }
+  } else {
+    // Cor sem tradução — se não está no nome, anexar
+    if (!display.toUpperCase().includes(upper)) {
+      display = `${display} ${cor}`;
+    }
   }
   return display;
 }
@@ -3745,20 +3756,11 @@ export default function EstoquePage() {
                         className={`w-full text-[15px] font-bold mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                       />
                     ) : (
-                      <p className={`text-[16px] font-bold ${mP} mt-0.5`}>{p.produto}</p>
+                      <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
+                        {displayNomeProduto(p.produto, p.cor, p.categoria)}
+                        {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
+                      </p>
                     )}
-                    {/* Cor bilíngue (EN · PT) abaixo do nome do produto */}
-                    {p.cor && (() => {
-                      const upper = p.cor.toUpperCase().trim();
-                      const en = PT_TO_EN[upper];
-                      const pt = COR_PT[upper];
-                      // Cor armazenada em PT → mostrar EN principal + PT secundário
-                      if (en) return <p className={`text-[13px] mt-0.5`}><span className="font-semibold" style={{ color: "#E8740E" }}>{en}</span> <span className={`text-[12px] ${mS}`}>· {p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></p>;
-                      // Cor armazenada em EN → mostrar EN principal + PT secundário
-                      if (pt && pt.toLowerCase() !== p.cor.toLowerCase()) return <p className={`text-[13px] mt-0.5`}><span className="font-semibold" style={{ color: "#E8740E" }}>{p.cor}</span> <span className={`text-[12px] ${mS}`}>· {pt}</span></p>;
-                      // Sem tradução → mostrar como está
-                      return <p className={`text-[13px] font-semibold mt-0.5`} style={{ color: "#E8740E" }}>{p.cor}</p>;
-                    })()}
                   </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
