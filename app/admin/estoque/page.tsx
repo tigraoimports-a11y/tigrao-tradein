@@ -2505,6 +2505,8 @@ export default function EstoquePage() {
             const cat = form.categoria || "";
             const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
             const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+            const showPulseira = cat === "APPLE_WATCH";
+            const showCiclos = cat === "MACBOOK";
             return (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
@@ -2531,7 +2533,18 @@ export default function EstoquePage() {
                   const obs = form.observacao || "";
                   set("observacao", e.target.checked ? `${obs} [COM_FONTE]`.trim() : obs.replace("[COM_FONTE]", "").trim());
                 }} className="accent-[#E8740E]" /> 🔋 Carregador</label>}
+                {showPulseira && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_PULSEIRA]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_PULSEIRA]`.trim() : obs.replace("[COM_PULSEIRA]", "").trim());
+                }} className="accent-[#E8740E]" /> ⌚ Pulseira</label>}
               </div>
+              {showCiclos && (
+                <div><p className={labelCls}>Ciclos de Bateria</p><input type="number" value={form.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1] || ""} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  const cleaned = obs.replace(/\[CICLOS:\d+\]/g, "").trim();
+                  set("observacao", e.target.value ? `${cleaned} [CICLOS:${e.target.value}]`.trim() : cleaned || "");
+                }} placeholder="Ex: 120" className={inputCls} /></div>
+              )}
               <div><p className={labelCls}>Cliente (comprado de)</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className={inputCls} /></div>
               <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
             </div>
@@ -3911,6 +3924,18 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
                       )}
+                      {/* Pulseira badge */}
+                      {(p.observacao?.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">⌚ Com Pulseira</span></div>
+                      )}
+                      {/* Ciclos badge */}
+                      {(() => {
+                        const ciclos = p.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1];
+                        if (!ciclos) return null;
+                        return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos</p>
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-blue-100 text-blue-700">🔄 {ciclos} ciclos</span></div>;
+                      })()}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
                         const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
@@ -4059,12 +4084,18 @@ export default function EstoquePage() {
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
                     const hasCabo = p.observacao?.includes("[COM_CABO]") || /com\s+cabo/i.test(p.observacao || "");
                     const hasFonte = p.observacao?.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(p.observacao || "");
+                    const hasPulseira = p.observacao?.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(p.observacao || "");
+                    const currentCiclos = p.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1] || "";
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
                     const cat = p.categoria || "";
                     // Cabo: iPhones, MacBook, iPad, Apple Watch
                     const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
                     // Carregador: MacBook, iPad
                     const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+                    // Pulseira: Apple Watch
+                    const showPulseira = cat === "APPLE_WATCH";
+                    // Ciclos: MacBook
+                    const showCiclos = cat === "MACBOOK";
                     const toggleTag = async (tag: string, label: string, has: boolean, want: boolean) => {
                       if (want === has) return;
                       const obs = p.observacao || "";
@@ -4127,6 +4158,39 @@ export default function EstoquePage() {
                               <option value="NAO">Sem carregador</option>
                               <option value="SIM">🔋 Com carregador</option>
                             </select>
+                          </div>
+                        )}
+                        {showPulseira && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                            <select value={hasPulseira ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_PULSEIRA", "Com pulseira", hasPulseira, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem pulseira</option>
+                              <option value="SIM">⌚ Com pulseira</option>
+                            </select>
+                          </div>
+                        )}
+                        {showCiclos && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos de Bateria</p>
+                            <input
+                              type="number" min={0}
+                              defaultValue={currentCiclos}
+                              placeholder="Ex: 120"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim();
+                                const obs = p.observacao || "";
+                                const cleaned = obs.replace(/\[CICLOS:\d+\]/g, "").trim();
+                                const finalObs = val ? `${cleaned} [CICLOS:${val}]`.trim() : (cleaned || null);
+                                if (finalObs !== (p.observacao || null)) {
+                                  await apiPatch(p.id, { observacao: finalObs });
+                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                                  setDetailProduct({ ...p, observacao: finalObs });
+                                  setMsg(val ? `Ciclos: ${val}` : "Ciclos removido!");
+                                }
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                            />
                           </div>
                         )}
                       </div>
