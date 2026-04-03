@@ -3324,13 +3324,13 @@ export default function EstoquePage() {
                                               const isUsado = p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA";
                                               if (!isUsado) return null;
                                               return (<>
-                                                {grade && <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${grade === "A+" ? "bg-amber-50 text-amber-600" : grade === "A" ? "bg-green-50 text-green-600" : grade === "AB" ? "bg-yellow-50 text-yellow-600" : "bg-orange-50 text-orange-600"}`}>{grade}</span>}
-                                                {hasCaixa && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">📦</span>}
-                                                {hasCabo && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔌</span>}
-                                                {hasFonte && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔋</span>}
-                                                {hasPulseira && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">⌚</span>}
-                                                {ciclos && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔄{ciclos}</span>}
-                                                {p.garantia && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-600">🛡️{p.garantia}</span>}
+                                                {grade && <span className={`px-1 py-px rounded text-[9px] font-bold ${grade === "A+" ? "bg-amber-100 text-amber-700" : grade === "A" ? "bg-green-100 text-green-700" : grade === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{grade}</span>}
+                                                {hasCaixa && <span className="text-[9px]" title="Com caixa">📦</span>}
+                                                {hasCabo && <span className="text-[9px]" title="Com cabo">🔌</span>}
+                                                {hasFonte && <span className="text-[9px]" title="Com carregador">🔋</span>}
+                                                {hasPulseira && <span className="text-[9px]" title="Com pulseira">⌚</span>}
+                                                {ciclos && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
+                                                {p.garantia && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
                                               </>);
                                             })()}
                                             {/* Origem/Obs */}
@@ -3340,11 +3340,11 @@ export default function EstoquePage() {
                                                 <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                               </div>
                                             ) : isEditableItemTab ? (
-                                              <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
-                                                {p.observacao || "+ Origem"}
+                                              <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cleanObs(p.observacao) ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
+                                                {cleanObs(p.observacao) || "+ Obs"}
                                               </button>
-                                            ) : p.observacao ? (
-                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{p.observacao}</span>
+                                            ) : cleanObs(p.observacao) ? (
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{cleanObs(p.observacao)}</span>
                                             ) : null}
                                           </div>
                                           {!isEditableItemTab && p.data_entrada && (
