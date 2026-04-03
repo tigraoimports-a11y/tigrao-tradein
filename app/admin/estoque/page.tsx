@@ -2665,7 +2665,37 @@ export default function EstoquePage() {
                                   </td>
                                   <td className={`px-4 py-2.5 text-sm font-semibold ${isRecebido ? (dm ? "text-[#98989D]" : "text-[#86868B]") : textPrimary}`} onClick={() => setDetailProduct(p)}>
                                     {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                                    {corSoPT(p.cor, p.produto) && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{corSoPT(p.cor, p.produto)}</span>}
+                                    {(() => {
+                                      const ptLabel = corSoPT(p.cor, p.produto);
+                                      const editKey = `${p.id}_corpt_ac`;
+                                      if (editingCorPT[editKey] !== undefined) {
+                                        return (
+                                          <span className="inline-flex items-center gap-0.5 ml-1.5" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                              value={editingCorPT[editKey]}
+                                              onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === "Enter") {
+                                                  const newCor = editingCorPT[editKey];
+                                                  if (newCor) { await apiPatch(p.id, { cor: newCor }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: newCor } : x)); }
+                                                  setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                }
+                                                if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                              }}
+                                              className={`w-24 px-1 py-0.5 rounded border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
+                                              autoFocus placeholder="Cor..."
+                                            />
+                                            <button onClick={async () => { const newCor = editingCorPT[editKey]; if (newCor) { await apiPatch(p.id, { cor: newCor }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: newCor } : x)); } setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; }); }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                            <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
+                                          </span>
+                                        );
+                                      }
+                                      return ptLabel ? (
+                                        <span className={`ml-1.5 text-[11px] font-normal ${textSecondary} cursor-pointer hover:text-[#E8740E]`} onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: p.cor || ptLabel || "" })); }} title="Editar cor">{ptLabel}</span>
+                                      ) : p.cor ? (
+                                        <span className={`ml-1.5 text-[10px] font-normal opacity-40 cursor-pointer hover:opacity-80 hover:text-[#E8740E]`} onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: p.cor || "" })); }} title="Adicionar nome em PT">+PT</span>
+                                      ) : null;
+                                    })()}
                                     {isRecebido
                                       ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{p.data_entrada && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada)}</span>}</>
                                       : (p.serial_no || p.imei) && (
@@ -3151,7 +3181,7 @@ export default function EstoquePage() {
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel || "" })); }}
                                                 title="Clique para editar a cor"
                                               >{ptLabel}</span>
-                                            ) : canEditNome && prodItems[0]?.cor ? (
+                                            ) : prodItems[0]?.cor ? (
                                               <span
                                                 className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || "" })); }}
@@ -3267,7 +3297,7 @@ export default function EstoquePage() {
                                               <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                             </div>
                                           ) : (
-                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {traduzirCor(p.cor)}</span>
+                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {(() => { const u = (p.cor || "").toUpperCase().trim(); const en = PT_TO_EN[u]; if (en) return <>{en}<span className="ml-1 opacity-60 text-[10px]">({p.cor?.charAt(0).toUpperCase()}{p.cor?.slice(1).toLowerCase()})</span></>; const pt = COR_PT[u]; if (pt && pt.toLowerCase() !== (p.cor || "").toLowerCase()) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({pt})</span></>; return p.cor || "—"; })()}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
@@ -3717,6 +3747,18 @@ export default function EstoquePage() {
                     ) : (
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>{p.produto}</p>
                     )}
+                    {/* Cor bilíngue (EN · PT) abaixo do nome do produto */}
+                    {p.cor && (() => {
+                      const upper = p.cor.toUpperCase().trim();
+                      const en = PT_TO_EN[upper];
+                      const pt = COR_PT[upper];
+                      // Cor armazenada em PT → mostrar EN principal + PT secundário
+                      if (en) return <p className={`text-[13px] mt-0.5`}><span className="font-semibold" style={{ color: "#E8740E" }}>{en}</span> <span className={`text-[12px] ${mS}`}>· {p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></p>;
+                      // Cor armazenada em EN → mostrar EN principal + PT secundário
+                      if (pt && pt.toLowerCase() !== p.cor.toLowerCase()) return <p className={`text-[13px] mt-0.5`}><span className="font-semibold" style={{ color: "#E8740E" }}>{p.cor}</span> <span className={`text-[12px] ${mS}`}>· {pt}</span></p>;
+                      // Sem tradução → mostrar como está
+                      return <p className={`text-[13px] font-semibold mt-0.5`} style={{ color: "#E8740E" }}>{p.cor}</p>;
+                    })()}
                   </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
@@ -4047,8 +4089,8 @@ export default function EstoquePage() {
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                         >
                           <option value="">— Selecionar —</option>
-                          {p.cor && !coresCat.includes(p.cor) && <option key={p.cor} value={p.cor}>{p.cor}</option>}
-                          {coresCat.map((c) => <option key={c} value={c}>{c}</option>)}
+                          {p.cor && !coresCat.includes(p.cor) && <option key={p.cor} value={p.cor}>{(() => { const u = p.cor.toUpperCase().trim(); const en = PT_TO_EN[u]; return en ? `${en} · ${p.cor}` : p.cor; })()}</option>}
+                          {coresCat.map((c) => { const u = c.toUpperCase().trim(); const en = PT_TO_EN[u]; return <option key={c} value={c}>{en ? `${en} · ${c}` : c}</option>; })}
                         </select>
                       ) : (
                         <input
@@ -4068,7 +4110,7 @@ export default function EstoquePage() {
                         />
                       );
                     })() : p.cor ? (
-                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.cor}</p>
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor)}</p>
                     ) : null}
                   </div>
                   {(p.imei || isAdmin || canEditImei) && (
