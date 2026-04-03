@@ -1536,13 +1536,16 @@ export default function EstoquePage() {
     return true;
   });
 
-  // Agrupar por categoria, depois por modelo base
+  // Agrupar por categoria (ou por cliente/fornecedor nas pendências), depois por modelo base
   const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
   filtered.forEach((p) => {
-    if (!byCat[p.categoria]) byCat[p.categoria] = {};
+    const catKey = tab === "pendencias"
+      ? (p.fornecedor || p.cliente || "Sem fornecedor").toUpperCase()
+      : p.categoria;
+    if (!byCat[catKey]) byCat[catKey] = {};
     const modelo = getModeloBase(p.produto, p.categoria);
-    if (!byCat[p.categoria][modelo]) byCat[p.categoria][modelo] = [];
-    byCat[p.categoria][modelo].push(p);
+    if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
+    byCat[catKey][modelo].push(p);
   });
 
   // KPIs
@@ -2813,9 +2816,14 @@ export default function EstoquePage() {
             {Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                  {dynamicCatLabels[cat] || cat}
+                  {tab === "pendencias" ? (
+                    <span className="flex items-center gap-2">
+                      <span className={`text-sm ${textSecondary}`}>👤</span>
+                      {cat}
+                    </span>
+                  ) : (dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
-                    {Object.values(modelos).flat().length} produtos | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
+                    {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
                 </h2>
 
