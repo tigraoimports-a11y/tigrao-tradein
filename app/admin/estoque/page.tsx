@@ -259,6 +259,24 @@ function extractCorPT(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
+/** Extrai a origem de um iPhone a partir do nome do produto ou da observação */
+function extractOrigem(produto: string, observacao?: string | null): string | null {
+  // 1. Tentar extrair da observação (ex: "HN (IN) - Chip Fisico + E-sim")
+  if (observacao) {
+    for (const orig of IPHONE_ORIGENS) {
+      const code = orig.split(" ")[0]; // "HN", "LL", etc.
+      if (observacao.toUpperCase().startsWith(code)) return orig;
+    }
+  }
+  // 2. Tentar extrair do final do nome do produto (ex: "IPHONE 16 128GB BLACK HN")
+  const upper = produto.toUpperCase().trim();
+  for (const orig of IPHONE_ORIGENS) {
+    const code = orig.split(" ")[0];
+    if (upper.endsWith(` ${code}`)) return orig;
+  }
+  return null;
+}
+
 /** Corrige nomes de produto que foram cadastrados com formato antigo/errado */
 function fixProdutoName(nome: string, categoria?: string | null): string {
   let n = nome;
@@ -3814,28 +3832,44 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones, campo separado do nome */}
-                {p.categoria === "IPHONES" && isAdmin && (
-                  <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
-                    <select
-                      value={p.origem ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value || null;
-                        try {
-                          await apiPatch(p.id, { origem: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
-                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                          setMsg("✅ Origem atualizada!");
-                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                      }}
-                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                    >
-                      <option value="">— Sem origem —</option>
-                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                )}
+                {/* Origem — apenas para iPhones */}
+                {p.categoria === "IPHONES" && (() => {
+                  const origemDetected = p.origem || extractOrigem(p.produto, p.observacao);
+                  if (canEdit) {
+                    // Editável em pendências/a caminho
+                    return (
+                      <div className="mb-3">
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
+                        <select
+                          value={p.origem ?? origemDetected ?? ""}
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
+                            try {
+                              await apiPatch(p.id, { origem: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                              setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                              setMsg("✅ Origem atualizada!");
+                            } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        >
+                          <option value="">— Sem origem —</option>
+                          {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    );
+                  }
+                  // Read-only no estoque
+                  if (origemDetected) {
+                    return (
+                      <div className="mb-3">
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p>
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{origemDetected}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     const qnt = p.qnt || 1;
@@ -3982,10 +4016,10 @@ export default function EstoquePage() {
                       {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
-                  {/* Cor — dropdown pelo catálogo da categoria */}
+                  {/* Cor — editável só em pendências/a caminho, read-only no estoque */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (() => {
+                    {canEdit ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
