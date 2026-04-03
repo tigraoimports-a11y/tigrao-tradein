@@ -89,6 +89,7 @@ export default function GerarLinkPage() {
   const [shoppingNome, setShoppingNome] = useState("");
   const [horario, setHorario] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
+  const [desconto, setDesconto] = useState("");
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
@@ -115,9 +116,10 @@ export default function GerarLinkPage() {
 
   // Cálculos
   const precoBase = parseFloat(rawPreco) || 0;
+  const descontoNum = parseFloat(desconto.replace(/\./g, "").replace(",", ".")) || 0;
   const trocaNum = parseFloat(rawTrocaVal) || 0;
   const entradaNum = parseFloat(rawEntrada) || 0;
-  const valorSemTaxa = Math.max(0, precoBase - trocaNum);
+  const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaNum);
   const valorParcelar = Math.max(0, valorSemTaxa - entradaNum);
   const numParcelas = parseInt(parcelas) || 0;
   const taxa = (forma === "Cartao Credito" && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
@@ -142,6 +144,7 @@ export default function GerarLinkPage() {
       shortData[`p${i + 1}`] = prodsFilled[i];
     }
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+    if (descontoNum > 0) shortData.dc = String(descontoNum);
     shortData.s = vendedorNome || "";
     shortData.w = whatsappDestino;
     if (forma) shortData.f = forma;
@@ -396,7 +399,7 @@ export default function GerarLinkPage() {
             )}
           </div>
         )}
-        <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+        <button onClick={() => { setProdutos([...produtos, ""]); if (!produtoManual) setProdutoManual(true); }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
           <label className={labelCls}>Preco Base (R$)</label>
@@ -406,6 +409,18 @@ export default function GerarLinkPage() {
             value={preco}
             onChange={(e) => setPreco(formatPreco(e.target.value))}
             placeholder="Ex: 8.797 (valor total)"
+            className={inputCls}
+          />
+        </div>
+
+        <div>
+          <label className={labelCls}>Desconto (R$)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={desconto}
+            onChange={(e) => setDesconto(formatPreco(e.target.value))}
+            placeholder="Ex: 200 (opcional)"
             className={inputCls}
           />
         </div>
@@ -539,6 +554,12 @@ export default function GerarLinkPage() {
                 <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Preço Base (PIX)</span>
                 <span className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>R$ {precoBase.toLocaleString("pt-BR")}</span>
               </div>
+              {descontoNum > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-blue-500">Desconto</span>
+                  <span className="font-semibold text-blue-500">- R$ {descontoNum.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
               {trocaNum > 0 && (
                 <div className="flex justify-between">
                   <span className="text-green-500">Troca (avaliação)</span>
