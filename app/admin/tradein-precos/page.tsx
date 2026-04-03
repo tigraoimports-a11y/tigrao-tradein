@@ -39,6 +39,11 @@ export default function TradeInPrecosPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState("");
 
+  // Adicionar variação inline
+  const [addingVariacao, setAddingVariacao] = useState<string | null>(null); // modelo name
+  const [varArm, setVarArm] = useState("");
+  const [varValor, setVarValor] = useState("");
+
   const fetchData = useCallback(async () => {
     if (!password) return;
     try {
@@ -120,6 +125,23 @@ export default function TradeInPrecosPage() {
       setMsg("Excluido!");
       setTimeout(() => setMsg(""), 2000);
     } catch { setMsg("Erro ao excluir"); }
+  }
+
+  async function handleAddVariacao(modelo: string) {
+    if (!varArm || !varValor) return;
+    setSaving("var");
+    try {
+      await fetch("/api/admin/usados", {
+        method: "POST",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsert_valor", modelo, armazenamento: varArm.trim(), valor_base: Number(varValor) }),
+      });
+      setVarArm(""); setVarValor(""); setAddingVariacao(null);
+      setMsg("Variacao adicionada!");
+      setTimeout(() => setMsg(""), 2000);
+      fetchData();
+    } catch { setMsg("Erro ao adicionar"); }
+    setSaving(null);
   }
 
   async function handleAdd() {
@@ -221,8 +243,27 @@ export default function TradeInPrecosPage() {
           <div key={modelo} className={`${bgCard} border ${borderCard} rounded-xl overflow-hidden`}>
             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
               <span className={`text-sm font-bold ${textPrimary}`}>{modelo}</span>
-              <span className={`text-xs ${textSecondary}`}>{items.length} {items.length === 1 ? "variacao" : "variacoes"}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setAddingVariacao(addingVariacao === modelo ? null : modelo); setVarArm(""); setVarValor(""); }}
+                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${addingVariacao === modelo ? (dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#D2D2D7] text-[#86868B]") : "text-[#E8740E] hover:bg-[#FFF5EB]"}`}>
+                  {addingVariacao === modelo ? "Cancelar" : "+ Variacao"}
+                </button>
+                <span className={`text-xs ${textSecondary}`}>{items.length} {items.length === 1 ? "variacao" : "variacoes"}</span>
+              </div>
             </div>
+            {addingVariacao === modelo && (
+              <div className={`px-4 py-2.5 flex items-center gap-2 ${dm ? "bg-[#1C1C1E] border-b border-[#3A3A3C]" : "bg-[#FFF8F0] border-b border-[#E8740E]/20"}`}>
+                <input value={varArm} onChange={e => setVarArm(e.target.value)} placeholder="Ex: 1TB/32GB" className={`${inputCls} w-36`} autoFocus
+                  onKeyDown={e => { if (e.key === "Enter" && varArm && varValor) { handleAddVariacao(modelo); } }} />
+                <span className={`text-sm ${textSecondary}`}>R$</span>
+                <input type="number" value={varValor} onChange={e => setVarValor(e.target.value)} placeholder="8500" className={`${inputCls} w-24`}
+                  onKeyDown={e => { if (e.key === "Enter" && varArm && varValor) { handleAddVariacao(modelo); } }} />
+                <button onClick={() => handleAddVariacao(modelo)} disabled={!varArm || !varValor || saving === "var"}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                  {saving === "var" ? "..." : "Adicionar"}
+                </button>
+              </div>
+            )}
             <div className="divide-y divide-[#E5E5EA]">
               {items.map(item => (
                 <div key={item.id} className={`px-4 py-2.5 flex items-center gap-3 ${dm ? "divide-[#3A3A3C]" : ""}`}>
