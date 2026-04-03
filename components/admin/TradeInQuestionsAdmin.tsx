@@ -397,8 +397,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                             }}
                             className="w-20 px-2 py-1 rounded border border-[#D2D2D7] text-sm text-center focus:outline-none focus:border-[#E8740E]"
                           />
+                          <button onClick={() => {
+                            const thresholds = [...(q.config.thresholds as Array<{ below: number; discount: number }>)];
+                            thresholds.splice(ti, 1);
+                            updateConfig(q.id, "thresholds", thresholds);
+                          }} className="text-red-400 hover:text-red-600 text-xs">✕</button>
                         </div>
                       ))}
+                      <button onClick={() => {
+                        const current = Array.isArray((q.config as Record<string, unknown>).thresholds) ? [...(q.config.thresholds as Array<{ below: number; discount: number }>)] : [];
+                        current.push({ below: 80, discount: -200 });
+                        updateConfig(q.id, "thresholds", current);
+                      }} className="text-xs font-semibold text-[#E8740E] hover:underline mt-1">+ Adicionar threshold</button>
                     </div>
                   </div>
                 )}
