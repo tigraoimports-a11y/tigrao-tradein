@@ -4095,44 +4095,42 @@ export default function EstoquePage() {
                   {!isLac && (p.garantia || isAdmin || canEdit) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Garantia</p>
-                      {(canEdit || isAdmin) ? (
+                      {(canEdit || isAdmin) ? (() => {
+                        const saveGarantia = async () => {
+                          const el = document.getElementById(`garantia-${p.id}`) as HTMLInputElement;
+                          const val = el?.value?.trim() || null;
+                          if (val !== (p.garantia || null)) {
+                            await apiPatch(p.id, { garantia: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
+                            setDetailProduct({ ...p, garantia: val });
+                            // Flash inline feedback
+                            const btn = document.getElementById(`garantia-btn-${p.id}`);
+                            if (btn) {
+                              btn.textContent = "✅";
+                              btn.classList.add("bg-emerald-600");
+                              setTimeout(() => { btn.textContent = "✓"; btn.classList.remove("bg-emerald-600"); }, 1500);
+                            }
+                          }
+                        };
+                        return (
                         <div className="flex items-center gap-1 mt-0.5">
                           <input
                             id={`garantia-${p.id}`}
                             type="text"
                             defaultValue={p.garantia || ""}
                             placeholder="DD/MM/AAAA ou MM/AAAA"
-                            onKeyDown={async (e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                const val = (e.target as HTMLInputElement).value.trim() || null;
-                                if (val !== (p.garantia || null)) {
-                                  await apiPatch(p.id, { garantia: val });
-                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
-                                  setDetailProduct({ ...p, garantia: val });
-                                  setMsg(val ? "✅ Garantia salva!" : "Garantia removida!");
-                                }
-                              }
-                            }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveGarantia(); } }}
                             className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                           />
                           <button
+                            id={`garantia-btn-${p.id}`}
                             onMouseDown={(e) => e.preventDefault()}
-                            onClick={async () => {
-                              const el = document.getElementById(`garantia-${p.id}`) as HTMLInputElement;
-                              const val = el?.value?.trim() || null;
-                              if (val !== (p.garantia || null)) {
-                                await apiPatch(p.id, { garantia: val });
-                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
-                                setDetailProduct({ ...p, garantia: val });
-                                setMsg(val ? "✅ Garantia salva!" : "Garantia removida!");
-                              }
-                            }}
-                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                            onClick={saveGarantia}
+                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm transition-colors"
                             title="Salvar garantia"
                           >✓</button>
-                        </div>
-                      ) : (
+                        </div>);
+                      })() : (
                         <p className={`text-[13px] ${mP} mt-0.5`}>{p.garantia}</p>
                       )}
                     </div>
