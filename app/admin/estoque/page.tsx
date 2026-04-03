@@ -3304,6 +3304,28 @@ export default function EstoquePage() {
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
                                               ) : null
                                             )}
+                                            {/* Badges: Grade, Caixa, Garantia */}
+                                            {(() => {
+                                              const obs = p.observacao || "";
+                                              const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                                              const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+                                              const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                                              const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
+                                              const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
+                                              const hasPulseira = obs.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(obs);
+                                              const ciclos = obs.match(/\[CICLOS:(\d+)\]/)?.[1];
+                                              const isUsado = p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA";
+                                              if (!isUsado) return null;
+                                              return (<>
+                                                {grade && <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${grade === "A+" ? "bg-amber-50 text-amber-600" : grade === "A" ? "bg-green-50 text-green-600" : grade === "AB" ? "bg-yellow-50 text-yellow-600" : "bg-orange-50 text-orange-600"}`}>{grade}</span>}
+                                                {hasCaixa && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">📦</span>}
+                                                {hasCabo && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔌</span>}
+                                                {hasFonte && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔋</span>}
+                                                {hasPulseira && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">⌚</span>}
+                                                {ciclos && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">🔄{ciclos}</span>}
+                                                {p.garantia && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-600">🛡️{p.garantia}</span>}
+                                              </>);
+                                            })()}
                                             {/* Origem/Obs */}
                                             {isEditableItemTab && isEditingField(p.id, "observacao") ? (
                                               <div className="flex items-center gap-0.5">
