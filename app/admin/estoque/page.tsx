@@ -330,6 +330,7 @@ interface ProdutoEstoque {
   estoque_minimo: number | null;
   pedido_fornecedor_id: string | null;
   origem: string | null;
+  garantia: string | null;
 }
 
 interface ImeiSearchResult {
@@ -843,7 +844,7 @@ export default function EstoquePage() {
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
-    bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "",
+    bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
   });
 
   // Campos estruturados por categoria
@@ -1333,7 +1334,7 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
-        data_entrada: hojeBR(),
+        garantia: form.garantia || null, data_entrada: hojeBR(),
       }),
     });
     const json = await res.json();
@@ -2500,13 +2501,55 @@ export default function EstoquePage() {
               + Outra cor
             </button>
           </div>
-          {form.tipo === "SEMINOVO" && (
+          {form.tipo === "SEMINOVO" && (() => {
+            const cat = form.categoria || "";
+            const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
+            const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+            const showPulseira = cat === "APPLE_WATCH";
+            const showCiclos = cat === "MACBOOK";
+            return (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
+              <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
+              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] === "APLUS" ? "A+" : form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
+                const obs = form.observacao || "";
+                const cleaned = obs.replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "").trim();
+                const tag = e.target.value ? `[GRADE_${e.target.value === "A+" ? "APLUS" : e.target.value}]` : "";
+                set("observacao", tag ? `${cleaned} ${tag}`.trim() : cleaned || "");
+              }} className={inputCls}>
+                <option value="">— Sem grade —</option>
+                <option value="A+">A+</option><option value="A">A</option><option value="AB">AB</option><option value="B">B</option>
+              </select></div>
+              <div className="flex gap-3 items-end flex-wrap">
+                <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_CAIXA]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_CAIXA]`.trim() : obs.replace("[COM_CAIXA]", "").trim());
+                }} className="accent-[#E8740E]" /> 📦 Caixa</label>
+                {showCabo && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_CABO]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_CABO]`.trim() : obs.replace("[COM_CABO]", "").trim());
+                }} className="accent-[#E8740E]" /> 🔌 Cabo</label>}
+                {showCarregador && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_FONTE]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_FONTE]`.trim() : obs.replace("[COM_FONTE]", "").trim());
+                }} className="accent-[#E8740E]" /> 🔋 Carregador</label>}
+                {showPulseira && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={form.observacao?.includes("[COM_PULSEIRA]") || false} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  set("observacao", e.target.checked ? `${obs} [COM_PULSEIRA]`.trim() : obs.replace("[COM_PULSEIRA]", "").trim());
+                }} className="accent-[#E8740E]" /> ⌚ Pulseira</label>}
+              </div>
+              {showCiclos && (
+                <div><p className={labelCls}>Ciclos de Bateria</p><input type="number" value={form.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1] || ""} onChange={(e) => {
+                  const obs = form.observacao || "";
+                  const cleaned = obs.replace(/\[CICLOS:\d+\]/g, "").trim();
+                  set("observacao", e.target.value ? `${cleaned} [CICLOS:${e.target.value}]`.trim() : cleaned || "");
+                }} placeholder="Ex: 120" className={inputCls} /></div>
+              )}
               <div><p className={labelCls}>Cliente (comprado de)</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className={inputCls} /></div>
-              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Grade, caixa, garantia..." className={inputCls} /></div>
+              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
             </div>
-          )}
+            );
+          })()}
           {form.tipo !== "SEMINOVO" && (
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} /></div>
           )}
@@ -3584,7 +3627,7 @@ export default function EstoquePage() {
         // reset serial/imei edit mode when a different product opens
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
-        const canEdit = isAdmin && (p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO");
+        const canEdit = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         // IMEI editável para qualquer usuário em produtos pendentes (obrigatório para mover ao estoque)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         const canEditImei = isPendente;
@@ -3722,26 +3765,30 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones, campo separado do nome; ocultar se já está no nome do produto */}
-                {p.categoria === "IPHONES" && isAdmin && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
+                {/* Origem — para iPhones: admin/pendências editam, outros visualizam; ocultar se já no nome */}
+                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
                   <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
-                    <select
-                      value={p.origem ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value || null;
-                        try {
-                          await apiPatch(p.id, { origem: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
-                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                          setMsg("✅ Origem atualizada!");
-                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                      }}
-                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                    >
-                      <option value="">— Sem origem —</option>
-                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""}</p>
+                    {(isAdmin || canEdit) ? (
+                      <select
+                        value={p.origem ?? ""}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                            await apiPatch(p.id, { origem: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                            setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                            setMsg("✅ Origem atualizada!");
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      >
+                        <option value="">— Sem origem —</option>
+                        {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">
@@ -3903,11 +3950,33 @@ export default function EstoquePage() {
                         </div>
                       )}
                       <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
-                      {/* Caixa badge — detecta tag estruturada ou texto livre */}
+                      {/* Caixa badge */}
                       {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">📦 Com Caixa</span></div>
                       )}
+                      {/* Cabo badge */}
+                      {(p.observacao?.includes("[COM_CABO]") || /com\s+cabo/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔌 Com Cabo</span></div>
+                      )}
+                      {/* Carregador badge */}
+                      {(p.observacao?.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
+                      )}
+                      {/* Pulseira badge */}
+                      {(p.observacao?.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(p.observacao || "")) && (
+                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">⌚ Com Pulseira</span></div>
+                      )}
+                      {/* Ciclos badge */}
+                      {(() => {
+                        const ciclos = p.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1];
+                        if (!ciclos) return null;
+                        return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos</p>
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-blue-100 text-blue-700">🔄 {ciclos} ciclos</span></div>;
+                      })()}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
                         const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
@@ -3922,13 +3991,14 @@ export default function EstoquePage() {
                         return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span></div>;
                       })()}
-                      {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
+                      {/* Origem para categorias não-iPhone (se existir) */}
+                      {p.origem && p.categoria !== "IPHONES" && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
                   {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor</p>
-                    {(canEdit || isAdmin) ? (() => {
+                    {canEdit ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
@@ -4021,14 +4091,66 @@ export default function EstoquePage() {
                       ) : null}
                     </div>
                   )}
-                  {/* Grade + Caixa */}
-                  {!isLac && canEdit && (() => {
+                  {/* Garantia — seminovos/usados */}
+                  {!isLac && (p.garantia || isAdmin || canEdit) && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Garantia</p>
+                      {(canEdit || isAdmin) ? (
+                        <input
+                          type="text"
+                          defaultValue={p.garantia || ""}
+                          placeholder="DD/MM/AAAA ou MM/AAAA"
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim() || null;
+                            if (val !== (p.garantia || null)) {
+                              await apiPatch(p.id, { garantia: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
+                              setDetailProduct({ ...p, garantia: val });
+                              setMsg(val ? "✅ Garantia salva!" : "Garantia removida!");
+                            }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      ) : (
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{p.garantia}</p>
+                      )}
+                    </div>
+                  )}
+                  {/* Grade + Caixa + Cabo + Carregador */}
+                  {!isLac && (canEdit || isAdmin) && (() => {
                     const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
                     const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
                     const currentGrade = tagKey ? GRADE_TAG[tagKey]
                       : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
+                    const hasCabo = p.observacao?.includes("[COM_CABO]") || /com\s+cabo/i.test(p.observacao || "");
+                    const hasFonte = p.observacao?.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(p.observacao || "");
+                    const hasPulseira = p.observacao?.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(p.observacao || "");
+                    const currentCiclos = p.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1] || "";
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    const cat = p.categoria || "";
+                    // Cabo: iPhones, MacBook, iPad, Apple Watch
+                    const showCabo = ["IPHONES", "MACBOOK", "IPADS", "APPLE_WATCH"].includes(cat);
+                    // Carregador: MacBook, iPad
+                    const showCarregador = ["MACBOOK", "IPADS"].includes(cat);
+                    // Pulseira: Apple Watch
+                    const showPulseira = cat === "APPLE_WATCH";
+                    // Ciclos: MacBook
+                    const showCiclos = cat === "MACBOOK";
+                    const toggleTag = async (tag: string, label: string, has: boolean, want: boolean) => {
+                      if (want === has) return;
+                      const obs = p.observacao || "";
+                      let newObs: string | null;
+                      if (!want) {
+                        newObs = obs.replace(`[${tag}]`, "").replace(/\s+/g, " ").trim() || null;
+                      } else {
+                        newObs = `${obs} [${tag}]`.trim();
+                      }
+                      await apiPatch(p.id, { observacao: newObs });
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                      setDetailProduct({ ...p, observacao: newObs });
+                      setMsg(want ? `${label} salvo!` : `${label} removido!`);
+                    };
                     return (
                       <div className="col-span-2 grid grid-cols-2 gap-2">
                         <div>
@@ -4056,29 +4178,62 @@ export default function EstoquePage() {
                         </div>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
-                          <select value={hasCaixa ? "SIM" : "NAO"} onChange={async (e) => {
-                            const wantCaixa = e.target.value === "SIM";
-                            const obs = p.observacao || "";
-                            const hadCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
-                            if (wantCaixa === hadCaixa) return;
-                            let newObs: string | null;
-                            if (!wantCaixa) {
-                              newObs = obs
-                                .replace("[COM_CAIXA]", "")
-                                .replace(/\bcom\s+caixa(\s+original)?\b/gi, "")
-                                .replace(/\s+/g, " ").trim() || null;
-                            } else {
-                              newObs = `${obs} [COM_CAIXA]`.trim();
-                            }
-                            await apiPatch(p.id, { observacao: newObs });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
-                            setDetailProduct({ ...p, observacao: newObs });
-                            setMsg(wantCaixa ? "Com caixa salvo!" : "Caixa removida!");
-                          }} className={selCls}>
+                          <select value={hasCaixa ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CAIXA", "Com caixa", hasCaixa, e.target.value === "SIM")} className={selCls}>
                             <option value="NAO">Sem caixa</option>
                             <option value="SIM">📦 Com caixa</option>
                           </select>
                         </div>
+                        {showCabo && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cabo</p>
+                            <select value={hasCabo ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_CABO", "Com cabo", hasCabo, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem cabo</option>
+                              <option value="SIM">🔌 Com cabo</option>
+                            </select>
+                          </div>
+                        )}
+                        {showCarregador && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
+                            <select value={hasFonte ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_FONTE", "Com carregador", hasFonte, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem carregador</option>
+                              <option value="SIM">🔋 Com carregador</option>
+                            </select>
+                          </div>
+                        )}
+                        {showPulseira && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                            <select value={hasPulseira ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_PULSEIRA", "Com pulseira", hasPulseira, e.target.value === "SIM")} className={selCls}>
+                              <option value="NAO">Sem pulseira</option>
+                              <option value="SIM">⌚ Com pulseira</option>
+                            </select>
+                          </div>
+                        )}
+                        {showCiclos && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos de Bateria</p>
+                            <input
+                              type="number" min={0}
+                              defaultValue={currentCiclos}
+                              placeholder="Ex: 120"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim();
+                                const obs = p.observacao || "";
+                                const cleaned = obs.replace(/\[CICLOS:\d+\]/g, "").trim();
+                                const finalObs = val ? `${cleaned} [CICLOS:${val}]`.trim() : (cleaned || null);
+                                if (finalObs !== (p.observacao || null)) {
+                                  await apiPatch(p.id, { observacao: finalObs });
+                                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                                  setDetailProduct({ ...p, observacao: finalObs });
+                                  setMsg(val ? `Ciclos: ${val}` : "Ciclos removido!");
+                                }
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -4087,8 +4242,8 @@ export default function EstoquePage() {
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
-                <div className={`grid ${canEdit ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
-                  {canEdit && (
+                <div className={`grid ${canEdit && isAdmin ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
+                  {canEdit && isAdmin && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Quantidade</p>
                       <input

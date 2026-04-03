@@ -251,26 +251,39 @@ export async function POST(req: NextRequest) {
   if (sem1 && (sem1.produto || (sem1.valor || 0) > 0)) {
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto1 = sem1.produto || "PRODUTO DA TROCA — IDENTIFICAR";
-    const { error: errSeminovo } = await supabase.from("estoque").insert({
-      produto: nomeProduto1,
-      categoria: sem1.categoria || detectCategoriaSeminovo(sem1.produto),
-      qnt: 1,
-      custo_unitario: sem1.valor || 0,
-      status: "PENDENTE",
-      tipo: "PENDENCIA",
-      cor: sem1.cor ? String(sem1.cor).toUpperCase() : null,
-      observacao: buildObsComTags(sem1.observacao || null, sem1.grade || null, sem1.caixa || null, sem1.cabo || null, sem1.fonte || null),
-      bateria: sem1.bateria || null,
-      serial_no: sem1.serial_no || null,
-      imei: sem1.imei || null,
-      origem: sem1.origem || null,
-      cliente: nomeCliente || null,
-      fornecedor: nomeCliente || null,
-      data_compra: body.data || data?.data || null,
-      updated_at: new Date().toISOString(),
-    });
-    if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
-    else await logActivity(usuario, "Pendência troca criada (auto)", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
+    // Verificar se pendência já existe (evitar duplicata em caso de venda cancelada e relançada)
+    const { data: existingPend1 } = await supabase.from("estoque")
+      .select("id")
+      .eq("cliente", nomeCliente)
+      .eq("produto", nomeProduto1)
+      .eq("tipo", "PENDENCIA")
+      .eq("status", "PENDENTE")
+      .limit(1);
+    if (existingPend1 && existingPend1.length > 0) {
+      await logActivity(usuario, "Pendência troca já existia", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend1[0].id);
+    } else {
+      const { error: errSeminovo } = await supabase.from("estoque").insert({
+        produto: nomeProduto1,
+        categoria: sem1.categoria || detectCategoriaSeminovo(sem1.produto),
+        qnt: 1,
+        custo_unitario: sem1.valor || 0,
+        status: "PENDENTE",
+        tipo: "PENDENCIA",
+        cor: sem1.cor ? String(sem1.cor).toUpperCase() : null,
+        observacao: buildObsComTags(sem1.observacao || null, sem1.grade || null, sem1.caixa || null, sem1.cabo || null, sem1.fonte || null),
+        bateria: sem1.bateria || null,
+        serial_no: sem1.serial_no || null,
+        imei: sem1.imei || null,
+        origem: sem1.origem || null,
+        garantia: sem1.garantia || null,
+        cliente: nomeCliente || null,
+        fornecedor: nomeCliente || null,
+        data_compra: body.data || data?.data || null,
+        updated_at: new Date().toISOString(),
+      });
+      if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
+      else await logActivity(usuario, "Pendência troca criada (auto)", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
+    }
   }
 
   // 2º produto na troca — mesmo fluxo com fallback
@@ -284,26 +297,39 @@ export async function POST(req: NextRequest) {
   if (sem2 && (sem2.produto || (sem2.valor || 0) > 0)) {
     const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto2 = sem2.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
-    const { error: errSeminovo2 } = await supabase.from("estoque").insert({
-      produto: nomeProduto2,
-      categoria: sem2.categoria || detectCategoriaSeminovo(sem2.produto),
-      qnt: 1,
-      custo_unitario: sem2.valor || 0,
-      status: "PENDENTE",
-      tipo: "PENDENCIA",
-      cor: sem2.cor ? String(sem2.cor).toUpperCase() : null,
-      observacao: buildObsComTags(sem2.observacao || null, sem2.grade || null, sem2.caixa || null, sem2.cabo || null, sem2.fonte || null),
-      bateria: sem2.bateria || null,
-      serial_no: sem2.serial_no || null,
-      imei: sem2.imei || null,
-      origem: sem2.origem || null,
-      cliente: nomeCliente2 || null,
-      fornecedor: nomeCliente2 || null,
-      data_compra: body.data || data?.data || null,
-      updated_at: new Date().toISOString(),
-    });
-    if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
-    else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
+    // Verificar se pendência já existe (evitar duplicata)
+    const { data: existingPend2 } = await supabase.from("estoque")
+      .select("id")
+      .eq("cliente", nomeCliente2)
+      .eq("produto", nomeProduto2)
+      .eq("tipo", "PENDENCIA")
+      .eq("status", "PENDENTE")
+      .limit(1);
+    if (existingPend2 && existingPend2.length > 0) {
+      await logActivity(usuario, "Pendência troca 2 já existia", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend2[0].id);
+    } else {
+      const { error: errSeminovo2 } = await supabase.from("estoque").insert({
+        produto: nomeProduto2,
+        categoria: sem2.categoria || detectCategoriaSeminovo(sem2.produto),
+        qnt: 1,
+        custo_unitario: sem2.valor || 0,
+        status: "PENDENTE",
+        tipo: "PENDENCIA",
+        cor: sem2.cor ? String(sem2.cor).toUpperCase() : null,
+        observacao: buildObsComTags(sem2.observacao || null, sem2.grade || null, sem2.caixa || null, sem2.cabo || null, sem2.fonte || null),
+        bateria: sem2.bateria || null,
+        serial_no: sem2.serial_no || null,
+        imei: sem2.imei || null,
+        origem: sem2.origem || null,
+        garantia: sem2.garantia || null,
+        cliente: nomeCliente2 || null,
+        fornecedor: nomeCliente2 || null,
+        data_compra: body.data || data?.data || null,
+        updated_at: new Date().toISOString(),
+      });
+      if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
+      else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
+    }
   }
 
   // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
@@ -626,12 +652,30 @@ export async function DELETE(req: NextRequest) {
     }
   }
 
-  // Se tinha produto na troca, remover o seminovo/pendencia do estoque
+  // Se tinha produto na troca, remover a pendência específica do estoque
+  // (apenas a pendência correspondente ao produto da troca, não todas do cliente)
   if (venda && venda.produto_na_troca && venda.cliente) {
-    await supabase.from("estoque")
-      .delete()
-      .eq("cliente", venda.cliente)
-      .in("tipo", ["PENDENCIA", "SEMINOVO"]);
+    const clienteUpper = (venda.cliente || "").toUpperCase();
+    // 1ª troca
+    if (venda.troca_produto) {
+      await supabase.from("estoque")
+        .delete()
+        .eq("produto", venda.troca_produto)
+        .eq("cliente", clienteUpper)
+        .in("tipo", ["PENDENCIA", "SEMINOVO"])
+        .limit(1);
+      await logActivity(usuario, "Removeu pendência troca (cancelamento)", `${venda.troca_produto} — ${venda.cliente}`, "estoque");
+    }
+    // 2ª troca
+    if (venda.troca_produto2 && venda.produto_na_troca2) {
+      await supabase.from("estoque")
+        .delete()
+        .eq("produto", venda.troca_produto2)
+        .eq("cliente", clienteUpper)
+        .in("tipo", ["PENDENCIA", "SEMINOVO"])
+        .limit(1);
+      await logActivity(usuario, "Removeu pendência troca 2 (cancelamento)", `${venda.troca_produto2} — ${venda.cliente}`, "estoque");
+    }
   }
 
   // Recalcular saldos do dia automaticamente

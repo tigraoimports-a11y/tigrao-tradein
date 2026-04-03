@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { data: estoqueResults } = await supabase
     .from("estoque")
     .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei")
-    .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
+    .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cliente.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
 
