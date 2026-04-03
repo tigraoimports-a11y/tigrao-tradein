@@ -3708,9 +3708,10 @@ export default function EstoquePage() {
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
         const canEdit = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
-        // IMEI editável para qualquer usuário em produtos pendentes (obrigatório para mover ao estoque)
+        // IMEI/Serial editável para pendências (qualquer user) ou admin (qualquer status)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
-        const canEditImei = isPendente;
+        const canEditImei = isPendente || isAdmin;
+        const canEditSerial = isPendente || isAdmin;
         const saved = (f: string) => savedField === f ? <span className="ml-1 text-[10px] font-semibold text-green-500 animate-pulse">Salvo!</span> : null;
         const saveSerial = async () => {
           const el = document.getElementById(`serial-single-${p.id}`) as HTMLInputElement;
@@ -3849,8 +3850,8 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — para iPhones: admin/pendências editam, outros visualizam; ocultar se já no nome */}
-                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
+                {/* Origem — para iPhones: admin/pendências editam, outros visualizam */}
+                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && (
                   <div className="mb-3">
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""} {saved("origem")}</p>
                     {(isAdmin || canEdit) ? (
