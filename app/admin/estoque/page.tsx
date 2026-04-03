@@ -1689,7 +1689,7 @@ export default function EstoquePage() {
     tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
     tab === "acaminho" ? aCaminho :
-    tab === "pendencias" ? [...pendencias, ...pendenciasMovidas] :
+    tab === "pendencias" ? pendencias :
     tab === "esgotados" ? esgotados :
     tab === "acabando" ? acabando :
     emEstoque;
