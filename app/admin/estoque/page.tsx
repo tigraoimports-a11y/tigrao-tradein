@@ -141,6 +141,15 @@ const COR_PT: Record<string, string> = {
   "DENIM": "Jeans",
   "STEALTH BLACK": "Preto Furtivo",
   "SILVER BLUE": "Azul Prata",
+  "MIST BLUE": "Azul Névoa",
+  "AZUL NÉVOA": "Azul Névoa",
+  "AZUL NEVOA": "Azul Névoa",
+  "SAGE": "Sálvia",
+  "JET BLACK": "Preto Brilhante",
+  "CLOUD WHITE": "Branco Nuvem",
+  "SKY BLUE": "Azul Céu",
+  "TEAL": "Verde-azulado",
+  "DEEP BLUE": "Azul Profundo",
 };
 
 function traduzirCor(cor: string | null | undefined): string {
@@ -196,6 +205,16 @@ const PT_TO_EN: Record<string, string> = {
   "NATURAL": "Natural",
   "ULTRAMARINO": "Ultramarine",
   "LAVANDA": "Lavender",
+  "AZUL NÉVOA": "Mist Blue",
+  "AZUL NEVOA": "Mist Blue",
+  "SÁLVIA": "Sage",
+  "SALVIA": "Sage",
+  "PRETO BRILHANTE": "Jet Black",
+  "BRANCO NUVEM": "Cloud White",
+  "AZUL CÉU": "Sky Blue",
+  "AZUL CEU": "Sky Blue",
+  "VERDE-AZULADO": "Teal",
+  "AZUL PROFUNDO": "Deep Blue",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -2949,9 +2968,12 @@ export default function EstoquePage() {
                       </div>
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
-                          // Agrupar por cor pra mostrar resumo no header
+                          // Agrupar por cor pra mostrar resumo no header (em português)
                           const colorSummary: Record<string, number> = {};
-                          items.forEach(p => { const c = p.cor || "—"; colorSummary[c] = (colorSummary[c] || 0) + p.qnt; });
+                          items.forEach(p => {
+                            const c = traduzirCor(p.cor);
+                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
+                          });
                           return (
                             <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
                               {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
