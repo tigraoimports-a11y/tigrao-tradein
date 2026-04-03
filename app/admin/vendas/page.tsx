@@ -841,10 +841,49 @@ export default function VendasPage() {
       preco_vendido: p.preco_vendido,
       serial_no: p.serial_no,
       imei: p.imei,
+      // Troca primária
+      produto_na_troca: p.produto_na_troca || "",
+      troca_produto: p.troca_produto || "",
+      troca_cor: p.troca_cor || "",
+      troca_categoria: p.troca_categoria || "",
+      troca_bateria: p.troca_bateria || "",
+      troca_obs: p.troca_obs || "",
+      troca_grade: p.troca_grade || "",
+      troca_caixa: p.troca_caixa || "",
+      troca_cabo: p.troca_cabo || "",
+      troca_fonte: p.troca_fonte || "",
+      troca_serial_no: p.troca_serial_no || "",
+      troca_imei: p.troca_imei || "",
+      troca_origem: p.troca_origem || "",
+      // 2ª troca
+      produto_na_troca2: p.produto_na_troca2 || "",
+      troca_produto2: p.troca_produto2 || "",
+      troca_cor2: p.troca_cor2 || "",
+      troca_categoria2: p.troca_categoria2 || "",
+      troca_bateria2: p.troca_bateria2 || "",
+      troca_obs2: p.troca_obs2 || "",
+      troca_grade2: p.troca_grade2 || "",
+      troca_caixa2: p.troca_caixa2 || "",
+      troca_cabo2: p.troca_cabo2 || "",
+      troca_fonte2: p.troca_fonte2 || "",
+      troca_serial_no2: p.troca_serial_no2 || "",
+      troca_imei2: p.troca_imei2 || "",
+      troca_origem2: p.troca_origem2 || "",
     }));
     if (p._catSel) setCatSel(p._catSel);
     if (p._estoqueId) setEstoqueId(p._estoqueId);
     setProdutoManual(!!p._produtoManual);
+    // Restaura trocaRow para o seletor de produto funcionar
+    if (p.troca_produto) {
+      setTrocaRow(r => ({ ...r, produto: p.troca_produto, cor: p.troca_cor || "", categoria: p.troca_categoria || r.categoria }));
+    } else {
+      setTrocaRow(createEmptyProdutoRow());
+    }
+    if (p.troca_produto2) {
+      setTrocaRow2(r => ({ ...r, produto: p.troca_produto2, cor: p.troca_cor2 || "", categoria: p.troca_categoria2 || r.categoria }));
+    } else {
+      setTrocaRow2(createEmptyProdutoRow());
+    }
     // Remove from cart (will be re-added when user clicks "Adicionar")
     setProdutosCarrinho(prev => prev.filter((_, i) => i !== index));
     setMsg(`Editando produto: ${p.produto}. Faça as alterações e adicione de volta ao carrinho.`);
