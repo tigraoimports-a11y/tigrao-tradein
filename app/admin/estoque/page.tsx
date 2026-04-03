@@ -100,8 +100,17 @@ const COR_PT: Record<string, string> = {
   "CORAL": "Coral",
   "PRODUCT RED": "Vermelho",
   "(PRODUCT)RED": "Vermelho",
-  "TEAL": "Azul-petróleo",
-  "ULTRAMARINE": "Ultramarino",
+  "TEAL": "Verde",
+  "ULTRAMARINE": "Azul",
+  "CLOUD WHITE": "Branco",
+  "SKY BLUE": "Azul Céu",
+  "SAGE": "Verde",
+  "MIST BLUE": "Azul Névoa",
+  "HAZE BLUE": "Azul Névoa",
+  "BLUSH": "Rosa",
+  "CITRUS": "Cítrico",
+  "INDIGO": "Índigo",
+  "BRANCO NUVEM": "Branco",
   "PEBBLE": "Pedregulho",
   "LIGHT BLUE": "Azul Claro",
   "DARK BLUE": "Azul Escuro",
@@ -196,6 +205,12 @@ const PT_TO_EN: Record<string, string> = {
   "NATURAL": "Natural",
   "ULTRAMARINO": "Ultramarine",
   "LAVANDA": "Lavender",
+  "BRANCO NUVEM": "Cloud White",
+  "AZUL CEU": "Sky Blue",
+  "AZUL CÉU": "Sky Blue",
+  "AZUL NEVOA": "Mist Blue",
+  "AZUL NÉVOA": "Mist Blue",
+  "INDIGO": "Indigo",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -2101,7 +2116,7 @@ export default function EstoquePage() {
       {/* ===== ABA REPOSIÇÃO ===== */}
       {tab === "reposicao" ? (() => {
         const stripOrigemRepo = (nome: string) => nome
-          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
           .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
           .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
           .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
@@ -2964,7 +2979,7 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
