@@ -3859,8 +3859,43 @@ export default function EstoquePage() {
                             </div>
                           ) : isAdmin ? (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
-                              {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                              {editingDetailSerial ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    defaultValue={p.serial_no || ""}
+                                    id={`edit-serial-${p.id}`}
+                                    style={{ textTransform: "uppercase" }}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === "Enter") {
+                                        const val = (e.target as HTMLInputElement).value.toUpperCase().trim();
+                                        await apiPatch(p.id, { serial_no: val || null });
+                                        setDetailProduct({ ...p, serial_no: val || null });
+                                        setEditingDetailSerial(false);
+                                        setMsg("Serial atualizado!");
+                                      }
+                                      if (e.key === "Escape") setEditingDetailSerial(false);
+                                    }}
+                                    autoFocus
+                                    className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                                  />
+                                  <button onClick={async () => {
+                                    const el = document.getElementById(`edit-serial-${p.id}`) as HTMLInputElement;
+                                    const val = el?.value.toUpperCase().trim() || "";
+                                    await apiPatch(p.id, { serial_no: val || null });
+                                    setDetailProduct({ ...p, serial_no: val || null });
+                                    setEditingDetailSerial(false);
+                                    setMsg("Serial atualizado!");
+                                  }} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm">✓</button>
+                                  <button onClick={() => setEditingDetailSerial(false)} className={`shrink-0 ${mS} hover:text-red-500`}>✕</button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
+                                  {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                                  <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">✏️</button>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>
