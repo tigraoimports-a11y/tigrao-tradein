@@ -4023,7 +4023,7 @@ export default function EstoquePage() {
                   {/* Cor — dropdown pelo catálogo da categoria */}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor {saved("cor")}</p>
-                    {canEdit ? (() => {
+                    {(canEdit || isAdmin) ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
                         : CORES_POR_CATEGORIA[p.categoria || ""] || [];
@@ -4175,9 +4175,17 @@ export default function EstoquePage() {
                     const showPulseira = cat === "APPLE_WATCH";
                     // Ciclos: MacBook
                     const showCiclos = cat === "MACBOOK";
+                    const getLatestObs = () => {
+                      // Lê observacao mais recente do estado (não do closure stale)
+                      const el = document.getElementById(`obs-${p.id}`) as HTMLTextAreaElement;
+                      // Fallback: ler do estoque state
+                      let latest = p.observacao || "";
+                      setEstoque(prev => { const found = prev.find(x => x.id === p.id); if (found) latest = found.observacao || ""; return prev; });
+                      return latest;
+                    };
                     const toggleTag = async (tag: string, label: string, has: boolean, want: boolean) => {
                       if (want === has) return;
-                      const obs = p.observacao || "";
+                      const obs = getLatestObs();
                       let newObs: string | null;
                       if (!want) {
                         newObs = obs.replace(`[${tag}]`, "").replace(/\s+/g, " ").trim() || null;
@@ -4186,7 +4194,7 @@ export default function EstoquePage() {
                       }
                       await apiPatch(p.id, { observacao: newObs });
                       setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
-                      setDetailProduct({ ...p, observacao: newObs });
+                      setDetailProduct(prev => prev ? { ...prev, observacao: newObs } : null);
                       showSaved(tag.toLowerCase());
                     };
                     return (
@@ -4195,7 +4203,7 @@ export default function EstoquePage() {
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade {saved("grade")}</p>
                           <select value={currentGrade} onChange={async (e) => {
                             const newGrade = e.target.value;
-                            const obs = p.observacao || "";
+                            const obs = getLatestObs();
                             const cleaned = obs
                               .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
                               .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
@@ -4204,7 +4212,7 @@ export default function EstoquePage() {
                             const finalObs = gradeTag ? `${cleaned} ${gradeTag}`.trim() : (cleaned || null);
                             await apiPatch(p.id, { observacao: finalObs });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                            setDetailProduct({ ...p, observacao: finalObs });
+                            setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
                             showSaved("grade");
                           }} className={selCls}>
                             <option value="">— Sem grade —</option>
@@ -4257,13 +4265,13 @@ export default function EstoquePage() {
                               placeholder="Ex: 120"
                               onBlur={async (e) => {
                                 const val = e.target.value.trim();
-                                const obs = p.observacao || "";
+                                const obs = getLatestObs();
                                 const cleaned = obs.replace(/\[CICLOS:\d+\]/g, "").trim();
                                 const finalObs = val ? `${cleaned} [CICLOS:${val}]`.trim() : (cleaned || null);
-                                if (finalObs !== (p.observacao || null)) {
+                                if (finalObs !== obs) {
                                   await apiPatch(p.id, { observacao: finalObs });
                                   setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                                  setDetailProduct({ ...p, observacao: finalObs });
+                                  setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
                                   showSaved("ciclos");
                                 }
                               }}
