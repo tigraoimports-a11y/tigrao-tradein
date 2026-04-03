@@ -157,6 +157,29 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const allModels = useMemo(() => getUniqueUsedModels(filtered), [filtered]);
   const lines = useMemo(() => extractLines(allModels, deviceType), [allModels, deviceType]);
   const modelsInLine = useMemo(() => getModelsInLine(allModels, line, deviceType), [allModels, line, deviceType]);
+
+  // Subgrupo: pra MacBook/iPad, agrupar modelos por chip (M1,M2...) e depois tamanho de tela
+  const [subLine, setSubLine] = useState("");
+  const chipGroups = useMemo(() => {
+    if (deviceType !== "macbook" && deviceType !== "ipad") return null;
+    const groups: Record<string, string[]> = {};
+    for (const m of modelsInLine) {
+      // Extrair chip: "MacBook Air M2 15\"" → "M2", "iPad Pro M4 11\"" → "M4"
+      const chipMatch = m.match(/\b(M\d+(?:\s+(?:Pro|Max))?)\b/i);
+      const chip = chipMatch ? chipMatch[1] : "Outro";
+      if (!groups[chip]) groups[chip] = [];
+      groups[chip].push(m);
+    }
+    return Object.keys(groups).length > 0 ? groups : null;
+  }, [modelsInLine, deviceType]);
+
+  const chipList = useMemo(() => chipGroups ? Object.keys(chipGroups).sort() : [], [chipGroups]);
+  const modelsForChip = useMemo(() => chipGroups && subLine ? (chipGroups[subLine] || []) : [], [chipGroups, subLine]);
+
+  // Se o chip selecionado tem só 1 modelo, auto-selecionar
+  const needsScreenSize = modelsForChip.length > 1;
+  const autoModel = modelsForChip.length === 1 ? modelsForChip[0] : null;
+
   const storages = useMemo(() => (model ? getUsedStoragesForModel(filtered, model) : []), [filtered, model]);
   const baseValue = useMemo(() => (model && storage ? getUsedBaseValue(filtered, model, storage) : null), [filtered, model, storage]);
 
@@ -209,8 +232,19 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const canProceed = model && storage && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
+  function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
+  function handleSubLineChange(sl: string) { setSubLine(sl); setModel(""); setStorage(""); setHasDamage(null); tq("chip"); }
   function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+
+  // Auto-select model when chip has only 1 model
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (autoModel && model !== autoModel) {
+      setModel(autoModel);
+      setStorage("");
+      setHasDamage(null);
+    }
+  }, [autoModel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deviceLabel = DEVICE_LABELS[deviceType];
 
@@ -235,14 +269,44 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
         </div>
       </Section>
 
-      {line && modelsInLine.length > 0 && (
+      {line && modelsInLine.length > 0 && chipGroups && chipList.length > 0 ? (
+        <>
+          <Section title="Modelo">
+            <div className={`grid gap-3 ${chipList.length <= 2 ? "grid-cols-2 max-w-[320px] mx-auto" : chipList.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+              {chipList.map((chip) => (
+                <Btn key={chip} sel={subLine === chip} onClick={() => handleSubLineChange(chip)}
+                  className={`w-full text-center ${chipList.length <= 4 ? "py-4 text-[15px]" : ""}`}>
+                  {getLineDisplayName(line, deviceType)} {chip}
+                </Btn>
+              ))}
+            </div>
+          </Section>
+          {subLine && needsScreenSize && (
+            <Section title="Tamanho da tela">
+              <div className="grid grid-cols-2 gap-3 max-w-[320px] mx-auto">
+                {modelsForChip.map((m) => {
+                  const sizeMatch = m.match(/(\d+)[""]/);
+                  const size = sizeMatch ? `${sizeMatch[1]}"` : m;
+                  return (
+                    <Btn key={m} sel={model === m} onClick={() => handleModelChange(m)}
+                      className="w-full text-center py-4 text-[15px]">
+                      {size}
+                    </Btn>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+          {isExcluded && <p className="mt-3 text-[13px] font-medium" style={{ color: "var(--ti-error)" }}>Este modelo nao e aceito no programa de trade-in.</p>}
+        </>
+      ) : line && modelsInLine.length > 0 ? (
         <Section title="Modelo">
           <div className="grid grid-cols-1 gap-2">
             {modelsInLine.map((m) => <Btn key={m} sel={model===m} onClick={() => handleModelChange(m)} className="text-left">{m}</Btn>)}
           </div>
           {isExcluded && <p className="mt-3 text-[13px] font-medium" style={{ color: "var(--ti-error)" }}>Este modelo nao e aceito no programa de trade-in.</p>}
         </Section>
-      )}
+      ) : null}
 
       {model && !isExcluded && storages.length > 0 && (
         <Section title="Armazenamento">
