@@ -2663,9 +2663,15 @@ export default function EstoquePage() {
             /* TELA DE CATEGORIAS */
             (() => {
               // Reverse map: EN → PT for display
-              const COR_EN_TO_PT: Record<string, string> = Object.fromEntries(
-                Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])
-              );
+              const COR_EN_TO_PT: Record<string, string> = {
+                ...Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])),
+                // Overrides de display: EN → PT simplificado
+                "TEAL": "VERDE",
+                "ULTRAMARINE": "AZUL",
+                "CLOUD WHITE": "BRANCO",
+                "SKY BLUE": "AZUL CÉU",
+                "SPACE BLACK": "PRETO ESPACIAL",
+              };
               const corToPt = (cor: string) => COR_EN_TO_PT[cor.toUpperCase()] || cor;
               return (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -2947,7 +2953,7 @@ export default function EstoquePage() {
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
                           // Agrupar por cor pra mostrar resumo no header (em português)
-                          const _enToPt: Record<string, string> = Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt]));
+                          const _enToPt: Record<string, string> = { ...Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])), "TEAL": "VERDE", "ULTRAMARINE": "AZUL", "CLOUD WHITE": "BRANCO", "SKY BLUE": "AZUL CÉU", "SPACE BLACK": "PRETO ESPACIAL" };
                           const colorSummary: Record<string, number> = {};
                           items.forEach(p => {
                             const raw = (p.cor || "—").toUpperCase();
