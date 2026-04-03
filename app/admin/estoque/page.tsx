@@ -333,6 +333,7 @@ interface ProdutoEstoque {
   estoque_minimo: number | null;
   pedido_fornecedor_id: string | null;
   origem: string | null;
+  garantia: string | null;
 }
 
 interface ImeiSearchResult {
@@ -846,7 +847,7 @@ export default function EstoquePage() {
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
-    bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "",
+    bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
   });
 
   // Campos estruturados por categoria
@@ -1336,7 +1337,7 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
-        data_entrada: hojeBR(),
+        garantia: form.garantia || null, data_entrada: hojeBR(),
       }),
     });
     const json = await res.json();
@@ -2506,8 +2507,9 @@ export default function EstoquePage() {
           {form.tipo === "SEMINOVO" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
+              <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
               <div><p className={labelCls}>Cliente (comprado de)</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} className={inputCls} /></div>
-              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Grade, caixa, garantia..." className={inputCls} /></div>
+              <div><p className={labelCls}>Observacoes</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} placeholder="Grade, caixa..." className={inputCls} /></div>
             </div>
           )}
           {form.tipo !== "SEMINOVO" && (
@@ -3719,26 +3721,30 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — apenas para iPhones, campo separado do nome */}
-                {p.categoria === "IPHONES" && isAdmin && (
+                {/* Origem — para iPhones: admin edita, outros visualizam */}
+                {p.categoria === "IPHONES" && (isAdmin || p.origem) && (
                   <div className="mb-3">
-                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem (opcional)</p>
-                    <select
-                      value={p.origem ?? ""}
-                      onChange={async (e) => {
-                        const val = e.target.value || null;
-                        try {
-                          await apiPatch(p.id, { origem: val });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
-                          setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
-                          setMsg("✅ Origem atualizada!");
-                        } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
-                      }}
-                      className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                    >
-                      <option value="">— Sem origem —</option>
-                      {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{isAdmin ? " (opcional)" : ""}</p>
+                    {isAdmin ? (
+                      <select
+                        value={p.origem ?? ""}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                            await apiPatch(p.id, { origem: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem: val } : x));
+                            setDetailProduct(prev => prev ? { ...prev, origem: val } : null);
+                            setMsg("✅ Origem atualizada!");
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      >
+                        <option value="">— Sem origem —</option>
+                        {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">
@@ -3884,7 +3890,8 @@ export default function EstoquePage() {
                         return <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Grade</p>
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${cls}`}>Grade {g}</span></div>;
                       })()}
-                      {p.origem && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
+                      {/* Origem para categorias não-iPhone (se existir) */}
+                      {p.origem && p.categoria !== "IPHONES" && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p></div>}
                     </>);
                   })()}
                   {/* Cor — dropdown pelo catálogo da categoria */}
@@ -3981,6 +3988,31 @@ export default function EstoquePage() {
                       ) : p.bateria ? (
                         <p className={`text-[13px] ${mP} mt-0.5`}>{p.bateria}%</p>
                       ) : null}
+                    </div>
+                  )}
+                  {/* Garantia — seminovos/usados */}
+                  {!isLac && (p.garantia || isAdmin || canEdit) && (
+                    <div>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Garantia</p>
+                      {(canEdit || isAdmin) ? (
+                        <input
+                          type="text"
+                          defaultValue={p.garantia || ""}
+                          placeholder="DD/MM/AAAA ou MM/AAAA"
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim() || null;
+                            if (val !== (p.garantia || null)) {
+                              await apiPatch(p.id, { garantia: val });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, garantia: val } : x));
+                              setDetailProduct({ ...p, garantia: val });
+                              setMsg(val ? "✅ Garantia salva!" : "Garantia removida!");
+                            }
+                          }}
+                          className={`w-full text-[13px] mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      ) : (
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{p.garantia}</p>
+                      )}
                     </div>
                   )}
                   {/* Grade + Caixa */}

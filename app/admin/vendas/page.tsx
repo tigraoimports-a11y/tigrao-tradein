@@ -87,10 +87,10 @@ export default function VendasPage() {
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
     troca_serial: "", troca_imei: "",
     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-    troca_serial2: "", troca_imei2: "",
+    troca_serial2: "", troca_imei2: "", troca_garantia2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
   });
@@ -703,6 +703,7 @@ export default function VendasPage() {
         observacao: prodFields.troca_obs || null,
         serial_no: prodFields.troca_serial || null,
         imei: prodFields.troca_imei || null,
+        garantia: prodFields.troca_garantia || null,
       };
     }
 
@@ -716,6 +717,7 @@ export default function VendasPage() {
         observacao: prodFields.troca_obs2 || null,
         serial_no: prodFields.troca_serial2 || null,
         imei: prodFields.troca_imei2 || null,
+        garantia: prodFields.troca_garantia2 || null,
       };
     }
 
@@ -764,10 +766,10 @@ export default function VendasPage() {
       custo: "", preco_vendido: "",
       serial_no: "", imei: "",
       produto_na_troca: "", troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "",
-      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+      troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
       troca_serial: "", troca_imei: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "",
-      troca_serial2: "", troca_imei2: "",
+      troca_serial2: "", troca_imei2: "", troca_garantia2: "",
     }));
     setCatSel("");
     setEstoqueId("");
@@ -1093,10 +1095,10 @@ export default function VendasPage() {
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
         troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-        troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+        troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
         troca_serial: "", troca_imei: "",
         produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-        troca_serial2: "", troca_imei2: "",
+        troca_serial2: "", troca_imei2: "", troca_garantia2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
       });
@@ -1353,7 +1355,7 @@ export default function VendasPage() {
       troca_fonte: "",
       troca_serial: "", troca_imei: "",
       produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-      troca_serial2: "", troca_imei2: "",
+      troca_serial2: "", troca_imei2: "", troca_garantia2: "",
       serial_no: v.serial_no || "",
       imei: v.imei || "",
       cep: "",
@@ -1557,10 +1559,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
                     troca_serial: "", troca_imei: "",
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-                    troca_serial2: "", troca_imei2: "",
+                    troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -2035,10 +2037,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
                     troca_serial: "", troca_imei: "",
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-                    troca_serial2: "", troca_imei2: "",
+                    troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -2606,6 +2608,7 @@ export default function VendasPage() {
                     />
                   </div>
                   <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
+                  <div><p className={labelCls}>Garantia</p><input value={form.troca_garantia || ""} onChange={(e) => set("troca_garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
                   <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
                     <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
                   </select></div>
@@ -2642,7 +2645,7 @@ export default function VendasPage() {
                     type="button"
                     onClick={() => {
                       setShowSegundaTroca(false);
-                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_serial2: "", troca_imei2: "" }));
+                      setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_serial2: "", troca_imei2: "", troca_garantia2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
                   >
@@ -2670,6 +2673,7 @@ export default function VendasPage() {
                         />
                       </div>
                       <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria2} onChange={(e) => set("troca_bateria2", e.target.value)} placeholder="Ex: 85" className={inputCls} /></div>
+                      <div><p className={labelCls}>Garantia</p><input value={form.troca_garantia2 || ""} onChange={(e) => set("troca_garantia2", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3"><p className={labelCls}>Obs do 2º seminovo</p><input value={form.troca_obs2} onChange={(e) => set("troca_obs2", e.target.value)} placeholder="Detalhes adicionais..." className={inputCls} /></div>
                       <div><p className={labelCls}>Serial</p><input value={form.troca_serial2} onChange={(e) => set("troca_serial2", e.target.value.toUpperCase())} placeholder="Ex: F2LX..." className={inputCls} /></div>
                       <div><p className={labelCls}>IMEI</p><input value={form.troca_imei2} onChange={(e) => set("troca_imei2", e.target.value.replace(/\D/g, "").slice(0, 15))} placeholder="Ex: 35938..." className={inputCls} inputMode="numeric" /></div>
@@ -3520,7 +3524,7 @@ export default function VendasPage() {
                                               troca_categoria2: "",
                                               troca_bateria2: (primaryVenda as unknown as Record<string, string>).troca_bateria2 || "",
                                               troca_obs2: (primaryVenda as unknown as Record<string, string>).troca_obs2 || "",
-                                              troca_serial2: "", troca_imei2: "",
+                                              troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
@@ -3560,7 +3564,7 @@ export default function VendasPage() {
                                                 troca_categoria2: "",
                                                 troca_bateria2: (gv as unknown as Record<string, string>).troca_bateria2 || "",
                                                 troca_obs2: (gv as unknown as Record<string, string>).troca_obs2 || "",
-                                                troca_serial2: "", troca_imei2: "",
+                                                troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                                               }));
                                               setProdutosCarrinho(cartItems);
                                               setEditandoGrupoIds(grupoVendas.map(gv => gv.id));
@@ -4140,10 +4144,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
                     troca_serial: "", troca_imei: "",
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-                    troca_serial2: "", troca_imei2: "",
+                    troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
@@ -4173,10 +4177,10 @@ export default function VendasPage() {
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
-                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "",
+                    troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_garantia: "",
                     troca_serial: "", troca_imei: "",
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
-                    troca_serial2: "", troca_imei2: "",
+                    troca_serial2: "", troca_imei2: "", troca_garantia2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                   });
