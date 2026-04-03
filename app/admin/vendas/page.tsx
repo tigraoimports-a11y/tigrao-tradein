@@ -156,6 +156,7 @@ export default function VendasPage() {
     local: string;
     serial_no: string;
     imei: string;
+    tipo: string;
     _estoqueId: string;
     _catSel: string;
     _produtoManual: boolean;
@@ -761,6 +762,7 @@ export default function VendasPage() {
     local: form.local,
     serial_no: form.serial_no,
     imei: form.imei,
+    tipo: estoque.find(e => e.id === estoqueId)?.tipo || "NOVO",
     _estoqueId: estoqueId,
     _catSel: catSel,
     _produtoManual: produtoManual,
@@ -1830,7 +1832,12 @@ export default function VendasPage() {
                 return (
                   <div key={i} className="px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-[#1D1D1F] truncate">{p.produto}</span>
+                      <span className="text-sm font-medium text-[#1D1D1F] truncate flex items-center gap-2">
+                        {p.produto}
+                        {p.tipo === "SEMINOVO" && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-yellow-100 text-yellow-700 shrink-0">Seminovo</span>}
+                        {p.tipo === "NAO_ATIVADO" && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-700 shrink-0">Não Ativado</span>}
+                        {(p.tipo === "NOVO" || !p.tipo) && <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-green-100 text-green-700 shrink-0">Lacrado</span>}
+                      </span>
                       <div className="ml-3 flex gap-1 flex-shrink-0">
                         <button onClick={() => handleEditFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-blue-500 hover:bg-blue-50 transition-colors" title="Editar produto">✏️</button>
                         <button onClick={() => handleRemoveFromCart(i)} className="px-2 py-1 rounded-lg text-xs text-red-500 hover:bg-red-50 transition-colors" title="Remover produto">✕</button>
@@ -3637,6 +3644,7 @@ export default function VendasPage() {
                                                 local: gv.local || "",
                                                 serial_no: gv.serial_no || "",
                                                 imei: gv.imei || "",
+                                                tipo: (gv as unknown as Record<string, string>).tipo || "NOVO",
                                                 _estoqueId: "",
                                                 _catSel: "",
                                                 _produtoManual: true,
@@ -3681,6 +3689,7 @@ export default function VendasPage() {
                                                 local: primaryVenda.local || "",
                                                 serial_no: v.serial_no || "",
                                                 imei: v.imei || "",
+                                                tipo: (v as unknown as Record<string, string>).tipo || "NOVO",
                                                 _estoqueId: "",
                                                 _catSel: "",
                                                 _produtoManual: true,
