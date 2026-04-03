@@ -101,10 +101,10 @@ function CompraForm() {
   const [precoAuto, setPrecoAuto] = useState(precoParam ? parseInt(precoParam) : 0);
 
   // WhatsApp pode vir do URL ou ser buscado da config
-  const [whatsappConfig, setWhatsappConfig] = useState("");
-  // Sempre André como default. Config sobrescreve se disponível.
-  // Prioridade: param URL (do gerador de link) > config DB > fallback André
-  const whatsappFinal = whatsapp || whatsappConfig || WHATSAPP_FORMULARIO;
+  const [whatsappFormConfig, setWhatsappFormConfig] = useState("");
+  const [whatsappPrincipalConfig, setWhatsappPrincipalConfig] = useState("");
+  // Prioridade: param URL (do gerador de link) > whatsapp_formularios > whatsapp_principal > fallback
+  const whatsappFinal = whatsapp || whatsappFormConfig || whatsappPrincipalConfig || WHATSAPP_FORMULARIO;
 
   // Fetch products + config
   useEffect(() => {
@@ -115,7 +115,8 @@ function CompraForm() {
     ]).then(([prodRes, catRes, cfgRes]) => {
       if (prodRes.data) setAllProducts(prodRes.data);
       if (catRes.categorias) setCatalogo(catRes.categorias);
-      if (cfgRes.data?.whatsapp_principal) setWhatsappConfig(cfgRes.data.whatsapp_principal);
+      if (cfgRes.data?.whatsapp_formularios) setWhatsappFormConfig(cfgRes.data.whatsapp_formularios);
+      if (cfgRes.data?.whatsapp_principal) setWhatsappPrincipalConfig(cfgRes.data.whatsapp_principal);
     });
   }, []);
 

@@ -15,6 +15,7 @@ export default function ConfiguracoesPage() {
 
   // Contato do formulário de troca
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
+  const [formularios, setFormularios] = useState(""); // WhatsApp formulários (troca, seminovos, links de compra)
   const [vendedores, setVendedores] = useState(VENDEDORES_PADRAO.map(v => ({ ...v })));
 
   const [loading, setLoading] = useState(true);
@@ -28,6 +29,7 @@ export default function ConfiguracoesPage() {
       .then(({ data }) => {
         if (!data) return;
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
+        if (data.whatsapp_formularios) setFormularios(String(data.whatsapp_formularios));
         // whatsapp_vendedores pode ser objeto {nome: numero} ou array
         const raw = data.whatsapp_vendedores;
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -55,7 +57,7 @@ export default function ConfiguracoesPage() {
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
         headers: { "x-admin-password": password, "Content-Type": "application/json" },
-        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_vendedores: waMap }),
+        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_formularios: formularios || principal, whatsapp_vendedores: waMap }),
       });
       const j = await res.json();
       setMsg(j.ok ? "✅ Salvo com sucesso!" : "❌ Erro: " + (j.error || "desconhecido"));
@@ -125,6 +127,55 @@ export default function ConfiguracoesPage() {
               className="inline-flex items-center gap-1 text-xs text-[#E8740E] hover:underline"
             >
               🔗 Testar: wa.me/{principal}
+            </a>
+          )}
+        </div>
+
+        {/* WhatsApp Formulários */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-3">
+          <div>
+            <p className="font-bold text-[#1D1D1F]">📋 WhatsApp Formulários</p>
+            <p className="text-xs text-[#86868B] mt-1">
+              Número padrão para receber formulários de troca de lacrados, seminovos e links de compra. Se vazio, usa o número do Formulário de Troca.
+            </p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            {vendedores.filter(v => v.numero).map(v => (
+              <button
+                key={v.nome}
+                type="button"
+                onClick={() => setFormularios(v.numero)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  formularios === v.numero
+                    ? "bg-[#E8740E] text-white shadow-sm"
+                    : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
+                }`}
+              >
+                {v.nome} {formularios === v.numero && "✓"}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#86868B] mb-1">Número formulários (DDI + DDD + número)</label>
+            <input
+              value={formularios}
+              onChange={e => setFormularios(e.target.value.replace(/\D/g, ""))}
+              placeholder="5521972461357"
+              className={inputCls}
+              inputMode="numeric"
+            />
+          </div>
+
+          {formularios && (
+            <a
+              href={`https://wa.me/${formularios}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-[#E8740E] hover:underline"
+            >
+              🔗 Testar: wa.me/{formularios}
             </a>
           )}
         </div>

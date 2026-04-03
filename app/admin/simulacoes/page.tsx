@@ -846,6 +846,7 @@ const VENDEDORES_DEFAULT: { nome: string; label: string; numero: string }[] = [
 
 function WhatsAppConfigPanel({ password }: { password: string }) {
   const [principal, setPrincipal] = useState("5521967442665");
+  const [formularios, setFormularios] = useState(""); // WhatsApp para formulários (troca, seminovos, links de compra)
   const defaultVendedores: Record<string, { numero: string; ativo: boolean }> = {};
   for (const v of VENDEDORES_DEFAULT) defaultVendedores[v.nome] = { numero: v.numero, ativo: true };
   const [vendedores, setVendedores] = useState<Record<string, { numero: string; ativo: boolean }>>(defaultVendedores);
@@ -859,6 +860,7 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
       .then(j => {
         if (j.data) {
           setPrincipal(j.data.whatsapp_principal || "5521967442665");
+          if (j.data.whatsapp_formularios) setFormularios(j.data.whatsapp_formularios);
           // Converter formato antigo (string) pra novo (objeto com ativo)
           const raw = j.data.whatsapp_vendedores || {};
           const mapped: Record<string, { numero: string; ativo: boolean }> = {};
@@ -897,7 +899,7 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
-        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_vendedores: waMap }),
+        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_formularios: formularios || principal, whatsapp_vendedores: waMap }),
       });
       const j = await res.json();
       if (j.ok) { setMsg("Salvo!"); setTimeout(() => setMsg(""), 3000); }
@@ -944,8 +946,42 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
 
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
           <span className="text-[#86868B]">Numero ativo:</span>
-          <span className="font-mono font-semibold text-[#1D1D1F]">+{principal.replace(/^55/, "55 ").replace(/(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
+          <span className="font-mono font-semibold text-[#1D1D1F]">{principal.replace(/^55/, "+55 ").replace(/\+(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
         </div>
+
+        <button onClick={salvar} disabled={saving}
+          className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${msg === "Salvo!" ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
+          {saving ? "Salvando..." : msg === "Salvo!" ? "&#x2705; Salvo!" : "Salvar"}
+        </button>
+      </div>
+
+      {/* WhatsApp Formulários */}
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="font-bold text-[#1D1D1F] text-lg">WhatsApp Formulários</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">Número padrão para receber formulários de troca de lacrados, seminovos e links de compra. Se vazio, usa o WhatsApp Principal.</p>
+        </div>
+
+        {/* Seletor rapido */}
+        <div className="flex gap-2">
+          {Object.entries(vendedores).filter(([, v]) => v.ativo).map(([nome, v]) => {
+            const isActive = formularios === v.numero;
+            return (
+              <button key={nome} onClick={() => setFormularios(v.numero)}
+                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? "bg-[#E8740E] text-white shadow-md" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"}`}>
+                {nome.charAt(0).toUpperCase() + nome.slice(1)}
+                {isActive && <span className="ml-1.5">&#x2705;</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {formularios && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
+            <span className="text-[#86868B]">Numero ativo:</span>
+            <span className="font-mono font-semibold text-[#1D1D1F]">{formularios.replace(/^55/, "+55 ").replace(/\+(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
+          </div>
+        )}
 
         <button onClick={salvar} disabled={saving}
           className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${msg === "Salvo!" ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
@@ -965,7 +1001,7 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
             <div key={nome} className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${v.ativo ? "bg-white border-[#D2D2D7]" : "bg-[#F5F5F7] border-[#E8E8ED] opacity-60"}`}>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-[#1D1D1F]">{nome.charAt(0).toUpperCase() + nome.slice(1)}</p>
-                <p className="text-xs font-mono text-[#86868B]">+{v.numero.replace(/^55(\d{2})/, "55 ($1) ").replace(/(\d{5})(\d{4})$/, "$1-$2")}</p>
+                <p className="text-xs font-mono text-[#86868B]">{v.numero.replace(/^55(\d{2})/, "+55 ($1) ").replace(/(\d{5})(\d{4})$/, "$1-$2")}</p>
               </div>
               {/* Toggle estilo iOS */}
               <button onClick={() => toggleVendedor(nome)}

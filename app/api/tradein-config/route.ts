@@ -43,6 +43,7 @@ export async function GET() {
     const labels = (data.labels && typeof data.labels === "object") ? data.labels as Record<string, unknown> : {};
     const result = { ...data };
     if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
+    if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
     if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
 
     return NextResponse.json({ data: result });

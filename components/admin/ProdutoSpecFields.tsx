@@ -87,8 +87,13 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
     if (/air/i.test(nome)) s.mb_modelo = "AIR";
     else if (/neo/i.test(nome)) s.mb_modelo = "NEO";
     else s.mb_modelo = "PRO";
-    const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?)\b/i);
-    s.mb_chip = chip ? chip[1].toUpperCase() : "";
+    // MacBook Neo sempre usa A18 PRO (chip fixo)
+    if (s.mb_modelo === "NEO") {
+      s.mb_chip = "A18 PRO";
+    } else {
+      const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?)\b/i);
+      s.mb_chip = chip ? chip[1].toUpperCase() : "";
+    }
     s.mb_nucleos = ""; // hide nucleos when using catalog model
   } else if (categoria === "MAC_MINI") {
     const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?)\b/i);
@@ -619,7 +624,7 @@ export default function ProdutoSpecFields({
               <div>
                 <p className={labelCls}>Chip</p>
                 <select value={row.spec.mb_chip} onChange={(e) => setSpec("mb_chip", e.target.value)} className={inputCls}>
-                  {["M1","M2","M2 PRO","M3","M3 PRO","M3 MAX","M4","M4 PRO","M4 MAX","M5","M5 PRO","M5 MAX"].map((c) => <option key={c}>{c}</option>)}
+                  {["A18","A18 PRO","M1","M2","M2 PRO","M3","M3 PRO","M3 MAX","M4","M4 PRO","M4 MAX","M5","M5 PRO","M5 MAX"].map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </>

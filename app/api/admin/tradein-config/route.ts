@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   const labels = (data?.labels && typeof data.labels === "object") ? data.labels as Record<string, unknown> : {};
   const result = { ...data };
   if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
+  if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
   if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
 
   return NextResponse.json({ data: result });
@@ -36,12 +37,13 @@ export async function PUT(req: NextRequest) {
   if (body.origens !== undefined) updates.origens = body.origens;
 
   // Salvar whatsapp config dentro do campo labels (JSONB) pra não depender de colunas novas
-  if (body.whatsapp_principal !== undefined || body.whatsapp_vendedores !== undefined || body.labels !== undefined) {
+  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_vendedores !== undefined || body.labels !== undefined) {
     const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
     const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
     const newLabels = { ...currentLabels };
     if (body.labels !== undefined) Object.assign(newLabels, body.labels);
     if (body.whatsapp_principal !== undefined) newLabels._whatsapp_principal = body.whatsapp_principal;
+    if (body.whatsapp_formularios !== undefined) newLabels._whatsapp_formularios = body.whatsapp_formularios;
     if (body.whatsapp_vendedores !== undefined) newLabels._whatsapp_vendedores = body.whatsapp_vendedores;
     updates.labels = newLabels;
   }

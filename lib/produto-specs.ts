@@ -182,7 +182,7 @@ export const MACBOOK_TIPOS = ["AIR", "PRO", "NEO"] as const;
 export const MACBOOK_TELAS_AIR = ['13"', '15"'];
 export const MACBOOK_TELAS_PRO = ['14"', '16"'];
 export const MACBOOK_TELAS_NEO = ['14"'];
-export const MACBOOK_CHIPS = ["M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"];
+export const MACBOOK_CHIPS = ["A18", "A18 PRO", "M1", "M2", "M2 PRO", "M3", "M3 PRO", "M3 MAX", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO", "M5 MAX"];
 export const MACBOOK_RAMS = ["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"];
 export const MACBOOK_STORAGES = ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"];
 export const MACBOOK_NUCLEOS = [
@@ -208,7 +208,7 @@ export const IPAD_MODELOS = [
   { value: "AIR", label: "iPad Air" },
   { value: "PRO", label: "iPad Pro" },
 ];
-export const IPAD_CHIPS = ["A15", "A16", "M1", "M2", "M3", "M4"];
+export const IPAD_CHIPS = ["A15", "A16", "M1", "M2", "M3", "M4", "M5"];
 export const IPAD_TELAS = ['8.3"', '10.9"', '11"', '13"'];
 export const IPAD_STORAGES = ["64GB", "128GB", "256GB", "512GB", "1TB", "2TB"];
 export const IPAD_CONNS = [
@@ -254,13 +254,16 @@ export const COR_PT_TO_EN: Record<string, string> = {
   "AZUL PACIFICO": "PACIFIC BLUE",
   "AZUL PROFUNDO": "DEEP BLUE",
   "AZUL SIERRA": "SIERRA BLUE",
+  "BLUSH": "BLUSH",
   "BRANCO": "WHITE",
   "BRANCO NUVEM": "CLOUD WHITE",
+  "CITRUS": "CITRUS",
   "CINZA ESPACIAL": "SPACE GRAY",
   "DOURADO": "GOLD",
   "DOURADO CLARO": "LIGHT GOLD",
   "ESTELAR": "STARLIGHT",
   "GRAFITE": "GRAPHITE",
+  "INDIGO": "INDIGO",
   "LARANJA COSMICO": "COSMIC ORANGE",
   "LAVANDA": "LAVENDER",
   "MEIA-NOITE": "MIDNIGHT",
@@ -313,11 +316,13 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     }
     case "MACBOOK": {
       const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
+      // MacBook Neo: chip fica só nos detalhes (spec), não no nome do produto
+      const chip = spec.mb_modelo === "NEO" ? "" : ` ${spec.mb_chip}`;
       const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
       const tela = spec.mb_tela ? ` ${spec.mb_tela}` : "";
       const ram = spec.mb_ram ? ` ${spec.mb_ram}` : "";
       const storage = spec.mb_storage ? ` ${spec.mb_storage}` : "";
-      return `${tipo} ${spec.mb_chip}${nucleos}${tela}${ram}${storage}${c}`.toUpperCase();
+      return `${tipo}${chip}${nucleos}${tela}${ram}${storage}${c}`.toUpperCase();
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
