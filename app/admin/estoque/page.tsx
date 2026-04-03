@@ -1261,10 +1261,17 @@ export default function EstoquePage() {
   const cleanObs = (obs: string | null): string | null => {
     if (!obs) return null;
     return obs
-      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA)\]/g, "")
+      .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
       .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+      .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
+  };
+  /** Extrai todas as tags [...] da observação */
+  const extractTags = (obs: string | null): string => {
+    if (!obs) return "";
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(APLUS|AB|A|B)|CICLOS:\d+)\]/g);
+    return tags ? tags.join(" ") : "";
   };
 
   const handleSubmitMulti = async () => {
@@ -4094,7 +4101,7 @@ export default function EstoquePage() {
                   {!isLac && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Bateria (%) {saved("bateria")}</p>
-                      {canEdit ? (
+                      {(canEdit || isAdmin) ? (
                         <input
                           type="number"
                           min={0} max={100}
@@ -4432,9 +4439,12 @@ export default function EstoquePage() {
                   {(canEdit || isAdmin) ? (() => {
                     const saveObs = async () => {
                       const el = document.getElementById(`obs-${p.id}`) as HTMLTextAreaElement;
-                      const condicaoPrefix = p.observacao?.match(/^\[(NAO_ATIVADO|SEMINOVO)\]/)?.[0] || "";
-                      const val = el?.value?.trim() ? `${condicaoPrefix}${el.value.trim()}` : (condicaoPrefix || null);
-                      if (val !== (p.observacao || null)) {
+                      let latestObs = p.observacao || "";
+                      setEstoque(prev => { const found = prev.find(x => x.id === p.id); if (found) latestObs = found.observacao || ""; return prev; });
+                      const existingTags = extractTags(latestObs);
+                      const userText = el?.value?.trim() || "";
+                      const val = userText ? `${existingTags} ${userText}`.trim() : (existingTags || null);
+                      if (val !== (latestObs || null)) {
                         await apiPatch(p.id, { observacao: val });
                         setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: val } : x));
                         setDetailProduct(prev => prev ? { ...prev, observacao: val } : null);
