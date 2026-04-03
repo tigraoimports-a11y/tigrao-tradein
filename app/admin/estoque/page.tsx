@@ -462,8 +462,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "naoativados", "seminovos", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "naoativados" | "seminovos" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "naoativados", "seminovos", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "naoativados" | "seminovos" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -1427,6 +1427,7 @@ export default function EstoquePage() {
   const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
   const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
+  const atacado = estoque.filter((p) => p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
@@ -1442,6 +1443,7 @@ export default function EstoquePage() {
     tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
     tab === "acaminho" ? aCaminho :
+    tab === "atacado" ? atacado :
     tab === "pendencias" ? pendencias :
     tab === "esgotados" ? esgotados :
     tab === "acabando" ? acabando :
@@ -1806,6 +1808,7 @@ export default function EstoquePage() {
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
             { key: "naoativados", label: "Não Ativados", count: naoAtivados.length },
             { key: "seminovos", label: "Seminovos", count: seminovos.length },
+            { key: "atacado", label: "Atacado", count: atacado.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
             { key: "reposicao", label: "Reposição", count: esgotados.length + acabando.length },
@@ -2638,7 +2641,7 @@ export default function EstoquePage() {
                 </div>
               );
             })()
-          ) : !filterCat && ["estoque", "pendencias"].includes(tab) ? (
+          ) : !filterCat && ["estoque", "atacado", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
@@ -4121,6 +4124,42 @@ export default function EstoquePage() {
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         Mover para Pendencias
+                      </button>
+                    )}
+                    {/* Mover para Atacado — quando item está EM ESTOQUE e é NOVO */}
+                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo === "NOVO" && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Mover para Atacado?")) return;
+                          try {
+                            await apiPatch(p.id, { tipo: "ATACADO" });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: "ATACADO" } : x));
+                            setDetailProduct(null);
+                            setMsg(`${p.produto} movido para Atacado!`);
+                          } catch { setMsg("Erro ao mover"); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-blue-900/30 text-blue-400 hover:bg-blue-700" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        Mover para Atacado
+                      </button>
+                    )}
+                    {/* Voltar ao Estoque — quando item está no Atacado */}
+                    {isAdmin && p.tipo === "ATACADO" && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Voltar para Estoque (Lacrados)?")) return;
+                          try {
+                            await apiPatch(p.id, { tipo: "NOVO" });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: "NOVO" } : x));
+                            setDetailProduct(null);
+                            setMsg(`${p.produto} voltou para Lacrados!`);
+                          } catch { setMsg("Erro ao mover"); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-green-900/30 text-green-400 hover:bg-green-700" : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                        Voltar ao Estoque
                       </button>
                     )}
                     <button
