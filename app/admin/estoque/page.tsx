@@ -8,7 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -182,6 +182,7 @@ const PT_TO_EN: Record<string, string> = {
   "AMORA": "Mulberry",
   "AZUL PROFUNDO": "Deep Blue",
   "AZUL PACÍFICO": "Pacific Blue",
+  "AZUL PACIFICO": "Pacific Blue",
   "AZUL SIERRA": "Sierra Blue",
   "AZUL TEMPESTADE": "Storm Blue",
   "AZUL PRATA": "Silver Blue",
@@ -190,16 +191,23 @@ const PT_TO_EN: Record<string, string> = {
   "VERDE MEIA-NOITE": "Midnight Green",
   "ROXO PROFUNDO": "Deep Purple",
   "LARANJA CÓSMICO": "Cosmic Orange",
+  "LARANJA COSMICO": "Cosmic Orange",
   "ROSA CLARO": "Light Pink",
   "PRETO FURTIVO": "Stealth Black",
   "PRETO ESPACIAL": "Space Black",
   "CINZA ESPACIAL": "Space Gray",
   "TITÂNIO NATURAL": "Natural Titanium",
+  "TITANIO NATURAL": "Natural Titanium",
   "TITÂNIO PRETO": "Black Titanium",
+  "TITANIO PRETO": "Black Titanium",
   "TITÂNIO BRANCO": "White Titanium",
+  "TITANIO BRANCO": "White Titanium",
   "TITÂNIO DESERTO": "Desert Titanium",
+  "TITANIO DESERTO": "Desert Titanium",
   "TITÂNIO AZUL": "Blue Titanium",
+  "TITANIO AZUL": "Blue Titanium",
   "TITÂNIO": "Titanium",
+  "TITANIO": "Titanium",
   "NATURAL": "Natural",
   "ULTRAMARINO": "Ultramarine",
   "LAVANDA": "Lavender",
@@ -2492,7 +2500,7 @@ export default function EstoquePage() {
               {coresEfetivas ? (
                 <select value={form.cor} onChange={(e) => set("cor", e.target.value)} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
                   {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
-                  {coresEfetivas.map((c) => <option key={c}>{c}</option>)}
+                  {coresEfetivas.map((c) => <option key={c} value={c}>{c}{COR_EN_TO_PT[c] ? ` · ${COR_EN_TO_PT[c]}` : ""}</option>)}
                 </select>
               ) : (
                 <input value={form.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul, Preto..." className={`${inputCls} flex-1`} style={{ width: "auto" }} />
@@ -2507,7 +2515,7 @@ export default function EstoquePage() {
                 {coresEfetivas ? (
                   <select value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} className={`${inputCls} flex-1`} style={{ width: "auto" }}>
                     {COR_OBRIGATORIA.includes(formBaseCat) ? <option value="" disabled>— Selecionar —</option> : <option value="">— Opcional —</option>}
-                    {coresEfetivas.map((c) => <option key={c}>{c}</option>)}
+                    {coresEfetivas.map((c) => <option key={c} value={c}>{c}{COR_EN_TO_PT[c] ? ` · ${COR_EN_TO_PT[c]}` : ""}</option>)}
                   </select>
                 ) : (
                   <input value={v.cor} onChange={(e) => { const nv = [...variacoes]; nv[i].cor = e.target.value; setVariacoes(nv); }} placeholder="Cor" className={`${inputCls} flex-1`} style={{ width: "auto" }} />
@@ -4091,8 +4099,8 @@ export default function EstoquePage() {
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                         >
                           <option value="">— Selecionar —</option>
-                          {p.cor && !coresCat.includes(p.cor) && <option key={p.cor} value={p.cor}>{(() => { const u = p.cor.toUpperCase().trim(); const en = PT_TO_EN[u]; return en ? `${en} · ${p.cor}` : p.cor; })()}</option>}
-                          {coresCat.map((c) => { const u = c.toUpperCase().trim(); const en = PT_TO_EN[u]; return <option key={c} value={c}>{en ? `${en} · ${c}` : c}</option>; })}
+                          {p.cor && !coresCat.includes(p.cor) && <option key={p.cor} value={p.cor}>{p.cor}{COR_EN_TO_PT[p.cor.toUpperCase()] ? ` · ${COR_EN_TO_PT[p.cor.toUpperCase()]}` : ""}</option>}
+                          {coresCat.map((c) => <option key={c} value={c}>{c}{COR_EN_TO_PT[c] ? ` · ${COR_EN_TO_PT[c]}` : ""}</option>)}
                         </select>
                       ) : (
                         <input
