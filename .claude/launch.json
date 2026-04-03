@@ -4,9 +4,8 @@
     {
       "name": "tigrao-tradein",
       "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["-c", "cd /Users/Nicolas/Projetos/tigrao-tradein/.claude/worktrees/cool-meitner && exec /usr/local/bin/node /Users/Nicolas/Projetos/tigrao-tradein/node_modules/.bin/next dev --webpack --port $PORT"],
-      "port": 3000,
-      "autoPort": true
+      "runtimeArgs": ["/Users/Nicolas/Projetos/tigrao-tradein/start-dev.sh"],
+      "port": 3000
     }
   ]
 }

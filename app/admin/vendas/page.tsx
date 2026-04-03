@@ -3608,7 +3608,7 @@ export default function VendasPage() {
                                               banco_sinal: primaryVenda.banco_sinal || "",
                                               troca_produto: grupoVendas.length === 1 ? trocaProd : "",
                                               troca_cor: grupoVendas.length === 1 ? trocaCor : "",
-                                              troca_categoria: "",
+                                              troca_categoria: grupoVendas.length === 1 ? ((v as unknown as Record<string, string>).troca_categoria || "IPHONES") : "",
                                               troca_bateria: grupoVendas.length === 1 ? trocaBat : "",
                                               troca_obs: grupoVendas.length === 1 ? trocaObs : "",
                                               troca_grade: grupoVendas.length === 1 ? trocaGrade : "",
@@ -3621,7 +3621,7 @@ export default function VendasPage() {
                                               produto_na_troca2: grupoVendas.length === 1 ? String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || "") : "",
                                               troca_produto2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_produto2 || "") : "",
                                               troca_cor2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_cor2 || "") : "",
-                                              troca_categoria2: "",
+                                              troca_categoria2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_categoria2 || "IPHONES") : "",
                                               troca_bateria2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_bateria2 || "") : "",
                                               troca_obs2: grupoVendas.length === 1 ? ((primaryVenda as unknown as Record<string, string>).troca_obs2 || "") : "",
                                               troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial_no2: "", troca_imei2: "", troca_origem2: "",
@@ -3703,10 +3703,12 @@ export default function VendasPage() {
                                               }]);
                                               setEditandoGrupoIds([v.id]);
                                               setEditandoVendaId(v.id);
-                                              // Restaurar trocaRow para o seletor funcionar
-                                              if (trocaProd) setTrocaRow(r => ({ ...r, produto: trocaProd, cor: trocaCor, categoria: r.categoria }));
+                                              // Restaurar trocaRow para o seletor funcionar — resetar catalogo_modelo_id para auto-match rodar
+                                              const trocaCat = (v as unknown as Record<string, string>).troca_categoria || "IPHONES";
+                                              if (trocaProd) setTrocaRow(r => ({ ...r, catalogo_modelo_id: "", catalogo_modelo_nome: "", produto: trocaProd, cor: trocaCor, categoria: trocaCat }));
                                               const tp2 = (primaryVenda as unknown as Record<string, string>).troca_produto2 || "";
-                                              if (tp2) setTrocaRow2(r => ({ ...r, produto: tp2, cor: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "", categoria: r.categoria }));
+                                              const trocaCat2 = (primaryVenda as unknown as Record<string, string>).troca_categoria2 || "IPHONES";
+                                              if (tp2) setTrocaRow2(r => ({ ...r, catalogo_modelo_id: "", catalogo_modelo_nome: "", produto: tp2, cor: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "", categoria: trocaCat2 }));
                                               setEditandoGrupoVinculo(primaryVenda.grupo_id || null);
                                             }
                                             setTab("nova");

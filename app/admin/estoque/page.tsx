@@ -287,10 +287,8 @@ function fixProdutoName(nome: string, categoria?: string | null): string {
   if (categoria === "MACBOOK" && /\bA18\b/i.test(n)) {
     n = n.replace(/MACBOOK\s+PRO\s+A18\s*PRO?\s*/gi, "MACBOOK NEO ");
   }
-  // iPad Pro: "IPAD PRO 11"" sem chip → adiciona M5 se ausente
-  if (categoria === "IPADS" && /IPAD\s+PRO\s+\d/i.test(n) && !/IPAD\s+PRO\s+[MA]\d/i.test(n)) {
-    n = n.replace(/IPAD\s+PRO\s+/gi, "IPAD PRO M5 ");
-  }
+  // iPad Air: "IPAD AIR 11"" sem chip → não assumir chip, manter como está
+  // iPad Pro: "IPAD PRO 11"" sem chip → não assumir chip, manter como está
   // iPhones: corrigir cores em PT que ficaram no nome (ex: "SKY AZUL" → "SKY BLUE", "MIST AZUL" → "MIST BLUE")
   if (categoria === "IPHONES") {
     // Cores compostas PT→EN que podem ter ficado no nome
@@ -490,8 +488,8 @@ function getModeloBase(produto: string, categoria: string): string {
     const chipMatch = p.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/i);
     const chip = chipMatch ? ` ${chipMatch[1].toUpperCase()}` : "";
     if (p.includes("MINI")) return `iPad Mini${chip}${size}${mem}`;
-    if (p.includes("AIR")) return `iPad Air${chip || " M3"}${size}${mem}`;
-    if (p.includes("PRO")) return `iPad Pro${chip || " M5"}${size}${mem}`;
+    if (p.includes("AIR")) return `iPad Air${chip}${size}${mem}`;
+    if (p.includes("PRO")) return `iPad Pro${chip}${size}${mem}`;
     return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
@@ -959,7 +957,7 @@ export default function EstoquePage() {
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
-        const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : (spec.ipad_modelo === "AIR" ? " M3" : "");
+        const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
         const conn = spec.ipad_conn === "WIFI+CELL" ? " WIFI+CELLULAR" : "";
         return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }

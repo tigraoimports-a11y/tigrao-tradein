@@ -219,7 +219,7 @@ export default function ProdutoSpecFields({
     fetchAllModelos(password).then(setAllModelos);
   }, [password]);
 
-  // Auto-match produto to catalog model when models load and catalogo_modelo_id is still empty
+  // Auto-match produto to catalog model when models load OR when produto/categoria changes and catalogo_modelo_id is still empty
   useEffect(() => {
     if (!allModelos.length || row.catalogo_modelo_id || !row.produto) return;
     const catalogKeys = CAT_TO_CATALOG[row.categoria] || [];
@@ -241,7 +241,7 @@ export default function ProdutoSpecFields({
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allModelos]);
+  }, [allModelos, row.produto, row.categoria]);
 
   // Fetch configs when catalog model changes
   useEffect(() => {

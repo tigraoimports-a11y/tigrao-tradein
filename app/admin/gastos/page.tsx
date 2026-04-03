@@ -111,10 +111,15 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
   if (categoria === "IPHONES") {
     const numMatch = n.match(/IPHONE\s*(\d+(?:\s+AIR)?)/);
     spec.ip_modelo = numMatch ? numMatch[1].trim() : "17";
-    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : n.includes(" E") ? "E" : "";
+    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : /IPHONE\s+\d+\s+E(\s|$)/.test(n) ? "E" : "";
     const ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP","ZA","IN"];
     const originMatch = n.match(new RegExp("\\b(" + ORIGIN_CODES.join("|") + ")\\b"));
-    if (originMatch) spec.ip_origem = originMatch[1];
+    if (originMatch) {
+      // Mapear código curto para a string completa de IPHONE_ORIGENS (ex: "J" → "J (JPA) - E-sim")
+      const code = originMatch[1];
+      const fullOrigem = IPHONE_ORIGENS.find(o => o.startsWith(code + " ") || o === code) || code;
+      spec.ip_origem = fullOrigem;
+    }
   } else if (categoria === "MACBOOK") {
     spec.mb_modelo = /NEO/i.test(n) ? "NEO" : /PRO/i.test(n) ? "PRO" : "AIR";
     const chip = n.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
@@ -140,7 +145,10 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
   // Validar que é um código de origem real antes de setar (evita "CLIENTE" no nome)
   const VALID_ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
   const origemCode = origemInicial.split(" ")[0].toUpperCase();
-  if (origemInicial && VALID_ORIGIN_CODES.includes(origemCode)) spec.ip_origem = origemCode;
+  if (origemInicial && VALID_ORIGIN_CODES.includes(origemCode)) {
+    const fullOrigem = IPHONE_ORIGENS.find(o => o.startsWith(origemCode + " ") || o === origemCode) || origemCode;
+    spec.ip_origem = fullOrigem;
+  }
   const caixaInicial = !!(p.observacao && p.observacao.includes("[COM_CAIXA]"));
   const GRADE_TAG_MAP: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
   const gradeTagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
@@ -175,6 +183,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   // Keep editFields for non-spec fields (origem, custo, qnt) that ProdutoSpecFields doesn't cover
   const [editFields, setEditFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // Extra serial/IMEI pairs for qnt > 1 (index 0 = unit 2, index 1 = unit 3, etc.)
+  const [multiSerials, setMultiSerials] = useState<Array<{serial_no: string; imei: string}>>([]);
 
   const reload = async () => {
     try {
@@ -245,6 +255,9 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     setEditFields({ tipo: currentTipo });
     // editRowState alimenta o ProdutoSpecFields com todos os campos incluindo spec.ip_origem
     setEditRowState(produtoToRowState(p, fornecedores, condicaoInicial, origemInicial));
+    // Inicializar multiSerials baseado na quantidade
+    const qnt = parseInt(p.qnt || 1);
+    setMultiSerials(qnt > 1 ? Array.from({ length: qnt - 1 }, () => ({ serial_no: "", imei: "" })) : []);
   };
 
   const saveEdit = async () => {
@@ -299,7 +312,51 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
         }
       }
 
-      if (Object.keys(updates).length > 0) {
+      // Multi-serial: se alguma unidade extra tem serial/IMEI, dividir em registros individuais
+      const filledExtras = multiSerials.filter(s => s.serial_no || s.imei);
+      if (filledExtras.length > 0) {
+        // Unidade 1: atualizar o registro existente com qnt=1 e serial/imei da unidade 1
+        updates.qnt = 1;
+        updates.serial_no = editRowState.serial_no.toUpperCase() || null;
+        updates.imei = editRowState.imei || null;
+        await fetch("/api/estoque", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-password": password },
+          body: JSON.stringify({ id: editId, ...updates }),
+        });
+        // Unidades extras: criar novos registros (copiando todos os campos do original)
+        const basePayload: Record<string, any> = {
+          produto: updates.produto ?? original?.produto,
+          categoria: updates.categoria ?? original?.categoria,
+          cor: updates.cor !== undefined ? updates.cor : (original?.cor || null),
+          custo_unitario: updates.custo_unitario ?? original?.custo_unitario,
+          fornecedor: updates.fornecedor !== undefined ? updates.fornecedor : (original?.fornecedor || null),
+          observacao: updates.observacao !== undefined ? updates.observacao : original?.observacao,
+          tipo: updates.tipo ?? original?.tipo,
+          status: updates.status ?? original?.status,
+          pedido_fornecedor_id: original?.pedido_fornecedor_id,
+          data_compra: original?.data_compra,
+          qnt: 1,
+        };
+        for (const s of filledExtras) {
+          await fetch("/api/estoque", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ ...basePayload, serial_no: s.serial_no.toUpperCase() || null, imei: s.imei || null }),
+          });
+        }
+        // Se sobrou qnt sem serial (mais unidades do que seriais preenchidos), criar 1 registro com o restante
+        const totalQnt = parseInt(editRowState.qnt) || 1;
+        const remaining = totalQnt - 1 - filledExtras.length;
+        if (remaining > 0) {
+          await fetch("/api/estoque", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ ...basePayload, qnt: remaining, serial_no: null, imei: null }),
+          });
+        }
+        await reload();
+      } else if (Object.keys(updates).length > 0) {
         await fetch("/api/estoque", {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "x-admin-password": password },
@@ -311,6 +368,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     setSaving(false);
     setEditId(null);
     setEditRowState(null);
+    setMultiSerials([]);
   };
 
   const inputCls = `w-full px-2 py-1 rounded border text-xs ${dm ? "bg-[#2C2C2E] border-[#4A4A4C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:outline-none focus:border-[#E8740E]`;
@@ -331,19 +389,63 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                 {/* ProdutoSpecFields: catálogo, modelo, cor, condição, fornecedor/cliente, serial, imei, qtd, custo */}
                 <ProdutoSpecFields
                   row={editRowState}
-                  onChange={setEditRowState}
-                  onRemove={() => { setEditId(null); setEditRowState(null); }}
+                  onChange={(newRow) => {
+                    const newQnt = parseInt(newRow.qnt) || 1;
+                    const oldQnt = parseInt(editRowState.qnt) || 1;
+                    if (newQnt !== oldQnt) {
+                      setMultiSerials(newQnt > 1 ? Array.from({ length: newQnt - 1 }, (_, i) => multiSerials[i] || { serial_no: "", imei: "" }) : []);
+                    }
+                    setEditRowState(newRow);
+                  }}
+                  onRemove={() => { setEditId(null); setEditRowState(null); setMultiSerials([]); }}
                   fornecedores={fornecedores}
                   inputCls={inputCls}
                   labelCls={`text-[10px] font-semibold uppercase tracking-wider mb-1 block ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}
                   darkMode={dm}
                   index={0}
                 />
+                {/* Seriais/IMEIs adicionais para qnt > 1 */}
+                {multiSerials.length > 0 && (
+                  <div className="space-y-2">
+                    <p className={`text-[10px] font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Seriais / IMEIs por unidade</p>
+                    <p className={`text-[10px] italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Unidade 1 — use os campos Serial e IMEI acima</p>
+                    {multiSerials.map((s, i) => (
+                      <div key={i} className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Serial — Unidade {i + 2}</p>
+                          <input
+                            value={s.serial_no}
+                            onChange={(e) => {
+                              const next = [...multiSerials];
+                              next[i] = { ...next[i], serial_no: e.target.value };
+                              setMultiSerials(next);
+                            }}
+                            placeholder="Opcional"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>IMEI — Unidade {i + 2}</p>
+                          <input
+                            value={s.imei}
+                            onChange={(e) => {
+                              const next = [...multiSerials];
+                              next[i] = { ...next[i], imei: e.target.value };
+                              setMultiSerials(next);
+                            }}
+                            placeholder="Opcional"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={saveEdit} disabled={saving} className="px-3 py-1 rounded bg-[#E8740E] text-white text-[10px] font-semibold hover:bg-[#D06A0D]">
                     {saving ? "Salvando..." : "Salvar"}
                   </button>
-                  <button onClick={() => { setEditId(null); setEditRowState(null); }} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  <button onClick={() => { setEditId(null); setEditRowState(null); setMultiSerials([]); }} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
                     Cancelar
                   </button>
                 </div>
