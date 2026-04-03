@@ -422,21 +422,36 @@ function getModeloBase(produto: string, categoria: string): string {
     return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
-    // Watch não tem memória relevante, agrupar por modelo + tamanho
+    // Watch: agrupar por modelo + geração + tamanho
     const sizeW = p.match(/(\d{2})\s*MM/i);
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
-    if (p.includes("ULTRA")) return `Apple Watch Ultra${sz}`;
+    // Ultra com geração (Ultra 2, Ultra 3)
+    const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
+    if (ultraMatch) {
+      const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
+      return `Apple Watch Ultra${gen}${sz}`;
+    }
+    // SE com geração (SE 2, SE 3)
+    const seMatch = p.match(/SE\s*(\d+)/);
+    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}`;
     if (p.includes("SE")) return `Apple Watch SE${sz}`;
-    if (p.includes("S11") || p.includes("SERIES 11")) return `Apple Watch Series 11${sz}`;
-    if (p.includes("S10") || p.includes("SERIES 10")) return `Apple Watch Series 10${sz}`;
+    // Series com número
+    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
+    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}`;
     return `Apple Watch${sz}`;
   }
   if (baseCat === "AIRPODS") {
-    if (p.includes("PRO 3")) return "AirPods Pro 3";
-    if (p.includes("PRO 2")) return "AirPods Pro 2";
-    if (p.includes("PRO")) return "AirPods Pro";
-    if (p.includes("MAX")) return "AirPods Max";
-    if (p.includes("4")) return "AirPods 4";
+    // AirPods com geração
+    if (p.includes("PRO")) {
+      const genMatch = p.match(/PRO\s*(\d+)/);
+      return genMatch ? `AirPods Pro ${genMatch[1]}` : "AirPods Pro";
+    }
+    if (p.includes("MAX")) {
+      const yearMatch = p.match(/MAX\s*(\d{4})/);
+      return yearMatch ? `AirPods Max ${yearMatch[1]}` : "AirPods Max";
+    }
+    const genMatch = p.match(/AIRPODS?\s*(\d+)/);
+    if (genMatch) return `AirPods ${genMatch[1]}`;
     return "AirPods";
   }
   return produto;
