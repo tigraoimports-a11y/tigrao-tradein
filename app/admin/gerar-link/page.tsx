@@ -68,13 +68,20 @@ export default function GerarLinkPage() {
   // Cores reais do estoque para o produto selecionado
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase();
-    // Buscar itens do estoque cujo nome do produto contenha o modelo selecionado
+    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    // Extrair palavras-chave do produto selecionado pra matching flexível
+    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
     const cores = new Set<string>();
     for (const item of estoqueItems) {
-      const prodEstoque = item.produto.toLowerCase();
-      // Match: produto do estoque contém o nome selecionado (ex: "iPhone 17 Pro 256GB" match "iPhone 17 Pro 256GB Prata")
+      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+      // Match direto
       if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+        continue;
+      }
+      // Match flexível: pelo menos 3 keywords em comum (modelo + tamanho/storage)
+      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
+      if (matchCount >= Math.min(3, keywords.length - 1)) {
         if (item.cor) cores.add(item.cor.toUpperCase());
       }
     }

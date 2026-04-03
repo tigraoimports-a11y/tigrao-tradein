@@ -187,13 +187,12 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
                 const json = await res.json();
                 const defaults = json.data || [];
                 if (defaults.length === 0) { setMsg("Nenhuma pergunta padrao encontrada."); setSaving(null); return; }
-                // Inserir cada uma no banco (que ainda não existe)
+                // Buscar as que JÁ existem no banco (com UUID real)
+                const dbSlugs = new Set(questions.filter(q => /^[0-9a-f]{8}-/i.test(q.id)).map(q => q.slug));
                 let inserted = 0;
                 for (const q of defaults) {
-                  // Verificar se já existe no banco por slug+device_type
-                  const exists = questions.find(existing => existing.slug === q.slug);
-                  if (exists) continue;
-                  const body = { slug: q.slug, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
+                  if (dbSlugs.has(q.slug)) continue; // já existe no banco
+                  const body = { slug: `${q.slug}_${deviceTab}`, titulo: q.titulo, tipo: q.tipo, opcoes: q.opcoes, config: q.config, ativo: q.ativo, ordem: q.ordem, device_type: deviceTab };
                   await fetch("/api/admin/tradein-perguntas", { method: "POST", headers: getHeaders(), body: JSON.stringify(body) });
                   inserted++;
                 }
@@ -281,18 +280,18 @@ export default function TradeInQuestionsAdmin({ password }: Props) {
               onClick={() => setExpandedId(isExpanded ? null : q.id)}
             >
               {/* Reorder arrows */}
-              <div className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-col gap-0" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleReorder(idx, "up")}
                   disabled={idx === 0}
-                  className="text-[10px] text-[#86868B] hover:text-[#E8740E] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-7 h-7 flex items-center justify-center rounded-t-lg text-sm font-bold text-[#86868B] hover:text-[#E8740E] hover:bg-[#FFF5EB] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                   ▲
                 </button>
                 <button
                   onClick={() => handleReorder(idx, "down")}
                   disabled={idx === questions.length - 1}
-                  className="text-[10px] text-[#86868B] hover:text-[#E8740E] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-7 h-7 flex items-center justify-center rounded-b-lg text-sm font-bold text-[#86868B] hover:text-[#E8740E] hover:bg-[#FFF5EB] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                 >
                   ▼
                 </button>

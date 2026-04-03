@@ -3142,6 +3142,12 @@ export default function EstoquePage() {
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel || "" })); }}
                                                 title="Clique para editar a cor"
                                               >{ptLabel}</span>
+                                            ) : canEditNome && prodItems[0]?.cor ? (
+                                              <span
+                                                className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || "" })); }}
+                                                title="Adicionar nome em PT"
+                                              >+PT</span>
                                             ) : null;
                                           })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
@@ -3759,8 +3765,8 @@ export default function EstoquePage() {
                     )}
                   </div>
                 )}
-                {/* Origem — para iPhones: admin edita, outros visualizam */}
-                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && (
+                {/* Origem — para iPhones: admin/pendências editam, outros visualizam; ocultar se já no nome */}
+                {p.categoria === "IPHONES" && (isAdmin || canEdit || p.origem) && !IPHONE_ORIGENS.some(o => { const code = o.split(" ")[0]; return p.produto?.toUpperCase().includes(` ${code} `) || p.produto?.toUpperCase().includes(` ${code}-`) || p.produto?.toUpperCase().endsWith(` ${code}`); }) && (
                   <div className="mb-3">
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem{(isAdmin || canEdit) ? " (opcional)" : ""}</p>
                     {(isAdmin || canEdit) ? (
@@ -3900,8 +3906,43 @@ export default function EstoquePage() {
                             </div>
                           ) : isAdmin ? (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
-                              {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                              {editingDetailSerial ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    defaultValue={p.serial_no || ""}
+                                    id={`edit-serial-${p.id}`}
+                                    style={{ textTransform: "uppercase" }}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === "Enter") {
+                                        const val = (e.target as HTMLInputElement).value.toUpperCase().trim();
+                                        await apiPatch(p.id, { serial_no: val || null });
+                                        setDetailProduct({ ...p, serial_no: val || null });
+                                        setEditingDetailSerial(false);
+                                        setMsg("Serial atualizado!");
+                                      }
+                                      if (e.key === "Escape") setEditingDetailSerial(false);
+                                    }}
+                                    autoFocus
+                                    className={`flex-1 text-[13px] font-mono px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                                  />
+                                  <button onClick={async () => {
+                                    const el = document.getElementById(`edit-serial-${p.id}`) as HTMLInputElement;
+                                    const val = el?.value.toUpperCase().trim() || "";
+                                    await apiPatch(p.id, { serial_no: val || null });
+                                    setDetailProduct({ ...p, serial_no: val || null });
+                                    setEditingDetailSerial(false);
+                                    setMsg("Serial atualizado!");
+                                  }} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm">✓</button>
+                                  <button onClick={() => setEditingDetailSerial(false)} className={`shrink-0 ${mS} hover:text-red-500`}>✕</button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`text-[13px] font-mono ${mP} flex-1`}>{p.serial_no || <span className={mS}>—</span>}</span>
+                                  {p.serial_no && <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`shrink-0 ${mS} hover:text-[#E8740E]`}>{cpIco}</button>}
+                                  <button onClick={() => setEditingDetailSerial(true)} className={`shrink-0 ${mS} hover:text-[#E8740E]`} title="Editar serial">✏️</button>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <button onClick={() => { navigator.clipboard.writeText(p.serial_no || ""); setMsg("Serial copiado"); }} className={`text-[13px] font-mono ${mP} hover:text-[#E8740E] flex items-center gap-1.5 mt-0.5`}>{p.serial_no} {cpIco}</button>

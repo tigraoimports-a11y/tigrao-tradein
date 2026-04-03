@@ -840,7 +840,6 @@ export default function AdminPage() {
 /* ── WhatsApp Config Panel ── */
 const VENDEDORES_DEFAULT: { nome: string; label: string; numero: string }[] = [
   { nome: "andre", label: "Andre", numero: "5521967442665" },
-  { nome: "nicolas", label: "Nicolas", numero: "5521995618747" },
   { nome: "bianca", label: "Bianca", numero: "5521972461357" },
 ];
 
