@@ -1483,12 +1483,17 @@ export default function EstoquePage() {
     return true;
   });
 
-  // Agrupar por categoria (ou por cliente/fornecedor nas pendências), depois por modelo base
+  // Agrupar por categoria (ou por data+cliente nas pendências), depois por modelo base
   const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
   filtered.forEach((p) => {
-    const catKey = tab === "pendencias"
-      ? (p.fornecedor || p.cliente || "Sem fornecedor").toUpperCase()
-      : p.categoria;
+    let catKey: string;
+    if (tab === "pendencias") {
+      const date = p.data_compra || p.data_entrada || "Sem data";
+      const cliente = (p.fornecedor || p.cliente || "Sem cliente").toUpperCase();
+      catKey = `${date}|||${cliente}`;
+    } else {
+      catKey = p.categoria;
+    }
     if (!byCat[catKey]) byCat[catKey] = {};
     const modelo = getModeloBase(p.produto, p.categoria);
     if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
@@ -2831,15 +2836,31 @@ export default function EstoquePage() {
                 )}
               </div>
             )}
-            {Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => (
+            {Object.entries(byCat).sort(([a], [b]) => {
+              // Pendências: ordenar por data (mais recente primeiro), depois por cliente
+              if (tab === "pendencias") {
+                const [dateA] = a.split("|||");
+                const [dateB] = b.split("|||");
+                if (dateA !== dateB) return dateB.localeCompare(dateA);
+                return a.localeCompare(b);
+              }
+              return a.localeCompare(b);
+            }).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                  {tab === "pendencias" ? (
-                    <span className="flex items-center gap-2">
-                      <span className={`text-sm ${textSecondary}`}>👤</span>
-                      {cat}
-                    </span>
-                  ) : (dynamicCatLabels[cat] || cat)}
+                  {tab === "pendencias" ? (() => {
+                    const [dateStr, cliente] = cat.split("|||");
+                    const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
+                    return (
+                      <span className="flex items-center gap-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className={`text-sm ${textSecondary}`}>👤</span>
+                          {cliente}
+                        </span>
+                      </span>
+                    );
+                  })() : (dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
