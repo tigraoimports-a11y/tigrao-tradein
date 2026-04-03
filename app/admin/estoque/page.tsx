@@ -100,8 +100,17 @@ const COR_PT: Record<string, string> = {
   "CORAL": "Coral",
   "PRODUCT RED": "Vermelho",
   "(PRODUCT)RED": "Vermelho",
-  "TEAL": "Azul-petróleo",
-  "ULTRAMARINE": "Ultramarino",
+  "TEAL": "Verde",
+  "ULTRAMARINE": "Azul",
+  "CLOUD WHITE": "Branco",
+  "SKY BLUE": "Azul Céu",
+  "SAGE": "Verde",
+  "MIST BLUE": "Azul Névoa",
+  "HAZE BLUE": "Azul Névoa",
+  "BLUSH": "Rosa",
+  "CITRUS": "Cítrico",
+  "INDIGO": "Índigo",
+  "BRANCO NUVEM": "Branco",
   "PEBBLE": "Pedregulho",
   "LIGHT BLUE": "Azul Claro",
   "DARK BLUE": "Azul Escuro",
@@ -196,6 +205,12 @@ const PT_TO_EN: Record<string, string> = {
   "NATURAL": "Natural",
   "ULTRAMARINO": "Ultramarine",
   "LAVANDA": "Lavender",
+  "BRANCO NUVEM": "Cloud White",
+  "AZUL CEU": "Sky Blue",
+  "AZUL CÉU": "Sky Blue",
+  "AZUL NEVOA": "Mist Blue",
+  "AZUL NÉVOA": "Mist Blue",
+  "INDIGO": "Indigo",
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
@@ -236,8 +251,22 @@ function extractCorPT(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
+/** Corrige nomes de produto que foram cadastrados com formato antigo/errado */
+function fixProdutoName(nome: string, categoria?: string | null): string {
+  let n = nome;
+  // MacBook Neo: "MACBOOK PRO A18 PRO ..." → "MACBOOK NEO ..."
+  if (categoria === "MACBOOK" && /\bA18\b/i.test(n)) {
+    n = n.replace(/MACBOOK\s+PRO\s+A18\s*PRO?\s*/gi, "MACBOOK NEO ");
+  }
+  // iPad Pro: "IPAD PRO 11"" sem chip → adiciona M5 se ausente
+  if (categoria === "IPADS" && /IPAD\s+PRO\s+\d/i.test(n) && !/IPAD\s+PRO\s+[MA]\d/i.test(n)) {
+    n = n.replace(/IPAD\s+PRO\s+/gi, "IPAD PRO M5 ");
+  }
+  return n;
+}
+
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
-  let display = stripOrigem(nome, categoria);
+  let display = stripOrigem(fixProdutoName(nome, categoria), categoria);
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
@@ -406,10 +435,11 @@ function getModeloBase(produto: string, categoria: string): string {
   if (baseCat === "MACBOOK") {
     const mem = getMem();
     const size = getSize();
-    // Extrair chip (M4, M5, M4 Pro, M5 Pro)
+    // Extrair chip M-series (M4, M5, M4 Pro, M5 Pro)
     const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
     const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${mem}`;
+    // MacBook Neo: detectar por "NEO" ou chip A18 (exclusivo do Neo)
+    if (p.includes("NEO") || /\bA18\b/i.test(p)) return `MacBook Neo${size}${mem}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
     if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
@@ -1604,6 +1634,7 @@ export default function EstoquePage() {
   const isPendenciasTab = tab === "pendencias";
   const isACaminhoTab = tab === "acaminho";
   const isEditableItemTab = isPendenciasTab || isACaminhoTab;
+  const isBateriaEditable = isEditableItemTab || tab === "seminovos" || tab === "estoque";
 
   // renderProductRow removido — agora renderizado inline com agrupamento por produto/cor
 
@@ -2085,7 +2116,7 @@ export default function EstoquePage() {
       {/* ===== ABA REPOSIÇÃO ===== */}
       {tab === "reposicao" ? (() => {
         const stripOrigemRepo = (nome: string) => nome
-          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
           .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
           .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
           .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
@@ -2948,7 +2979,7 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items]) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
@@ -3255,12 +3286,12 @@ export default function EstoquePage() {
                                             })()}
                                             {/* Bateria (só seminovo/pendência) */}
                                             {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
+                                              isBateriaEditable && isEditingField(p.id, "bateria") ? (
                                                 <div className="flex items-center gap-0.5">
                                                   <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : isEditableItemTab ? (
+                                              ) : isBateriaEditable ? (
                                                 <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
