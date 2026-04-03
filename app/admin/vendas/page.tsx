@@ -931,8 +931,8 @@ export default function VendasPage() {
     setMsg("");
 
     // Build payloads for all products
-    // Se tem carrinho, atribuir a troca global ao primeiro produto
-    if (allProducts.length > 1) {
+    // Atribuir troca global do form ao primeiro produto do carrinho (para 1 ou mais produtos)
+    if (allProducts.length >= 1) {
       const globalTroca1 = form.produto_na_troca;
       const globalTroca2 = form.produto_na_troca2;
       if ((parseFloat(globalTroca1) || 0) > 0 && !(parseFloat(allProducts[0].produto_na_troca) > 0)) {
