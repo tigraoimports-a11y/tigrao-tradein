@@ -2654,7 +2654,7 @@ export default function EstoquePage() {
             /* TELA DE CATEGORIAS */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
-                const sourceList = tab === "pendencias" ? pendencias : emEstoque;
+                const sourceList = tab === "pendencias" ? pendencias : tab === "atacado" ? atacado : emEstoque;
                 const items = sourceList.filter((p) => p.categoria === cat.key);
                 const count = items.length;
                 const units = items.reduce((s, p) => s + p.qnt, 0);
