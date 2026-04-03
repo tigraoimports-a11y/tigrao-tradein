@@ -2661,6 +2661,13 @@ export default function EstoquePage() {
             })()
           ) : !filterCat && ["estoque", "pendencias"].includes(tab) ? (
             /* TELA DE CATEGORIAS */
+            (() => {
+              // Reverse map: EN → PT for display
+              const COR_EN_TO_PT: Record<string, string> = Object.fromEntries(
+                Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt])
+              );
+              const corToPt = (cor: string) => COR_EN_TO_PT[cor.toUpperCase()] || cor;
+              return (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {categoriasState.map((cat) => {
                 const sourceList = tab === "pendencias" ? [...pendencias, ...pendenciasMovidas] : emEstoque;
@@ -2669,6 +2676,18 @@ export default function EstoquePage() {
                 const units = items.reduce((s, p) => s + p.qnt, 0);
                 const valorTotal = items.reduce((s, p) => s + (p.custo_unitario || 0) * p.qnt, 0);
                 if (count === 0) return null;
+                // Top models breakdown for preview
+                const modelMap: Record<string, Record<string, number>> = {};
+                items.forEach(p => {
+                  const m = p.produto || "—";
+                  if (!modelMap[m]) modelMap[m] = {};
+                  const corPt = corToPt(p.cor || "—");
+                  modelMap[m][corPt] = (modelMap[m][corPt] || 0) + p.qnt;
+                });
+                const topModels = Object.entries(modelMap)
+                  .map(([nome, colors]) => ({ nome, colors, total: Object.values(colors).reduce((s, n) => s + n, 0) }))
+                  .sort((a, b) => b.total - a.total)
+                  .slice(0, 4);
                 const isEditing = editingCatName === cat.key;
                 return (
                   <div key={cat.key} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden hover:border-[#E8740E] hover:shadow-md transition-all group relative cursor-pointer`} onClick={() => !isEditing && setFilterCat(cat.key)}>
@@ -2706,8 +2725,29 @@ export default function EstoquePage() {
                           )}
                         </div>
                       </div>
+                      {/* Top models preview */}
+                      {topModels.length > 0 && (
+                        <div className={`mt-2 space-y-1.5 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"} pt-2`}>
+                          {topModels.map(({ nome, colors, total }) => (
+                            <div key={nome} className="flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`text-[11px] font-semibold ${textPrimary} truncate leading-tight`} title={nome}>{nome}</span>
+                                <span className={`text-[10px] font-bold shrink-0 ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{total}u</span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                                {Object.entries(colors).sort(([a],[b]) => a.localeCompare(b)).map(([cor, qty]) => (
+                                  <span key={cor} className={`text-[9.5px] ${textMuted}`}>{cor}: <span className="font-semibold">{qty}</span></span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {Object.keys(modelMap).length > 4 && (
+                            <span className={`text-[9.5px] ${textMuted} italic`}>+{Object.keys(modelMap).length - 4} modelos</span>
+                          )}
+                        </div>
+                      )}
                       {/* Stats */}
-                      <div className={`flex items-center justify-between pt-2 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
+                      <div className={`flex items-center justify-between pt-2 mt-1 border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
                         <div className="flex items-center gap-2">
                           <span className={`text-[13px] font-bold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"}`}>{units} un.</span>
                           <span className={`text-[11px] ${textMuted}`}>· {count} mod.</span>
@@ -2762,6 +2802,8 @@ export default function EstoquePage() {
                 );
               })()}
             </div>
+              );
+            })()
           ) : Object.keys(byCat).length === 0 ? (
             <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
               <p className={textSecondary}>Nenhum produto encontrado.</p>
@@ -2904,9 +2946,14 @@ export default function EstoquePage() {
                       </div>
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
-                          // Agrupar por cor pra mostrar resumo no header
+                          // Agrupar por cor pra mostrar resumo no header (em português)
+                          const _enToPt: Record<string, string> = Object.fromEntries(Object.entries(COR_PT_TO_EN).map(([pt, en]) => [en, pt]));
                           const colorSummary: Record<string, number> = {};
-                          items.forEach(p => { const c = p.cor || "—"; colorSummary[c] = (colorSummary[c] || 0) + p.qnt; });
+                          items.forEach(p => {
+                            const raw = (p.cor || "—").toUpperCase();
+                            const c = _enToPt[raw] || raw;
+                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
+                          });
                           return (
                             <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
                               {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
