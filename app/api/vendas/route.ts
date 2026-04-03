@@ -87,7 +87,11 @@ export async function GET(req: NextRequest) {
     if (to) query = query.lte("data", to);
   }
 
-  const { data, error } = await query.limit(1000);
+  const estoqueId = searchParams.get("estoque_id");
+  if (estoqueId) query = query.eq("estoque_id", estoqueId);
+
+  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 1000;
+  const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
 }

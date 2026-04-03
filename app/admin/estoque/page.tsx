@@ -483,6 +483,7 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  const [detailVenda, setDetailVenda] = useState<{ cliente: string; data: string; preco_vendido: number } | null>(null);
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
   const [editingDetailImei, setEditingDetailImei] = useState(false);
   const [recatMode, setRecatMode] = useState(false);
@@ -896,12 +897,25 @@ export default function EstoquePage() {
   useEffect(() => {
     setEditingDetailSerial(false);
     setEditingDetailImei(false);
+    setDetailVenda(null);
     // Extrai Apple ID do observacao se houver (formato "APPLE ID: xxx\n...")
     if (detailProduct?.observacao) {
       const match = detailProduct.observacao.match(/^APPLE ID:\s*(.+?)(\n|$)/im);
       setDetailAppleId(match ? match[1].trim() : "");
     } else {
       setDetailAppleId("");
+    }
+    // Busca venda relacionada quando item está ESGOTADO
+    if (detailProduct?.id && detailProduct.status === "ESGOTADO") {
+      fetch(`/api/vendas?estoque_id=${detailProduct.id}&select=cliente,data,preco_vendido&limit=1`, {
+        headers: { "x-admin-password": password },
+      })
+        .then(r => r.json())
+        .then(json => {
+          const v = Array.isArray(json) ? json[0] : (json?.data?.[0] ?? json?.vendas?.[0]);
+          if (v?.cliente) setDetailVenda({ cliente: v.cliente, data: v.data, preco_vendido: v.preco_vendido });
+        })
+        .catch(() => {});
     }
   }, [detailProduct?.id]);
 
@@ -4027,6 +4041,37 @@ export default function EstoquePage() {
                   ) : <p className={`text-[13px] ${mS} mt-0.5`}>—</p>}
                 </div>
               </div>
+              {/* Vendido para — exibido quando ESGOTADO */}
+              {p.status === "ESGOTADO" && (
+                <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                  <p className={`text-xs font-bold ${mP} mb-3`}>Saída</p>
+                  {detailVenda ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Vendido Para</p>
+                        <button
+                          onClick={() => { setDetailProduct(null); window.location.href = `/admin/clientes?q=${encodeURIComponent(detailVenda.cliente)}`; }}
+                          className={`text-[13px] mt-0.5 font-medium text-[#E8740E] hover:underline text-left`}
+                        >
+                          {detailVenda.cliente}<span className={`ml-1 text-[10px] ${mS}`}>↗</span>
+                        </button>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Data da Venda</p>
+                        <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(detailVenda.data)}</p>
+                      </div>
+                      {detailVenda.preco_vendido > 0 && (
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Venda</p>
+                          <p className={`text-[13px] font-bold text-[#E8740E] mt-0.5`}>{fmt(detailVenda.preco_vendido)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className={`text-[12px] ${mS}`}>Buscando...</p>
+                  )}
+                </div>
+              )}
               {/* Operações Relacionadas */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
