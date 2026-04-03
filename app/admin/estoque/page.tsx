@@ -1673,9 +1673,7 @@ export default function EstoquePage() {
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
   const pendenciasMovidas = estoque.filter((p) =>
-    p.tipo === "SEMINOVO" && (
-      p.observacao?.includes("[EX_PENDENCIA]") || !!p.cliente
-    )
+    p.tipo === "SEMINOVO" && p.observacao?.includes("[EX_PENDENCIA]")
   );
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
