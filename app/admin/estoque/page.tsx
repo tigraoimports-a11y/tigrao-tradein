@@ -1237,6 +1237,24 @@ export default function EstoquePage() {
       .trim() || null;
   };
 
+  /** Converte tags internas do observacao em texto legível para exibição */
+  const formatObsDisplay = (obs: string | null): string | null => {
+    if (!obs) return null;
+    return obs
+      .replace(/\[EX_PENDENCIA\]/g, "")
+      .replace(/\[NAO_ATIVADO\]/g, "")
+      .replace(/\[SEMINOVO\]/g, "")
+      .replace(/\[GRADE_APLUS\]/g, "A+")
+      .replace(/\[GRADE_AB\]/g, "AB")
+      .replace(/\[GRADE_A\]/g, "A")
+      .replace(/\[GRADE_B\]/g, "B")
+      .replace(/\[COM_CAIXA\]/g, "Com Caixa")
+      .replace(/\[COM_CABO\]/g, "Com Cabo")
+      .replace(/\[COM_FONTE\]/g, "Com Fonte")
+      .replace(/\s+/g, " ")
+      .trim() || null;
+  };
+
   const handleSubmitMulti = async () => {
     if (pedidoProdutos.length === 0) { setMsg("Adicione pelo menos 1 produto"); return; }
 
@@ -1442,12 +1460,7 @@ export default function EstoquePage() {
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
-  // Pendências que já foram movidas para o estoque (ficam visíveis como "No estoque")
-  const pendenciasMovidas = estoque.filter((p) =>
-    p.tipo === "SEMINOVO" && (
-      p.observacao?.includes("[EX_PENDENCIA]") || !!p.cliente
-    )
-  );
+  const pendenciasMovidas: typeof estoque = []; // removido — pendências saem ao mover para estoque
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
@@ -1717,7 +1730,7 @@ export default function EstoquePage() {
           { label: "Unidades", value: totalUnidades, sub: "em estoque" },
           { label: "Valor Total", value: fmt(valorEstoque), sub: "investido" },
           { label: "Seminovos", value: seminovos.length, sub: fmt(valorSeminovos) },
-          { label: "Pendencias", value: pendencias.length, sub: pendenciasMovidas.length > 0 ? `${pendenciasMovidas.length} no estoque` : "aguardando" },
+          { label: "Pendencias", value: pendencias.length, sub: "aguardando" },
           { label: "A Caminho", value: aCaminho.length, sub: fmt(valorACaminho) },
         ].map((kpi) => (
           <div key={kpi.label} className={`${bgCard} border ${borderCard} rounded-2xl p-4 hover:shadow-md transition-shadow`}>
@@ -3088,10 +3101,10 @@ export default function EstoquePage() {
                                               </div>
                                             ) : isEditableItemTab ? (
                                               <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.observacao ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
-                                                {p.observacao || "+ Origem"}
+                                                {formatObsDisplay(p.observacao) || "+ Origem"}
                                               </button>
                                             ) : p.observacao ? (
-                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{p.observacao}</span>
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{formatObsDisplay(p.observacao)}</span>
                                             ) : null}
                                           </div>
                                           {!isEditableItemTab && p.data_entrada && (
