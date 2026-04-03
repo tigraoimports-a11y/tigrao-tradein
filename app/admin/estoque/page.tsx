@@ -8,7 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_OBRIGATORIA, COR_PT_TO_EN, corToEn, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -1249,6 +1249,39 @@ export default function EstoquePage() {
       .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
+  };
+
+  /** Reconstrói o nome do produto trocando a cor (mantém formato com origem para iPhones) */
+  const rebuildNomeComCor = (nome: string, oldCor: string | null, newCor: string | null, cat: string): string => {
+    // Coletar todas as strings de cor que podem aparecer no nome
+    const enValues = Object.values(COR_PT_TO_EN); // strings em inglês
+    const ptKeys = Object.keys(COR_PT_TO_EN); // strings em português
+    const allColorStrings = [...new Set([...enValues, ...ptKeys])].sort((a, b) => b.length - a.length); // mais longos primeiro
+
+    // Remover cor atual do nome
+    let stripped = nome;
+    const oldColorStr = oldCor ? (cat === "IPHONES" ? corToEn(oldCor) : oldCor.toUpperCase()) : null;
+    if (oldColorStr) {
+      stripped = stripped.replace(new RegExp(`\\b${oldColorStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"), "").replace(/\s+/g, " ").trim();
+    } else {
+      // Tentar remover qualquer cor conhecida do nome
+      for (const c of allColorStrings) {
+        const r = new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+        if (r.test(stripped)) { stripped = stripped.replace(r, "").replace(/\s+/g, " ").trim(); break; }
+      }
+    }
+
+    if (!newCor) return stripped;
+    const newColorStr = cat === "IPHONES" ? corToEn(newCor) : newCor.toUpperCase();
+
+    // Para iPhones: cor vai ANTES da sigla de origem (ex: "HN", "LL", "BE" no final)
+    if (cat === "IPHONES") {
+      const originMatch = stripped.match(/\s+([A-Z]{2,3})$/);
+      if (originMatch) {
+        return stripped.replace(/\s+([A-Z]{2,3})$/, ` ${newColorStr} ${originMatch[1]}`);
+      }
+    }
+    return `${stripped} ${newColorStr}`;
   };
 
   /** Converte tags internas do observacao em texto legível para exibição */
@@ -3719,9 +3752,12 @@ export default function EstoquePage() {
                           value={p.cor || ""}
                           onChange={async (e) => {
                             const val = e.target.value || null;
-                            await apiPatch(p.id, { cor: val });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
-                            setDetailProduct({ ...p, cor: val });
+                            const novoNome = rebuildNomeComCor(p.produto, p.cor, val, p.categoria || "");
+                            const patch: Record<string, unknown> = { cor: val };
+                            if (novoNome !== p.produto) patch.produto = novoNome;
+                            await apiPatch(p.id, patch);
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val, produto: novoNome } : x));
+                            setDetailProduct({ ...p, cor: val, produto: novoNome });
                             setMsg("Cor atualizada!");
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
@@ -3737,9 +3773,12 @@ export default function EstoquePage() {
                           onBlur={async (e) => {
                             const val = e.target.value.trim().toUpperCase() || null;
                             if (val !== (p.cor || null)) {
-                              await apiPatch(p.id, { cor: val });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
-                              setDetailProduct({ ...p, cor: val });
+                              const novoNome = rebuildNomeComCor(p.produto, p.cor, val, p.categoria || "");
+                              const patch: Record<string, unknown> = { cor: val };
+                              if (novoNome !== p.produto) patch.produto = novoNome;
+                              await apiPatch(p.id, patch);
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val, produto: novoNome } : x));
+                              setDetailProduct({ ...p, cor: val, produto: novoNome });
                               setMsg("Cor atualizada!");
                             }
                           }}
