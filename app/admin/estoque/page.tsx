@@ -105,8 +105,8 @@ const COR_PT: Record<string, string> = {
   "CLOUD WHITE": "Branco",
   "SKY BLUE": "Azul Céu",
   "SAGE": "Verde",
-  "MIST BLUE": "Azul Névoa",
-  "HAZE BLUE": "Azul Névoa",
+  "MIST BLUE": "Azul",
+  "HAZE BLUE": "Azul",
   "BLUSH": "Rosa",
   "CITRUS": "Cítrico",
   "INDIGO": "Índigo",
@@ -235,11 +235,19 @@ function stripOrigem(nome: string, categoria?: string | null): string {
 function extractCorPT(nome: string): string | null {
   if (!nome) return null;
   const upper = nome.toUpperCase();
-  // Verifica do mais longo para o mais curto para evitar matches parciais
+  // 1. Tenta encontrar cor em PT no nome
   const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
   for (const ptKey of ptKeys) {
     if (upper.includes(ptKey)) {
       return ptKey.charAt(0).toUpperCase() + ptKey.slice(1).toLowerCase();
+    }
+  }
+  // 2. Tenta encontrar cor em EN no nome e retorna tradução PT
+  const enKeys = Object.keys(COR_PT).sort((a, b) => b.length - a.length);
+  for (const enKey of enKeys) {
+    if (upper.includes(enKey)) {
+      const pt = COR_PT[enKey];
+      if (pt && pt.toUpperCase() !== enKey) return pt;
     }
   }
   return null;
@@ -262,11 +270,44 @@ function fixProdutoName(nome: string, categoria?: string | null): string {
   if (categoria === "IPADS" && /IPAD\s+PRO\s+\d/i.test(n) && !/IPAD\s+PRO\s+[MA]\d/i.test(n)) {
     n = n.replace(/IPAD\s+PRO\s+/gi, "IPAD PRO M5 ");
   }
+  // iPhones: corrigir cores em PT que ficaram no nome (ex: "SKY AZUL" → "SKY BLUE", "MIST AZUL" → "MIST BLUE")
+  if (categoria === "IPHONES") {
+    // Cores compostas PT→EN que podem ter ficado no nome
+    const ptToEnInline: [RegExp, string][] = [
+      [/\bAZUL\s+CEU\b/gi, "SKY BLUE"],
+      [/\bAZUL\s+CÉU\b/gi, "SKY BLUE"],
+      [/\bSKY\s+AZUL\b/gi, "SKY BLUE"],
+      [/\bMIST\s+AZUL\b/gi, "MIST BLUE"],
+      [/\bAZUL\s+NEVOA\b/gi, "MIST BLUE"],
+      [/\bAZUL\s+NÉVOA\b/gi, "MIST BLUE"],
+      [/\bBRANCO\s+NUVEM\b/gi, "CLOUD WHITE"],
+      [/\bCINZA\s+ESPACIAL\s+PRETO\b/gi, "SPACE BLACK"],
+      [/\bPRETO\s+ESPACIAL\b/gi, "SPACE BLACK"],
+      [/\bCINZA\s+ESPACIAL\b/gi, "SPACE GRAY"],
+      [/\bLARANJA\s+C[OÓ]SMICO\b/gi, "COSMIC ORANGE"],
+      [/\bROXO\s+PROFUNDO\b/gi, "DEEP PURPLE"],
+      [/\bAZUL\s+PROFUNDO\b/gi, "DEEP BLUE"],
+      [/\bVERDE\s+ALPINO\b/gi, "ALPINE GREEN"],
+    ];
+    for (const [pat, en] of ptToEnInline) n = n.replace(pat, en);
+  }
   return n;
 }
 
+/** Remove toda referência de origem do nome de iPhones (ex: "LL", "(EUA)", "(IN)", "(JPA)") */
+function stripAllOrigem(nome: string): string {
+  return nome
+    .replace(/\s+\([^)]*\)/g, "")  // Remove qualquer coisa entre parênteses: (EUA), (IN), (JPA), (BR)
+    .replace(/\s+(AA|BE|BR|BZ|CH|E|HN|J|LL|LZ|N|QL|VC|ZD|ZP)(?=\s|$)/gi, "")  // Remove códigos soltos
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
-  let display = stripOrigem(fixProdutoName(nome, categoria), categoria);
+  let display = fixProdutoName(nome, categoria);
+  // iPhones: remover TODA referência de origem
+  if (!categoria || categoria === "IPHONES") display = stripAllOrigem(display);
+  display = stripOrigem(display, categoria);
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
@@ -507,6 +548,7 @@ export default function EstoquePage() {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [editingNome, setEditingNome] = useState<Record<string, string>>({});
+  const [editingCorPT, setEditingCorPT] = useState<Record<string, string>>({});
   const [editingField, setEditingField] = useState<Record<string, Record<string, string>>>({});
   const [variacoes, setVariacoes] = useState<{ cor: string; qnt: string }[]>([]);
   const [editingCat, setEditingCat] = useState<Record<string, string>>({});
@@ -3144,7 +3186,48 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {corSoPT(prodItems[0]?.cor, prodItems[0]?.produto) && <span className="text-[11px] font-normal opacity-60 ml-1">{corSoPT(prodItems[0]?.cor, prodItems[0]?.produto)}</span>}
+                                          {(() => {
+                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
+                                            const editKey = `${prodItems[0]?.id}_corpt`;
+                                            if (editingCorPT[editKey] !== undefined) {
+                                              return (
+                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
+                                                  <input
+                                                    value={editingCorPT[editKey]}
+                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const newCor = editingCorPT[editKey];
+                                                        if (newCor) {
+                                                          await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                          setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                        }
+                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                      }
+                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                    }}
+                                                    className="w-20 px-1 py-0 rounded border border-[#0071E3] text-[10px] bg-[#1A1A1A] text-white/80"
+                                                    autoFocus
+                                                  />
+                                                  <button onClick={async () => {
+                                                    const newCor = editingCorPT[editKey];
+                                                    if (newCor) {
+                                                      await Promise.all(prodItems.map(p => apiPatch(p.id, { cor: newCor })));
+                                                      setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor: newCor } : p));
+                                                    }
+                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
+                                                  }} className="text-[9px] text-[#E8740E] font-bold">OK</button>
+                                                </span>
+                                              );
+                                            }
+                                            return ptLabel ? (
+                                              <span
+                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor || ptLabel })); }}
+                                                title="Clique para editar cor"
+                                              >{ptLabel}</span>
+                                            ) : null;
+                                          })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
                                       );
