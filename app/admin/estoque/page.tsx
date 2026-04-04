@@ -8,7 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, MACBOOK_CORES, IPAD_CORES, WATCH_CORES, AIRPODS_CORES, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -226,6 +226,52 @@ const PT_TO_EN: Record<string, string> = {
 };
 
 const ORIGEM_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP"];
+
+/** Retorna cores específicas do modelo baseado no nome do produto + categoria */
+function getModelSpecificCores(produto: string, categoria: string): string[] {
+  const p = (produto || "").toUpperCase();
+
+  if (categoria === "MACBOOK") {
+    if (p.includes("NEO")) return ["BLUSH", "CITRUS", "INDIGO", "SILVER"];
+    if (p.includes("AIR M1")) return ["GOLD", "SILVER", "SPACE GRAY"];
+    if (p.includes("AIR M2") || p.includes("AIR M3")) return ["MIDNIGHT", "SILVER", "SPACE GRAY", "STARLIGHT"];
+    if (p.includes("AIR M4") || p.includes("AIR M5")) return ["MIDNIGHT", "SILVER", "SKY BLUE", "STARLIGHT"];
+    if (p.includes("PRO M1") || p.includes("PRO M2")) return ["SILVER", "SPACE GRAY"];
+    if (p.includes("PRO M4") || p.includes("PRO M5")) return ["SILVER", "SPACE BLACK"];
+    return MACBOOK_CORES;
+  }
+
+  if (categoria === "IPADS") {
+    if (p.includes("PRO M4") || p.includes("PRO M5")) return ["SILVER", "SPACE BLACK"];
+    if (p.includes("PRO")) return ["SILVER", "SPACE GRAY"];
+    if (p.includes("AIR M2") || p.includes("AIR M3")) return ["BLUE", "PURPLE", "SPACE GRAY", "STARLIGHT"];
+    if (p.includes("AIR 5")) return ["BLUE", "PINK", "PURPLE", "SPACE GRAY", "STARLIGHT"];
+    if (p.includes("AIR 4")) return ["GREEN", "PINK", "SILVER", "SKY BLUE", "SPACE GRAY"];
+    if (p.includes("MINI 7")) return ["BLUE", "PURPLE", "SPACE GRAY", "STARLIGHT"];
+    if (p.includes("MINI 6")) return ["PINK", "PURPLE", "SPACE GRAY", "STARLIGHT"];
+    if (p.includes("A16") || p.includes("11º") || p.includes("10º")) return ["BLUE", "PINK", "SILVER", "YELLOW"];
+    if (p.includes("9º")) return ["SILVER", "SPACE GRAY"];
+    return IPAD_CORES;
+  }
+
+  if (categoria === "APPLE_WATCH" || categoria === "APPLE_WATCH_ATACADO") {
+    if (p.includes("ULTRA")) return ["BLACK TITANIUM", "NATURAL TITANIUM"];
+    if (p.includes("SERIES 11") || p.includes("S11")) return ["GOLD", "JET BLACK", "NATURAL", "ROSE GOLD", "SILVER", "SLATE", "SPACE GRAY"];
+    if (p.includes("SERIES 10") || p.includes("S10")) return ["GOLD", "JET BLACK", "NATURAL", "ROSE GOLD", "SILVER", "SLATE"];
+    if (p.includes("SERIES 9") || p.includes("S9")) return ["GOLD", "GRAPHITE", "MIDNIGHT", "PINK", "RED", "SILVER", "STARLIGHT"];
+    if (p.includes("SERIES 8") || p.includes("S8")) return ["GOLD", "GRAPHITE", "MIDNIGHT", "RED", "SILVER", "STARLIGHT"];
+    if (p.includes("SE 3")) return ["MIDNIGHT", "STARLIGHT"];
+    if (p.includes("SE 2") || p.includes("SE")) return ["MIDNIGHT", "SILVER", "STARLIGHT"];
+    return WATCH_CORES;
+  }
+
+  if (categoria === "AIRPODS") {
+    if (p.includes("MAX")) return ["BLUE", "MIDNIGHT", "ORANGE", "PURPLE", "STARLIGHT"];
+    return AIRPODS_CORES;
+  }
+
+  return CORES_POR_CATEGORIA[categoria] || [];
+}
 
 /** Remove código de origem do final de qualquer string (ex: "AZUL PROFUNDO LL" → "AZUL PROFUNDO") */
 function stripCode(s: string): string {
@@ -3436,8 +3482,8 @@ export default function EstoquePage() {
                                             {p.qnt} {p.qnt === 1 ? "un." : "un."}
                                           </span>
                                         </td>
-                                        <td colSpan={5} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
-                                          {(p.imei || p.serial_no) && <span className="opacity-50">#{p.serial_no || p.imei}</span>}
+                                        <td colSpan={5} className={`px-4 py-2.5 text-right text-[11px] font-mono ${textSecondary}`}>
+                                          {(p.imei || p.serial_no) && <span>#{p.serial_no || p.imei}</span>}
                                         </td>
                                       </tr>
                                     );
@@ -4241,7 +4287,7 @@ export default function EstoquePage() {
                     {(canEdit || isAdmin) ? (() => {
                       const coresCat = p.categoria === "IPHONES"
                         ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
-                        : CORES_POR_CATEGORIA[p.categoria || ""] || [];
+                        : getModelSpecificCores(p.produto || "", p.categoria || "");
                       return coresCat.length > 0 ? (
                         <select
                           value={p.cor || ""}
