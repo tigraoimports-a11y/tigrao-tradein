@@ -281,18 +281,23 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   const upper = corClean.toUpperCase().trim();
   const en = PT_TO_EN[upper];
   const corEN = en ? en.toUpperCase() : upper; // cor em inglês (ou original se não tem tradução)
+  // Verifica se o nome já contém alguma cor comercial conhecida (EN)
+  const displayUpper = display.toUpperCase();
+  const nomeJaTemCorEN = Object.keys(COR_PT).sort((a, b) => b.length - a.length)
+    .some(enKey => enKey.length >= 3 && displayUpper.includes(enKey));
+
   if (en) {
     // Substitui a cor em PT pelo equivalente EN no nome (case-insensitive)
     const pattern = upper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
     const before = display;
     try { display = display.replace(new RegExp(pattern, "gi"), corEN); } catch { /* ignore */ }
-    // Se não substituiu (cor não estava no nome), anexar a cor EN ao final
-    if (display === before && !display.toUpperCase().includes(corEN)) {
+    // Se não substituiu e nome NÃO tem cor EN conhecida, anexar
+    if (display === before && !display.toUpperCase().includes(corEN) && !nomeJaTemCorEN) {
       display = `${display} ${corEN}`;
     }
   } else {
-    // Cor sem tradução — se não está no nome, anexar
-    if (!display.toUpperCase().includes(upper)) {
+    // Cor sem tradução — se não está no nome e nome não tem cor conhecida, anexar
+    if (!display.toUpperCase().includes(upper) && !nomeJaTemCorEN) {
       display = `${display} ${cor}`;
     }
   }
