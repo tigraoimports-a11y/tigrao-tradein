@@ -205,11 +205,25 @@ export async function POST(req: NextRequest) {
       const novaQnt = Math.max(0, Number(item.qnt) - 1);
       // Seminovos e Novos: marcar como ESGOTADO ao chegar em qnt=0 (nunca deletar)
       // Isso preserva o ID do item e permite rastreabilidade completa (retorno ao estoque na devolução)
-      await supabase.from("estoque").update({
+      const { error: updateError } = await supabase.from("estoque").update({
         qnt: novaQnt,
         status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
         updated_at: new Date().toISOString(),
       }).eq("id", estoqueId);
+
+      // Retry once if first attempt failed
+      if (updateError) {
+        console.error(`[vendas] Falha ao decrementar estoque ${estoqueId}: ${updateError.message}. Tentando novamente...`);
+        const { error: retryError } = await supabase.from("estoque").update({
+          qnt: novaQnt,
+          status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE",
+          updated_at: new Date().toISOString(),
+        }).eq("id", estoqueId);
+        if (retryError) {
+          console.error(`[vendas] FALHA CRÍTICA: estoque ${estoqueId} NÃO foi decrementado após retry: ${retryError.message}`);
+        }
+      }
+
       await logActivity(
         usuario,
         novaQnt === 0 ? "Esgotou do estoque (auto)" : "Removeu do estoque (auto)",
