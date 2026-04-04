@@ -258,17 +258,21 @@ export default function StepQuote(p: StepQuoteProps) {
         const condStr = condLines.slice(0, 3).join(", ");
         // Determinar forma de pagamento pra pré-preencher
         const formaPagParam = parc === "pix" ? "PIX" : parc && entNum > 0 ? "PIX + Cartao" : parc ? "Cartao de Credito" : "";
+        // Valores de troca: quando tem 2 aparelhos, usar valores individuais
+        const valor1 = hasSecond && tradeInValue1 !== undefined ? tradeInValue1 : tradeInValue;
+        const valor2 = hasSecond && tradeInValue2 !== undefined ? tradeInValue2 : 0;
+        const cond2Lines = hasSecond && condition2 ? getAnyConditionLines(deviceType2 || "iphone", condition2).slice(0, 3).join(", ") : "";
         const params = new URLSearchParams({
           produto: `${newModel} ${newStorage}`,
           preco: String(Math.round(newPrice)),
           whatsapp: whatsappNumero,
           ...(vendedor ? { vendedor } : {}),
           ...(usedModel ? { troca_produto: `${usedModel} ${usedStorage || ""}`.trim() } : {}),
-          ...(tradeInValue1 && tradeInValue1 > 0 ? { troca_valor: String(Math.round(tradeInValue1)) } : tradeInValue > 0 ? { troca_valor: String(Math.round(tradeInValue)) } : {}),
+          ...(valor1 > 0 ? { troca_valor: String(Math.round(valor1)) } : {}),
           ...(condStr ? { troca_cond: condStr } : {}),
           ...(hasSecond && usedModel2 ? { troca_produto2: `${usedModel2} ${usedStorage2 || ""}`.trim() } : {}),
-          ...(hasSecond && tradeInValue2 && tradeInValue2 > 0 ? { troca_valor2: String(Math.round(tradeInValue2)) } : {}),
-          ...(hasSecond && condition2 ? { troca_cond2: getAnyConditionLines(deviceType2 || "iphone", condition2).slice(0, 3).join(", ") } : {}),
+          ...(hasSecond && valor2 > 0 ? { troca_valor2: String(Math.round(valor2)) } : {}),
+          ...(cond2Lines ? { troca_cond2: cond2Lines } : {}),
           ...(clienteNome ? { nome: clienteNome } : {}),
           ...(clienteWhatsApp ? { whatsapp_cliente: clienteWhatsApp } : {}),
           ...(clienteInstagram ? { instagram: clienteInstagram } : {}),
