@@ -29,7 +29,6 @@ export const DEFAULT_CATEGORIAS_ESTOQUE: Categoria[] = [
   { key: "MAC_STUDIO", label: "Mac Studio", emoji: "\u{1F5A5}\uFE0F" },
   { key: "IMAC", label: "iMac", emoji: "\u{1F5A5}\uFE0F" },
   { key: "APPLE_WATCH", label: "Apple Watch", emoji: "\u231A" },
-  { key: "APPLE_WATCH_ATACADO", label: "Apple Watch Atacado", emoji: "\u231A" },
   { key: "AIRPODS", label: "AirPods", emoji: "\u{1F3A7}" },
   { key: "ACESSORIOS", label: "Acess\u00F3rios", emoji: "\u{1F50C}" },
   { key: "SEMINOVOS", label: "Seminovos", emoji: "\u{1F4F1}" },

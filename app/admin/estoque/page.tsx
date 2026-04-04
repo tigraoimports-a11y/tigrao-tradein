@@ -389,7 +389,7 @@ const fmtDate = (d: string | null | undefined): string => {
 };
 
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
-const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH_ATACADO", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
+const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 function getBaseCat(cat: string): string {
   // Seminovos usa mesmos campos de iPhones
   if (cat === "SEMINOVOS") return "IPHONES";
@@ -969,13 +969,59 @@ export default function EstoquePage() {
         const data: ProdutoEstoque[] = json.data ?? [];
         setEstoque(data);
         // Migração: corrigir categorias legadas (MACBOOK_NEO/AIR/PRO → MACBOOK)
-        const legacyMap: Record<string, string> = { MACBOOK_NEO: "MACBOOK", MACBOOK_AIR: "MACBOOK", MACBOOK_PRO: "MACBOOK" };
+        const legacyMap: Record<string, string> = { MACBOOK_NEO: "MACBOOK", MACBOOK_AIR: "MACBOOK", MACBOOK_PRO: "MACBOOK", APPLE_WATCH_ATACADO: "APPLE_WATCH" };
         const toFix = data.filter(p => legacyMap[p.categoria]);
         if (toFix.length > 0) {
           for (const p of toFix) {
             fetch(`/api/estoque`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, categoria: legacyMap[p.categoria] }) }).catch(() => {});
           }
           setEstoque(prev => prev.map(p => legacyMap[p.categoria] ? { ...p, categoria: legacyMap[p.categoria] } : p));
+        }
+        // Migração: normalizar nomes de Apple Watch
+        const watchFixes: { id: string; produto: string; cor: string | null }[] = [];
+        const allColors = new Set(["MIDNIGHT", "SILVER", "STARLIGHT", "GOLD", "GRAPHITE", "ONYX BLACK", "SPACE BLACK", "SPACE GRAY", "JET BLACK", "PINK", "RED", "ROSE GOLD", "SLATE", "NATURAL", "NATURAL TITANIUM", "BLACK TITANIUM", "WHITE", "BLACK", "BLUE"]);
+        for (const p of data) {
+          const cat = legacyMap[p.categoria] || p.categoria;
+          if (cat !== "APPLE_WATCH") continue;
+          const nome = (p.produto || "").toUpperCase().trim();
+          // Caso 1: nome é só uma cor (ex: "SILVER", "JET BLACK")
+          if (allColors.has(nome)) {
+            // Não podemos saber o modelo, mas podemos mover a cor para o campo cor e limpar o nome
+            if (!p.cor || p.cor.toUpperCase() === nome) {
+              watchFixes.push({ id: p.id, produto: nome, cor: nome });
+            }
+            continue;
+          }
+          // Caso 2: normalizar GPS+CEL → GPS+CELLULAR
+          let fixed = nome;
+          if (fixed.includes("GPS+CEL ") || fixed.endsWith("GPS+CEL")) {
+            fixed = fixed.replace(/GPS\+CEL\b/g, "GPS+CELLULAR");
+          }
+          // Caso 3: CELL → CELLULAR
+          if (fixed.includes(" CELL ") || fixed.endsWith(" CELL")) {
+            fixed = fixed.replace(/\bCELL\b/g, "CELLULAR");
+          }
+          // Caso 4: remover "APPLE WATCH " duplicado
+          fixed = fixed.replace(/^APPLE WATCH APPLE WATCH/i, "APPLE WATCH");
+          // Caso 5: garantir que começa com "APPLE WATCH"
+          if (!fixed.startsWith("APPLE WATCH")) {
+            // Pode ser "SERIES 11 GPS 46MM..." sem prefixo
+            if (/^(SERIES|SE|ULTRA)\s/i.test(fixed)) {
+              fixed = `APPLE WATCH ${fixed}`;
+            }
+          }
+          if (fixed !== nome) {
+            watchFixes.push({ id: p.id, produto: fixed, cor: p.cor });
+          }
+        }
+        if (watchFixes.length > 0) {
+          for (const fix of watchFixes) {
+            fetch(`/api/estoque`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: fix.id, produto: fix.produto, cor: fix.cor }) }).catch(() => {});
+          }
+          setEstoque(prev => prev.map(p => {
+            const fix = watchFixes.find(f => f.id === p.id);
+            return fix ? { ...p, produto: fix.produto, cor: fix.cor } : p;
+          }));
         }
       }
     } catch { /* ignore */ }
@@ -3985,6 +4031,12 @@ export default function EstoquePage() {
                     ) : (
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
                         {displayNomeProduto(p.produto, p.cor, p.categoria)}
+                        {/* Badge de núcleos para MacBooks */}
+                        {getBaseCat(p.categoria) === "MACBOOK" && (() => {
+                          const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                          if (!nucleosMatch) return null;
+                          return <span className={`ml-2 px-2 py-0.5 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{nucleosMatch[1]}</span>;
+                        })()}
                         {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
                       </p>
                     )}
