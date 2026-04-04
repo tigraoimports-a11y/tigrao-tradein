@@ -371,8 +371,9 @@ export default function ProdutoSpecFields({
           {onDuplicate && (
             <button
               onClick={onDuplicate}
-              className={`text-xs font-semibold px-2 py-1 rounded-lg transition-colors ${dm ? "text-[#E8740E] hover:bg-[#E8740E]/20" : "text-[#E8740E] hover:bg-[#E8740E]/10"}`}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors shadow-sm"
             >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
               Duplicar
             </button>
           )}
@@ -380,7 +381,7 @@ export default function ProdutoSpecFields({
         </div>
       </div>}
 
-      {/* Categoria + Cor + Condição */}
+      {/* Linha 1: Categoria + Modelo + Condição */}
       <div className={`grid gap-3 ${compactMode ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"}`}>
         <div>
           <p className={labelCls}>Categoria</p>
@@ -388,19 +389,26 @@ export default function ProdutoSpecFields({
             {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
           </select>
         </div>
-        <div>
-          <p className={labelCls}>Cor</p>
-          {coresOptions ? (
-            <select value={row.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls}>
-              {COR_OBRIGATORIA.includes(row.categoria)
-                ? <option value="" disabled>— Selecionar —</option>
-                : <option value="">— Opcional —</option>}
-              {coresOptions.map((c) => <option key={c}>{c}</option>)}
+        {/* Modelo — vem logo após categoria */}
+        {categoryModelos.length > 0 && (
+          <div>
+            <p className={labelCls}>
+              Modelo
+              {hasCatalogModel && <span className="ml-1 text-green-500 text-[10px]">✓</span>}
+            </p>
+            <select
+              value={row.catalogo_modelo_id}
+              onChange={(e) => {
+                const m = categoryModelos.find((m) => m.id === e.target.value);
+                if (m) selectCatalogoModelo(m);
+              }}
+              className={inputCls}
+            >
+              <option value="">— Selecionar modelo —</option>
+              {categoryModelos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
             </select>
-          ) : row.categoria === "MAC_MINI" ? null : (
-            <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Azul..." className={inputCls} />
-          )}
-        </div>
+          </div>
+        )}
         {!compactMode && <div>
           <p className={labelCls}>Condição</p>
           <select value={row.condicao || "NOVO"} onChange={(e) => set("condicao", e.target.value)} className={inputCls}>
@@ -530,26 +538,7 @@ export default function ProdutoSpecFields({
         )}
       </div>}
 
-      {/* Catalog model selector */}
-      {categoryModelos.length > 0 && (
-        <div className={`p-3 ${bgSection} rounded-lg`}>
-          <p className={labelCls}>
-            Modelo
-            {hasCatalogModel && <span className="ml-2 text-green-500 text-xs">✓ {row.catalogo_modelo_nome}</span>}
-          </p>
-          <select
-            value={row.catalogo_modelo_id}
-            onChange={(e) => {
-              const m = categoryModelos.find((m) => m.id === e.target.value);
-              if (m) selectCatalogoModelo(m);
-            }}
-            className={inputCls}
-          >
-            <option value="">— Selecionar modelo —</option>
-            {categoryModelos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
-          </select>
-        </div>
-      )}
+      {/* Modelo selecionado já está na Linha 1 acima */}
 
       {/* iPhone specs */}
       {row.categoria === "IPHONES" && (
@@ -723,6 +712,29 @@ export default function ProdutoSpecFields({
         </div>
       )}
 
+      {/* Cor — após specs específicos da categoria */}
+      {(hasCatalogModel || !categoryModelos.length) && (
+        <div className={`grid gap-3 ${compactMode ? "grid-cols-1" : "grid-cols-2 md:grid-cols-3"}`}>
+          {coresOptions && row.categoria !== "MAC_MINI" && (
+            <div>
+              <p className={labelCls}>Cor</p>
+              <select value={row.cor} onChange={(e) => set("cor", e.target.value)} className={inputCls}>
+                {COR_OBRIGATORIA.includes(row.categoria)
+                  ? <option value="" disabled>— Selecionar —</option>
+                  : <option value="">— Opcional —</option>}
+                {coresOptions.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {!coresOptions && row.categoria !== "MAC_MINI" && (
+            <div>
+              <p className={labelCls}>Cor</p>
+              <input value={row.cor} onChange={(e) => set("cor", e.target.value)} placeholder="Ex: Silver, Space Black..." className={inputCls} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Nome do produto */}
       <div>
         <p className={labelCls}>Nome do Produto</p>
@@ -740,7 +752,7 @@ export default function ProdutoSpecFields({
         )}
       </div>
 
-      {/* Qtd + Custo + IMEI + Serial — oculto em modo compacto */}
+      {/* Qtd + Custo + Serial + IMEI — oculto em modo compacto */}
       {!compactMode && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
           <p className={labelCls}>Quantidade</p>
@@ -751,13 +763,15 @@ export default function ProdutoSpecFields({
           <input type="number" value={row.custo_unitario} onChange={(e) => set("custo_unitario", e.target.value)} className={inputCls} />
         </div>
         <div>
-          <p className={labelCls}>IMEI</p>
-          <input value={row.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional" className={inputCls} />
-        </div>
-        <div>
           <p className={labelCls}>Serial</p>
-          <input value={row.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Opcional" className={inputCls} />
+          <input value={row.serial_no} onChange={(e) => set("serial_no", e.target.value)} placeholder="Obrigatório" className={inputCls} />
         </div>
+        {["IPHONES", "IPADS", "APPLE_WATCH"].includes(row.categoria) && (
+          <div>
+            <p className={labelCls}>IMEI</p>
+            <input value={row.imei} onChange={(e) => set("imei", e.target.value)} placeholder="Opcional" className={inputCls} />
+          </div>
+        )}
       </div>}
     </div>
   );

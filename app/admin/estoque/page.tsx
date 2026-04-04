@@ -3371,7 +3371,9 @@ export default function EstoquePage() {
                     {expandedModels.has(modelo) && <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <tbody>
-                          {produtoEntries.map(([prodNome, prodItems]) => {
+                          {produtoEntries.map(([prodNome, prodItemsRaw]) => {
+                            // Ordenar por cor → data de entrada
+                            const prodItems = [...prodItemsRaw].sort((a, b) => (a.cor || "").localeCompare(b.cor || "") || (a.data_entrada || "").localeCompare(b.data_entrada || ""));
                             const showObs = tab === "seminovos" || isEditableItemTab;
                             const showMover = isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
@@ -4362,9 +4364,22 @@ export default function EstoquePage() {
                           value={p.cor || ""}
                           onChange={async (e) => {
                             const val = e.target.value || null;
-                            await apiPatch(p.id, { cor: val });
-                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val } : x));
-                            setDetailProduct({ ...p, cor: val });
+                            // Se o nome do produto contém a cor antiga, substituir pela nova
+                            let newProduto = p.produto;
+                            if (p.cor && p.produto) {
+                              const oldCorUpper = p.cor.toUpperCase();
+                              const prodUpper = p.produto.toUpperCase();
+                              if (prodUpper.includes(oldCorUpper)) {
+                                newProduto = val
+                                  ? p.produto.replace(new RegExp(oldCorUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), val.toUpperCase())
+                                  : p.produto.replace(new RegExp("\\s*" + oldCorUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "");
+                              }
+                            }
+                            const updates: Record<string, unknown> = { cor: val };
+                            if (newProduto !== p.produto) updates.produto = newProduto;
+                            await apiPatch(p.id, updates);
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: val, produto: newProduto } : x));
+                            setDetailProduct({ ...p, cor: val, produto: newProduto });
                             showSaved("cor");
                           }}
                           className={`w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
