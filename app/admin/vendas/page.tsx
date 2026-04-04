@@ -2877,16 +2877,11 @@ export default function VendasPage() {
             )}
           </div>
 
-          {/* Botão Adicionar Produto ao Carrinho — sempre visível quando tem cliente */}
-          {form.cliente && (
+          {/* Botão Adicionar Produto ao Carrinho — visível quando tem produto selecionado */}
+          {form.produto && (
             <button
               onClick={handleAddToCart}
-              disabled={!form.produto}
-              className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm ${
-                form.produto
-                  ? "bg-green-500 text-white hover:bg-green-600"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
+              className="w-full py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm bg-green-500 text-white hover:bg-green-600"
             >
               {produtosCarrinho.length > 0
                 ? `+ Adicionar Produto ${produtosCarrinho.length + 1} ao Carrinho`
