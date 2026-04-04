@@ -122,6 +122,13 @@ export default function VendasPage() {
   // Busca por serial number
   const [serialBusca, setSerialBusca] = useState("");
 
+  // QR Code scanner
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [qrScanMsg, setQrScanMsg] = useState("");
+  const qrVideoRef = useRef<HTMLVideoElement | null>(null);
+  const qrStreamRef = useRef<MediaStream | null>(null);
+  const qrScanningRef = useRef(false);
+
   // CEP auto-fill
   const [cepLoading, setCepLoading] = useState(false);
   const fetchCep = useCallback(async (cep: string) => {
@@ -253,6 +260,73 @@ export default function VendasPage() {
       }
     } catch { /* ignore */ }
   }, [password]);
+
+  // ── QR Scanner ──────────────────────────────────────────────────────────────
+  const handleStopQR = useCallback(() => {
+    qrScanningRef.current = false;
+    if (qrStreamRef.current) { qrStreamRef.current.getTracks().forEach(t => t.stop()); qrStreamRef.current = null; }
+    setShowQRScanner(false);
+    setQrScanMsg("");
+  }, []);
+
+  const handleQRDetected = useCallback((rawValue: string) => {
+    const val = rawValue.trim();
+    const found = estoque.find(p =>
+      (p.serial_no && p.serial_no.toUpperCase() === val.toUpperCase()) ||
+      (p.imei && p.imei.toUpperCase() === val.toUpperCase()) ||
+      p.id === val
+    );
+    if (found) {
+      setCatSel(found.categoria);
+      setEstoqueId(found.id);
+      set("produto", found.produto);
+      set("custo", String(found.custo_unitario || 0));
+      if (found.fornecedor) set("fornecedor", found.fornecedor);
+      if (found.serial_no) { set("serial_no", found.serial_no); setSerialBusca(found.serial_no); }
+      if (found.imei) { set("imei", found.imei); if (!found.serial_no) setSerialBusca(found.imei); }
+      handleStopQR();
+      setMsg(`✅ Produto encontrado: ${found.produto}`);
+    } else {
+      setQrScanMsg(`⚠️ Serial não encontrado em estoque: ${val.slice(0, 20)}…`);
+    }
+  }, [estoque, set, handleStopQR]);
+
+  const handleOpenQRScanner = useCallback(async () => {
+    setShowQRScanner(true);
+    setQrScanMsg("Aguarde, iniciando câmera...");
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!(window as any).BarcodeDetector) {
+        setQrScanMsg("❌ Scanner não suportado neste browser. Use Chrome ou Edge.");
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } } });
+      qrStreamRef.current = stream;
+      await new Promise<void>(resolve => setTimeout(resolve, 100));
+      if (qrVideoRef.current) { qrVideoRef.current.srcObject = stream; await qrVideoRef.current.play(); }
+      qrScanningRef.current = true;
+      setQrScanMsg("Aponte a câmera para o QR code da etiqueta...");
+      let lastVal = "";
+      const scan = async () => {
+        if (!qrScanningRef.current || !qrVideoRef.current) return;
+        try {
+          const barcodes = await detector.detect(qrVideoRef.current);
+          if (barcodes.length > 0 && barcodes[0].rawValue !== lastVal) {
+            lastVal = barcodes[0].rawValue;
+            handleQRDetected(barcodes[0].rawValue);
+            return;
+          }
+        } catch { /* ignore */ }
+        requestAnimationFrame(scan);
+      };
+      requestAnimationFrame(scan);
+    } catch {
+      setQrScanMsg("❌ Erro ao acessar câmera. Verifique as permissões do browser.");
+    }
+  }, [estoque, handleQRDetected]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   const fetchEstoque = useCallback(async () => {
     try {
@@ -1642,6 +1716,21 @@ export default function VendasPage() {
             </div>
           )}
 
+          {/* Modal QR Scanner */}
+          {showQRScanner && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={handleStopQR}>
+              <div className={`rounded-2xl p-4 w-80 shadow-2xl ${dm ? "bg-[#1C1C1E]" : "bg-white"}`} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`font-bold text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>📷 Scan QR Code da Etiqueta</span>
+                  <button onClick={handleStopQR} className="text-[#86868B] hover:text-red-500 text-lg leading-none">✕</button>
+                </div>
+                <video ref={qrVideoRef} className="w-full rounded-xl bg-black aspect-square object-cover" playsInline muted />
+                {qrScanMsg && <p className={`mt-2 text-xs text-center ${qrScanMsg.startsWith("❌") || qrScanMsg.startsWith("⚠️") ? "text-red-500" : "text-[#86868B]"}`}>{qrScanMsg}</p>}
+                <button onClick={handleStopQR} className="mt-3 w-full py-2 rounded-xl text-xs font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
+              </div>
+            </div>
+          )}
+
           {/* Modal para colar texto do formulário */}
           {showPasteModal && (
             <div className="border border-[#E8740E] bg-[#FFF8F0] rounded-xl p-4 space-y-3">
@@ -1910,7 +1999,7 @@ export default function VendasPage() {
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial</p><div className="relative"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div></div>
+                  <div><p className={labelCls}>Buscar Serial</p><div className="flex gap-2 items-center"><div className="relative flex-1"><input value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Digitar serial..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button></div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
