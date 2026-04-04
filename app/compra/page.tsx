@@ -292,7 +292,7 @@ function CompraForm() {
       lines.push("");
       if (trocaProduto) {
         lines.push(`*Produto na troca:* ${trocaProduto}`);
-        if (trocaNum > 0) lines.push(`Avaliacao: R$ ${fmt(trocaNum)}`);
+        if (trocaNum1 > 0) lines.push(`Avaliacao: R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
       } else if (descTroca) {
         lines.push(`*Produto na troca:* ${descTroca}`);
