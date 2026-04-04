@@ -105,7 +105,7 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
   const storageMatch = n.match(/\b(\d+[GT]B)\b/);
   if (storageMatch) {
     if (categoria === "IPHONES") spec.ip_storage = storageMatch[1];
-    else if (categoria === "MACBOOK") spec.mb_storage = storageMatch[1];
+    else if (categoria === "MACBOOK" || categoria === "MACBOOK_NEO" || categoria === "MACBOOK_AIR" || categoria === "MACBOOK_PRO") spec.mb_storage = storageMatch[1];
     else if (categoria === "MAC_MINI") spec.mm_storage = storageMatch[1];
   }
   if (categoria === "IPHONES") {
@@ -120,10 +120,12 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
       const fullOrigem = IPHONE_ORIGENS.find(o => o.startsWith(code + " ") || o === code) || code;
       spec.ip_origem = fullOrigem;
     }
-  } else if (categoria === "MACBOOK") {
+  } else if (categoria === "MACBOOK" || categoria === "MACBOOK_NEO" || categoria === "MACBOOK_AIR" || categoria === "MACBOOK_PRO") {
     spec.mb_modelo = /NEO/i.test(n) ? "NEO" : /PRO/i.test(n) ? "PRO" : "AIR";
-    const chip = n.match(/\b(M\d+(?:\s+(?:PRO|MAX))?)\b/);
+    const chip = n.match(/\b(A18\s*Pro|M\d+(?:\s+(?:PRO|MAX))?)\b/i);
     if (chip) spec.mb_chip = chip[1];
+    const nucleosMatch = n.match(/\((\d+C\s*CPU\/\d+C\s*GPU)\)/i);
+    if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1].toUpperCase();
     const ram = n.match(/\b(\d+GB)\b.*(?:RAM|GB)/);
     if (ram) spec.mb_ram = ram[1];
   } else if (categoria === "MAC_MINI") {

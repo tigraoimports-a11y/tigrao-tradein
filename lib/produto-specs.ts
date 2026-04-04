@@ -69,9 +69,9 @@ export const MACBOOK_CORES = ["BLUSH", "CITRUS", "INDIGO", "MIDNIGHT", "SILVER",
 export const IPAD_CORES = ["BLUE", "SPACE GRAY", "STARLIGHT", "PURPLE"];
 
 export const WATCH_CORES = [
-  "BLACK TITANIUM", "GOLD", "GRAPHITE", "ONYX BLACK", "MIDNIGHT",
+  "JET BLACK", "GOLD", "GRAPHITE", "ONYX BLACK", "MIDNIGHT",
   "NATURAL", "NATURAL TITANIUM", "PINK", "RED", "ROSE GOLD",
-  "SILVER", "SLATE", "SPACE GRAY", "STARLIGHT",
+  "SILVER", "SLATE", "SPACE GRAY", "STARLIGHT", "SPACE BLACK",
 ];
 
 export const AIRPODS_CORES = ["MIDNIGHT", "STARLIGHT"];
@@ -320,8 +320,7 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     }
     case "MACBOOK": {
       const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
-      // MacBook Neo: chip fica só nos detalhes (spec), não no nome do produto
-      const chip = spec.mb_modelo === "NEO" ? "" : ` ${spec.mb_chip}`;
+      const chip = spec.mb_chip ? ` ${spec.mb_chip}` : "";
       const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
       const tela = spec.mb_tela ? ` ${spec.mb_tela}` : "";
       const ram = spec.mb_ram ? ` ${spec.mb_ram}` : "";
