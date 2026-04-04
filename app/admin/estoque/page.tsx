@@ -1169,19 +1169,17 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
+      // Layout vertical: QR em cima, texto embaixo — para fita 29mm
       return `<div class="label">
-        <table style="width:62mm;height:29mm;border-collapse:collapse;table-layout:fixed"><tr>
-          <td style="width:22mm;vertical-align:middle;text-align:center;padding:1mm">
-            <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
-          </td>
-          <td style="vertical-align:middle;padding:1mm 1.5mm 1mm 0;overflow:hidden">
-            <div style="font-size:7pt;font-weight:bold;line-height:1.2;margin-bottom:0.8mm">${p.produto}</div>
-            ${cor ? `<div style="font-size:6pt;color:#444;line-height:1.1;margin-bottom:0.5mm">Cor: ${cor}</div>` : ""}
-            ${serial ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">S/N: ${serial}</div>` : ""}
-            ${imei ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">IMEI: ${imei}</div>` : ""}
-            ${fornecedor ? `<div style="font-size:5.5pt;color:#666;line-height:1.1">${fornecedor}</div>` : ""}
-          </td>
-        </tr></table>
+        <div style="text-align:center;padding:1mm 1mm 0.5mm">
+          <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+        </div>
+        <div style="padding:0 1.5mm 1mm;text-align:center">
+          <div style="font-size:6.5pt;font-weight:bold;line-height:1.2;word-break:break-word">${p.produto}${cor ? " " + cor : ""}</div>
+          ${serial ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.3;margin-top:0.5mm">S/N: ${serial}</div>` : ""}
+          ${imei ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.3">IMEI: ${imei}</div>` : ""}
+          ${fornecedor ? `<div style="font-size:5pt;color:#555;line-height:1.2;margin-top:0.3mm">${fornecedor}</div>` : ""}
+        </div>
       </div>`;
     }).join("");
 
@@ -1189,24 +1187,22 @@ export default function EstoquePage() {
       <title>Etiqueta</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
-        @page{size:62mm 29mm;margin:0}
+        @page{size:29mm 50mm;margin:0}
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0}
         .label{
-          width:62mm;height:29mm;
+          width:29mm;
           overflow:hidden;display:block;
           break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;
         }
         .label:last-child{break-after:auto;page-break-after:auto}
-        canvas{display:block;width:24mm;height:24mm;margin:0 auto}
+        canvas{display:block;width:25mm;height:25mm;margin:0 auto}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
         .instrucao b{font-size:12px}
-        @media print{
-          .instrucao{display:none}
-        }
+        @media print{.instrucao{display:none}}
       </style></head><body>
       <div class="instrucao">
-        ⚠️ Papel: <b>NOVA 62×29mm</b> · Orientação: <b>Vertical ↕</b> (NÃO horizontal) · Redimensionamento: <b>100%</b>
+        ⚠️ Crie tamanho personalizado: <b>Largura 29mm × Altura 50mm</b> · Orientação: <b>Vertical ↕</b> · Redimensionamento: <b>100%</b>
       </div>
       ${labelsHtml}
       <script>
