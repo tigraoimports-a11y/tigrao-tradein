@@ -1204,10 +1204,11 @@ export default function EstoquePage() {
         }
       </style></head><body>
       <div class="instrucao">
-        <strong>⚠️ Configure o papel antes de imprimir:</strong>
-        1. Em <b>Tamanho do Papel</b>, selecione <b>62 mm (fita contínua)</b> no driver Brother<br>
-        2. Em <b>Orientação</b>, use <b>Horizontal</b><br>
-        3. Desmarque "Imprimir cabeçalhos e rodapés" · Todas as etiquetas saem em 1 fita só
+        <strong>⚠️ Para sair em 1 fita contínua:</strong>
+        1. No diálogo de impressão, clique em <b>"Mostrar detalhes"</b><br>
+        2. Em <b>Tamanho do Papel</b> → selecione <b>"62 mm (W)"</b> ou <b>"62mm Continuous"</b> (opção da Brother)<br>
+        3. Em <b>Orientação</b>, use <b>Horizontal</b> · Desmarque "Cabeçalhos e rodapés"<br>
+        4. Depois salve em <b>Pré-ajustes → "Salvar configurações atuais"</b> para não precisar repetir
       </div>
       ${labelsHtml}
       <script>
