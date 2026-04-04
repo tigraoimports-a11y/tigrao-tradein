@@ -125,8 +125,12 @@ export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
   const isAdmin = userRole === "admin";
   const perms = userPermissoes ?? [];
 
+  // Páginas visíveis pra todos os usuários (não precisa de permissão)
+  const PUBLIC_PAGES = ["gerar_link", "calculadora_taxas", "entregas"];
+
   function canSee(pageKey: string): boolean {
     if (isAdmin) return true;
+    if (PUBLIC_PAGES.includes(pageKey)) return true;
     return perms.includes(pageKey);
   }
 
