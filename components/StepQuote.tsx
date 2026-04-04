@@ -56,6 +56,8 @@ export default function StepQuote(p: StepQuoteProps) {
     clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, allProducts, onReset, onCotarOutro, onGoToStep, onTrackAction } = p;
 
   const hasSecond = !!(usedModel2 && usedStorage2);
+  // DEBUG: verificar valores do 2o aparelho
+  if (typeof window !== "undefined") console.log("[StepQuote DEBUG]", { hasSecond, usedModel2, usedStorage2, tradeInValue1, tradeInValue2, tradeInValue });
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
   const [sairLoading, setSairLoading] = useState(false); const [showFeedback, setShowFeedback] = useState(false); const [showAllParc, setShowAllParc] = useState(false);
   const [motivo, setMotivo] = useState("");
