@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
-import {
-  IPHONE_CORES_POR_MODELO, IPHONE_STORAGES_POR_MODELO, IPHONE_ORIGENS,
-  MACBOOK_CHIPS, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_TELAS_AIR, MACBOOK_TELAS_PRO, MACBOOK_TELAS_NEO, MACBOOK_CORES,
-  MAC_MINI_CHIPS, MAC_MINI_RAMS, MAC_MINI_STORAGES,
-  IPAD_CHIPS, IPAD_TELAS, IPAD_STORAGES, IPAD_CORES,
-  WATCH_TAMANHOS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, WATCH_CORES,
-  AIRPODS_MODELOS,
-} from "@/lib/produto-specs";
 
 function checkAuth(req: NextRequest): boolean {
   const pw = req.headers.get("x-admin-password");
@@ -152,122 +144,78 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Special handler: seed all modelo configs from produto-specs.ts data
+    // Special handler: seed modelo configs with EXACT data from old system (meumobi)
     if (resource === "seed_modelo_configs") {
-      // Get all models from DB
       const { data: modelos } = await supabase.from("catalogo_modelos").select("id, nome, categoria_key");
       if (!modelos) return NextResponse.json({ error: "No models found" }, { status: 400 });
 
+      // Data extracted from tigrao.meumobi.dev/models (old system)
+      const IPHONE_ORIGENS_SELECTED = [
+        "BR- Chip Físico + E-sim", "LZ (CL/PY/UY)- Chip Físico + E-sim", "VC (CAN)- E-sim",
+        "BZ (BR)- Chip Físico + E-sim", "BE (BR)- Chip Físico + E-sim", "CH- Chip Físico",
+        "E (MEX)- Chip Físico + E-sim", "HN (IN)- Chip Físico + E-sim", "J (JPA)- E-sim",
+        "LL (EUA)- E-sim", "N (UK)- E-sim",
+      ];
+      const IPHONE_ORIGENS_EXTENDED = [...IPHONE_ORIGENS_SELECTED, "ZP (HK/MO)- E-sim"];
+
+      type ModelConfig = Record<string, Record<string, string[]>>;
+      const MODEL_CONFIGS: ModelConfig = {
+        // ── iPhones ──
+        "iPhone 14 Pro Max": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Deep Purple","Gold","Silver","Space Black"], origem: IPHONE_ORIGENS_EXTENDED },
+        "iPhone 15": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Blue","Green","Pink","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 15 Plus": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Blue","Green","Pink","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 15 Pro": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Black Titanium","Blue Titanium","Natural Titanium","White Titanium"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 15 Pro Max": { capacidade: ["256GB","512GB","1TB"], cores: ["Black Titanium","Blue Titanium","Natural Titanium","White Titanium"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 16": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Pink","Teal","Ultramarine","White"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 16 Plus": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Pink","Teal","Ultramarine","White"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 16 Pro": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Black Titanium","Desert Titanium","Natural Titanium","White Titanium"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 16 Pro Max": { capacidade: ["256GB","512GB","1TB"], cores: ["Black Titanium","Desert Titanium","Natural Titanium","White Titanium"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 17": { capacidade: ["256GB","512GB"], cores: ["Black","Lavender","Haze Blue","Sage","White"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 17 Air": { capacidade: ["256GB","512GB","1TB"], cores: ["Cloud White","Light Gold","Sky Blue","Space Black"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 17 Pro": { capacidade: ["256GB","512GB","1TB"], cores: ["Cosmic Orange","Deep Blue","Silver"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 17 Pro Max": { capacidade: ["256GB","512GB","1TB","2TB"], cores: ["Cosmic Orange","Deep Blue","Silver"], origem: IPHONE_ORIGENS_SELECTED },
+        // ── MacBook Air ──
+        "MacBook Air M4": { chips_air: ["(10C CPU/8C GPU)","(10C CPU/10C GPU)"], telas: ['13"','15"'], cores: ["Midnight","Silver","Sky Blue","Starlight"], ram: ["16GB","24GB","32GB"], ssd: ["256GB","512GB","1TB"] },
+        "MacBook Air M5": { chips_air: ["(10C CPU/8C GPU)","(10C CPU/10C GPU)"], telas: ['13"','15"'], cores: ["Midnight","Silver","Sky Blue","Starlight"], ram: ["16GB","24GB"], ssd: ["512GB","1TB"] },
+        // ── MacBook Neo ──
+        "MacBook Neo": { cores: ["Blush","Citrus","Indigo","Silver"], ram: ["8GB"], ssd: ["256GB","512GB"] },
+        // ── MacBook Pro ──
+        "MacBook Pro M4": { chips_pro_max: ["(10C CPU/10C GPU)"], telas: ['14"'], cores: ["Silver","Space Black"], ram: ["16GB","24GB","32GB","48GB"], ssd: ["512GB","1TB"] },
+        "MacBook Pro M4 Pro": { chips_pro_max: ["(12C CPU/16C GPU)","(14C CPU/20C GPU)"], telas: ['14"','16"'], cores: ["Silver","Space Black"], ram: ["24GB","48GB"], ssd: ["512GB","1TB"] },
+        "MacBook Pro M5": { chips_pro_max: ["(10C CPU/10C GPU)"], telas: ['14"'], cores: ["Silver","Space Black"], ram: ["16GB","24GB"], ssd: ["512GB","1TB"] },
+        // ── Mac Mini ──
+        "MacMini M4": { chips_air: ["(10C CPU/10C GPU)"], ram: ["16GB","24GB","32GB","48GB","64GB"], ssd: ["256GB","512GB","1TB"] },
+        "MacMini M4 Pro": { chips_pro_max: ["(12C CPU/16C GPU)","(14C CPU/20C GPU)"], ram: ["24GB","48GB","64GB"], ssd: ["512GB","1TB"] },
+        // ── Mac Studio ──
+        "MacStudio": { chips_max: ["M4 Max (14C CPU /32C GPU)"], ram: ["36GB"], ssd: ["512GB"] },
+        // ── iMac ──
+        "iMac": { chips_air: ["(8C CPU/8C GPU)","(10C CPU/10C GPU)"], ram: ["16GB","24GB"], ssd: ["256GB","512GB"], cores: ["Silver"] },
+        // ── Apple Watch ──
+        "Apple Watch Series 11": { tamanho_aw: ["42mm","46mm"], cores_aw: ["Jet Black","Rose Gold","Silver","Space Gray"], tamanho_pulseira: ["M/L","S/M"], conectividade_aw: ["GPS","GPS + CEL"], pulseiras: ["Pulseira Esportiva Azul","Pulseira esportiva roxo-névoa","Pulseira Esportiva Estelar","Pulseira Esportiva Preta","Pulseira loop Alpina azul-clara","Pulseira loop Alpina índigo","Pulseira loop Alpina preta","Pulseira loop esportiva azul-âncora","Pulseira loop esportiva cinza-escura","Pulseira loop Trail azul/azul-brilhante","Pulseira loop Trail azul/preta","Pulseira loop Trail preta/carvão","Pulseira natural estilo milanês","Pulseira Ocean Preta","Pulseira Ocean Azul","Pulseira preta estilo milanês"] },
+        "Apple Watch Series 10": { tamanho_aw: ["42mm","46mm"], cores_aw: ["Gold","Jet Black","Natural","Rose Gold","Silver","Slate"], tamanho_pulseira: ["M/L","S/M"], conectividade_aw: ["GPS","GPS + CEL"] },
+        "Apple Watch SE (3rd generation)": { tamanho_aw: ["40mm","44mm"], cores_aw: ["Midnight","Starlight"], tamanho_pulseira: ["M/L","S/M"], conectividade_aw: ["GPS","GPS + CEL"] },
+        "Apple Watch SE (2rd generation)": { tamanho_aw: ["40mm","44mm"], cores_aw: ["Midnight","Silver","Starlight"], tamanho_pulseira: ["M/L","S/M"], conectividade_aw: ["GPS","GPS + CEL"] },
+        "Apple Watch Ultra 3": { tamanho_aw: ["49mm"], cores_aw: ["Black Titanium","Natural Titanium"], tamanho_pulseira: ["M/L","One Size","S/M"], conectividade_aw: ["GPS + CEL"], pulseiras: ["Pulseira loop Alpina verde","Pulseira natural estilo milanês","Pulseira Ocean Preta","Puseira Ocean Verde-Neón","Pulseira Ocean Azul","Pulseira preta estilo milanês"] },
+        "Apple Watch Ultra 2": { tamanho_aw: ["49mm"], cores_aw: ["Black Titanium","Natural Titanium"], tamanho_pulseira: ["M/L","One Size","S/M"], conectividade_aw: ["GPS + CEL"], pulseiras: ["Pulseira loop Alpina verde","Pulseira natural estilo milanês","Pulseira Ocean Preta","Puseira Ocean Verde-Neón","Pulseira Ocean Azul","Pulseira preta estilo milanês"] },
+      };
+
       let seeded = 0;
       for (const modelo of modelos) {
+        const modelConfigs = MODEL_CONFIGS[modelo.nome];
+        if (!modelConfigs) continue;
+
         const configs: { tipo_chave: string; valor: string }[] = [];
-        const catKey = modelo.categoria_key;
-        const nome = modelo.nome;
-
-        // iPhone configs
-        if (catKey === "IPHONES") {
-          // Match model name to IPHONE_CORES_POR_MODELO key
-          const modelKey = nome.replace(/^iPhone\s*/i, "").toUpperCase();
-          const cores = IPHONE_CORES_POR_MODELO[modelKey];
-          if (cores) cores.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-          const storages = IPHONE_STORAGES_POR_MODELO[modelKey];
-          if (storages) storages.forEach(s => configs.push({ tipo_chave: "capacidade", valor: s }));
-          // All iPhones get all origins
-          IPHONE_ORIGENS.forEach(o => configs.push({ tipo_chave: "origem", valor: o }));
-        }
-
-        // MacBook Air configs
-        if (catKey === "MACBOOK_AIR") {
-          const airChips = MACBOOK_CHIPS.filter(c => !c.includes("PRO") && !c.includes("MAX"));
-          airChips.forEach(c => configs.push({ tipo_chave: "chips_air", valor: c }));
-          MACBOOK_TELAS_AIR.forEach(t => configs.push({ tipo_chave: "telas", valor: t }));
-          MACBOOK_CORES.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-          MACBOOK_RAMS.filter(r => ["8GB", "16GB", "24GB"].includes(r)).forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MACBOOK_STORAGES.filter(s => ["256GB", "512GB", "1TB", "2TB"].includes(s)).forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-        }
-
-        // MacBook Pro configs
-        if (catKey === "MACBOOK_PRO") {
-          const proChips = MACBOOK_CHIPS.filter(c => c.includes("PRO") || c.includes("MAX"));
-          proChips.forEach(c => configs.push({ tipo_chave: "chips_pro_max", valor: c }));
-          MACBOOK_TELAS_PRO.forEach(t => configs.push({ tipo_chave: "telas", valor: t }));
-          MACBOOK_CORES.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-          MACBOOK_RAMS.forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MACBOOK_STORAGES.forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-        }
-
-        // MacBook Neo configs
-        if (catKey === "MACBOOK_NEO") {
-          const neoChips = MACBOOK_CHIPS.filter(c => c.startsWith("A18") || c === "M4");
-          neoChips.forEach(c => configs.push({ tipo_chave: "chips_air", valor: c }));
-          MACBOOK_TELAS_NEO.forEach(t => configs.push({ tipo_chave: "telas", valor: t }));
-          MACBOOK_CORES.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-          MACBOOK_RAMS.filter(r => ["8GB", "16GB", "24GB"].includes(r)).forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MACBOOK_STORAGES.filter(s => ["256GB", "512GB", "1TB"].includes(s)).forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-        }
-
-        // Mac Mini configs
-        if (catKey === "MAC_MINI") {
-          const airChips = MAC_MINI_CHIPS.filter(c => !c.includes("PRO"));
-          airChips.forEach(c => configs.push({ tipo_chave: "chips_air", valor: c }));
-          const proChips = MAC_MINI_CHIPS.filter(c => c.includes("PRO"));
-          proChips.forEach(c => configs.push({ tipo_chave: "chips_pro_max", valor: c }));
-          MAC_MINI_RAMS.forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MAC_MINI_STORAGES.forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-        }
-
-        // Mac Studio configs
-        if (catKey === "MAC_STUDIO") {
-          const maxChips = MACBOOK_CHIPS.filter(c => c.includes("MAX") || c.includes("ULTRA"));
-          if (maxChips.length === 0) {
-            ["M4 MAX", "M4 ULTRA", "M5 MAX", "M5 ULTRA"].forEach(c => configs.push({ tipo_chave: "chips_max", valor: c }));
-          } else {
-            maxChips.forEach(c => configs.push({ tipo_chave: "chips_max", valor: c }));
+        for (const [tipo_chave, valores] of Object.entries(modelConfigs)) {
+          for (const valor of valores) {
+            configs.push({ tipo_chave, valor });
           }
-          MACBOOK_RAMS.filter(r => parseInt(r) >= 32).forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MACBOOK_STORAGES.forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-        }
-
-        // iMac configs
-        if (catKey === "IMAC") {
-          const imacChips = MACBOOK_CHIPS.filter(c => !c.includes("PRO") && !c.includes("MAX") && c.startsWith("M"));
-          imacChips.forEach(c => configs.push({ tipo_chave: "chips_air", valor: c }));
-          MACBOOK_RAMS.filter(r => ["8GB", "16GB", "24GB", "32GB"].includes(r)).forEach(r => configs.push({ tipo_chave: "ram", valor: r }));
-          MACBOOK_STORAGES.filter(s => ["256GB", "512GB", "1TB", "2TB"].includes(s)).forEach(s => configs.push({ tipo_chave: "ssd", valor: s }));
-          // iMac cores (same as MacBook)
-          MACBOOK_CORES.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-        }
-
-        // iPad configs
-        if (catKey === "IPADS") {
-          IPAD_CHIPS.forEach(c => configs.push({ tipo_chave: "chips_air", valor: c }));
-          IPAD_TELAS.forEach(t => configs.push({ tipo_chave: "telas", valor: t }));
-          IPAD_STORAGES.forEach(s => configs.push({ tipo_chave: "capacidade", valor: s }));
-          IPAD_CORES.forEach(c => configs.push({ tipo_chave: "cores", valor: c }));
-          ["WIFI", "WIFI+CELL"].forEach(c => configs.push({ tipo_chave: "conectividade", valor: c }));
-        }
-
-        // Apple Watch configs
-        if (catKey === "APPLE_WATCH") {
-          WATCH_TAMANHOS.forEach(t => configs.push({ tipo_chave: "tamanho_aw", valor: t }));
-          WATCH_CORES.forEach(c => configs.push({ tipo_chave: "cores_aw", valor: c }));
-          WATCH_PULSEIRAS.forEach(p => configs.push({ tipo_chave: "tamanho_pulseira", valor: p }));
-          WATCH_BAND_MODELS.forEach(b => configs.push({ tipo_chave: "pulseiras", valor: b }));
-          ["GPS", "GPS + CEL"].forEach(c => configs.push({ tipo_chave: "conectividade_aw", valor: c }));
-        }
-
-        // AirPods configs
-        if (catKey === "AIRPODS") {
-          AIRPODS_MODELOS.forEach(m => configs.push({ tipo_chave: "descricao_airpods", valor: m }));
         }
 
         if (configs.length > 0) {
-          // Delete existing configs
           await supabase.from("catalogo_modelo_configs").delete().eq("modelo_id", modelo.id);
-          // Insert new configs
           const rows = configs.map(c => ({ modelo_id: modelo.id, tipo_chave: c.tipo_chave, valor: c.valor }));
           const { error: insError } = await supabase.from("catalogo_modelo_configs").insert(rows);
-          if (insError) console.error(`Seed error for ${nome}:`, insError.message);
+          if (insError) console.error(`Seed error for ${modelo.nome}:`, insError.message);
           else seeded++;
         }
       }
