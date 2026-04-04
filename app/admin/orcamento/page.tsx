@@ -74,6 +74,9 @@ export default function OrcamentoPage() {
   const [carrinho, setCarrinho] = useState<{ id: string; nome: string; preco: number; categoria: string }[]>([]);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
+  const [trocaProduto2, setTrocaProduto2] = useState("");
+  const [trocaValor2, setTrocaValor2] = useState("");
+  const [showTroca2, setShowTroca2] = useState(false);
   const [desconto, setDesconto] = useState("");
 
   useEffect(() => {
@@ -215,8 +218,10 @@ export default function OrcamentoPage() {
       : [];
     const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco, 0);
     const trocaVal = parseFloat(trocaValor) || 0;
+    const trocaVal2 = parseFloat(trocaValor2) || 0;
+    const trocaTotal = trocaVal + trocaVal2;
     const descontoVal = parseFloat(desconto) || 0;
-    const precoPix = totalBruto - trocaVal - descontoVal;
+    const precoPix = totalBruto - trocaTotal - descontoVal;
     const entradaVal = parseFloat(entrada) || 0;
     const restante = precoPix - entradaVal;
 
@@ -264,12 +269,27 @@ export default function OrcamentoPage() {
     );
 
     if (trocaProduto && trocaVal > 0) {
+      const temDois = trocaProduto2 && trocaVal2 > 0;
       linhas.push(
-        `🔄 *Seu aparelho na troca:*`,
+        temDois ? `🔄 *Seus aparelhos na troca:*` : `🔄 *Seu aparelho na troca:*`,
+        ``,
+        temDois ? `*PRODUTO USADO 1*` : ``,
         `${trocaProduto}`,
         `Avaliação: R$ ${trocaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      );
+      if (temDois) {
+        linhas.push(
+          ``,
+          `*PRODUTO USADO 2*`,
+          `${trocaProduto2}`,
+          `Avaliação: R$ ${trocaVal2.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        );
+      }
+      linhas.push(
         ``,
-        `*Com a troca do seu produto você pagará a diferença de:*`,
+        temDois
+          ? `*Com a troca dos seus produtos você pagará a diferença de:*`
+          : `*Com a troca do seu produto você pagará a diferença de:*`,
         ``,
       );
     }
@@ -325,7 +345,7 @@ export default function OrcamentoPage() {
   useEffect(() => {
     if (produtoSelecionado || carrinho.length > 0 || semiProduto) gerarOrcamento();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, desconto, tipoOrc, semiSel, semiPreco, semiObs]);
+  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, trocaProduto2, trocaValor2, desconto, tipoOrc, semiSel, semiPreco, semiObs]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -521,11 +541,31 @@ export default function OrcamentoPage() {
               {/* Troca */}
               <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-blue-50 border border-blue-200"}`}>
                 <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-700"}`}>Produto na troca?</p>
-                <input type="text" placeholder="Ex: iPhone 15 Pro Max 256GB" value={trocaProduto} onChange={e => setTrocaProduto(e.target.value)} className={inputCls} />
+                <input type="text" placeholder="Ex: iPhone 15 Pro Max 256GB - marcas de uso - bateria 89% - com caixa" value={trocaProduto} onChange={e => setTrocaProduto(e.target.value)} className={inputCls} />
                 {trocaProduto && (
                   <div>
                     <p className={labelCls}>Valor da avaliacao (R$)</p>
                     <input type="text" inputMode="decimal" placeholder="Ex: 3500" value={trocaValor} onChange={e => setTrocaValor(e.target.value)} className={inputCls} />
+                  </div>
+                )}
+                {trocaProduto && !showTroca2 && (
+                  <button onClick={() => setShowTroca2(true)} className={`text-xs font-semibold ${dm ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-800"} transition-colors`}>
+                    + Adicionar outro produto usado na troca
+                  </button>
+                )}
+                {showTroca2 && (
+                  <div className={`mt-2 pt-2 space-y-2 ${dm ? "border-t border-[#3A3A3C]" : "border-t border-blue-200"}`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-blue-400" : "text-blue-700"}`}>Produto usado 2</p>
+                      <button onClick={() => { setShowTroca2(false); setTrocaProduto2(""); setTrocaValor2(""); }} className="text-xs text-red-400 hover:text-red-600">Remover</button>
+                    </div>
+                    <input type="text" placeholder="Ex: iPhone 12 Pro Max 256GB - sem marcas - bateria 89% - sem caixa" value={trocaProduto2} onChange={e => setTrocaProduto2(e.target.value)} className={inputCls} />
+                    {trocaProduto2 && (
+                      <div>
+                        <p className={labelCls}>Valor da avaliacao (R$)</p>
+                        <input type="text" inputMode="decimal" placeholder="Ex: 2000" value={trocaValor2} onChange={e => setTrocaValor2(e.target.value)} className={inputCls} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
