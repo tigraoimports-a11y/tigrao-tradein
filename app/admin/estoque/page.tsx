@@ -4791,6 +4791,24 @@ export default function EstoquePage() {
                         Mover para Atacado
                       </button>
                     )}
+                    {/* Mover para A Caminho — quando item está EM ESTOQUE e precisa reimprimir etiqueta */}
+                    {isAdmin && p.status === "EM ESTOQUE" && (p.tipo === "NOVO" || p.tipo === "A_CAMINHO") && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Mover de volta para Produtos a Caminho? O item sairá do estoque e poderá ter a etiqueta impressa novamente.")) return;
+                          try {
+                            await apiPatch(p.id, { tipo: "A_CAMINHO", status: "A CAMINHO" });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: "A_CAMINHO", status: "A CAMINHO" } : x));
+                            setDetailProduct(null);
+                            setMsg(`${p.produto} movido para A Caminho!`);
+                          } catch { setMsg("Erro ao mover"); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-orange-900/30 text-orange-400 hover:bg-orange-700" : "bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                        Mover para A Caminho
+                      </button>
+                    )}
                     {/* Voltar ao Estoque — quando item está no Atacado */}
                     {isAdmin && p.tipo === "ATACADO" && (
                       <button
