@@ -8,7 +8,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -1402,6 +1402,8 @@ export default function EstoquePage() {
       .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
       .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
       .replace(/\[CICLOS:\d+\]/g, "")
+      .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
+      .replace(/\[BAND:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
@@ -4379,14 +4381,18 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">⌚ Com Pulseira</span></div>
                       )}
-                      {/* Apple Watch: tamanho + modelo de pulseira */}
+                      {/* Apple Watch: tamanho + pulseira info */}
                       {p.categoria === "APPLE_WATCH" && (() => {
-                        const { tamanho, pulseira } = extractWatchBadges(p.produto);
+                        const { tamanho } = extractWatchBadges(p.produto);
+                        const pulseiraTam = p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1];
+                        const bandModel = p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
                         return (<>
                           {tamanho && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
                             <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span></div>}
-                          {pulseira && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span></div>}
+                          {pulseiraTam && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{pulseiraTam}</span></div>}
+                          {bandModel && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{bandModel}</span></div>}
                         </>);
                       })()}
                       {/* Ciclos badge */}
@@ -4660,6 +4666,44 @@ export default function EstoquePage() {
                             <select value={hasPulseira ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_PULSEIRA", "Com pulseira", hasPulseira, e.target.value === "SIM")} className={selCls}>
                               <option value="NAO">Sem pulseira</option>
                               <option value="SIM">⌚ Com pulseira</option>
+                            </select>
+                          </div>
+                        )}
+                        {showPulseira && (
+                          <div>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira {saved("pulseira_tam")}</p>
+                            <select value={p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
+                              const val = e.target.value;
+                              const obs = getLatestObs();
+                              const cleaned = obs.replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "").trim();
+                              const finalObs = val ? `${cleaned} [PULSEIRA_TAM:${val}]`.trim() : (cleaned || null);
+                              await apiPatch(p.id, { observacao: finalObs });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                              setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
+                              showSaved("pulseira_tam");
+                            }} className={selCls}>
+                              <option value="">— Selecionar —</option>
+                              <option value="S/M">S/M</option>
+                              <option value="M/L">M/L</option>
+                              <option value="One Size">One Size</option>
+                            </select>
+                          </div>
+                        )}
+                        {showPulseira && (
+                          <div className="col-span-2">
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira {saved("band_model")}</p>
+                            <select value={p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
+                              const val = e.target.value;
+                              const obs = getLatestObs();
+                              const cleaned = obs.replace(/\[BAND:[^\]]+\]/g, "").trim();
+                              const finalObs = val ? `${cleaned} [BAND:${val}]`.trim() : (cleaned || null);
+                              await apiPatch(p.id, { observacao: finalObs });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                              setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
+                              showSaved("band_model");
+                            }} className={selCls}>
+                              <option value="">— Selecionar —</option>
+                              {WATCH_BAND_MODELS.map(b => <option key={b} value={b}>{b}</option>)}
                             </select>
                           </div>
                         )}
