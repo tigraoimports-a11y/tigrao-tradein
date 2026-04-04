@@ -64,7 +64,7 @@ export function getIphoneCores(modelo: string): string[] {
   return IPHONE_CORES_POR_MODELO[modelo] || IPHONE_CORES;
 }
 
-export const MACBOOK_CORES = ["MIDNIGHT", "SILVER", "STARLIGHT", "SKY BLUE", "SPACE BLACK"];
+export const MACBOOK_CORES = ["BLUSH", "CITRUS", "INDIGO", "MIDNIGHT", "SILVER", "SKY BLUE", "SPACE BLACK", "STARLIGHT"];
 
 export const IPAD_CORES = ["BLUE", "SPACE GRAY", "STARLIGHT", "PURPLE"];
 
