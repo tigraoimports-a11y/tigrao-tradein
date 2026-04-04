@@ -263,6 +263,18 @@ function extractCorPT(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
+/** Extrai tamanho (42MM, 46MM etc) e pulseira (SPORT BAND S/M etc) de um nome de Apple Watch */
+function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: string | null } {
+  if (!nome) return { tamanho: null, pulseira: null };
+  const upper = nome.toUpperCase();
+  const tamMatch = upper.match(/\b(\d{2}MM)\b/);
+  const tamanho = tamMatch ? tamMatch[1] : null;
+  // Pulseira patterns: "SPORT BAND S/M", "BRAIDED SOLO LOOP M", "MILANESE LOOP", etc.
+  const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
+  const pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
+  return { tamanho, pulseira };
+}
+
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
   let display = stripOrigem(nome, categoria);
   // MacBook: remover núcleos detalhados do nome exibido (aparece como badge separado)
@@ -1607,7 +1619,8 @@ export default function EstoquePage() {
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
-  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id);
+  // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
+  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.data_compra);
   const acabando = novos.filter((p) => p.qnt === 1);
 
   // Esgotados: qnt=0 em NOVO. Marcar se já está a caminho
@@ -2889,7 +2902,9 @@ export default function EstoquePage() {
                 }
                 return true;
               });
-              const allItems = [...filtered, ...recebidosFiltrados];
+              const allItems = acaminhoFilter === "pendentes" ? filtered
+                : acaminhoFilter === "recebidos" ? recebidosFiltrados
+                : [...filtered, ...recebidosFiltrados];
               const byDate: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
                 const d = p.data_compra || "Sem data";
@@ -2905,11 +2920,7 @@ export default function EstoquePage() {
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
                 <div className="space-y-4">
-                  {sortedDates.filter(date => {
-                    // Ocultar pedidos onde todos os itens já foram recebidos
-                    const items = byDate[date];
-                    return items.some(p => p.tipo === "A_CAMINHO");
-                  }).map(date => {
+                  {sortedDates.map(date => {
                     const items = byDate[date];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
@@ -3498,6 +3509,17 @@ export default function EstoquePage() {
                                         </span>
                                       );
                                     })()}
+                                    {/* Apple Watch badges: tamanho + pulseira */}
+                                    {prodItems[0]?.categoria === "APPLE_WATCH" && (() => {
+                                      const { tamanho, pulseira } = extractWatchBadges(prodNome);
+                                      if (!tamanho && !pulseira) return null;
+                                      return (
+                                        <div className="flex gap-1 mt-0.5">
+                                          {tamanho && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
+                                          {pulseira && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span>}
+                                        </div>
+                                      );
+                                    })()}
                                     </div>
                                   </td>
                                   <td className="px-4 py-2 text-right">
@@ -4050,7 +4072,7 @@ export default function EstoquePage() {
                         }}
                         className={`w-full text-[15px] font-bold mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
                       />
-                    ) : (
+                    ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
                         {displayNomeProduto(p.produto, p.cor, p.categoria)}
                         {/* Badge de núcleos para MacBooks */}
@@ -4061,7 +4083,17 @@ export default function EstoquePage() {
                         })()}
                         {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
                       </p>
-                    )}
+                      {p.categoria === "APPLE_WATCH" && (() => {
+                        const { tamanho, pulseira } = extractWatchBadges(p.produto);
+                        if (!tamanho && !pulseira) return null;
+                        return (
+                          <div className="flex gap-1.5 mt-1">
+                            {tamanho && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
+                            {pulseira && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span>}
+                          </div>
+                        );
+                      })()}
+                    </>)}
                   </div>
                   <div className="text-right"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Status</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.status === "EM ESTOQUE" ? "bg-green-100 text-green-700" : p.status === "A CAMINHO" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{p.status}</span></div>
                 </div>
