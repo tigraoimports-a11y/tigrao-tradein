@@ -285,7 +285,8 @@ export default function VendasPage() {
       p.id === val
     );
     if (found) {
-      setCatSel(found.categoria);
+      const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+      setCatSel(`${found.categoria}__${tipoKey}`);
       setEstoqueId(found.id);
       set("produto", found.produto);
       set("custo", String(found.custo_unitario || 0));
@@ -341,7 +342,7 @@ export default function VendasPage() {
       const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
-        setEstoque((json.data ?? []).filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE"));
+        setEstoque((json.data ?? []).filter((p: EstoqueItem) => p.qnt > 0 && (p.status === "EM ESTOQUE" || p.tipo === "A_CAMINHO")));
       }
     } catch { /* ignore */ }
   }, [password]);
@@ -357,7 +358,8 @@ export default function VendasPage() {
       (p.imei && p.imei.toUpperCase() === v)
     );
     if (found) {
-      setCatSel(found.categoria || "");
+      const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+      setCatSel(`${found.categoria}__${tipoKey}`);
       setEstoqueId(found.id);
       setForm(f => ({ ...f,
         produto: found.produto.toUpperCase(),
