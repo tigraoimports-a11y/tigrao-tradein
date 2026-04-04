@@ -289,19 +289,22 @@ function CompraForm() {
 
     // Trade-in info
     if (temTroca && (trocaProduto || descTroca)) {
+      const temDoisUsados = !!trocaProduto2Param;
       lines.push("");
+      lines.push(temDoisUsados ? `*MEUS APARELHOS NA TROCA:*` : `*MEU APARELHO NA TROCA:*`);
       if (trocaProduto) {
-        lines.push(`*Produto na troca:* ${trocaProduto}`);
-        if (trocaNum1 > 0) lines.push(`Avaliacao: R$ ${fmt(trocaNum1)}`);
+        if (temDoisUsados) lines.push(``, `*Aparelho 1:*`);
+        lines.push(`Modelo: ${trocaProduto}`);
+        if (trocaNum1 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
       } else if (descTroca) {
-        lines.push(`*Produto na troca:* ${descTroca}`);
+        lines.push(`Modelo: ${descTroca}`);
       }
       // 2º produto na troca
-      if (trocaProduto2Param) {
-        lines.push("");
-        lines.push(`*Produto 2 na troca:* ${trocaProduto2Param}`);
-        if (parseFloat(trocaValor2Param) > 0) lines.push(`Avaliacao: R$ ${fmt(parseFloat(trocaValor2Param))}`);
+      if (temDoisUsados) {
+        lines.push(``, `*Aparelho 2:*`);
+        lines.push(`Modelo: ${trocaProduto2Param}`);
+        if (trocaNum2 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum2)}`);
         if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
       }
       if (valorBase > 0) { lines.push(""); lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`); }
@@ -444,13 +447,13 @@ function CompraForm() {
           </div>
           <div>
             <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaProduto2Param ? " (1º)" : ""}</p>
-            {trocaNum > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum)}</p>}
+            {trocaNum1 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum1)}</p>}
             {trocaCond && <p className="text-[#86868B] text-xs">{trocaCond}</p>}
           </div>
           {trocaProduto2Param && (
             <div className="pt-2 border-t border-green-200">
               <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param} (2º)</p>
-              {parseFloat(trocaValor2Param) > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(parseFloat(trocaValor2Param))}</p>}
+              {trocaNum2 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum2)}</p>}
               {trocaCond2Param && <p className="text-[#86868B] text-xs">{trocaCond2Param}</p>}
             </div>
           )}
