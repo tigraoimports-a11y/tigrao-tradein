@@ -3074,8 +3074,8 @@ export default function EstoquePage() {
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
-                    // No estoque (lacrados): ocultar itens com qnt=0
-                    if (tab === "estoque" && p.qnt === 0) return;
+                    // Ocultar itens esgotados (qnt=0) em lacrados e seminovos
+                    if ((tab === "estoque" || tab === "seminovos") && p.qnt === 0) return;
                     const groupKey = stripOrigem(p.produto).toUpperCase();
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
