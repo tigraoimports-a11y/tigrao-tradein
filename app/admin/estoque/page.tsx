@@ -1189,14 +1189,15 @@ export default function EstoquePage() {
       <title>Etiqueta</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
+        @page{size:62mm 29mm;margin:0}
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0}
         .label{
           width:62mm;height:29mm;
           overflow:hidden;display:block;
-          page-break-after:always;page-break-inside:avoid;
+          break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;
         }
-        .label:last-child{page-break-after:auto}
+        .label:last-child{break-after:auto;page-break-after:auto}
         canvas{display:block;width:20mm;height:20mm;margin:0 auto}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
         .instrucao b{font-size:12px}
@@ -1205,7 +1206,7 @@ export default function EstoquePage() {
         }
       </style></head><body>
       <div class="instrucao">
-        ⚠️ Papel: <b>NOVA 62×29mm</b> · Orientação: <b>Horizontal</b> · Desmarque cabeçalhos · Salve como <b>Pré-ajuste</b>
+        ⚠️ Papel: <b>NOVA 62×29mm</b> · Orientação: <b>Vertical ↕</b> (NÃO horizontal) · Redimensionamento: <b>100%</b>
       </div>
       ${labelsHtml}
       <script>
