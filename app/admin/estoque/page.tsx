@@ -2776,7 +2776,11 @@ export default function EstoquePage() {
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
                 <div className="space-y-4">
-                  {sortedDates.map(date => {
+                  {sortedDates.filter(date => {
+                    // Ocultar pedidos onde todos os itens já foram recebidos
+                    const items = byDate[date];
+                    return items.some(p => p.tipo === "A_CAMINHO");
+                  }).map(date => {
                     const items = byDate[date];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
@@ -2824,8 +2828,8 @@ export default function EstoquePage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {items.map(p => {
-                              const isRecebido = p.tipo !== "A_CAMINHO";
+                            {items.filter(p => p.tipo === "A_CAMINHO").map(p => {
+                              const isRecebido = false;
                               return (
                                 <tr key={p.id}
                                   className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${
