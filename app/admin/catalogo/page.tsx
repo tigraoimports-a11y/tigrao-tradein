@@ -968,26 +968,37 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
     }
   }
 
-  // Toggle category-spec assignment via supabase direct (using the API)
-  async function toggleCatSpec(catKey: string, tipoChave: string, currentlyOn: boolean) {
+  // Ciclo: não atribuído → opcional → obrigatório → não atribuído
+  async function toggleCatSpec(catKey: string, tipoChave: string, assigned: boolean, obrigatoria?: boolean) {
     setSaving(`catspec-${catKey}-${tipoChave}`);
     try {
-      if (currentlyOn) {
-        // find the id and delete
-        const existing = data.categoriaSpecs.find(
-          (cs) => cs.categoria_key === catKey && cs.tipo_chave === tipoChave
-        );
-        if (existing) {
-          // Use DELETE on the catalogo endpoint but we need to go direct;
-          // Since categoriaSpecs is not a managed resource in this route, we use supabase
-          // For now, use a workaround: PATCH to ativo=false isn't available for categoria_specs
-          // We'll just show an info toast and recommend direct SQL
-          alert("Para remover atribuições de spec, edite diretamente no Supabase por enquanto.");
-        }
+      const currentSpecs = data.categoriaSpecs
+        .filter((cs) => cs.categoria_key === catKey)
+        .map((cs) => ({ tipo_chave: cs.tipo_chave, obrigatoria: cs.obrigatoria ?? false, ordem: cs.ordem ?? 0 }));
+
+      let newSpecs;
+      if (!assigned) {
+        // Não atribuído → Opcional
+        const maxOrdem = currentSpecs.reduce((max, s) => Math.max(max, s.ordem), 0);
+        newSpecs = [...currentSpecs, { tipo_chave: tipoChave, obrigatoria: false, ordem: maxOrdem + 1 }];
+      } else if (!obrigatoria) {
+        // Opcional → Obrigatório
+        newSpecs = currentSpecs.map((s) => s.tipo_chave === tipoChave ? { ...s, obrigatoria: true } : s);
       } else {
-        // add via POST to categories_specs - need a direct approach
-        alert("Para adicionar atribuições de spec, edite diretamente no Supabase por enquanto.");
+        // Obrigatório → Não atribuído
+        newSpecs = currentSpecs.filter((s) => s.tipo_chave !== tipoChave);
       }
+
+      const res = await fetch("/api/admin/catalogo", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ resource: "categoria_specs_config", categoria_key: catKey, specs: newSpecs }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      await reload();
+    } catch (e) {
+      alert("Erro ao salvar: " + String(e));
     } finally {
       setSaving(null);
     }
@@ -1180,7 +1191,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     return (
                       <td key={tipo.id} className="text-center px-2 py-2">
                         <button
-                          onClick={() => toggleCatSpec(cat.key, tipo.chave, assigned)}
+                          onClick={() => toggleCatSpec(cat.key, tipo.chave, assigned, obrigatoria)}
                           disabled={saving === `catspec-${cat.key}-${tipo.chave}`}
                           className={`w-6 h-6 rounded text-xs font-bold transition-colors ${
                             assigned
@@ -1192,9 +1203,9 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                           title={
                             assigned
                               ? obrigatoria
-                                ? "Obrigatória"
-                                : "Opcional"
-                              : "Não atribuída"
+                                ? "Obrigatória → clique para remover"
+                                : "Opcional → clique para obrigatória"
+                              : "Não atribuída → clique para adicionar"
                           }
                         >
                           {assigned ? (obrigatoria ? "●" : "○") : ""}
