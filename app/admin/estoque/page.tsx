@@ -1169,42 +1169,44 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
-      return `<div class="label">
-        <div style="text-align:center;padding:1mm 1mm 0">
-          <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
-        </div>
-        <div style="padding:0.5mm 1.5mm 1mm">
-          <div style="font-size:5.5pt;font-weight:bold;line-height:1.2;word-break:break-word">${p.produto}</div>
-          ${cor ? `<div style="font-size:5pt;color:#444;line-height:1.2">Cor: ${cor}</div>` : ""}
-          ${serial ? `<div style="font-size:4.5pt;font-family:monospace;line-height:1.2">S/N: ${serial}</div>` : ""}
-          ${imei ? `<div style="font-size:4.5pt;font-family:monospace;line-height:1.2">IMEI: ${imei}</div>` : ""}
-          ${fornecedor ? `<div style="font-size:4.5pt;color:#666;line-height:1.2">${fornecedor}</div>` : ""}
-        </div>
+      return `<div class="label" style="page-break-after:${idx < produtosParaImprimir.length - 1 ? "always" : "auto"}">
+        <table style="width:100%;height:100%;border-collapse:collapse"><tr>
+          <td style="width:29mm;vertical-align:middle;text-align:center;padding:1mm">
+            <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+          </td>
+          <td style="vertical-align:middle;padding:1mm 1.5mm 1mm 0;overflow:hidden">
+            <div style="font-size:6.5pt;font-weight:bold;line-height:1.2;margin-bottom:0.8mm">${p.produto}</div>
+            ${cor ? `<div style="font-size:5.5pt;color:#444;line-height:1.1;margin-bottom:0.4mm">Cor: ${cor}</div>` : ""}
+            ${serial ? `<div style="font-size:5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">S/N: ${serial}</div>` : ""}
+            ${imei ? `<div style="font-size:5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">IMEI: ${imei}</div>` : ""}
+            ${fornecedor ? `<div style="font-size:5pt;color:#666;line-height:1.1">${fornecedor}</div>` : ""}
+          </td>
+        </tr></table>
       </div>`;
-    }).join('<div style="border-top:1px dashed #ccc;width:100%;margin:0"></div>');
+    }).join("");
 
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta</title>
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0;width:29mm}
+        html,body{margin:0;padding:0;width:62mm}
         body{font-family:Arial,Helvetica,sans-serif}
-        .label{width:29mm;min-height:50mm;overflow:hidden;display:block}
-        canvas{display:block;width:23mm;height:23mm;margin:0 auto}
-        @page{size:29mm auto;margin:0}
-        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-family:Arial,sans-serif;font-size:11px;border-radius:4px;color:#333;width:200px}
+        .label{width:62mm;height:29mm;overflow:hidden;display:block}
+        canvas{display:block;width:22mm;height:22mm;margin:0 auto}
+        @page{size:62mm 29mm;margin:0}
+        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-family:Arial,sans-serif;font-size:11px;border-radius:4px;color:#333}
         .instrucao strong{display:block;font-size:13px;margin-bottom:4px}
         @media print{
-          html,body{width:29mm;margin:0;padding:0}
+          html,body{width:62mm;margin:0;padding:0}
           .instrucao{display:none}
+          .label{page-break-inside:avoid}
         }
       </style></head><body>
       <div class="instrucao">
-        <strong>⚠️ Configure o papel (Rolo 29mm):</strong>
-        1. Tamanho do Papel → <b>Rolo de 29mm</b> → <b>29 × 62mm</b><br>
-        2. Orientação: <b>Vertical</b> · Desmarque cabeçalhos/rodapés<br>
-        3. Salve como <b>Pré-ajuste</b> para não repetir
+        <strong>⚠️ Configure o papel:</strong>
+        Tamanho: <b>NOVA 62×29mm</b> · Orientação: <b>Horizontal</b><br>
+        Desmarque "Cabeçalhos e rodapés" · Salve como <b>Pré-ajuste</b>
       </div>
       ${labelsHtml}
       <script>
