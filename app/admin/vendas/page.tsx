@@ -130,6 +130,53 @@ export default function VendasPage() {
   const qrScanningRef = useRef(false);
   const serialInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Scanner remoto via iPhone
+  const [iPhoneScanModal, setIPhoneScanModal] = useState(false);
+  const [iPhoneScanToken, setIPhoneScanToken] = useState("");
+  const [iPhoneScanStatus, setIPhoneScanStatus] = useState<"loading" | "waiting" | "done" | "error">("loading");
+  const iPhonePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleOpenIPhoneScan = async () => {
+    setIPhoneScanModal(true);
+    setIPhoneScanStatus("loading");
+    setIPhoneScanToken("");
+    try {
+      const res = await fetch("/api/scan-session", {
+        method: "POST",
+        headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+      });
+      if (!res.ok) throw new Error("Erro ao criar sessão");
+      const { token } = await res.json();
+      setIPhoneScanToken(token);
+      setIPhoneScanStatus("waiting");
+      // Polling a cada 1.5s
+      iPhonePollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/scan-session?token=${token}`);
+          if (r.status === 410) { handleCloseIPhoneScan(); setMsg("Sessão expirada. Abra novamente."); return; }
+          if (!r.ok) return;
+          const j = await r.json();
+          if (j.serial) {
+            handleCloseIPhoneScan();
+            await fetch(`/api/scan-session?token=${token}`, { method: "DELETE" });
+            setSerialBusca(j.serial);
+            setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", "");
+            autoSelecionarPorSerial(j.serial);
+          }
+        } catch { /* ignore poll errors */ }
+      }, 1500);
+    } catch {
+      setIPhoneScanStatus("error");
+    }
+  };
+
+  const handleCloseIPhoneScan = () => {
+    if (iPhonePollRef.current) { clearInterval(iPhonePollRef.current); iPhonePollRef.current = null; }
+    setIPhoneScanModal(false);
+    setIPhoneScanToken("");
+    setIPhoneScanStatus("loading");
+  };
+
   // CEP auto-fill
   const [cepLoading, setCepLoading] = useState(false);
   const fetchCep = useCallback(async (cep: string) => {
@@ -1756,6 +1803,54 @@ export default function VendasPage() {
             </div>
           )}
 
+          {/* Modal Scanner iPhone */}
+          {iPhoneScanModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={handleCloseIPhoneScan}>
+              <div className={`rounded-2xl p-5 w-80 shadow-2xl ${dm ? "bg-[#1C1C1E]" : "bg-white"}`} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`font-bold text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>📱 Escanear com iPhone</span>
+                  <button onClick={handleCloseIPhoneScan} className="text-[#86868B] hover:text-red-500 text-lg leading-none">✕</button>
+                </div>
+                {iPhoneScanStatus === "loading" && (
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <div className="w-8 h-8 border-2 border-[#E8740E] border-t-transparent rounded-full animate-spin" />
+                    <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Gerando sessão...</p>
+                  </div>
+                )}
+                {iPhoneScanStatus === "error" && (
+                  <div className="flex flex-col items-center gap-3 py-4 text-center">
+                    <p className="text-red-500 text-sm">Erro ao criar sessão. Verifique se a tabela scan_sessions foi criada no Supabase.</p>
+                    <button onClick={handleCloseIPhoneScan} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F5F5F7] text-[#86868B]">Fechar</button>
+                  </div>
+                )}
+                {iPhoneScanStatus === "waiting" && iPhoneScanToken && (() => {
+                  const scanUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/scan?token=${iPhoneScanToken}`;
+                  return (
+                    <div className="flex flex-col items-center gap-4">
+                      <p className={`text-xs text-center ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                        Escaneie o QR abaixo com o iPhone para abrir o scanner
+                      </p>
+                      <div className="p-2 bg-white rounded-xl">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(scanUrl)}`}
+                          alt="QR code para abrir scanner no iPhone"
+                          width={200} height={200}
+                          className="rounded-lg"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#E8740E] animate-pulse" />
+                        <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Aguardando iPhone escanear a etiqueta...</p>
+                      </div>
+                      <button onClick={handleCloseIPhoneScan} className={`w-full py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-[#2C2C2E] text-[#98989D] hover:text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"}`}>Cancelar</button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Modal para colar texto do formulário */}
           {showPasteModal && (
             <div className="border border-[#E8740E] bg-[#FFF8F0] rounded-xl p-4 space-y-3">
@@ -2008,7 +2103,7 @@ export default function VendasPage() {
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { const v = e.target.value; setSerialBusca(v); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); autoSelecionarPorSerial(v); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button></div></div>
+                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { const v = e.target.value; setSerialBusca(v); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); autoSelecionarPorSerial(v); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera do Mac" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button><button onClick={handleOpenIPhoneScan} title="Usar câmera do iPhone" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📱</button></div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
