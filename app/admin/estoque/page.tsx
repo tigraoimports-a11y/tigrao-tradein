@@ -1174,29 +1174,22 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
-      return `<td style="width:50%;vertical-align:middle;padding:1mm;overflow:hidden">
-        <table style="width:100%;border-collapse:collapse"><tr>
-          <td style="width:13mm;vertical-align:middle;text-align:center;padding-right:0.8mm">
+      return `<table class="half-table"><tr>
+          <td style="width:14mm;vertical-align:middle;text-align:center;padding:1mm 0.5mm 1mm 1mm">
             <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
           </td>
-          <td style="vertical-align:middle;overflow:hidden">
-            <div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-bottom:0.5mm;word-break:break-word">${p.produto}</div>
+          <td style="vertical-align:middle;padding:1mm 1mm 1mm 0;overflow:hidden">
+            <div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-bottom:0.4mm;word-break:break-word">${p.produto}</div>
             ${cor ? `<div style="font-size:4.5pt;color:#444;line-height:1.1;margin-bottom:0.3mm">Cor: ${cor}</div>` : ""}
-            ${serial ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.3mm">S/N: ${serial}</div>` : ""}
-            ${imei ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.3mm">IMEI: ${imei}</div>` : ""}
+            ${serial ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.2mm">S/N: ${serial}</div>` : ""}
+            ${imei ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.2mm">IMEI: ${imei}</div>` : ""}
             ${fornecedor ? `<div style="font-size:4pt;color:#666;line-height:1.1">${fornecedor}</div>` : ""}
           </td>
-        </tr></table>
-      </td>`;
+        </tr></table>`;
     };
     const labelsHtml = labelPairs.map(([p1, p2], pairIdx) => {
-      const isLast = pairIdx === labelPairs.length - 1;
-      return `<div class="label" style="page-break-after:${!isLast ? "always" : "auto"}">
-        <table style="width:100%;height:100%;border-collapse:collapse"><tr>
-          ${renderHalf(p1, pairIdx * 2)}
-          <td style="width:0;border-left:1px dashed #ccc;padding:0"></td>
-          ${p2 ? renderHalf(p2, pairIdx * 2 + 1) : `<td style="width:50%"></td>`}
-        </tr></table>
+      return `<div class="label">
+        ${renderHalf(p1, pairIdx * 2)}<span class="divider"></span>${p2 ? renderHalf(p2, pairIdx * 2 + 1) : ""}
       </div>`;
     }).join("");
 
@@ -1205,23 +1198,24 @@ export default function EstoquePage() {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0;width:62mm}
-        body{font-family:Arial,Helvetica,sans-serif}
-        .label{width:62mm;height:29mm;overflow:hidden;display:block}
+        body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0}
+        .label{
+          width:62mm;height:29mm;
+          overflow:hidden;display:block;
+          page-break-after:always;page-break-inside:avoid;
+        }
+        .label:last-child{page-break-after:auto}
+        .half-table{width:31mm;height:29mm;border-collapse:collapse;table-layout:fixed;display:inline-table;vertical-align:top}
+        .divider{display:inline-block;width:0;height:29mm;border-left:1px dashed #bbb;vertical-align:top}
         canvas{display:block;width:13mm;height:13mm;margin:0 auto}
-        @page{size:62mm 29mm;margin:0}
-        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-family:Arial,sans-serif;font-size:11px;border-radius:4px;color:#333}
-        .instrucao strong{display:block;font-size:13px;margin-bottom:4px}
+        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
+        .instrucao b{font-size:12px}
         @media print{
-          html,body{width:62mm;margin:0;padding:0}
           .instrucao{display:none}
-          .label{page-break-inside:avoid}
         }
       </style></head><body>
       <div class="instrucao">
-        <strong>⚠️ Configure o papel:</strong>
-        Tamanho: <b>NOVA 62×29mm</b> · Orientação: <b>Horizontal</b><br>
-        Desmarque "Cabeçalhos e rodapés" · Salve como <b>Pré-ajuste</b>
+        ⚠️ Papel: <b>NOVA 62×29mm</b> · Orientação: <b>Horizontal</b> · Desmarque cabeçalhos · Salve como <b>Pré-ajuste</b>
       </div>
       ${labelsHtml}
       <script>
