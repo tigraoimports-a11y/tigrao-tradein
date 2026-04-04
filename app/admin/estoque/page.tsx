@@ -1179,6 +1179,7 @@ export default function EstoquePage() {
           ${serial ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;margin-top:0.5mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;color:#000">IMEI: ${imei}</div>` : ""}
           ${fornecedor ? `<div style="font-size:6pt;font-weight:bold;line-height:1.2;margin-top:0.3mm;color:#000">${fornecedor}</div>` : ""}
+          ${p.custo_unitario ? `<div style="font-size:6.5pt;font-weight:900;line-height:1.3;margin-top:0.5mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
       </div>`;
     }).join("");
