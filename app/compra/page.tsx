@@ -679,49 +679,71 @@ function CompraForm() {
         <div className={cardCls}>
           <p className={sectionTitle}>Entrega</p>
           <div>
-            <label className={labelCls}>Horario Preferido *</label>
-            <input type="text" required value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Ex: Manha, Tarde, 14h-16h" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local *</label>
+            <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Como deseja receber? *</label>
             <div className="flex gap-3">
-              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${local === "Loja" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg border-2 cursor-pointer transition-colors ${local === "Loja" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                 <input type="radio" name="local" value="Loja" checked={local === "Loja"} onChange={() => setLocal("Loja")} className="sr-only" />
                 <span className="text-lg">&#x1F3EA;</span>
-                <span className="font-medium">Loja</span>
+                <span className="font-medium text-sm">Retirar na Loja</span>
               </label>
-              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${local === "Entrega" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+              <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg border-2 cursor-pointer transition-colors ${local === "Entrega" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                 <input type="radio" name="local" value="Entrega" checked={local === "Entrega"} onChange={() => setLocal("Entrega")} className="sr-only" />
                 <span className="text-lg">&#x1F69A;</span>
-                <span className="font-medium">Entrega</span>
+                <span className="font-medium text-sm">Solicitar Entrega</span>
               </label>
             </div>
-            {local === "Entrega" && (
-              <div className="mt-3 space-y-3">
-                <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
-                <div className="flex gap-3">
-                  <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                    <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
-                    &#x1F3E0; <span className="font-medium">Residencia</span>
-                  </label>
-                  <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                    <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
-                    &#x1F3EC; <span className="font-medium">Shopping</span>
-                  </label>
-                </div>
-                {/* Info de pagamento por tipo de entrega */}
-                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
-                  {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
-                </div>
-                {tipoEntrega === "Shopping" && (
-                  <div>
-                    <label className={labelCls}>Qual shopping? *</label>
-                    <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: BarraShopping, Village Mall..." className={inputCls} />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
+
+          {/* Data — seg a sab */}
+          <div>
+            <label className={labelCls}>Data *</label>
+            <input type="date" required value={dataEntrega}
+              onChange={(e) => {
+                const d = new Date(e.target.value + "T12:00:00");
+                if (d.getDay() === 0) { alert("Nao trabalhamos aos domingos. Selecione de segunda a sabado."); return; }
+                setDataEntrega(e.target.value);
+              }}
+              min={(() => { const d = new Date(); d.setDate(d.getDate() + (d.getHours() >= 18 ? 1 : 0)); while (d.getDay() === 0) d.setDate(d.getDate() + 1); return d.toISOString().split("T")[0]; })()}
+              className={inputCls} />
+          </div>
+
+          {/* Horário — 10h às 18h */}
+          <div>
+            <label className={labelCls}>Horario *</label>
+            <div className="grid grid-cols-4 gap-2">
+              {["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"].map(h => (
+                <button key={h} type="button" onClick={() => setHorario(h)}
+                  className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${horario === h ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                  {h}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {local === "Entrega" && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Local de entrega *</label>
+              <div className="flex gap-3">
+                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                  <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
+                  &#x1F3E0; <span className="font-medium">Residencia</span>
+                </label>
+                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                  <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />
+                  &#x1F3EC; <span className="font-medium">Shopping</span>
+                </label>
+              </div>
+              <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
+                {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
+              </div>
+              {tipoEntrega === "Shopping" && (
+                <div>
+                  <label className={labelCls}>Qual shopping? *</label>
+                  <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: BarraShopping, Village Mall..." className={inputCls} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <button type="submit"
