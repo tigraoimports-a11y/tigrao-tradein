@@ -3066,7 +3066,7 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items], cardIdx) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
