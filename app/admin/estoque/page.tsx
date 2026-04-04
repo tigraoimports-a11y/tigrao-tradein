@@ -1169,7 +1169,7 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
-      return `<div class="label" style="page-break-after:${idx < produtosParaImprimir.length - 1 ? "always" : "auto"}">
+      return `<div class="label">
         <table style="width:100%;height:100%"><tr>
           <td style="width:38%;vertical-align:middle;text-align:center;padding:1mm">
             <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
@@ -1183,7 +1183,7 @@ export default function EstoquePage() {
           </td>
         </tr></table>
       </div>`;
-    }).join("");
+    }).join('<div style="border-top:1px dashed #ccc;width:100%"></div>');
 
     win.document.write(`<!DOCTYPE html><html><head>
       <title>Etiqueta</title>
@@ -1195,21 +1195,19 @@ export default function EstoquePage() {
         .label{width:62mm;height:29mm;overflow:hidden;display:block}
         table{border-collapse:collapse;table-layout:fixed;width:100%;height:100%}
         canvas{display:block;width:20mm;height:20mm;margin:0 auto}
-        @page{size:62mm 29mm;margin:0 !important}
+        @page{size:62mm auto;margin:0}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-family:Arial,sans-serif;font-size:11px;border-radius:4px;color:#333}
         .instrucao strong{display:block;font-size:13px;margin-bottom:4px}
         @media print{
           html,body{width:62mm;margin:0;padding:0}
           .instrucao{display:none}
-          .label{page-break-after:always;page-break-inside:avoid}
-          .label:last-child{page-break-after:auto}
         }
       </style></head><body>
       <div class="instrucao">
         <strong>⚠️ Configure o papel antes de imprimir:</strong>
-        1. Em <b>Tamanho do Papel</b>, selecione <b>62 mm × 29 mm</b> (ou DK-11209 no driver Brother)<br>
+        1. Em <b>Tamanho do Papel</b>, selecione <b>62 mm (fita contínua)</b> no driver Brother<br>
         2. Em <b>Orientação</b>, use <b>Horizontal</b><br>
-        3. Desmarque "Imprimir cabeçalhos e rodapés"
+        3. Desmarque "Imprimir cabeçalhos e rodapés" · Todas as etiquetas saem em 1 fita só
       </div>
       ${labelsHtml}
       <script>
