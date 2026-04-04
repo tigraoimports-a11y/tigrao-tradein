@@ -148,6 +148,9 @@ const COR_PT: Record<string, string> = {
   "JET BLACK": "Preto Brilhante",
   "CLOUD WHITE": "Branco Nuvem",
   "SKY BLUE": "Azul Céu",
+  "INDIGO": "Indigo",
+  "BLUSH": "Rosa Blush",
+  "CITRUS": "Cítrico",
 };
 
 function traduzirCor(cor: string | null | undefined): string {
