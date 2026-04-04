@@ -15,53 +15,57 @@ export async function GET(req: NextRequest) {
 
   // =========== TAB: FORNECEDORES ===========
   if (tab === "fornecedores") {
-    // Buscar do estoque: agrupar por fornecedor
+    // 1) Buscar cadastro de fornecedores (tabela master)
+    const { data: fornCadastro, error: fornErr } = await supabase
+      .from("fornecedores")
+      .select("id, nome, contato, observacao, created_at")
+      .order("nome");
+    if (fornErr) return NextResponse.json({ error: fornErr.message }, { status: 500 });
+
+    // Set de nomes cadastrados (uppercase) para filtrar
+    const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
+    const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
+
+    // 2) Buscar compras do estoque filtrando só fornecedores cadastrados
     const { data: estoqueData, error: estoqueErr } = await supabase
       .from("estoque")
       .select("fornecedor, produto, cor, qnt, custo_unitario, data_compra, data_entrada, categoria, tipo, status, serial_no")
       .not("fornecedor", "is", null)
       .neq("fornecedor", "");
-
     if (estoqueErr) return NextResponse.json({ error: estoqueErr.message }, { status: 500 });
 
-    // Agrupar por fornecedor
+    // Agrupar por fornecedor (só cadastrados)
     const fornMap = new Map<string, {
+      id: string;
       nome: string;
+      contato: string | null;
+      observacao: string | null;
+      created_at: string;
       total_produtos: number;
       total_investido: number;
       total_em_estoque: number;
       primeira_compra: string;
       ultima_compra: string;
       categorias: Set<string>;
-      compras: {
-        produto: string;
-        cor: string | null;
-        qnt: number;
-        custo_unitario: number;
-        data: string;
-        categoria: string;
-        status: string;
-        serial_no: string | null;
-      }[];
+      compras: { produto: string; cor: string | null; qnt: number; custo_unitario: number; data: string; categoria: string; status: string; serial_no: string | null }[];
     }>();
+
+    // Inicializar todos os fornecedores cadastrados (mesmo sem compras)
+    for (const fc of (fornCadastro || [])) {
+      const key = fc.nome.trim().toUpperCase();
+      if (search && !key.includes(search.toUpperCase())) continue;
+      fornMap.set(key, {
+        id: fc.id, nome: fc.nome, contato: fc.contato, observacao: fc.observacao, created_at: fc.created_at,
+        total_produtos: 0, total_investido: 0, total_em_estoque: 0,
+        primeira_compra: "", ultima_compra: "",
+        categorias: new Set(), compras: [],
+      });
+    }
 
     for (const item of (estoqueData || [])) {
       const forn = (item.fornecedor || "").trim().toUpperCase();
-      if (!forn) continue;
-      if (search && !forn.includes(search.toUpperCase())) continue;
-
-      if (!fornMap.has(forn)) {
-        fornMap.set(forn, {
-          nome: forn,
-          total_produtos: 0,
-          total_investido: 0,
-          total_em_estoque: 0,
-          primeira_compra: item.data_compra || item.data_entrada || "9999-12-31",
-          ultima_compra: item.data_compra || item.data_entrada || "0000-01-01",
-          categorias: new Set(),
-          compras: [],
-        });
-      }
+      if (!forn || !cadastrados.has(forn)) continue; // Ignora não-cadastrados (clientes de upgrade)
+      if (!fornMap.has(forn)) continue; // filtrado por search
 
       const f = fornMap.get(forn)!;
       const custo = (item.custo_unitario || 0) * (item.qnt || 1);
@@ -71,18 +75,13 @@ export async function GET(req: NextRequest) {
       if (item.categoria) f.categorias.add(item.categoria);
 
       const data = item.data_compra || item.data_entrada || "";
-      if (data && data < f.primeira_compra) f.primeira_compra = data;
-      if (data && data > f.ultima_compra) f.ultima_compra = data;
+      if (data && (!f.primeira_compra || data < f.primeira_compra)) f.primeira_compra = data;
+      if (data && (!f.ultima_compra || data > f.ultima_compra)) f.ultima_compra = data;
 
       f.compras.push({
-        produto: item.produto,
-        cor: item.cor,
-        qnt: item.qnt || 1,
-        custo_unitario: item.custo_unitario || 0,
-        data: data,
-        categoria: item.categoria || "",
-        status: item.status || "",
-        serial_no: item.serial_no || null,
+        produto: item.produto, cor: item.cor, qnt: item.qnt || 1,
+        custo_unitario: item.custo_unitario || 0, data, categoria: item.categoria || "",
+        status: item.status || "", serial_no: item.serial_no || null,
       });
     }
 

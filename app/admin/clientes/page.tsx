@@ -45,7 +45,11 @@ interface FornecedorCompra {
 }
 
 interface Fornecedor {
+  id: string;
   nome: string;
+  contato: string | null;
+  observacao: string | null;
+  created_at: string;
   total_produtos: number;
   total_investido: number;
   total_em_estoque: number;
@@ -65,7 +69,11 @@ const fmtDate = (d: string) => {
 export default function ClientesPage() {
   const { password, darkMode: dm, apiHeaders } = useAdmin();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<"clientes" | "lojistas" | "fornecedores" | "notas">("clientes");
+  const [tab, setTab] = useState<"clientes" | "lojistas" | "fornecedores" | "notas">(() => {
+    const t = searchParams.get("tab");
+    if (t === "fornecedores" || t === "lojistas" || t === "notas") return t;
+    return "clientes";
+  });
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") || "");
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -80,6 +88,10 @@ export default function ClientesPage() {
   const [totals, setTotals] = useState({ total: 0, total_gasto: 0, total_compras: 0, total_investido: 0, total_em_estoque: 0, total_produtos: 0 });
   const [sortBy, setSortBy] = useState<"gasto" | "compras" | "nome" | "recente">("gasto");
   const [fornSort, setFornSort] = useState<"investido" | "produtos" | "nome" | "recente">("investido");
+  const [detailForn, setDetailForn] = useState<Fornecedor | null>(null);
+  const [fornForm, setFornForm] = useState({ nome: "", contato: "", observacao: "" });
+  const [fornMsg, setFornMsg] = useState("");
+  const [savingForn, setSavingForn] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -112,6 +124,44 @@ export default function ClientesPage() {
   }, [password, tab, debouncedSearch, apiHeaders]);
 
   useEffect(() => { fetchClientes(); }, [fetchClientes]);
+
+  const handleCadastrarForn = async () => {
+    if (!fornForm.nome.trim()) { setFornMsg("Nome obrigatório"); return; }
+    setSavingForn(true);
+    try {
+      const res = await fetch("/api/fornecedores", {
+        method: "POST",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(fornForm),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setFornMsg("Fornecedor cadastrado!");
+        setFornForm({ nome: "", contato: "", observacao: "" });
+        fetchClientes();
+      } else {
+        setFornMsg("Erro: " + (json.error || "Falha"));
+      }
+    } catch { setFornMsg("Erro de conexão"); }
+    setSavingForn(false);
+    setTimeout(() => setFornMsg(""), 3000);
+  };
+
+  const handleDeleteForn = async (f: Fornecedor) => {
+    if (!confirm(`Excluir fornecedor "${f.nome}"?`)) return;
+    try {
+      const res = await fetch("/api/fornecedores", {
+        method: "DELETE",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ id: f.id }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setFornecedores(prev => prev.filter(x => x.id !== f.id));
+        if (detailForn?.id === f.id) setDetailForn(null);
+      }
+    } catch { /* ignore */ }
+  };
 
   // Sort clientes
   const sorted = [...clientes].sort((a, b) => {
@@ -186,6 +236,35 @@ export default function ClientesPage() {
 
       {/* ============= FORNECEDORES TAB ============= */}
       {tab === "fornecedores" ? (<>
+        {/* Cadastrar fornecedor */}
+        <div className={`${cardCls} space-y-4`}>
+          <h2 className={`text-[15px] font-bold ${mP}`}>Cadastrar Fornecedor</h2>
+          {fornMsg && <p className={`text-xs px-3 py-2 rounded-lg ${fornMsg.includes("Erro") ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-600"}`}>{fornMsg}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <p className={`text-[10px] uppercase tracking-wider mb-1 ${mS}`}>Nome *</p>
+              <input value={fornForm.nome} onChange={(e) => setFornForm(f => ({ ...f, nome: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && handleCadastrarForn()}
+                placeholder="Ex: DISTRIBUIDORA APPLE SP" className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[10px] uppercase tracking-wider mb-1 ${mS}`}>Contato (WhatsApp/Tel)</p>
+              <input value={fornForm.contato} onChange={(e) => setFornForm(f => ({ ...f, contato: e.target.value }))}
+                placeholder="Ex: 21 99999-9999" className={inputCls} />
+            </div>
+            <div>
+              <p className={`text-[10px] uppercase tracking-wider mb-1 ${mS}`}>Observacao</p>
+              <input value={fornForm.observacao} onChange={(e) => setFornForm(f => ({ ...f, observacao: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && handleCadastrarForn()}
+                placeholder="Notas, prazo entrega, etc." className={inputCls} />
+            </div>
+          </div>
+          <button onClick={handleCadastrarForn} disabled={savingForn}
+            className="px-5 py-2.5 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+            {savingForn ? "Salvando..." : "Cadastrar"}
+          </button>
+        </div>
+
         {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className={cardCls}>
@@ -215,126 +294,186 @@ export default function ClientesPage() {
             { key: "recente", label: "Mais recente" },
             { key: "nome", label: "Nome" },
           ] as const).map((o) => (
-            <button
-              key={o.key}
-              onClick={() => setFornSort(o.key)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${fornSort === o.key ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} hover:text-[#E8740E]`}`}
-            >
+            <button key={o.key} onClick={() => setFornSort(o.key)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${fornSort === o.key ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} hover:text-[#E8740E]`}`}>
               {o.label}
             </button>
           ))}
         </div>
 
-        {/* Fornecedores Table */}
-        <div className={tableCls}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
-                  {["Fornecedor", "Produtos", "Investido", "Em Estoque", "Categorias", "Primeira Compra", "Ultima Compra"].map(h => (
-                    <th key={h} className={thCls}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
-                ) : sortedForn.length === 0 ? (
-                  <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>{search ? `Nenhum resultado para "${search}"` : "Nenhum fornecedor encontrado"}</td></tr>
-                ) : sortedForn.map((f) => (
-                  <React.Fragment key={f.nome}>
-                    <tr
-                      onClick={() => setExpandedId(expandedId === f.nome ? null : f.nome)}
-                      className={`${rowCls} ${expandedId === f.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs">{expandedId === f.nome ? "▼" : "▶"}</span>
-                          <p className={`font-semibold ${mP}`}>{f.nome}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 rounded-lg bg-[#E8740E]/10 text-[#E8740E] text-xs font-bold">{f.total_produtos}</span>
-                      </td>
-                      <td className="px-4 py-3 font-bold text-red-500">{fmt(f.total_investido)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`font-semibold ${f.total_em_estoque > 0 ? "text-green-600" : mM}`}>{f.total_em_estoque} un.</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {f.categorias.slice(0, 3).map(c => (
-                            <span key={c} className={`px-2 py-0.5 rounded-md text-[10px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{c}</span>
-                          ))}
-                          {f.categorias.length > 3 && <span className={`text-[10px] ${mM}`}>+{f.categorias.length - 3}</span>}
-                        </div>
-                      </td>
-                      <td className={`px-4 py-3 text-xs ${mS}`}>{fmtDate(f.primeira_compra)}</td>
-                      <td className={`px-4 py-3 text-xs ${mS}`}>{fmtDate(f.ultima_compra)}</td>
-                    </tr>
-
-                    {/* Expanded: historico de compras */}
-                    {expandedId === f.nome && (
-                      <tr>
-                        <td colSpan={7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
-                          <div className="space-y-3">
-                            {/* Resumo por categoria */}
-                            <div className="flex flex-wrap gap-3">
-                              {(() => {
-                                const byCat: Record<string, { qnt: number; custo: number }> = {};
-                                f.compras.forEach(c => {
-                                  const cat = c.categoria || "OUTROS";
-                                  if (!byCat[cat]) byCat[cat] = { qnt: 0, custo: 0 };
-                                  byCat[cat].qnt += c.qnt;
-                                  byCat[cat].custo += c.custo_unitario * c.qnt;
-                                });
-                                return Object.entries(byCat).sort(([,a],[,b]) => b.custo - a.custo).map(([cat, info]) => (
-                                  <div key={cat} className={`px-3 py-2 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#E8E8ED]"}`}>
-                                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{cat}</p>
-                                    <p className={`text-[13px] font-bold ${mP}`}>{info.qnt} un. · {fmt(info.custo)}</p>
-                                  </div>
-                                ));
-                              })()}
-                            </div>
-
-                            <p className={`text-xs font-bold uppercase tracking-wider ${mS}`}>
-                              Historico de compras ({f.compras.length} itens)
-                            </p>
-                            <div className="space-y-1 max-h-[400px] overflow-y-auto">
-                              {f.compras.map((c, i) => (
-                                <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-white"}`}>
-                                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <span className={mM}>{fmtDate(c.data)}</span>
-                                    <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
-                                    {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
-                                    {c.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>}
-                                  </div>
-                                  <div className="flex items-center gap-3 shrink-0 ml-2">
-                                    <span className={mM}>{c.qnt}x</span>
-                                    <span className="font-bold text-red-500 w-24 text-right">{fmt(c.custo_unitario * c.qnt)}</span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      c.status === "EM ESTOQUE" ? "bg-green-500/10 text-green-600" :
-                                      c.status === "ESGOTADO" ? "bg-red-500/10 text-red-500" :
-                                      c.status === "A CAMINHO" ? "bg-blue-500/10 text-blue-500" :
-                                      `${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F2F2F7] text-[#86868B]"}`
-                                    }`}>{c.status || "—"}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+        {/* Fornecedores Cards */}
+        {loading ? (
+          <div className={`${cardCls} py-12 text-center ${mM}`}>Carregando...</div>
+        ) : sortedForn.length === 0 ? (
+          <div className={`${cardCls} py-12 text-center ${mM}`}>{search ? `Nenhum resultado para "${search}"` : "Nenhum fornecedor cadastrado"}</div>
+        ) : (
+          <div className="grid gap-3">
+            {sortedForn.map((f) => (
+              <div key={f.id} onClick={() => setDetailForn(f)}
+                className={`${cardCls} cursor-pointer hover:border-[#E8740E] transition-colors`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${dm ? "bg-[#2C2C2E] text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>
+                      {f.nome.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`font-bold ${mP} truncate`}>{f.nome}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {f.contato && <span className={`text-xs ${mS}`}>{f.contato}</span>}
+                        {f.observacao && <span className={`text-xs ${mM} truncate max-w-[200px]`}>{f.observacao}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0 ml-4">
+                    <div className="text-right hidden sm:block">
+                      <p className={`text-[10px] uppercase ${mS}`}>Produtos</p>
+                      <p className="text-sm font-bold text-[#E8740E]">{f.total_produtos}</p>
+                    </div>
+                    <div className="text-right hidden sm:block">
+                      <p className={`text-[10px] uppercase ${mS}`}>Investido</p>
+                      <p className="text-sm font-bold text-red-500">{fmt(f.total_investido)}</p>
+                    </div>
+                    <div className="text-right hidden md:block">
+                      <p className={`text-[10px] uppercase ${mS}`}>Em Estoque</p>
+                      <p className={`text-sm font-bold ${f.total_em_estoque > 0 ? "text-green-600" : mM}`}>{f.total_em_estoque} un.</p>
+                    </div>
+                    <div className="text-right hidden md:block">
+                      <p className={`text-[10px] uppercase ${mS}`}>Ultima Compra</p>
+                      <p className={`text-xs ${mS}`}>{fmtDate(f.ultima_compra)}</p>
+                    </div>
+                    <span className={`text-lg ${mM}`}>›</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
 
         {!loading && sortedForn.length > 0 && (
-          <p className={`text-xs text-center ${mM}`}>Mostrando {sortedForn.length} fornecedores</p>
+          <p className={`text-xs text-center ${mM}`}>{sortedForn.length} fornecedores cadastrados</p>
         )}
+
+        {/* Modal de Detalhes do Fornecedor */}
+        {detailForn && (() => {
+          const f = detailForn;
+          const mBg = dm ? "bg-[#1C1C1E]" : "bg-white";
+          const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+          // Resumo por categoria
+          const byCat: Record<string, { qnt: number; custo: number }> = {};
+          f.compras.forEach(c => {
+            const cat = c.categoria || "OUTROS";
+            if (!byCat[cat]) byCat[cat] = { qnt: 0, custo: 0 };
+            byCat[cat].qnt += c.qnt;
+            byCat[cat].custo += c.custo_unitario * c.qnt;
+          });
+          const catEntries = Object.entries(byCat).sort(([,a],[,b]) => b.custo - a.custo);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              onClick={() => setDetailForn(null)} onKeyDown={(e) => { if (e.key === "Escape") setDetailForn(null); }} tabIndex={-1} ref={(el) => el?.focus()}>
+              <div className={`w-full max-w-3xl mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className={`flex items-center justify-between px-6 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${dm ? "bg-[#2C2C2E] text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>
+                      {f.nome.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-bold ${mP}`}>{f.nome}</h3>
+                      {f.contato && <p className={`text-xs ${mS}`}>{f.contato}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteForn(f); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${dm ? "border-[#3A3A3C] text-red-400 hover:bg-red-500/10" : "border-[#E8E8ED] text-red-500 hover:bg-red-50"}`}>
+                      Excluir
+                    </button>
+                    <button onClick={() => setDetailForn(null)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  {/* Info do cadastro */}
+                  {f.observacao && (
+                    <div className={`px-4 py-3 rounded-xl border ${mSec}`}>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS} mb-1`}>Observacao</p>
+                      <p className={`text-sm ${mP}`}>{f.observacao}</p>
+                    </div>
+                  )}
+
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className={`px-4 py-3 rounded-xl border ${mSec}`}>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Produtos</p>
+                      <p className={`text-xl font-bold text-[#E8740E]`}>{f.total_produtos}</p>
+                    </div>
+                    <div className={`px-4 py-3 rounded-xl border ${mSec}`}>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Investido</p>
+                      <p className="text-xl font-bold text-red-500">{fmt(f.total_investido)}</p>
+                    </div>
+                    <div className={`px-4 py-3 rounded-xl border ${mSec}`}>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Em Estoque</p>
+                      <p className={`text-xl font-bold ${f.total_em_estoque > 0 ? "text-green-600" : mM}`}>{f.total_em_estoque} un.</p>
+                    </div>
+                    <div className={`px-4 py-3 rounded-xl border ${mSec}`}>
+                      <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Fornecedor desde</p>
+                      <p className={`text-sm font-bold ${mP}`}>{fmtDate(f.primeira_compra || f.created_at?.split("T")[0])}</p>
+                    </div>
+                  </div>
+
+                  {/* Resumo por categoria */}
+                  {catEntries.length > 0 && (
+                    <div>
+                      <p className={`text-xs font-bold uppercase tracking-wider ${mS} mb-2`}>Por Categoria</p>
+                      <div className="flex flex-wrap gap-2">
+                        {catEntries.map(([cat, info]) => (
+                          <div key={cat} className={`px-3 py-2 rounded-xl border ${mSec}`}>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{cat}</p>
+                            <p className={`text-[13px] font-bold ${mP}`}>{info.qnt} un. · {fmt(info.custo)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Historico de compras */}
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-wider ${mS} mb-2`}>
+                      Historico de compras ({f.compras.length} itens)
+                    </p>
+                    {f.compras.length === 0 ? (
+                      <p className={`text-sm ${mM} py-4 text-center`}>Nenhuma compra registrada ainda</p>
+                    ) : (
+                      <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                        {f.compras.map((c, i) => (
+                          <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <span className={mM}>{fmtDate(c.data)}</span>
+                              <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
+                              {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
+                              {c.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>}
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0 ml-2">
+                              <span className={mM}>{c.qnt}x</span>
+                              <span className="font-bold text-red-500 w-24 text-right">{fmt(c.custo_unitario * c.qnt)}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                c.status === "EM ESTOQUE" ? "bg-green-500/10 text-green-600" :
+                                c.status === "ESGOTADO" ? "bg-red-500/10 text-red-500" :
+                                c.status === "A CAMINHO" ? "bg-blue-500/10 text-blue-500" :
+                                `${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F2F2F7] text-[#86868B]"}`
+                              }`}>{c.status || "—"}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </>) : tab === "notas" ? (
 
       /* ============= NOTAS FISCAIS TAB ============= */
