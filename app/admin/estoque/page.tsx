@@ -1163,33 +1163,25 @@ export default function EstoquePage() {
     const win = window.open("", "_blank", "width=600,height=400");
     if (!win) return;
 
-    // Agrupa de 2 em 2 — 2 produtos por etiqueta
-    const labelPairs: [ProdutoEstoque, ProdutoEstoque | null][] = [];
-    for (let i = 0; i < produtosParaImprimir.length; i += 2) {
-      labelPairs.push([produtosParaImprimir[i], produtosParaImprimir[i + 1] ?? null]);
-    }
-    const renderHalf = (p: ProdutoEstoque, idx: number) => {
+    const labelsHtml = produtosParaImprimir.map((p, idx) => {
       const serial = p.serial_no || "";
       const imei = p.imei || "";
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
-      return `<table class="half-table"><tr>
-          <td style="width:14mm;vertical-align:middle;text-align:center;padding:1mm 0.5mm 1mm 1mm">
+      return `<div class="label">
+        <table style="width:62mm;height:29mm;border-collapse:collapse;table-layout:fixed"><tr>
+          <td style="width:22mm;vertical-align:middle;text-align:center;padding:1mm">
             <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
           </td>
-          <td style="vertical-align:middle;padding:1mm 1mm 1mm 0;overflow:hidden">
-            <div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-bottom:0.4mm;word-break:break-word">${p.produto}</div>
-            ${cor ? `<div style="font-size:4.5pt;color:#444;line-height:1.1;margin-bottom:0.3mm">Cor: ${cor}</div>` : ""}
-            ${serial ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.2mm">S/N: ${serial}</div>` : ""}
-            ${imei ? `<div style="font-size:4pt;font-family:monospace;line-height:1.1;margin-bottom:0.2mm">IMEI: ${imei}</div>` : ""}
-            ${fornecedor ? `<div style="font-size:4pt;color:#666;line-height:1.1">${fornecedor}</div>` : ""}
+          <td style="vertical-align:middle;padding:1mm 1.5mm 1mm 0;overflow:hidden">
+            <div style="font-size:7pt;font-weight:bold;line-height:1.2;margin-bottom:0.8mm">${p.produto}</div>
+            ${cor ? `<div style="font-size:6pt;color:#444;line-height:1.1;margin-bottom:0.5mm">Cor: ${cor}</div>` : ""}
+            ${serial ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">S/N: ${serial}</div>` : ""}
+            ${imei ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.1;margin-bottom:0.4mm">IMEI: ${imei}</div>` : ""}
+            ${fornecedor ? `<div style="font-size:5.5pt;color:#666;line-height:1.1">${fornecedor}</div>` : ""}
           </td>
-        </tr></table>`;
-    };
-    const labelsHtml = labelPairs.map(([p1, p2], pairIdx) => {
-      return `<div class="label">
-        ${renderHalf(p1, pairIdx * 2)}<span class="divider"></span>${p2 ? renderHalf(p2, pairIdx * 2 + 1) : ""}
+        </tr></table>
       </div>`;
     }).join("");
 
@@ -1205,9 +1197,7 @@ export default function EstoquePage() {
           page-break-after:always;page-break-inside:avoid;
         }
         .label:last-child{page-break-after:auto}
-        .half-table{width:31mm;height:29mm;border-collapse:collapse;table-layout:fixed;display:inline-table;vertical-align:top}
-        .divider{display:inline-block;width:0;height:29mm;border-left:1px dashed #bbb;vertical-align:top}
-        canvas{display:block;width:13mm;height:13mm;margin:0 auto}
+        canvas{display:block;width:20mm;height:20mm;margin:0 auto}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
         .instrucao b{font-size:12px}
         @media print{
