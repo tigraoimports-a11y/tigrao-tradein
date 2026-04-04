@@ -39,6 +39,10 @@ export interface Simulacao {
   formaPagamento?: string;
   condicaoLinhas?: string[];
   vendedor?: string;
+  // 2º produto na troca
+  modeloUsado2?: string;
+  storageUsado2?: string;
+  avaliacaoUsado2?: number;
 }
 
 // Keep backwards compat

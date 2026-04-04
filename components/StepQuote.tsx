@@ -103,8 +103,9 @@ export default function StepQuote(p: StepQuoteProps) {
 
   const leadBase = { nome: clienteNome, whatsapp: clienteWhatsApp, instagram: clienteInstagram,
     modeloNovo: newModel, storageNovo: newStorage, precoNovo: newPrice, modeloUsado: usedModel,
-    storageUsado: usedStorage, avaliacaoUsado: tradeInValue, diferenca: dif, condicaoLinhas: condLines,
-    vendedor: vendedor || undefined, origem: clienteOrigem || undefined };
+    storageUsado: usedStorage, avaliacaoUsado: hasSecond ? (tradeInValue1 ?? tradeInValue) : tradeInValue, diferenca: dif, condicaoLinhas: condLines,
+    vendedor: vendedor || undefined, origem: clienteOrigem || undefined,
+    ...(hasSecond ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, avaliacaoUsado2: tradeInValue2 ?? 0 } : {}) };
 
   const cardStyle: React.CSSProperties = { backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" };
   const inputStyle: React.CSSProperties = { backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)", outline: "none" };

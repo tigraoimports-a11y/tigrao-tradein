@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     const { supabase } = await import("@/lib/supabase");
 
-    const { error } = await supabase.from("simulacoes").insert([{
+    const row: Record<string, unknown> = {
       nome: body.nome,
       whatsapp: body.whatsapp,
       instagram: body.instagram || null,
@@ -110,7 +110,12 @@ export async function POST(req: NextRequest) {
       forma_pagamento: body.formaPagamento || null,
       condicao_linhas: body.condicaoLinhas || [],
       vendedor: body.vendedor || null,
-    }]);
+    };
+    // 2º produto na troca (se existir)
+    if (body.modeloUsado2) row.modelo_usado2 = body.modeloUsado2;
+    if (body.storageUsado2) row.storage_usado2 = body.storageUsado2;
+    if (body.avaliacaoUsado2) row.avaliacao_usado2 = body.avaliacaoUsado2;
+    const { error } = await supabase.from("simulacoes").insert([row]);
 
     if (error) {
       console.error("[leads] Erro Supabase:", error);
