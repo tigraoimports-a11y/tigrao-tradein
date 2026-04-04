@@ -38,11 +38,15 @@ export default function TradeInPrecosPage() {
   // Inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState("");
+  const [editArm, setEditArm] = useState("");
 
   // Adicionar variação inline
-  const [addingVariacao, setAddingVariacao] = useState<string | null>(null); // modelo name
+  const [addingVariacao, setAddingVariacao] = useState<string | null>(null);
   const [varArm, setVarArm] = useState("");
   const [varValor, setVarValor] = useState("");
+
+  // Copiar variações
+  const [copyingTo, setCopyingTo] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!password) return;
@@ -125,6 +129,45 @@ export default function TradeInPrecosPage() {
       setMsg("Excluido!");
       setTimeout(() => setMsg(""), 2000);
     } catch { setMsg("Erro ao excluir"); }
+  }
+
+  async function handleSaveEdit(id: string, valor: number, armazenamento: string) {
+    setSaving(id);
+    try {
+      const item = data.find(d => d.id === id);
+      if (!item) return;
+      // Se armazenamento mudou, deletar o antigo e criar novo
+      if (armazenamento !== item.armazenamento) {
+        await fetch("/api/admin/usados", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_valor", id }) });
+        await fetch("/api/admin/usados", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ action: "upsert_valor", modelo: item.modelo, armazenamento, valor_base: valor }) });
+      } else {
+        await fetch("/api/admin/usados", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ action: "upsert_valor", modelo: item.modelo, armazenamento, valor_base: valor }) });
+      }
+      setEditingId(null);
+      setMsg("Salvo!");
+      setTimeout(() => setMsg(""), 2000);
+      fetchData();
+    } catch { setMsg("Erro ao salvar"); }
+    setSaving(null);
+  }
+
+  async function handleCopyVariacoes(fromModelo: string, toModelo: string) {
+    const fromItems = data.filter(d => d.modelo === fromModelo);
+    if (fromItems.length === 0) { setMsg("Modelo de origem sem variações"); return; }
+    setSaving("copy");
+    let copied = 0;
+    for (const item of fromItems) {
+      // Verificar se já existe no destino
+      const exists = data.find(d => d.modelo === toModelo && d.armazenamento === item.armazenamento);
+      if (exists) continue;
+      await fetch("/api/admin/usados", { method: "POST", headers: { ...apiHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ action: "upsert_valor", modelo: toModelo, armazenamento: item.armazenamento, valor_base: item.valor_base }) });
+      copied++;
+    }
+    setCopyingTo(null);
+    setMsg(`${copied} variações copiadas de ${fromModelo}!`);
+    setTimeout(() => setMsg(""), 3000);
+    fetchData();
+    setSaving(null);
   }
 
   async function handleAddVariacao(modelo: string) {
@@ -244,6 +287,10 @@ export default function TradeInPrecosPage() {
             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
               <span className={`text-sm font-bold ${textPrimary}`}>{modelo}</span>
               <div className="flex items-center gap-2">
+                <button onClick={() => { setCopyingTo(copyingTo === modelo ? null : modelo); }}
+                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${copyingTo === modelo ? (dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-600") : (dm ? "text-[#98989D] hover:text-blue-400" : "text-[#86868B] hover:text-blue-600")}`}>
+                  {copyingTo === modelo ? "Cancelar" : "Copiar de..."}
+                </button>
                 <button onClick={() => { setAddingVariacao(addingVariacao === modelo ? null : modelo); setVarArm(""); setVarValor(""); }}
                   className={`text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${addingVariacao === modelo ? (dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#D2D2D7] text-[#86868B]") : "text-[#E8740E] hover:bg-[#FFF5EB]"}`}>
                   {addingVariacao === modelo ? "Cancelar" : "+ Variacao"}
@@ -251,6 +298,17 @@ export default function TradeInPrecosPage() {
                 <span className={`text-xs ${textSecondary}`}>{items.length} {items.length === 1 ? "variacao" : "variacoes"}</span>
               </div>
             </div>
+            {copyingTo === modelo && (
+              <div className={`px-4 py-2.5 flex items-center gap-2 flex-wrap ${dm ? "bg-blue-900/10 border-b border-blue-800/30" : "bg-blue-50 border-b border-blue-200"}`}>
+                <span className={`text-xs font-medium ${dm ? "text-blue-400" : "text-blue-700"}`}>Copiar variacoes de:</span>
+                {grouped.filter(([m]) => m !== modelo).map(([m, mItems]) => (
+                  <button key={m} onClick={() => handleCopyVariacoes(m, modelo)} disabled={saving === "copy"}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-blue-900/30" : "bg-white text-[#1D1D1F] hover:bg-blue-100"} border ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+                    {m} ({mItems.length})
+                  </button>
+                ))}
+              </div>
+            )}
             {addingVariacao === modelo && (
               <div className={`px-4 py-2.5 flex items-center gap-2 ${dm ? "bg-[#1C1C1E] border-b border-[#3A3A3C]" : "bg-[#FFF8F0] border-b border-[#E8740E]/20"}`}>
                 <input value={varArm} onChange={e => setVarArm(e.target.value)} placeholder="Ex: 1TB/32GB" className={`${inputCls} w-36`} autoFocus
@@ -278,19 +336,22 @@ export default function TradeInPrecosPage() {
                   </span>
                   {/* Valor */}
                   {editingId === item.id ? (
-                    <div className="flex items-center gap-2 flex-1">
+                    <div className="flex items-center gap-2 flex-1 flex-wrap">
+                      <input type="text" value={editArm} onChange={e => setEditArm(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleSaveEdit(item.id, Number(editValor), editArm); if (e.key === "Escape") setEditingId(null); }}
+                        className={`${inputCls} w-32`} placeholder="Armazenamento" />
                       <span className={`text-sm ${textSecondary}`}>R$</span>
-                      <input type="number" value={editValor} onChange={e => setEditValor(e.target.value)} autoFocus
-                        onKeyDown={e => { if (e.key === "Enter") handleSave(item.id, Number(editValor)); if (e.key === "Escape") setEditingId(null); }}
+                      <input type="number" value={editValor} onChange={e => setEditValor(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleSaveEdit(item.id, Number(editValor), editArm); if (e.key === "Escape") setEditingId(null); }}
                         className={`${inputCls} w-28`} />
-                      <button onClick={() => handleSave(item.id, Number(editValor))} disabled={saving === item.id}
+                      <button onClick={() => handleSaveEdit(item.id, Number(editValor), editArm)} disabled={saving === item.id}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
                         {saving === item.id ? "..." : "Salvar"}
                       </button>
                       <button onClick={() => setEditingId(null)} className={`text-xs ${textSecondary} hover:underline`}>Cancelar</button>
                     </div>
                   ) : (
-                    <button onClick={() => { setEditingId(item.id); setEditValor(String(item.valor_base)); }}
+                    <button onClick={() => { setEditingId(item.id); setEditValor(String(item.valor_base)); setEditArm(item.armazenamento); }}
                       className={`text-sm font-bold flex-1 text-left hover:text-[#E8740E] transition-colors ${item.ativo ? "text-[#E8740E]" : textSecondary}`}>
                       {fmt(item.valor_base)}
                     </button>
