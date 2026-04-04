@@ -265,6 +265,10 @@ function extractCorPT(nome: string): string | null {
  */
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
   let display = stripOrigem(nome, categoria);
+  // MacBook: remover núcleos detalhados do nome exibido (aparece como badge separado)
+  if (categoria && getBaseCat(categoria) === "MACBOOK") {
+    display = display.replace(/\s*\(\d+C?\s*CPU\/\d+C?\s*GPU\)/gi, "").replace(/\s+/g, " ").trim();
+  }
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
@@ -401,7 +405,12 @@ const CAT_LABELS: Record<string, string> = {
   IPHONES: "iPhones",
   IPADS: "iPads",
   MACBOOK: "MacBooks",
+  MACBOOK_NEO: "MacBook Neo",
+  MACBOOK_AIR: "MacBook Air",
+  MACBOOK_PRO: "MacBook Pro",
   MAC_MINI: "Mac Mini",
+  MAC_STUDIO: "Mac Studio",
+  IMAC: "iMac",
   APPLE_WATCH: "Apple Watch",
   APPLE_WATCH_ATACADO: "Apple Watch Atacado",
   AIRPODS: "AirPods",
@@ -922,8 +931,10 @@ export default function EstoquePage() {
       case "MAC_MINI":
         return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
       case "MACBOOK": {
-        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : "MACBOOK PRO";
-        return `${tipo} ${spec.mb_chip} ${spec.mb_tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
+        const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
+        const tela = spec.mb_modelo === "NEO" ? spec.mb_tela || '13"' : spec.mb_tela;
+        const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
+        return `${tipo} ${spec.mb_chip}${nucleos} ${tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
@@ -953,7 +964,20 @@ export default function EstoquePage() {
     setLoading(true);
     try {
       const res = await fetch("/api/estoque", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } });
-      if (res.ok) { const json = await res.json(); setEstoque(json.data ?? []); }
+      if (res.ok) {
+        const json = await res.json();
+        const data: ProdutoEstoque[] = json.data ?? [];
+        setEstoque(data);
+        // Migração: corrigir categorias legadas (MACBOOK_NEO/AIR/PRO → MACBOOK)
+        const legacyMap: Record<string, string> = { MACBOOK_NEO: "MACBOOK", MACBOOK_AIR: "MACBOOK", MACBOOK_PRO: "MACBOOK" };
+        const toFix = data.filter(p => legacyMap[p.categoria]);
+        if (toFix.length > 0) {
+          for (const p of toFix) {
+            fetch(`/api/estoque`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id, categoria: legacyMap[p.categoria] }) }).catch(() => {});
+          }
+          setEstoque(prev => prev.map(p => legacyMap[p.categoria] ? { ...p, categoria: legacyMap[p.categoria] } : p));
+        }
+      }
     } catch { /* ignore */ }
     setLoading(false);
   }, [password]);
@@ -1358,7 +1382,6 @@ export default function EstoquePage() {
           imei: p.imei || null,
           serial_no: p.serial_no || null,
           data_entrada: hojeBR(),
-          // Quando A_CAMINHO, codifica a condição esperada no observacao para usar ao mover
           observacao: (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO")
             ? `[${p.condicao}]`
             : null,
@@ -1529,7 +1552,7 @@ export default function EstoquePage() {
   };
 
   // Filtrar por tipo
-  const novos = estoque.filter((p) => (p.tipo ?? "NOVO") === "NOVO");
+  const novos = estoque.filter((p) => (p.tipo || "NOVO") === "NOVO");
   const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
   const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
   const atacado = estoque.filter((p) => p.tipo === "ATACADO");
@@ -2364,7 +2387,14 @@ export default function EstoquePage() {
 
           {/* Row 1: Categoria + Tipo */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => { set("categoria", e.target.value); set("produto", ""); }} className={inputCls}>
+            <div><p className={labelCls}>Categoria</p><select value={form.categoria} onChange={(e) => {
+              const newCat = e.target.value;
+              set("categoria", newCat); set("produto", "");
+              // Sincronizar mb_modelo com categoria específica de MacBook
+              if (newCat === "MACBOOK_NEO") { setS("mb_modelo", "NEO"); setS("mb_chip", "A18 Pro"); setS("mb_nucleos", "6C CPU/5C GPU"); setS("mb_tela", '13"'); }
+              else if (newCat === "MACBOOK_AIR") setS("mb_modelo", "AIR");
+              else if (newCat === "MACBOOK_PRO") setS("mb_modelo", "PRO");
+            }} className={inputCls}>
               {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
             </select></div>
             {form.categoria === "SEMINOVOS" ? (
@@ -2465,7 +2495,7 @@ export default function EstoquePage() {
               {(() => {
                 const mbMods = getCatModelos("MACBOOK", ["AIR", "PRO", "NEO"]);
                 return (
-                  <div><p className={labelCls}>Modelo</p><select value={mbMods.includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => setS("mb_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
+                  <div><p className={labelCls}>Modelo</p><select value={mbMods.includes(spec.mb_modelo) ? spec.mb_modelo : "__custom__"} onChange={(e) => { const v = e.target.value === "__custom__" ? "" : e.target.value; setS("mb_modelo", v); if (v === "NEO") { setS("mb_chip", "A18 Pro"); setS("mb_nucleos", "6C CPU/5C GPU"); setS("mb_tela", '13"'); } }} className={inputCls}>
                     {mbMods.map((m) => <option key={m} value={m}>{m === "AIR" ? "MacBook Air" : m === "PRO" ? "MacBook Pro" : m === "NEO" ? "MacBook Neo" : `MacBook ${m}`}</option>)}
                     <option value="__custom__">Outro (digitar)</option>
                   </select>
@@ -2474,18 +2504,26 @@ export default function EstoquePage() {
                   ) : null}</div>
                 );
               })()}
-              <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
-                {spec.mb_modelo === "AIR"
-                  ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
-                  : [<option key='14"' value='14"'>14 polegadas</option>, <option key='16"' value='16"'>16 polegadas</option>]
-                }
-              </select></div>
+              {spec.mb_modelo !== "NEO" && (
+                <div><p className={labelCls}>Tela</p><select value={spec.mb_tela} onChange={(e) => setS("mb_tela", e.target.value)} className={inputCls}>
+                  {spec.mb_modelo === "AIR"
+                    ? [<option key='13"' value='13"'>13 polegadas</option>, <option key='15"' value='15"'>15 polegadas</option>]
+                    : [<option key='14"' value='14"'>14 polegadas</option>, <option key='16"' value='16"'>16 polegadas</option>]
+                  }
+                </select></div>
+              )}
               <div><p className={labelCls}>Chip</p><select value={spec.mb_chip} onChange={(e) => setS("mb_chip", e.target.value)} className={inputCls}>
-                {["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"].map((c) => <option key={c}>{c}</option>)}
+                {spec.mb_modelo === "NEO"
+                  ? [<option key="A18 Pro" value="A18 Pro">A18 Pro</option>]
+                  : ["M1", "M2", "M3", "M4", "M4 PRO", "M4 MAX", "M5", "M5 PRO"].map((c) => <option key={c} value={c}>{c}</option>)
+                }
               </select></div>
               <div><p className={labelCls}>Núcleos</p><select value={spec.mb_nucleos} onChange={(e) => setS("mb_nucleos", e.target.value)} className={inputCls}>
                 <option value="" disabled>— Selecionar —</option>
-                {["8C CPU/7C GPU", "8C CPU/8C GPU", "8C CPU/10C GPU", "10C CPU/8C GPU", "10C CPU/10C GPU", "12C CPU/16C GPU", "12C CPU/19C GPU", "14C CPU/20C GPU", "14C CPU/32C GPU", "16C CPU/40C GPU"].map((n) => <option key={n}>{n}</option>)}
+                {(spec.mb_modelo === "NEO"
+                  ? ["6C CPU/5C GPU"]
+                  : ["8C CPU/7C GPU", "8C CPU/8C GPU", "8C CPU/10C GPU", "10C CPU/8C GPU", "10C CPU/10C GPU", "12C CPU/16C GPU", "12C CPU/19C GPU", "14C CPU/20C GPU", "14C CPU/32C GPU", "16C CPU/40C GPU"]
+                ).map((n) => <option key={n}>{n}</option>)}
               </select></div>
               <div><p className={labelCls}>RAM</p><select value={spec.mb_ram} onChange={(e) => setS("mb_ram", e.target.value)} className={inputCls}>
                 {["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"].map((r) => <option key={r}>{r}</option>)}
@@ -3045,6 +3083,9 @@ export default function EstoquePage() {
                       onClick={async () => {
                         const detectCat = (nome: string): string => {
                           const n = (nome || "").toUpperCase();
+                          if (n.includes("MACBOOK NEO") && CATEGORIAS.includes("MACBOOK_NEO")) return "MACBOOK_NEO";
+                          if (n.includes("MACBOOK AIR") && CATEGORIAS.includes("MACBOOK_AIR")) return "MACBOOK_AIR";
+                          if (n.includes("MACBOOK PRO") && CATEGORIAS.includes("MACBOOK_PRO")) return "MACBOOK_PRO";
                           if (n.includes("MACBOOK") && CATEGORIAS.includes("MACBOOK")) return "MACBOOK";
                           if (n.includes("MAC MINI") && CATEGORIAS.includes("MAC_MINI")) return "MAC_MINI";
                           if (n.includes("MAC STUDIO") && CATEGORIAS.includes("MAC_STUDIO")) return "MAC_STUDIO";
@@ -3326,8 +3367,15 @@ export default function EstoquePage() {
                                           <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
                                         </div>
                                       ) : (
-                                        <span className={`flex items-center gap-1 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
+                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
+                                          {/* Badge de núcleos para MacBooks */}
+                                          {getBaseCat(prodItems[0]?.categoria) === "MACBOOK" && (() => {
+                                            const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
+                                            const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                                            if (!nucleosMatch) return null;
+                                            return <span className="px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-bold text-white/70 tracking-wide">{nucleosMatch[1]}</span>;
+                                          })()}
                                           {(() => {
                                             const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
                                             const editKey = `${prodItems[0]?.id}_corpt`;
@@ -3452,7 +3500,7 @@ export default function EstoquePage() {
                                           </span>
                                         </td>
                                         <td colSpan={5} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
-                                          {(p.imei || p.serial_no) && <span className="opacity-50">#{p.serial_no || p.imei}</span>}
+                                          {(p.imei || p.serial_no) && <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>#{p.serial_no || p.imei}</span>}
                                         </td>
                                       </tr>
                                     );
