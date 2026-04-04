@@ -4379,6 +4379,16 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">⌚ Com Pulseira</span></div>
                       )}
+                      {/* Apple Watch: tamanho + modelo de pulseira */}
+                      {p.categoria === "APPLE_WATCH" && (() => {
+                        const { tamanho, pulseira } = extractWatchBadges(p.produto);
+                        return (<>
+                          {tamanho && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span></div>}
+                          {pulseira && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span></div>}
+                        </>);
+                      })()}
                       {/* Ciclos badge */}
                       {(() => {
                         const ciclos = p.observacao?.match(/\[CICLOS:(\d+)\]/)?.[1];
