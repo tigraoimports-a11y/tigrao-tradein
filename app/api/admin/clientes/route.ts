@@ -11,29 +11,117 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search")?.trim() || "";
-  const tab = searchParams.get("tab") || "clientes"; // "clientes" or "lojistas"
+  const tab = searchParams.get("tab") || "clientes";
 
-  // Buscar todas vendas com dados do cliente
+  // =========== TAB: FORNECEDORES ===========
+  if (tab === "fornecedores") {
+    // Buscar do estoque: agrupar por fornecedor
+    const { data: estoqueData, error: estoqueErr } = await supabase
+      .from("estoque")
+      .select("fornecedor, produto, cor, qnt, custo_unitario, data_compra, data_entrada, categoria, tipo, status, serial_no")
+      .not("fornecedor", "is", null)
+      .neq("fornecedor", "");
+
+    if (estoqueErr) return NextResponse.json({ error: estoqueErr.message }, { status: 500 });
+
+    // Agrupar por fornecedor
+    const fornMap = new Map<string, {
+      nome: string;
+      total_produtos: number;
+      total_investido: number;
+      total_em_estoque: number;
+      primeira_compra: string;
+      ultima_compra: string;
+      categorias: Set<string>;
+      compras: {
+        produto: string;
+        cor: string | null;
+        qnt: number;
+        custo_unitario: number;
+        data: string;
+        categoria: string;
+        status: string;
+        serial_no: string | null;
+      }[];
+    }>();
+
+    for (const item of (estoqueData || [])) {
+      const forn = (item.fornecedor || "").trim().toUpperCase();
+      if (!forn) continue;
+      if (search && !forn.includes(search.toUpperCase())) continue;
+
+      if (!fornMap.has(forn)) {
+        fornMap.set(forn, {
+          nome: forn,
+          total_produtos: 0,
+          total_investido: 0,
+          total_em_estoque: 0,
+          primeira_compra: item.data_compra || item.data_entrada || "9999-12-31",
+          ultima_compra: item.data_compra || item.data_entrada || "0000-01-01",
+          categorias: new Set(),
+          compras: [],
+        });
+      }
+
+      const f = fornMap.get(forn)!;
+      const custo = (item.custo_unitario || 0) * (item.qnt || 1);
+      f.total_produtos += item.qnt || 1;
+      f.total_investido += custo;
+      if (item.status === "EM ESTOQUE") f.total_em_estoque += item.qnt || 0;
+      if (item.categoria) f.categorias.add(item.categoria);
+
+      const data = item.data_compra || item.data_entrada || "";
+      if (data && data < f.primeira_compra) f.primeira_compra = data;
+      if (data && data > f.ultima_compra) f.ultima_compra = data;
+
+      f.compras.push({
+        produto: item.produto,
+        cor: item.cor,
+        qnt: item.qnt || 1,
+        custo_unitario: item.custo_unitario || 0,
+        data: data,
+        categoria: item.categoria || "",
+        status: item.status || "",
+        serial_no: item.serial_no || null,
+      });
+    }
+
+    const fornecedores = Array.from(fornMap.values())
+      .map(f => ({
+        ...f,
+        categorias: Array.from(f.categorias),
+        compras: f.compras.sort((a, b) => (b.data || "").localeCompare(a.data || "")),
+      }))
+      .sort((a, b) => b.total_investido - a.total_investido);
+
+    return NextResponse.json({
+      fornecedores,
+      total: fornecedores.length,
+      total_investido: fornecedores.reduce((s, f) => s + f.total_investido, 0),
+      total_produtos: fornecedores.reduce((s, f) => s + f.total_produtos, 0),
+      total_em_estoque: fornecedores.reduce((s, f) => s + f.total_em_estoque, 0),
+    });
+  }
+
+  // =========== TABS: clientes / lojistas / notas ===========
   let query = supabase
     .from("vendas")
-    .select("*")
+    .select("id,data,cliente,cpf,cnpj,email,pessoa,bairro,cidade,uf,origem,tipo,produto,fornecedor,preco_vendido,forma,banco,serial_no,imei,nota_fiscal_url,status_pagamento")
+    .neq("status_pagamento", "CANCELADO")
     .order("data", { ascending: false });
 
-  // Filtrar por serial ou imei se parece código de produto
   if (search) {
     const clean = search.replace(/[\.\-\/\s]/g, "");
-    // Se parece serial/imei (alfanumérico 8+ chars)
     if (/^[A-Z0-9]{8,}$/i.test(clean)) {
       query = query.or(`serial_no.ilike.%${clean}%,imei.ilike.%${clean}%,cpf.ilike.%${clean}%,cliente.ilike.%${search}%`);
     } else if (/^\d{3,}$/.test(clean)) {
-      // Parece CPF
       query = query.ilike("cpf", `%${clean}%`);
     } else {
       query = query.ilike("cliente", `%${search}%`);
     }
   }
 
-  // Buscar todas as vendas sem limite fixo (paginação automática)
+  // Paginação em batches
   const rawVendas: Record<string, unknown>[] = [];
   let from = 0;
   const PAGE = 1000;
@@ -46,98 +134,57 @@ export async function GET(req: NextRequest) {
     from += PAGE;
   }
 
-  // Filtrar canceladas no JS (evita problema com neq e NULL no Supabase)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vendas = (rawVendas ?? []).filter(
-    (v: any) => v.status_pagamento !== "CANCELADO"
-  );
+  // Tab "notas"
+  if (tab === "notas") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const notas = rawVendas.filter((v: any) => v.nota_fiscal_url).map((v: any) => ({
+      id: v.id, data: v.data, cliente: v.cliente, produto: v.produto,
+      preco_vendido: Number(v.preco_vendido || 0), nota_fiscal_url: v.nota_fiscal_url,
+    }));
+    return NextResponse.json({ notas, total: notas.length });
+  }
 
-  // Agrupar por cliente
+  // Agrupar por cliente (sem enviar vendas[] no response — fica mais leve)
   const clienteMap = new Map<string, {
-    nome: string;
-    cpf: string | null;
-    cnpj: string | null;
-    email: string | null;
-    pessoa: string | null;
-    bairro: string | null;
-    cidade: string | null;
-    uf: string | null;
-    total_compras: number;
-    total_gasto: number;
-    ultima_compra: string;
-    ultimo_produto: string;
-    cliente_desde: string;
-    is_lojista: boolean;
-    vendas: {
-      id: string;
-      data: string;
-      produto: string;
-      preco_vendido: number;
-      forma: string;
-      banco: string;
-      serial_no: string | null;
-      imei: string | null;
-    }[];
+    nome: string; cpf: string | null; cnpj: string | null; email: string | null;
+    pessoa: string | null; bairro: string | null; cidade: string | null; uf: string | null;
+    total_compras: number; total_gasto: number; ultima_compra: string; ultimo_produto: string;
+    cliente_desde: string; is_lojista: boolean;
+    vendas: { id: string; data: string; produto: string; preco_vendido: number; forma: string; banco: string; serial_no: string | null; imei: string | null }[];
   }>();
-
-  // Mapa de CPF → chave do clienteMap (para unificar mesma pessoa com nomes diferentes)
   const cpfToKey = new Map<string, string>();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const v of vendas as any[]) {
+  for (const v of rawVendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
-
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
     const cpf = (v.cpf || "").trim();
 
-    // Determinar a chave de agrupamento:
-    // - Com CPF: agrupa por CPF (mesma pessoa mesmo com nomes diferentes)
-    // - Sem CPF: agrupa só pelo nome exato (não mistura com outros)
     let key: string;
     if (cpf) {
-      if (cpfToKey.has(cpf)) {
-        key = cpfToKey.get(cpf)!;
-      } else {
-        key = `cpf:${cpf}`;
-        cpfToKey.set(cpf, key);
-      }
+      if (cpfToKey.has(cpf)) { key = cpfToKey.get(cpf)!; }
+      else { key = `cpf:${cpf}`; cpfToKey.set(cpf, key); }
     } else {
       key = `nome:${nome.toUpperCase()}`;
     }
 
     if (!clienteMap.has(key)) {
       clienteMap.set(key, {
-        nome,
-        cpf: v.cpf,
-        cnpj: v.cnpj,
-        email: v.email,
-        pessoa: v.pessoa,
-        bairro: v.bairro,
-        cidade: v.cidade,
-        uf: v.uf,
-        total_compras: 0,
-        total_gasto: 0,
-        ultima_compra: v.data,
-        ultimo_produto: v.produto,
-        cliente_desde: v.data,
-        is_lojista: isAtacado,
-        vendas: [],
+        nome, cpf: v.cpf, cnpj: v.cnpj, email: v.email, pessoa: v.pessoa,
+        bairro: v.bairro, cidade: v.cidade, uf: v.uf,
+        total_compras: 0, total_gasto: 0, ultima_compra: v.data, ultimo_produto: v.produto,
+        cliente_desde: v.data, is_lojista: isAtacado, vendas: [],
       });
     }
 
     const c = clienteMap.get(key)!;
     c.total_compras++;
     c.total_gasto += Number(v.preco_vendido || 0);
-    if (v.data > c.ultima_compra) {
-      c.ultima_compra = v.data;
-      c.ultimo_produto = v.produto;
-    }
+    if (v.data > c.ultima_compra) { c.ultima_compra = v.data; c.ultimo_produto = v.produto; }
     if (v.data < c.cliente_desde) c.cliente_desde = v.data;
     if (isAtacado) c.is_lojista = true;
-    // Sempre usar o nome mais completo
     if (nome.length > c.nome.length) c.nome = nome;
-    // Preencher dados pessoais mais recentes
     if (v.cpf && !c.cpf) c.cpf = v.cpf;
     if (v.cnpj && !c.cnpj) c.cnpj = v.cnpj;
     if (v.email && !c.email) c.email = v.email;
@@ -147,34 +194,11 @@ export async function GET(req: NextRequest) {
     if (v.pessoa && !c.pessoa) c.pessoa = v.pessoa;
 
     c.vendas.push({
-      id: v.id,
-      data: v.data,
-      produto: v.produto,
-      preco_vendido: Number(v.preco_vendido || 0),
-      forma: v.forma,
-      banco: v.banco,
-      serial_no: v.serial_no,
-      imei: v.imei,
+      id: v.id, data: v.data, produto: v.produto, preco_vendido: Number(v.preco_vendido || 0),
+      forma: v.forma, banco: v.banco, serial_no: v.serial_no, imei: v.imei,
     });
   }
 
-  // Tab "notas" — vendas com nota fiscal
-  if (tab === "notas") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const notasRaw = (rawVendas ?? []).filter((v: any) => v.nota_fiscal_url && v.status_pagamento !== "CANCELADO");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const notas = notasRaw.map((v: any) => ({
-      id: v.id,
-      data: v.data,
-      cliente: v.cliente,
-      produto: v.produto,
-      preco_vendido: Number(v.preco_vendido || 0),
-      nota_fiscal_url: v.nota_fiscal_url,
-    }));
-    return NextResponse.json({ notas, total: notas.length });
-  }
-
-  // Filtrar por tab
   let clientes = Array.from(clienteMap.values());
   if (tab === "lojistas") {
     clientes = clientes.filter((c) => c.is_lojista);
@@ -182,7 +206,6 @@ export async function GET(req: NextRequest) {
     clientes = clientes.filter((c) => !c.is_lojista);
   }
 
-  // Ordenar por total gasto desc
   clientes.sort((a, b) => b.total_gasto - a.total_gasto);
 
   return NextResponse.json({
