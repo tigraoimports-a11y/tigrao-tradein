@@ -520,6 +520,9 @@ export default function EstoquePage() {
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [filterDataCompra, setFilterDataCompra] = useState("");
+  // Filtros seminovos: linha de modelo e características
+  const [filterLinha, setFilterLinha] = useState("");
+  const [filterCaract, setFilterCaract] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [editingCusto, setEditingCusto] = useState<Record<string, string>>({});
@@ -693,7 +696,7 @@ export default function EstoquePage() {
     setEditCardTitleValue("");
   }
   function getCardTitle(modelo: string): string {
-    return cardTitleOverrides[modelo] || modelo;
+    return (cardTitleOverrides[modelo] || modelo).toUpperCase();
   }
 
   // Drag-and-drop para reordenar
@@ -1525,6 +1528,26 @@ export default function EstoquePage() {
       const s = search.toLowerCase();
       if (!p.produto.toLowerCase().includes(s) && !(p.cor?.toLowerCase().includes(s)) && !(p.imei?.toLowerCase().includes(s)) && !(p.serial_no?.toLowerCase().includes(s))) return false;
     }
+    // Filtro por linha de modelo (seminovos/pendências)
+    if (filterLinha && (tab === "seminovos" || tab === "pendencias")) {
+      if (!p.produto.toUpperCase().includes(filterLinha.toUpperCase())) return false;
+    }
+    // Filtro por características (seminovos/pendências)
+    if (filterCaract.length > 0 && (tab === "seminovos" || tab === "pendencias")) {
+      const obs = (p.observacao || "").toUpperCase();
+      for (const f of filterCaract) {
+        if (f === "COM_CAIXA" && !obs.includes("[COM_CAIXA]")) return false;
+        if (f === "SEM_CAIXA" && obs.includes("[COM_CAIXA]")) return false;
+        if (f === "COM_CABO" && !obs.includes("[COM_CABO]")) return false;
+        if (f === "COM_GARANTIA" && !p.garantia) return false;
+        if (f === "GRADE_A+" && !obs.includes("[GRADE_APLUS]")) return false;
+        if (f === "GRADE_A" && !obs.includes("[GRADE_A]")) return false;
+        if (f === "GRADE_AB" && !obs.includes("[GRADE_AB]")) return false;
+        if (f === "GRADE_B" && !obs.includes("[GRADE_B]")) return false;
+        if (f === "COM_FONTE" && !obs.includes("[COM_FONTE]")) return false;
+        if (f === "COM_PULSEIRA" && !obs.includes("[COM_PULSEIRA]")) return false;
+      }
+    }
     return true;
   });
 
@@ -1968,6 +1991,61 @@ export default function EstoquePage() {
               + Categoria
             </button>
           </>)}
+        </div>
+        {/* Filtros extras para seminovos/pendências */}
+        {(tab === "seminovos" || tab === "pendencias") && (
+          <div className={`flex flex-wrap items-center gap-2 px-4 pb-3`}>
+            {/* Filtro por linha de modelo */}
+            <select
+              value={filterLinha}
+              onChange={(e) => setFilterLinha(e.target.value)}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+            >
+              <option value="">Todas as linhas</option>
+              {(() => {
+                const list = tab === "seminovos" ? seminovos : pendencias;
+                const linhas = new Set<string>();
+                list.forEach(p => {
+                  const m = p.produto.match(/^(IPHONE\s+\d+[A-Z\s]*?|MACBOOK\s+\w+|IPAD\s+\w+|APPLE\s+WATCH\s+\S+|AIRPODS\s+\S+)/i);
+                  if (m) linhas.add(m[1].toUpperCase().trim());
+                });
+                return [...linhas].sort().map(l => <option key={l} value={l}>{l}</option>);
+              })()}
+            </select>
+            {/* Filtro por características */}
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${dm ? "text-[#86868B]" : "text-[#86868B]"} ml-1`}>Filtrar:</span>
+            {[
+              { key: "COM_CAIXA", label: "📦 Caixa" },
+              { key: "SEM_CAIXA", label: "📦✕ Sem caixa" },
+              { key: "COM_CABO", label: "🔌 Cabo" },
+              { key: "COM_GARANTIA", label: "🛡️ Garantia" },
+              { key: "GRADE_A+", label: "A+" },
+              { key: "GRADE_A", label: "A" },
+              { key: "GRADE_AB", label: "AB" },
+              { key: "GRADE_B", label: "B" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilterCaract(prev => prev.includes(key) ? prev.filter(f => f !== key) : [...prev, key])}
+                className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                  filterCaract.includes(key)
+                    ? "bg-[#E8740E] text-white border-[#E8740E]"
+                    : `${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {(filterLinha || filterCaract.length > 0) && (
+              <button
+                onClick={() => { setFilterLinha(""); setFilterCaract([]); }}
+                className="px-2 py-1 rounded-lg text-[11px] font-medium text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400/60 transition-colors"
+              >
+                ✕ Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
         </div>
       </div>
       )}
