@@ -4376,11 +4376,6 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
                       )}
-                      {/* Pulseira badge */}
-                      {(p.observacao?.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(p.observacao || "")) && (
-                        <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira</p>
-                        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">⌚ Com Pulseira</span></div>
-                      )}
                       {/* Apple Watch: tamanho + pulseira info */}
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho } = extractWatchBadges(p.produto);
@@ -4657,15 +4652,6 @@ export default function EstoquePage() {
                             <select value={hasFonte ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_FONTE", "Com carregador", hasFonte, e.target.value === "SIM")} className={selCls}>
                               <option value="NAO">Sem carregador</option>
                               <option value="SIM">🔋 Com carregador</option>
-                            </select>
-                          </div>
-                        )}
-                        {showPulseira && (
-                          <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Pulseira {saved("com_pulseira")}</p>
-                            <select value={hasPulseira ? "SIM" : "NAO"} onChange={(e) => toggleTag("COM_PULSEIRA", "Com pulseira", hasPulseira, e.target.value === "SIM")} className={selCls}>
-                              <option value="NAO">Sem pulseira</option>
-                              <option value="SIM">⌚ Com pulseira</option>
                             </select>
                           </div>
                         )}
