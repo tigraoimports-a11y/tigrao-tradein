@@ -537,6 +537,7 @@ export default function EstoquePage() {
   const [filterCat, setFilterCat] = useState("");
   const [search, setSearch] = useState("");
   const [filterDataCompra, setFilterDataCompra] = useState("");
+  const [acaminhoFilter, setAcaminhoFilter] = useState<"pendentes" | "recebidos" | "todos">("pendentes");
   // Filtros seminovos: linha de modelo e características
   const [filterLinha, setFilterLinha] = useState("");
   const [filterCaract, setFilterCaract] = useState<string[]>([]);
@@ -1632,10 +1633,15 @@ export default function EstoquePage() {
     return count;
   })();
 
+  const acaminhoList =
+    acaminhoFilter === "pendentes" ? aCaminho :
+    acaminhoFilter === "recebidos" ? pedidosRecebidos :
+    [...aCaminho, ...pedidosRecebidos];
+
   const currentList =
     tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
-    tab === "acaminho" ? aCaminho :
+    tab === "acaminho" ? acaminhoList :
     tab === "atacado" ? atacado :
     tab === "pendencias" ? pendencias :
     tab === "esgotados" ? esgotados :
@@ -2091,22 +2097,36 @@ export default function EstoquePage() {
                 {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
               </select>
             )}
-            {tab === "acaminho" && (() => {
-              // Datas únicas de pedido disponíveis
-              const datasDisponiveis = [...new Set(aCaminho.map(p => p.data_compra).filter(Boolean))].sort().reverse() as string[];
-              return (
-                <select
-                  value={filterDataCompra}
-                  onChange={(e) => setFilterDataCompra(e.target.value)}
-                  className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
-                >
-                  <option value="">Todos os pedidos</option>
-                  {datasDisponiveis.map(d => (
-                    <option key={d} value={d}>{d.split("-").reverse().join("/")}</option>
-                  ))}
-                </select>
-              );
-            })()}
+            {tab === "acaminho" && (<>
+              {/* Filtro: Pendentes / Recebidos / Todos */}
+              <div className={`flex rounded-lg overflow-hidden border text-[11px] font-semibold ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+                {([["pendentes", "Pendentes"], ["recebidos", "Recebidos"], ["todos", "Todos"]] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setAcaminhoFilter(val)}
+                    className={`px-3 py-1.5 transition-colors ${acaminhoFilter === val ? "bg-[#E8740E] text-white" : dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {/* Filtro por data de pedido */}
+              {(() => {
+                const datasDisponiveis = [...new Set(acaminhoList.map(p => p.data_compra).filter(Boolean))].sort().reverse() as string[];
+                return datasDisponiveis.length > 0 ? (
+                  <select
+                    value={filterDataCompra}
+                    onChange={(e) => setFilterDataCompra(e.target.value)}
+                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}
+                  >
+                    <option value="">Todos os pedidos</option>
+                    {datasDisponiveis.map(d => (
+                      <option key={d} value={d}>{d.split("-").reverse().join("/")}</option>
+                    ))}
+                  </select>
+                ) : null;
+              })()}
+            </>)}
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className={`px-3 py-1.5 rounded-lg border text-[11px] w-44 focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] placeholder:text-[#6E6E73]" : "bg-white border-[#E5E5EA]"}`} />
             <button onClick={() => setShowNewCat(!showNewCat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D]" : "border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E] hover:text-[#E8740E] transition-colors`}>
               + Categoria
@@ -4151,7 +4171,7 @@ export default function EstoquePage() {
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     const qnt = p.qnt || 1;
-                    const needsMultiple = isAdmin && !p.serial_no && qnt > 1;
+                    const needsMultiple = (isAdmin || isPendente) && !p.serial_no && qnt > 1;
                     const pencilIco = <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>;
                     const inpCls = `text-[13px] font-mono px-2 py-1.5 rounded-lg border w-full ${dm ? "bg-[#1C1C1E] border-[#0071E3] text-[#F5F5F7]" : "bg-white border-[#0071E3] text-[#1D1D1F]"} focus:outline-none`;
                     if (needsMultiple) {
