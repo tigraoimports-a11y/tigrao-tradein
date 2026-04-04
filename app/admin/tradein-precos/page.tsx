@@ -43,6 +43,8 @@ export default function TradeInPrecosPage() {
   // Adicionar variação inline
   const [addingVariacao, setAddingVariacao] = useState<string | null>(null);
   const [varArm, setVarArm] = useState("");
+  const [varRam, setVarRam] = useState("");
+  const [varSsd, setVarSsd] = useState("");
   const [varValor, setVarValor] = useState("");
 
   // Copiar variações
@@ -171,15 +173,19 @@ export default function TradeInPrecosPage() {
   }
 
   async function handleAddVariacao(modelo: string) {
-    if (!varArm || !varValor) return;
+    // MacBook: combinar RAM + SSD no formato "SSD/RAM" (ex: "512GB/16GB")
+    const isMac = deviceTab === "macbook";
+    const armFinal = isMac ? (varRam && varSsd ? `${varSsd}/${varRam}` : varArm) : varArm;
+    if (!armFinal || !varValor) return;
+    const varArmToSave = armFinal;
     setSaving("var");
     try {
       await fetch("/api/admin/usados", {
         method: "POST",
         headers: { ...apiHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "upsert_valor", modelo, armazenamento: varArm.trim(), valor_base: Number(varValor) }),
+        body: JSON.stringify({ action: "upsert_valor", modelo, armazenamento: varArmToSave.trim(), valor_base: Number(varValor) }),
       });
-      setVarArm(""); setVarValor(""); setAddingVariacao(null);
+      setVarArm(""); setVarRam(""); setVarSsd(""); setVarValor(""); setAddingVariacao(null);
       setMsg("Variacao adicionada!");
       setTimeout(() => setMsg(""), 2000);
       fetchData();
@@ -310,13 +316,21 @@ export default function TradeInPrecosPage() {
               </div>
             )}
             {addingVariacao === modelo && (
-              <div className={`px-4 py-2.5 flex items-center gap-2 ${dm ? "bg-[#1C1C1E] border-b border-[#3A3A3C]" : "bg-[#FFF8F0] border-b border-[#E8740E]/20"}`}>
-                <input value={varArm} onChange={e => setVarArm(e.target.value)} placeholder="Ex: 1TB/32GB" className={`${inputCls} w-36`} autoFocus
-                  onKeyDown={e => { if (e.key === "Enter" && varArm && varValor) { handleAddVariacao(modelo); } }} />
+              <div className={`px-4 py-2.5 flex items-center gap-2 flex-wrap ${dm ? "bg-[#1C1C1E] border-b border-[#3A3A3C]" : "bg-[#FFF8F0] border-b border-[#E8740E]/20"}`}>
+                {deviceTab === "macbook" ? (
+                  <>
+                    <input value={varRam} onChange={e => setVarRam(e.target.value)} placeholder="RAM (ex: 16GB)" className={`${inputCls} w-28`} autoFocus />
+                    <input value={varSsd} onChange={e => setVarSsd(e.target.value)} placeholder="SSD (ex: 512GB)" className={`${inputCls} w-28`}
+                      onKeyDown={e => { if (e.key === "Enter" && varRam && varSsd && varValor) handleAddVariacao(modelo); }} />
+                  </>
+                ) : (
+                  <input value={varArm} onChange={e => setVarArm(e.target.value)} placeholder="Ex: 256GB" className={`${inputCls} w-36`} autoFocus
+                    onKeyDown={e => { if (e.key === "Enter" && varArm && varValor) handleAddVariacao(modelo); }} />
+                )}
                 <span className={`text-sm ${textSecondary}`}>R$</span>
                 <input type="number" value={varValor} onChange={e => setVarValor(e.target.value)} placeholder="8500" className={`${inputCls} w-24`}
-                  onKeyDown={e => { if (e.key === "Enter" && varArm && varValor) { handleAddVariacao(modelo); } }} />
-                <button onClick={() => handleAddVariacao(modelo)} disabled={!varArm || !varValor || saving === "var"}
+                  onKeyDown={e => { if (e.key === "Enter" && varValor) handleAddVariacao(modelo); }} />
+                <button onClick={() => handleAddVariacao(modelo)} disabled={saving === "var" || (deviceTab === "macbook" ? (!varRam || !varSsd || !varValor) : (!varArm || !varValor))}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
                   {saving === "var" ? "..." : "Adicionar"}
                 </button>
@@ -330,9 +344,15 @@ export default function TradeInPrecosPage() {
                     className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border transition-colors ${item.ativo ? "bg-green-500 text-white border-green-500" : (dm ? "bg-[#3A3A3C] text-[#6E6E73] border-[#3A3A3C]" : "bg-[#E5E5EA] text-[#86868B] border-[#D2D2D7]")}`}>
                     {item.ativo ? "✓" : ""}
                   </button>
-                  {/* Armazenamento */}
-                  <span className={`text-sm font-medium w-32 ${item.ativo ? textPrimary : textSecondary} ${!item.ativo ? "line-through opacity-60" : ""}`}>
-                    {item.armazenamento}
+                  {/* Armazenamento — MacBook mostra RAM + SSD separados */}
+                  <span className={`text-sm font-medium w-36 ${item.ativo ? textPrimary : textSecondary} ${!item.ativo ? "line-through opacity-60" : ""}`}>
+                    {(() => {
+                      const parts = item.armazenamento.split("/");
+                      if (parts.length === 2 && deviceTab === "macbook") {
+                        return <><span className="block text-xs">{parts[1]} RAM</span><span className="block text-xs opacity-70">{parts[0]} SSD</span></>;
+                      }
+                      return item.armazenamento;
+                    })()}
                   </span>
                   {/* Valor */}
                   {editingId === item.id ? (

@@ -343,7 +343,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                         {items.map(({ raw, ssd, ram: r }) => (
                           <Btn key={raw} sel={storage === raw} onClick={() => { setStorage(raw); tq("storage"); }}
                             className="w-full text-center">
-                            {r ? `${r} RAM / ${ssd} SSD` : ssd}
+                            {r ? <><span className="block font-bold">{r} RAM</span><span className="block text-[12px] opacity-80">{ssd} SSD</span></> : ssd}
                           </Btn>
                         ))}
                       </div>
