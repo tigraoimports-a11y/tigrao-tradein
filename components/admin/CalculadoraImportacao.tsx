@@ -189,6 +189,7 @@ export default function CalculadoraImportacao() {
 
       {/* Results */}
       {result && (
+        <>
         <div className="rounded-2xl border border-[#E5E5EA] bg-white overflow-hidden">
           <div className="px-5 pt-5 pb-3">
             <div className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-4">
@@ -310,6 +311,7 @@ export default function CalculadoraImportacao() {
             );
           })()}
         </div>
+        </>
       )}
     </div>
   );
