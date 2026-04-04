@@ -143,13 +143,17 @@ export async function POST(req: NextRequest) {
   let estoqueId = body._estoque_id;
   delete body._estoque_id;
 
-  // Se tem estoque_id, copiar IMEI e Serial do estoque para a venda (se existirem)
+  // Se tem estoque_id, verificar se produto ainda está disponível e copiar IMEI/Serial
   let imeiFromEstoque: string | null = null;
   let serialFromEstoque: string | null = null;
-  if (estoqueId && (!body.imei || !body.serial_no)) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no").eq("id", estoqueId).single();
-    if (estoqueItem?.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
-    if (estoqueItem?.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
+  if (estoqueId) {
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status").eq("id", estoqueId).single();
+    if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
+    if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
+      return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
+    }
+    if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
+    if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
   }
 
   // Garantir nome do cliente em caixa alta
