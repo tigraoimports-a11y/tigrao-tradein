@@ -4655,44 +4655,6 @@ export default function EstoquePage() {
                             </select>
                           </div>
                         )}
-                        {showPulseira && (
-                          <div>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira {saved("pulseira_tam")}</p>
-                            <select value={p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
-                              const val = e.target.value;
-                              const obs = getLatestObs();
-                              const cleaned = obs.replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "").trim();
-                              const finalObs = val ? `${cleaned} [PULSEIRA_TAM:${val}]`.trim() : (cleaned || null);
-                              await apiPatch(p.id, { observacao: finalObs });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                              setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
-                              showSaved("pulseira_tam");
-                            }} className={selCls}>
-                              <option value="">— Selecionar —</option>
-                              <option value="S/M">S/M</option>
-                              <option value="M/L">M/L</option>
-                              <option value="One Size">One Size</option>
-                            </select>
-                          </div>
-                        )}
-                        {showPulseira && (
-                          <div className="col-span-2">
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira {saved("band_model")}</p>
-                            <select value={p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
-                              const val = e.target.value;
-                              const obs = getLatestObs();
-                              const cleaned = obs.replace(/\[BAND:[^\]]+\]/g, "").trim();
-                              const finalObs = val ? `${cleaned} [BAND:${val}]`.trim() : (cleaned || null);
-                              await apiPatch(p.id, { observacao: finalObs });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                              setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
-                              showSaved("band_model");
-                            }} className={selCls}>
-                              <option value="">— Selecionar —</option>
-                              {WATCH_BAND_MODELS.map(b => <option key={b} value={b}>{b}</option>)}
-                            </select>
-                          </div>
-                        )}
                         {showCiclos && (
                           <div>
                             <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Ciclos de Bateria {saved("ciclos")}</p>
@@ -4722,6 +4684,52 @@ export default function EstoquePage() {
                   })()}
                 </div>
               </div>
+              {/* Apple Watch: Tamanho e Modelo de Pulseira — sempre visível */}
+              {p.categoria === "APPLE_WATCH" && (canEdit || isAdmin) && (() => {
+                const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                const getLatestObs = () => { let latest = p.observacao || ""; setEstoque(prev => { const found = prev.find(x => x.id === p.id); if (found) latest = found.observacao || ""; return prev; }); return latest; };
+                return (
+                  <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                    <p className={`text-xs font-bold ${mP} mb-3`}>Pulseira</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira {saved("pulseira_tam")}</p>
+                        <select value={p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
+                          const val = e.target.value;
+                          const obs = getLatestObs();
+                          const cleaned = obs.replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "").trim();
+                          const finalObs = val ? `${cleaned} [PULSEIRA_TAM:${val}]`.trim() : (cleaned || null);
+                          await apiPatch(p.id, { observacao: finalObs });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                          setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
+                          showSaved("pulseira_tam");
+                        }} className={selCls}>
+                          <option value="">— Selecionar —</option>
+                          <option value="S/M">S/M</option>
+                          <option value="M/L">M/L</option>
+                          <option value="One Size">One Size</option>
+                        </select>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira {saved("band_model")}</p>
+                        <select value={p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1] || ""} onChange={async (e) => {
+                          const val = e.target.value;
+                          const obs = getLatestObs();
+                          const cleaned = obs.replace(/\[BAND:[^\]]+\]/g, "").trim();
+                          const finalObs = val ? `${cleaned} [BAND:${val}]`.trim() : (cleaned || null);
+                          await apiPatch(p.id, { observacao: finalObs });
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
+                          setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
+                          showSaved("band_model");
+                        }} className={selCls}>
+                          <option value="">— Selecionar —</option>
+                          {WATCH_BAND_MODELS.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
