@@ -270,56 +270,27 @@ export default function ProdutoSpecFields({
 
   const hasCatalogModel = !!row.catalogo_modelo_id;
 
-  // Spec options: catalog-filtered when model selected, fallback otherwise
-  // Apple Watch usa cores_aw, demais categorias usam cores
+  // Spec options: usa configs do catálogo se existem, senão fallback hardcoded
+  // Isso garante que mesmo se o modelo foi cadastrado no catálogo sem configurar
+  // cores/ram/ssd, o dropdown ainda mostra as opções do fallback
+  const cfgOr = (key: string, fallback?: string[]): string[] | undefined =>
+    (modeloConfigs[key]?.length ? modeloConfigs[key] : fallback);
+
   const coresKey = row.categoria === "APPLE_WATCH" ? "cores_aw" : "cores";
-  const coresOptions: string[] | undefined = hasCatalogModel && modeloConfigs[coresKey]?.length
-    ? modeloConfigs[coresKey]
-    : (row.categoria === "IPHONES" ? getIphoneCores(row.spec.ip_modelo) : CORES_POR_CATEGORIA[row.categoria]);
+  const coresFallback = row.categoria === "IPHONES" ? getIphoneCores(row.spec.ip_modelo) : CORES_POR_CATEGORIA[row.categoria];
+  const coresOptions: string[] | undefined = cfgOr(coresKey, coresFallback);
 
-  const capacidadeOptions = hasCatalogModel && modeloConfigs.capacidade?.length
-    ? modeloConfigs.capacidade
-    : getIphoneStorages(row.spec.ip_modelo);
-
-  const telasOptions = hasCatalogModel && modeloConfigs.telas?.length
-    ? modeloConfigs.telas
-    : ['8.3"', '10.9"', '11"', '12.9"', '13"', '14"', '15"', '16"'];
-
-  const conectividadeOptions = hasCatalogModel && modeloConfigs.conectividade?.length
-    ? modeloConfigs.conectividade
-    : ["Wi-Fi", "Wi-Fi + Cel"];
-
-  const origemOptions = hasCatalogModel && modeloConfigs.origem?.length
-    ? modeloConfigs.origem
-    : IPHONE_ORIGENS;
-
-  const ramOptions = hasCatalogModel && modeloConfigs.ram?.length
-    ? modeloConfigs.ram
-    : MACBOOK_RAMS;
-
-  const ssdOptions = hasCatalogModel && modeloConfigs.ssd?.length
-    ? modeloConfigs.ssd
-    : MACBOOK_STORAGES;
-
-  const macMiniRamOptions = hasCatalogModel && modeloConfigs.ram?.length
-    ? modeloConfigs.ram
-    : MAC_MINI_RAMS;
-
-  const macMiniSsdOptions = hasCatalogModel && modeloConfigs.ssd?.length
-    ? modeloConfigs.ssd
-    : MAC_MINI_STORAGES;
-
-  const awTamanhoOptions = hasCatalogModel && modeloConfigs.tamanho_aw?.length
-    ? modeloConfigs.tamanho_aw
-    : WATCH_TAMANHOS_FULL;
-
-  const awConnOptions = hasCatalogModel && modeloConfigs.conectividade_aw?.length
-    ? modeloConfigs.conectividade_aw
-    : ["GPS", "GPS + CEL"];
-
-  const awBandOptions = hasCatalogModel && modeloConfigs.pulseiras?.length
-    ? modeloConfigs.pulseiras
-    : WATCH_BAND_MODELS;
+  const capacidadeOptions = cfgOr("capacidade", getIphoneStorages(row.spec.ip_modelo));
+  const telasOptions = cfgOr("telas", ['8.3"', '10.9"', '11"', '12.9"', '13"', '14"', '15"', '16"']);
+  const conectividadeOptions = cfgOr("conectividade", ["Wi-Fi", "Wi-Fi + Cel"]);
+  const origemOptions = cfgOr("origem", IPHONE_ORIGENS);
+  const ramOptions = cfgOr("ram", MACBOOK_RAMS);
+  const ssdOptionsFinal = cfgOr("ssd", MACBOOK_STORAGES);
+  const macMiniRamOptions = cfgOr("ram", MAC_MINI_RAMS);
+  const macMiniSsdOptions = cfgOr("ssd", MAC_MINI_STORAGES);
+  const awTamanhoOptions = cfgOr("tamanho_aw", WATCH_TAMANHOS_FULL);
+  const awConnOptions = cfgOr("conectividade_aw", ["GPS", "GPS + CEL"]);
+  const awBandOptions = cfgOr("pulseiras", WATCH_BAND_MODELS);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
 
@@ -595,14 +566,14 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.ip_storage} onChange={(e) => setSpec("ip_storage", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {capacidadeOptions.map((s) => <option key={s}>{s}</option>)}
+              {capacidadeOptions?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Origem</p>
             <select value={row.spec.ip_origem} onChange={(e) => setSpec("ip_origem", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {origemOptions.map((o) => <option key={o}>{o}</option>)}
+              {origemOptions?.map((o) => <option key={o}>{o}</option>)}
             </select>
           </div>
         </div>
@@ -633,21 +604,21 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Tela</p>
             <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {telasOptions.map((t) => <option key={t}>{t}</option>)}
+              {telasOptions?.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>RAM</p>
             <select value={row.spec.mb_ram} onChange={(e) => setSpec("mb_ram", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {ramOptions.map((r) => <option key={r}>{r}</option>)}
+              {ramOptions?.map((r) => <option key={r}>{r}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.mb_storage} onChange={(e) => setSpec("mb_storage", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {ssdOptions.map((s) => <option key={s}>{s}</option>)}
+              {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
         </div>
@@ -659,13 +630,13 @@ export default function ProdutoSpecFields({
           <div>
             <p className={labelCls}>RAM</p>
             <select value={row.spec.mm_ram} onChange={(e) => setSpec("mm_ram", e.target.value)} className={inputCls}>
-              {macMiniRamOptions.map((r) => <option key={r}>{r}</option>)}
+              {macMiniRamOptions?.map((r) => <option key={r}>{r}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.mm_storage} onChange={(e) => setSpec("mm_storage", e.target.value)} className={inputCls}>
-              {macMiniSsdOptions.map((s) => <option key={s}>{s}</option>)}
+              {macMiniSsdOptions?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
         </div>
@@ -678,21 +649,21 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Tela</p>
             <select value={row.spec.ipad_tela} onChange={(e) => setSpec("ipad_tela", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {telasOptions.map((t) => <option key={t}>{t}</option>)}
+              {telasOptions?.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.ipad_storage} onChange={(e) => setSpec("ipad_storage", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {capacidadeOptions.map((s) => <option key={s}>{s}</option>)}
+              {capacidadeOptions?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Conectividade</p>
             <select value={row.spec.ipad_conn} onChange={(e) => setSpec("ipad_conn", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {conectividadeOptions.map((c) => (
+              {conectividadeOptions?.map((c) => (
                 <option key={c} value={c.includes("+") ? "WIFI+CELL" : "WIFI"}>
                   {c.includes("+") ? "Wi-Fi + Cellular" : "Wi-Fi"}
                 </option>
@@ -709,14 +680,14 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Tamanho</p>
             <select value={row.spec.aw_tamanho} onChange={(e) => setSpec("aw_tamanho", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {awTamanhoOptions.map((t) => <option key={t}>{t}</option>)}
+              {awTamanhoOptions?.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <p className={labelCls}>Conectividade</p>
             <select value={row.spec.aw_conn} onChange={(e) => setSpec("aw_conn", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {awConnOptions.map((c) => (
+              {awConnOptions?.map((c) => (
                 <option key={c} value={c.includes("+") ? "GPS+CELL" : "GPS"}>
                   {c}
                 </option>
@@ -734,7 +705,7 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Modelo Pulseira</p>
             <select value={row.spec.aw_band} onChange={(e) => setSpec("aw_band", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
-              {awBandOptions.map((b) => <option key={b}>{b}</option>)}
+              {awBandOptions?.map((b) => <option key={b}>{b}</option>)}
             </select>
           </div>
         </div>
