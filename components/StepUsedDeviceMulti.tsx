@@ -499,19 +499,13 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
                           {isSelected ? "\u2713" : ""}
                         </span>
                         <span className="flex-1">{opt.label}</span>
-                        <span className="text-[12px] opacity-70">R$ {opt.discount}</span>
+                        {/* Desconto oculto do cliente */}
                       </button>
                     );
                   });
                 })()}
               </div>
-              {wearMarks.length > 0 && (
-                <div className="mt-3 rounded-xl px-4 py-2 text-center" style={{ backgroundColor: "var(--ti-error-light)", border: "1px solid var(--ti-error)" }}>
-                  <p className="text-[13px] font-semibold" style={{ color: "var(--ti-error)" }}>
-                    Desconto total: R$ {wearMarksDiscount}
-                  </p>
-                </div>
-              )}
+              {/* Desconto total oculto do cliente */}
             </Section>
           )}
 
