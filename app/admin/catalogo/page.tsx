@@ -1153,30 +1153,34 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
 
       {/* Category-Spec assignments grid */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-[#F5F5F7]">
-          <h2 className="font-semibold text-[#1D1D1F]">Atribuições por Categoria</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">
-            Quais specs cada categoria utiliza (leitura). Para modificar, edite a tabela{" "}
-            <code className="font-mono bg-[#F5F5F7] px-1 rounded">catalogo_categoria_specs</code> no Supabase.
-          </p>
+        <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-[#1D1D1F]">Atribuições por Categoria</h2>
+            <p className="text-xs text-[#86868B] mt-0.5">Clique para alternar: sem uso → opcional → obrigatório → sem uso</p>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-[#86868B]">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#E8740E]"></span>Obrigatório</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#34C759]"></span>Opcional</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#E8E8ED]"></span>Sem uso</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-[#F5F5F7]">
-                <th className="text-left px-4 py-2 font-semibold text-[#86868B]">Categoria</th>
+              <tr>
+                <th className="sticky left-0 z-10 bg-[#F9F9FB] text-left px-4 py-3 font-semibold text-[#1D1D1F] text-sm min-w-[140px] border-b border-r border-[#E8E8ED]">Categoria</th>
                 {data.specTipos.map((t) => (
-                  <th key={t.id} className="text-center px-2 py-2 font-semibold text-[#86868B] whitespace-nowrap">
+                  <th key={t.id} className="text-center px-3 py-3 font-medium text-[#6E6E73] whitespace-nowrap border-b border-[#E8E8ED] min-w-[80px]">
                     {t.nome}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {data.categorias.map((cat) => (
-                <tr key={cat.id} className="border-t border-[#F5F5F7] hover:bg-[#FAFAFA]">
-                  <td className="px-4 py-2 font-medium text-[#1D1D1F]">
-                    {cat.emoji} {cat.nome}
+              {data.categorias.map((cat, catIdx) => (
+                <tr key={cat.id} className={catIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}>
+                  <td className={`sticky left-0 z-10 px-4 py-3 font-semibold text-[#1D1D1F] text-sm border-r border-[#E8E8ED] ${catIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}>
+                    <span className="mr-1.5">{cat.emoji}</span>{cat.nome}
                   </td>
                   {data.specTipos.map((tipo) => {
                     const assigned = data.categoriaSpecs.some(
@@ -1188,27 +1192,36 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                         cs.tipo_chave === tipo.chave &&
                         cs.obrigatoria
                     );
+                    const isLoading = saving === `catspec-${cat.key}-${tipo.chave}`;
                     return (
-                      <td key={tipo.id} className="text-center px-2 py-2">
+                      <td key={tipo.id} className="text-center px-3 py-3">
                         <button
                           onClick={() => toggleCatSpec(cat.key, tipo.chave, assigned, obrigatoria)}
-                          disabled={saving === `catspec-${cat.key}-${tipo.chave}`}
-                          className={`w-6 h-6 rounded text-xs font-bold transition-colors ${
+                          disabled={isLoading}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto transition-all duration-150 ${
+                            isLoading ? "opacity-40 animate-pulse" :
                             assigned
                               ? obrigatoria
-                                ? "bg-[#E8740E] text-white"
-                                : "bg-green-100 text-green-700 border border-green-300"
-                              : "bg-[#F5F5F7] text-[#C7C7CC]"
+                                ? "bg-[#E8740E] shadow-sm shadow-[#E8740E]/30 hover:shadow-md hover:shadow-[#E8740E]/40"
+                                : "bg-[#34C759] shadow-sm shadow-[#34C759]/30 hover:shadow-md hover:shadow-[#34C759]/40"
+                              : "bg-[#E8E8ED] hover:bg-[#D1D1D6]"
                           }`}
                           title={
                             assigned
                               ? obrigatoria
-                                ? "Obrigatória → clique para remover"
-                                : "Opcional → clique para obrigatória"
-                              : "Não atribuída → clique para adicionar"
+                                ? `${tipo.nome}: Obrigatório → remover`
+                                : `${tipo.nome}: Opcional → obrigatório`
+                              : `${tipo.nome}: Adicionar como opcional`
                           }
                         >
-                          {assigned ? (obrigatoria ? "●" : "○") : ""}
+                          {assigned && (
+                            <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              {obrigatoria
+                                ? <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                : <circle cx="10" cy="10" r="3" />
+                              }
+                            </svg>
+                          )}
                         </button>
                       </td>
                     );
@@ -1218,15 +1231,8 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
             </tbody>
           </table>
           {data.categorias.length === 0 && (
-            <div className="text-center py-6 text-[#86868B] text-sm">
-              Sem dados. Execute a migration SQL no Supabase.
-            </div>
+            <div className="text-center py-8 text-[#86868B] text-sm">Nenhuma categoria cadastrada.</div>
           )}
-        </div>
-        <div className="px-4 py-2 bg-[#F5F5F7] text-xs text-[#86868B] flex gap-4">
-          <span><span className="inline-block w-4 h-4 rounded bg-[#E8740E] mr-1"></span>Obrigatória</span>
-          <span><span className="inline-block w-4 h-4 rounded bg-green-100 border border-green-300 mr-1"></span>Opcional</span>
-          <span><span className="inline-block w-4 h-4 rounded bg-[#F5F5F7] border border-[#E8E8ED] mr-1"></span>Não atribuída</span>
         </div>
       </div>
     </div>
