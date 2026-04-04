@@ -1209,12 +1209,14 @@ export default function EstoquePage() {
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
           var data=canvas.getAttribute('data-qr');
-          var qr=qrcode(0,'M');qr.addData(data);qr.make();
-          var size=400;canvas.width=size;canvas.height=size;
-          var ctx=canvas.getContext('2d');var cells=qr.getModuleCount();var cs=size/cells;
+          var qr=qrcode(0,'L');qr.addData(data);qr.make();
+          var size=500;canvas.width=size;canvas.height=size;
+          var ctx=canvas.getContext('2d');
+          var cells=qr.getModuleCount();
+          var qz=4;var totalCells=cells+qz*2;var cs=size/totalCells;var offset=qz*cs;
           ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
           for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
-            if(qr.isDark(r,c))ctx.fillRect(c*cs,r*cs,cs+.5,cs+.5);
+            if(qr.isDark(r,c))ctx.fillRect(Math.floor(offset+c*cs),Math.floor(offset+r*cs),Math.ceil(cs),Math.ceil(cs));
         });
         window.onload=function(){setTimeout(function(){window.print()},600)};
       <\/script></body></html>`);
