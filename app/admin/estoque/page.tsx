@@ -1194,9 +1194,9 @@ export default function EstoquePage() {
         .label{
           width:29mm;
           overflow:hidden;display:block;
-          break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;
+          break-after:page;break-inside:avoid;
         }
-        .label:last-child{break-after:auto;page-break-after:auto}
+        .label:last-child{break-after:auto}
         canvas{display:block;width:25mm;height:25mm;margin:0 auto}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
         .instrucao b{font-size:12px}
