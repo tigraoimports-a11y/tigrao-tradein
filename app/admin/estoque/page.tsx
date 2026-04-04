@@ -2838,7 +2838,7 @@ export default function EstoquePage() {
                           <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-[#FFF5EB] border border-[#E8740E]/30"}`}>
                             <span className={`text-xs font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{selectedACaminho.size} selecionado{selectedACaminho.size > 1 ? "s" : ""}</span>
                             <button onClick={() => {
-                              const itens = pendentes.filter(p => selectedACaminho.has(p.id));
+                              const itens = aCaminho.filter(p => selectedACaminho.has(p.id));
                               if (itens.length === 0) return;
                               handlePrintEtiquetaDirect(itens);
                             }} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️ Imprimir Etiquetas</button>
