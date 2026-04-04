@@ -2163,7 +2163,7 @@ export default function EstoquePage() {
         const catOrder = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
 
         // Agrupar novos por modelo_base+cor → {totalQnt, min, jaCaminho, corDisplay}
-        type RepoGroup = { totalQnt: number; min: number; corDisplay: string; jaCaminho: boolean; falta: number };
+        type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
         for (const p of novos) {
@@ -2172,12 +2172,22 @@ export default function EstoquePage() {
           const base = extractBase(nome);
           const cor = extractCor(nome, p.cor);
           const corKey = (cor || "—").toUpperCase();
-          const corDisplay = cor ? (traduzirCor(cor) || cor) : "—";
+          // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
+          const corUpper = (cor || "").toUpperCase().trim();
+          const ptFromEN = COR_PT[corUpper]; // se cor é EN → pega PT
+          const enFromPT = PT_TO_EN[corUpper]; // se cor é PT → pega EN
+          let corEN = cor || "—";
+          let corPT = "";
+          if (ptFromEN) { corEN = cor!; corPT = ptFromEN; }
+          else if (enFromPT) { corEN = enFromPT; corPT = cor!; }
+          const corDisplay = corPT && corPT.toLowerCase() !== corEN.toLowerCase()
+            ? `${corEN.toUpperCase()} (${corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase()})`
+            : (cor || "—");
 
           if (!byCatModel[cat]) byCatModel[cat] = {};
           if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
 
-          const existing = byCatModel[cat][base].find(c => (c.corDisplay || "—").toUpperCase() === corKey || traduzirCor(c.corDisplay).toUpperCase() === corKey);
+          const existing = byCatModel[cat][base].find(c => c.corEN.toUpperCase() === corEN.toUpperCase() || (c.corDisplay || "—").toUpperCase() === corKey);
           if (existing) {
             existing.totalQnt += p.qnt;
             if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) existing.min = p.estoque_minimo;
@@ -2185,7 +2195,7 @@ export default function EstoquePage() {
             byCatModel[cat][base].push({
               totalQnt: p.qnt,
               min: (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) ? p.estoque_minimo : 0,
-              corDisplay,
+              corEN, corPT, corDisplay,
               jaCaminho: produtosACaminho.has(p.produto.toUpperCase()),
               falta: 0,
             });
@@ -2282,7 +2292,7 @@ export default function EstoquePage() {
                               }`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
-                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corDisplay}</span>
+                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1 font-normal opacity-60 text-[11px]`}>({c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()})</span>}</span>
                                   {c.jaCaminho && (
                                     <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
                                   )}
