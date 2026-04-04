@@ -568,6 +568,8 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  // Configs do catálogo para o modelo do produto no detalhe (cores por modelo específico)
+  const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
   const [savedField, setSavedField] = useState<string | null>(null);
   const showSaved = (field: string) => { setSavedField(field); setTimeout(() => setSavedField(null), 1800); };
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
@@ -884,7 +886,7 @@ export default function EstoquePage() {
   }
 
   // ── Catálogo dinâmico de modelos ──────────────────────────────────────────
-  const [catalogoModelos, setCatalogoModelos] = useState<{categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
+  const [catalogoModelos, setCatalogoModelos] = useState<{id: string; categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
   useEffect(() => {
     if (!password) return;
     fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } })
@@ -896,6 +898,37 @@ export default function EstoquePage() {
     const db = catalogoModelos.filter(m => m.categoria_key === catKey && m.ativo !== false).sort((a, b) => a.ordem - b.ordem).map(m => m.nome);
     return db.length > 0 ? db : fallback;
   }
+
+  // Fetch configs do catálogo quando o modal de detalhe abre (para cores por modelo específico)
+  useEffect(() => {
+    if (!detailProduct || !password || !catalogoModelos.length) { setDetailModelConfigs({}); return; }
+    const CAT_CATALOG: Record<string, string[]> = {
+      IPHONES: ["IPHONES"], MACBOOK: ["MACBOOK_AIR", "MACBOOK_PRO", "MACBOOK_NEO"],
+      MAC_MINI: ["MAC_MINI"], IPADS: ["IPADS"], APPLE_WATCH: ["APPLE_WATCH"],
+      AIRPODS: ["AIRPODS"], ACESSORIOS: ["ACESSORIOS"],
+    };
+    const keys = CAT_CATALOG[detailProduct.categoria] || [];
+    const catModelos = catalogoModelos.filter(m => keys.includes(m.categoria_key) && m.ativo !== false);
+    const prodUpper = detailProduct.produto.toUpperCase();
+    const match = catModelos
+      .map(m => ({ m, nome: m.nome.toUpperCase() }))
+      .filter(({ nome }) => prodUpper.includes(nome))
+      .sort((a, b) => b.nome.length - a.nome.length)[0];
+    if (!match) { setDetailModelConfigs({}); return; }
+    fetch(`/api/admin/catalogo?modelo_id=${match.m.id}`, { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.configs) return;
+        const grouped: Record<string, string[]> = {};
+        d.configs.forEach((c: { tipo_chave: string; valor: string }) => {
+          if (!grouped[c.tipo_chave]) grouped[c.tipo_chave] = [];
+          grouped[c.tipo_chave].push(c.valor);
+        });
+        setDetailModelConfigs(grouped);
+      })
+      .catch(() => setDetailModelConfigs({}));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailProduct?.id, detailProduct?.categoria, catalogoModelos.length, password]);
 
   const [form, setForm] = useState({
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
@@ -4419,9 +4452,13 @@ export default function EstoquePage() {
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cor {saved("cor")}</p>
                     {(canEdit || isAdmin) ? (() => {
-                      const coresCat = p.categoria === "IPHONES"
-                        ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
-                        : CORES_POR_CATEGORIA[p.categoria || ""] || [];
+                      // Cores: prioriza configs do catálogo por modelo, senão fallback genérico
+                      const coresKey = p.categoria === "APPLE_WATCH" ? "cores_aw" : "cores";
+                      const catalogCores = detailModelConfigs[coresKey];
+                      const coresCat = catalogCores?.length ? catalogCores
+                        : p.categoria === "IPHONES"
+                          ? getIphoneCores(p.produto?.match(/IPHONE\s+(\d+[A-Z\s]*)/i)?.[1]?.trim().toUpperCase() || "")
+                          : CORES_POR_CATEGORIA[p.categoria || ""] || [];
                       return coresCat.length > 0 ? (
                         <select
                           value={p.cor || ""}
