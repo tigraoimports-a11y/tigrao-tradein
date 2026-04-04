@@ -157,10 +157,24 @@ export async function POST(req: NextRequest) {
         "LL (EUA)- E-sim", "N (UK)- E-sim",
       ];
       const IPHONE_ORIGENS_EXTENDED = [...IPHONE_ORIGENS_SELECTED, "ZP (HK/MO)- E-sim"];
+      const IPHONE_ORIGENS_WITH_AA = ["AA (EAU)- E-sim", ...IPHONE_ORIGENS_SELECTED];
 
       type ModelConfig = Record<string, Record<string, string[]>>;
       const MODEL_CONFIGS: ModelConfig = {
-        // ── iPhones ──
+        // ── iPhones (11-14 Pro) ──
+        "iPhone 11": { capacidade: ["64GB","128GB","256GB"], cores: ["Black","Green","Purple","Red","White","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 11 Pro": { capacidade: ["64GB","256GB","512GB"], cores: ["Gold","Midnight Green","Silver","Space Gray"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 11 Pro Max": { capacidade: ["64GB","256GB","512GB"], cores: ["Gold","Midnight Green","Silver","Space Gray"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 12": { capacidade: ["64GB","128GB","256GB"], cores: ["Black","Blue","Green","Purple","Red","White"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 12 Pro": { capacidade: ["128GB","256GB","512GB"], cores: ["Gold","Graphite","Pacific Blue","Silver"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 12 Pro Max": { capacidade: ["128GB","256GB","512GB"], cores: ["Gold","Graphite","Pacific Blue","Silver"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 13": { capacidade: ["128GB","256GB","512GB"], cores: ["Blue","Green","Midnight","Pink","Red","Starlight"], origem: IPHONE_ORIGENS_WITH_AA },
+        "iPhone 13 Pro": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Alpine Green","Gold","Graphite","Sierra Blue","Silver"], origem: IPHONE_ORIGENS_WITH_AA },
+        "iPhone 13 Pro Max": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Alpine Green","Gold","Graphite","Sierra Blue","Silver"], origem: IPHONE_ORIGENS_WITH_AA },
+        "iPhone 14": { capacidade: ["128GB","256GB","512GB"], cores: ["Blue","Midnight","Purple","Red","Starlight","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 14 Plus": { capacidade: ["128GB","256GB","512GB"], cores: ["Blue","Midnight","Purple","Red","Starlight","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
+        "iPhone 14 Pro": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Deep Purple","Gold","Silver","Space Black"], origem: IPHONE_ORIGENS_SELECTED },
+        // ── iPhones (14 Pro Max - 17 Pro Max) ──
         "iPhone 14 Pro Max": { capacidade: ["128GB","256GB","512GB","1TB"], cores: ["Deep Purple","Gold","Silver","Space Black"], origem: IPHONE_ORIGENS_EXTENDED },
         "iPhone 15": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Blue","Green","Pink","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
         "iPhone 15 Plus": { capacidade: ["128GB","256GB","512GB"], cores: ["Black","Blue","Green","Pink","Yellow"], origem: IPHONE_ORIGENS_SELECTED },
