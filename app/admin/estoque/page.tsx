@@ -1190,14 +1190,27 @@ export default function EstoquePage() {
       <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
       <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        html,body{margin:0;padding:0}
+        html,body{margin:0;padding:0;width:62mm}
         body{font-family:Arial,Helvetica,sans-serif}
-        .label{width:62mm;height:29mm;overflow:hidden}
-        table{border-collapse:collapse;table-layout:fixed}
+        .label{width:62mm;height:29mm;overflow:hidden;display:block}
+        table{border-collapse:collapse;table-layout:fixed;width:100%;height:100%}
         canvas{display:block;width:20mm;height:20mm;margin:0 auto}
-        @page{size:62mm 29mm;margin:0}
-        @media print{html,body{width:62mm;margin:0;padding:0}}
+        @page{size:62mm 29mm;margin:0 !important}
+        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-family:Arial,sans-serif;font-size:11px;border-radius:4px;color:#333}
+        .instrucao strong{display:block;font-size:13px;margin-bottom:4px}
+        @media print{
+          html,body{width:62mm;margin:0;padding:0}
+          .instrucao{display:none}
+          .label{page-break-after:always;page-break-inside:avoid}
+          .label:last-child{page-break-after:auto}
+        }
       </style></head><body>
+      <div class="instrucao">
+        <strong>⚠️ Configure o papel antes de imprimir:</strong>
+        1. Em <b>Tamanho do Papel</b>, selecione <b>62 mm × 29 mm</b> (ou DK-11209 no driver Brother)<br>
+        2. Em <b>Orientação</b>, use <b>Horizontal</b><br>
+        3. Desmarque "Imprimir cabeçalhos e rodapés"
+      </div>
       ${labelsHtml}
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
@@ -1209,7 +1222,7 @@ export default function EstoquePage() {
           for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
             if(qr.isDark(r,c))ctx.fillRect(c*cs,r*cs,cs+.5,cs+.5);
         });
-        window.onload=function(){setTimeout(function(){window.print()},300)};
+        window.onload=function(){setTimeout(function(){window.print()},600)};
       <\/script></body></html>`);
     win.document.close();
   };
