@@ -601,6 +601,8 @@ export default function EstoquePage() {
 
   // Seleção em lote na aba A Caminho
   const [selectedACaminho, setSelectedACaminho] = useState<Set<string>>(new Set());
+  // Grupos expandidos na aba A Caminho (key = "date::baseModel")
+  const [expandedACaminhoGroups, setExpandedACaminhoGroups] = useState<Set<string>>(new Set());
 
   const handleImeiSearch = async () => {
     if (!imeiSearch.trim()) return;
@@ -1278,6 +1280,26 @@ export default function EstoquePage() {
 
     setEtiquetaModal(null);
     fetchEstoque();
+  };
+
+  /** Retorna o modelo base de um produto sem a cor (ex: "IPHONE 17 256GB") */
+  const getBaseModelACaminho = (produto: string): string => {
+    const COLOR_WORDS = new Set([
+      "BLACK","WHITE","RED","BLUE","GREEN","YELLOW","PINK","PURPLE","GOLD","SILVER",
+      "NATURAL","TITANIUM","COSMIC","LAVENDER","SAGE","TEAL","ULTRAMARINE","MIDNIGHT",
+      "STARLIGHT","ROSE","DESERT","DEEP","DARK","ORANGE","GRAY","GREY","PRETO","BRANCO",
+      "AZUL","ROSA","PRATA","VERDE","VERMELHO","AMARELO","ROXO","CINZA","DOURADO",
+    ]);
+    const words = produto.split(/\s+/);
+    const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
+    if (storageIdx === -1) return produto;
+    const baseParts = words.slice(0, storageIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
+    // Incluir sufixo de conectividade (WI-FI, CELLULAR) que aparece logo após o storage
+    const connectWords = new Set(["WI-FI","CELLULAR","5G","4G","LTE"]);
+    if (storageIdx + 1 < words.length && connectWords.has(words[storageIdx + 1].toUpperCase())) {
+      baseParts.push(words[storageIdx + 1]);
+    }
+    return baseParts.join(" ");
   };
 
   /** Extrai a condição (NOVO/NAO_ATIVADO/SEMINOVO) do campo observacao de um produto A_CAMINHO */
@@ -2828,114 +2850,100 @@ export default function EstoquePage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {items.filter(p => p.tipo === "A_CAMINHO").map(p => {
-                              const isRecebido = false;
-                              return (
-                                <tr key={p.id}
-                                  className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} last:border-0 cursor-pointer transition-colors ${
-                                    selectedACaminho.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") :
-                                    isRecebido
-                                      ? (dm ? "hover:bg-green-900/10" : "hover:bg-green-50")
-                                      : (dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]")
-                                  }`}>
-                                  <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                    {!isRecebido && <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => { setSelectedACaminho(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }} className="accent-[#E8740E]" />}
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-sm font-semibold ${isRecebido ? (dm ? "text-[#98989D]" : "text-[#86868B]") : textPrimary}`} onClick={() => setDetailProduct(p)}>
-                                    {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                                    {(() => {
-                                      const ptLabel = corSoPT(p.cor, p.produto);
-                                      const editKey = `${p.id}_corpt_ac`;
-                                      if (editingCorPT[editKey] !== undefined) {
-                                        return (
-                                          <span className="inline-flex items-center gap-0.5 ml-1.5" onClick={(e) => e.stopPropagation()}>
-                                            <input
-                                              value={editingCorPT[editKey]}
-                                              onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                              onKeyDown={async (e) => {
-                                                if (e.key === "Enter") {
-                                                  const newCor = editingCorPT[editKey];
-                                                  if (newCor) { await apiPatch(p.id, { cor: newCor }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: newCor } : x)); }
-                                                  setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                }
-                                                if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                              }}
-                                              className={`w-24 px-1 py-0.5 rounded border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
-                                              autoFocus placeholder="Cor..."
-                                            />
-                                            <button onClick={async () => { const newCor = editingCorPT[editKey]; if (newCor) { await apiPatch(p.id, { cor: newCor }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, cor: newCor } : x)); } setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; }); }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                            <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
-                                          </span>
-                                        );
-                                      }
-                                      return ptLabel ? (
-                                        <span className={`ml-1.5 text-[11px] font-normal ${textSecondary} cursor-pointer hover:text-[#E8740E]`} onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: p.cor || ptLabel || "" })); }} title="Editar cor">{ptLabel}</span>
-                                      ) : p.cor ? (
-                                        <span className={`ml-1.5 text-[10px] font-normal opacity-40 cursor-pointer hover:opacity-80 hover:text-[#E8740E]`} onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: p.cor || "" })); }} title="Adicionar nome em PT">+PT</span>
-                                      ) : null;
-                                    })()}
-                                    {isRecebido
-                                      ? <><span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"}`}>✅ No estoque</span>{p.data_entrada && <span className={`ml-1 text-[10px] ${textSecondary}`}>· {fmtDate(p.data_entrada)}</span>}</>
-                                      : (p.serial_no || p.imei) && (
-                                        <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
-                                          ✅ {p.serial_no || p.imei}
-                                          <button onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaDirect([p]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors" title="Imprimir etiqueta">🏷️</button>
-                                        </span>
-                                      )
-                                    }
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-center text-sm font-bold ${isRecebido ? "text-green-600" : textPrimary}`} onClick={() => setDetailProduct(p)}>{p.qnt}</td>
-                                  <td className={`px-4 py-2.5 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
-                                  <td className={`px-4 py-2.5 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || p.cliente || "—"}</td>
-                                  <td className={`px-4 py-2.5 text-right text-sm font-bold ${isRecebido ? (dm ? "text-green-500/60" : "text-green-600/60") : textPrimary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
-                                  {isAdmin && !isRecebido && (
-                                    <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const qnt = p.qnt || 1;
-                                          const fmtC = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 0 });
-                                          const fmtD = (d: string) => { try { const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}`; } catch { return d; } };
-                                          const labels = Array.from({ length: qnt }, () => `
-                                            <div class="label">
-                                              <div class="produto">${p.produto}</div>
-                                              ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
-                                              <div class="custo">R$ ${fmtC(p.custo_unitario || 0)}</div>
-                                              ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
-                                              ${p.data_compra ? `<div class="data">${fmtD(p.data_compra)}</div>` : ""}
-                                            </div>
-                                          `).join("");
-                                          const win = window.open("", "_blank", "width=400,height=400");
-                                          if (win) {
-                                            win.document.write(`<!DOCTYPE html><html><head>
-                                              <title>Etiqueta - ${p.produto}</title>
-                                              <style>
-                                                *{margin:0;padding:0;box-sizing:border-box}
-                                                body{font-family:Arial,sans-serif}
-                                                .label{text-align:center;padding:3mm 4mm 2mm;page-break-after:always;width:62mm;height:45mm;display:flex;flex-direction:column;justify-content:center;align-items:center}
-                                                .label:last-child{page-break-after:auto}
-                                                .produto{font-size:11pt;font-weight:bold;line-height:1.2}
-                                                .cor{font-size:8pt;color:#333;margin-top:1mm}
-                                                .custo{font-size:12pt;font-weight:bold;color:#E8740E;margin-top:2mm}
-                                                .fornecedor{font-size:7pt;color:#555;margin-top:1mm;text-transform:uppercase}
-                                                .data{font-size:6pt;color:#888;margin-top:1mm}
-                                                @page{size:62mm 45mm;margin:0}
-                                              </style></head><body>${labels}
-                                              <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
-                                            </body></html>`);
-                                            win.document.close();
-                                          }
-                                        }}
-                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}
-                                      >
-                                        🏷️ Etiqueta
-                                      </button>
+                            {(() => {
+                              // Agrupar pendentes por modelo base
+                              const pendentesDate = items.filter(p => p.tipo === "A_CAMINHO");
+                              const groupMap = new Map<string, typeof pendentesDate>();
+                              pendentesDate.forEach(p => {
+                                const base = getBaseModelACaminho(p.produto);
+                                if (!groupMap.has(base)) groupMap.set(base, []);
+                                groupMap.get(base)!.push(p);
+                              });
+                              return Array.from(groupMap.entries()).flatMap(([baseModel, group]) => {
+                                const groupKey = `${date}::${baseModel}`;
+                                const isExpanded = expandedACaminhoGroups.has(groupKey);
+                                const totalQnt = group.reduce((s, p) => s + p.qnt, 0);
+                                const totalVal = group.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                                const allSelected = group.every(p => selectedACaminho.has(p.id));
+                                const fornecedorUniq = group.every(p => p.fornecedor === group[0].fornecedor) ? group[0].fornecedor : "—";
+                                const isSingleUnit = group.length === 1 && group[0].qnt === 1;
+                                const rows = [];
+                                // Linha de grupo (sumário)
+                                rows.push(
+                                  <tr key={`grp-${groupKey}`}
+                                    className={`border-b ${dm ? "border-[#2C2C2E]" : "border-[#F5F5F7]"} cursor-pointer transition-colors ${
+                                      allSelected ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") :
+                                      (dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]")
+                                    }`}
+                                    onClick={() => {
+                                      if (isSingleUnit) { setDetailProduct(group[0]); return; }
+                                      setExpandedACaminhoGroups(prev => { const n = new Set(prev); if (n.has(groupKey)) n.delete(groupKey); else n.add(groupKey); return n; });
+                                    }}>
+                                    <td className="px-2 py-3 text-center" onClick={e => e.stopPropagation()}>
+                                      <input type="checkbox" checked={allSelected} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (allSelected) group.forEach(p => n.delete(p.id)); else group.forEach(p => n.add(p.id)); return n; })} className="accent-[#E8740E]" />
                                     </td>
-                                  )}
-                                  {isAdmin && isRecebido && <td className="px-2 py-2.5"></td>}
-                                </tr>
-                              );
-                            })}
+                                    <td className={`px-4 py-3 text-sm font-semibold ${textPrimary}`}>
+                                      <span>{baseModel}</span>
+                                      {!isSingleUnit && (
+                                        <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"}`}>
+                                          {group.length} variantes
+                                        </span>
+                                      )}
+                                      {isSingleUnit && (group[0].serial_no || group[0].imei) && (
+                                        <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
+                                          ✅ {group[0].serial_no || group[0].imei}
+                                          <button onClick={e => { e.stopPropagation(); handlePrintEtiquetaDirect([group[0]]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️</button>
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className={`px-4 py-3 text-center text-sm font-bold ${textPrimary}`}>{totalQnt}</td>
+                                    <td className={`px-4 py-3 text-right text-sm ${textSecondary}`}>{group[0].custo_unitario ? fmt(group[0].custo_unitario) : "—"}</td>
+                                    <td className={`px-4 py-3 text-sm ${textSecondary}`}>{fornecedorUniq || "—"}</td>
+                                    <td className={`px-4 py-3 text-right text-sm font-bold ${textPrimary}`}>{totalVal > 0 ? fmt(totalVal) : "—"}</td>
+                                    {isAdmin && <td className="px-2 py-3 text-center">
+                                      {!isSingleUnit ? (
+                                        <span className={`text-[11px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{isExpanded ? "▲" : "▼"}</span>
+                                      ) : (
+                                        <button onClick={e => { e.stopPropagation(); handlePrintEtiquetaDirect([group[0]]); }} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}>🏷️ Etiqueta</button>
+                                      )}
+                                    </td>}
+                                  </tr>
+                                );
+                                // Linhas expandidas (itens individuais)
+                                if (isExpanded && !isSingleUnit) {
+                                  group.forEach(p => {
+                                    const ptLabel = corSoPT(p.cor, p.produto);
+                                    rows.push(
+                                      <tr key={p.id}
+                                        className={`border-b ${dm ? "border-[#2C2C2E] bg-[#1A1A1C] hover:bg-[#222]" : "border-[#F5F5F7] bg-[#FAFAFA] hover:bg-[#F5F5F7]"} cursor-pointer transition-colors ${selectedACaminho.has(p.id) ? (dm ? "!bg-[#E8740E]/10" : "!bg-[#FFF5EB]") : ""}`}>
+                                        <td className="px-2 py-2 text-center pl-6" onClick={e => e.stopPropagation()}>
+                                          <input type="checkbox" checked={selectedACaminho.has(p.id)} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })} className="accent-[#E8740E]" />
+                                        </td>
+                                        <td className={`px-4 py-2 text-[13px] font-medium ${textPrimary} pl-8`} onClick={() => setDetailProduct(p)}>
+                                          <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
+                                          {p.cor || p.produto}
+                                          {ptLabel && p.cor !== ptLabel && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
+                                          {(p.serial_no || p.imei) && (
+                                            <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
+                                              ✅ {p.serial_no || p.imei}
+                                              <button onClick={e => { e.stopPropagation(); handlePrintEtiquetaDirect([p]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️</button>
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className={`px-4 py-2 text-center text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.qnt}</td>
+                                        <td className={`px-4 py-2 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
+                                        <td className={`px-4 py-2 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || "—"}</td>
+                                        <td className={`px-4 py-2 text-right text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
+                                        {isAdmin && <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
+                                          <button onClick={() => handlePrintEtiquetaDirect([p])} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}>🏷️ Etiqueta</button>
+                                        </td>}
+                                      </tr>
+                                    );
+                                  });
+                                }
+                                return rows;
+                              });
+                            })()}
                           </tbody>
                           {pendentes.length > 0 && (
                             <tfoot>
