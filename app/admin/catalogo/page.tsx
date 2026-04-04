@@ -596,9 +596,9 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   function toggleConfig(tipoChave: string, valor: string) {
     const key = `${tipoChave}:${valor}`;
     setConfigs((prev) => {
+      if (prev.has(key)) return prev; // Não permite desmarcar — dados fixos
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      next.add(key);
       return next;
     });
   }
@@ -659,42 +659,12 @@ function ModelosTab({ data, headers, reload }: TabProps) {
       <div className="w-80 shrink-0 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
           <h2 className="font-semibold text-[#1D1D1F]">Modelos</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                if (!confirm("Preencher automaticamente as configurações de todos os modelos com dados padrão?")) return;
-                setSaving("seed");
-                try {
-                  const res = await fetch("/api/admin/catalogo", {
-                    method: "POST",
-                    headers: headers(),
-                    body: JSON.stringify({ resource: "seed_modelo_configs" }),
-                  });
-                  const json = await res.json();
-                  if (json.ok) {
-                    alert(`Configurações preenchidas para ${json.seeded} de ${json.total} modelos!`);
-                    reload();
-                  } else {
-                    alert("Erro: " + json.error);
-                  }
-                } catch (e) {
-                  alert("Erro: " + String(e));
-                } finally {
-                  setSaving(null);
-                }
-              }}
-              disabled={saving === "seed"}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
-            >
-              {saving === "seed" ? "Preenchendo..." : "Preencher Dados"}
-            </button>
-            <button
-              onClick={() => setShowNewForm(!showNewForm)}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
-            >
-              + Novo Modelo
-            </button>
-          </div>
+          <button
+            onClick={() => setShowNewForm(!showNewForm)}
+            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+          >
+            + Novo Modelo
+          </button>
         </div>
 
         {showNewForm && (
