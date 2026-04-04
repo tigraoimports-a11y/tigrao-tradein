@@ -1175,10 +1175,10 @@ export default function EstoquePage() {
           <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         </div>
         <div style="padding:0 1.5mm 1mm;text-align:center">
-          <div style="font-size:6.5pt;font-weight:bold;line-height:1.2;word-break:break-word">${p.produto}${cor ? " " + cor : ""}</div>
-          ${serial ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.3;margin-top:0.5mm">S/N: ${serial}</div>` : ""}
-          ${imei ? `<div style="font-size:5.5pt;font-family:monospace;line-height:1.3">IMEI: ${imei}</div>` : ""}
-          ${fornecedor ? `<div style="font-size:5pt;color:#555;line-height:1.2;margin-top:0.3mm">${fornecedor}</div>` : ""}
+          <div style="font-size:7pt;font-weight:900;line-height:1.2;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
+          ${serial ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;margin-top:0.5mm;color:#000">S/N: ${serial}</div>` : ""}
+          ${imei ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;color:#000">IMEI: ${imei}</div>` : ""}
+          ${fornecedor ? `<div style="font-size:6pt;font-weight:bold;line-height:1.2;margin-top:0.3mm;color:#000">${fornecedor}</div>` : ""}
         </div>
       </div>`;
     }).join("");
