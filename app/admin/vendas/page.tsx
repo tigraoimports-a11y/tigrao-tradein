@@ -348,28 +348,27 @@ export default function VendasPage() {
 
   useEffect(() => { if (password) { fetchEstoque(); fetchFornecedores(); } }, [password, fetchEstoque, fetchFornecedores]);
 
-  // Auto-selecionar produto quando serial/IMEI exato for digitado ou bipado
-  useEffect(() => {
-    const val = serialBusca.trim().toUpperCase();
-    if (!val || val.length < 5) return; // evita buscas parciais curtas
+  // Auto-selecionar produto por serial/IMEI — chamado direto no onChange
+  const autoSelecionarPorSerial = useCallback((val: string) => {
+    const v = val.trim().toUpperCase();
+    if (!v || v.length < 5) return;
     const found = estoque.find(p =>
-      p.status === "EM ESTOQUE" && (
-        (p.serial_no && p.serial_no.toUpperCase() === val) ||
-        (p.imei && p.imei.toUpperCase() === val)
-      )
+      (p.serial_no && p.serial_no.toUpperCase() === v) ||
+      (p.imei && p.imei.toUpperCase() === v)
     );
     if (found) {
       setCatSel(found.categoria || "");
       setEstoqueId(found.id);
-      set("produto", found.produto);
-      set("custo", String(found.custo_unitario || 0));
-      if (found.fornecedor) set("fornecedor", found.fornecedor);
-      if (found.serial_no) set("serial_no", found.serial_no);
-      if (found.imei) set("imei", found.imei);
-      setMsg(`✅ ${found.produto} — selecionado automaticamente`);
+      setForm(f => ({ ...f,
+        produto: found.produto.toUpperCase(),
+        custo: String(found.custo_unitario || 0),
+        fornecedor: found.fornecedor ? found.fornecedor.toUpperCase() : f.fornecedor,
+        serial_no: found.serial_no ? found.serial_no.toUpperCase() : f.serial_no,
+        imei: found.imei ? found.imei.toUpperCase() : f.imei,
+      }));
+      setMsg(`✅ ${found.produto}`);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serialBusca, estoque]);
+  }, [estoque, setCatSel, setEstoqueId, setForm]);
 
   // Gerar categorias separadas por tipo (Lacrado vs Seminovo)
   const categorias = (() => {
@@ -2023,7 +2022,7 @@ export default function VendasPage() {
                       {categorias.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                   </div>
-                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { setSerialBusca(e.target.value); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button></div></div>
+                  <div><p className={labelCls}>Buscar Serial <span className="text-[10px] text-[#E8740E] font-normal">← bipe aqui</span></p><div className="flex gap-2 items-center"><div className="relative flex-1"><input ref={serialInputRef} autoFocus value={serialBusca} onChange={(e) => { const v = e.target.value; setSerialBusca(v); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); autoSelecionarPorSerial(v); }} placeholder="Apontar pistola aqui e bipar QR..." className={inputCls} />{serialBusca && <button onClick={() => { setSerialBusca(""); setEstoqueId(""); set("produto", ""); set("custo", ""); set("fornecedor", ""); set("serial_no", ""); set("imei", ""); if (serialInputRef.current) serialInputRef.current.focus(); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#86868B] hover:text-red-500">✕</button>}</div><button onClick={handleOpenQRScanner} title="Escanear QR Code com câmera" className={`flex-shrink-0 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7] hover:border-[#E8740E]" : "bg-white border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}>📷</button></div></div>
                 </div>
 
                 {/* Produtos agrupados por modelo */}
