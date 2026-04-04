@@ -261,6 +261,13 @@ export default function VendasPage() {
     } catch { /* ignore */ }
   }, [password]);
 
+  // Campos que NÃO devem ser uppercased (emails, senhas, etc)
+  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
+  const set = (field: string, value: string | boolean) => {
+    const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
+    setForm((f) => ({ ...f, [field]: v }));
+  };
+
   // ── QR Scanner ──────────────────────────────────────────────────────────────
   const handleStopQR = useCallback(() => {
     qrScanningRef.current = false;
@@ -557,13 +564,6 @@ export default function VendasPage() {
       </div>
     );
   }
-
-  // Campos que NÃO devem ser uppercased (emails, senhas, etc)
-  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
-  const set = (field: string, value: string | boolean) => {
-    const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
-    setForm((f) => ({ ...f, [field]: v }));
-  };
 
   // Formatação de valores com separador de milhares
   const fmtMil = (v: string) => {
