@@ -46,13 +46,21 @@ const CAT_TO_CATALOG: Record<string, string[]> = {
   ACESSORIOS: ["ACESSORIOS"],
 };
 
+// ─── Category spec config (which spec types belong to each category) ─────────
+
+interface CatalogoCategSpec {
+  categoria_key: string;
+  tipo_chave: string;
+}
+
 // ─── Module-level catalog cache ───────────────────────────────────────────────
 
 let _catalogCache: CatalogoModelo[] | null = null;
-let _catalogPromise: Promise<CatalogoModelo[]> | null = null;
+let _categSpecsCache: CatalogoCategSpec[] | null = null;
+let _catalogPromise: Promise<{ modelos: CatalogoModelo[]; categSpecs: CatalogoCategSpec[] }> | null = null;
 
-async function fetchAllModelos(password: string): Promise<CatalogoModelo[]> {
-  if (_catalogCache) return _catalogCache;
+async function fetchCatalogData(password: string): Promise<{ modelos: CatalogoModelo[]; categSpecs: CatalogoCategSpec[] }> {
+  if (_catalogCache && _categSpecsCache) return { modelos: _catalogCache, categSpecs: _categSpecsCache };
   if (_catalogPromise) return _catalogPromise;
   _catalogPromise = fetch("/api/admin/catalogo", {
     headers: { "x-admin-password": password },
@@ -60,12 +68,13 @@ async function fetchAllModelos(password: string): Promise<CatalogoModelo[]> {
     .then((r) => r.json())
     .then((d) => {
       _catalogCache = (d.modelos || []).filter((m: CatalogoModelo) => m.ativo);
+      _categSpecsCache = d.categoriaSpecs || [];
       _catalogPromise = null;
-      return _catalogCache!;
+      return { modelos: _catalogCache!, categSpecs: _categSpecsCache! };
     })
     .catch(() => {
       _catalogPromise = null;
-      return [];
+      return { modelos: [], categSpecs: [] };
     });
   return _catalogPromise;
 }
@@ -204,6 +213,7 @@ export default function ProdutoSpecFields({
   const bgSection = dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]";
 
   const [allModelos, setAllModelos] = useState<CatalogoModelo[]>([]);
+  const [categSpecs, setCategSpecs] = useState<CatalogoCategSpec[]>([]);
   const [modeloConfigs, setModeloConfigs] = useState<Record<string, string[]>>({});
 
   // Client search state
@@ -213,10 +223,13 @@ export default function ProdutoSpecFields({
   const [showClienteSugg, setShowClienteSugg] = useState(false);
   const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch all catalog models once
+  // Fetch all catalog models + category specs once
   useEffect(() => {
     if (!password) return;
-    fetchAllModelos(password).then(setAllModelos);
+    fetchCatalogData(password).then(({ modelos, categSpecs: cs }) => {
+      setAllModelos(modelos);
+      setCategSpecs(cs);
+    });
   }, [password]);
 
   // Auto-match produto to catalog model when models load OR when produto/categoria changes and catalogo_modelo_id is still empty
@@ -269,6 +282,23 @@ export default function ProdutoSpecFields({
     .sort((a, b) => a.ordem - b.ordem);
 
   const hasCatalogModel = !!row.catalogo_modelo_id;
+
+  // Derive the active catalog category key from the selected model
+  const activeCatalogCategory: string | null = (() => {
+    if (!row.catalogo_modelo_id) return null;
+    const modelo = allModelos.find((m) => m.id === row.catalogo_modelo_id);
+    return modelo?.categoria_key ?? null;
+  })();
+
+  // Check if a spec type is configured for the active catalog category
+  // When no catalog model is selected, fall back to showing all fields (legacy behavior)
+  const hasSpec = (tipoChave: string): boolean => {
+    if (!activeCatalogCategory) return true; // no catalog model → show all (legacy)
+    if (!categSpecs.length) return true; // no specs loaded yet → show all
+    return categSpecs.some(
+      (cs) => cs.categoria_key === activeCatalogCategory && cs.tipo_chave === tipoChave
+    );
+  };
 
   // Spec options: usa configs do catálogo se existem, senão fallback hardcoded
   // Isso garante que mesmo se o modelo foi cadastrado no catálogo sem configurar
@@ -600,114 +630,158 @@ export default function ProdutoSpecFields({
               </div>
             </>
           )}
-          <div>
-            <p className={labelCls}>Tela</p>
-            <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {telasOptions?.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>RAM</p>
-            <select value={row.spec.mb_ram} onChange={(e) => setSpec("mb_ram", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {ramOptions?.map((r) => <option key={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Armazenamento</p>
-            <select value={row.spec.mb_storage} onChange={(e) => setSpec("mb_storage", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
+          {/* Chip dropdown when catalog model is selected — respects catalogo_categoria_specs */}
+          {hasCatalogModel && (hasSpec("chips_air") || hasSpec("chips_pro_max") || hasSpec("chip_neo")) && (
+            <div>
+              <p className={labelCls}>Chip</p>
+              <select value={row.spec.mb_chip} onChange={(e) => setSpec("mb_chip", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {(cfgOr("chip_neo") || cfgOr("chips_air") || cfgOr("chips_pro_max") || [])?.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("telas") && (
+            <div>
+              <p className={labelCls}>Tela</p>
+              <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {telasOptions?.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("ram") && (
+            <div>
+              <p className={labelCls}>RAM</p>
+              <select value={row.spec.mb_ram} onChange={(e) => setSpec("mb_ram", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {ramOptions?.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("ssd") && (
+            <div>
+              <p className={labelCls}>Armazenamento</p>
+              <select value={row.spec.mb_storage} onChange={(e) => setSpec("mb_storage", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
       {/* Mac Mini specs */}
       {row.categoria === "MAC_MINI" && (
         <div className={`grid grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>RAM</p>
-            <select value={row.spec.mm_ram} onChange={(e) => setSpec("mm_ram", e.target.value)} className={inputCls}>
-              {macMiniRamOptions?.map((r) => <option key={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Armazenamento</p>
-            <select value={row.spec.mm_storage} onChange={(e) => setSpec("mm_storage", e.target.value)} className={inputCls}>
-              {macMiniSsdOptions?.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
+          {/* Mac Mini chips — show if chips_air or chips_pro_max configured */}
+          {hasCatalogModel && (hasSpec("chips_air") || hasSpec("chips_pro_max")) && (
+            <div>
+              <p className={labelCls}>Chip</p>
+              <select value={row.spec.mm_chip} onChange={(e) => setSpec("mm_chip", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {(cfgOr("chips_air") || cfgOr("chips_pro_max") || [])?.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("ram") && (
+            <div>
+              <p className={labelCls}>RAM</p>
+              <select value={row.spec.mm_ram} onChange={(e) => setSpec("mm_ram", e.target.value)} className={inputCls}>
+                {macMiniRamOptions?.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("ssd") && (
+            <div>
+              <p className={labelCls}>Armazenamento</p>
+              <select value={row.spec.mm_storage} onChange={(e) => setSpec("mm_storage", e.target.value)} className={inputCls}>
+                {macMiniSsdOptions?.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
       {/* iPad specs */}
       {row.categoria === "IPADS" && (
         <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>Tela</p>
-            <select value={row.spec.ipad_tela} onChange={(e) => setSpec("ipad_tela", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {telasOptions?.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Armazenamento</p>
-            <select value={row.spec.ipad_storage} onChange={(e) => setSpec("ipad_storage", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {capacidadeOptions?.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Conectividade</p>
-            <select value={row.spec.ipad_conn} onChange={(e) => setSpec("ipad_conn", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {conectividadeOptions?.map((c) => (
-                <option key={c} value={c.includes("+") ? "WIFI+CELL" : "WIFI"}>
-                  {c.includes("+") ? "Wi-Fi + Cellular" : "Wi-Fi"}
-                </option>
-              ))}
-            </select>
-          </div>
+          {hasSpec("telas") && (
+            <div>
+              <p className={labelCls}>Tela</p>
+              <select value={row.spec.ipad_tela} onChange={(e) => setSpec("ipad_tela", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {telasOptions?.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("capacidade") && (
+            <div>
+              <p className={labelCls}>Armazenamento</p>
+              <select value={row.spec.ipad_storage} onChange={(e) => setSpec("ipad_storage", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {capacidadeOptions?.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("conectividade") && (
+            <div>
+              <p className={labelCls}>Conectividade</p>
+              <select value={row.spec.ipad_conn} onChange={(e) => setSpec("ipad_conn", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {conectividadeOptions?.map((c) => (
+                  <option key={c} value={c.includes("+") ? "WIFI+CELL" : "WIFI"}>
+                    {c.includes("+") ? "Wi-Fi + Cellular" : "Wi-Fi"}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
       {/* Apple Watch specs */}
       {row.categoria === "APPLE_WATCH" && (
         <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>Tamanho</p>
-            <select value={row.spec.aw_tamanho} onChange={(e) => setSpec("aw_tamanho", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {awTamanhoOptions?.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Conectividade</p>
-            <select value={row.spec.aw_conn} onChange={(e) => setSpec("aw_conn", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {awConnOptions?.map((c) => (
-                <option key={c} value={c.includes("+") ? "GPS+CELL" : "GPS"}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Tamanho Pulseira</p>
-            <select value={row.spec.aw_pulseira} onChange={(e) => setSpec("aw_pulseira", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {WATCH_PULSEIRAS.map((p) => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Modelo Pulseira</p>
-            <select value={row.spec.aw_band} onChange={(e) => setSpec("aw_band", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {awBandOptions?.map((b) => <option key={b}>{b}</option>)}
-            </select>
-          </div>
+          {hasSpec("tamanho_aw") && (
+            <div>
+              <p className={labelCls}>Tamanho</p>
+              <select value={row.spec.aw_tamanho} onChange={(e) => setSpec("aw_tamanho", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {awTamanhoOptions?.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("conectividade_aw") && (
+            <div>
+              <p className={labelCls}>Conectividade</p>
+              <select value={row.spec.aw_conn} onChange={(e) => setSpec("aw_conn", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {awConnOptions?.map((c) => (
+                  <option key={c} value={c.includes("+") ? "GPS+CELL" : "GPS"}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {hasSpec("tamanho_pulseira") && (
+            <div>
+              <p className={labelCls}>Tamanho Pulseira</p>
+              <select value={row.spec.aw_pulseira} onChange={(e) => setSpec("aw_pulseira", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {WATCH_PULSEIRAS.map((p) => <option key={p}>{p}</option>)}
+              </select>
+            </div>
+          )}
+          {hasSpec("pulseiras") && (
+            <div>
+              <p className={labelCls}>Modelo Pulseira</p>
+              <select value={row.spec.aw_band} onChange={(e) => setSpec("aw_band", e.target.value)} className={inputCls}>
+                <option value="">— Não informar —</option>
+                {awBandOptions?.map((b) => <option key={b}>{b}</option>)}
+              </select>
+            </div>
+          )}
         </div>
       )}
 

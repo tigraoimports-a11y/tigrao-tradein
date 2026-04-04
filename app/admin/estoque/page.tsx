@@ -255,6 +255,7 @@ function getModelSpecificCores(produto: string, categoria: string): string[] {
   }
 
   if (categoria === "APPLE_WATCH" || categoria === "APPLE_WATCH_ATACADO") {
+    if (p.includes("ULTRA 3")) return ["BLACK TITANIUM", "JET BLACK", "NATURAL TITANIUM"];
     if (p.includes("ULTRA")) return ["BLACK TITANIUM", "NATURAL TITANIUM"];
     if (p.includes("SERIES 11") || p.includes("S11")) return ["GOLD", "JET BLACK", "NATURAL", "ROSE GOLD", "SILVER", "SLATE", "SPACE GRAY"];
     if (p.includes("SERIES 10") || p.includes("S10")) return ["GOLD", "JET BLACK", "NATURAL", "ROSE GOLD", "SILVER", "SLATE"];
