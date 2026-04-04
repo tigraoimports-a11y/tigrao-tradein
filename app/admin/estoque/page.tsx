@@ -274,7 +274,7 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
         break;
       }
     }
-    return display;
+    return display.toUpperCase();
   }
   // Remove código de origem do campo cor também (ex: "AZUL PROFUNDO LL" → "AZUL PROFUNDO")
   const corClean = (categoria === "IPHONES" || !categoria) ? stripCode(cor) : cor;
@@ -296,7 +296,7 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
       display = `${display} ${cor}`;
     }
   }
-  return display;
+  return display.toUpperCase();
 }
 
 /** Retorna só a tradução em português da cor (para exibir em cinza ao lado do nome) */
@@ -1613,7 +1613,7 @@ export default function EstoquePage() {
                   <p className={`font-bold text-sm ${textPrimary} mb-2`}>{etiquetaModal.batchItems.length} produtos — QR codes em grade</p>
                   {etiquetaModal.batchItems.map(p => (
                     <div key={p.id} className={`flex justify-between text-xs ${textSecondary} py-0.5`}>
-                      <span className="truncate flex-1">{p.produto} {p.cor ? `(${p.cor})` : ""}</span>
+                      <span className="truncate flex-1">{p.produto.toUpperCase()} {p.cor ? `(${p.cor})` : ""}</span>
                       <span className="font-mono ml-2 text-[10px]">{p.serial_no || p.imei || "—"}</span>
                     </div>
                   ))}
@@ -1890,7 +1890,7 @@ export default function EstoquePage() {
                   <table className={`w-full text-xs ${dm ? "text-[#CCC]" : ""}`}>
                     <thead><tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}><th className="text-left px-2 py-1">Produto</th><th className="text-left px-2 py-1">Cor</th><th className="text-right px-2 py-1">Qnt</th><th className="text-left px-2 py-1">Tipo</th><th className="text-left px-2 py-1">Cat</th></tr></thead>
                     <tbody>{semCusto.map((p) => (
-                      <tr key={p.id} className={`border-b ${borderLight}`}><td className="px-2 py-1">{p.produto}</td><td className="px-2 py-1">{p.cor || "—"}</td><td className="text-right px-2 py-1">{p.qnt}</td><td className="px-2 py-1">{p.tipo}</td><td className="px-2 py-1">{p.categoria}</td></tr>
+                      <tr key={p.id} className={`border-b ${borderLight}`}><td className="px-2 py-1">{p.produto.toUpperCase()}</td><td className="px-2 py-1">{p.cor || "—"}</td><td className="text-right px-2 py-1">{p.qnt}</td><td className="px-2 py-1">{p.tipo}</td><td className="px-2 py-1">{p.categoria}</td></tr>
                     ))}</tbody>
                   </table>
                 </div>
@@ -3077,7 +3077,7 @@ export default function EstoquePage() {
                   items.forEach((p) => {
                     // No estoque (lacrados): ocultar itens com qnt=0
                     if (tab === "estoque" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto);
+                    const groupKey = stripOrigem(p.produto).toUpperCase();
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
