@@ -406,7 +406,6 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               tradeinConfig={tradeinConfig} />
           )}
 
-          {step === 4 && (() => { if (typeof window !== "undefined") console.log("[TradeInCalc DEBUG]", { hasSecondDevice, usedModel2, usedStorage2, tradeInValue, tradeInValue2 }); return null; })()}
           {step === 4 && (
             <StepQuote
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
