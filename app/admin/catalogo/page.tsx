@@ -968,42 +968,6 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
     }
   }
 
-  // Ciclo: não atribuído → opcional → obrigatório → não atribuído
-  async function toggleCatSpec(catKey: string, tipoChave: string, assigned: boolean, obrigatoria?: boolean) {
-    setSaving(`catspec-${catKey}-${tipoChave}`);
-    try {
-      const currentSpecs = data.categoriaSpecs
-        .filter((cs) => cs.categoria_key === catKey)
-        .map((cs) => ({ tipo_chave: cs.tipo_chave, obrigatoria: cs.obrigatoria ?? false, ordem: cs.ordem ?? 0 }));
-
-      let newSpecs;
-      if (!assigned) {
-        // Não atribuído → Opcional
-        const maxOrdem = currentSpecs.reduce((max, s) => Math.max(max, s.ordem), 0);
-        newSpecs = [...currentSpecs, { tipo_chave: tipoChave, obrigatoria: false, ordem: maxOrdem + 1 }];
-      } else if (!obrigatoria) {
-        // Opcional → Obrigatório
-        newSpecs = currentSpecs.map((s) => s.tipo_chave === tipoChave ? { ...s, obrigatoria: true } : s);
-      } else {
-        // Obrigatório → Não atribuído
-        newSpecs = currentSpecs.filter((s) => s.tipo_chave !== tipoChave);
-      }
-
-      const res = await fetch("/api/admin/catalogo", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ resource: "categoria_specs_config", categoria_key: catKey, specs: newSpecs }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-
-      await reload();
-    } catch (e) {
-      alert("Erro ao salvar: " + String(e));
-    } finally {
-      setSaving(null);
-    }
-  }
-
   return (
     <div className="space-y-4">
       {/* Two panel layout */}
@@ -1151,90 +1115,6 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
         </div>
       </div>
 
-      {/* Category-Spec assignments grid */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-[#1D1D1F]">Atribuições por Categoria</h2>
-            <p className="text-xs text-[#86868B] mt-0.5">Clique para alternar: sem uso → opcional → obrigatório → sem uso</p>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-[#86868B]">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#E8740E]"></span>Obrigatório</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#34C759]"></span>Opcional</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#E8E8ED]"></span>Sem uso</span>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 bg-[#F9F9FB] text-left px-4 py-3 font-semibold text-[#1D1D1F] text-sm min-w-[140px] border-b border-r border-[#E8E8ED]">Categoria</th>
-                {data.specTipos.map((t) => (
-                  <th key={t.id} className="text-center px-3 py-3 font-medium text-[#6E6E73] whitespace-nowrap border-b border-[#E8E8ED] min-w-[80px]">
-                    {t.nome}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.categorias.map((cat, catIdx) => (
-                <tr key={cat.id} className={catIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}>
-                  <td className={`sticky left-0 z-10 px-4 py-3 font-semibold text-[#1D1D1F] text-sm border-r border-[#E8E8ED] ${catIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}>
-                    <span className="mr-1.5">{cat.emoji}</span>{cat.nome}
-                  </td>
-                  {data.specTipos.map((tipo) => {
-                    const assigned = data.categoriaSpecs.some(
-                      (cs) => cs.categoria_key === cat.key && cs.tipo_chave === tipo.chave
-                    );
-                    const obrigatoria = data.categoriaSpecs.some(
-                      (cs) =>
-                        cs.categoria_key === cat.key &&
-                        cs.tipo_chave === tipo.chave &&
-                        cs.obrigatoria
-                    );
-                    const isLoading = saving === `catspec-${cat.key}-${tipo.chave}`;
-                    return (
-                      <td key={tipo.id} className="text-center px-3 py-3">
-                        <button
-                          onClick={() => toggleCatSpec(cat.key, tipo.chave, assigned, obrigatoria)}
-                          disabled={isLoading}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center mx-auto transition-all duration-150 ${
-                            isLoading ? "opacity-40 animate-pulse" :
-                            assigned
-                              ? obrigatoria
-                                ? "bg-[#E8740E] shadow-sm shadow-[#E8740E]/30 hover:shadow-md hover:shadow-[#E8740E]/40"
-                                : "bg-[#34C759] shadow-sm shadow-[#34C759]/30 hover:shadow-md hover:shadow-[#34C759]/40"
-                              : "bg-[#E8E8ED] hover:bg-[#D1D1D6]"
-                          }`}
-                          title={
-                            assigned
-                              ? obrigatoria
-                                ? `${tipo.nome}: Obrigatório → remover`
-                                : `${tipo.nome}: Opcional → obrigatório`
-                              : `${tipo.nome}: Adicionar como opcional`
-                          }
-                        >
-                          {assigned && (
-                            <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              {obrigatoria
-                                ? <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                : <circle cx="10" cy="10" r="3" />
-                              }
-                            </svg>
-                          )}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data.categorias.length === 0 && (
-            <div className="text-center py-8 text-[#86868B] text-sm">Nenhuma categoria cadastrada.</div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
