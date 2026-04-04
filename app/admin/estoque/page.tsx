@@ -3528,7 +3528,7 @@ export default function EstoquePage() {
                                                 </button>
                                               )}
                                               {p.serial_no && (
-                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className="flex items-center gap-1 text-[11px] font-mono text-purple-600 hover:text-[#E8740E] cursor-pointer" title="Copiar Serial">
+                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className={`flex items-center gap-1 text-[11px] font-mono ${textPrimary} hover:text-[#E8740E] cursor-pointer`} title="Copiar Serial">
                                                   <span className="text-[9px] font-sans font-bold text-[#86868B]">SN</span>{p.serial_no}
                                                 </button>
                                               )}
