@@ -1415,7 +1415,7 @@ export default function VendasPage() {
     if (!form.cliente || form.cliente.length < 2) return [];
     const term = form.cliente.toLowerCase();
     // Agrupar vendas por nome do cliente
-    const map = new Map<string, { cliente: string; ultimaData: string; ultimoProduto: string; qtd: number; origem: string; tipo: string; forma: string; banco: string }>();
+    const map = new Map<string, { cliente: string; ultimaData: string; ultimoProduto: string; qtd: number; origem: string; tipo: string; forma: string; banco: string; cpf: string; cnpj: string; email: string; endereco: string; cep: string; pessoa: string; bairro: string; cidade: string; uf: string }>();
     for (const v of vendas) {
       const nome = v.cliente?.toLowerCase();
       if (!nome || !nome.includes(term)) continue;
@@ -1430,6 +1430,15 @@ export default function VendasPage() {
           tipo: v.tipo,
           forma: v.forma,
           banco: v.banco,
+          cpf: v.cpf || "",
+          cnpj: v.cnpj || "",
+          email: v.email || "",
+          endereco: v.endereco || "",
+          cep: v.cep || "",
+          pessoa: v.pessoa || "PF",
+          bairro: v.bairro || "",
+          cidade: v.cidade || "",
+          uf: v.uf || "",
         });
       } else {
         existing.qtd += 1;
@@ -1691,6 +1700,15 @@ export default function VendasPage() {
                             set("tipo", c.tipo);
                             set("forma", c.forma);
                             set("banco", c.banco);
+                            if (c.pessoa) set("pessoa", c.pessoa);
+                            if (c.cpf) set("cpf", c.cpf);
+                            if (c.cnpj) set("cnpj", c.cnpj);
+                            if (c.email) set("email", c.email);
+                            if (c.endereco) set("endereco", c.endereco);
+                            if (c.cep) set("cep", c.cep);
+                            if (c.bairro) set("bairro", c.bairro);
+                            if (c.cidade) set("cidade", c.cidade);
+                            if (c.uf) set("uf", c.uf);
                             setShowClienteSuggestions(false);
                             setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
                           }}
