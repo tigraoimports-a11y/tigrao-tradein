@@ -1198,7 +1198,7 @@ export default function EstoquePage() {
           break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;
         }
         .label:last-child{break-after:auto;page-break-after:auto}
-        canvas{display:block;width:20mm;height:20mm;margin:0 auto}
+        canvas{display:block;width:24mm;height:24mm;margin:0 auto}
         .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
         .instrucao b{font-size:12px}
         @media print{
@@ -1213,7 +1213,7 @@ export default function EstoquePage() {
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
           var data=canvas.getAttribute('data-qr');
           var qr=qrcode(0,'M');qr.addData(data);qr.make();
-          var size=200;canvas.width=size;canvas.height=size;
+          var size=400;canvas.width=size;canvas.height=size;
           var ctx=canvas.getContext('2d');var cells=qr.getModuleCount();var cs=size/cells;
           ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
           for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
