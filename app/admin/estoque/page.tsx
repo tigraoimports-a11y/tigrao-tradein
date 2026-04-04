@@ -2047,7 +2047,6 @@ export default function EstoquePage() {
           </div>
         )}
         </div>
-      </div>
       )}
 
       {/* Preços Sugeridos por tipo */}
