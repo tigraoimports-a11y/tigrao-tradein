@@ -1171,15 +1171,15 @@ export default function EstoquePage() {
       const fornecedor = p.fornecedor || "";
       // Layout vertical: QR em cima, texto embaixo — para fita 29mm
       return `<div class="label">
-        <div style="text-align:center;padding:1mm 1mm 0.5mm">
+        <div style="text-align:center;padding:0.5mm 1mm 0.3mm">
           <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         </div>
-        <div style="padding:0 1.5mm 1mm;text-align:center">
-          <div style="font-size:7pt;font-weight:900;line-height:1.2;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
-          ${serial ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;margin-top:0.5mm;color:#000">S/N: ${serial}</div>` : ""}
-          ${imei ? `<div style="font-size:6pt;font-family:monospace;font-weight:bold;line-height:1.3;color:#000">IMEI: ${imei}</div>` : ""}
-          ${fornecedor ? `<div style="font-size:6pt;font-weight:bold;line-height:1.2;margin-top:0.3mm;color:#000">${fornecedor}</div>` : ""}
-          ${p.custo_unitario ? `<div style="font-size:6.5pt;font-weight:900;line-height:1.3;margin-top:0.5mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
+        <div style="padding:0 1.5mm 0.5mm;text-align:center">
+          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
+          ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
+          ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
+          ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
+          ${p.custo_unitario ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.3mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -1197,14 +1197,8 @@ export default function EstoquePage() {
           break-after:page;break-inside:avoid;
         }
         .label:last-child{break-after:auto}
-        canvas{display:block;width:25mm;height:25mm;margin:0 auto}
-        .instrucao{background:#fff3cd;border:1px solid #ffc107;padding:8px 12px;margin-bottom:8px;font-size:11px;border-radius:4px;color:#333;font-family:Arial}
-        .instrucao b{font-size:12px}
-        @media print{.instrucao{display:none}}
+        canvas{display:block;width:22mm;height:22mm;margin:0 auto}
       </style></head><body>
-      <div class="instrucao">
-        ⚠️ Crie tamanho personalizado: <b>Largura 29mm × Altura 50mm</b> · Orientação: <b>Vertical ↕</b> · Redimensionamento: <b>100%</b>
-      </div>
       ${labelsHtml}
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
