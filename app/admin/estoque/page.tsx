@@ -281,18 +281,23 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   const upper = corClean.toUpperCase().trim();
   const en = PT_TO_EN[upper];
   const corEN = en ? en.toUpperCase() : upper; // cor em inglês (ou original se não tem tradução)
+  // Verifica se o nome já contém alguma cor comercial conhecida (EN)
+  const displayUpper = display.toUpperCase();
+  const nomeJaTemCorEN = Object.keys(COR_PT).sort((a, b) => b.length - a.length)
+    .some(enKey => enKey.length >= 3 && displayUpper.includes(enKey));
+
   if (en) {
     // Substitui a cor em PT pelo equivalente EN no nome (case-insensitive)
     const pattern = upper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
     const before = display;
     try { display = display.replace(new RegExp(pattern, "gi"), corEN); } catch { /* ignore */ }
-    // Se não substituiu (cor não estava no nome), anexar a cor EN ao final
-    if (display === before && !display.toUpperCase().includes(corEN)) {
+    // Se não substituiu e nome NÃO tem cor EN conhecida, anexar
+    if (display === before && !display.toUpperCase().includes(corEN) && !nomeJaTemCorEN) {
       display = `${display} ${corEN}`;
     }
   } else {
-    // Cor sem tradução — se não está no nome, anexar
-    if (!display.toUpperCase().includes(upper)) {
+    // Cor sem tradução — se não está no nome e nome não tem cor conhecida, anexar
+    if (!display.toUpperCase().includes(upper) && !nomeJaTemCorEN) {
       display = `${display} ${cor}`;
     }
   }
@@ -1511,6 +1516,25 @@ export default function EstoquePage() {
   const produtosACaminho = new Set(aCaminho.map((p) => p.produto.toUpperCase()));
   const esgotados = novos.filter((p) => p.qnt === 0);
 
+  // Reposição: agrupar por modelo+cor e verificar se está abaixo do mínimo
+  const reposicaoCount = (() => {
+    // Agrupar novos por produto+cor → somar qnt e pegar estoque_minimo
+    const groups: Record<string, { totalQnt: number; min: number | null }> = {};
+    for (const p of novos) {
+      const key = `${p.produto}|||${p.cor || ""}`;
+      if (!groups[key]) groups[key] = { totalQnt: 0, min: null };
+      groups[key].totalQnt += p.qnt;
+      if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
+        groups[key].min = p.estoque_minimo;
+      }
+    }
+    let count = 0;
+    for (const g of Object.values(groups)) {
+      if (g.min && g.totalQnt < g.min) count++;
+    }
+    return count;
+  })();
+
   const currentList =
     tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
@@ -1911,7 +1935,7 @@ export default function EstoquePage() {
             { key: "atacado", label: "Atacado", count: atacado.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
-            { key: "reposicao", label: "Reposição", count: esgotados.length + acabando.length },
+            { key: "reposicao", label: "Reposição", count: reposicaoCount },
           ] as const).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)}
               className={`px-3.5 py-2 rounded-lg text-[12px] font-semibold transition-all ${
@@ -2118,7 +2142,7 @@ export default function EstoquePage() {
       {/* ===== ABA REPOSIÇÃO ===== */}
       {tab === "reposicao" ? (() => {
         const stripOrigemRepo = (nome: string) => nome
-          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+          .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
           .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
           .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
           .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
@@ -2127,66 +2151,90 @@ export default function EstoquePage() {
         // Extrair modelo base (sem cor): "IPHONE 17 PRO MAX 256GB SILVER" → "IPHONE 17 PRO MAX 256GB"
         const extractBase = (nome: string) => {
           const m = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
-          return m ? m[1].trim() : nome;
+          return m ? m[1].trim().toUpperCase() : nome.toUpperCase();
         };
         // Extrair cor do nome
-        const extractCor = (nome: string) => {
+        const extractCor = (nome: string, corField: string | null | undefined) => {
           const base = extractBase(nome);
           const rest = nome.slice(base.length).trim();
-          return rest || null;
-        };
-        // Extrair linha: "IPHONE 17 PRO MAX 256GB" → "LINHA 17", "MACBOOK AIR M4 13"" → "CHIP M4"
-        const extractLinha = (nome: string, cat: string) => {
-          if (cat === "IPHONE") { const m = nome.match(/IPHONE\s+(\d+)/i); return m ? `LINHA ${m[1]}` : "OUTROS"; }
-          if (cat === "IPAD") { const m = nome.match(/IPAD\s+(PRO|AIR|MINI)?/i); return m?.[1] ? `iPad ${m[1]}` : "iPad"; }
-          if (cat === "MACBOOK" || cat === "MAC_MINI") { const m = nome.match(/M(\d+)/i); return m ? `CHIP M${m[1]}` : "OUTROS"; }
-          if (cat === "APPLE_WATCH") { const m = nome.match(/SERIES\s+(\d+)|ULTRA\s*(\d*)|SE\s*(\d*)/i); return m ? (m[1] ? `SERIES ${m[1]}` : m[2] !== undefined ? "ULTRA" : "SE") : "OUTROS"; }
-          return "OUTROS";
+          return rest || corField || null;
         };
 
-        // Filtrar itens para reposição: qnt < estoque_minimo (só itens com mínimo definido)
-        const reposicaoItems = novos.filter(p => {
-          const min = p.estoque_minimo;
-          if (typeof min === "number" && min > 0) return p.qnt < min;
-          return false; // sem mínimo definido = não aparece na reposição
-        });
+        const catOrder = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
 
-        // Estrutura: cat → linha → modelo_base → [{cor, qnt, esgotado}]
-        type CorInfo = { cor: string | null; qnt: number; jaCaminho: boolean };
-        type ModeloInfo = { base: string; cores: CorInfo[]; totalQnt: number };
-        const catOrder = ["IPHONE", "IPAD", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
-        const catLabels: Record<string, string> = { IPHONE: "IPHONES", IPAD: "IPADS", MACBOOK: "MACBOOKS", MAC_MINI: "MAC MINI", APPLE_WATCH: "APPLE WATCH", AIRPODS: "AIRPODS", ACESSORIOS: "ACESSÓRIOS" };
+        // Agrupar novos por modelo_base+cor → {totalQnt, min, jaCaminho, corDisplay}
+        type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
+        const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
-        // Agrupar: cat → modelo_base → [{cor, qnt}]
-        const byCatModel: Record<string, Record<string, CorInfo[]>> = {};
-        for (const p of reposicaoItems) {
+        for (const p of novos) {
           const cat = p.categoria || "OUTROS";
           const nome = stripOrigemRepo(p.produto);
           const base = extractBase(nome);
-          const cor = extractCor(nome) || p.cor || null;
+          const cor = extractCor(nome, p.cor);
+          const corKey = (cor || "—").toUpperCase();
+          // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
+          const corUpper = (cor || "").toUpperCase().trim();
+          const ptFromEN = COR_PT[corUpper]; // se cor é EN → pega PT
+          const enFromPT = PT_TO_EN[corUpper]; // se cor é PT → pega EN
+          let corEN = cor || "—";
+          let corPT = "";
+          if (ptFromEN) { corEN = cor!; corPT = ptFromEN; }
+          else if (enFromPT) { corEN = enFromPT; corPT = cor!; }
+          const corDisplay = corPT && corPT.toLowerCase() !== corEN.toLowerCase()
+            ? `${corEN.toUpperCase()} (${corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase()})`
+            : (cor || "—");
+
           if (!byCatModel[cat]) byCatModel[cat] = {};
           if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
-          const existing = byCatModel[cat][base].find(c => c.cor === cor);
-          if (existing) { existing.qnt += p.qnt; }
-          else { byCatModel[cat][base].push({ cor, qnt: p.qnt, jaCaminho: produtosACaminho.has(nome.toUpperCase()) }); }
+
+          const existing = byCatModel[cat][base].find(c => c.corEN.toUpperCase() === corEN.toUpperCase() || (c.corDisplay || "—").toUpperCase() === corKey);
+          if (existing) {
+            existing.totalQnt += p.qnt;
+            if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) existing.min = p.estoque_minimo;
+          } else {
+            byCatModel[cat][base].push({
+              totalQnt: p.qnt,
+              min: (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) ? p.estoque_minimo : 0,
+              corEN, corPT, corDisplay,
+              jaCaminho: produtosACaminho.has(p.produto.toUpperCase()),
+              falta: 0,
+            });
+          }
         }
 
-        const sortedCats = Object.keys(byCatModel).sort((a, b) => {
+        // Calcular falta e filtrar apenas quem está abaixo do mínimo
+        const byCatModelFiltered: Record<string, Record<string, RepoGroup[]>> = {};
+        for (const [cat, models] of Object.entries(byCatModel)) {
+          for (const [base, cores] of Object.entries(models)) {
+            const abaixo = cores.filter(c => {
+              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : 0;
+              return c.min > 0 && c.totalQnt < c.min;
+            });
+            if (abaixo.length > 0) {
+              if (!byCatModelFiltered[cat]) byCatModelFiltered[cat] = {};
+              byCatModelFiltered[cat][base] = abaixo;
+            }
+          }
+        }
+
+        const sortedCats = Object.keys(byCatModelFiltered).sort((a, b) => {
           const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
           return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
         });
+
+        const totalFalta = Object.values(byCatModelFiltered).reduce((s, models) =>
+          s + Object.values(models).reduce((s2, cores) => s2 + cores.reduce((s3, c) => s3 + c.falta, 0), 0), 0);
 
         // Build copy text
         const buildCopyText = () => {
           const lines: string[] = ["*COMPRAR PRODUTOS*", ""];
           for (const cat of sortedCats) {
-            lines.push(`*${catLabels[cat] || cat}*`);
-            const modelos = Object.entries(byCatModel[cat]).sort(([a], [b]) => a.localeCompare(b));
+            lines.push(`*${dynamicCatLabels[cat] || cat}*`);
+            const modelos = Object.entries(byCatModelFiltered[cat]).sort(([a], [b]) => a.localeCompare(b));
             for (const [base, cores] of modelos) {
               lines.push(`\n${base}`);
-              for (const c of cores) {
-                const label = c.qnt === 0 ? `COMPRAR ${c.cor || "—"}` : `${c.qnt}x ${c.cor || "—"}`;
-                lines.push(`${c.qnt === 0 ? "🔴" : "🟡"} ${label}${c.jaCaminho ? " ✈️" : ""}`);
+              for (const c of cores.sort((a, b) => b.falta - a.falta)) {
+                lines.push(`${c.totalQnt === 0 ? "🔴" : "🟡"} ${c.corDisplay}: ${c.totalQnt}/${c.min} (falta ${c.falta})${c.jaCaminho ? " ✈️ A CAMINHO" : ""}`);
               }
             }
             lines.push("");
@@ -2195,58 +2243,85 @@ export default function EstoquePage() {
         };
 
         return (
-          <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm space-y-4`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className={`text-[18px] font-bold ${textPrimary}`}>Comprar Produtos</h2>
-                <p className={`text-[13px] mt-1 ${textSecondary}`}>Produtos abaixo do estoque mínimo — clique na categoria</p>
+          <div className="space-y-4">
+            {/* Header */}
+            <div className={`${bgCard} border ${borderCard} rounded-2xl p-6 shadow-sm`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`text-[18px] font-bold ${textPrimary}`}>Reposição de Estoque</h2>
+                  <p className={`text-[13px] mt-1 ${textSecondary}`}>
+                    {totalFalta > 0 ? `${totalFalta} unidades precisam ser compradas` : "Estoque OK!"}
+                  </p>
+                </div>
+                {totalFalta > 0 && (
+                  <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
+                    📋 Copiar Lista
+                  </button>
+                )}
               </div>
-              <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
-                📋 Copiar Lista
-              </button>
             </div>
+
             {sortedCats.length === 0 ? (
-              <p className={`text-sm ${textSecondary} text-center py-8`}>Estoque OK! Nenhum produto abaixo do mínimo.</p>
+              <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 text-center`}>
+                <p className={`text-[40px] mb-2`}>✅</p>
+                <p className={`text-[15px] font-bold ${textPrimary}`}>Estoque completo!</p>
+                <p className={`text-[13px] ${textSecondary} mt-1`}>Todos os produtos estão acima do mínimo configurado.</p>
+                <p className={`text-[11px] ${textMuted} mt-3`}>Configure o estoque mínimo abrindo um produto lacrado e definindo o campo "Estoque Mínimo".</p>
+              </div>
             ) : (
               sortedCats.map(cat => {
-                const modelos = Object.entries(byCatModel[cat]).sort(([a], [b]) => a.localeCompare(b));
-                const totalItems = modelos.reduce((s, [, cores]) => s + cores.length, 0);
-                const isOpen = expandedProducts.has(`repo_${cat}`);
+                const modelos = Object.entries(byCatModelFiltered[cat]).sort(([a], [b]) => a.localeCompare(b));
+                const totalFaltaCat = modelos.reduce((s, [, cores]) => s + cores.reduce((s2, c) => s2 + c.falta, 0), 0);
                 return (
-                  <div key={cat} className={`border rounded-xl overflow-hidden ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
-                    <button
-                      onClick={() => setExpandedProducts(prev => { const s = new Set(prev); s.has(`repo_${cat}`) ? s.delete(`repo_${cat}`) : s.add(`repo_${cat}`); return s; })}
-                      className={`w-full flex items-center justify-between px-5 py-4 font-bold text-[15px] transition-colors ${isOpen ? (dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]") : (dm ? "hover:bg-[#1C1C1E]" : "hover:bg-[#FAFAFA]")}`}
-                      style={{ color: isOpen ? "var(--at-accent, #E8740E)" : undefined }}
-                    >
-                      <span className={`flex items-center gap-2 ${!isOpen ? textPrimary : ""}`}>
-                        <span className="text-[12px]">{isOpen ? "▼" : "▶"}</span>
-                        {catLabels[cat] || cat}
-                      </span>
-                      <span className={`text-[12px] font-normal ${textSecondary}`}>{totalItems} itens</span>
-                    </button>
-                    {isOpen && (
-                      <div className={`px-5 pb-4 pt-2 space-y-4 ${dm ? "bg-[#1C1C1E]" : "bg-white"}`}>
-                        {modelos.map(([base, cores]) => (
-                          <div key={base}>
-                            <p className={`text-[13px] font-bold ${textPrimary} mb-1`}>{base}</p>
-                            <div className="pl-3 space-y-0.5">
-                              {cores.sort((a, b) => (b.qnt - a.qnt) || (a.cor || "").localeCompare(b.cor || "")).map((c, i) => (
-                                <p key={i} className={`text-[13px] ${textPrimary}`}>
-                                  {c.qnt === 0 ? "🔴" : "🟡"} {c.qnt === 0 ? "COMPRAR" : `${c.qnt}x`} {c.cor || "—"}
-                                  {c.jaCaminho && <span className="text-[10px] font-bold text-blue-500 ml-2">A CAMINHO</span>}
-                                </p>
-                              ))}
-                            </div>
+                  <div key={cat} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                    <div className={`px-5 py-3 border-b ${borderCard} flex items-center justify-between`}>
+                      <h3 className={`text-[14px] font-bold ${textPrimary}`}>{dynamicCatLabels[cat] || cat}</h3>
+                      <span className="text-[11px] font-bold text-red-500">{totalFaltaCat} un. faltando</span>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: dm ? "#2C2C2E" : "#F2F2F7" }}>
+                      {modelos.map(([base, cores]) => (
+                        <div key={base} className="px-5 py-3">
+                          <p className={`text-[13px] font-bold ${textPrimary} mb-2`}>{base}</p>
+                          <div className="grid gap-1.5">
+                            {cores.sort((a, b) => b.falta - a.falta).map((c, i) => (
+                              <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${
+                                c.totalQnt === 0
+                                  ? (dm ? "bg-red-500/10 border border-red-500/20" : "bg-red-50 border border-red-100")
+                                  : (dm ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-yellow-50 border border-yellow-100")
+                              }`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
+                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1 font-normal opacity-60 text-[11px]`}>({c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()})</span>}</span>
+                                  {c.jaCaminho && (
+                                    <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-[12px] ${textSecondary}`}>
+                                    {c.totalQnt}/{c.min}
+                                  </span>
+                                  <span className={`text-[12px] font-bold ${c.totalQnt === 0 ? "text-red-500" : "text-yellow-600"}`}>
+                                    comprar {c.falta}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })
             )}
+
+            {/* Dica */}
+            <div className={`px-5 py-3 rounded-xl border border-dashed ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+              <p className={`text-[11px] ${textMuted}`}>
+                💡 Para definir o estoque mínimo de um produto, abra um produto lacrado → campo "Estoque Mínimo". O mínimo é por cor: todos os itens da mesma cor compartilham o mesmo mínimo.
+              </p>
+            </div>
           </div>
         );
       })()
@@ -3066,7 +3141,7 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items], cardIdx) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
@@ -3074,8 +3149,8 @@ export default function EstoquePage() {
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
-                    // No estoque (lacrados): ocultar itens com qnt=0
-                    if (tab === "estoque" && p.qnt === 0) return;
+                    // Ocultar itens esgotados (qnt=0) em lacrados e seminovos
+                    if ((tab === "estoque" || tab === "seminovos") && p.qnt === 0) return;
                     const groupKey = stripOrigem(p.produto).toUpperCase();
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
@@ -3150,9 +3225,9 @@ export default function EstoquePage() {
                             colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
                           });
                           return (
-                            <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
+                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer max-w-[300px] overflow-hidden max-h-[1.4em]`}>
                               {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
-                                <span key={c}>{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                                <span key={c} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
                               ))}
                             </span>
                           );
