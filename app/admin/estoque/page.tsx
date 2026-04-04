@@ -3150,9 +3150,9 @@ export default function EstoquePage() {
                             colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
                           });
                           return (
-                            <span className={`text-[11px] ${textSecondary} flex items-center gap-1 flex-wrap cursor-pointer`}>
+                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer max-w-[300px] overflow-hidden max-h-[1.4em]`}>
                               {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
-                                <span key={c}>{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                                <span key={c} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
                               ))}
                             </span>
                           );
