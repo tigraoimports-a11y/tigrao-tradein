@@ -7,6 +7,16 @@ const formatBRL = (v: number) =>
 const formatUSD = (v: number) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
+// Mesmas taxas do gerador de orçamento
+const TAXAS_PARCELA: Record<number, number> = {
+  1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+  7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+  13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+  19: 20, 20: 21, 21: 22,
+};
+function getTaxa(n: number) { return TAXAS_PARCELA[n] ?? 0; }
+const fmtBRL = (v: number) => `R$ ${Math.ceil(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
 // Catálogo de produtos com peso pré-cadastrado (kg) — peso com caixa completa
 const PRODUTOS_PESO: { cat: string; nome: string; peso: number }[] = [
   // MacBooks (caixa completa ~3kg)
@@ -44,6 +54,11 @@ export default function CalculadoraImportacao() {
   const [showProdutos, setShowProdutos] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
   const [produtoSelecionado, setProdutoSelecionado] = useState("");
+
+  // Gerador de orçamento
+  const [precoVenda, setPrecoVenda] = useState("");
+  const [parcelasSel, setParcelasSel] = useState<number[]>([12, 18, 21]);
+  const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
     if (preco && peso && cotacao) {
@@ -204,6 +219,96 @@ export default function CalculadoraImportacao() {
               {formatBRL(result.totalBrl)}
             </div>
           </div>
+        </div>
+
+        {/* ── Gerador de Orçamento ── */}
+        <div className="rounded-2xl border border-[#E5E5EA] bg-white overflow-hidden">
+          <div className="px-5 pt-5 pb-4 space-y-4">
+            <div className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider">
+              Gerar Orçamento para Cliente
+            </div>
+
+            {/* Preço de venda */}
+            <div>
+              <label className="block text-xs font-semibold text-[#86868B] mb-1.5">Preço que quero vender (R$)</label>
+              <div className="flex items-center rounded-xl border border-[#D2D2D7] bg-white overflow-hidden focus-within:border-[#E8740E] transition-colors">
+                <span className="pl-3 text-sm text-[#86868B] font-medium">R$</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={precoVenda}
+                  onChange={e => { setPrecoVenda(e.target.value); setCopiado(false); }}
+                  placeholder="Ex: 11500"
+                  className="flex-1 px-3 py-3 bg-transparent text-[#1D1D1F] text-base font-semibold outline-none placeholder:text-[#C7C7CC]"
+                />
+              </div>
+            </div>
+
+            {/* Seletor de parcelas */}
+            <div>
+              <label className="block text-xs font-semibold text-[#86868B] mb-2">Parcelas no texto</label>
+              <div className="flex flex-wrap gap-2">
+                {[6, 9, 10, 12, 15, 18, 21].map(n => {
+                  const sel = parcelasSel.includes(n);
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => { setParcelasSel(prev => sel ? prev.filter(x => x !== n) : [...prev, n].sort((a,b)=>a-b)); setCopiado(false); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${sel ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"}`}
+                    >
+                      {n}x
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Texto gerado */}
+          {parseFloat(precoVenda) > 0 && (() => {
+            const pix = parseFloat(precoVenda);
+            const nome = produtoSelecionado || "PRODUTO";
+            const sorted = [...parcelasSel].sort((a, b) => a - b);
+            const linhas: string[] = [
+              `📦 *${nome.toUpperCase()}*`,
+              ``,
+              `📦 Novo / Lacrado`,
+              `✅ 1 ano de garantia`,
+              `📄 Nota fiscal em seu nome`,
+              ``,
+              `🕐 Produto sob encomenda`,
+              `📦 Prazo de entrega: varia conforme disponibilidade`,
+              ``,
+            ];
+            if (sorted.length > 0) {
+              linhas.push(`💳 Parcelado no cartão:`);
+              for (const n of sorted) {
+                const vp = Math.ceil(pix * (1 + getTaxa(n) / 100) / n);
+                linhas.push(`     • ${n}x de ${fmtBRL(vp)}`);
+              }
+            }
+            linhas.push(`💰 Ou ${fmtBRL(pix)} à vista no PIX`);
+            linhas.push(``);
+            linhas.push(`⏰ Orçamento válido por 24 horas. Após esse período refaça o orçamento.`);
+            const texto = linhas.join("\n");
+
+            return (
+              <div>
+                <div className="px-5 pb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider">Texto pronto</span>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 3000); }}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-colors ${copiado ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#D06A0D]"}`}
+                  >
+                    {copiado ? "✅ Copiado!" : "📋 Copiar"}
+                  </button>
+                </div>
+                <div className="mx-5 mb-5 p-4 bg-[#1A1A1A] rounded-xl">
+                  <pre className="text-[11px] text-[#E5E5E5] font-mono whitespace-pre-wrap leading-relaxed">{texto}</pre>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
