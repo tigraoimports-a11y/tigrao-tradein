@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
   // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui registros com NULL
   let query = supabase
     .from("vendas")
-    .select("id,data,cliente,cpf,cnpj,email,pessoa,bairro,cidade,uf,origem,tipo,produto,fornecedor,preco_vendido,forma,banco,serial_no,imei,nota_fiscal_url,status_pagamento")
+    .select("id,data,cliente,cpf,cnpj,email,bairro,cidade,uf,origem,tipo,produto,fornecedor,preco_vendido,forma,banco,serial_no,imei,nota_fiscal_url,status_pagamento")
     .order("data", { ascending: false });
 
   if (search) {
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
   // Agrupar por cliente (sem enviar vendas[] no response — fica mais leve)
   const clienteMap = new Map<string, {
     nome: string; cpf: string | null; cnpj: string | null; email: string | null;
-    pessoa: string | null; bairro: string | null; cidade: string | null; uf: string | null;
+    bairro: string | null; cidade: string | null; uf: string | null;
     total_compras: number; total_gasto: number; ultima_compra: string; ultimo_produto: string;
     cliente_desde: string; is_lojista: boolean;
     vendas: { id: string; data: string; produto: string; preco_vendido: number; forma: string; banco: string; serial_no: string | null; imei: string | null }[];
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
 
     if (!clienteMap.has(key)) {
       clienteMap.set(key, {
-        nome, cpf: v.cpf, cnpj: v.cnpj, email: v.email, pessoa: v.pessoa,
+        nome, cpf: v.cpf, cnpj: v.cnpj, email: v.email,
         bairro: v.bairro, cidade: v.cidade, uf: v.uf,
         total_compras: 0, total_gasto: 0, ultima_compra: v.data, ultimo_produto: v.produto,
         cliente_desde: v.data, is_lojista: isAtacado, vendas: [],
@@ -206,7 +206,6 @@ export async function GET(req: NextRequest) {
     if (v.bairro && !c.bairro) c.bairro = v.bairro;
     if (v.cidade && !c.cidade) c.cidade = v.cidade;
     if (v.uf && !c.uf) c.uf = v.uf;
-    if (v.pessoa && !c.pessoa) c.pessoa = v.pessoa;
 
     c.vendas.push({
       id: v.id, data: v.data, produto: v.produto, preco_vendido: Number(v.preco_vendido || 0),

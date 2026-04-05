@@ -20,7 +20,6 @@ interface Cliente {
   cpf: string | null;
   cnpj: string | null;
   email: string | null;
-  pessoa: string | null;
   bairro: string | null;
   cidade: string | null;
   uf: string | null;
