@@ -3547,6 +3547,15 @@ export default function EstoquePage() {
                         })()}
                         <span className={`text-[11px] font-medium ${textPrimary}`}>{items.reduce((s, p) => s + p.qnt, 0)} un.</span>
                         <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                        {/* Botão Etiqueta no header do card — só Pendências */}
+                        {isPendenciasTab && isAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); items.forEach(p => handlePrintEtiquetaPendencia(p)); }}
+                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                          >
+                            🏷️ Etiqueta
+                          </button>
+                        )}
                         {/* Botão editar preço em massa — todas as unidades do grupo */}
                         {isAdmin && (
                           bulkCustoKey === modelo ? (
