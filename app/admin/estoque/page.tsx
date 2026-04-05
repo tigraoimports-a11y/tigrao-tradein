@@ -3620,12 +3620,32 @@ export default function EstoquePage() {
                           const totalQntBal = items.reduce((s, p) => s + p.qnt, 0);
                           const totalValorBal = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                           const avgCusto = totalQntBal > 0 ? Math.round(totalValorBal / totalQntBal) : 0;
-                          const hasVariation = items.some(p => p.custo_unitario !== items[0]?.custo_unitario);
-                          return hasVariation && totalQntBal > 1 ? (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"}`} title="Preço médio de balanço">
+                          if (totalQntBal === 0) return null;
+                          if (editBalancoKey === modelo) return (
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <span className={`text-[10px] ${dm ? "text-blue-400" : "text-blue-600"}`}>Bal. R$</span>
+                              <input
+                                type="number"
+                                value={editBalancoVal}
+                                onChange={(e) => setEditBalancoVal(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSaveBalanco(items); if (e.key === "Escape") { setEditBalancoKey(""); setEditBalancoVal(""); } }}
+                                className={`w-20 px-1 py-0.5 rounded border border-blue-500 text-xs text-right ${dm ? "bg-[#1A1A1A] text-blue-300" : "bg-white text-blue-600"}`}
+                                placeholder={String(avgCusto)}
+                                autoFocus
+                              />
+                              <button onClick={(e) => { e.stopPropagation(); handleSaveBalanco(items); }} className="text-[10px] text-blue-400 font-bold">OK</button>
+                              <button onClick={(e) => { e.stopPropagation(); setEditBalancoKey(""); setEditBalancoVal(""); }} className="text-[10px] text-red-400">✕</button>
+                            </div>
+                          );
+                          return (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"} ${isAdmin ? "cursor-pointer hover:bg-blue-900/50" : ""}`}
+                              title={isAdmin ? "Clique para editar preço de balanço" : "Preço médio de balanço"}
+                              onClick={(e) => { if (isAdmin) { e.stopPropagation(); setEditBalancoKey(modelo); setEditBalancoVal(String(avgCusto)); } }}
+                            >
                               Bal. {fmt(avgCusto)}
                             </span>
-                          ) : null;
+                          );
                         })()}
                         {/* Botão Etiqueta no header do card — só Pendências */}
                         {isPendenciasTab && isAdmin && (
@@ -3696,13 +3716,7 @@ export default function EstoquePage() {
                     {expandedModels.has(modelo) && <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <tbody>
-                          {(() => {
-                            // Calcular preço de balanço do modelo (média ponderada de todos os itens)
-                            const modeloTotalQnt = items.reduce((s, p) => s + p.qnt, 0);
-                            const modeloTotalValor = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                            const modeloBalanco = modeloTotalQnt > 0 ? Math.round(modeloTotalValor / modeloTotalQnt) : 0;
-                            return null;
-                          })()}
+                          {/* Balanço agora aparece no header do card */}
                           {produtoEntries.map(([prodNome, prodItemsRaw]) => {
                             // Ordenar por cor → data de entrada
                             const prodItems = [...prodItemsRaw].sort((a, b) => (a.cor || "").localeCompare(b.cor || "") || (a.data_entrada || "").localeCompare(b.data_entrada || ""));
@@ -3710,10 +3724,6 @@ export default function EstoquePage() {
                             const showMover = isPendenciasTab;
                             const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                            // Preço de balanço do modelo
-                            const modeloTotalQnt = items.reduce((s, p) => s + p.qnt, 0);
-                            const modeloTotalValor = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                            const modeloBalanco = modeloTotalQnt > 0 ? Math.round(modeloTotalValor / modeloTotalQnt) : 0;
                             const corKey = `${modelo}::${prodNome}`;
 
                             return (
@@ -3828,33 +3838,7 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
                                   </td>
-                                  <td className={`px-4 py-2 text-xs ${dm ? "text-blue-400" : "text-blue-600"}`} onClick={e => e.stopPropagation()}>
-                                    {editBalancoKey === prodNome ? (
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-[10px] text-blue-300/60">Balanço:</span>
-                                        <input
-                                          type="number"
-                                          value={editBalancoVal}
-                                          onChange={(e) => setEditBalancoVal(e.target.value)}
-                                          onKeyDown={(e) => { if (e.key === "Enter") handleSaveBalanco(items); if (e.key === "Escape") { setEditBalancoKey(""); setEditBalancoVal(""); } }}
-                                          className={`w-20 px-1 py-0.5 rounded border border-blue-500 text-xs text-right ${dm ? "bg-[#1A1A1A] text-blue-300" : "bg-white text-blue-600"}`}
-                                          placeholder={String(modeloBalanco)}
-                                          autoFocus
-                                        />
-                                        <button onClick={() => handleSaveBalanco(items)} className="text-[10px] text-blue-400 font-bold">OK</button>
-                                        <button onClick={() => { setEditBalancoKey(""); setEditBalancoVal(""); }} className="text-[10px] text-red-400">✕</button>
-                                      </div>
-                                    ) : (
-                                      <span
-                                        className={`flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-blue-300" : ""}`}
-                                        onClick={() => { if (isAdmin) { setEditBalancoKey(prodNome); setEditBalancoVal(String(modeloBalanco)); } }}
-                                        title={isAdmin ? "Editar preço de balanço (aplicar a todas as unidades)" : "Preço de balanço (média do modelo)"}
-                                      >
-                                        <span className="text-[10px] text-blue-300/60">Balanço:</span> {fmt(modeloBalanco)}
-                                        {isAdmin && <span className="text-[9px] opacity-0 group-hover/card:opacity-50">✏️</span>}
-                                      </span>
-                                    )}
-                                  </td>
+                                  <td className="px-4 py-2"></td>
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
                                 </tr>
@@ -3894,7 +3878,10 @@ export default function EstoquePage() {
                                             {p.qnt} {p.qnt === 1 ? "un." : "un."}
                                           </span>
                                         </td>
-                                        <td colSpan={5} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
+                                        <td className={`px-4 py-2.5 text-xs ${textSecondary}`}>
+                                          {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
+                                        </td>
+                                        <td colSpan={4} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
                                           {(p.imei || p.serial_no) && <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>#{p.serial_no || p.imei}</span>}
                                         </td>
                                       </tr>
@@ -4037,8 +4024,8 @@ export default function EstoquePage() {
                                           </span>
                                         )}
                                       </td>
-                                      <td className={`px-4 py-2.5`}></td>
                                       <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
+                                      <td></td>
                                       <td className="px-4 py-2.5">
                                         <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${dm ? (p.status === "EM ESTOQUE" ? "bg-green-900/30 text-green-400" : p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
                                         {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
