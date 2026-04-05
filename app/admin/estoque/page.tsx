@@ -3509,6 +3509,8 @@ export default function EstoquePage() {
                   const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
                   const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
                   return modeloEntries.map(([modelo, items], cardIdx) => {
+                  // No estoque: ocultar cards onde TODAS as unidades têm qnt=0
+                  if (tab === "estoque" && items.every(p => p.qnt === 0)) return null;
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
                     .replace(/\s+(VC|LL|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
