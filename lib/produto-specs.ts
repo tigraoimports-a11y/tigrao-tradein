@@ -198,6 +198,13 @@ export const MACBOOK_NUCLEOS = [
 ];
 
 export const MAC_MINI_CHIPS = ["M1", "M2", "M2 PRO", "M4", "M4 PRO"];
+export const MAC_MINI_NUCLEOS = [
+  "8C CPU/8C GPU",
+  "8C CPU/10C GPU",
+  "10C CPU/10C GPU",
+  "12C CPU/16C GPU",
+  "14C CPU/20C GPU",
+];
 export const MAC_MINI_RAMS = ["8GB", "16GB", "24GB", "32GB", "48GB", "64GB"];
 export const MAC_MINI_STORAGES = ["256GB", "512GB", "1TB", "2TB"];
 
@@ -229,7 +236,7 @@ export const AIRPODS_MODELOS = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "
 export interface ProdutoSpec {
   ip_modelo: string; ip_linha: string; ip_storage: string; ip_origem: string;
   mb_modelo: string; mb_tela: string; mb_chip: string; mb_nucleos: string; mb_ram: string; mb_storage: string;
-  mm_chip: string; mm_ram: string; mm_storage: string;
+  mm_chip: string; mm_nucleos: string; mm_ram: string; mm_storage: string;
   ipad_modelo: string; ipad_chip: string; ipad_tela: string; ipad_storage: string; ipad_conn: string;
   aw_modelo: string; aw_tamanho: string; aw_conn: string; aw_pulseira: string; aw_band: string;
   air_modelo: string;
@@ -238,7 +245,7 @@ export interface ProdutoSpec {
 export const DEFAULT_SPEC: ProdutoSpec = {
   ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
   mb_modelo: "AIR", mb_tela: '13"', mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
-  mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
+  mm_chip: "M4", mm_nucleos: "10C CPU/10C GPU", mm_ram: "16GB", mm_storage: "256GB",
   ipad_modelo: "AIR", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
   aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
   air_modelo: "AIRPODS 4",
@@ -314,9 +321,10 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
       return `IPHONE ${spec.ip_modelo}${linha}${storage}${c}${origem}`.toUpperCase();
     }
     case "MAC_MINI": {
+      const nucleos = spec.mm_nucleos ? ` (${spec.mm_nucleos})` : "";
       const ram = spec.mm_ram ? ` ${spec.mm_ram}` : "";
       const storage = spec.mm_storage ? ` ${spec.mm_storage}` : "";
-      return `MAC MINI ${spec.mm_chip}${ram}${storage}`.toUpperCase();
+      return `MAC MINI ${spec.mm_chip}${nucleos}${ram}${storage}`.toUpperCase();
     }
     case "MACBOOK": {
       const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
