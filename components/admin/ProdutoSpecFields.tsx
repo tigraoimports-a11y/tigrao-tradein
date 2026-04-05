@@ -295,8 +295,8 @@ export default function ProdutoSpecFields({
   // Núcleos: usa chip_air ou chip_pro_max do catálogo (configurado por modelo)
   // Se tem modelo do catálogo selecionado, mostra APENAS o que está configurado
   // Se não tem modelo do catálogo, usa fallback hardcoded
-  const nucleosChipAir = modeloConfigs["chip_air"] || [];
-  const nucleosChipProMax = modeloConfigs["chip_pro_max"] || [];
+  const nucleosChipAir = modeloConfigs["chips_air"] || modeloConfigs["chip_air"] || [];
+  const nucleosChipProMax = modeloConfigs["chips_pro_max"] || modeloConfigs["chip_pro_max"] || [];
   const macNucleosCatalog = [...nucleosChipAir, ...nucleosChipProMax];
   const mbNucleosOptions = hasCatalogModel
     ? macNucleosCatalog  // só o que está no catálogo (pode ser vazio = sem dropdown)
