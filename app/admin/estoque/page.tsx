@@ -3122,8 +3122,19 @@ export default function EstoquePage() {
                                         </td>
                                         <td className={`px-4 py-2 text-[13px] font-medium ${textPrimary} pl-8`} onClick={() => setDetailProduct(p)}>
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
-                                          {p.cor || p.produto}
-                                          {ptLabel && p.cor && ptLabel.toUpperCase() !== p.cor.toUpperCase() && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
+                                          {(() => {
+                                            if (!p.cor) return p.produto;
+                                            const upper = p.cor.toUpperCase().trim();
+                                            const ptFromEN = COR_PT[upper];
+                                            if (ptFromEN && ptFromEN.toLowerCase() !== p.cor.toLowerCase()) {
+                                              return <>{p.cor} <span className={`text-[11px] font-normal ${textSecondary}`}>{ptFromEN}</span></>;
+                                            }
+                                            const enFromPT = PT_TO_EN[upper];
+                                            if (enFromPT) {
+                                              return <>{enFromPT} <span className={`text-[11px] font-normal ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
+                                            }
+                                            return p.cor;
+                                          })()}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                               ✅ {p.serial_no || p.imei}
