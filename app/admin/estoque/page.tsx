@@ -4114,7 +4114,7 @@ export default function EstoquePage() {
       )}
 
       {/* Floating bulk action bar */}
-      {selectMode && selectedIds.size > 0 && (
+      {selectMode && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
           <span className={`text-sm font-semibold ${textPrimary}`}>{selectedIds.size} selecionado(s)</span>
           <button
@@ -4123,6 +4123,7 @@ export default function EstoquePage() {
           >
             Selecionar todos ({filtered.length})
           </button>
+          {selectedIds.size > 0 && <>
           <button
             onClick={() => {
               const itens = estoque.filter(p => selectedIds.has(p.id));
@@ -4173,6 +4174,7 @@ export default function EstoquePage() {
           >
             {bulkDeleting ? "Excluindo..." : `Excluir ${selectedIds.size}`}
           </button>
+          </>}
           <button
             onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
