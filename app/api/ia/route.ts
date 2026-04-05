@@ -10,40 +10,37 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function coletarContexto() {
   // Busca dados do negócio para contexto
-  const [estoque, vendas, pendencias, config] = await Promise.all([
+  const [estoqueRes, vendasRes, pendenciasRes] = await Promise.all([
     supabase
       .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco, custo, serial, imei, fornecedor, estoque_minimo, tab")
+      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status")
+      .not("tipo", "eq", "PENDENCIA")
+      .not("tipo", "eq", "A_CAMINHO")
       .order("produto"),
     supabase
       .from("vendas")
-      .select("produto, cor, storage, valor, forma, banco, data_venda, vendedor, origem, tipo")
+      .select("produto, cor, storage, valor, forma, banco, data_venda, vendedor, origem")
       .gte("data_venda", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .order("data_venda", { ascending: false })
-      .limit(200),
+      .limit(300),
     supabase
       .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco, custo, serial, imei, cliente, tab")
-      .eq("tab", "pendencias"),
-    supabase
-      .from("tradein_config")
-      .select("chave, valor")
-      .limit(20),
+      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, cliente, tipo, created_at")
+      .eq("tipo", "PENDENCIA"),
   ]);
 
-  const estoqueData = estoque.data || [];
-  const vendasData = vendas.data || [];
-  const pendenciasData = pendencias.data || [];
+  const estoqueData = estoqueRes.data || [];
+  const vendasData = vendasRes.data || [];
+  const pendenciasData = pendenciasRes.data || [];
 
   // Agrupar estoque por modelo
   const estoqueAgrupado: Record<string, { qnt: number; preco?: number; custo?: number; min?: number }> = {};
   for (const item of estoqueData) {
-    if (item.tab === "pendencias") continue;
-    const key = `${item.produto} ${item.storage || ""} ${item.cor || ""}`.trim();
+    const key = `${item.produto}${item.storage ? " " + item.storage : ""}${item.cor ? " " + item.cor : ""}`.trim();
     if (!estoqueAgrupado[key]) estoqueAgrupado[key] = { qnt: 0 };
     estoqueAgrupado[key].qnt += item.qnt || 0;
-    if (item.preco) estoqueAgrupado[key].preco = item.preco;
-    if (item.custo) estoqueAgrupado[key].custo = item.custo;
+    if (item.preco_sugerido) estoqueAgrupado[key].preco = item.preco_sugerido;
+    if (item.custo_unitario) estoqueAgrupado[key].custo = item.custo_unitario;
     if (item.estoque_minimo) estoqueAgrupado[key].min = item.estoque_minimo;
   }
 
@@ -51,20 +48,38 @@ async function coletarContexto() {
   const totalVendas = vendasData.length;
   const receitaTotal = vendasData.reduce((s, v) => s + (v.valor || 0), 0);
 
-  // Detectar possíveis duplicatas (mesmo produto, custo diferente)
-  const duplicatas: string[] = [];
-  const porProduto: Record<string, number[]> = {};
-  for (const item of estoqueData) {
-    if (!item.custo || item.tab === "pendencias") continue;
-    const key = `${item.produto} ${item.storage || ""} ${item.cor || ""}`.trim();
-    if (!porProduto[key]) porProduto[key] = [];
-    if (!porProduto[key].includes(item.custo)) porProduto[key].push(item.custo);
+  // Vendas por produto (top 10)
+  const vendasPorProduto: Record<string, number> = {};
+  for (const v of vendasData) {
+    const key = `${v.produto}${v.storage ? " " + v.storage : ""}`.trim();
+    vendasPorProduto[key] = (vendasPorProduto[key] || 0) + 1;
   }
-  for (const [k, custos] of Object.entries(porProduto)) {
-    if (custos.length > 1) duplicatas.push(`${k}: custos divergentes ${custos.map(c => `R$${c}`).join(" vs ")}`);
+  const topProdutos = Object.entries(vendasPorProduto)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([k, v]) => `${k}: ${v} vendas`);
+
+  // Vendas por vendedor
+  const vendasPorVendedor: Record<string, number> = {};
+  for (const v of vendasData) {
+    const nome = v.vendedor || "Sem vendedor";
+    vendasPorVendedor[nome] = (vendasPorVendedor[nome] || 0) + 1;
   }
 
-  // Produtos zerados (sem estoque mínimo configurado)
+  // Detectar custos divergentes (mesmo produto, custo diferente)
+  const custoPorProduto: Record<string, Set<number>> = {};
+  for (const item of estoqueData) {
+    if (!item.custo_unitario) continue;
+    const key = `${item.produto}${item.storage ? " " + item.storage : ""}${item.cor ? " " + item.cor : ""}`.trim();
+    if (!custoPorProduto[key]) custoPorProduto[key] = new Set();
+    custoPorProduto[key].add(item.custo_unitario);
+  }
+  const divergencias = Object.entries(custoPorProduto)
+    .filter(([, custos]) => custos.size > 1)
+    .map(([k, custos]) => `${k}: ${Array.from(custos).map(c => `R$${c.toLocaleString("pt-BR")}`).join(" vs ")}`)
+    .slice(0, 10);
+
+  // Produtos zerados
   const zerados = Object.entries(estoqueAgrupado)
     .filter(([, v]) => v.qnt === 0)
     .map(([k]) => k)
@@ -76,16 +91,29 @@ async function coletarContexto() {
     .map(([k, v]) => `${k}: tem ${v.qnt}, mínimo ${v.min}`)
     .slice(0, 20);
 
+  // Pendências antigas (mais de 15 dias)
+  const quinzeDiasAtras = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+  const pendenciasAntigas = pendenciasData
+    .filter(p => p.created_at && p.created_at < quinzeDiasAtras)
+    .map(p => `${p.produto}${p.storage ? " " + p.storage : ""} - cliente: ${p.cliente || "sem nome"}`)
+    .slice(0, 10);
+
   return {
-    estoqueResumo: estoqueAgrupado,
-    totalItens: estoqueData.filter(i => i.tab !== "pendencias").length,
+    estoqueAgrupado,
+    totalItensEstoque: Object.values(estoqueAgrupado).reduce((s, v) => s + v.qnt, 0),
+    totalModelosEstoque: Object.keys(estoqueAgrupado).length,
     totalPendencias: pendenciasData.length,
+    pendenciasAntigas,
     totalVendas30d: totalVendas,
     receitaTotal30d: receitaTotal,
-    duplicatasCusto: duplicatas.slice(0, 10),
+    topProdutos10,
+    vendasPorVendedor,
+    divergenciasCusto: divergencias,
     produtosZerados: zerados,
     produtosAbaixoMinimo: abaixoMin,
   };
+
+  function topProdutos10() { return topProdutos; }
 }
 
 export async function POST(req: NextRequest) {
@@ -100,33 +128,45 @@ export async function POST(req: NextRequest) {
     if (modo === "analise" || !historico.length) {
       // Primeira mensagem ou análise automática: busca dados completos
       const dados = await coletarContexto();
-      contexto = `
-Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
-Você tem acesso aos dados do sistema e ajuda o dono (André) e a equipe com análises de estoque, vendas e operações.
+      const topProdutos = dados.topProdutos10();
 
-DADOS ATUAIS DO SISTEMA:
-- Total de itens em estoque: ${dados.totalItens}
-- Produtos nas Pendências (trade-in): ${dados.totalPendencias}
-- Vendas nos últimos 30 dias: ${dados.totalVendas30d} vendas | Receita: R$ ${dados.receitaTotal30d.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+      contexto = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
+Você tem acesso aos dados reais do sistema e ajuda o dono (André) com análises de estoque, vendas e operações.
+Responda em português brasileiro de forma clara e objetiva. Use emojis quando fizer sentido. Seja direto e prático.
 
-PRODUTOS COM CUSTO DIVERGENTE (possíveis duplicatas ou erro de cadastro):
-${dados.duplicatasCusto.length ? dados.duplicatasCusto.join("\n") : "Nenhum detectado ✅"}
+=== DADOS DO SISTEMA (TEMPO REAL) ===
 
-PRODUTOS ZERADOS (sem estoque):
+ESTOQUE:
+- Total de unidades em estoque: ${dados.totalItensEstoque}
+- Total de modelos diferentes: ${dados.totalModelosEstoque}
+- Produtos nas Pendências (trade-in aguardando): ${dados.totalPendencias}
+${dados.pendenciasAntigas.length ? `- Pendências com mais de 15 dias:\n  ${dados.pendenciasAntigas.join("\n  ")}` : "- Sem pendências antigas ✅"}
+
+VENDAS (últimos 30 dias):
+- Total de vendas: ${dados.totalVendas30d}
+- Receita total: R$ ${dados.receitaTotal30d.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+- Top produtos mais vendidos:
+  ${topProdutos.join("\n  ")}
+- Vendas por vendedor:
+  ${Object.entries(dados.vendasPorVendedor).sort(([,a],[,b]) => b-a).map(([k,v]) => `${k}: ${v} vendas`).join("\n  ")}
+
+ALERTAS:
+Custos divergentes (possível erro cadastro):
+${dados.divergenciasCusto.length ? dados.divergenciasCusto.join("\n") : "Nenhum ✅"}
+
+Produtos esgotados (qnt=0):
 ${dados.produtosZerados.length ? dados.produtosZerados.join(", ") : "Nenhum ✅"}
 
-PRODUTOS ABAIXO DO MÍNIMO:
+Produtos abaixo do estoque mínimo:
 ${dados.produtosAbaixoMinimo.length ? dados.produtosAbaixoMinimo.join("\n") : "Nenhum ✅"}
 
-ESTOQUE ATUAL (agrupado por modelo):
-${Object.entries(dados.estoqueResumo)
+ESTOQUE ATUAL (modelos com quantidade):
+${Object.entries(dados.estoqueAgrupado)
   .filter(([, v]) => v.qnt > 0)
-  .slice(0, 50)
-  .map(([k, v]) => `• ${k}: ${v.qnt} un | R$${v.preco?.toLocaleString("pt-BR") || "—"} | custo R$${v.custo?.toLocaleString("pt-BR") || "—"}`)
+  .sort(([, a], [, b]) => b.qnt - a.qnt)
+  .slice(0, 60)
+  .map(([k, v]) => `• ${k}: ${v.qnt} un | venda R$${v.preco?.toLocaleString("pt-BR") || "—"} | custo R$${v.custo?.toLocaleString("pt-BR") || "—"}`)
   .join("\n")}
-
-Responda em português brasileiro de forma clara e direta. Use emojis quando apropriado.
-Seja objetivo e prático — André precisa de respostas rápidas e acionáveis.
 `;
     }
 
