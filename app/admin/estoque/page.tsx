@@ -1013,8 +1013,8 @@ export default function EstoquePage() {
         return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }
       case "APPLE_WATCH": {
-        const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
-        const pulseira = spec.aw_pulseira ? ` ${spec.aw_pulseira}` : "";
+        const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CEL" : " GPS";
+        const pulseira = spec.aw_pulseira ? ` PULSEIRA ${spec.aw_pulseira}` : "";
         return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}${c}${pulseira}`.toUpperCase();
       }
       case "AIRPODS":
@@ -1062,14 +1062,14 @@ export default function EstoquePage() {
             }
             continue;
           }
-          // Caso 2: normalizar GPS+CEL → GPS+CELLULAR
+          // Caso 2: normalizar GPS+CELLULAR → GPS+CEL
           let fixed = nome;
-          if (fixed.includes("GPS+CEL ") || fixed.endsWith("GPS+CEL")) {
-            fixed = fixed.replace(/GPS\+CEL\b/g, "GPS+CELLULAR");
+          if (fixed.includes("GPS+CELLULAR")) {
+            fixed = fixed.replace(/GPS\+CELLULAR/g, "GPS+CEL");
           }
-          // Caso 3: CELL → CELLULAR
-          if (fixed.includes(" CELL ") || fixed.endsWith(" CELL")) {
-            fixed = fixed.replace(/\bCELL\b/g, "CELLULAR");
+          // Caso 3: CELLULAR → CEL (standalone)
+          if (fixed.includes(" CELLULAR ") || fixed.endsWith(" CELLULAR")) {
+            fixed = fixed.replace(/\bCELLULAR\b/g, "CEL");
           }
           // Caso 4: remover "APPLE WATCH " duplicado
           fixed = fixed.replace(/^APPLE WATCH APPLE WATCH/i, "APPLE WATCH");
@@ -1442,9 +1442,9 @@ export default function EstoquePage() {
       if (sizeIdx !== -1) {
         // Pega até o tamanho (ex: "APPLE WATCH ULTRA 3 49MM"), remove cores
         const baseParts = words.slice(0, sizeIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
-        // Incluir GPS/CELLULAR após tamanho
-        const connectWords = new Set(["GPS","CELLULAR","WI-FI","5G","4G","LTE"]);
-        if (sizeIdx + 1 < words.length && connectWords.has(words[sizeIdx + 1].toUpperCase())) {
+        // Incluir GPS/GPS+CEL/CELLULAR após tamanho
+        const nextWord = sizeIdx + 1 < words.length ? words[sizeIdx + 1].toUpperCase() : "";
+        if (/^(GPS(\+CEL)?|CELLULAR|WI-FI|5G|4G|LTE)$/i.test(nextWord)) {
           baseParts.push(words[sizeIdx + 1]);
         }
         return baseParts.join(" ");
