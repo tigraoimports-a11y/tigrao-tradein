@@ -3828,36 +3828,10 @@ export default function EstoquePage() {
                                   <td className="px-4 py-2 text-right">
                                     <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
                                   </td>
-                                  <td className="px-4 py-2 text-xs text-white/50" onClick={e => e.stopPropagation()}>
-                                    {bulkCustoKey === prodNome ? (
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-[10px] text-white/30">R$</span>
-                                        <input
-                                          type="number"
-                                          value={bulkCustoVal}
-                                          onChange={(e) => setBulkCustoVal(e.target.value)}
-                                          onKeyDown={(e) => { if (e.key === "Enter") handleBulkCusto(prodItems); if (e.key === "Escape") { setBulkCustoKey(""); setBulkCustoVal(""); } }}
-                                          className="w-20 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right bg-[#1A1A1A] text-white"
-                                          placeholder={String(prodItems[0]?.custo_unitario || "")}
-                                          autoFocus
-                                        />
-                                        <button onClick={() => handleBulkCusto(prodItems)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                        <button onClick={() => { setBulkCustoKey(""); setBulkCustoVal(""); }} className="text-[10px] text-red-400">✕</button>
-                                      </div>
-                                    ) : (
-                                      <span
-                                        className={`flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""}`}
-                                        onClick={() => { if (isAdmin) { setBulkCustoKey(prodNome); setBulkCustoVal(String(prodItems[0]?.custo_unitario || "")); } }}
-                                        title={isAdmin ? "Editar preco de todas as unidades" : ""}
-                                      >
-                                        {prodItems[0]?.custo_unitario ? fmt(prodItems[0].custo_unitario) : "—"}
-                                        {isAdmin && <span className="text-[9px] opacity-0 group-hover/card:opacity-50">✏️</span>}
-                                      </span>
-                                    )}
-                                  </td>
                                   <td className={`px-4 py-2 text-xs ${dm ? "text-blue-400" : "text-blue-600"}`} onClick={e => e.stopPropagation()}>
                                     {editBalancoKey === prodNome ? (
                                       <div className="flex items-center gap-1">
+                                        <span className="text-[10px] text-blue-300/60">Balanço:</span>
                                         <input
                                           type="number"
                                           value={editBalancoVal}
@@ -3876,7 +3850,7 @@ export default function EstoquePage() {
                                         onClick={() => { if (isAdmin) { setEditBalancoKey(prodNome); setEditBalancoVal(String(modeloBalanco)); } }}
                                         title={isAdmin ? "Editar preço de balanço (aplicar a todas as unidades)" : "Preço de balanço (média do modelo)"}
                                       >
-                                        {fmt(modeloBalanco)}
+                                        <span className="text-[10px] text-blue-300/60">Balanço:</span> {fmt(modeloBalanco)}
                                         {isAdmin && <span className="text-[9px] opacity-0 group-hover/card:opacity-50">✏️</span>}
                                       </span>
                                     )}
@@ -4063,13 +4037,7 @@ export default function EstoquePage() {
                                           </span>
                                         )}
                                       </td>
-                                      <td className={`px-4 py-2.5 text-xs ${dm ? "text-blue-400/70" : "text-blue-500"}`} onClick={e => e.stopPropagation()}>
-                                        <span
-                                          className={`${isAdmin ? "cursor-pointer hover:text-blue-300" : ""}`}
-                                          onClick={() => { if (isAdmin) { setEditBalancoKey(prodNome); setEditBalancoVal(String(modeloBalanco)); } }}
-                                          title={isAdmin ? "Editar balanço" : "Preço de balanço"}
-                                        >{fmt(modeloBalanco)}</span>
-                                      </td>
+                                      <td className={`px-4 py-2.5`}></td>
                                       <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
                                       <td className="px-4 py-2.5">
                                         <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${dm ? (p.status === "EM ESTOQUE" ? "bg-green-900/30 text-green-400" : p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
