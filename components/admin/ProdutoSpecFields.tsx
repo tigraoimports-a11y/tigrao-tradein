@@ -130,7 +130,7 @@ const IPHONE_MODELOS_FULL = [
   "16", "16 PLUS", "16E", "16 PRO", "16 PRO MAX",
   "17", "17 AIR", "17 PRO", "17 PRO MAX",
 ];
-const AIRPODS_MODELOS_FULL = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"];
+const AIRPODS_MODELOS_FULL = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX 2024 USB-C"];
 const WATCH_TAMANHOS_FULL = ["40mm", "42mm", "44mm", "45mm", "46mm", "49mm"];
 
 // ─── Row state ────────────────────────────────────────────────────────────────
@@ -701,14 +701,16 @@ export default function ProdutoSpecFields({
       )}
 
       {/* AirPods specs */}
-      {row.categoria === "AIRPODS" && !categoryModelos.length && (
+      {row.categoria === "AIRPODS" && (
         <div className={`grid grid-cols-2 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>Modelo</p>
-            <select value={row.spec.air_modelo} onChange={(e) => setSpec("air_modelo", e.target.value)} className={inputCls}>
-              {AIRPODS_MODELOS_FULL.map((m) => <option key={m}>{m}</option>)}
-            </select>
-          </div>
+          {!categoryModelos.length && (
+            <div>
+              <p className={labelCls}>Modelo</p>
+              <select value={row.spec.air_modelo} onChange={(e) => setSpec("air_modelo", e.target.value)} className={inputCls}>
+                {AIRPODS_MODELOS_FULL.map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
