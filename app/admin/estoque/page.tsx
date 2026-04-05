@@ -820,8 +820,8 @@ export default function EstoquePage() {
     return result;
   });
   const dragCardRef = useRef<string | null>(null);
-  const dragOverCardRef = useRef<string | null>(null);
   const [dragCardKey, setDragCardKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ modelo: string; position: "before" | "after" } | null>(null);
   function saveCardOrder(cat: string, keys: string[]) {
     setCardOrders(prev => ({ ...prev, [cat]: keys }));
     if (typeof window !== "undefined") {
@@ -847,20 +847,36 @@ export default function EstoquePage() {
     [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
     saveCardOrder(cat, keys);
   }
-  function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
-    if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
-      setDragCardKey(null); return;
+  function handleCardDragOver(e: React.DragEvent, modelo: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragCardRef.current || dragCardRef.current === modelo) {
+      setDropTarget(null);
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position = e.clientY < midY ? "before" : "after";
+    setDropTarget({ modelo, position });
+  }
+  function handleCardDrop(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
+    if (!dragCardRef.current || !dropTarget) {
+      setDragCardKey(null); setDropTarget(null); return;
     }
     const keys = modeloEntries.map(([m]) => m);
     const fromIdx = keys.indexOf(dragCardRef.current);
-    const toIdx = keys.indexOf(dragOverCardRef.current);
-    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); return; }
+    let toIdx = keys.indexOf(dropTarget.modelo);
+    if (fromIdx === -1 || toIdx === -1) { setDragCardKey(null); setDropTarget(null); return; }
+    // Remove from old position
     keys.splice(fromIdx, 1);
+    // Recalculate target index after removal
+    toIdx = keys.indexOf(dropTarget.modelo);
+    if (dropTarget.position === "after") toIdx += 1;
     keys.splice(toIdx, 0, dragCardRef.current);
     saveCardOrder(cat, keys);
     setDragCardKey(null);
+    setDropTarget(null);
     dragCardRef.current = null;
-    dragOverCardRef.current = null;
   }
 
   // Duplicar produto do estoque
@@ -3556,15 +3572,22 @@ export default function EstoquePage() {
                   if (tab === "estoque" && produtoEntries.length === 0) return null;
 
                   const isCardDragging = dragCardKey === modelo;
+                  const isDropBefore = dropTarget?.modelo === modelo && dropTarget?.position === "before";
+                  const isDropAfter = dropTarget?.modelo === modelo && dropTarget?.position === "after";
                   return (
                   <div
                     key={modelo}
-                    draggable
-                    onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
-                    onDragEnter={(e) => { e.stopPropagation(); e.preventDefault(); dragOverCardRef.current = modelo; }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E] border-2" : borderCard}`}
+                    onDragOver={(e) => handleCardDragOver(e, modelo)}
+                    onDragLeave={() => { if (dropTarget?.modelo === modelo) setDropTarget(null); }}
+                    onDrop={(e) => { e.preventDefault(); handleCardDrop(cat, modeloEntries); }}
+                    className="relative"
+                  >
+                    {/* Drop indicator - before */}
+                    {isDropBefore && dragCardKey && (
+                      <div className="absolute -top-1.5 left-4 right-4 h-[3px] rounded-full bg-[#E8740E] z-10 shadow-[0_0_8px_rgba(232,116,14,0.5)]" />
+                    )}
+                  <div
+                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${isCardDragging ? "opacity-30 scale-[0.98] border-[#E8740E] border-2" : borderCard}`}
                   >
                     <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { if (selectMode) return; setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
@@ -3611,9 +3634,32 @@ export default function EstoquePage() {
                           </h3>
                         )}
                         {modeloEntries.length > 1 && (
-                          <div className="flex flex-col gap-0 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                            <button disabled={cardIdx === 0} onClick={() => moveCard(cat, modeloEntries, cardIdx, "up")} className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === 0 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`} title="Mover para cima">▲</button>
-                            <button disabled={cardIdx === modeloEntries.length - 1} onClick={() => moveCard(cat, modeloEntries, cardIdx, "down")} className={`px-1 py-0 leading-none text-[9px] rounded ${cardIdx === modeloEntries.length - 1 ? "opacity-20 cursor-not-allowed" : `${dm ? "text-[#86868B] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}`} title="Mover para baixo">▼</button>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              disabled={cardIdx === 0}
+                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "up")}
+                              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${cardIdx === 0 ? "opacity-20 cursor-not-allowed" : dm ? "text-[#86868B] hover:text-white hover:bg-[#3A3A3C]" : "text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#E5E5EA]"}`}
+                              title="Mover para cima"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                            </button>
+                            <button
+                              disabled={cardIdx === modeloEntries.length - 1}
+                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "down")}
+                              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${cardIdx === modeloEntries.length - 1 ? "opacity-20 cursor-not-allowed" : dm ? "text-[#86868B] hover:text-white hover:bg-[#3A3A3C]" : "text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#E5E5EA]"}`}
+                              title="Mover para baixo"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            <span
+                              draggable
+                              onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
+                              onDragEnd={() => { setDragCardKey(null); setDropTarget(null); dragCardRef.current = null; }}
+                              className={`w-6 h-6 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing transition-colors ${dm ? "text-[#636366] hover:text-[#E8740E] hover:bg-[#3A3A3C]" : "text-[#C7C7CC] hover:text-[#E8740E] hover:bg-[#E5E5EA]"}`}
+                              title="Arrastar para reordenar"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+                            </span>
                           </div>
                         )}
                       </div>
@@ -4223,6 +4269,11 @@ export default function EstoquePage() {
                         </tbody>
                       </table>
                     </div>}
+                  </div>
+                    {/* Drop indicator - after */}
+                    {isDropAfter && dragCardKey && (
+                      <div className="absolute -bottom-1.5 left-4 right-4 h-[3px] rounded-full bg-[#E8740E] z-10 shadow-[0_0_8px_rgba(232,116,14,0.5)]" />
+                    )}
                   </div>
                   );
                 });
