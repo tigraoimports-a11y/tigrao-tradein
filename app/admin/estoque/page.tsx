@@ -120,6 +120,7 @@ const COR_PT: Record<string, string> = {
   "LARANJA": "Laranja",
   "COSMIC ORANGE": "Laranja Cósmico",
   "ORANGE": "Laranja",
+  "DEEP BLUE": "Azul Profundo",
   "DEEP PURPLE": "Roxo Profundo",
   "ALPINE GREEN": "Verde Alpino",
   "SIERRA BLUE": "Azul Serra",
@@ -524,7 +525,8 @@ function getModeloBase(produto: string, categoria: string): string {
     if (genMatch) return `AirPods ${genMatch[1]}`;
     return "AirPods";
   }
-  return produto;
+  // Fallback: normalizar trailing dashes/espaços
+  return produto.replace(/\s*[-–]\s*$/, "").trim();
 }
 
 export default function EstoquePage() {
@@ -1017,8 +1019,8 @@ export default function EstoquePage() {
         return `${modelo}${chip} ${spec.ipad_tela} ${spec.ipad_storage}${conn}${c}`.toUpperCase();
       }
       case "APPLE_WATCH": {
-        const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CELLULAR" : " GPS";
-        const pulseira = spec.aw_pulseira ? ` ${spec.aw_pulseira}` : "";
+        const conn = spec.aw_conn === "GPS+CELL" ? " GPS+CEL" : " GPS";
+        const pulseira = spec.aw_pulseira ? ` PULSEIRA ${spec.aw_pulseira}` : "";
         return `APPLE WATCH ${spec.aw_modelo} ${spec.aw_tamanho}${conn}${c}${pulseira}`.toUpperCase();
       }
       case "AIRPODS":
@@ -1066,14 +1068,14 @@ export default function EstoquePage() {
             }
             continue;
           }
-          // Caso 2: normalizar GPS+CEL → GPS+CELLULAR
+          // Caso 2: normalizar GPS+CELLULAR → GPS+CEL
           let fixed = nome;
-          if (fixed.includes("GPS+CEL ") || fixed.endsWith("GPS+CEL")) {
-            fixed = fixed.replace(/GPS\+CEL\b/g, "GPS+CELLULAR");
+          if (fixed.includes("GPS+CELLULAR")) {
+            fixed = fixed.replace(/GPS\+CELLULAR/g, "GPS+CEL");
           }
-          // Caso 3: CELL → CELLULAR
-          if (fixed.includes(" CELL ") || fixed.endsWith(" CELL")) {
-            fixed = fixed.replace(/\bCELL\b/g, "CELLULAR");
+          // Caso 3: CELLULAR → CEL (standalone)
+          if (fixed.includes(" CELLULAR ") || fixed.endsWith(" CELLULAR")) {
+            fixed = fixed.replace(/\bCELLULAR\b/g, "CEL");
           }
           // Caso 4: remover "APPLE WATCH " duplicado
           fixed = fixed.replace(/^APPLE WATCH APPLE WATCH/i, "APPLE WATCH");
@@ -1436,10 +1438,26 @@ export default function EstoquePage() {
       "NATURAL","TITANIUM","COSMIC","LAVENDER","SAGE","TEAL","ULTRAMARINE","MIDNIGHT",
       "STARLIGHT","ROSE","DESERT","DEEP","DARK","ORANGE","GRAY","GREY","PRETO","BRANCO",
       "AZUL","ROSA","PRATA","VERDE","VERMELHO","AMARELO","ROXO","CINZA","DOURADO",
+      "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
     const words = produto.split(/\s+/);
     const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
-    if (storageIdx === -1) return produto;
+    // Watches/AirPods: sem storage, agrupar por modelo+tamanho
+    if (storageIdx === -1) {
+      const sizeIdx = words.findIndex(w => /^\d+MM$/i.test(w));
+      if (sizeIdx !== -1) {
+        // Pega até o tamanho (ex: "APPLE WATCH ULTRA 3 49MM"), remove cores
+        const baseParts = words.slice(0, sizeIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
+        // Incluir GPS/GPS+CEL/CELLULAR após tamanho
+        const nextWord = sizeIdx + 1 < words.length ? words[sizeIdx + 1].toUpperCase() : "";
+        if (/^(GPS(\+CEL)?|CELLULAR|WI-FI|5G|4G|LTE)$/i.test(nextWord)) {
+          baseParts.push(words[sizeIdx + 1]);
+        }
+        return baseParts.join(" ");
+      }
+      // Sem storage nem tamanho: remover cores do nome
+      return words.filter(w => !COLOR_WORDS.has(w.toUpperCase()) && !/^PULSEIRA$/i.test(w)).join(" ");
+    }
     const baseParts = words.slice(0, storageIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
     // Incluir sufixo de conectividade (WI-FI, CELLULAR) que aparece logo após o storage
     const connectWords = new Set(["WI-FI","CELLULAR","5G","4G","LTE"]);
@@ -1676,14 +1694,14 @@ export default function EstoquePage() {
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo || "NOVO") === "NOVO");
   const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
-  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
+  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO" && p.status !== "ESGOTADO");
   const atacado = estoque.filter((p) => p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
-  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.data_compra);
+  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id && !["PENDENCIA", "SEMINOVO"].includes(p.tipo));
   const acabando = novos.filter((p) => p.qnt === 1);
 
   // Esgotados: qnt=0 em NOVO. Marcar se já está a caminho
@@ -2983,7 +3001,12 @@ export default function EstoquePage() {
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
                 <div className="space-y-4">
-                  {sortedDates.map(date => {
+                  {sortedDates.filter(date => {
+                    // Ocultar pedidos onde todos os itens já foram recebidos (exceto se filtrando por recebidos)
+                    if (acaminhoFilter === "recebidos") return true;
+                    const items = byDate[date];
+                    return acaminhoFilter === "todos" ? true : items.some(p => p.tipo === "A_CAMINHO");
+                  }).map(date => {
                     const items = byDate[date];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
@@ -3032,8 +3055,10 @@ export default function EstoquePage() {
                           </thead>
                           <tbody>
                             {(() => {
-                              // Agrupar pendentes por modelo base
-                              const pendentesDate = items.filter(p => p.tipo === "A_CAMINHO");
+                              // Agrupar itens por modelo base (pendentes ou recebidos conforme filtro)
+                              const pendentesDate = acaminhoFilter === "recebidos"
+                                ? items.filter(p => p.tipo !== "A_CAMINHO")
+                                : items.filter(p => p.tipo === "A_CAMINHO");
                               const groupMap = new Map<string, typeof pendentesDate>();
                               pendentesDate.forEach(p => {
                                 const base = getBaseModelACaminho(p.produto);
@@ -3090,9 +3115,9 @@ export default function EstoquePage() {
                                     </td>}
                                   </tr>
                                 );
-                                // Linhas expandidas (itens individuais)
+                                // Linhas expandidas (itens individuais, agrupados por cor)
                                 if (isExpanded && !isSingleUnit) {
-                                  group.forEach(p => {
+                                  [...group].sort((a, b) => (a.cor || "").localeCompare(b.cor || "")).forEach(p => {
                                     const ptLabel = corSoPT(p.cor, p.produto, p.cor_pt);
                                     rows.push(
                                       <tr key={p.id}
@@ -3102,8 +3127,19 @@ export default function EstoquePage() {
                                         </td>
                                         <td className={`px-4 py-2 text-[13px] font-medium ${textPrimary} pl-8`} onClick={() => setDetailProduct(p)}>
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
-                                          {p.cor || p.produto}
-                                          {ptLabel && p.cor !== ptLabel && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
+                                          {(() => {
+                                            if (!p.cor) return p.produto;
+                                            const upper = p.cor.toUpperCase().trim();
+                                            const ptFromEN = COR_PT[upper];
+                                            if (ptFromEN && ptFromEN.toLowerCase() !== p.cor.toLowerCase()) {
+                                              return <>{p.cor} <span className={`text-[11px] font-normal ${textSecondary}`}>{ptFromEN}</span></>;
+                                            }
+                                            const enFromPT = PT_TO_EN[upper];
+                                            if (enFromPT) {
+                                              return <>{enFromPT} <span className={`text-[11px] font-normal ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
+                                            }
+                                            return p.cor;
+                                          })()}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                               ✅ {p.serial_no || p.imei}
@@ -3340,11 +3376,13 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items], cardIdx) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
+                    .replace(/\s+J(?=\s*\(|\s*$)(\s*\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
                     .replace(/\s{2,}/g, " ")
+                    .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
@@ -3509,7 +3547,7 @@ export default function EstoquePage() {
                                           <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
                                         </div>
                                       ) : (
-                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
+                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {/* Badge de núcleos para MacBooks */}
                                           {getBaseCat(prodItems[0]?.categoria) === "MACBOOK" && (() => {
