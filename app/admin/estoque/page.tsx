@@ -519,7 +519,8 @@ function getModeloBase(produto: string, categoria: string): string {
     if (genMatch) return `AirPods ${genMatch[1]}`;
     return "AirPods";
   }
-  return produto;
+  // Fallback: normalizar trailing dashes/espaços
+  return produto.replace(/\s*[-–]\s*$/, "").trim();
 }
 
 export default function EstoquePage() {
@@ -1431,10 +1432,26 @@ export default function EstoquePage() {
       "NATURAL","TITANIUM","COSMIC","LAVENDER","SAGE","TEAL","ULTRAMARINE","MIDNIGHT",
       "STARLIGHT","ROSE","DESERT","DEEP","DARK","ORANGE","GRAY","GREY","PRETO","BRANCO",
       "AZUL","ROSA","PRATA","VERDE","VERMELHO","AMARELO","ROXO","CINZA","DOURADO",
+      "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
     const words = produto.split(/\s+/);
     const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
-    if (storageIdx === -1) return produto;
+    // Watches/AirPods: sem storage, agrupar por modelo+tamanho
+    if (storageIdx === -1) {
+      const sizeIdx = words.findIndex(w => /^\d+MM$/i.test(w));
+      if (sizeIdx !== -1) {
+        // Pega até o tamanho (ex: "APPLE WATCH ULTRA 3 49MM"), remove cores
+        const baseParts = words.slice(0, sizeIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
+        // Incluir GPS/CELLULAR após tamanho
+        const connectWords = new Set(["GPS","CELLULAR","WI-FI","5G","4G","LTE"]);
+        if (sizeIdx + 1 < words.length && connectWords.has(words[sizeIdx + 1].toUpperCase())) {
+          baseParts.push(words[sizeIdx + 1]);
+        }
+        return baseParts.join(" ");
+      }
+      // Sem storage nem tamanho: remover cores do nome
+      return words.filter(w => !COLOR_WORDS.has(w.toUpperCase()) && !/^PULSEIRA$/i.test(w)).join(" ");
+    }
     const baseParts = words.slice(0, storageIdx + 1).filter(w => !COLOR_WORDS.has(w.toUpperCase()));
     // Incluir sufixo de conectividade (WI-FI, CELLULAR) que aparece logo após o storage
     const connectWords = new Set(["WI-FI","CELLULAR","5G","4G","LTE"]);
@@ -3032,8 +3049,10 @@ export default function EstoquePage() {
                           </thead>
                           <tbody>
                             {(() => {
-                              // Agrupar pendentes por modelo base
-                              const pendentesDate = items.filter(p => p.tipo === "A_CAMINHO");
+                              // Agrupar itens por modelo base (pendentes ou recebidos conforme filtro)
+                              const pendentesDate = acaminhoFilter === "recebidos"
+                                ? items.filter(p => p.tipo !== "A_CAMINHO")
+                                : items.filter(p => p.tipo === "A_CAMINHO");
                               const groupMap = new Map<string, typeof pendentesDate>();
                               pendentesDate.forEach(p => {
                                 const base = getBaseModelACaminho(p.produto);
