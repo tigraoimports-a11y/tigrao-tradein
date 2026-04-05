@@ -55,6 +55,16 @@ function PrecosContent() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
 
+  // Edição completa de linha (modelo + specs + preço)
+  const [editingFull, setEditingFull] = useState<{
+    origModelo: string; origArm: string;
+    modelo: string; specs: { label: string; value: string }[];
+    preco_pix: string; tipo: string;
+  } | null>(null);
+
+  // Headers editáveis (renomear colunas)
+  const [editingHeader, setEditingHeader] = useState<{ catKey: string; colIdx: number } | null>(null);
+
   // Categorias dinâmicas
   const [categorias, setCategorias] = useState<Categoria[]>(() => getCategoriasPrecos());
   const [showNewCat, setShowNewCat] = useState(false);
@@ -263,6 +273,46 @@ function PrecosContent() {
     setSpecFields((prev) => prev.map((s) => ({ ...s, value: "" })));
     setSaving(null);
     // NÃO fechar o form — facilita adicionar múltiplas variantes seguidas
+  }
+
+  async function handleSaveFull() {
+    if (!editingFull) return;
+    const preco = parseFloat(editingFull.preco_pix.replace(",", "."));
+    const filledSpecs = editingFull.specs.filter((s) => s.value.trim());
+    const newArm = filledSpecs.map((s) => s.value.trim()).join(" | ");
+    if (!editingFull.modelo.trim() || !newArm || isNaN(preco) || preco <= 0) return;
+
+    setSaving("full");
+    const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
+
+    // Se modelo ou armazenamento mudou, apagar registro antigo
+    const modeloChanged = editingFull.origModelo !== editingFull.modelo.trim();
+    const armChanged = editingFull.origArm !== newArm;
+    if (modeloChanged || armChanged) {
+      await fetch("/api/admin/precos", {
+        method: "DELETE", headers,
+        body: JSON.stringify({ modelo: editingFull.origModelo, armazenamento: editingFull.origArm }),
+      });
+    }
+
+    // Salvar labels atualizados
+    const labels = editingFull.specs.map((s, i) => s.label || `Spec ${i + 1}`);
+    saveLabels(tab, labels);
+
+    await fetch("/api/admin/precos", {
+      method: "POST", headers,
+      body: JSON.stringify({
+        modelo: editingFull.modelo.trim(),
+        armazenamento: newArm,
+        preco_pix: preco,
+        status: "ativo",
+        categoria: tab,
+        tipo: editingFull.tipo,
+      }),
+    });
+    await fetchData(password);
+    setEditingFull(null);
+    setSaving(null);
   }
 
   if (loading && data === null) {
@@ -555,6 +605,108 @@ function PrecosContent() {
         </div>
       )}
 
+      {/* Modal edição completa */}
+      {editingFull && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditingFull(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-base text-[#1D1D1F]">Editar produto</h3>
+
+            {/* Modelo */}
+            <div>
+              <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Modelo</p>
+              <input
+                value={editingFull.modelo}
+                onChange={(e) => setEditingFull({ ...editingFull, modelo: e.target.value })}
+                className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:border-[#E8740E] outline-none"
+                placeholder="Ex: Mac Mini M4"
+              />
+            </div>
+
+            {/* Specs dinâmicos */}
+            <div className="space-y-2">
+              {editingFull.specs.map((sf, i) => (
+                <div key={i} className="flex gap-2 items-end">
+                  <div className="w-28 shrink-0">
+                    <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Nome col. {i + 1}</p>
+                    <input
+                      value={sf.label}
+                      onChange={(e) => {
+                        const specs = [...editingFull.specs];
+                        specs[i] = { ...specs[i], label: e.target.value };
+                        setEditingFull({ ...editingFull, specs });
+                      }}
+                      className="w-full px-2 py-1.5 border border-[#D2D2D7] rounded-lg text-xs focus:border-[#E8740E] outline-none"
+                      placeholder="RAM, Tela..."
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Valor</p>
+                    <input
+                      value={sf.value}
+                      onChange={(e) => {
+                        const specs = [...editingFull.specs];
+                        specs[i] = { ...specs[i], value: e.target.value };
+                        setEditingFull({ ...editingFull, specs });
+                      }}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:border-[#E8740E] outline-none"
+                      placeholder="16GB, 256GB..."
+                    />
+                  </div>
+                  {editingFull.specs.length > 1 && (
+                    <button onClick={() => setEditingFull({ ...editingFull, specs: editingFull.specs.filter((_, j) => j !== i) })}
+                      className="text-red-400 hover:text-red-600 text-lg leading-none pb-1">×</button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setEditingFull({ ...editingFull, specs: [...editingFull.specs, { label: `Spec ${editingFull.specs.length + 1}`, value: "" }] })}
+                className="text-xs text-[#E8740E] hover:underline"
+              >
+                + Adicionar coluna
+              </button>
+            </div>
+
+            {/* Preço + Tipo */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Preço PIX (R$)</p>
+                <input
+                  type="number"
+                  value={editingFull.preco_pix}
+                  onChange={(e) => setEditingFull({ ...editingFull, preco_pix: e.target.value })}
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:border-[#E8740E] outline-none"
+                />
+              </div>
+              <div className="w-36">
+                <p className="text-[10px] font-bold text-[#86868B] uppercase mb-1">Tipo</p>
+                <select
+                  value={editingFull.tipo}
+                  onChange={(e) => setEditingFull({ ...editingFull, tipo: e.target.value })}
+                  className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm"
+                >
+                  <option value="TRADEIN">Trade-In</option>
+                  <option value="CATALOGO">Catálogo</option>
+                  <option value="AMBOS">Ambos</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSaveFull}
+                disabled={saving === "full"}
+                className="flex-1 py-2.5 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+              >
+                {saving === "full" ? "Salvando..." : "Salvar alterações"}
+              </button>
+              <button onClick={() => setEditingFull(null)} className="px-4 py-2.5 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7]">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 && !showAdd ? (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-12 text-center shadow-sm">
           <p className="text-[#86868B] mb-4">Nenhum produto em {catInfo.label}.</p>
@@ -592,12 +744,47 @@ function PrecosContent() {
                   {hasMultipleCols ? (
                     Array.from({ length: maxParts }).map((_, i) => (
                       <th key={i} className="px-4 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">
-                        {defaultLabels[i] || `Spec ${i + 1}`}
+                        {editingHeader?.catKey === tab && editingHeader.colIdx === i ? (
+                          <input
+                            autoFocus
+                            defaultValue={defaultLabels[i] || `Spec ${i + 1}`}
+                            onBlur={(e) => {
+                              const newLabels = [...getLabelsForCategory(tab)];
+                              while (newLabels.length <= i) newLabels.push(`Spec ${newLabels.length + 1}`);
+                              newLabels[i] = e.target.value || `Spec ${i + 1}`;
+                              saveLabels(tab, newLabels);
+                              setData(prev => prev ? [...prev] : prev);
+                              setEditingHeader(null);
+                            }}
+                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            className="w-20 px-1 py-0.5 border border-[#E8740E] rounded text-xs font-bold text-[#1D1D1F] uppercase outline-none"
+                          />
+                        ) : (
+                          <span className="cursor-pointer hover:text-[#E8740E] transition-colors" title="Clique para renomear" onClick={() => setEditingHeader({ catKey: tab, colIdx: i })}>
+                            {defaultLabels[i] || `Spec ${i + 1}`} ✎
+                          </span>
+                        )}
                       </th>
                     ))
                   ) : (
                     <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">
-                      {defaultLabels[0] || "Variação"}
+                      {editingHeader?.catKey === tab && editingHeader.colIdx === 0 ? (
+                        <input
+                          autoFocus
+                          defaultValue={defaultLabels[0] || "Variação"}
+                          onBlur={(e) => {
+                            saveLabels(tab, [e.target.value || "Variação"]);
+                            setData(prev => prev ? [...prev] : prev);
+                            setEditingHeader(null);
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className="w-20 px-1 py-0.5 border border-[#E8740E] rounded text-xs font-bold text-[#1D1D1F] uppercase outline-none"
+                        />
+                      ) : (
+                        <span className="cursor-pointer hover:text-[#E8740E] transition-colors" title="Clique para renomear" onClick={() => setEditingHeader({ catKey: tab, colIdx: 0 })}>
+                          {defaultLabels[0] || "Variação"} ✎
+                        </span>
+                      )}
                     </th>
                   )}
                   <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Preço PIX</th>
@@ -735,7 +922,18 @@ function PrecosContent() {
                               Duplicar
                             </button>
                             <button
-                              onClick={() => setEditing({ ...editing, [key]: String(row.preco_pix) })}
+                              onClick={() => {
+                                const parts = row.armazenamento.split("|").map((s) => s.trim().replace(/\s*RAM$/i, ""));
+                                const labels = getLabelsForCategory(tab);
+                                setEditingFull({
+                                  origModelo: row.modelo,
+                                  origArm: row.armazenamento,
+                                  modelo: row.modelo,
+                                  specs: parts.map((v, idx) => ({ label: labels[idx] || `Spec ${idx + 1}`, value: v })),
+                                  preco_pix: String(row.preco_pix),
+                                  tipo: row.tipo ?? "TRADEIN",
+                                });
+                              }}
                               className="px-2 py-1.5 rounded-lg text-xs text-[#86868B] hover:text-[#E8740E] border border-[#D2D2D7] hover:border-[#E8740E] transition-colors"
                             >
                               Editar

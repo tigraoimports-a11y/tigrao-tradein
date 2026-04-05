@@ -1224,6 +1224,19 @@ export default function EstoquePage() {
     setMsg(`Preco atualizado para ${items.length} unidades: R$ ${val.toLocaleString("pt-BR")}`);
   };
 
+  // Quantidade mínima em massa (todas as unidades de um grupo)
+  const [bulkMinimoKey, setBulkMinimoKey] = useState<string>("");
+  const [bulkMinimoVal, setBulkMinimoVal] = useState<string>("");
+  const handleBulkMinimo = async (items: ProdutoEstoque[]) => {
+    const val = parseInt(bulkMinimoVal);
+    if (isNaN(val) || val < 0) return;
+    const ids = items.map(p => p.id);
+    await Promise.all(ids.map(id => apiPatch(id, { estoque_minimo: val })));
+    setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, estoque_minimo: val } : p));
+    setBulkMinimoKey(""); setBulkMinimoVal("");
+    setMsg(`Qtd. mínima definida como ${val} para ${items.length} variante(s)`);
+  };
+
   // Edição genérica de campo inline
   const startEditField = (id: string, field: string, value: string) => {
     setEditingField((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
@@ -1358,6 +1371,72 @@ export default function EstoquePage() {
         canvas{display:block;width:22mm;height:22mm;margin:0 auto}
       </style></head><body>
       ${labelsHtml}
+      <script>
+        document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
+          var data=canvas.getAttribute('data-qr');
+          var qr=qrcode(0,'L');qr.addData(data);qr.make();
+          var size=500;canvas.width=size;canvas.height=size;
+          var ctx=canvas.getContext('2d');
+          var cells=qr.getModuleCount();
+          var qz=4;var totalCells=cells+qz*2;var cs=size/totalCells;var offset=qz*cs;
+          ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
+          for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
+            if(qr.isDark(r,c))ctx.fillRect(Math.floor(offset+c*cs),Math.floor(offset+r*cs),Math.ceil(cs),Math.ceil(cs));
+        });
+        window.onload=function(){setTimeout(function(){window.print()},600)};
+      <\/script></body></html>`);
+    win.document.close();
+  };
+
+  // Etiqueta específica pra pendências (produtos na troca) — com dados do cliente
+  const handlePrintEtiquetaPendencia = (p: ProdutoEstoque) => {
+    const serial = p.serial_no || "";
+    const imei = p.imei || "";
+    const qrData = serial || imei || p.id;
+    const cor = p.cor ? ` ${p.cor}` : "";
+    const obs = p.observacao || "";
+    const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+    const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+    const hasCaixa = obs.includes("[COM_CAIXA]");
+    const hasCabo = obs.includes("[COM_CABO]");
+    const win = window.open("", "_blank", "width=600,height=400");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Etiqueta Troca</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+      <style>
+        @page{size:29mm 62mm;margin:0}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0}
+        .label{width:29mm;overflow:hidden;display:block}
+        canvas{display:block;width:22mm;height:22mm;margin:0 auto;margin-top:1mm}
+        .info{padding:0 1.5mm 1mm;text-align:center}
+        .produto{font-size:6pt;font-weight:900;line-height:1.2;color:#000;word-break:break-word}
+        .badges{font-size:5pt;margin-top:0.5mm;color:#555;line-height:1.3}
+        .sn{font-size:5pt;font-family:monospace;font-weight:bold;color:#000;line-height:1.3;margin-top:0.3mm}
+        .cliente{font-size:6pt;font-weight:900;color:#E8740E;line-height:1.3;margin-top:0.5mm;word-break:break-word;text-transform:uppercase}
+        .data{font-size:5pt;color:#555;margin-top:0.2mm}
+        .custo{font-size:6pt;font-weight:900;color:#000;margin-top:0.3mm}
+        .label-troca{font-size:4.5pt;letter-spacing:0.5px;text-transform:uppercase;color:#888;margin-top:0.5mm}
+      </style></head><body>
+      <div class="label">
+        <canvas id="qr0" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+        <div class="info">
+          <div class="produto">${p.produto}${cor}</div>
+          <div class="badges">${[
+            p.bateria ? `🔋 ${p.bateria}%` : "",
+            grade ? `Grade ${grade}` : "",
+            hasCaixa ? "Com caixa" : "",
+            hasCabo ? "Com cabo" : "",
+          ].filter(Boolean).join(" · ") || ""}</div>
+          ${serial ? `<div class="sn">S/N: ${serial}</div>` : ""}
+          ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
+          ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
+          ${p.data_compra ? `<div class="data">📅 ${p.data_compra.split("-").reverse().join("/")}</div>` : ""}
+          ${p.custo_unitario ? `<div class="custo">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
+          <div class="label-troca">Produto na troca</div>
+        </div>
+      </div>
       <script>
         document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
           var data=canvas.getAttribute('data-qr');
@@ -1722,10 +1801,12 @@ export default function EstoquePage() {
 
   // Reposição: agrupar por modelo+cor e verificar se está abaixo do mínimo
   const reposicaoCount = (() => {
-    // Agrupar novos por produto+cor → somar qnt e pegar estoque_minimo
+    // Agrupar por modelo_base (getModeloBase) + p.cor — mesma lógica da aba Reposição
     const groups: Record<string, { totalQnt: number; min: number | null }> = {};
     for (const p of novos) {
-      const key = `${p.produto}|||${p.cor || ""}`;
+      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const cor = (p.cor || "").toUpperCase();
+      const key = `${base}|||${cor}`;
       if (!groups[key]) groups[key] = { totalQnt: 0, min: null };
       groups[key].totalQnt += p.qnt;
       if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
@@ -1734,7 +1815,7 @@ export default function EstoquePage() {
     }
     let count = 0;
     for (const g of Object.values(groups)) {
-      if (g.min && g.totalQnt < g.min) count++;
+      if ((g.min && g.totalQnt < g.min) || g.totalQnt === 0) count++;
     }
     return count;
   })();
@@ -2391,9 +2472,10 @@ export default function EstoquePage() {
 
         for (const p of novos) {
           const cat = p.categoria || "OUTROS";
-          const nome = stripOrigemRepo(p.produto);
-          const base = extractBase(nome);
-          const cor = extractCor(nome, p.cor);
+          // Usar getModeloBase (mesma função do Lacrados) para consistência de agrupamento
+          const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+          // Usar p.cor como chave primária (mesma cor para BLUE e BLUE WI-FI)
+          const cor = p.cor || extractCor(stripOrigemRepo(p.produto), null);
           const corKey = (cor || "—").toUpperCase();
           // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
           const corUpper = (cor || "").toUpperCase().trim();
@@ -2425,13 +2507,13 @@ export default function EstoquePage() {
           }
         }
 
-        // Calcular falta e filtrar apenas quem está abaixo do mínimo
+        // Calcular falta e filtrar apenas quem está abaixo do mínimo (ou esgotado)
         const byCatModelFiltered: Record<string, Record<string, RepoGroup[]>> = {};
         for (const [cat, models] of Object.entries(byCatModel)) {
           for (const [base, cores] of Object.entries(models)) {
             const abaixo = cores.filter(c => {
-              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : 0;
-              return c.min > 0 && c.totalQnt < c.min;
+              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : (c.totalQnt === 0 ? 1 : 0);
+              return (c.min > 0 && c.totalQnt < c.min) || (c.totalQnt === 0);
             });
             if (abaixo.length > 0) {
               if (!byCatModelFiltered[cat]) byCatModelFiltered[cat] = {};
@@ -3398,8 +3480,8 @@ export default function EstoquePage() {
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
-                    // Ocultar itens esgotados (qnt=0) em lacrados e seminovos
-                    if ((tab === "estoque" || tab === "seminovos") && p.qnt === 0) return;
+                    // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
+                    if (tab === "seminovos" && p.qnt === 0) return;
                     const groupKey = stripOrigem(p.produto).toUpperCase();
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
@@ -3433,9 +3515,28 @@ export default function EstoquePage() {
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
                     className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E] border-2" : borderCard}`}
                   >
-                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
+                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { if (selectMode) return; setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
-                        <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
+                        {selectMode ? (
+                          <input
+                            type="checkbox"
+                            checked={items.filter(p => !(tab === "seminovos" && p.qnt === 0)).every(p => selectedIds.has(p.id))}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const valid = items.filter(p => !(tab === "seminovos" && p.qnt === 0));
+                              setSelectedIds(prev => {
+                                const n = new Set(prev);
+                                if (valid.every(p => n.has(p.id))) { valid.forEach(p => n.delete(p.id)); }
+                                else { valid.forEach(p => n.add(p.id)); }
+                                return n;
+                              });
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            className="w-4 h-4 accent-[#E8740E] cursor-pointer shrink-0"
+                          />
+                        ) : (
+                          <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
+                        )}
                         {editingCardTitle === modelo ? (
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -3486,16 +3587,62 @@ export default function EstoquePage() {
                           const totalValor = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                           const avgCusto = totalQnt > 0 ? Math.round(totalValor / totalQnt) : 0;
                           const hasVariation = items.some(p => p.custo_unitario !== items[0]?.custo_unitario);
-                          return (<>
-                            <span className={`text-[11px] font-medium ${textPrimary}`}>{totalQnt} un.</span>
-                            <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(totalValor)}</span>
-                            {hasVariation && totalQnt > 1 && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"}`} title="Preço médio de balanço">
-                                Bal. {fmt(avgCusto)}
-                              </span>
+                          return <>
+                            <span className={`text-[11px] font-medium ${totalQnt === 0 ? "text-red-500" : textPrimary}`}>{totalQnt} un.</span>
+                            {totalQnt === 0 && tab === "estoque" && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-600 uppercase tracking-wide">Esgotado</span>
                             )}
-                          </>);
+                          </>;
                         })()}
+                        <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
+                        {(() => {
+                          const totalQntBal = items.reduce((s, p) => s + p.qnt, 0);
+                          const totalValorBal = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                          const avgCusto = totalQntBal > 0 ? Math.round(totalValorBal / totalQntBal) : 0;
+                          const hasVariation = items.some(p => p.custo_unitario !== items[0]?.custo_unitario);
+                          return hasVariation && totalQntBal > 1 ? (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"}`} title="Preço médio de balanço">
+                              Bal. {fmt(avgCusto)}
+                            </span>
+                          ) : null;
+                        })()}
+                        {/* Botão Etiqueta no header do card — só Pendências */}
+                        {isPendenciasTab && isAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); items.forEach(p => handlePrintEtiquetaPendencia(p)); }}
+                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                          >
+                            🏷️ Etiqueta
+                          </button>
+                        )}
+                        {/* Botão qtd. mínima em massa */}
+                        {isAdmin && !isPendenciasTab && (
+                          bulkMinimoKey === modelo ? (
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>mín.</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={bulkMinimoVal}
+                                onChange={(e) => setBulkMinimoVal(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleBulkMinimo(items); if (e.key === "Escape") { setBulkMinimoKey(""); setBulkMinimoVal(""); } }}
+                                className={`w-16 px-2 py-1 rounded border border-[#0071E3] text-xs text-center ${dm ? "bg-[#1A1A1A] text-white" : "bg-white text-[#1D1D1F]"}`}
+                                placeholder="0"
+                                autoFocus
+                              />
+                              <button onClick={(e) => { e.stopPropagation(); handleBulkMinimo(items); }} className="text-[11px] text-[#E8740E] font-bold">OK</button>
+                              <button onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(""); setBulkMinimoVal(""); }} className="text-[11px] text-red-400">✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(modelo); setBulkMinimoVal(""); }}
+                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-blue-400 hover:border-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:text-blue-500 hover:border-blue-500"}`}
+                              title="Definir quantidade mínima para todas as variantes"
+                            >
+                              {items.some(p => p.estoque_minimo != null) ? `mín. ${items[0].estoque_minimo ?? "—"}` : "Qtd. mínima"}
+                            </button>
+                          )
+                        )}
                         {/* Botão editar preço em massa — todas as unidades do grupo */}
                         {isAdmin && (
                           bulkCustoKey === modelo ? (
@@ -3957,6 +4104,15 @@ export default function EstoquePage() {
                                             </div>
                                           );
                                         })()}
+                                        {/* Botão Etiqueta — Pendências (produto na troca) */}
+                                        {isPendenciasTab && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                                          >
+                                            🏷️ Etiqueta
+                                          </button>
+                                        )}
                                         {/* Botão Etiqueta — só no tab A Caminho */}
                                         {isACaminhoTab && (
                                           <button
@@ -4060,7 +4216,7 @@ export default function EstoquePage() {
       )}
 
       {/* Floating bulk action bar */}
-      {selectMode && selectedIds.size > 0 && (
+      {selectMode && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
           <span className={`text-sm font-semibold ${textPrimary}`}>{selectedIds.size} selecionado(s)</span>
           <button
@@ -4068,6 +4224,16 @@ export default function EstoquePage() {
             className={`px-3 py-1.5 rounded-lg text-xs font-medium ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"} hover:bg-[#E8740E] hover:text-white transition-colors`}
           >
             Selecionar todos ({filtered.length})
+          </button>
+          {selectedIds.size > 0 && <>
+          <button
+            onClick={() => {
+              const itens = estoque.filter(p => selectedIds.has(p.id));
+              if (itens.length > 0) handlePrintEtiquetaDirect(itens);
+            }}
+            className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+          >
+            🏷️ Imprimir Etiquetas ({selectedIds.size})
           </button>
           {tab === "estoque" && (
             <button
@@ -4110,6 +4276,7 @@ export default function EstoquePage() {
           >
             {bulkDeleting ? "Excluindo..." : `Excluir ${selectedIds.size}`}
           </button>
+          </>}
           <button
             onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium ${textSecondary} hover:${textPrimary} transition-colors`}
