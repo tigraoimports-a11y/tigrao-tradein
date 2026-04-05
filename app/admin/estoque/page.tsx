@@ -805,21 +805,31 @@ export default function EstoquePage() {
   }
 
   // Reordenação de cards (modelo inteiro) via drag-and-drop + botões ▲/▼
-  const [cardOrderVersion, setCardOrderVersion] = useState(0);
+  const [cardOrders, setCardOrders] = useState<Record<string, string[]>>(() => {
+    if (typeof window === "undefined") return {};
+    const result: Record<string, string[]> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith("tigrao_estoque_card_order_")) {
+          const cat = k.replace("tigrao_estoque_card_order_", "");
+          result[cat] = JSON.parse(localStorage.getItem(k) || "[]");
+        }
+      }
+    } catch { /* ignore */ }
+    return result;
+  });
   const dragCardRef = useRef<string | null>(null);
   const dragOverCardRef = useRef<string | null>(null);
   const [dragCardKey, setDragCardKey] = useState<string | null>(null);
-  // Guardar ordem dos cards por categoria em localStorage
-  function getCardOrder(cat: string): string[] {
-    if (typeof window === "undefined") return [];
-    try { const r = localStorage.getItem(`tigrao_estoque_card_order_${cat}`); return r ? JSON.parse(r) : []; } catch { return []; }
-  }
   function saveCardOrder(cat: string, keys: string[]) {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
+    setCardOrders(prev => ({ ...prev, [cat]: keys }));
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`tigrao_estoque_card_order_${cat}`, JSON.stringify(keys));
+    }
   }
   function sortByCardOrder(entries: [string, ProdutoEstoque[]][], cat: string): [string, ProdutoEstoque[]][] {
-    const order = getCardOrder(cat);
+    const order = cardOrders[cat] || [];
     if (!order.length) return entries;
     return [...entries].sort(([a], [b]) => {
       const ia = order.indexOf(a);
@@ -836,7 +846,6 @@ export default function EstoquePage() {
     if (targetIdx < 0 || targetIdx >= keys.length) return;
     [keys[index], keys[targetIdx]] = [keys[targetIdx], keys[index]];
     saveCardOrder(cat, keys);
-    setCardOrderVersion(v => v + 1);
   }
   function handleCardDragEnd(cat: string, modeloEntries: [string, ProdutoEstoque[]][]) {
     if (!dragCardRef.current || !dragOverCardRef.current || dragCardRef.current === dragOverCardRef.current) {
@@ -849,7 +858,6 @@ export default function EstoquePage() {
     keys.splice(fromIdx, 1);
     keys.splice(toIdx, 0, dragCardRef.current);
     saveCardOrder(cat, keys);
-    setCardOrderVersion(v => v + 1);
     setDragCardKey(null);
     dragCardRef.current = null;
     dragOverCardRef.current = null;
