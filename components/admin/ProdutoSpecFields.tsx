@@ -292,6 +292,13 @@ export default function ProdutoSpecFields({
   const ssdOptionsFinal = cfgOr("ssd", MACBOOK_STORAGES);
   const macMiniRamOptions = cfgOr("ram", MAC_MINI_RAMS);
   const macMiniSsdOptions = cfgOr("ssd", MAC_MINI_STORAGES);
+  // Núcleos: usa chip_air ou chip_pro_max do catálogo (configurado por modelo)
+  const nucleosChipAir = cfgOr("chip_air");
+  const nucleosChipProMax = cfgOr("chip_pro_max");
+  // Combina ambos se existirem, senão fallback hardcoded
+  const macNucleosCatalog = [...(nucleosChipAir || []), ...(nucleosChipProMax || [])];
+  const mbNucleosOptions = macNucleosCatalog.length ? macNucleosCatalog : MACBOOK_NUCLEOS.map(n => `(${n})`);
+  const mmNucleosOptions = macNucleosCatalog.length ? macNucleosCatalog : MAC_MINI_NUCLEOS.map(n => `(${n})`);
   const awTamanhoOptions = cfgOr("tamanho_aw", WATCH_TAMANHOS_FULL);
   const awConnOptions = cfgOr("conectividade_aw", ["GPS", "GPS + CEL"]);
   const awBandOptions = cfgOr("pulseiras", WATCH_BAND_MODELS);
@@ -597,7 +604,10 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Núcleos</p>
             <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
               <option value="">— Selecionar —</option>
-              {MACBOOK_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
+              {mbNucleosOptions.map((n) => {
+                const clean = n.replace(/^\(|\)$/g, "").trim();
+                return <option key={clean} value={clean}>{clean}</option>;
+              })}
             </select>
           </div>
           <div>
@@ -639,7 +649,10 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Núcleos</p>
             <select value={row.spec.mm_nucleos} onChange={(e) => setSpec("mm_nucleos", e.target.value)} className={inputCls}>
               <option value="">— Selecionar —</option>
-              {MAC_MINI_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
+              {mmNucleosOptions.map((n) => {
+                const clean = n.replace(/^\(|\)$/g, "").trim();
+                return <option key={clean} value={clean}>{clean}</option>;
+              })}
             </select>
           </div>
           <div>
