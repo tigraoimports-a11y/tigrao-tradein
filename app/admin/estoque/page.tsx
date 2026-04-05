@@ -4039,6 +4039,15 @@ export default function EstoquePage() {
           >
             Selecionar todos ({filtered.length})
           </button>
+          <button
+            onClick={() => {
+              const itens = estoque.filter(p => selectedIds.has(p.id));
+              if (itens.length > 0) handlePrintEtiquetaDirect(itens);
+            }}
+            className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+          >
+            🏷️ Imprimir Etiquetas ({selectedIds.size})
+          </button>
           {tab === "estoque" && (
             <button
               onClick={async () => {
