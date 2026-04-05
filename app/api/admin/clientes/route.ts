@@ -26,13 +26,23 @@ export async function GET(req: NextRequest) {
     const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
     const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
 
-    // 2) Buscar compras do estoque filtrando só fornecedores cadastrados
-    const { data: estoqueData, error: estoqueErr } = await supabase
+    // 2) Buscar compras do estoque (com paginação — Supabase limita a 1000 por query)
+    const estoqueQuery = supabase
       .from("estoque")
       .select("fornecedor, produto, cor, qnt, custo_unitario, data_compra, data_entrada, categoria, tipo, status, serial_no")
-      .not("fornecedor", "is", null)
-      .neq("fornecedor", "");
-    if (estoqueErr) return NextResponse.json({ error: estoqueErr.message }, { status: 500 });
+      .not("fornecedor", "is", null);
+    const estoqueData: Record<string, unknown>[] = [];
+    let estFrom = 0;
+    const EST_PAGE = 1000;
+    while (true) {
+      const { data: batch, error: batchErr } = await estoqueQuery.range(estFrom, estFrom + EST_PAGE - 1);
+      if (batchErr) return NextResponse.json({ error: batchErr.message }, { status: 500 });
+      if (!batch || batch.length === 0) break;
+      // Filtrar fornecedor vazio em JS (evita bug .neq() com NULL)
+      estoqueData.push(...batch.filter((b: Record<string, unknown>) => b.fornecedor && (b.fornecedor as string).trim() !== ""));
+      if (batch.length < EST_PAGE) break;
+      estFrom += EST_PAGE;
+    }
 
     // Agrupar por fornecedor (só cadastrados)
     const fornMap = new Map<string, {
@@ -62,7 +72,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    for (const item of (estoqueData || [])) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const item of estoqueData as any[]) {
       const forn = (item.fornecedor || "").trim().toUpperCase();
       if (!forn || !cadastrados.has(forn)) continue; // Ignora não-cadastrados (clientes de upgrade)
       if (!fornMap.has(forn)) continue; // filtrado por search
