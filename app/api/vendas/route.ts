@@ -573,86 +573,105 @@ export async function DELETE(req: NextRequest) {
   }
 
   // Devolver ao estoque se a venda veio de produto cadastrado
-  if (venda && venda.estoque_id) {
-    const { data: item } = await supabase.from("estoque").select("id, qnt, tipo").eq("id", venda.estoque_id).single();
-    if (item) {
-      await supabase.from("estoque").update({
-        qnt: Number(item.qnt) + 1,
-        status: "EM ESTOQUE",
-        updated_at: new Date().toISOString(),
-      }).eq("id", venda.estoque_id);
-      await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
-    } else {
-      // Item foi deletado ou não encontrado pelo estoque_id
-      // Tentar recuperar pelo serial_no (qualquer status — preserva rastreabilidade)
-      let found = false;
-      if (venda.serial_no) {
-        const { data: bySerial } = await supabase.from("estoque").select("id, qnt, status").eq("serial_no", venda.serial_no).limit(1).single();
-        if (bySerial) {
-          await supabase.from("estoque").update({ qnt: 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", bySerial.id);
-          found = true;
-          await logActivity(usuario, "Devolveu ao estoque (cancelamento, serial rastreado)", `${venda.produto} serial=${venda.serial_no}`, "estoque", bySerial.id);
-        }
-      }
-      // Se não achou por serial, tentar por produto+cor (ESGOTADO conta)
-      if (!found && venda.produto) {
-        let q = supabase.from("estoque").select("id, qnt, status").eq("produto", venda.produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
-        if (venda.cor) q = q.eq("cor", venda.cor);
-        const { data: byName } = await q.order("qnt", { ascending: false }).limit(1);
-        if (byName && byName.length > 0) {
-          await supabase.from("estoque").update({ qnt: Number(byName[0].qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", byName[0].id);
-          found = true;
-          await logActivity(usuario, "Devolveu ao estoque (cancelamento, por produto)", venda.produto, "estoque", byName[0].id);
-        }
-      }
-      // Último recurso: recriar (apenas se produto não existe em nenhuma forma no estoque)
-      if (!found && venda.produto) {
-        const novoItem: Record<string, unknown> = {
-          produto: venda.produto,
-          cor: venda.cor || null,
-          serial_no: venda.serial_no || null,
-          imei: venda.imei || null,
-          qnt: 1,
-          status: "EM ESTOQUE",
-          tipo: "SEMINOVO",
-          categoria: venda.categoria || null,
-          custo_unitario: venda.custo || null,
-          fornecedor: venda.fornecedor || null,
-          updated_at: new Date().toISOString(),
-        };
-        const { error: errInsert } = await supabase.from("estoque").insert(novoItem);
-        if (!errInsert) {
-          await logActivity(usuario, "Recriou no estoque (cancelamento)", `${venda.produto} serial=${venda.serial_no || "?"}`, "estoque");
-        } else {
-          await logActivity(usuario, "Cancelamento: falha ao recriar no estoque", `${venda.produto}: ${errInsert.message}`, "estoque");
-        }
-      }
-    }
-  } else if (venda && venda.produto) {
-    // Fallback: buscar produto no estoque pelo serial ou nome+cor e devolver
-    // Inclui "ESGOTADO" pois o item pode ter ficado com qnt=0 após a venda
-    let found = false;
-    if (venda.serial_no) {
-      const { data: item } = await supabase.from("estoque").select("id, qnt").eq("serial_no", venda.serial_no).single();
+  // Helper para restaurar estoque por serial ou nome+cor
+  async function restaurarEstoque(v: typeof venda): Promise<boolean> {
+    if (!v) return false;
+    // 1. Por estoque_id direto
+    if (v.estoque_id) {
+      const { data: item } = await supabase.from("estoque").select("id, qnt, tipo").eq("id", v.estoque_id).single();
       if (item) {
-        await supabase.from("estoque").update({ qnt: Number(item.qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", item.id);
-        found = true;
+        const { error: upErr } = await supabase.from("estoque").update({
+          qnt: Number(item.qnt) + 1,
+          status: "EM ESTOQUE",
+          updated_at: new Date().toISOString(),
+        }).eq("id", v.estoque_id);
+        if (!upErr) {
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento)", v.produto, "estoque", v.estoque_id);
+          return true;
+        }
+        console.error("[Vendas DELETE] Erro ao restaurar estoque por id:", upErr.message);
       }
     }
-    if (!found) {
-      // Buscar por nome do produto — inclui EM ESTOQUE e ESGOTADO
-      let query = supabase.from("estoque").select("id, qnt, status").eq("produto", venda.produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
-      if (venda.cor) query = query.eq("cor", venda.cor);
-      const { data: items } = await query.order("qnt", { ascending: false }).limit(1);
-      if (items && items.length > 0) {
-        await supabase.from("estoque").update({ qnt: Number(items[0].qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", items[0].id);
-        found = true;
+    // 2. Por serial_no (pega o mais recente, sem .single() que falha com múltiplos)
+    if (v.serial_no) {
+      const { data: bySerial } = await supabase.from("estoque")
+        .select("id, qnt, status")
+        .eq("serial_no", v.serial_no)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (bySerial && bySerial.length > 0) {
+        const { error: upErr } = await supabase.from("estoque").update({
+          qnt: 1, status: "EM ESTOQUE", updated_at: new Date().toISOString(),
+        }).eq("id", bySerial[0].id);
+        if (!upErr) {
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, serial)", `${v.produto} serial=${v.serial_no}`, "estoque", bySerial[0].id);
+          return true;
+        }
+        console.error("[Vendas DELETE] Erro ao restaurar por serial:", upErr.message);
       }
     }
-    if (found) {
-      await logActivity(usuario, "Devolveu ao estoque (cancelamento)", venda.produto, "estoque");
-    } else {
-      await logActivity(usuario, "Cancelamento: produto não encontrado no estoque", venda.produto || "?", "estoque");
+    // 3. Por IMEI (mesma lógica do serial)
+    if (v.imei) {
+      const { data: byImei } = await supabase.from("estoque")
+        .select("id, qnt, status")
+        .eq("imei", v.imei)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (byImei && byImei.length > 0) {
+        const { error: upErr } = await supabase.from("estoque").update({
+          qnt: 1, status: "EM ESTOQUE", updated_at: new Date().toISOString(),
+        }).eq("id", byImei[0].id);
+        if (!upErr) {
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, IMEI)", `${v.produto} imei=${v.imei}`, "estoque", byImei[0].id);
+          return true;
+        }
+        console.error("[Vendas DELETE] Erro ao restaurar por IMEI:", upErr.message);
+      }
+    }
+    // 4. Por produto+cor
+    if (v.produto) {
+      let q = supabase.from("estoque").select("id, qnt, status").eq("produto", v.produto).in("status", ["EM ESTOQUE", "ESGOTADO"]);
+      if (v.cor) q = q.eq("cor", v.cor);
+      const { data: byName } = await q.order("updated_at", { ascending: false }).limit(1);
+      if (byName && byName.length > 0) {
+        const { error: upErr } = await supabase.from("estoque").update({
+          qnt: Number(byName[0].qnt) + 1, status: "EM ESTOQUE", updated_at: new Date().toISOString(),
+        }).eq("id", byName[0].id);
+        if (!upErr) {
+          await logActivity(usuario, "Devolveu ao estoque (cancelamento, produto)", v.produto, "estoque", byName[0].id);
+          return true;
+        }
+        console.error("[Vendas DELETE] Erro ao restaurar por produto:", upErr.message);
+      }
+    }
+    // 5. Último recurso: recriar
+    if (v.produto) {
+      const { error: errInsert } = await supabase.from("estoque").insert({
+        produto: v.produto,
+        cor: v.cor || null,
+        serial_no: v.serial_no || null,
+        imei: v.imei || null,
+        qnt: 1,
+        status: "EM ESTOQUE",
+        tipo: "NOVO",
+        categoria: v.categoria || null,
+        custo_unitario: v.custo || null,
+        fornecedor: v.fornecedor || null,
+        updated_at: new Date().toISOString(),
+      });
+      if (!errInsert) {
+        await logActivity(usuario, "Recriou no estoque (cancelamento)", `${v.produto} serial=${v.serial_no || "?"}`, "estoque");
+        return true;
+      }
+      await logActivity(usuario, "Cancelamento: falha ao recriar no estoque", `${v.produto}: ${errInsert.message}`, "estoque");
+    }
+    return false;
+  }
+
+  if (venda) {
+    const restored = await restaurarEstoque(venda);
+    if (!restored && venda.produto) {
+      await logActivity(usuario, "Cancelamento: produto não restaurado ao estoque", venda.produto || "?", "estoque");
     }
   }
 
