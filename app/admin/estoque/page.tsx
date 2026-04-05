@@ -3499,9 +3499,28 @@ export default function EstoquePage() {
                     onDragEnd={(e) => { e.stopPropagation(); handleCardDragEnd(cat, modeloEntries); }}
                     className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all ${isCardDragging ? "opacity-40 border-[#E8740E] border-2" : borderCard}`}
                   >
-                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
+                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { if (selectMode) return; setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                       <div className="flex items-center gap-3">
-                        <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
+                        {selectMode ? (
+                          <input
+                            type="checkbox"
+                            checked={items.filter(p => !((tab === "estoque" || tab === "seminovos") && p.qnt === 0)).every(p => selectedIds.has(p.id))}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const valid = items.filter(p => !((tab === "estoque" || tab === "seminovos") && p.qnt === 0));
+                              setSelectedIds(prev => {
+                                const n = new Set(prev);
+                                if (valid.every(p => n.has(p.id))) { valid.forEach(p => n.delete(p.id)); }
+                                else { valid.forEach(p => n.add(p.id)); }
+                                return n;
+                              });
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            className="w-4 h-4 accent-[#E8740E] cursor-pointer shrink-0"
+                          />
+                        ) : (
+                          <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
+                        )}
                         {editingCardTitle === modelo ? (
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <input
