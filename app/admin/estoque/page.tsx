@@ -1813,7 +1813,7 @@ export default function EstoquePage() {
     }
     let count = 0;
     for (const g of Object.values(groups)) {
-      if (g.min && g.totalQnt < g.min) count++;
+      if ((g.min && g.totalQnt < g.min) || g.totalQnt === 0) count++;
     }
     return count;
   })();
@@ -2504,13 +2504,13 @@ export default function EstoquePage() {
           }
         }
 
-        // Calcular falta e filtrar apenas quem está abaixo do mínimo
+        // Calcular falta e filtrar apenas quem está abaixo do mínimo (ou esgotado)
         const byCatModelFiltered: Record<string, Record<string, RepoGroup[]>> = {};
         for (const [cat, models] of Object.entries(byCatModel)) {
           for (const [base, cores] of Object.entries(models)) {
             const abaixo = cores.filter(c => {
-              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : 0;
-              return c.min > 0 && c.totalQnt < c.min;
+              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : (c.totalQnt === 0 ? 1 : 0);
+              return (c.min > 0 && c.totalQnt < c.min) || (c.totalQnt === 0);
             });
             if (abaixo.length > 0) {
               if (!byCatModelFiltered[cat]) byCatModelFiltered[cat] = {};
@@ -3477,8 +3477,8 @@ export default function EstoquePage() {
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
-                    // Ocultar itens esgotados (qnt=0) em lacrados e seminovos
-                    if ((tab === "estoque" || tab === "seminovos") && p.qnt === 0) return;
+                    // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
+                    if (tab === "seminovos" && p.qnt === 0) return;
                     const groupKey = stripOrigem(p.produto).toUpperCase();
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
@@ -3517,10 +3517,10 @@ export default function EstoquePage() {
                         {selectMode ? (
                           <input
                             type="checkbox"
-                            checked={items.filter(p => !((tab === "estoque" || tab === "seminovos") && p.qnt === 0)).every(p => selectedIds.has(p.id))}
+                            checked={items.filter(p => !(tab === "seminovos" && p.qnt === 0)).every(p => selectedIds.has(p.id))}
                             onChange={(e) => {
                               e.stopPropagation();
-                              const valid = items.filter(p => !((tab === "estoque" || tab === "seminovos") && p.qnt === 0));
+                              const valid = items.filter(p => !(tab === "seminovos" && p.qnt === 0));
                               setSelectedIds(prev => {
                                 const n = new Set(prev);
                                 if (valid.every(p => n.has(p.id))) { valid.forEach(p => n.delete(p.id)); }
@@ -3579,7 +3579,15 @@ export default function EstoquePage() {
                             </span>
                           );
                         })()}
-                        <span className={`text-[11px] font-medium ${textPrimary}`}>{items.reduce((s, p) => s + p.qnt, 0)} un.</span>
+                        {(() => {
+                          const totalQnt = items.reduce((s, p) => s + p.qnt, 0);
+                          return <>
+                            <span className={`text-[11px] font-medium ${totalQnt === 0 ? "text-red-500" : textPrimary}`}>{totalQnt} un.</span>
+                            {totalQnt === 0 && tab === "estoque" && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-600 uppercase tracking-wide">Esgotado</span>
+                            )}
+                          </>;
+                        })()}
                         <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
                         {/* Botão Etiqueta no header do card — só Pendências */}
                         {isPendenciasTab && isAdmin && (
