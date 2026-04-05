@@ -3127,12 +3127,10 @@ export default function EstoquePage() {
                                             const upper = p.cor.toUpperCase().trim();
                                             const ptFromEN = COR_PT[upper];
                                             if (ptFromEN && ptFromEN.toLowerCase() !== p.cor.toLowerCase()) {
-                                              // Cor em EN → mostrar EN + PT ao lado
                                               return <>{p.cor} <span className={`text-[11px] font-normal ${textSecondary}`}>{ptFromEN}</span></>;
                                             }
                                             const enFromPT = PT_TO_EN[upper];
                                             if (enFromPT) {
-                                              // Cor em PT → mostrar EN + PT ao lado
                                               return <>{enFromPT} <span className={`text-[11px] font-normal ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
                                             }
                                             return p.cor;
