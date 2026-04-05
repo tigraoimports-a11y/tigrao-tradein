@@ -11,6 +11,9 @@ import {
   WATCH_BAND_MODELS,
   MACBOOK_RAMS,
   MACBOOK_STORAGES,
+  MACBOOK_NUCLEOS,
+  MAC_MINI_CHIPS,
+  MAC_MINI_NUCLEOS,
   MAC_MINI_RAMS,
   MAC_MINI_STORAGES,
   CORES_POR_CATEGORIA,
@@ -98,6 +101,7 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
   } else if (categoria === "MAC_MINI") {
     const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?)\b/i);
     s.mm_chip = chip ? chip[1].toUpperCase() : "";
+    s.mm_nucleos = ""; // user selects nucleos manually
   } else if (categoria === "APPLE_WATCH") {
     const part = nome.replace(/^Apple Watch\s+/i, "");
     if (/SE.*2|2.*SE/i.test(part)) { s.aw_modelo = "SE 2"; s.aw_tamanho = "40mm"; }
@@ -590,6 +594,13 @@ export default function ProdutoSpecFields({
             </>
           )}
           <div>
+            <p className={labelCls}>Núcleos</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Selecionar —</option>
+              {MACBOOK_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
@@ -615,7 +626,22 @@ export default function ProdutoSpecFields({
 
       {/* Mac Mini specs */}
       {row.categoria === "MAC_MINI" && (
-        <div className={`grid grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 p-3 ${bgSection} rounded-lg`}>
+          {!categoryModelos.length && (
+            <div>
+              <p className={labelCls}>Chip</p>
+              <select value={row.spec.mm_chip} onChange={(e) => setSpec("mm_chip", e.target.value)} className={inputCls}>
+                {MAC_MINI_CHIPS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <p className={labelCls}>Núcleos</p>
+            <select value={row.spec.mm_nucleos} onChange={(e) => setSpec("mm_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Selecionar —</option>
+              {MAC_MINI_NUCLEOS.map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </div>
           <div>
             <p className={labelCls}>RAM</p>
             <select value={row.spec.mm_ram} onChange={(e) => setSpec("mm_ram", e.target.value)} className={inputCls}>

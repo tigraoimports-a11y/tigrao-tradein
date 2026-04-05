@@ -910,8 +910,9 @@ export default function EstoquePage() {
     }
     if (baseCat === "MAC_MINI") {
       const chipMatch = n.match(/(M\d+(?:\s*PRO)?)/i);
+      const nucleosMatch = n.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
       const ramMatch = n.match(/(\d+GB)\s/);
-      return { mm_chip: chipMatch ? chipMatch[1] : "M4", mm_ram: ramMatch ? ramMatch[1] : "16GB", mm_storage: storage || "256GB" };
+      return { mm_chip: chipMatch ? chipMatch[1] : "M4", mm_nucleos: nucleosMatch ? nucleosMatch[1] : "10C CPU/10C GPU", mm_ram: ramMatch ? ramMatch[1] : "16GB", mm_storage: storage || "256GB" };
     }
     if (baseCat === "APPLE_WATCH") {
       const modeloMatch = n.match(/(SERIES\s*\d+|SE|ULTRA\s*\d*)/i);
@@ -1037,7 +1038,7 @@ export default function EstoquePage() {
     // MACBOOK
     mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
     // MAC_MINI
-    mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
+    mm_chip: "M4", mm_nucleos: "10C CPU/10C GPU", mm_ram: "16GB", mm_storage: "256GB",
     // IPADS
     ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
     // APPLE_WATCH
@@ -1069,7 +1070,8 @@ export default function EstoquePage() {
         return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
       }
       case "MAC_MINI":
-        return `MAC MINI ${spec.mm_chip} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
+        const mmNucleos = spec.mm_nucleos ? ` (${spec.mm_nucleos})` : "";
+        return `MAC MINI ${spec.mm_chip}${mmNucleos} ${spec.mm_ram} ${spec.mm_storage}`.toUpperCase();
       case "MACBOOK": {
         const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
         const tela = spec.mb_modelo === "NEO" ? spec.mb_tela || '13"' : spec.mb_tela;
@@ -1789,7 +1791,7 @@ export default function EstoquePage() {
         setSpec({
           ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
           mb_modelo: "AIR", mb_tela: "13\"", mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
-          mm_chip: "M4", mm_ram: "16GB", mm_storage: "256GB",
+          mm_chip: "M4", mm_nucleos: "10C CPU/10C GPU", mm_ram: "16GB", mm_storage: "256GB",
           ipad_modelo: "AIR", ipad_chip: "", ipad_tela: "11\"", ipad_storage: "128GB", ipad_conn: "WIFI",
           aw_modelo: "SERIES 11", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
           air_modelo: "AIRPODS 4",
