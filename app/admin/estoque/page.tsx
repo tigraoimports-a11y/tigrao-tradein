@@ -298,8 +298,8 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
 
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
   let display = stripOrigem(nome, categoria);
-  // MacBook: remover núcleos detalhados do nome exibido (aparece como badge separado)
-  if (categoria && getBaseCat(categoria) === "MACBOOK") {
+  // MacBook/Mac Mini: remover núcleos detalhados do nome exibido (aparece como badge separado)
+  if (categoria && (getBaseCat(categoria) === "MACBOOK" || getBaseCat(categoria) === "MAC_MINI")) {
     display = display.replace(/\s*\(\d+C?\s*CPU\/\d+C?\s*GPU\)/gi, "").replace(/\s+/g, " ").trim();
   }
   if (!cor) {
@@ -3842,7 +3842,7 @@ export default function EstoquePage() {
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {/* Badge de núcleos para MacBooks */}
-                                          {getBaseCat(prodItems[0]?.categoria) === "MACBOOK" && (() => {
+                                          {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
                                             const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
                                             const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
                                             if (!nucleosMatch) return null;
@@ -4472,8 +4472,8 @@ export default function EstoquePage() {
                     ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
                         {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                        {/* Badge de núcleos para MacBooks */}
-                        {getBaseCat(p.categoria) === "MACBOOK" && (() => {
+                        {/* Badge de núcleos para MacBooks e Mac Mini */}
+                        {(getBaseCat(p.categoria) === "MACBOOK" || getBaseCat(p.categoria) === "MAC_MINI") && (() => {
                           const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
                           if (!nucleosMatch) return null;
                           return <span className={`ml-2 px-2 py-0.5 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{nucleosMatch[1]}</span>;
