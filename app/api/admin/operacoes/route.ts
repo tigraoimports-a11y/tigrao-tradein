@@ -102,11 +102,23 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Buscar trocas
+  let trocasQuery = supabase
+    .from("trocas")
+    .select("id, data, motivo, fornecedor, produto_saida_nome, produto_saida_cor, produto_saida_custo, produto_saida_serial, produto_saida_imei, produto_entrada_nome, produto_entrada_cor, produto_entrada_custo, produto_entrada_serial, produto_entrada_imei, diferenca_valor, created_at")
+    .order("data", { ascending: false });
+
+  if (search) {
+    trocasQuery = trocasQuery.or(`produto_saida_nome.ilike.%${search}%,produto_entrada_nome.ilike.%${search}%,fornecedor.ilike.%${search}%`);
+  }
+
+  const { data: trocasData } = await trocasQuery.limit(500);
+
   // Montar lista de operações
   interface Operacao {
     codigo: string;
     data: string;
-    tipo: "Entrada" | "Saída";
+    tipo: "Entrada" | "Saída" | "Troca";
     contato: string;
     itens: { id: string; produto: string; serial_no: string | null; imei: string | null; preco: number; custo: number; tipo_venda: string | null; cor: string | null }[];
     total_itens: number;
@@ -117,7 +129,7 @@ export async function GET(req: NextRequest) {
 
   const operacoes: Operacao[] = [];
 
-  if (tipo !== "entrada") {
+  if (!tipo || tipo === "saida") {
     let idx = 0;
     for (const [, op] of saidaMap) {
       const ts = new Date(op.created_at).getTime();
@@ -135,7 +147,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (tipo !== "saida") {
+  if (!tipo || tipo === "entrada") {
     let idx = 0;
     for (const [, op] of entradaMap) {
       const ts = new Date(op.created_at).getTime();
@@ -149,6 +161,28 @@ export async function GET(req: NextRequest) {
         valor_total: op.itens.reduce((s, i) => s + i.preco, 0),
         status: "Concluida",
         created_at: op.created_at,
+      });
+    }
+  }
+
+  // Trocas
+  if (!tipo || tipo === "troca") {
+    let idx = 0;
+    for (const t of trocasData ?? []) {
+      const ts = new Date(t.created_at).getTime();
+      operacoes.push({
+        codigo: `OP-T${ts}${String(idx++).padStart(3, "0")}`,
+        data: t.data,
+        tipo: "Troca",
+        contato: t.fornecedor || "—",
+        itens: [
+          { id: t.id, produto: `↑ ${t.produto_saida_nome}`, serial_no: t.produto_saida_serial, imei: t.produto_saida_imei, preco: Number(t.produto_saida_custo), custo: Number(t.produto_saida_custo), tipo_venda: "TROCA", cor: t.produto_saida_cor },
+          { id: t.id, produto: `↓ ${t.produto_entrada_nome}`, serial_no: t.produto_entrada_serial, imei: t.produto_entrada_imei, preco: Number(t.produto_entrada_custo), custo: Number(t.produto_entrada_custo), tipo_venda: "TROCA", cor: t.produto_entrada_cor },
+        ],
+        total_itens: 2,
+        valor_total: Number(t.diferenca_valor) || 0,
+        status: "Concluida",
+        created_at: t.created_at,
       });
     }
   }
