@@ -22,11 +22,9 @@ export async function GET(req: NextRequest) {
       .order("nome");
     if (fornErr) return NextResponse.json({ error: fornErr.message }, { status: 500 });
 
-    // Set de nomes cadastrados (uppercase) para filtrar
     const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
-    const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
 
-    // 2) Buscar compras do estoque (com paginação — Supabase limita a 1000 por query)
+    // 2) Buscar itens do estoque (com paginação)
     const estoqueQuery = supabase
       .from("estoque")
       .select("fornecedor, produto, cor, qnt, custo_unitario, data_compra, data_entrada, categoria, tipo, status, serial_no")
@@ -38,10 +36,27 @@ export async function GET(req: NextRequest) {
       const { data: batch, error: batchErr } = await estoqueQuery.range(estFrom, estFrom + EST_PAGE - 1);
       if (batchErr) return NextResponse.json({ error: batchErr.message }, { status: 500 });
       if (!batch || batch.length === 0) break;
-      // Filtrar fornecedor vazio em JS (evita bug .neq() com NULL)
       estoqueData.push(...batch.filter((b: Record<string, unknown>) => b.fornecedor && (b.fornecedor as string).trim() !== ""));
       if (batch.length < EST_PAGE) break;
       estFrom += EST_PAGE;
+    }
+
+    // 3) Buscar vendas (itens já vendidos — saíram do estoque, com paginação)
+    const vendasQuery = supabase
+      .from("vendas")
+      .select("fornecedor, produto, custo, data, serial_no, imei, status_pagamento")
+      .not("fornecedor", "is", null);
+    const vendasData: Record<string, unknown>[] = [];
+    let vFrom = 0;
+    while (true) {
+      const { data: batch, error: batchErr } = await vendasQuery.range(vFrom, vFrom + EST_PAGE - 1);
+      if (batchErr) return NextResponse.json({ error: batchErr.message }, { status: 500 });
+      if (!batch || batch.length === 0) break;
+      vendasData.push(...batch.filter((b: Record<string, unknown>) =>
+        b.fornecedor && (b.fornecedor as string).trim() !== "" && b.status_pagamento !== "CANCELADO"
+      ));
+      if (batch.length < EST_PAGE) break;
+      vFrom += EST_PAGE;
     }
 
     // Agrupar por fornecedor (só cadastrados)
@@ -54,6 +69,7 @@ export async function GET(req: NextRequest) {
       total_produtos: number;
       total_investido: number;
       total_em_estoque: number;
+      total_vendido: number;
       primeira_compra: string;
       ultima_compra: string;
       categorias: Set<string>;
@@ -66,17 +82,20 @@ export async function GET(req: NextRequest) {
       if (search && !key.includes(search.toUpperCase())) continue;
       fornMap.set(key, {
         id: fc.id, nome: fc.nome, contato: fc.contato, observacao: fc.observacao, created_at: fc.created_at,
-        total_produtos: 0, total_investido: 0, total_em_estoque: 0,
+        total_produtos: 0, total_investido: 0, total_em_estoque: 0, total_vendido: 0,
         primeira_compra: "", ultima_compra: "",
         categorias: new Set(), compras: [],
       });
     }
 
+    // Rastrear seriais/produtos já contabilizados (evitar duplicata estoque+venda)
+    const contabilizados = new Set<string>();
+
+    // Processar estoque (itens atuais)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const item of estoqueData as any[]) {
       const forn = (item.fornecedor || "").trim().toUpperCase();
-      if (!forn || !cadastrados.has(forn)) continue; // Ignora não-cadastrados (clientes de upgrade)
-      if (!fornMap.has(forn)) continue; // filtrado por search
+      if (!forn || !cadastrados.has(forn) || !fornMap.has(forn)) continue;
 
       const f = fornMap.get(forn)!;
       const custo = (item.custo_unitario || 0) * (item.qnt || 1);
@@ -89,10 +108,42 @@ export async function GET(req: NextRequest) {
       if (data && (!f.primeira_compra || data < f.primeira_compra)) f.primeira_compra = data;
       if (data && (!f.ultima_compra || data > f.ultima_compra)) f.ultima_compra = data;
 
+      // Marcar como contabilizado
+      const chave = item.serial_no ? `serial:${item.serial_no}` : `prod:${forn}:${item.produto}:${data}:${item.custo_unitario}`;
+      contabilizados.add(chave);
+
       f.compras.push({
         produto: item.produto, cor: item.cor, qnt: item.qnt || 1,
         custo_unitario: item.custo_unitario || 0, data, categoria: item.categoria || "",
         status: item.status || "", serial_no: item.serial_no || null,
+      });
+    }
+
+    // Processar vendas (itens que saíram do estoque)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const v of vendasData as any[]) {
+      const forn = (v.fornecedor || "").trim().toUpperCase();
+      if (!forn || !cadastrados.has(forn) || !fornMap.has(forn)) continue;
+
+      // Evitar duplicata com estoque
+      const chave = v.serial_no ? `serial:${v.serial_no}` : `prod:${forn}:${v.produto}:${v.data}:${v.custo}`;
+      if (contabilizados.has(chave)) continue;
+      contabilizados.add(chave);
+
+      const f = fornMap.get(forn)!;
+      const custo = Number(v.custo || 0);
+      f.total_produtos += 1;
+      f.total_investido += custo;
+      f.total_vendido += 1;
+
+      const data = v.data || "";
+      if (data && (!f.primeira_compra || data < f.primeira_compra)) f.primeira_compra = data;
+      if (data && (!f.ultima_compra || data > f.ultima_compra)) f.ultima_compra = data;
+
+      f.compras.push({
+        produto: v.produto || "", cor: null, qnt: 1,
+        custo_unitario: custo, data, categoria: "",
+        status: "VENDIDO", serial_no: v.serial_no || null,
       });
     }
 
