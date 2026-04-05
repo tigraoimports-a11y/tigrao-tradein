@@ -1801,10 +1801,12 @@ export default function EstoquePage() {
 
   // Reposição: agrupar por modelo+cor e verificar se está abaixo do mínimo
   const reposicaoCount = (() => {
-    // Agrupar novos por produto+cor → somar qnt e pegar estoque_minimo
+    // Agrupar por modelo_base (getModeloBase) + p.cor — mesma lógica da aba Reposição
     const groups: Record<string, { totalQnt: number; min: number | null }> = {};
     for (const p of novos) {
-      const key = `${p.produto}|||${p.cor || ""}`;
+      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const cor = (p.cor || "").toUpperCase();
+      const key = `${base}|||${cor}`;
       if (!groups[key]) groups[key] = { totalQnt: 0, min: null };
       groups[key].totalQnt += p.qnt;
       if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
@@ -2470,9 +2472,10 @@ export default function EstoquePage() {
 
         for (const p of novos) {
           const cat = p.categoria || "OUTROS";
-          const nome = stripOrigemRepo(p.produto);
-          const base = extractBase(nome);
-          const cor = extractCor(nome, p.cor);
+          // Usar getModeloBase (mesma função do Lacrados) para consistência de agrupamento
+          const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+          // Usar p.cor como chave primária (mesma cor para BLUE e BLUE WI-FI)
+          const cor = p.cor || extractCor(stripOrigemRepo(p.produto), null);
           const corKey = (cor || "—").toUpperCase();
           // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
           const corUpper = (cor || "").toUpperCase().trim();
