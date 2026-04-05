@@ -248,12 +248,32 @@ function stripOrigem(nome: string, categoria?: string | null): string {
 function extractCorPT(nome: string): string | null {
   if (!nome) return null;
   const upper = nome.toUpperCase();
+  // Custom PT salvo via +PT
+  for (const [enKey, ptVal] of Object.entries(CUSTOM_COR_PT)) {
+    if (upper.includes(enKey)) return ptVal;
+  }
+  // Verifica cores EN no nome → retorna tradução PT (do mais longo para o mais curto)
+  const enKeys = Object.keys(COR_PT).sort((a, b) => b.length - a.length);
+  for (const enKey of enKeys) {
+    if (upper.includes(enKey)) return COR_PT[enKey];
+  }
   // Verifica do mais longo para o mais curto para evitar matches parciais
   const ptKeys = Object.keys(PT_TO_EN).sort((a, b) => b.length - a.length);
   for (const ptKey of ptKeys) {
     if (upper.includes(ptKey)) {
       return ptKey.charAt(0).toUpperCase() + ptKey.slice(1).toLowerCase();
     }
+  }
+  return null;
+}
+
+/** Extrai a cor EN embutida no nome do produto (quando cor=null) */
+function extractCorEN(nome: string): string | null {
+  if (!nome) return null;
+  const upper = nome.toUpperCase();
+  const enKeys = Object.keys(COR_PT).sort((a, b) => b.length - a.length);
+  for (const enKey of enKeys) {
+    if (upper.includes(enKey)) return enKey;
   }
   return null;
 }
@@ -3720,9 +3740,11 @@ export default function EstoquePage() {
                           {produtoEntries.map(([prodNome, prodItemsRaw]) => {
                             // Ordenar por cor → data de entrada
                             const prodItems = [...prodItemsRaw].sort((a, b) => (a.cor || "").localeCompare(b.cor || "") || (a.data_entrada || "").localeCompare(b.data_entrada || ""));
+                            // No estoque: ocultar grupos onde TODAS as unidades têm qnt=0
+                            const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
+                            if (tab === "estoque" && prodTotal === 0) return null;
                             const showObs = tab === "seminovos" || isEditableItemTab;
                             const showMover = isPendenciasTab;
-                            const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
                             const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                             const corKey = `${modelo}::${prodNome}`;
 
@@ -3772,6 +3794,7 @@ export default function EstoquePage() {
                                           })()}
                                           {(() => {
                                             const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
+                                            const corKey = prodItems[0]?.cor || extractCorEN(prodItems[0]?.produto) || "";
                                             const editKey = `${prodItems[0]?.id}_corpt`;
                                             if (editingCorPT[editKey] !== undefined) {
                                               const savePT = (corEN: string, newPT: string) => {
@@ -3787,7 +3810,7 @@ export default function EstoquePage() {
                                                     onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
                                                     onKeyDown={(e) => {
                                                       if (e.key === "Enter") {
-                                                        savePT(prodItems[0]?.cor || "", editingCorPT[editKey]?.trim() || "");
+                                                        savePT(corKey, editingCorPT[editKey]?.trim() || "");
                                                         setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
                                                       }
                                                       if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
@@ -3797,7 +3820,7 @@ export default function EstoquePage() {
                                                     placeholder="Cor em PT..."
                                                   />
                                                   <button onClick={() => {
-                                                    savePT(prodItems[0]?.cor || "", editingCorPT[editKey]?.trim() || "");
+                                                    savePT(corKey, editingCorPT[editKey]?.trim() || "");
                                                     setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
                                                   }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                   <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
@@ -3810,7 +3833,7 @@ export default function EstoquePage() {
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: ptLabel || "" })); }}
                                                 title="Clique para editar a cor em PT"
                                               >{ptLabel}</span>
-                                            ) : prodItems[0]?.cor ? (
+                                            ) : corKey ? (
                                               <span
                                                 className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
                                                 onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: "" })); }}
