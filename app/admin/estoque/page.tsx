@@ -1401,7 +1401,8 @@ export default function EstoquePage() {
         .produto{font-size:6pt;font-weight:900;line-height:1.2;color:#000;word-break:break-word}
         .badges{font-size:5pt;margin-top:0.5mm;color:#555;line-height:1.3}
         .sn{font-size:5pt;font-family:monospace;font-weight:bold;color:#000;line-height:1.3;margin-top:0.3mm}
-        .cliente{font-size:5.5pt;font-weight:bold;color:#E8740E;line-height:1.3;margin-top:0.5mm;word-break:break-word}
+        .cliente{font-size:6pt;font-weight:900;color:#E8740E;line-height:1.3;margin-top:0.5mm;word-break:break-word;text-transform:uppercase}
+        .data{font-size:5pt;color:#555;margin-top:0.2mm}
         .custo{font-size:6pt;font-weight:900;color:#000;margin-top:0.3mm}
         .label-troca{font-size:4.5pt;letter-spacing:0.5px;text-transform:uppercase;color:#888;margin-top:0.5mm}
       </style></head><body>
@@ -1418,7 +1419,8 @@ export default function EstoquePage() {
           ${serial ? `<div class="sn">S/N: ${serial}</div>` : ""}
           ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
           ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
-          ${p.custo_unitario ? `<div class="custo">TROCA: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
+          ${p.data_compra ? `<div class="data">📅 ${p.data_compra.split("-").reverse().join("/")}</div>` : ""}
+          ${p.custo_unitario ? `<div class="custo">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
           <div class="label-troca">Produto na troca</div>
         </div>
       </div>
