@@ -3122,8 +3122,8 @@ export default function EstoquePage() {
                                         </td>
                                         <td className={`px-4 py-2 text-[13px] font-medium ${textPrimary} pl-8`} onClick={() => setDetailProduct(p)}>
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
-                                          {ptLabel || p.cor || p.produto}
-                                          {ptLabel && p.cor !== ptLabel && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
+                                          {p.cor || p.produto}
+                                          {ptLabel && p.cor && ptLabel.toUpperCase() !== p.cor.toUpperCase() && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                               ✅ {p.serial_no || p.imei}
