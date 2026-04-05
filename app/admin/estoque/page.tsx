@@ -1375,6 +1375,70 @@ export default function EstoquePage() {
     win.document.close();
   };
 
+  // Etiqueta específica pra pendências (produtos na troca) — com dados do cliente
+  const handlePrintEtiquetaPendencia = (p: ProdutoEstoque) => {
+    const serial = p.serial_no || "";
+    const imei = p.imei || "";
+    const qrData = serial || imei || p.id;
+    const cor = p.cor ? ` ${p.cor}` : "";
+    const obs = p.observacao || "";
+    const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+    const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+    const hasCaixa = obs.includes("[COM_CAIXA]");
+    const hasCabo = obs.includes("[COM_CABO]");
+    const win = window.open("", "_blank", "width=600,height=400");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>Etiqueta Troca</title>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+      <style>
+        @page{size:29mm 62mm;margin:0}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0}
+        .label{width:29mm;overflow:hidden;display:block}
+        canvas{display:block;width:22mm;height:22mm;margin:0 auto;margin-top:1mm}
+        .info{padding:0 1.5mm 1mm;text-align:center}
+        .produto{font-size:6pt;font-weight:900;line-height:1.2;color:#000;word-break:break-word}
+        .badges{font-size:5pt;margin-top:0.5mm;color:#555;line-height:1.3}
+        .sn{font-size:5pt;font-family:monospace;font-weight:bold;color:#000;line-height:1.3;margin-top:0.3mm}
+        .cliente{font-size:5.5pt;font-weight:bold;color:#E8740E;line-height:1.3;margin-top:0.5mm;word-break:break-word}
+        .custo{font-size:6pt;font-weight:900;color:#000;margin-top:0.3mm}
+        .label-troca{font-size:4.5pt;letter-spacing:0.5px;text-transform:uppercase;color:#888;margin-top:0.5mm}
+      </style></head><body>
+      <div class="label">
+        <canvas id="qr0" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
+        <div class="info">
+          <div class="produto">${p.produto}${cor}</div>
+          <div class="badges">${[
+            p.bateria ? `🔋 ${p.bateria}%` : "",
+            grade ? `Grade ${grade}` : "",
+            hasCaixa ? "Com caixa" : "",
+            hasCabo ? "Com cabo" : "",
+          ].filter(Boolean).join(" · ") || ""}</div>
+          ${serial ? `<div class="sn">S/N: ${serial}</div>` : ""}
+          ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
+          ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
+          ${p.custo_unitario ? `<div class="custo">TROCA: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
+          <div class="label-troca">Produto na troca</div>
+        </div>
+      </div>
+      <script>
+        document.querySelectorAll('canvas[data-qr]').forEach(function(canvas){
+          var data=canvas.getAttribute('data-qr');
+          var qr=qrcode(0,'L');qr.addData(data);qr.make();
+          var size=500;canvas.width=size;canvas.height=size;
+          var ctx=canvas.getContext('2d');
+          var cells=qr.getModuleCount();
+          var qz=4;var totalCells=cells+qz*2;var cs=size/totalCells;var offset=qz*cs;
+          ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
+          for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)
+            if(qr.isDark(r,c))ctx.fillRect(Math.floor(offset+c*cs),Math.floor(offset+r*cs),Math.ceil(cs),Math.ceil(cs));
+        });
+        window.onload=function(){setTimeout(function(){window.print()},600)};
+      <\/script></body></html>`);
+    win.document.close();
+  };
+
   const handlePrintEtiquetaModal = () => {
     if (!etiquetaModal) return;
     const { item, items, batchItems } = etiquetaModal;
@@ -3927,6 +3991,15 @@ export default function EstoquePage() {
                                             </div>
                                           );
                                         })()}
+                                        {/* Botão Etiqueta — Pendências (produto na troca) */}
+                                        {isPendenciasTab && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }}
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
+                                          >
+                                            🏷️ Etiqueta
+                                          </button>
+                                        )}
                                         {/* Botão Etiqueta — só no tab A Caminho */}
                                         {isACaminhoTab && (
                                           <button
