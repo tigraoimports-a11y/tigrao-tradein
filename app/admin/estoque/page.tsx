@@ -3110,9 +3110,9 @@ export default function EstoquePage() {
                                     </td>}
                                   </tr>
                                 );
-                                // Linhas expandidas (itens individuais)
+                                // Linhas expandidas (itens individuais, agrupados por cor)
                                 if (isExpanded && !isSingleUnit) {
-                                  group.forEach(p => {
+                                  [...group].sort((a, b) => (a.cor || "").localeCompare(b.cor || "")).forEach(p => {
                                     const ptLabel = corSoPT(p.cor, p.produto);
                                     rows.push(
                                       <tr key={p.id}
