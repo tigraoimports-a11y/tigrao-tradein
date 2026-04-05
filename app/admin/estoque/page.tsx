@@ -1224,6 +1224,19 @@ export default function EstoquePage() {
     setMsg(`Preco atualizado para ${items.length} unidades: R$ ${val.toLocaleString("pt-BR")}`);
   };
 
+  // Quantidade mínima em massa (todas as unidades de um grupo)
+  const [bulkMinimoKey, setBulkMinimoKey] = useState<string>("");
+  const [bulkMinimoVal, setBulkMinimoVal] = useState<string>("");
+  const handleBulkMinimo = async (items: ProdutoEstoque[]) => {
+    const val = parseInt(bulkMinimoVal);
+    if (isNaN(val) || val < 0) return;
+    const ids = items.map(p => p.id);
+    await Promise.all(ids.map(id => apiPatch(id, { estoque_minimo: val })));
+    setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, estoque_minimo: val } : p));
+    setBulkMinimoKey(""); setBulkMinimoVal("");
+    setMsg(`Qtd. mínima definida como ${val} para ${items.length} variante(s)`);
+  };
+
   // Edição genérica de campo inline
   const startEditField = (id: string, field: string, value: string) => {
     setEditingField((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
@@ -3576,6 +3589,34 @@ export default function EstoquePage() {
                           >
                             🏷️ Etiqueta
                           </button>
+                        )}
+                        {/* Botão qtd. mínima em massa */}
+                        {isAdmin && !isPendenciasTab && (
+                          bulkMinimoKey === modelo ? (
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>mín.</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={bulkMinimoVal}
+                                onChange={(e) => setBulkMinimoVal(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleBulkMinimo(items); if (e.key === "Escape") { setBulkMinimoKey(""); setBulkMinimoVal(""); } }}
+                                className={`w-16 px-2 py-1 rounded border border-[#0071E3] text-xs text-center ${dm ? "bg-[#1A1A1A] text-white" : "bg-white text-[#1D1D1F]"}`}
+                                placeholder="0"
+                                autoFocus
+                              />
+                              <button onClick={(e) => { e.stopPropagation(); handleBulkMinimo(items); }} className="text-[11px] text-[#E8740E] font-bold">OK</button>
+                              <button onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(""); setBulkMinimoVal(""); }} className="text-[11px] text-red-400">✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(modelo); setBulkMinimoVal(""); }}
+                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-blue-400 hover:border-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:text-blue-500 hover:border-blue-500"}`}
+                              title="Definir quantidade mínima para todas as variantes"
+                            >
+                              {items.some(p => p.estoque_minimo != null) ? `mín. ${items[0].estoque_minimo ?? "—"}` : "Qtd. mínima"}
+                            </button>
+                          )
                         )}
                         {/* Botão editar preço em massa — todas as unidades do grupo */}
                         {isAdmin && (
