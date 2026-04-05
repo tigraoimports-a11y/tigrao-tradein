@@ -657,28 +657,43 @@ export async function DELETE(req: NextRequest) {
   }
 
   // Se tinha produto na troca, remover a pendência específica do estoque
-  // (apenas a pendência correspondente ao produto da troca, não todas do cliente)
   if (venda && venda.produto_na_troca && venda.cliente) {
     const clienteUpper = (venda.cliente || "").toUpperCase();
-    // 1ª troca
-    if (venda.troca_produto) {
-      await supabase.from("estoque")
-        .delete()
-        .eq("produto", venda.troca_produto)
+    // Helper: busca pendência por produto exato, fallback por cliente+data
+    async function removerPendencia(trocaProduto: string | null, label: string) {
+      // 1. Tentar por nome exato do produto
+      if (trocaProduto) {
+        const { data: found } = await supabase.from("estoque")
+          .select("id, produto")
+          .eq("produto", trocaProduto)
+          .eq("cliente", clienteUpper)
+          .in("tipo", ["PENDENCIA", "SEMINOVO"])
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (found && found.length > 0) {
+          await supabase.from("estoque").delete().eq("id", found[0].id);
+          await logActivity(usuario, `Removeu pendência ${label} (cancelamento)`, `${found[0].produto} — ${venda.cliente}`, "estoque");
+          return;
+        }
+      }
+      // 2. Fallback: buscar por cliente + tipo + data da venda
+      const { data: fallback } = await supabase.from("estoque")
+        .select("id, produto")
         .eq("cliente", clienteUpper)
         .in("tipo", ["PENDENCIA", "SEMINOVO"])
+        .eq("data_compra", venda.data)
+        .order("created_at", { ascending: false })
         .limit(1);
-      await logActivity(usuario, "Removeu pendência troca (cancelamento)", `${venda.troca_produto} — ${venda.cliente}`, "estoque");
+      if (fallback && fallback.length > 0) {
+        await supabase.from("estoque").delete().eq("id", fallback[0].id);
+        await logActivity(usuario, `Removeu pendência ${label} (cancelamento, fallback)`, `${fallback[0].produto} — ${venda.cliente}`, "estoque");
+      }
     }
+    // 1ª troca
+    await removerPendencia(venda.troca_produto, "troca");
     // 2ª troca
-    if (venda.troca_produto2 && venda.produto_na_troca2) {
-      await supabase.from("estoque")
-        .delete()
-        .eq("produto", venda.troca_produto2)
-        .eq("cliente", clienteUpper)
-        .in("tipo", ["PENDENCIA", "SEMINOVO"])
-        .limit(1);
-      await logActivity(usuario, "Removeu pendência troca 2 (cancelamento)", `${venda.troca_produto2} — ${venda.cliente}`, "estoque");
+    if (venda.produto_na_troca2) {
+      await removerPendencia(venda.troca_produto2, "troca 2");
     }
   }
 

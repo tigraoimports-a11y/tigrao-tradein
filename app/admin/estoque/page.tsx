@@ -1671,7 +1671,7 @@ export default function EstoquePage() {
   // Filtrar por tipo
   const novos = estoque.filter((p) => (p.tipo || "NOVO") === "NOVO");
   const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
-  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO");
+  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO" && p.status !== "ESGOTADO");
   const atacado = estoque.filter((p) => p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
   const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
@@ -2978,7 +2978,12 @@ export default function EstoquePage() {
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
                 <div className="space-y-4">
-                  {sortedDates.map(date => {
+                  {sortedDates.filter(date => {
+                    // Ocultar pedidos onde todos os itens já foram recebidos (exceto se filtrando por recebidos)
+                    if (acaminhoFilter === "recebidos") return true;
+                    const items = byDate[date];
+                    return acaminhoFilter === "todos" ? true : items.some(p => p.tipo === "A_CAMINHO");
+                  }).map(date => {
                     const items = byDate[date];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
@@ -3335,11 +3340,13 @@ export default function EstoquePage() {
                   return modeloEntries.map(([modelo, items], cardIdx) => {
                   // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
                   const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
+                    .replace(/\s+J(?=\s*\(|\s*$)(\s*\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
                     .replace(/\s{2,}/g, " ")
+                    .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
                   items.forEach((p) => {
@@ -3504,7 +3511,7 @@ export default function EstoquePage() {
                                           <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
                                         </div>
                                       ) : (
-                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodNome }); } }}>
+                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
                                           {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {/* Badge de núcleos para MacBooks */}
                                           {getBaseCat(prodItems[0]?.categoria) === "MACBOOK" && (() => {
