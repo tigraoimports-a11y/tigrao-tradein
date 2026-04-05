@@ -100,6 +100,39 @@ function CompraForm() {
   const [produtoInput, setProdutoInput] = useState(produtoParam);
   const [precoAuto, setPrecoAuto] = useState(precoParam ? parseInt(precoParam) : 0);
   const [corSel, setCorSel] = useState("");
+
+  // Variantes do produto base (ex: "Mac Mini M4" → lista de configs)
+  // Prioridade: tabela de preços (/admin/precos) → estoque (fallback)
+  type Variante = { produto: string; preco: number | null };
+  const variantesDoBase = useMemo((): Variante[] => {
+    // Só entra neste modo quando produto base veio pela URL mas sem preço
+    if (!produtoParam || precoParam) return [];
+    const base = produtoParam.toLowerCase().trim();
+
+    // 1. Tenta tabela de preços (mesma fonte do gerar-link)
+    const fromPrecos: Variante[] = allProducts
+      .filter(p => {
+        const nome = `${p.modelo} ${p.armazenamento}`.toLowerCase().trim();
+        return nome.startsWith(base) && nome !== base;
+      })
+      .map(p => ({ produto: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.precoPix }));
+
+    if (fromPrecos.length > 0) return fromPrecos;
+
+    // 2. Fallback: estoque em stock
+    const todas: Variante[] = [];
+    for (const itens of Object.values(catalogo)) {
+      for (const item of itens) {
+        const nome = item.produto.toLowerCase().trim();
+        if (nome.startsWith(base) && nome !== base) {
+          if (!todas.find(v => v.produto === item.produto)) {
+            todas.push({ produto: item.produto, preco: item.preco });
+          }
+        }
+      }
+    }
+    return todas;
+  }, [produtoParam, precoParam, allProducts, catalogo]);
   const [coresDisponiveis, setCoresDisponiveis] = useState<string[]>([]);
 
   // WhatsApp pode vir do URL ou ser buscado da config
@@ -235,31 +268,55 @@ function CompraForm() {
       return;
     }
 
+    if (!formaPagamento) {
+      alert("Selecione a forma de pagamento antes de enviar.");
+      return;
+    }
+
+    if (formaPagamento.includes("Cartao") && !parcelas) {
+      alert("Selecione o numero de parcelas antes de enviar.");
+      return;
+    }
+
+    const produtoFinal = produtoInput || produtoParam || "";
+    const precoFinal = preco > 0 ? preco : precoAuto;
+    if (!precoFinal) {
+      alert("Informe o valor combinado do produto.");
+      return;
+    }
+
     const localStr = local === "Loja" ? "Retirada em loja"
       : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
       : "Entrega - Residencia";
 
-    // Forma de pagamento com detalhes
+    // Valor base para cálculos (usa precoFinal definido acima)
+    const valorBaseFinal = trocaNum > 0 ? Math.max(precoFinal - trocaNum, 0) : precoFinal;
+    const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
+    const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
+
+    // Parcelas recalculadas com precoFinal (garante precisão mesmo se precoAuto mudou no submit)
+    const parcelasCalc = parcelas ? (() => {
+      const n = parseInt(parcelas);
+      const taxa = TAXAS[n] ?? 0;
+      const total = Math.ceil(valorParcelarFinal * (1 + taxa / 100));
+      const vp = Math.ceil(total / n);
+      return { n, total, vp };
+    })() : null;
+
+    // Forma de pagamento com detalhes completos
     let pagStr = formaPagamento;
-    if (formaPagamento.includes("Cartao") && parcelas) {
-      const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
-      if (entradaPixNum > 0) {
-        // Entrada PIX + Cartão parcelado
-        if (p) {
-          pagStr = `Entrada PIX R$ ${fmt(entradaPixNum)} + ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao (total cartao: R$ ${fmt(p.total)})`;
-        } else {
-          pagStr = `Entrada PIX R$ ${fmt(entradaPixNum)} + Cartao em ${parcelas}x`;
-        }
-      } else if (p) {
-        pagStr = `R$ ${fmt(p.total)} em ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao`;
+    if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
+      if (entradaFinal > 0) {
+        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
       } else {
-        pagStr = `Cartao de Credito em ${parcelas}x`;
+        pagStr = `R$ ${fmt(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao`;
       }
-    } else if (formaPagamento === "PIX" && valorBase > 0) {
-      pagStr = `PIX — R$ ${fmt(valorBase)}`;
-    } else if (formaPagamento === "PIX + Cartao" && parcelas) {
-      const p = parcOpts.find(o => o.parcelas === parseInt(parcelas));
-      pagStr = p ? `Entrada PIX R$ ${fmt(entradaPixNum)} + ${parcelas}x de R$ ${fmt(p.valorParcela)} no cartao` : `PIX + Cartao em ${parcelas}x`;
+    } else if (formaPagamento === "PIX") {
+      pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
+    } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {
+      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
+    } else if (formaPagamento === "Debito") {
+      pagStr = `Debito — R$ ${fmt(valorBaseFinal)}`;
     }
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
@@ -282,7 +339,7 @@ function CompraForm() {
       `*Bairro:* ${bairro}`,
       "",
       // Produto e pagamento
-      `*Produto:* ${produtoInput || produtoParam || "Nao selecionado"}${corSel ? ` — ${corSel}` : ""}${preco > 0 ? ` — R$ ${fmt(preco)}` : ""}`,
+      `*Produto:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
       ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
       `*Forma de pagamento:* ${pagStr}`,
     ];
@@ -358,21 +415,64 @@ function CompraForm() {
         {produtoParam ? (
           <>
             <p className={sectionTitle}>{produtosExtras.length > 0 ? "Produtos" : "Produto"}</p>
-            <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
-            {produtosExtras.map((p, i) => (
-              <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p}</p>
-            ))}
-            {preco > 0 && (
-              <div className="mt-2 space-y-1">
-                <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
-                <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
-                {trocaNum > 0 && (
-                  <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>
-                )}
+
+            {/* Modo variante: produto base veio na URL mas sem preço → mostra picker de configs */}
+            {variantesDoBase.length > 0 && !produtoInput && (
+              <div className="mt-2 space-y-2">
+                <p className="text-[#1D1D1F] font-bold text-lg">{produtoParam}</p>
+                <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold mt-3 mb-1">Escolha a configuracao</p>
+                <div className="space-y-2">
+                  {variantesDoBase.map(v => (
+                    <button key={v.produto} type="button"
+                      onClick={() => { setProdutoInput(v.produto); setPrecoAuto(v.preco ?? 0); setCorSel(""); }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 border-[#D2D2D7] bg-[#F5F5F7] hover:border-[#E8740E] hover:bg-[#FFF5EB] transition-all text-left">
+                      <span className="text-sm font-semibold text-[#1D1D1F]">
+                        {v.produto.replace(produtoParam, "").trim().replace(/^[-–]/, "").trim() || v.produto}
+                      </span>
+                      {v.preco && (
+                        <span className="text-sm font-bold text-[#E8740E] ml-3 shrink-0">R$ {fmt(v.preco)}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
+
+            {/* Variante selecionada — mostra config escolhida + botão trocar */}
+            {variantesDoBase.length > 0 && produtoInput && (
+              <div className="mt-2 space-y-1">
+                <p className="text-[#1D1D1F] font-bold text-lg">{produtoInput}</p>
+                {precoAuto > 0 && (
+                  <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(precoAuto)}</p>
+                )}
+                <button type="button" onClick={() => { setProdutoInput(""); setPrecoAuto(0); setCorSel(""); }}
+                  className="text-xs text-[#E8740E] underline underline-offset-2 mt-1">
+                  Trocar configuracao
+                </button>
+              </div>
+            )}
+
+            {/* Modo normal: produto + preço já definidos na URL */}
+            {variantesDoBase.length === 0 && (
+              <>
+                <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
+                {produtosExtras.map((p, i) => (
+                  <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p}</p>
+                ))}
+                {preco > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
+                    <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
+                    {trocaNum > 0 && (
+                      <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Seleção de cor — cores reais do estoque */}
-            {coresDisponiveis.length > 0 && (
+            {(produtoInput || variantesDoBase.length === 0) && coresDisponiveis.length > 0 && (
               <div className="mt-3 pt-3 border-t border-[#E8E8ED]">
                 <p className="text-xs text-[#86868B] uppercase tracking-wider font-semibold mb-2">Escolha a cor</p>
                 <div className="flex flex-wrap gap-2">
@@ -400,18 +500,35 @@ function CompraForm() {
             {catSel && catalogo[catSel] && (
               <div className="mt-3 max-h-[200px] overflow-y-auto space-y-1 border border-[#D2D2D7] rounded-lg p-2 bg-[#F5F5F7]">
                 {catalogo[catSel].map(p => (
-                  <button key={p.produto} type="button" onClick={() => setProdutoInput(p.produto)}
+                  <button key={p.produto} type="button" onClick={() => { setProdutoInput(p.produto); setPrecoAuto(p.preco ?? 0); setCorSel(""); }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${produtoInput === p.produto ? "bg-[#E8740E] text-white font-semibold" : "bg-white text-[#1D1D1F] hover:bg-[#FFF5EB]"}`}>
-                    {p.produto}
+                    <span>{p.produto}</span>
+                    {p.preco && <span className={`ml-2 text-xs font-bold ${produtoInput === p.produto ? "text-white/80" : "text-[#E8740E]"}`}>R$ {fmt(p.preco)}</span>}
                   </button>
                 ))}
               </div>
             )}
-            {produtoInput && preco > 0 && (
-              <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
+            {produtoInput && (
+              <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200 space-y-2">
                 <p className="text-sm font-semibold text-[#1D1D1F]">{produtoInput}{corSel ? ` — ${corSel}` : ""}</p>
-                <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
-                {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
+                {preco > 0 ? (
+                  <>
+                    <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
+                    {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-[#86868B] mb-1">Valor combinado (R$) *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={precoAuto > 0 ? String(precoAuto) : ""}
+                      onChange={e => setPrecoAuto(parseInt(e.target.value.replace(/\D/g,"")) || 0)}
+                      placeholder="Ex: 7500"
+                      className={inputCls}
+                    />
+                  </div>
+                )}
               </div>
             )}
             {/* Seleção de cor — cores reais do estoque */}
@@ -699,11 +816,29 @@ function CompraForm() {
             <label className={labelCls}>Data *</label>
             <input type="date" required value={dataEntrega}
               onChange={(e) => {
+                if (!e.target.value) return;
                 const d = new Date(e.target.value + "T12:00:00");
-                if (d.getDay() === 0) { alert("Nao trabalhamos aos domingos. Selecione de segunda a sabado."); return; }
+                if (d.getDay() === 0) {
+                  // Domingo: pula para a próxima segunda automaticamente
+                  d.setDate(d.getDate() + 1);
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  const day = String(d.getDate()).padStart(2, "0");
+                  setDataEntrega(`${y}-${m}-${day}`);
+                  return;
+                }
                 setDataEntrega(e.target.value);
               }}
-              min={(() => { const d = new Date(); d.setDate(d.getDate() + (d.getHours() >= 18 ? 1 : 0)); while (d.getDay() === 0) d.setDate(d.getDate() + 1); return d.toISOString().split("T")[0]; })()}
+              min={(() => {
+                const d = new Date();
+                d.setDate(d.getDate() + (d.getHours() >= 18 ? 1 : 0));
+                while (d.getDay() === 0) d.setDate(d.getDate() + 1);
+                // Usar data LOCAL (não UTC) para evitar off-by-one em fusos horários
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const day = String(d.getDate()).padStart(2, "0");
+                return `${y}-${m}-${day}`;
+              })()}
               className={inputCls} />
           </div>
 
