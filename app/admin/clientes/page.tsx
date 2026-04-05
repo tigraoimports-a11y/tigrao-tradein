@@ -198,8 +198,8 @@ export default function ClientesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className={`text-2xl font-bold ${mP}`}>Clientes</h1>
-        <p className={`text-sm ${mS}`}>Base de clientes com historico de compras</p>
+        <h1 className={`text-2xl font-bold ${mP}`}>Cadastros</h1>
+        <p className={`text-sm ${mS}`}>Base de cadastros com historico de compras</p>
       </div>
 
       {/* Tabs */}
