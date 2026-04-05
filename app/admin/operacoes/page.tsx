@@ -6,7 +6,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 interface Operacao {
   codigo: string;
   data: string;
-  tipo: "Entrada" | "Saída";
+  tipo: "Entrada" | "Saída" | "Troca";
   contato: string;
   itens: OperacaoItem[];
   total_itens: number;
@@ -38,7 +38,7 @@ export default function OperacoesPage() {
   const [operacoes, setOperacoes] = useState<Operacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailOp, setDetailOp] = useState<Operacao | null>(null);
-  const [filterTipo, setFilterTipo] = useState<"todos" | "entrada" | "saida">("todos");
+  const [filterTipo, setFilterTipo] = useState<"todos" | "entrada" | "saida" | "troca">("todos");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
@@ -79,13 +79,13 @@ export default function OperacoesPage() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex gap-2">
-          {(["todos", "entrada", "saida"] as const).map((t) => (
+          {(["todos", "entrada", "saida", "troca"] as const).map((t) => (
             <button
               key={t}
               onClick={() => { setFilterTipo(t); setPage(0); }}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${filterTipo === t ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}
             >
-              {t === "todos" ? "Todas" : t === "entrada" ? "↓ Entradas" : "↑ Saídas"}
+              {t === "todos" ? "Todas" : t === "entrada" ? "↓ Entradas" : t === "saida" ? "↑ Saídas" : "↔ Trocas"}
             </button>
           ))}
         </div>
@@ -122,8 +122,8 @@ export default function OperacoesPage() {
                   <td className={`px-4 py-3 font-mono text-xs ${txtP}`}>{op.codigo}</td>
                   <td className={`px-4 py-3 ${txtS}`}>{fmtDate(op.data)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                      {op.tipo === "Entrada" ? "↓" : "↑"} {op.tipo}
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : op.tipo === "Troca" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
+                      {op.tipo === "Entrada" ? "↓" : op.tipo === "Troca" ? "↔" : "↑"} {op.tipo}
                     </span>
                   </td>
                   <td className={`px-4 py-3 font-medium ${txtP}`}>{op.contato}</td>
@@ -166,8 +166,8 @@ export default function OperacoesPage() {
                 <div>
                   <p className={`text-[10px] ${txtS}`}>{op.codigo}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                      {op.tipo === "Entrada" ? "↓" : "↑"} {op.tipo}
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${op.tipo === "Entrada" ? "bg-green-100 text-green-700" : op.tipo === "Troca" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
+                      {op.tipo === "Entrada" ? "↓" : op.tipo === "Troca" ? "↔" : "↑"} {op.tipo}
                     </span>
                     <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">{op.status}</span>
                     <span className={`text-sm font-semibold ${txtP}`}>{fmtDate(op.data)}</span>

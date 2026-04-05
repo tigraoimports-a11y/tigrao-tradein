@@ -38,6 +38,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/saldos", label: "Saldos", icon: "\u{1F3E6}", pageKey: "saldos" },
       { href: "/admin/recebiveis", label: "Recebiveis", icon: "\u{1F4B3}", pageKey: "recebiveis" },
       { href: "/admin/conciliacao", label: "Conciliacao", icon: "\u{1F50D}", pageKey: "conciliacao" },
+      { href: "/admin/trocas", label: "Trocas", icon: "\u{1F504}", pageKey: "trocas" },
     ],
   },
 

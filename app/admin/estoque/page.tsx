@@ -899,6 +899,29 @@ export default function EstoquePage() {
     return db.length > 0 ? db : fallback;
   }
 
+  // Normalize model name for matching: strip diacritics, prefixes, generation suffixes
+  function normalizeModelName(name: string): string {
+    return name
+      .toUpperCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+      .replace(/[°ºª]/g, "")
+      .replace(/^APPLE\s+WATCH\s+/i, "")
+      .replace(/^IPHONE\s+/i, "")
+      .replace(/^IPAD\s+/i, "")
+      .replace(/^MACBOOK\s+/i, "")
+      .replace(/\bGERACAO\b/gi, "")
+      .replace(/\bGEN\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Check if all words from model name appear in product name (order-independent)
+  function modelMatchesProduct(modelNorm: string, prodNorm: string): boolean {
+    const modelWords = modelNorm.split(/\s+/).filter(w => w.length > 0);
+    if (!modelWords.length) return false;
+    return modelWords.every(w => prodNorm.includes(w));
+  }
+
   // Fetch configs do catálogo quando o modal de detalhe abre (para cores por modelo específico)
   useEffect(() => {
     if (!detailProduct || !password || !catalogoModelos.length) { setDetailModelConfigs({}); return; }
@@ -909,11 +932,11 @@ export default function EstoquePage() {
     };
     const keys = CAT_CATALOG[detailProduct.categoria] || [];
     const catModelos = catalogoModelos.filter(m => keys.includes(m.categoria_key) && m.ativo !== false);
-    const prodUpper = detailProduct.produto.toUpperCase();
+    const prodNorm = normalizeModelName(detailProduct.produto);
     const match = catModelos
-      .map(m => ({ m, nome: m.nome.toUpperCase() }))
-      .filter(({ nome }) => prodUpper.includes(nome))
-      .sort((a, b) => b.nome.length - a.nome.length)[0];
+      .map(m => ({ m, norm: normalizeModelName(m.nome) }))
+      .filter(({ norm }) => modelMatchesProduct(norm, prodNorm))
+      .sort((a, b) => b.norm.length - a.norm.length)[0];
     if (!match) { setDetailModelConfigs({}); return; }
     fetch(`/api/admin/catalogo?modelo_id=${match.m.id}`, { headers: { "x-admin-password": password } })
       .then(r => r.json())
