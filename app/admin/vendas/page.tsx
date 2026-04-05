@@ -444,7 +444,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO") === tipo);
+    return estoque.filter(p => p.categoria === cat && ((p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -2114,11 +2114,13 @@ export default function VendasPage() {
                     : baseList;
                   // Limpar nome do produto: remover origem e chip
                   const stripOrigemVendas = (nome: string) => nome
-                    .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ)\s*(\([^)]*\))?/gi, "")
+                    .replace(/\s+(VC|LL|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
+                    .replace(/\s+J(?=\s*\(|\s*$)(\s*\([^)]*\))?/gi, "")
                     .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
                     .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
                     .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
                     .replace(/\s{2,}/g, " ")
+                    .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const grupos: Record<string, EstoqueItem[]> = {};
                   for (const p of filtrados) {
@@ -2141,9 +2143,12 @@ export default function VendasPage() {
 
                   // Extrair modelo base (sem cor) pra agrupar cores num card só
                   const extractModeloBase = (nome: string) => {
-                    // Pega tudo até a memória (ex: "IPHONE 16 PLUS 128GB")
-                    const m = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
-                    return m ? m[1].trim() : nome;
+                    // Apple Watch: "WATCH ULTRA 3 49MM" ou "WATCH S10 42MM"
+                    const watchMatch = nome.match(/^(.*?(?:WATCH|APPLE\s*WATCH)\s*(?:ULTRA\s*\d*|SE\s*\d*|S\d+|SERIES\s*\d+)(?:\s*\d+MM)?)/i);
+                    if (watchMatch) return watchMatch[1].trim();
+                    // Acessórios sem memória: retorna o nome todo (já stripped)
+                    const memMatch = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
+                    return memMatch ? memMatch[1].trim() : nome;
                   };
 
                   // Reagrupar: modelo base → cores → itens
