@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       const { supabase } = await import("@/lib/supabase");
       const { data } = await supabase
         .from("precos")
-        .select("modelo, armazenamento, preco_pix, status, tipo")
+        .select("modelo, armazenamento, preco_pix, status, tipo, categoria")
         .order("modelo")
         .order("armazenamento");
 
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
             modelo: r.modelo,
             armazenamento: r.armazenamento,
             precoPix: r.preco_pix,
+            categoria: r.categoria || null,
           }));
         return NextResponse.json(products);
       }

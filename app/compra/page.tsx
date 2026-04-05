@@ -42,7 +42,7 @@ interface ProdutoAPI {
   modelo: string;
   armazenamento: string;
   precoPix: number;
-  categoria?: string;
+  categoria?: string | null;
 }
 
 function CompraForm() {
@@ -135,6 +135,32 @@ function CompraForm() {
   }, [produtoParam, precoParam, allProducts, catalogo]);
   const [coresDisponiveis, setCoresDisponiveis] = useState<string[]>([]);
 
+  // Catálogo construído da tabela de preços (fallback quando estoque vazio)
+  const CAT_LABELS: Record<string, string> = {
+    IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks",
+    APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods",
+    MAC_MINI: "Mac Mini", ACESSORIOS: "Acessórios", OUTROS: "Outros",
+  };
+  function inferCatLabel(cat: string) {
+    return CAT_LABELS[cat] || cat.replace(/_/g, " ");
+  }
+  const catalogoDePrecos = useMemo((): Record<string, { produto: string; cor: null; preco: number | null }[]> => {
+    if (allProducts.length === 0) return {};
+    const cats: Record<string, { produto: string; cor: null; preco: number | null }[]> = {};
+    for (const p of allProducts) {
+      const cat = inferCatLabel(p.categoria || "OUTROS");
+      if (!cats[cat]) cats[cat] = [];
+      const nome = `${p.modelo} ${p.armazenamento}`.trim();
+      if (!cats[cat].find(x => x.produto === nome)) {
+        cats[cat].push({ produto: nome, cor: null, preco: p.precoPix });
+      }
+    }
+    return cats;
+  }, [allProducts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Usa estoque se disponível, senão tabela de preços
+  const catalogoAtivo = Object.keys(catalogo).length > 0 ? catalogo : catalogoDePrecos;
+
   // WhatsApp pode vir do URL ou ser buscado da config
   const [whatsappFormConfig, setWhatsappFormConfig] = useState("");
   const [whatsappPrincipalConfig, setWhatsappPrincipalConfig] = useState("");
@@ -148,7 +174,9 @@ function CompraForm() {
       fetch("/api/produtos-disponiveis").then(r => r.json()).catch(() => ({ categorias: {} })),
       fetch("/api/tradein-config").then(r => r.json()).catch(() => ({ data: null })),
     ]).then(([prodRes, catRes, cfgRes]) => {
-      if (prodRes.data) setAllProducts(prodRes.data);
+      // /api/produtos retorna array direto (não {data: []})
+      if (Array.isArray(prodRes)) setAllProducts(prodRes);
+      else if (prodRes.data) setAllProducts(prodRes.data);
       if (catRes.categorias) setCatalogo(catRes.categorias);
       if (cfgRes.data?.whatsapp_formularios) setWhatsappFormConfig(cfgRes.data.whatsapp_formularios);
       if (cfgRes.data?.whatsapp_principal) setWhatsappPrincipalConfig(cfgRes.data.whatsapp_principal);
@@ -486,20 +514,20 @@ function CompraForm() {
               </div>
             )}
           </>
-        ) : Object.keys(catalogo).length > 0 ? (
+        ) : Object.keys(catalogoAtivo).length > 0 ? (
           <>
             <p className={sectionTitle}>Qual produto deseja?</p>
             <div className="flex flex-wrap gap-2 mt-2">
-              {Object.keys(catalogo).map(cat => (
+              {Object.keys(catalogoAtivo).map(cat => (
                 <button key={cat} type="button" onClick={() => { setCatSel(catSel === cat ? "" : cat); setProdutoInput(""); setPrecoAuto(0); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${catSel === cat ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73]"}`}>
                   {cat}
                 </button>
               ))}
             </div>
-            {catSel && catalogo[catSel] && (
+            {catSel && catalogoAtivo[catSel] && (
               <div className="mt-3 max-h-[200px] overflow-y-auto space-y-1 border border-[#D2D2D7] rounded-lg p-2 bg-[#F5F5F7]">
-                {catalogo[catSel].map(p => (
+                {catalogoAtivo[catSel].map(p => (
                   <button key={p.produto} type="button" onClick={() => { setProdutoInput(p.produto); setPrecoAuto(p.preco ?? 0); setCorSel(""); }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${produtoInput === p.produto ? "bg-[#E8740E] text-white font-semibold" : "bg-white text-[#1D1D1F] hover:bg-[#FFF5EB]"}`}>
                     <span>{p.produto}</span>
