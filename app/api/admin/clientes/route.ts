@@ -103,10 +103,10 @@ export async function GET(req: NextRequest) {
   }
 
   // =========== TABS: clientes / lojistas / notas ===========
+  // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui registros com NULL
   let query = supabase
     .from("vendas")
     .select("id,data,cliente,cpf,cnpj,email,pessoa,bairro,cidade,uf,origem,tipo,produto,fornecedor,preco_vendido,forma,banco,serial_no,imei,nota_fiscal_url,status_pagamento")
-    .neq("status_pagamento", "CANCELADO")
     .order("data", { ascending: false });
 
   if (search) {
@@ -133,10 +133,15 @@ export async function GET(req: NextRequest) {
     from += PAGE;
   }
 
+  // Filtrar cancelados em JS (evita bug do .neq() com NULL no Supabase)
+  const vendas = rawVendas.filter((v: Record<string, unknown>) =>
+    v.status_pagamento !== "CANCELADO"
+  );
+
   // Tab "notas"
   if (tab === "notas") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const notas = rawVendas.filter((v: any) => v.nota_fiscal_url).map((v: any) => ({
+    const notas = vendas.filter((v: any) => v.nota_fiscal_url).map((v: any) => ({
       id: v.id, data: v.data, cliente: v.cliente, produto: v.produto,
       preco_vendido: Number(v.preco_vendido || 0), nota_fiscal_url: v.nota_fiscal_url,
     }));
@@ -154,7 +159,7 @@ export async function GET(req: NextRequest) {
   const cpfToKey = new Map<string, string>();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const v of rawVendas as any[]) {
+  for (const v of vendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
