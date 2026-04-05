@@ -534,7 +534,15 @@ function getModeloBase(produto: string, categoria: string): string {
       return yearMatch ? `AirPods Max ${yearMatch[1]}` : "AirPods Max";
     }
     const genMatch = p.match(/AIRPODS?\s*(\d+)/);
-    if (genMatch) return `AirPods ${genMatch[1]}`;
+    if (genMatch) {
+      const gen = genMatch[1];
+      // Separar ANC vs sem ANC (são modelos diferentes)
+      const hasANC = p.includes("ANC") || p.includes("COM ANC");
+      const noANC = p.includes("SEM ANC");
+      if (hasANC && !noANC) return `AirPods ${gen} ANC`;
+      if (noANC) return `AirPods ${gen}`;
+      return `AirPods ${gen}`;
+    }
     return "AirPods";
   }
   // Fallback: normalizar trailing dashes/espaços
@@ -1209,6 +1217,19 @@ export default function EstoquePage() {
     await apiPatch(item.id, { custo_unitario: val });
     setEstoque((prev) => prev.map((p) => p.id === item.id ? { ...p, custo_unitario: val } : p));
     const e = { ...editingCusto }; delete e[item.id]; setEditingCusto(e);
+  };
+
+  // Editar balanço (média do modelo — aplicar a todas as unidades do modelo)
+  const [editBalancoKey, setEditBalancoKey] = useState<string>("");
+  const [editBalancoVal, setEditBalancoVal] = useState<string>("");
+  const handleSaveBalanco = async (modeloItems: ProdutoEstoque[]) => {
+    const val = parseFloat(editBalancoVal.replace(",", "."));
+    if (isNaN(val) || val <= 0) return;
+    const ids = modeloItems.map(p => p.id);
+    await Promise.all(ids.map(id => apiPatch(id, { custo_unitario: val })));
+    setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, custo_unitario: val } : p));
+    setEditBalancoKey(""); setEditBalancoVal("");
+    setMsg(`Balanço aplicado: ${modeloItems.length} unidades → ${fmt(val)}`);
   };
 
   // Editar preço em massa (todas as unidades de um grupo)
@@ -3834,8 +3855,31 @@ export default function EstoquePage() {
                                       </span>
                                     )}
                                   </td>
-                                  <td className={`px-4 py-2 text-xs ${dm ? "text-blue-400" : "text-blue-600"}`}>
-                                    <span title="Preço de balanço (média do modelo)">{fmt(modeloBalanco)}</span>
+                                  <td className={`px-4 py-2 text-xs ${dm ? "text-blue-400" : "text-blue-600"}`} onClick={e => e.stopPropagation()}>
+                                    {editBalancoKey === prodNome ? (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          value={editBalancoVal}
+                                          onChange={(e) => setEditBalancoVal(e.target.value)}
+                                          onKeyDown={(e) => { if (e.key === "Enter") handleSaveBalanco(items); if (e.key === "Escape") { setEditBalancoKey(""); setEditBalancoVal(""); } }}
+                                          className={`w-20 px-1 py-0.5 rounded border border-blue-500 text-xs text-right ${dm ? "bg-[#1A1A1A] text-blue-300" : "bg-white text-blue-600"}`}
+                                          placeholder={String(modeloBalanco)}
+                                          autoFocus
+                                        />
+                                        <button onClick={() => handleSaveBalanco(items)} className="text-[10px] text-blue-400 font-bold">OK</button>
+                                        <button onClick={() => { setEditBalancoKey(""); setEditBalancoVal(""); }} className="text-[10px] text-red-400">✕</button>
+                                      </div>
+                                    ) : (
+                                      <span
+                                        className={`flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-blue-300" : ""}`}
+                                        onClick={() => { if (isAdmin) { setEditBalancoKey(prodNome); setEditBalancoVal(String(modeloBalanco)); } }}
+                                        title={isAdmin ? "Editar preço de balanço (aplicar a todas as unidades)" : "Preço de balanço (média do modelo)"}
+                                      >
+                                        {fmt(modeloBalanco)}
+                                        {isAdmin && <span className="text-[9px] opacity-0 group-hover/card:opacity-50">✏️</span>}
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
                                   <td colSpan={2}></td>
@@ -4019,8 +4063,12 @@ export default function EstoquePage() {
                                           </span>
                                         )}
                                       </td>
-                                      <td className={`px-4 py-2.5 text-xs ${dm ? "text-blue-400/70" : "text-blue-500"}`}>
-                                        <span title="Balanço">{fmt(modeloBalanco)}</span>
+                                      <td className={`px-4 py-2.5 text-xs ${dm ? "text-blue-400/70" : "text-blue-500"}`} onClick={e => e.stopPropagation()}>
+                                        <span
+                                          className={`${isAdmin ? "cursor-pointer hover:text-blue-300" : ""}`}
+                                          onClick={() => { if (isAdmin) { setEditBalancoKey(prodNome); setEditBalancoVal(String(modeloBalanco)); } }}
+                                          title={isAdmin ? "Editar balanço" : "Preço de balanço"}
+                                        >{fmt(modeloBalanco)}</span>
                                       </td>
                                       <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
                                       <td className="px-4 py-2.5">
