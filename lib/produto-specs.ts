@@ -74,7 +74,7 @@ export const WATCH_CORES = [
   "SILVER", "SLATE", "SPACE GRAY", "STARLIGHT", "SPACE BLACK",
 ];
 
-export const AIRPODS_CORES = ["MIDNIGHT", "STARLIGHT"];
+export const AIRPODS_CORES = ["MIDNIGHT", "STARLIGHT", "WHITE", "BLACK", "BLUE", "ORANGE", "PURPLE", "SILVER"];
 
 export const ACESSORIOS_CORES = ["BLACK", "WHITE"];
 
@@ -222,7 +222,7 @@ export const WATCH_CONNS = [
   { value: "GPS+CELL", label: "GPS + Cellular" },
 ];
 
-export const AIRPODS_MODELOS = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"];
+export const AIRPODS_MODELOS = ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX 2024 USB-C"];
 
 // ── Interface dos specs ──
 

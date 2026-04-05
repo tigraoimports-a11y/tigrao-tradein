@@ -2789,7 +2789,7 @@ export default function EstoquePage() {
           {formBaseCat === "AIRPODS" && (
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               {(() => {
-                const airMods = getCatModelos("AIRPODS", ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX", "AIRPODS MAX 2"]);
+                const airMods = getCatModelos("AIRPODS", ["AIRPODS 4", "AIRPODS 4 ANC", "AIRPODS PRO 2", "AIRPODS PRO 3", "AIRPODS MAX 2024 USB-C"]);
                 return (
                   <div><p className={labelCls}>Modelo</p><select value={airMods.includes(spec.air_modelo) ? spec.air_modelo : "__custom__"} onChange={(e) => setS("air_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
                     {airMods.map((m) => <option key={m}>{m}</option>)}
