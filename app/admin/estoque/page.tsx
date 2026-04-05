@@ -324,10 +324,19 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   return display.toUpperCase();
 }
 
+// Mapa custom de cores PT salvas via +PT (persiste no localStorage)
+const CUSTOM_COR_PT: Record<string, string> = {};
+try {
+  const saved = typeof window !== "undefined" ? localStorage.getItem("tigrao_custom_cor_pt") : null;
+  if (saved) Object.assign(CUSTOM_COR_PT, JSON.parse(saved));
+} catch { /* ignore */ }
+function saveCustomCorPT(en: string, pt: string) {
+  CUSTOM_COR_PT[en.toUpperCase().trim()] = pt;
+  try { localStorage.setItem("tigrao_custom_cor_pt", JSON.stringify(CUSTOM_COR_PT)); } catch { /* ignore */ }
+}
+
 /** Retorna só a tradução em português da cor (para exibir em cinza ao lado do nome) */
-function corSoPT(cor: string | null | undefined, nome?: string | null, corPtField?: string | null): string | null {
-  // Se o campo cor_pt está preenchido no banco, usar diretamente
-  if (corPtField) return corPtField;
+function corSoPT(cor: string | null | undefined, nome?: string | null): string | null {
   if (!cor) {
     // Sem campo cor: tenta extrair cor PT do nome do produto
     if (nome) return extractCorPT(nome);
@@ -336,6 +345,9 @@ function corSoPT(cor: string | null | undefined, nome?: string | null, corPtFiel
   // Remove código de origem do campo cor antes de traduzir
   const corClean = stripCode(cor);
   const upper = corClean.toUpperCase().trim();
+  // Custom PT salvo via +PT (localStorage)
+  const customPt = CUSTOM_COR_PT[upper];
+  if (customPt) return customPt;
   const pt = COR_PT[upper]; // cor armazenada em EN → retorna PT
   if (pt && pt.toLowerCase() !== upper.toLowerCase()) return pt;
   if (PT_TO_EN[upper]) return corClean.charAt(0).toUpperCase() + corClean.slice(1).toLowerCase(); // armazenada em PT → retorna formatada
@@ -343,11 +355,12 @@ function corSoPT(cor: string | null | undefined, nome?: string | null, corPtFiel
 }
 
 /** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
-function corBilingual(cor: string | null | undefined, corPtField?: string | null): string {
+function corBilingual(cor: string | null | undefined): string {
   if (!cor) return "—";
-  // Se tem cor_pt customizada no banco, usar diretamente
-  if (corPtField) return `${cor} · ${corPtField}`;
   const upper = cor.toUpperCase().trim();
+  // Custom PT salvo via +PT
+  const customPt = CUSTOM_COR_PT[upper];
+  if (customPt) return `${cor} · ${customPt}`;
   // EN → PT
   const pt = COR_PT[upper];
   if (pt && pt.toLowerCase() !== cor.toLowerCase()) return `${cor} · ${pt}`;
@@ -379,7 +392,6 @@ interface ProdutoEstoque {
   pedido_fornecedor_id: string | null;
   origem: string | null;
   garantia: string | null;
-  cor_pt: string | null;
 }
 
 interface ImeiSearchResult {
@@ -3118,7 +3130,7 @@ export default function EstoquePage() {
                                 // Linhas expandidas (itens individuais, agrupados por cor)
                                 if (isExpanded && !isSingleUnit) {
                                   [...group].sort((a, b) => (a.cor || "").localeCompare(b.cor || "")).forEach(p => {
-                                    const ptLabel = corSoPT(p.cor, p.produto, p.cor_pt);
+                                    const ptLabel = corSoPT(p.cor, p.produto);
                                     rows.push(
                                       <tr key={p.id}
                                         className={`border-b ${dm ? "border-[#2C2C2E] bg-[#1A1A1C] hover:bg-[#222]" : "border-[#F5F5F7] bg-[#FAFAFA] hover:bg-[#F5F5F7]"} cursor-pointer transition-colors ${selectedACaminho.has(p.id) ? (dm ? "!bg-[#E8740E]/10" : "!bg-[#FFF5EB]") : ""}`}>
@@ -3557,21 +3569,23 @@ export default function EstoquePage() {
                                             return <span className="px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-bold text-white/70 tracking-wide">{nucleosMatch[1]}</span>;
                                           })()}
                                           {(() => {
-                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto, prodItems[0]?.cor_pt);
+                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
                                             const editKey = `${prodItems[0]?.id}_corpt`;
                                             if (editingCorPT[editKey] !== undefined) {
+                                              const savePT = (corEN: string, newPT: string) => {
+                                                if (newPT) {
+                                                  saveCustomCorPT(corEN, newPT);
+                                                  setEstoque(prev => [...prev]); // force re-render
+                                                }
+                                              };
                                               return (
                                                 <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
                                                   <input
                                                     value={editingCorPT[editKey]}
                                                     onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                                    onKeyDown={async (e) => {
+                                                    onKeyDown={(e) => {
                                                       if (e.key === "Enter") {
-                                                        const newCorPT = editingCorPT[editKey]?.trim();
-                                                        if (newCorPT) {
-                                                          await Promise.all(prodItems.map(p => apiPatch(p.id, { cor_pt: newCorPT })));
-                                                          setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor_pt: newCorPT } : p));
-                                                        }
+                                                        savePT(prodItems[0]?.cor || "", editingCorPT[editKey]?.trim() || "");
                                                         setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
                                                       }
                                                       if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
@@ -3580,12 +3594,8 @@ export default function EstoquePage() {
                                                     autoFocus
                                                     placeholder="Cor em PT..."
                                                   />
-                                                  <button onClick={async () => {
-                                                    const newCorPT = editingCorPT[editKey]?.trim();
-                                                    if (newCorPT) {
-                                                      await Promise.all(prodItems.map(p => apiPatch(p.id, { cor_pt: newCorPT })));
-                                                      setEstoque(prev => prev.map(p => prodItems.some(pi => pi.id === p.id) ? { ...p, cor_pt: newCorPT } : p));
-                                                    }
+                                                  <button onClick={() => {
+                                                    savePT(prodItems[0]?.cor || "", editingCorPT[editKey]?.trim() || "");
                                                     setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
                                                   }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                   <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
@@ -3595,7 +3605,7 @@ export default function EstoquePage() {
                                             return ptLabel ? (
                                               <span
                                                 className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: prodItems[0]?.cor_pt || ptLabel || "" })); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: ptLabel || "" })); }}
                                                 title="Clique para editar a cor em PT"
                                               >{ptLabel}</span>
                                             ) : prodItems[0]?.cor ? (
@@ -3680,7 +3690,7 @@ export default function EstoquePage() {
                                             const upper = p.cor.toUpperCase().trim();
                                             const en = PT_TO_EN[upper];
                                             const ptFromMap = COR_PT[upper];
-                                            const ptCustom = p.cor_pt;
+                                            const ptCustom = CUSTOM_COR_PT[upper];
                                             if (ptCustom) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptCustom}</span></>;
                                             if (en) return <>{en.charAt(0).toUpperCase() + en.slice(1).toLowerCase()}<span className={`ml-1 text-[12px] ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
                                             if (ptFromMap && ptFromMap.toLowerCase() !== p.cor.toLowerCase()) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptFromMap}</span></>;
@@ -3727,7 +3737,7 @@ export default function EstoquePage() {
                                               <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                             </div>
                                           ) : (
-                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {(() => { if (p.cor_pt) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({p.cor_pt})</span></>; const u = (p.cor || "").toUpperCase().trim(); const en = PT_TO_EN[u]; if (en) return <>{en}<span className="ml-1 opacity-60 text-[10px]">({p.cor?.charAt(0).toUpperCase()}{p.cor?.slice(1).toLowerCase()})</span></>; const pt = COR_PT[u]; if (pt && pt.toLowerCase() !== (p.cor || "").toLowerCase()) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({pt})</span></>; return p.cor || "—"; })()}</span>
+                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {(() => { const u = (p.cor || "").toUpperCase().trim(); const customPt = CUSTOM_COR_PT[u]; if (customPt) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({customPt})</span></>; const en = PT_TO_EN[u]; if (en) return <>{en}<span className="ml-1 opacity-60 text-[10px]">({p.cor?.charAt(0).toUpperCase()}{p.cor?.slice(1).toLowerCase()})</span></>; const pt = COR_PT[u]; if (pt && pt.toLowerCase() !== (p.cor || "").toLowerCase()) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({pt})</span></>; return p.cor || "—"; })()}</span>
                                           )}
                                           {(p.imei || p.serial_no) && (
                                             <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
@@ -4184,7 +4194,7 @@ export default function EstoquePage() {
                           if (!nucleosMatch) return null;
                           return <span className={`ml-2 px-2 py-0.5 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{nucleosMatch[1]}</span>;
                         })()}
-                        {corSoPT(p.cor, p.produto, p.cor_pt) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto, p.cor_pt)}</span>}
+                        {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
                       </p>
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho, pulseira } = extractWatchBadges(p.produto);
@@ -4574,7 +4584,7 @@ export default function EstoquePage() {
                         />
                       );
                     })() : p.cor ? (
-                      <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor, p.cor_pt)}</p>
+                      <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor)}</p>
                     ) : null}
                   </div>
                   {(p.imei || isAdmin || canEditImei) && (
