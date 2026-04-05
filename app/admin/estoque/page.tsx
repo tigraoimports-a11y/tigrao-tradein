@@ -120,6 +120,7 @@ const COR_PT: Record<string, string> = {
   "LARANJA": "Laranja",
   "COSMIC ORANGE": "Laranja Cósmico",
   "ORANGE": "Laranja",
+  "DEEP BLUE": "Azul Profundo",
   "DEEP PURPLE": "Roxo Profundo",
   "ALPINE GREEN": "Verde Alpino",
   "SIERRA BLUE": "Azul Serra",
@@ -1695,7 +1696,7 @@ export default function EstoquePage() {
   const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
-  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.data_compra);
+  const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id && !["PENDENCIA", "SEMINOVO"].includes(p.tipo));
   const acabando = novos.filter((p) => p.qnt === 1);
 
   // Esgotados: qnt=0 em NOVO. Marcar se já está a caminho
@@ -3121,7 +3122,7 @@ export default function EstoquePage() {
                                         </td>
                                         <td className={`px-4 py-2 text-[13px] font-medium ${textPrimary} pl-8`} onClick={() => setDetailProduct(p)}>
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
-                                          {p.cor || p.produto}
+                                          {ptLabel || p.cor || p.produto}
                                           {ptLabel && p.cor !== ptLabel && <span className={`ml-1.5 text-[11px] font-normal ${textSecondary}`}>{ptLabel}</span>}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
