@@ -19,9 +19,10 @@ async function coletarContexto() {
       .order("produto"),
     supabase
       .from("vendas")
-      .select("produto, cor, storage, valor, forma, banco, data_venda, vendedor, origem")
-      .gte("data_venda", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-      .order("data_venda", { ascending: false })
+      .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
+      .gte("data", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+      .neq("status_pagamento", "CANCELADO")
+      .order("data", { ascending: false })
       .limit(300),
     supabase
       .from("estoque")
@@ -46,7 +47,7 @@ async function coletarContexto() {
 
   // Estatísticas de vendas
   const totalVendas = vendasData.length;
-  const receitaTotal = vendasData.reduce((s, v) => s + (v.valor || 0), 0);
+  const receitaTotal = vendasData.reduce((s, v) => s + (v.preco_vendido || 0), 0);
 
   // Vendas por produto (top 10)
   const vendasPorProduto: Record<string, number> = {};
