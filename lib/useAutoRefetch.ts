@@ -9,9 +9,13 @@ import { useEffect } from "react";
 export function useAutoRefetch(refetch: () => void, enabled: boolean = true, intervalMs: number = 20000) {
   useEffect(() => {
     if (!enabled) return;
-    const interval = setInterval(refetch, intervalMs);
+    // intervalMs <= 0 desabilita o polling — fica só o refetch ao focar a janela
+    const interval = intervalMs > 0 ? setInterval(refetch, intervalMs) : null;
     const onFocus = () => refetch();
     window.addEventListener("focus", onFocus);
-    return () => { clearInterval(interval); window.removeEventListener("focus", onFocus); };
+    return () => {
+      if (interval) clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [refetch, enabled, intervalMs]);
 }
