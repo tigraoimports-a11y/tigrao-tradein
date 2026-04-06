@@ -46,8 +46,8 @@ export default function GerarLinkPage() {
   }, [precosVenda, catSel]);
   const [corSel, setCorSel] = useState("");
 
-  // Fetch estoque para obter cores reais disponíveis
-  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number }[]>([]);
+  // Fetch estoque para obter cores reais disponíveis + seminovos
+  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
   useEffect(() => {
     if (!adminPw) return;
     fetch("/api/estoque", { headers: adminHeaders() })
@@ -57,14 +57,25 @@ export default function GerarLinkPage() {
           setEstoqueItems(
             j.data
               .filter((p: { status?: string; qnt?: number }) => p.status === "EM ESTOQUE" && (p.qnt || 0) > 0)
-              .map((p: { produto: string; cor: string | null; qnt: number }) => ({
-                produto: p.produto, cor: p.cor, qnt: p.qnt
+              .map((p: { produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
+                produto: p.produto, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
               }))
           );
         }
       })
       .catch(() => {});
   }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Seminovos disponíveis em tempo real
+  const seminovosDisponiveis = useMemo(() => {
+    return estoqueItems
+      .filter(p => p.tipo === "SEMINOVO")
+      .map(p => ({
+        nome: p.cor ? `${p.produto} ${p.cor}` : p.produto,
+        preco: p.preco_sugerido || 0,
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [estoqueItems]);
 
   // Cores reais do estoque para o produto selecionado
   const coresDisponiveis = useMemo(() => {
@@ -385,25 +396,29 @@ export default function GerarLinkPage() {
                 <select value={catSel} onChange={(e) => setCatSel(e.target.value)} className={inputCls}>
                   <option value="">-- Categoria --</option>
                   {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                  <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
                 </select>
                 {catSel && (
                   <div className={`max-h-[250px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
-                    {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                    {produtosFiltradosPreco.map((m) => {
-                      const sel = produtos[pickerIdx] === m.nome;
-                      return (
-                        <button key={m.nome} onClick={() => {
-                          const np = [...produtos];
-                          np[pickerIdx] = sel ? "" : m.nome;
-                          setProdutos(np);
-                          if (pickerIdx === 0) { setPreco(sel ? "" : m.preco.toLocaleString("pt-BR")); setCorSel(""); }
-                          if (!sel) { setPickerIdx(null); setCatSel(""); }
-                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                          <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
-                        </button>
-                      );
-                    })}
+                    {(() => {
+                      const lista = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
+                      if (lista.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                      return lista.map((m) => {
+                        const sel = produtos[pickerIdx!] === m.nome;
+                        return (
+                          <button key={m.nome} onClick={() => {
+                            const np = [...produtos];
+                            np[pickerIdx!] = sel ? "" : m.nome;
+                            setProdutos(np);
+                            if (pickerIdx === 0) { setPreco(sel ? "" : (m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "")); setCorSel(""); }
+                            if (!sel) { setPickerIdx(null); setCatSel(""); }
+                          }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                            <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                            <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
@@ -414,38 +429,42 @@ export default function GerarLinkPage() {
             <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); }} className={inputCls}>
               <option value="">-- Categoria --</option>
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+              <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
             </select>
             {catSel && (
               <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
-                {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                {produtosFiltradosPreco.map((m) => {
-                  const sel = produtos[0] === m.nome;
-                  return (
-                    <div key={m.nome}>
-                      <button onClick={() => {
-                        if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
-                        setProdutos([m.nome]);
-                        setPreco(m.preco.toLocaleString("pt-BR"));
-                        setCorSel("");
-                      }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                        <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                        <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
-                      </button>
-                      {sel && coresDisponiveis.length > 0 && (
-                        <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
-                          <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {coresDisponiveis.map(cor => (
-                              <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                              >{cor}</button>
-                            ))}
+                {(() => {
+                  const lista = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
+                  if (lista.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                  return lista.map((m) => {
+                    const sel = produtos[0] === m.nome;
+                    return (
+                      <div key={m.nome}>
+                        <button onClick={() => {
+                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
+                          setProdutos([m.nome]);
+                          setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
+                          setCorSel("");
+                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                          <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
+                        </button>
+                        {sel && catSel !== "SEMINOVOS" && coresDisponiveis.length > 0 && (
+                          <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
+                            <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {coresDisponiveis.map(cor => (
+                                <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                >{cor}</button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
