@@ -2006,7 +2006,7 @@ export default function EstoquePage() {
 
       {/* Modal Etiqueta Obrigatória */}
       {etiquetaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => {}}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => {}}>
           <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border shadow-2xl w-full max-w-lg mx-4 overflow-hidden`} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
