@@ -131,10 +131,16 @@ export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
   // Páginas visíveis pra todos os usuários (não precisa de permissão)
   const PUBLIC_PAGES = ["gerar_link", "calculadora_taxas", "entregas"];
 
+  // Aliases: se o usuário tem qualquer uma dessas permissões, pode ver o item
+  const PAGE_ALIASES: Record<string, string[]> = {
+    vendas_ver: ["vendas_ver", "vendas_registrar"],
+  };
+
   function canSee(pageKey: string): boolean {
     if (isAdmin) return true;
     if (PUBLIC_PAGES.includes(pageKey)) return true;
-    return perms.includes(pageKey);
+    const aliases = PAGE_ALIASES[pageKey] ?? [pageKey];
+    return aliases.some((k) => perms.includes(k));
   }
 
   function toggleGroup(label: string) {
