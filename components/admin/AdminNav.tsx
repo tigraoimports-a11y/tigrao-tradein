@@ -50,6 +50,7 @@ const NAV: NavEntry[] = [
       { href: "/admin/etiquetas", label: "Etiquetas", icon: "\u{1F3F7}\uFE0F", pageKey: "etiquetas" },
       { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
       { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
+      { href: "/admin/contrato-encomenda", label: "Contrato de Encomenda", icon: "\u{1F4C4}", pageKey: "contrato_encomenda" },
       { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
       { href: "/admin/clientes?tab=fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
       { href: "/admin/catalogo", label: "Configurações Produtos", icon: "⚙️", pageKey: "catalogo" },
