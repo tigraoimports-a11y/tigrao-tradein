@@ -761,18 +761,51 @@ export default function EstoquePage() {
     setEditCatLabel("");
   }
 
-  // Override de títulos de cards (modelo agrupador)
-  const [cardTitleOverrides, setCardTitleOverrides] = useState(() => {
-    if (typeof window === "undefined") return {} as Record<string, string>;
-    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
-  });
+  // Override de títulos de cards (modelo agrupador) — persiste no banco pra sincronizar entre usuários
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/estoque-settings?key=card_title_overrides", {
+      headers: { "x-admin-password": password },
+    })
+      .then(r => r.json())
+      .then(j => {
+        if (j.value && typeof j.value === "object") {
+          setCardTitleOverrides(j.value as Record<string, string>);
+        } else {
+          // Migrar do localStorage se existir
+          try {
+            const local = JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>;
+            if (Object.keys(local).length > 0) {
+              setCardTitleOverrides(local);
+              fetch("/api/admin/estoque-settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                body: JSON.stringify({ key: "card_title_overrides", value: local }),
+              }).catch(() => {});
+            }
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {
+        try {
+          const local = JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>;
+          setCardTitleOverrides(local);
+        } catch { /* ignore */ }
+      });
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingCardTitle, setEditingCardTitle] = useState("");
   const [editCardTitleValue, setEditCardTitleValue] = useState("");
   function saveCardTitleOverride(originalTitle: string, newTitle: string) {
     const updated = { ...cardTitleOverrides, [originalTitle]: newTitle.trim() };
     if (!newTitle.trim() || newTitle.trim() === originalTitle) delete updated[originalTitle];
     setCardTitleOverrides(updated);
-    localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated));
+    // Salva no banco (sincroniza entre usuários)
+    fetch("/api/admin/estoque-settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ key: "card_title_overrides", value: updated }),
+    }).catch(() => {});
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
