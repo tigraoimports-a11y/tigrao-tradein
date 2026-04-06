@@ -1078,33 +1078,27 @@ export default function VendasPage() {
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
     }
-    // Single-product: se tem segundo cartão, recalcular preco_vendido somando o líquido do comp_alt
+    // Single-product: se tem segundo cartão, SEMPRE recalcular preco_vendido como
+    // líquido(cartão principal) + líquido(2o cartão) + pix + espécie + troca
     if (payloads.length === 1) {
       const gCompAlt = parseFloat(form.comp_alt) || 0;
       if (gCompAlt > 0) {
-        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
-        const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
-        const precoAtual = Number(payloads[0].preco_vendido || 0);
-        // Só soma se o preco_vendido ainda não incluir o segundo cartão
-        // (heurística: se valor_comprovante + entradas + troca < preco_vendido, já está incluso)
         const gCompPrinc = Number(payloads[0].valor_comprovante || 0);
         const gEntradaPix = parseFloat(form.entrada_pix) || 0;
         const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
         const gTroca = parseFloat(String(payloads[0].produto_na_troca || "0")) || 0;
-        const jaComposto = gCompPrinc + gCompAlt + gEntradaPix + gEntradaEspecie + gTroca;
-        if (Math.abs(precoAtual - jaComposto) < 2 || precoAtual < gCompPrinc + gEntradaPix + gEntradaEspecie + gTroca + 1) {
-          // Recalcula preco_vendido com líquido do cartão principal + líquido do 2o cartão + entradas + troca
-          const gForma = String(payloads[0].forma || form.forma);
-          const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : String(payloads[0].banco || form.banco);
-          const gParcelas = parseInt(form.qnt_parcelas) || 0;
-          const gBandeira = form.bandeira || null;
-          const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
-            ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
-            : gForma === "DEBITO" ? 0.75
-            : 0;
-          const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
-          payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
-        }
+        const gForma = String(payloads[0].forma || form.forma);
+        const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : String(payloads[0].banco || form.banco);
+        const gParcelas = parseInt(form.qnt_parcelas) || 0;
+        const gBandeira = form.bandeira || null;
+        const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
+          ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+          : gForma === "DEBITO" ? 0.75
+          : 0;
+        const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
+        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+        const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
+        payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
     }
     if (payloads.length > 1) {
