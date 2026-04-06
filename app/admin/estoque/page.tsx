@@ -5018,30 +5018,37 @@ export default function EstoquePage() {
                       showSaved(field);
                     };
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    // Sincroniza com o catálogo: usa config do modelo se existir, senão fallback
+                    const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
+                    const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
+                    const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
+                    const nucleosList = nucleosCatalog.length > 0
+                      ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
+                      : MACBOOK_NUCLEOS;
                     return (
                       <>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Núcleos {saved("nucleos")}</p>
                           <select value={curNucleos} onChange={(e) => updateMacbookField("nucleos", e.target.value)} className={selCls}>
                             <option value="">— Não informar —</option>
-                            {curNucleos && !MACBOOK_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
-                            {MACBOOK_NUCLEOS.map((n) => <option key={n} value={n}>{n}</option>)}
+                            {curNucleos && !nucleosList.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {nucleosList.map((n) => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
                           <select value={curRam} onChange={(e) => updateMacbookField("ram", e.target.value)} className={selCls}>
                             <option value="">— Selecionar —</option>
-                            {curRam && !MACBOOK_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
-                            {MACBOOK_RAMS.map((r) => <option key={r} value={r}>{r}</option>)}
+                            {curRam && !ramList.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {ramList.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </div>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
                           <select value={curSsd} onChange={(e) => updateMacbookField("ssd", e.target.value)} className={selCls}>
                             <option value="">— Selecionar —</option>
-                            {curSsd && !MACBOOK_STORAGES.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
-                            {MACBOOK_STORAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                            {curSsd && !ssdList.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {ssdList.map((s) => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </>
