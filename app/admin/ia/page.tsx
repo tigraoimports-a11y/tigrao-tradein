@@ -29,16 +29,49 @@ export default function IAPage() {
   const { password, user } = useAdmin();
   const senha = password;
   const usuario = user?.nome ?? "sistema";
+  const storageKey = `ia_chat_${usuario}`;
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [analisando, setAnalisando] = useState(false);
+  const [hidratado, setHidratado] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Carrega histórico salvo ao montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setMensagens(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+    setHidratado(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  // Salva histórico a cada mudança (depois da hidratação inicial)
+  useEffect(() => {
+    if (!hidratado) return;
+    try {
+      if (mensagens.length === 0) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, JSON.stringify(mensagens));
+    } catch {
+      /* quota cheia, ignora */
+    }
+  }, [mensagens, storageKey, hidratado]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
+
+  function novaConversa() {
+    if (mensagens.length > 0 && !confirm("Limpar a conversa atual e começar uma nova?")) return;
+    setMensagens([]);
+  }
 
   async function analisarAutomatico() {
     setAnalisando(true);
@@ -116,19 +149,31 @@ export default function IAPage() {
           <h1 className="text-2xl font-bold text-gray-800">🤖 Assistente IA</h1>
           <p className="text-sm text-gray-500">Analisa seu estoque, vendas e detecta problemas automaticamente</p>
         </div>
-        <button
-          onClick={analisarAutomatico}
-          disabled={analisando || loading}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {analisando ? (
-            <>
-              <span className="animate-spin">⏳</span> Analisando...
-            </>
-          ) : (
-            <>🔍 Análise Automática</>
+        <div className="flex items-center gap-2">
+          {mensagens.length > 0 && (
+            <button
+              onClick={novaConversa}
+              disabled={loading || analisando}
+              className="flex items-center gap-1 border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+              title="Limpar conversa e começar nova"
+            >
+              ✨ Nova conversa
+            </button>
           )}
-        </button>
+          <button
+            onClick={analisarAutomatico}
+            disabled={analisando || loading}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analisando ? (
+              <>
+                <span className="animate-spin">⏳</span> Analisando...
+              </>
+            ) : (
+              <>🔍 Análise Automática</>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Chat area */}
