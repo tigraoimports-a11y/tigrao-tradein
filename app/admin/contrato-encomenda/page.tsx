@@ -12,12 +12,7 @@ const CONDICOES_PADRAO = [
   "Sem carregador original",
 ];
 
-const FORMAS_PAGAMENTO = [
-  "integralmente via Pix no ato da assinatura deste contrato",
-  "via cartão de crédito no ato da assinatura deste contrato",
-  "50% via Pix no ato da assinatura e 50% na entrega do produto",
-  "via transferência bancária no ato da assinatura deste contrato",
-];
+const FORMAS_OPCOES = ["Pix", "Cartão de Crédito", "Cartão de Débito", "Transferência Bancária"];
 
 function hoje(): string {
   const d = new Date();
@@ -65,7 +60,10 @@ export default function ContratoEncomendaPage() {
   const [valorUsado, setValorUsado] = useState("");
 
   // Pagamento e prazo
-  const [formaPagamento, setFormaPagamento] = useState(FORMAS_PAGAMENTO[0]);
+  const [valorAssinatura, setValorAssinatura] = useState("");
+  const [formaAssinatura, setFormaAssinatura] = useState("Pix");
+  const [valorEntrega, setValorEntrega] = useState("");
+  const [formaEntrega, setFormaEntrega] = useState("Pix");
   const [prazoEntrega, setPrazoEntrega] = useState("20");
   const [dataContrato, setDataContrato] = useState(hoje());
 
@@ -133,7 +131,10 @@ export default function ContratoEncomendaPage() {
           condicoesUsado: temTroca ? condicoesFinais : undefined,
           bateriaUsado: temTroca && bateria ? `${bateria}%` : undefined,
           valorUsado: temTroca ? vUsado : undefined,
-          formaPagamento,
+          valorAssinatura: parseFloat(valorAssinatura.replace(/\./g, "").replace(",", ".")) || 0,
+          formaAssinatura,
+          valorEntrega: valorEntrega ? (parseFloat(valorEntrega.replace(/\./g, "").replace(",", ".")) || 0) : undefined,
+          formaEntrega: valorEntrega ? formaEntrega : undefined,
           prazoEntrega: parseInt(prazoEntrega) || 20,
           data: dataContrato,
         }),
@@ -297,19 +298,42 @@ export default function ContratoEncomendaPage() {
       {/* PAGAMENTO E PRAZO */}
       <div className={sectionCls}>
         <h2 className="text-sm font-bold text-orange-600 uppercase tracking-wide mb-4">IV – Pagamento e Prazo</h2>
-        <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Forma de pagamento</label>
-            <select className={inputCls} value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
-              {FORMAS_PAGAMENTO.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <input
-              className={`${inputCls} mt-2`}
-              value={formaPagamento}
-              onChange={e => setFormaPagamento(e.target.value)}
-              placeholder=""
-            />
+        <div className="space-y-4">
+
+          {/* Bloco 1: na assinatura */}
+          <div className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Será pago na assinatura do contrato</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Valor (R$)</label>
+                <input className={inputCls} value={valorAssinatura} onChange={e => setValorAssinatura(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Forma de pagamento</label>
+                <select className={inputCls} value={formaAssinatura} onChange={e => setFormaAssinatura(e.target.value)}>
+                  {FORMAS_OPCOES.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
+
+          {/* Bloco 2: na entrega */}
+          <div className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Será pago na entrega do produto</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Valor (R$) <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <input className={inputCls} value={valorEntrega} onChange={e => setValorEntrega(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Forma de pagamento</label>
+                <select className={inputCls} value={formaEntrega} onChange={e => setFormaEntrega(e.target.value)}>
+                  {FORMAS_OPCOES.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Prazo de entrega (dias úteis)</label>

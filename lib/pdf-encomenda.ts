@@ -24,7 +24,10 @@ export interface ContratoEncomendaData {
   valorUsado?: number;
 
   // Pagamento
-  formaPagamento: string;   // ex: "Pix no ato da assinatura"
+  valorAssinatura: number;   // valor pago na assinatura
+  formaAssinatura: string;   // ex: "Pix"
+  valorEntrega?: number;     // valor pago na entrega (opcional)
+  formaEntrega?: string;     // ex: "Pix"
 
   // Prazo
   prazoEntrega: number;     // dias úteis, default 20
@@ -212,7 +215,7 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
 
     const clausulaNum = dados.temTroca ? "4" : "3";
     const refClausula = dados.temTroca ? "Cláusula II" : "Cláusula II";
-    const prodLabel = `${dados.produtoNovo} ${dados.storageNovo} ${dados.corNova}`;
+    const prodLabel = `${dados.produtoNovo}`.trim();
 
     doc.font("Helvetica").text(`${clausulaNum}.1. O valor do produto novo descrito na ${refClausula} (`);
     doc.moveUp(1.2);
@@ -223,33 +226,40 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     doc.font("Helvetica-Bold").text(fmtBRLExtenso(dados.valorNovo) + ".");
     doc.moveDown(0.4);
 
+    let nextClausula = 2;
+
     if (dados.temTroca && dados.valorUsado) {
-      doc.font("Helvetica").text(`${clausulaNum}.2. O CONTRATANTE entregará como parte do pagamento o aparelho descrito na Cláusula III, avaliado em:`);
+      doc.font("Helvetica").text(`${clausulaNum}.${nextClausula}. O CONTRATANTE entregará como parte do pagamento o aparelho descrito na Cláusula III, avaliado em:`);
       doc.moveDown(0.3);
       doc.font("Helvetica-Bold").text(fmtBRLExtenso(dados.valorUsado) + ".");
       doc.moveDown(0.4);
+      nextClausula++;
 
       const restante = dados.valorNovo - dados.valorUsado;
-      doc.font("Helvetica").text(`${clausulaNum}.3. Considerando a troca, o valor remanescente da negociação corresponde a:`);
+      doc.font("Helvetica").text(`${clausulaNum}.${nextClausula}. Considerando a troca, o valor remanescente da negociação corresponde a:`);
       doc.moveDown(0.3);
-      doc.font("Helvetica-Bold").fillColor("#1a6e1a").text(`💵 ${fmtBRLExtenso(restante)}.`);
+      doc.font("Helvetica-Bold").fillColor("#1a6e1a").text(`${fmtBRLExtenso(restante)}.`);
       doc.fillColor("#222222");
       doc.moveDown(0.4);
-
-      doc.font("Helvetica").text(`${clausulaNum}.4. O pagamento será realizado `);
-      doc.moveUp(1.2);
-      doc.font("Helvetica").text(`${clausulaNum}.4. O pagamento será realizado `, { continued: true });
-      doc.font("Helvetica-Bold").text(`${dados.formaPagamento}`, { continued: true });
-      doc.font("Helvetica").text(", como condição para confirmação da encomenda.");
-      doc.moveDown(0.4);
-    } else {
-      doc.font("Helvetica").text(`${clausulaNum}.2. O pagamento será realizado `);
-      doc.moveUp(1.2);
-      doc.font("Helvetica").text(`${clausulaNum}.2. O pagamento será realizado `, { continued: true });
-      doc.font("Helvetica-Bold").text(`${dados.formaPagamento}`, { continued: true });
-      doc.font("Helvetica").text(", como condição para confirmação da encomenda.");
-      doc.moveDown(0.4);
+      nextClausula++;
     }
+
+    // Condições de pagamento
+    doc.font("Helvetica").text(`${clausulaNum}.${nextClausula}. O pagamento será realizado conforme abaixo:`);
+    doc.moveDown(0.3);
+
+    doc.font("Helvetica").text("• Na assinatura do contrato: ", { indent: 15, continued: true });
+    doc.font("Helvetica-Bold").text(fmtBRLExtenso(dados.valorAssinatura), { continued: true });
+    doc.font("Helvetica").text(` via ${dados.formaAssinatura}.`);
+    doc.moveDown(0.2);
+
+    if (dados.valorEntrega && dados.valorEntrega > 0) {
+      doc.font("Helvetica").text("• Na entrega do produto: ", { indent: 15, continued: true });
+      doc.font("Helvetica-Bold").text(fmtBRLExtenso(dados.valorEntrega), { continued: true });
+      doc.font("Helvetica").text(` via ${dados.formaEntrega}.`);
+      doc.moveDown(0.2);
+    }
+    doc.moveDown(0.4);
 
     // ─── V – DAS CONDIÇÕES DO PRODUTO ────────────────────────────
     checkBreak(80);
