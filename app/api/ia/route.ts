@@ -23,8 +23,18 @@ async function coletarContexto() {
       .range(0, 49999),
   ]);
 
-  if (estoqueRes.error) console.error("[IA] erro estoque:", estoqueRes.error);
-  if (vendasRes.error) console.error("[IA] erro vendas:", vendasRes.error);
+  const debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string } = {
+    estoqueRows: estoqueRes.data?.length || 0,
+    vendasRows: vendasRes.data?.length || 0,
+  };
+  if (estoqueRes.error) {
+    console.error("[IA] erro estoque:", estoqueRes.error);
+    debugInfo.estoqueErr = estoqueRes.error.message;
+  }
+  if (vendasRes.error) {
+    console.error("[IA] erro vendas:", vendasRes.error);
+    debugInfo.vendasErr = vendasRes.error.message;
+  }
 
   const estoqueAll = estoqueRes.data || [];
   // Filtra em JS para não excluir linhas com tipo NULL (PostgREST .not/.neq descarta NULLs)
@@ -115,6 +125,7 @@ async function coletarContexto() {
     divergenciasCusto: divergencias,
     produtosZerados: zerados,
     produtosAbaixoMinimo: abaixoMin,
+    debugInfo,
   };
 }
 
@@ -128,9 +139,11 @@ export async function POST(req: NextRequest) {
     // SEMPRE busca contexto — antes só era buscado na primeira mensagem,
     // o que fazia a IA "esquecer" os dados a partir da segunda pergunta.
     let contexto = "";
+    let debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string } | null = null;
     {
       const dados = await coletarContexto();
       const topProdutos = dados.topProdutos;
+      debugInfo = dados.debugInfo;
 
       contexto = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
 Você tem acesso aos dados reais do sistema e ajuda o dono (André) com análises de estoque, vendas e operações.
@@ -190,7 +203,7 @@ Ajude com dúvidas sobre estoque, vendas e operações. Responda em português b
 
     const resposta = response.content[0].type === "text" ? response.content[0].text : "";
 
-    return NextResponse.json({ resposta });
+    return NextResponse.json({ resposta, debug: debugInfo });
   } catch (error) {
     console.error("Erro na IA:", error);
     const msg = error instanceof Error ? error.message : String(error);

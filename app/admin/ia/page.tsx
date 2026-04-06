@@ -55,7 +55,12 @@ export default function IAPage() {
 
       const data = await res.json();
       if (data.resposta) {
-        setMensagens([...novaLista, { role: "assistant", content: data.resposta }]);
+        const debugLine = data.debug
+          ? `\n\n---\n_🛠 debug: estoque=${data.debug.estoqueRows} vendas=${data.debug.vendasRows}${data.debug.estoqueErr ? ` | erro estoque: ${data.debug.estoqueErr}` : ""}${data.debug.vendasErr ? ` | erro vendas: ${data.debug.vendasErr}` : ""}_`
+          : "";
+        setMensagens([...novaLista, { role: "assistant", content: data.resposta + debugLine }]);
+      } else if (data.error) {
+        setMensagens([...novaLista, { role: "assistant", content: `❌ ${data.error}${data.detalhe ? `\n\n${data.detalhe}` : ""}` }]);
       }
     } catch {
       setMensagens([...novaLista, { role: "assistant", content: "❌ Erro ao conectar com a IA. Tente novamente." }]);
