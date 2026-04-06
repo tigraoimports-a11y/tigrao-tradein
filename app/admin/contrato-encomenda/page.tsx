@@ -177,34 +177,34 @@ export default function ContratoEncomendaPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className={labelCls}>Nome completo *</label>
-            <input className={inputCls} value={clienteNome} onChange={e => setClienteNome(e.target.value)} placeholder="Thiago Nogueira Rodrigues" />
+            <input className={inputCls} value={clienteNome} onChange={e => setClienteNome(e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>CPF *</label>
-            <input className={inputCls} value={clienteCPF} onChange={e => setClienteCPF(formatCPF(e.target.value))} placeholder="000.000.000-00" />
+            <input className={inputCls} value={clienteCPF} onChange={e => setClienteCPF(formatCPF(e.target.value))} />
           </div>
           <div>
             <label className={labelCls}>CEP</label>
-            <input className={inputCls} value={clienteCEP} onChange={e => setClienteCEP(formatCEP(e.target.value))} placeholder="00000-000" />
+            <input className={inputCls} value={clienteCEP} onChange={e => setClienteCEP(formatCEP(e.target.value))} />
           </div>
           <div className="col-span-2">
             <label className={labelCls}>Rua / Avenida</label>
-            <input className={inputCls} value={clienteRua} onChange={e => setClienteRua(e.target.value)} placeholder="Rua Manoel de Araújo" />
+            <input className={inputCls} value={clienteRua} onChange={e => setClienteRua(e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>Número</label>
-            <input className={inputCls} value={clienteNumero} onChange={e => setClienteNumero(e.target.value)} placeholder="390" />
+            <input className={inputCls} value={clienteNumero} onChange={e => setClienteNumero(e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>Complemento</label>
-            <input className={inputCls} value={clienteComplemento} onChange={e => setClienteComplemento(e.target.value)} placeholder="apto 101" />
+            <input className={inputCls} value={clienteComplemento} onChange={e => setClienteComplemento(e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>Bairro</label>
-            <input className={inputCls} value={clienteBairro} onChange={e => setClienteBairro(e.target.value)} placeholder="Irajá" />
+            <input className={inputCls} value={clienteBairro} onChange={e => setClienteBairro(e.target.value)} />
           </div>
         </div>
-        {enderecoCompleto && (
+        {(clienteRua || clienteBairro) && (
           <p className="mt-3 text-xs text-gray-400 italic">Preview: {enderecoCompleto}</p>
         )}
       </div>
@@ -212,26 +212,18 @@ export default function ContratoEncomendaPage() {
       {/* PRODUTO NOVO */}
       <div className={sectionCls}>
         <h2 className="text-sm font-bold text-orange-600 uppercase tracking-wide mb-4">II – Produto Novo (Encomenda)</h2>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-3 sm:col-span-1">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
             <label className={labelCls}>Produto *</label>
-            <input className={inputCls} value={produtoNovo} onChange={e => setProdutoNovo(e.target.value)} placeholder="iPhone 17" />
+            <input className={inputCls} value={produtoNovo} onChange={e => setProdutoNovo(e.target.value)} />
           </div>
-          <div>
-            <label className={labelCls}>Storage</label>
-            <input className={inputCls} value={storageNovo} onChange={e => setStorageNovo(e.target.value)} placeholder="512GB" />
-          </div>
-          <div>
-            <label className={labelCls}>Cor</label>
-            <input className={inputCls} value={corNova} onChange={e => setCorNova(e.target.value)} placeholder="Mist Blue (Azul névoa)" />
-          </div>
-          <div className="col-span-3">
+          <div className="col-span-2">
             <label className={labelCls}>Detalhes adicionais do produto <span className="text-gray-400 font-normal">(opcional)</span></label>
-            <textarea className={inputCls + " resize-none"} rows={2} value={detalhesNovo} onChange={e => setDetalhesNovo(e.target.value)} placeholder="Ex: Lacrado de fábrica, garantia Apple 1 ano, NF inclusa, desbloqueado para todas as operadoras" />
+            <textarea className={inputCls + " resize-none"} rows={2} value={detalhesNovo} onChange={e => setDetalhesNovo(e.target.value)} />
           </div>
-          <div className="col-span-3 sm:col-span-1">
-            <label className={labelCls}>Valor do produto novo (R$) *</label>
-            <input className={inputCls} value={valorNovo} onChange={e => setValorNovo(e.target.value)} placeholder="7.597,00" />
+          <div>
+            <label className={labelCls}>Valor de venda do produto novo (R$) *</label>
+            <input className={inputCls} value={valorNovo} onChange={e => setValorNovo(e.target.value)} />
           </div>
         </div>
       </div>
@@ -251,15 +243,15 @@ export default function ContratoEncomendaPage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-3 sm:col-span-1">
                 <label className={labelCls}>Produto usado</label>
-                <input className={inputCls} value={produtoUsado} onChange={e => setProdutoUsado(e.target.value)} placeholder="iPhone 15 Pro Max" />
+                <input className={inputCls} value={produtoUsado} onChange={e => setProdutoUsado(e.target.value)} />
               </div>
               <div>
                 <label className={labelCls}>Storage</label>
-                <input className={inputCls} value={storageUsado} onChange={e => setStorageUsado(e.target.value)} placeholder="256GB" />
+                <input className={inputCls} value={storageUsado} onChange={e => setStorageUsado(e.target.value)} />
               </div>
               <div>
                 <label className={labelCls}>Cor</label>
-                <input className={inputCls} value={corUsada} onChange={e => setCorUsada(e.target.value)} placeholder="Natural Titânio" />
+                <input className={inputCls} value={corUsada} onChange={e => setCorUsada(e.target.value)} />
               </div>
             </div>
 
@@ -291,11 +283,11 @@ export default function ContratoEncomendaPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Saúde da bateria (%)</label>
-                <input className={inputCls} value={bateria} onChange={e => setBateria(e.target.value)} placeholder="86" type="number" min="1" max="100" />
+                <input className={inputCls} value={bateria} onChange={e => setBateria(e.target.value)} type="number" min="1" max="100" />
               </div>
               <div>
                 <label className={labelCls}>Valor avaliado (R$)</label>
-                <input className={inputCls} value={valorUsado} onChange={e => setValorUsado(e.target.value)} placeholder="3.800,00" />
+                <input className={inputCls} value={valorUsado} onChange={e => setValorUsado(e.target.value)} />
               </div>
             </div>
           </div>
@@ -315,7 +307,7 @@ export default function ContratoEncomendaPage() {
               className={`${inputCls} mt-2`}
               value={formaPagamento}
               onChange={e => setFormaPagamento(e.target.value)}
-              placeholder="Ou escreva uma forma customizada..."
+              placeholder=""
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -325,7 +317,7 @@ export default function ContratoEncomendaPage() {
             </div>
             <div>
               <label className={labelCls}>Data do contrato</label>
-              <input className={inputCls} value={dataContrato} onChange={e => setDataContrato(e.target.value)} placeholder="04 de Abril de 2026" />
+              <input className={inputCls} value={dataContrato} onChange={e => setDataContrato(e.target.value)} />
             </div>
           </div>
         </div>
