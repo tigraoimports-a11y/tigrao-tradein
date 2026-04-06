@@ -246,13 +246,14 @@ export async function POST(req: NextRequest) {
   // (cliente ainda tem o aparelho, devolve em 24h)
   // Fallback: se _seminovo não veio mas a venda tem valor de troca, criar pendência mesmo sem nome do produto
   const pTrocaValor1 = parseTrocaValor(data?.produto_na_troca);
+  const hasTroca1Info = !!(data?.troca_produto || pTrocaValor1 > 0 || (seminovoData && (seminovoData.produto || (seminovoData.valor || 0) > 0)));
   const sem1 = seminovoData && (seminovoData.produto || (seminovoData.valor || 0) > 0)
     ? seminovoData
-    : pTrocaValor1 > 0
+    : hasTroca1Info
       ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
-  if (sem1 && (sem1.produto || (sem1.valor || 0) > 0)) {
+  if (sem1 && (sem1.produto || (sem1.valor || 0) > 0 || hasTroca1Info)) {
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto1 = sem1.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata em caso de venda cancelada e relançada)
@@ -292,13 +293,14 @@ export async function POST(req: NextRequest) {
 
   // 2º produto na troca — mesmo fluxo com fallback
   const pTrocaValor2 = parseTrocaValor(data?.produto_na_troca2);
+  const hasTroca2Info = !!(data?.troca_produto2 || pTrocaValor2 > 0 || (seminovoData2 && (seminovoData2.produto || (seminovoData2.valor || 0) > 0)));
   const sem2 = seminovoData2 && (seminovoData2.produto || (seminovoData2.valor || 0) > 0)
     ? seminovoData2
-    : pTrocaValor2 > 0
+    : hasTroca2Info
       ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
-  if (sem2 && (sem2.produto || (sem2.valor || 0) > 0)) {
+  if (sem2 && (sem2.produto || (sem2.valor || 0) > 0 || hasTroca2Info)) {
     const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto2 = sem2.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata)
@@ -348,6 +350,7 @@ export async function PATCH(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const role = getRole(req);
   if (!hasPermission(role, "vendas.create")) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+  const usuario = getUsuario(req);
 
   const body = await req.json();
 
@@ -490,43 +493,105 @@ export async function PATCH(req: NextRequest) {
   const vendaData = data?.[0]?.data || fields.data;
   if (vendaData) recalcularSaldoDia(supabase, vendaData).catch(() => {});
 
-  // Sync automático para pendências no estoque quando troca é editada na venda
+  // Sync automático para pendências no estoque quando troca é editada/adicionada na venda
   if (data?.[0]) {
     const venda = data[0];
-    const trocaFields = ["troca_produto", "troca_cor", "troca_categoria", "troca_produto2", "troca_cor2", "troca_categoria2"];
+    const trocaFields = ["troca_produto", "troca_cor", "troca_categoria", "troca_bateria", "troca_obs", "produto_na_troca",
+                          "troca_produto2", "troca_cor2", "troca_categoria2", "troca_bateria2", "troca_obs2", "produto_na_troca2"];
     const hasTrocaChange = trocaFields.some(f => f in fields);
     if (hasTrocaChange && venda.cliente) {
-      // Buscar pendências do cliente (fornecedor = cliente da venda)
+      const nomeCliente = String(venda.cliente).toUpperCase();
+      // Buscar pendências existentes do cliente
       const { data: pendencias } = await supabase
         .from("estoque")
         .select("id, produto, data_compra")
         .ilike("fornecedor", venda.cliente)
         .eq("status", "PENDENTE")
+        .eq("tipo", "PENDENCIA")
         .order("data_compra", { ascending: false });
 
-      if (pendencias && pendencias.length > 0) {
-        // Troca 1
-        if ((fields.troca_produto || fields.troca_cor || fields.troca_categoria) && venda.troca_produto) {
-          // Tentar achar a pendência com data igual ou a primeira da lista
-          const p1 = pendencias.find(p => p.data_compra === venda.data) || pendencias[0];
+      const existing = pendencias || [];
+
+      // ── TROCA 1 ──
+      const hasTroca1 = !!(venda.troca_produto || venda.produto_na_troca);
+      if (hasTroca1) {
+        const p1 = existing.find(p => p.data_compra === venda.data) || existing[0];
+        if (p1) {
+          // UPDATE
           const upd1: Record<string, unknown> = {};
           if (fields.troca_produto) upd1.produto = fields.troca_produto;
-          if (fields.troca_cor !== undefined) upd1.cor = fields.troca_cor;
+          if (fields.troca_cor !== undefined) upd1.cor = fields.troca_cor ? String(fields.troca_cor).toUpperCase() : null;
           if (fields.troca_categoria) upd1.categoria = fields.troca_categoria;
+          if (fields.troca_bateria !== undefined) { const b = parseInt(String(fields.troca_bateria || "")); upd1.bateria = Number.isFinite(b) ? b : null; }
+          if (fields.troca_obs !== undefined) upd1.observacao = fields.troca_obs || null;
+          if (fields.produto_na_troca !== undefined) upd1.custo_unitario = parseTrocaValor(fields.produto_na_troca);
           if (Object.keys(upd1).length > 0) {
+            upd1.updated_at = new Date().toISOString();
             await supabase.from("estoque").update(upd1).eq("id", p1.id);
           }
+        } else {
+          // INSERT — não existia pendência, criar agora
+          const valor1 = parseTrocaValor(venda.produto_na_troca);
+          const nome1 = venda.troca_produto || "PRODUTO DA TROCA — IDENTIFICAR";
+          const { error: errNew1 } = await supabase.from("estoque").insert({
+            produto: nome1,
+            categoria: venda.troca_categoria || detectCategoriaSeminovo(venda.troca_produto),
+            qnt: 1,
+            custo_unitario: valor1,
+            status: "PENDENTE",
+            tipo: "PENDENCIA",
+            cor: venda.troca_cor ? String(venda.troca_cor).toUpperCase() : null,
+            bateria: (() => { const b = parseInt(String(venda.troca_bateria || "")); return Number.isFinite(b) ? b : null; })(),
+            observacao: venda.troca_obs || null,
+            cliente: nomeCliente,
+            fornecedor: nomeCliente,
+            data_compra: venda.data,
+            updated_at: new Date().toISOString(),
+          });
+          if (!errNew1) await logActivity(usuario, "Pendência troca criada (edição)", `${nome1} R$${valor1} — ${venda.cliente}`, "estoque");
+          else console.error("Erro ao criar pendencia troca 1 (PATCH):", errNew1.message);
         }
-        // Troca 2
-        if ((fields.troca_produto2 || fields.troca_cor2 || fields.troca_categoria2) && venda.troca_produto2 && pendencias.length >= 2) {
-          const p2 = pendencias.find(p => p.data_compra === venda.data && p.id !== pendencias[0]?.id) || pendencias[1];
+      }
+
+      // ── TROCA 2 ──
+      const hasTroca2 = !!(venda.troca_produto2 || venda.produto_na_troca2);
+      if (hasTroca2) {
+        // Segunda pendência = segunda na lista (ou primeira se não existir troca 1)
+        const p2 = existing.length >= 2
+          ? (existing.find(p => p.data_compra === venda.data && p.id !== existing[0]?.id) || existing[1])
+          : (hasTroca1 ? undefined : existing[0]);
+        if (p2) {
           const upd2: Record<string, unknown> = {};
           if (fields.troca_produto2) upd2.produto = fields.troca_produto2;
-          if (fields.troca_cor2 !== undefined) upd2.cor = fields.troca_cor2;
+          if (fields.troca_cor2 !== undefined) upd2.cor = fields.troca_cor2 ? String(fields.troca_cor2).toUpperCase() : null;
           if (fields.troca_categoria2) upd2.categoria = fields.troca_categoria2;
+          if (fields.troca_bateria2 !== undefined) { const b = parseInt(String(fields.troca_bateria2 || "")); upd2.bateria = Number.isFinite(b) ? b : null; }
+          if (fields.troca_obs2 !== undefined) upd2.observacao = fields.troca_obs2 || null;
+          if (fields.produto_na_troca2 !== undefined) upd2.custo_unitario = parseTrocaValor(fields.produto_na_troca2);
           if (Object.keys(upd2).length > 0) {
+            upd2.updated_at = new Date().toISOString();
             await supabase.from("estoque").update(upd2).eq("id", p2.id);
           }
+        } else {
+          const valor2 = parseTrocaValor(venda.produto_na_troca2);
+          const nome2 = venda.troca_produto2 || "PRODUTO DA TROCA 2 — IDENTIFICAR";
+          const { error: errNew2 } = await supabase.from("estoque").insert({
+            produto: nome2,
+            categoria: venda.troca_categoria2 || detectCategoriaSeminovo(venda.troca_produto2),
+            qnt: 1,
+            custo_unitario: valor2,
+            status: "PENDENTE",
+            tipo: "PENDENCIA",
+            cor: venda.troca_cor2 ? String(venda.troca_cor2).toUpperCase() : null,
+            bateria: (() => { const b = parseInt(String(venda.troca_bateria2 || "")); return Number.isFinite(b) ? b : null; })(),
+            observacao: venda.troca_obs2 || null,
+            cliente: nomeCliente,
+            fornecedor: nomeCliente,
+            data_compra: venda.data,
+            updated_at: new Date().toISOString(),
+          });
+          if (!errNew2) await logActivity(usuario, "Pendência troca 2 criada (edição)", `${nome2} R$${valor2} — ${venda.cliente}`, "estoque");
+          else console.error("Erro ao criar pendencia troca 2 (PATCH):", errNew2.message);
         }
       }
     }

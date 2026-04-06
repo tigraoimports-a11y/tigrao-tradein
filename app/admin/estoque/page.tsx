@@ -2372,6 +2372,25 @@ export default function EstoquePage() {
           <button onClick={() => setTab("historico" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "historico" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Historico
           </button>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                if (!confirm("Recalcular balanço de TODOS os produtos em estoque?\n\nAgrupa por categoria + modelo (ignora cor) e aplica média ponderada do custo de compra.")) return;
+                setMsg("⏳ Recalculando balanços...");
+                try {
+                  const r = await fetch("/api/admin/recalc-balancos", { method: "POST", headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } });
+                  const j = await r.json();
+                  if (!r.ok) { setMsg(`❌ ${j.error || "Erro ao recalcular"}`); return; }
+                  setMsg(`✅ ${j.updated} produto(s) atualizados em ${j.groups} grupo(s)`);
+                  fetchEstoque();
+                } catch (e) { setMsg(`❌ ${e instanceof Error ? e.message : "Erro"}`); }
+              }}
+              title="Recalcula custo_unitario (balanço) de todos os produtos em estoque, agrupando por categoria+modelo (ignora cor) — média ponderada do custo_compra"
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${bgCard} border ${borderCard} ${textSecondary} hover:border-blue-500 hover:text-blue-500`}
+            >
+              🔄 Recalc Balanços
+            </button>
+          )}
           {isAdmin && !["novo", "scan", "historico", "etiquetas"].includes(tab) && (
             <button
               onClick={() => { setSelectMode(!selectMode); if (selectMode) setSelectedIds(new Set()); }}

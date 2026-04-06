@@ -741,7 +741,8 @@ export default function VendasPage() {
   };
 
   // Resumo financeiro
-  const temTroca = valorTroca > 0;
+  // temTroca: mostra o form de troca se tem valor > 0 OU se já preencheu produto da troca OU se é UPGRADE
+  const temTroca = valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto || form.tipo === "UPGRADE";
   const temEntradaPix = entradaPix > 0;
   const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO";
@@ -3580,8 +3581,8 @@ export default function VendasPage() {
                                             <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                         </div>
-                                        {/* Detalhes do produto na troca */}
-                                        {(parseFloat(ef.produto_na_troca) || 0) > 0 && (
+                                        {/* Detalhes do produto na troca — mostra se tem valor OU nome OU se é upgrade */}
+                                        {((parseFloat(ef.produto_na_troca) || 0) > 0 || !!ef.troca_produto || v.tipo === "UPGRADE") && (
                                           <div className={`mt-3 p-3 rounded-lg border ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
                                             <p className="text-[10px] font-bold text-[#86868B] uppercase mb-2">🔄 Produto na Troca</p>
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -3798,6 +3799,27 @@ export default function VendasPage() {
                                             });
                                             setProdutoManual(true);
 
+                                            // Popular trocaRow/trocaRow2 para o ProdutoSpecFields mostrar os dados
+                                            if (grupoVendas.length === 1) {
+                                              const trocaCat = (primaryVenda as unknown as Record<string, string>).troca_categoria || "";
+                                              const trocaCat2 = (primaryVenda as unknown as Record<string, string>).troca_categoria2 || "";
+                                              setTrocaRow({
+                                                ...createEmptyProdutoRow(),
+                                                produto: trocaProd || "",
+                                                cor: trocaCor || "",
+                                                categoria: trocaCat || "",
+                                              });
+                                              setTrocaRow2({
+                                                ...createEmptyProdutoRow(),
+                                                produto: (primaryVenda as unknown as Record<string, string>).troca_produto2 || "",
+                                                cor: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "",
+                                                categoria: trocaCat2 || "",
+                                              });
+                                            } else {
+                                              setTrocaRow(createEmptyProdutoRow());
+                                              setTrocaRow2(createEmptyProdutoRow());
+                                            }
+
                                             // Se grupo: carregar outros produtos no carrinho
                                             if (grupoVendas.length > 1) {
                                               const cartItems: ProdutoCarrinho[] = grupoVendas.map(gv => ({
@@ -3872,9 +3894,10 @@ export default function VendasPage() {
                                               parc_alt: String(vx.parc_alt || ""),
                                               band_alt: String(vx.band_alt || ""),
                                               comp_alt: String(vx.comp_alt || ""),
-                                              produto_na_troca: String(v.produto_na_troca || ""),
+                                              produto_na_troca: String(v.produto_na_troca || "").replace(/[^0-9.,]/g, "").replace(",", "."),
                                               troca_produto: String(vx.troca_produto || ""),
                                               troca_cor: String(vx.troca_cor || ""),
+                                              troca_categoria: String(vx.troca_categoria || ""),
                                               troca_bateria: String(vx.troca_bateria || ""),
                                               troca_obs: String(vx.troca_obs || ""),
                                               troca_serial: String(vx.troca_serial || ""),

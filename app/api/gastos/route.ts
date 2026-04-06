@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
       categoria: p.categoria,
       qnt: p.qnt,
       custo_unitario: p.custo_unitario,
+      custo_compra: p.custo_unitario,
       cor: p.cor || null,
       fornecedor: p.cliente_origem?.trim() || p.fornecedor || null,
       serial_no: p.serial_no ? p.serial_no.toUpperCase() : null,
