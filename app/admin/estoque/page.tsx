@@ -4558,7 +4558,31 @@ export default function EstoquePage() {
                     <button
                       onClick={() => {
                         if (!recatMode) {
-                          setRecatRow({ ...createEmptyProdutoRow(), categoria: p.categoria || "IPHONES" });
+                          // Pre-popular spec a partir do nome atual (modelo/storage/ram/chip/nucleos)
+                          const base = createEmptyProdutoRow();
+                          const baseCat = getBaseCat(p.categoria || "IPHONES");
+                          const nome = (p.produto || "").toUpperCase();
+                          const spec = { ...base.spec };
+                          const storageMatch = nome.match(/(\d+(?:GB|TB))/);
+                          const ramMatch = nome.match(/(\d+GB)\s+\d+(?:GB|TB)/); // RAM antes do storage
+                          const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                          const telaMatch = nome.match(/(\d{2}")/);
+                          if (baseCat === "IPHONES") {
+                            if (storageMatch) spec.ip_storage = storageMatch[1];
+                            const modMatch = nome.match(/IPHONE\s+([0-9A-Z\s]+?)(?:\s+\d+(?:GB|TB)|$)/);
+                            if (modMatch) spec.ip_modelo = modMatch[1].trim();
+                          } else if (baseCat === "MACBOOK") {
+                            if (nome.includes("AIR")) spec.mb_modelo = "AIR";
+                            else if (nome.includes("NEO")) spec.mb_modelo = "NEO";
+                            else if (nome.includes("PRO")) spec.mb_modelo = "PRO";
+                            const chipMatch = nome.match(/\b(M[1-9](?:\s+PRO|\s+MAX)?)\b/);
+                            if (chipMatch) spec.mb_chip = chipMatch[1];
+                            if (telaMatch) spec.mb_tela = telaMatch[1];
+                            if (ramMatch) spec.mb_ram = ramMatch[1];
+                            if (storageMatch) spec.mb_storage = storageMatch[1];
+                            if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1];
+                          }
+                          setRecatRow({ ...base, categoria: p.categoria || "IPHONES", spec, cor: p.cor || "" });
                           setRecatMode(true);
                         } else {
                           setRecatMode(false);

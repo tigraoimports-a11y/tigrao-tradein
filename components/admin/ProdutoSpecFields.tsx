@@ -605,18 +605,16 @@ export default function ProdutoSpecFields({
               </div>
             </>
           )}
-          {mbNucleosOptions.length > 0 && (
-            <div>
-              <p className={labelCls}>Núcleos</p>
-              <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
-                <option value="">— Selecionar —</option>
-                {mbNucleosOptions.map((n) => {
-                  const clean = n.replace(/^\(|\)$/g, "").trim();
-                  return <option key={clean} value={clean}>{clean}</option>;
-                })}
-              </select>
-            </div>
-          )}
+          <div>
+            <p className={labelCls}>Núcleos (CPU/GPU)</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Não informar —</option>
+              {(mbNucleosOptions.length > 0
+                ? mbNucleosOptions.map((n) => n.replace(/^\(|\)$/g, "").trim())
+                : MACBOOK_NUCLEOS
+              ).map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
           <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>
@@ -636,13 +634,6 @@ export default function ProdutoSpecFields({
             <select value={row.spec.mb_storage} onChange={(e) => setSpec("mb_storage", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
               {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <p className={labelCls}>Núcleos (CPU/GPU)</p>
-            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
-              <option value="">— Não informar —</option>
-              {MACBOOK_NUCLEOS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>
