@@ -1,10 +1,28 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Mensagem {
   role: "user" | "assistant";
   content: string;
+}
+
+// Mini-renderizador de markdown inline: suporta **negrito** e quebras de linha.
+function renderMarkdown(text: string) {
+  return text.split("\n").map((line, lineIdx) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <Fragment key={lineIdx}>
+        {parts.map((part, i) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+          }
+          return <Fragment key={i}>{part}</Fragment>;
+        })}
+        {lineIdx < text.split("\n").length - 1 && <br />}
+      </Fragment>
+    );
+  });
 }
 
 export default function IAPage() {
@@ -132,16 +150,16 @@ export default function IAPage() {
             {mensagens.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-purple-600 text-white rounded-br-sm"
+                      ? "bg-purple-600 text-white rounded-br-sm whitespace-pre-wrap"
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   }`}
                 >
                   {msg.role === "assistant" && (
                     <span className="text-xs font-semibold text-purple-600 block mb-1">🤖 Assistente IA</span>
                   )}
-                  {msg.content}
+                  {msg.role === "assistant" ? renderMarkdown(msg.content) : msg.content}
                 </div>
               </div>
             ))}
