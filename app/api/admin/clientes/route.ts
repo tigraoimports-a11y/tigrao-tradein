@@ -25,6 +25,25 @@ export async function GET(req: NextRequest) {
     const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
     const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
 
+    // Mapeamento de aliases → nome canônico (consolida fornecedores duplicados)
+    const FORN_ALIASES: Record<string, string> = {
+      "ECO": "ECO CELL", "ECO CEL": "ECO CELL", "ECOCEL": "ECO CELL",
+      "EMILIO SHOP": "EMILIO",
+      "FABIO BANGU": "FÁBIO BANGU", "FÁBIO": "FÁBIO BANGU", "FÁBIO RODRIGO VAZ DA SILVA": "FÁBIO BANGU",
+      "MADE": "MADE IN",
+      "MIAMI ZONE": "MIAMI",
+      "PLANETA": "PLANETA CEL",
+      "TM": "TM CEL",
+      "TARTARUGA-F/A": "TARTARUGA",
+      "XFB": "XFB IMPORT",
+      "ZN": "ZN CELL", "ZN CEL": "ZN CELL",
+      "DANIELLA": "DANIELLA ARRUDA GONÇALVES BANDEIRA",
+    };
+    function normForn(nome: string): string {
+      const up = nome.trim().toUpperCase();
+      return FORN_ALIASES[up] || up;
+    }
+
     // 2) Buscar itens do estoque (com paginação)
     const estoqueQuery = supabase
       .from("estoque")
@@ -81,8 +100,15 @@ export async function GET(req: NextRequest) {
 
     // Inicializar todos os fornecedores cadastrados (mesmo sem compras)
     for (const fc of (fornCadastro || [])) {
-      const key = fc.nome.trim().toUpperCase();
+      const key = normForn(fc.nome);
       if (search && !key.includes(search.toUpperCase())) continue;
+      if (fornMap.has(key)) {
+        // Já existe (outro cadastro mapeou pro mesmo nome canônico) — mescla dados de contato
+        const existing = fornMap.get(key)!;
+        if (!existing.contato && fc.contato) existing.contato = fc.contato;
+        if (!existing.observacao && fc.observacao) existing.observacao = fc.observacao;
+        continue;
+      }
       fornMap.set(key, {
         id: fc.id, nome: fc.nome, contato: fc.contato, observacao: fc.observacao, created_at: fc.created_at,
         cadastrado: true,
@@ -96,13 +122,11 @@ export async function GET(req: NextRequest) {
     function ensureForn(forn: string): FornEntry | null {
       if (search && !forn.includes(search.toUpperCase())) return null;
       if (!fornMap.has(forn)) {
-        // Verificar se tem cadastro com nome parecido
-        const cadastro = cadastroMap.get(forn);
         fornMap.set(forn, {
-          id: cadastro?.id || "", nome: cadastro?.nome || forn,
-          contato: cadastro?.contato || null, observacao: cadastro?.observacao || null,
-          created_at: cadastro?.created_at || "",
-          cadastrado: !!cadastro,
+          id: "", nome: forn,
+          contato: null, observacao: null,
+          created_at: "",
+          cadastrado: false,
           total_produtos: 0, total_investido: 0, total_em_estoque: 0, total_vendido: 0,
           primeira_compra: "", ultima_compra: "",
           categorias: new Set(), compras: [],
@@ -117,7 +141,7 @@ export async function GET(req: NextRequest) {
     // Processar estoque (itens atuais)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const item of estoqueData as any[]) {
-      const forn = (item.fornecedor || "").trim().toUpperCase();
+      const forn = normForn(item.fornecedor || "");
       if (!forn) continue;
       const f = ensureForn(forn);
       if (!f) continue;
@@ -146,7 +170,7 @@ export async function GET(req: NextRequest) {
     // Processar vendas (itens que saíram do estoque)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const v of vendasData as any[]) {
-      const forn = (v.fornecedor || "").trim().toUpperCase();
+      const forn = normForn(v.fornecedor || "");
       if (!forn) continue;
       const f = ensureForn(forn);
       if (!f) continue;
