@@ -201,7 +201,7 @@ export default function IAPage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-400">
-        Powered by Claude Sonnet · Os dados são buscados em tempo real do sistema
+        Powered by Claude Opus 4.6 · Consulta o banco em tempo real via tool use
       </p>
     </div>
   );
