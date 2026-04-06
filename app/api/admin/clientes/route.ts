@@ -25,19 +25,16 @@ export async function GET(req: NextRequest) {
     const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
     const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
 
-    // Mapeamento de aliases → nome canônico (consolida fornecedores duplicados)
+    // Mapeamento de aliases → nome canônico (baseado no sistema antigo todos_contatos_tigrao.csv)
     const FORN_ALIASES: Record<string, string> = {
       "ECO": "ECO CELL", "ECO CEL": "ECO CELL", "ECOCEL": "ECO CELL",
       "EMILIO SHOP": "EMILIO",
-      "FABIO BANGU": "FÁBIO BANGU", "FÁBIO": "FÁBIO BANGU", "FÁBIO RODRIGO VAZ DA SILVA": "FÁBIO BANGU",
-      "MADE": "MADE IN",
+      "FABIO BANGU": "FÁBIO BANGU", "FABIO F/A": "FÁBIO BANGU",
       "MIAMI ZONE": "MIAMI",
-      "PLANETA": "PLANETA CEL",
+      "PLANETA CEL": "PLANETA",
       "TM": "TM CEL",
-      "TARTARUGA-F/A": "TARTARUGA",
-      "XFB": "XFB IMPORT",
+      "XFB IMPORT": "XFB",
       "ZN": "ZN CELL", "ZN CEL": "ZN CELL",
-      "DANIELLA": "DANIELLA ARRUDA GONÇALVES BANDEIRA",
     };
     function normForn(nome: string): string {
       const up = nome.trim().toUpperCase();
