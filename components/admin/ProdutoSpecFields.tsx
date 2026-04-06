@@ -638,6 +638,13 @@ export default function ProdutoSpecFields({
               {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
+          <div>
+            <p className={labelCls}>Núcleos (CPU/GPU)</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Não informar —</option>
+              {MACBOOK_NUCLEOS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
         </div>
       )}
 

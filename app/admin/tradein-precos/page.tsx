@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface UsadoRow {
@@ -61,6 +62,7 @@ export default function TradeInPrecosPage() {
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   const filtered = useMemo(() => {
     const tab = DEVICE_TABS.find(t => t.key === deviceTab);

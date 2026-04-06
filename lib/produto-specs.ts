@@ -42,7 +42,7 @@ export const IPHONE_CORES_POR_MODELO: Record<string, string[]> = {
   "16 PRO":        ["BLACK TITANIUM", "DESERT TITANIUM", "NATURAL TITANIUM", "WHITE TITANIUM"],
   "16 PRO MAX":    ["BLACK TITANIUM", "DESERT TITANIUM", "NATURAL TITANIUM", "WHITE TITANIUM"],
   "16E":           ["BLACK", "WHITE"],
-  "17":            ["BLACK", "LAVENDER", "HAZE BLUE", "SAGE", "WHITE"],
+  "17":            ["BLACK", "LAVENDER", "MIST BLUE", "SAGE", "WHITE"],
   "17 AIR":        ["CLOUD WHITE", "LIGHT GOLD", "SKY BLUE", "SPACE BLACK"],
   "17 PRO":        ["COSMIC ORANGE", "DEEP BLUE", "SILVER"],
   "17 PRO MAX":    ["COSMIC ORANGE", "DEEP BLUE", "SILVER"],
@@ -52,8 +52,8 @@ export const IPHONE_CORES_POR_MODELO: Record<string, string[]> = {
 export const IPHONE_CORES = [
   "ALPINE GREEN", "BLACK", "BLACK TITANIUM", "BLUE", "BLUE TITANIUM",
   "CLOUD WHITE", "COSMIC ORANGE", "DEEP BLUE", "DEEP PURPLE", "DESERT TITANIUM",
-  "GOLD", "GRAPHITE", "GREEN", "HAZE BLUE",
-  "LAVENDER", "LIGHT GOLD", "MIDNIGHT", "MIDNIGHT GREEN",
+  "GOLD", "GRAPHITE", "GREEN",
+  "LAVENDER", "LIGHT GOLD", "MIDNIGHT", "MIDNIGHT GREEN", "MIST BLUE",
   "NATURAL TITANIUM", "PACIFIC BLUE", "PINK", "PURPLE", "RED",
   "SAGE", "SIERRA BLUE", "SILVER", "SKY BLUE", "SPACE BLACK", "SPACE GRAY", "STARLIGHT",
   "TEAL", "ULTRAMARINE", "WHITE", "WHITE TITANIUM", "YELLOW",
@@ -256,7 +256,7 @@ export const COR_PT_TO_EN: Record<string, string> = {
   "AMARELO": "YELLOW",
   "AZUL": "BLUE",
   "AZUL CEU": "SKY BLUE",
-  "AZUL NEVOA": "HAZE BLUE",
+  "AZUL NEVOA": "MIST BLUE",
   "AZUL PACIFICO": "PACIFIC BLUE",
   "AZUL PROFUNDO": "DEEP BLUE",
   "AZUL SIERRA": "SIERRA BLUE",
@@ -317,8 +317,8 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     case "IPHONES": {
       const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
       const storage = spec.ip_storage ? ` ${spec.ip_storage}` : "";
-      const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : "";
-      return `IPHONE ${spec.ip_modelo}${linha}${storage}${c}${origem}`.toUpperCase();
+      // Origem (LL/J/HN/...) NÃO entra mais no nome — é gravada no campo `origem` da row.
+      return `IPHONE ${spec.ip_modelo}${linha}${storage}${c}`.toUpperCase();
     }
     case "MAC_MINI": {
       const nucleos = spec.mm_nucleos ? ` (${spec.mm_nucleos})` : "";
@@ -329,11 +329,11 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     case "MACBOOK": {
       const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
       const chip = spec.mb_chip ? ` ${spec.mb_chip}` : "";
-      const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
+      // Núcleos NÃO entra no nome/preview — fica apenas como spec editável/visível nos detalhes.
       const tela = spec.mb_tela ? ` ${spec.mb_tela}` : "";
       const ram = spec.mb_ram ? ` ${spec.mb_ram}` : "";
       const storage = spec.mb_storage ? ` ${spec.mb_storage}` : "";
-      return `${tipo}${chip}${nucleos}${tela}${ram}${storage}${c}`.toUpperCase();
+      return `${tipo}${chip}${tela}${ram}${storage}${c}`.toUpperCase();
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;

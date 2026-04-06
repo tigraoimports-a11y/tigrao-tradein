@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Encomenda {
@@ -57,6 +58,7 @@ export default function EncomendasPage() {
   }, [password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 

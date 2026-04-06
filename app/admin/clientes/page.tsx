@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useSearchParams } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 
@@ -129,6 +130,7 @@ export default function ClientesPage() {
   }, [password, tab, debouncedSearch, apiHeaders]);
 
   useEffect(() => { fetchClientes(); }, [fetchClientes]);
+  useAutoRefetch(fetchClientes);
 
   const handleCadastrarForn = async () => {
     if (!fornForm.nome.trim()) { setFornMsg("Nome obrigatório"); return; }

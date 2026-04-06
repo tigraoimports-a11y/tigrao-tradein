@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface LogEntry {
@@ -99,6 +100,7 @@ export default function LogPage() {
   }, [password, page, getDateRange, filterUser]);
 
   useEffect(() => { fetchLog(); }, [fetchLog]);
+  useAutoRefetch(fetchLog);
   // Buscar lista de usuários do sistema + do log
   const [allUsuarios, setAllUsuarios] = useState<string[]>([]);
   useEffect(() => {

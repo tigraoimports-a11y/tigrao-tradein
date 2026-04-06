@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { PAGE_GROUPS } from "@/lib/permissions";
 
@@ -62,6 +63,7 @@ export default function UsuariosPage() {
   }, [headers]);
 
   useEffect(() => { fetchUsuarios(); }, [fetchUsuarios]);
+  useAutoRefetch(fetchUsuarios);
 
   const handleRoleChange = async (id: string, newRole: string) => {
     setSaving(id);

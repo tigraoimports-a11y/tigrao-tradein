@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Operacao {
@@ -62,6 +63,7 @@ export default function OperacoesPage() {
   }, [password, filterTipo, search, page, apiHeaders]);
 
   useEffect(() => { fetchOperacoes(); }, [fetchOperacoes]);
+  useAutoRefetch(fetchOperacoes);
 
   const bgCard = dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]";
   const bgSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";

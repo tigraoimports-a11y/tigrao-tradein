@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 const fmt = (v: number) =>
@@ -96,6 +97,7 @@ export default function RelatorioPage() {
   }, [month, password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   if (!month) return null;
 

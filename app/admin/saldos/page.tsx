@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import type { SaldoBancario } from "@/lib/admin-types";
 
@@ -70,6 +71,7 @@ export default function SaldosPage() {
   }, [password]);
 
   useEffect(() => { fetchSaldos(); }, [fetchSaldos]);
+  useAutoRefetch(fetchSaldos);
   useEffect(() => { fetchSaldoData(dataAtual); }, [dataAtual, fetchSaldoData]);
 
   const handleSalvar = async () => {
