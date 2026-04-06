@@ -14,13 +14,14 @@ async function coletarContexto() {
     supabase
       .from("estoque")
       .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status, cliente, created_at")
-      .order("produto"),
+      .order("produto")
+      .range(0, 49999),
     supabase
       .from("vendas")
       .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
       .gte("data", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
       .order("data", { ascending: false })
-      .limit(500),
+      .range(0, 49999),
   ]);
 
   if (estoqueRes.error) console.error("[IA] erro estoque:", estoqueRes.error);
