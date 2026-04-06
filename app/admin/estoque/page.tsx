@@ -9,7 +9,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -1651,7 +1651,11 @@ export default function EstoquePage() {
       "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
     const words = produto.split(/\s+/);
-    const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
+    // Para MacBook/iPad/Mac Mini a RAM também é "XXGB" — usar o ÚLTIMO match (SSD real)
+    let storageIdx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (/^\d+(GB|TB)$/i.test(words[i])) storageIdx = i;
+    }
     // Watches/AirPods: sem storage, agrupar por modelo+tamanho
     if (storageIdx === -1) {
       const sizeIdx = words.findIndex(w => /^\d+MM$/i.test(w));
@@ -3325,7 +3329,10 @@ export default function EstoquePage() {
                                       <input type="checkbox" checked={allSelected} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (allSelected) group.forEach(p => n.delete(p.id)); else group.forEach(p => n.add(p.id)); return n; })} className="accent-[#E8740E]" />
                                     </td>
                                     <td className={`px-4 py-3 text-sm font-semibold ${textPrimary}`}>
-                                      <span>{baseModel}</span>
+                                      <span>{isSingleUnit ? group[0].produto : baseModel}</span>
+                                      {isSingleUnit && group[0].cor && !group[0].produto.toUpperCase().includes((group[0].cor || "").toUpperCase()) && (
+                                        <span className={`ml-2 text-[11px] font-normal ${textSecondary}`}>{group[0].cor}</span>
+                                      )}
                                       {!isSingleUnit && (
                                         <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"}`}>
                                           {group.length} variantes
@@ -4601,7 +4608,7 @@ export default function EstoquePage() {
                             if (storageMatch) spec.mb_storage = storageMatch[1];
                             if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1];
                           }
-                          setRecatRow({ ...base, categoria: p.categoria || "IPHONES", spec, cor: p.cor || "" });
+                          setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "" });
                           setRecatMode(true);
                         } else {
                           setRecatMode(false);
@@ -4978,7 +4985,76 @@ export default function EstoquePage() {
                       <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor)}</p>
                     ) : null}
                   </div>
-                  {(p.imei || isAdmin || canEditImei) && (
+                  {canEdit && getBaseCat(p.categoria || "") === "MACBOOK" && (() => {
+                    const nome = (p.produto || "").toUpperCase();
+                    const storages: string[] = [];
+                    nome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    const curRam = storages[storages.length - 2] || "";
+                    const curSsd = storages[storages.length - 1] || "";
+                    const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                    const curNucleos = nucleosMatch ? nucleosMatch[1] : "";
+                    const updateMacbookField = async (field: "ram" | "ssd" | "nucleos", val: string) => {
+                      let novo = p.produto || "";
+                      if (field === "nucleos") {
+                        if (nucleosMatch) novo = novo.replace(/\s*\([^)]*CPU\/[^)]*GPU\)/i, val ? ` (${val})` : "");
+                        else if (val) novo = novo.replace(/$/, ` (${val})`);
+                      } else if (field === "ram") {
+                        if (curRam && val) {
+                          // substitui o penúltimo XXGB/TB
+                          const re = new RegExp(`\\b${curRam}\\b(?=\\s+\\d+(?:GB|TB)\\b)`);
+                          novo = novo.replace(re, val);
+                        }
+                      } else if (field === "ssd") {
+                        if (curSsd && val) {
+                          // substitui o último XXGB/TB
+                          const re = new RegExp(`\\b${curSsd}\\b(?!.*\\b\\d+(?:GB|TB)\\b)`);
+                          novo = novo.replace(re, val);
+                        }
+                      }
+                      novo = novo.trim();
+                      await apiPatch(p.id, { produto: novo });
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo } : x));
+                      setDetailProduct({ ...p, produto: novo });
+                      showSaved(field);
+                    };
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    // Sincroniza com o catálogo: usa config do modelo se existir, senão fallback
+                    const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
+                    const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
+                    const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
+                    const nucleosList = nucleosCatalog.length > 0
+                      ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
+                      : MACBOOK_NUCLEOS;
+                    return (
+                      <>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Núcleos {saved("nucleos")}</p>
+                          <select value={curNucleos} onChange={(e) => updateMacbookField("nucleos", e.target.value)} className={selCls}>
+                            <option value="">— Não informar —</option>
+                            {curNucleos && !nucleosList.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {nucleosList.map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
+                          <select value={curRam} onChange={(e) => updateMacbookField("ram", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curRam && !ramList.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {ramList.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
+                          <select value={curSsd} onChange={(e) => updateMacbookField("ssd", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curSsd && !ssdList.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {ssdList.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {(p.imei || isAdmin || canEditImei) && !CATS_SEM_IMEI.includes(getBaseCat(p.categoria || "")) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI {saved("imei")}</p>
                       {canEditImei ? (
