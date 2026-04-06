@@ -698,6 +698,10 @@ export default function VendasPage() {
     const curForma = form.forma;
     const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
+    // Segundo cartão (comp_alt) — sempre incluído quando preenchido
+    const compAltVal = parseFloat(form.comp_alt) || 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+    const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
     const trcForm2 = parseFloat(overrides.troca2 ?? form.produto_na_troca2) || 0;
@@ -706,13 +710,16 @@ export default function VendasPage() {
 
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      result = String(Math.round(compVal + esp + trc));
+      result = String(Math.round(compVal + esp + trc + liqAlt));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      result = String(Math.round(liqCartao + pix + esp + trc));
+      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt));
     } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
-      const total = pix + esp + trc + compVal;
+      const total = pix + esp + trc + compVal + liqAlt;
       if (total > 0) result = String(Math.round(total));
+    } else if (liqAlt > 0) {
+      // Apenas 2o cartão preenchido
+      result = String(Math.round(pix + esp + trc + liqAlt));
     }
 
     // Se tem carrinho com 2+ produtos, distribuir automaticamente
@@ -723,6 +730,22 @@ export default function VendasPage() {
 
     return result;
   };
+
+  // Recalcular preco_vendido automaticamente quando 2o cartão mudar
+  useEffect(() => {
+    if (!form.comp_alt) return;
+    const newVendido = recalcVendido({});
+    if (!newVendido) return;
+    if (produtosCarrinho.length === 0) {
+      setForm(f => f.preco_vendido === newVendido ? f : { ...f, preco_vendido: newVendido });
+    } else if (produtosCarrinho.length === 1) {
+      // Carrinho com 1 item: atualizar o preco_vendido desse item
+      setProdutosCarrinho(prev => prev.length === 1 && prev[0].preco_vendido !== newVendido
+        ? [{ ...prev[0], preco_vendido: newVendido }]
+        : prev);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt]);
 
   // Distribuir valor total da venda proporcionalmente ao custo de cada produto no carrinho
   const distribuirValorTotal = (totalStr: string) => {
@@ -2498,15 +2521,22 @@ export default function VendasPage() {
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                         <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
+                          const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
+                          const compAltDisp = parseFloat(form.comp_alt) || 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+                          const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                          return (
                           <>
-                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>
+                            {liqAltDisp > 0 && <span>+ 2o cartao: <strong>{fmt(liqAltDisp)}</strong></span>}
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
                             {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                             {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
-                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca))}</strong></span>
                           </>
-                        )}
+                          );
+                        })()}
                       </div>
                     </>
                   )}
@@ -3068,10 +3098,11 @@ export default function VendasPage() {
             const gTrocaProds = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
             const gTroca = gTrocaProds || valorTroca;
             const somaFormas = gComprovante + gCompAltConf + gPix + gEspecie + gTroca;
-            // Only check conferencia if at least one payment field is filled
-            const temConferencia = somaFormas > 0 && totalVendido > 0;
-            const diffConferencia = Math.abs(somaFormas - totalVendido);
-            const confOk = diffConferencia <= Math.max(totalVendido * 0.02, 50); // 2% tolerance or R$50
+            // Conferencia: somaFormas (gross) deve ser >= receitaReal (líquido). Comparar com receitaReal.
+            const temConferencia = somaFormas > 0 && receitaReal > 0;
+            const diffConferencia = Math.abs(somaFormas - receitaReal);
+            // Tolerância maior para acomodar taxas de cartão (até 25% do gross)
+            const confOk = diffConferencia <= Math.max(somaFormas * 0.25, 50);
 
             return (
               <div className="p-4 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl text-white">
@@ -3115,7 +3146,7 @@ export default function VendasPage() {
                 )}
                 {temConferencia && (
                   <div className={`mt-2 pt-2 border-t border-white/10 text-xs text-center ${confOk ? "text-green-400" : "text-yellow-400"}`}>
-                    {confOk ? "Conferencia OK" : `Conferencia: soma formas (${fmt(somaFormas)}) != total vendido (${fmt(totalVendido)}) — diferenca: ${fmt(diffConferencia)}`}
+                    {confOk ? "Conferencia OK" : `Conferencia: soma formas (${fmt(somaFormas)}) vs receita liquida (${fmt(receitaReal)}) — diferenca: ${fmt(diffConferencia)}`}
                   </div>
                 )}
               </div>
