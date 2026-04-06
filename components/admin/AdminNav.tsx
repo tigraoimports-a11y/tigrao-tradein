@@ -32,9 +32,7 @@ const NAV: NavEntry[] = [
   {
     label: "Financeiro", icon: "\u{1F4B0}",
     items: [
-      { href: "/admin/registrar-venda", label: "Registrar Venda", icon: "\u{1F4B0}", pageKey: "vendas_registrar" },
-      { href: "/admin/vendas-pendentes", label: "Vendas Pendentes", icon: "\u23F3", pageKey: "vendas_pendentes" },
-      { href: "/admin/vendas", label: "Histórico de Vendas", icon: "\u{1F4CB}", pageKey: "vendas_ver" },
+      { href: "/admin/vendas", label: "Vendas", icon: "\u{1F4B0}", pageKey: "vendas_ver" },
       { href: "/admin/clientes", label: "Cadastros", icon: "\u{1F465}", pageKey: "clientes" },
       { href: "/admin/gastos", label: "Gastos", icon: "\u{1F4E4}", pageKey: "gastos" },
       { href: "/admin/saldos", label: "Saldos", icon: "\u{1F3E6}", pageKey: "saldos" },

@@ -175,29 +175,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   }
 
-  const search = searchParams.get("search");
-  const statusFilter = searchParams.get("status");
-  const limitParam = searchParams.get("limit");
-
-  // Busca por produto/serial/IMEI (para registrar-venda)
-  if (search) {
-    let q = supabase.from("estoque").select("id,produto,cor,qnt,serial_no,imei,status").order("produto");
-    if (statusFilter) q = q.eq("status", statusFilter);
-    // Busca por produto OU serial
-    const cleanSerial = search.toUpperCase().replace(/\s/g, "");
-    const { data: bySerial } = await supabase.from("estoque").select("id,produto,cor,qnt,serial_no,imei,status")
-      .ilike("serial_no", `%${cleanSerial}%`).eq("status", statusFilter || "EM ESTOQUE").limit(5);
-    const { data: byProduto } = await supabase.from("estoque").select("id,produto,cor,qnt,serial_no,imei,status")
-      .ilike("produto", `%${search}%`).eq("status", statusFilter || "EM ESTOQUE").order("produto").limit(parseInt(limitParam || "20"));
-    const merged = [...(bySerial || []), ...(byProduto || [])];
-    const seen = new Set<string>();
-    const deduped = merged.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true; });
-    return NextResponse.json({ data: deduped });
-  }
-
   let query = supabase.from("estoque").select("*").order("categoria").order("produto");
   if (categoria) query = query.eq("categoria", categoria);
-  if (statusFilter) query = query.eq("status", statusFilter);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

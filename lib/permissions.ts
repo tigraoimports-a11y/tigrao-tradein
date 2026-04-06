@@ -29,7 +29,6 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
     pages: [
       { key: "vendas_ver", label: "Vendas (visualizar)" },
       { key: "vendas_registrar", label: "Vendas (registrar)" },
-      { key: "vendas_pendentes", label: "Vendas Pendentes (admin)" },
       { key: "entregas", label: "Entregas" },
       { key: "encomendas", label: "Encomendas" },
       { key: "fornecedores", label: "Fornecedores" },
@@ -73,8 +72,6 @@ export const ALL_PAGE_KEYS = PAGE_GROUPS.flatMap((g) => g.pages.map((p) => p.key
 const PATH_TO_KEY: Record<string, string> = {
   "/admin": "dashboard",
   "/admin/vendas": "vendas_ver",
-  "/admin/registrar-venda": "vendas_registrar",
-  "/admin/vendas-pendentes": "vendas_pendentes",
   "/admin/gastos": "gastos",
   "/admin/saldos": "saldos",
   "/admin/recebiveis": "recebiveis",
@@ -124,7 +121,6 @@ const KEY_TO_LEGACY: Record<string, string> = {
   gerar_link: "operacoes.read",
   vendas_ver: "vendas.read",
   vendas_registrar: "vendas.create",
-  vendas_pendentes: "vendas.read",
   entregas: "entregas.read",
   encomendas: "encomendas.read",
   fornecedores: "fornecedores.read",
