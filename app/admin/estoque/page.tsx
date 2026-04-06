@@ -9,7 +9,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 
@@ -4985,7 +4985,69 @@ export default function EstoquePage() {
                       <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor)}</p>
                     ) : null}
                   </div>
-                  {(p.imei || isAdmin || canEditImei) && (
+                  {canEdit && getBaseCat(p.categoria || "") === "MACBOOK" && (() => {
+                    const nome = (p.produto || "").toUpperCase();
+                    const storages: string[] = [];
+                    nome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    const curRam = storages[storages.length - 2] || "";
+                    const curSsd = storages[storages.length - 1] || "";
+                    const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                    const curNucleos = nucleosMatch ? nucleosMatch[1] : "";
+                    const updateMacbookField = async (field: "ram" | "ssd" | "nucleos", val: string) => {
+                      let novo = p.produto || "";
+                      if (field === "nucleos") {
+                        if (nucleosMatch) novo = novo.replace(/\s*\([^)]*CPU\/[^)]*GPU\)/i, val ? ` (${val})` : "");
+                        else if (val) novo = novo.replace(/$/, ` (${val})`);
+                      } else if (field === "ram") {
+                        if (curRam && val) {
+                          // substitui o penúltimo XXGB/TB
+                          const re = new RegExp(`\\b${curRam}\\b(?=\\s+\\d+(?:GB|TB)\\b)`);
+                          novo = novo.replace(re, val);
+                        }
+                      } else if (field === "ssd") {
+                        if (curSsd && val) {
+                          // substitui o último XXGB/TB
+                          const re = new RegExp(`\\b${curSsd}\\b(?!.*\\b\\d+(?:GB|TB)\\b)`);
+                          novo = novo.replace(re, val);
+                        }
+                      }
+                      novo = novo.trim();
+                      await apiPatch(p.id, { produto: novo });
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo } : x));
+                      setDetailProduct({ ...p, produto: novo });
+                      showSaved(field);
+                    };
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    return (
+                      <>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Núcleos {saved("nucleos")}</p>
+                          <select value={curNucleos} onChange={(e) => updateMacbookField("nucleos", e.target.value)} className={selCls}>
+                            <option value="">— Não informar —</option>
+                            {curNucleos && !MACBOOK_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {MACBOOK_NUCLEOS.map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
+                          <select value={curRam} onChange={(e) => updateMacbookField("ram", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curRam && !MACBOOK_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {MACBOOK_RAMS.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
+                          <select value={curSsd} onChange={(e) => updateMacbookField("ssd", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curSsd && !MACBOOK_STORAGES.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {MACBOOK_STORAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {(p.imei || isAdmin || canEditImei) && !CATS_SEM_IMEI.includes(getBaseCat(p.categoria || "")) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI {saved("imei")}</p>
                       {canEditImei ? (
