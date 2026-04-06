@@ -80,6 +80,12 @@ export default function ClientesPage() {
   const [notas, setNotas] = useState<{ id: string; data: string; cliente: string; produto: string; preco_vendido: number; nota_fiscal_url: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleDate = (key: string) => setExpandedDates(prev => {
+    const n = new Set(prev);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  });
   const [detailClient, setDetailClient] = useState<Cliente | null>(null);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
@@ -436,37 +442,92 @@ export default function ClientesPage() {
                     </div>
                   )}
 
-                  {/* Historico de compras */}
+                  {/* Historico de compras agrupado por data */}
                   <div>
                     <p className={`text-xs font-bold uppercase tracking-wider ${mS} mb-2`}>
                       Historico de compras ({f.compras.length} itens)
                     </p>
                     {f.compras.length === 0 ? (
                       <p className={`text-sm ${mM} py-4 text-center`}>Nenhuma compra registrada ainda</p>
-                    ) : (
-                      <div className="space-y-1 max-h-[400px] overflow-y-auto">
-                        {f.compras.map((c, i) => (
-                          <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <span className={mM}>{fmtDate(c.data)}</span>
-                              <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
-                              {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
-                              {c.serial_no && <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>}
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0 ml-2">
-                              <span className={mM}>{c.qnt}x</span>
-                              <span className="font-bold text-red-500 w-24 text-right">{fmt(c.custo_unitario * c.qnt)}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                c.status === "EM ESTOQUE" ? "bg-green-500/10 text-green-600" :
-                                c.status === "ESGOTADO" ? "bg-red-500/10 text-red-500" :
-                                c.status === "A CAMINHO" ? "bg-blue-500/10 text-blue-500" :
-                                `${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F2F2F7] text-[#86868B]"}`
-                              }`}>{c.status || "—"}</span>
-                            </div>
+                    ) : (() => {
+                      // Agrupa por data
+                      const groups = new Map<string, typeof f.compras>();
+                      for (const c of f.compras) {
+                        const k = c.data || "—";
+                        if (!groups.has(k)) groups.set(k, []);
+                        groups.get(k)!.push(c);
+                      }
+                      const sorted = Array.from(groups.entries()).sort((a, b) => (b[0] || "").localeCompare(a[0] || ""));
+                      const semSerialTotal = f.compras.filter(c => !c.serial_no).length;
+                      return (
+                        <>
+                          {semSerialTotal > 0 && (
+                            <p className="text-[11px] text-amber-600 mb-2">
+                              ⚠️ {semSerialTotal} {semSerialTotal === 1 ? "item está" : "itens estão"} sem número de série
+                            </p>
+                          )}
+                          <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                            {sorted.map(([data, itens]) => {
+                              const key = `${f.id || f.nome}:${data}`;
+                              const isOpen = expandedDates.has(key);
+                              const totalQnt = itens.reduce((s, c) => s + (c.qnt || 1), 0);
+                              const totalValor = itens.reduce((s, c) => s + (c.custo_unitario || 0) * (c.qnt || 1), 0);
+                              const semSerial = itens.filter(c => !c.serial_no).length;
+                              const statusCount: Record<string, number> = {};
+                              itens.forEach(c => { const s = c.status || "—"; statusCount[s] = (statusCount[s] || 0) + (c.qnt || 1); });
+                              return (
+                                <div key={key} className={`rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                                  <button
+                                    onClick={() => toggleDate(key)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs hover:opacity-80 transition-opacity`}
+                                  >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      <span className={`shrink-0 ${mM}`}>{isOpen ? "▼" : "▶"}</span>
+                                      <span className={`font-semibold ${mP}`}>{fmtDate(data)}</span>
+                                      <span className={mS}>{totalQnt} {totalQnt === 1 ? "item" : "itens"}</span>
+                                      {semSerial > 0 && (
+                                        <span className="text-amber-600 text-[10px]">⚠ {semSerial} sem SN</span>
+                                      )}
+                                      <div className="flex items-center gap-1">
+                                        {Object.entries(statusCount).map(([st, qt]) => (
+                                          <span key={st} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                            st === "EM ESTOQUE" ? "bg-green-500/10 text-green-600" :
+                                            st === "ESGOTADO" ? "bg-red-500/10 text-red-500" :
+                                            st === "VENDIDO" ? "bg-blue-500/10 text-blue-500" :
+                                            st === "A CAMINHO" ? "bg-purple-500/10 text-purple-500" :
+                                            `${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F2F2F7] text-[#86868B]"}`
+                                          }`}>{qt} {st}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <span className="font-bold text-red-500 w-28 text-right shrink-0">{fmt(totalValor)}</span>
+                                  </button>
+                                  {isOpen && (
+                                    <div className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"} px-3 py-2 space-y-1`}>
+                                      {itens.map((c, i) => (
+                                        <div key={i} className="flex items-center justify-between text-[11px] py-1">
+                                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
+                                            {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
+                                            {c.serial_no
+                                              ? <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>
+                                              : <span className="text-amber-600 shrink-0">⚠ sem SN</span>}
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                                            <span className={mM}>{c.qnt}x</span>
+                                            <span className="font-bold text-red-500 w-20 text-right">{fmt(c.custo_unitario * c.qnt)}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
