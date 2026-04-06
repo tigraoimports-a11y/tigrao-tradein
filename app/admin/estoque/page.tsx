@@ -4986,41 +4986,51 @@ export default function EstoquePage() {
                     ) : null}
                   </div>
                   {canEdit && getBaseCat(p.categoria || "") === "MACBOOK" && (() => {
-                    const nome = (p.produto || "").toUpperCase();
+                    // Núcleos NÃO vive no nome — guardado como tag [NUCLEOS:...] na observacao
+                    const cleanNome = (p.produto || "").replace(/\s*\([^)]*CPU\/[^)]*GPU\)\s*/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
                     const storages: string[] = [];
-                    nome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    cleanNome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
                     const curRam = storages[storages.length - 2] || "";
                     const curSsd = storages[storages.length - 1] || "";
-                    const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
-                    const curNucleos = nucleosMatch ? nucleosMatch[1] : "";
-                    const updateMacbookField = async (field: "ram" | "ssd" | "nucleos", val: string) => {
-                      let novo = p.produto || "";
-                      if (field === "nucleos") {
-                        if (nucleosMatch) novo = novo.replace(/\s*\([^)]*CPU\/[^)]*GPU\)/i, val ? ` (${val})` : "");
-                        else if (val) novo = novo.replace(/$/, ` (${val})`);
-                      } else if (field === "ram") {
-                        if (curRam && val) {
-                          // substitui o penúltimo XXGB/TB
-                          const re = new RegExp(`\\b${curRam}\\b(?=\\s+\\d+(?:GB|TB)\\b)`);
-                          novo = novo.replace(re, val);
-                        }
+                    const telaMatch = cleanNome.match(/(\d{2}")/);
+                    const curTela = telaMatch ? telaMatch[1] : "";
+                    const obsRaw = p.observacao || "";
+                    const nucTagMatch = obsRaw.match(/\[NUCLEOS:([^\]]+)\]/i);
+                    // Fallback: se ainda tem no nome antigo, ler de lá
+                    const nucNomeMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                    const curNucleos = nucTagMatch ? nucTagMatch[1].trim() : (nucNomeMatch ? nucNomeMatch[1] : "");
+                    const stripNucFromName = (s: string) => s.replace(/\s*\([^)]*CPU\/[^)]*GPU\)\s*/gi, " ").replace(/\s+/g, " ").trim();
+                    const updateMacbookField = async (field: "ram" | "ssd" | "tela" | "nucleos", val: string) => {
+                      let novo = stripNucFromName(p.produto || "");
+                      let novaObs = obsRaw;
+                      if (field === "ram") {
+                        if (curRam) novo = novo.replace(new RegExp(`\\b${curRam}\\b(?=\\s+\\d+(?:GB|TB)\\b)`), val || curRam);
                       } else if (field === "ssd") {
-                        if (curSsd && val) {
-                          // substitui o último XXGB/TB
-                          const re = new RegExp(`\\b${curSsd}\\b(?!.*\\b\\d+(?:GB|TB)\\b)`);
-                          novo = novo.replace(re, val);
+                        if (curSsd) novo = novo.replace(new RegExp(`\\b${curSsd}\\b(?!.*\\b\\d+(?:GB|TB)\\b)`), val || curSsd);
+                      } else if (field === "tela") {
+                        if (curTela) novo = novo.replace(new RegExp(`${curTela.replace('"','\\"')}`), val || curTela);
+                        else if (val) {
+                          // insere tela após o chip (M1/M2/.../Mx)
+                          novo = novo.replace(/(\bM[1-9](?:\s+PRO|\s+MAX)?\b)/i, `$1 ${val}`);
                         }
+                      } else if (field === "nucleos") {
+                        // Remove tag antiga e insere nova (se val)
+                        novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                        if (val) novaObs = (novaObs + ` [NUCLEOS:${val}]`).trim();
                       }
                       novo = novo.trim();
-                      await apiPatch(p.id, { produto: novo });
-                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo } : x));
-                      setDetailProduct({ ...p, produto: novo });
+                      const updates: Record<string, unknown> = { produto: novo };
+                      if (field === "nucleos" || novaObs !== obsRaw) updates.observacao = novaObs || null;
+                      await apiPatch(p.id, updates);
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo, observacao: (updates.observacao as string | null) ?? x.observacao } : x));
+                      setDetailProduct({ ...p, produto: novo, observacao: (updates.observacao as string | null) ?? p.observacao });
                       showSaved(field);
                     };
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
-                    // Sincroniza com o catálogo: usa config do modelo se existir, senão fallback
+                    // Sincroniza com o catálogo
                     const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
                     const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
+                    const telaList = (detailModelConfigs.telas?.length ? detailModelConfigs.telas : ['13"', '14"', '15"', '16"']);
                     const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
                     const nucleosList = nucleosCatalog.length > 0
                       ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
@@ -5033,6 +5043,14 @@ export default function EstoquePage() {
                             <option value="">— Não informar —</option>
                             {curNucleos && !nucleosList.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
                             {nucleosList.map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tela {saved("tela")}</p>
+                          <select value={curTela} onChange={(e) => updateMacbookField("tela", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curTela && !telaList.includes(curTela) && <option value={curTela}>{curTela}</option>}
+                            {telaList.map((t) => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                         <div>
