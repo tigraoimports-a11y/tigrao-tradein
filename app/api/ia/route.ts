@@ -125,10 +125,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { mensagem, historico = [], modo } = body;
 
+    // SEMPRE busca contexto — antes só era buscado na primeira mensagem,
+    // o que fazia a IA "esquecer" os dados a partir da segunda pergunta.
     let contexto = "";
-
-    if (modo === "analise" || !historico.length) {
-      // Primeira mensagem ou análise automática: busca dados completos
+    {
       const dados = await coletarContexto();
       const topProdutos = dados.topProdutos;
 
@@ -181,8 +181,8 @@ ${Object.entries(dados.estoqueAgrupado)
     ];
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1500,
+      model: "claude-opus-4-6",
+      max_tokens: 2500,
       system: contexto || `Você é o assistente de IA da TigrãoImports, loja Apple no Rio de Janeiro.
 Ajude com dúvidas sobre estoque, vendas e operações. Responda em português brasileiro, de forma clara e objetiva.`,
       messages,
@@ -193,6 +193,7 @@ Ajude com dúvidas sobre estoque, vendas e operações. Responda em português b
     return NextResponse.json({ resposta });
   } catch (error) {
     console.error("Erro na IA:", error);
-    return NextResponse.json({ error: "Erro ao processar" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Erro ao processar", detalhe: msg }, { status: 500 });
   }
 }
