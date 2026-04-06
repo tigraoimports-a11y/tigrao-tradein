@@ -3217,24 +3217,33 @@ export default function VendasPage() {
                       {tab === "andamento" && (
                         <button
                           disabled={finalizandoLote}
-                          onClick={async () => {
-                            if (!confirm(`Finalizar ${selecionadas.size} venda(s) selecionada(s)?`)) return;
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ids = Array.from(selecionadas);
+                            if (ids.length === 0) return;
+                            if (!confirm(`Finalizar ${ids.length} venda(s) selecionada(s)?`)) return;
                             setFinalizandoLote(true);
-                            let ok = 0;
-                            for (const id of selecionadas) {
+                            let ok = 0, fail = 0;
+                            const erros: string[] = [];
+                            for (const id of ids) {
                               try {
-                                await fetch("/api/vendas", {
+                                const res = await fetch("/api/vendas", {
                                   method: "PATCH",
-                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                   body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
                                 });
-                                ok++;
-                              } catch {}
+                                if (res.ok) ok++;
+                                else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                              } catch (err) {
+                                fail++;
+                                erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                              }
                             }
-                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
+                            if (erros.length) console.error("[Finalizar Lote] erros:", erros);
+                            setVendas(prev => prev.map(v => ids.includes(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
                             setSelecionadas(new Set());
                             setFinalizandoLote(false);
-                            setMsg(`${ok} venda(s) finalizada(s) com sucesso!`);
+                            setMsg(fail > 0 ? `${ok} finalizada(s), ${fail} falha(s) — veja console` : `${ok} venda(s) finalizada(s)!`);
                           }}
                           className="px-4 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
                         >
@@ -3244,24 +3253,33 @@ export default function VendasPage() {
                       {/* Cancelar/Excluir selecionadas — disponível em todas as tabs */}
                       <button
                         disabled={finalizandoLote}
-                        onClick={async () => {
-                          if (!confirm(`⚠️ EXCLUIR ${selecionadas.size} venda(s) selecionada(s)?\n\nIsso vai remover permanentemente do sistema e devolver produtos ao estoque.`)) return;
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const ids = Array.from(selecionadas);
+                          if (ids.length === 0) return;
+                          if (!confirm(`⚠️ EXCLUIR ${ids.length} venda(s) selecionada(s)?\n\nIsso vai remover permanentemente do sistema e devolver produtos ao estoque.`)) return;
                           setFinalizandoLote(true);
-                          let ok = 0;
-                          for (const id of selecionadas) {
+                          let ok = 0, fail = 0;
+                          const erros: string[] = [];
+                          for (const id of ids) {
                             try {
                               const res = await fetch("/api/vendas", {
                                 method: "DELETE",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                 body: JSON.stringify({ id }),
                               });
                               if (res.ok) ok++;
-                            } catch {}
+                              else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                            } catch (err) {
+                              fail++;
+                              erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                            }
                           }
-                          setVendas(prev => prev.filter(v => !selecionadas.has(v.id)));
+                          if (erros.length) console.error("[Excluir Lote] erros:", erros);
+                          setVendas(prev => prev.filter(v => !ids.includes(v.id)));
                           setSelecionadas(new Set());
                           setFinalizandoLote(false);
-                          setMsg(`${ok} venda(s) excluída(s) com sucesso!`);
+                          setMsg(fail > 0 ? `${ok} excluída(s), ${fail} falha(s) — veja console` : `${ok} venda(s) excluída(s)!`);
                         }}
                         className="px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
                       >
@@ -3270,24 +3288,33 @@ export default function VendasPage() {
                       {(tab === "finalizadas" || tab === "hoje") && (
                         <button
                           disabled={finalizandoLote}
-                          onClick={async () => {
-                            if (!confirm(`Mover ${selecionadas.size} venda(s) para Pendentes?`)) return;
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ids = Array.from(selecionadas);
+                            if (ids.length === 0) return;
+                            if (!confirm(`Mover ${ids.length} venda(s) para Pendentes?`)) return;
                             setFinalizandoLote(true);
-                            let ok = 0;
-                            for (const id of selecionadas) {
+                            let ok = 0, fail = 0;
+                            const erros: string[] = [];
+                            for (const id of ids) {
                               try {
-                                await fetch("/api/vendas", {
+                                const res = await fetch("/api/vendas", {
                                   method: "PATCH",
-                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                   body: JSON.stringify({ id, status_pagamento: "AGUARDANDO" }),
                                 });
-                                ok++;
-                              } catch {}
+                                if (res.ok) ok++;
+                                else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                              } catch (err) {
+                                fail++;
+                                erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                              }
                             }
-                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+                            if (erros.length) console.error("[Mover Lote] erros:", erros);
+                            setVendas(prev => prev.map(v => ids.includes(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
                             setSelecionadas(new Set());
                             setFinalizandoLote(false);
-                            setMsg(`${ok} venda(s) movida(s) para Pendentes!`);
+                            setMsg(fail > 0 ? `${ok} movida(s), ${fail} falha(s) — veja console` : `${ok} venda(s) movida(s) para Pendentes!`);
                           }}
                           className="px-4 py-1.5 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition-colors"
                         >

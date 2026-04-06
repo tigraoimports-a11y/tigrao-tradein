@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Mensagem {
@@ -7,20 +7,71 @@ interface Mensagem {
   content: string;
 }
 
+// Mini-renderizador de markdown inline: suporta **negrito** e quebras de linha.
+function renderMarkdown(text: string) {
+  return text.split("\n").map((line, lineIdx) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <Fragment key={lineIdx}>
+        {parts.map((part, i) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+          }
+          return <Fragment key={i}>{part}</Fragment>;
+        })}
+        {lineIdx < text.split("\n").length - 1 && <br />}
+      </Fragment>
+    );
+  });
+}
+
 export default function IAPage() {
   const { password, user } = useAdmin();
   const senha = password;
   const usuario = user?.nome ?? "sistema";
+  const storageKey = `ia_chat_${usuario}`;
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [analisando, setAnalisando] = useState(false);
+  const [hidratado, setHidratado] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Carrega histórico salvo ao montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setMensagens(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+    setHidratado(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  // Salva histórico a cada mudança (depois da hidratação inicial)
+  useEffect(() => {
+    if (!hidratado) return;
+    try {
+      if (mensagens.length === 0) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, JSON.stringify(mensagens));
+    } catch {
+      /* quota cheia, ignora */
+    }
+  }, [mensagens, storageKey, hidratado]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
+
+  function novaConversa() {
+    if (mensagens.length > 0 && !confirm("Limpar a conversa atual e começar uma nova?")) return;
+    setMensagens([]);
+  }
 
   async function analisarAutomatico() {
     setAnalisando(true);
@@ -53,12 +104,22 @@ export default function IAPage() {
         }),
       });
 
-      const data = await res.json();
+      let data: { resposta?: string; error?: string; detalhe?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        const txt = await res.text().catch(() => "");
+        setMensagens([...novaLista, { role: "assistant", content: `❌ Resposta inválida do servidor (HTTP ${res.status}). ${txt.slice(0, 200)}` }]);
+        return;
+      }
       if (data.resposta) {
         setMensagens([...novaLista, { role: "assistant", content: data.resposta }]);
+      } else if (data.error) {
+        setMensagens([...novaLista, { role: "assistant", content: `❌ ${data.error}${data.detalhe ? `\n\n${data.detalhe}` : ""}` }]);
       }
-    } catch {
-      setMensagens([...novaLista, { role: "assistant", content: "❌ Erro ao conectar com a IA. Tente novamente." }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMensagens([...novaLista, { role: "assistant", content: `❌ Erro ao conectar com a IA: ${msg}` }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -88,19 +149,31 @@ export default function IAPage() {
           <h1 className="text-2xl font-bold text-gray-800">🤖 Assistente IA</h1>
           <p className="text-sm text-gray-500">Analisa seu estoque, vendas e detecta problemas automaticamente</p>
         </div>
-        <button
-          onClick={analisarAutomatico}
-          disabled={analisando || loading}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {analisando ? (
-            <>
-              <span className="animate-spin">⏳</span> Analisando...
-            </>
-          ) : (
-            <>🔍 Análise Automática</>
+        <div className="flex items-center gap-2">
+          {mensagens.length > 0 && (
+            <button
+              onClick={novaConversa}
+              disabled={loading || analisando}
+              className="flex items-center gap-1 border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+              title="Limpar conversa e começar nova"
+            >
+              ✨ Nova conversa
+            </button>
           )}
-        </button>
+          <button
+            onClick={analisarAutomatico}
+            disabled={analisando || loading}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analisando ? (
+              <>
+                <span className="animate-spin">⏳</span> Analisando...
+              </>
+            ) : (
+              <>🔍 Análise Automática</>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Chat area */}
@@ -130,16 +203,16 @@ export default function IAPage() {
             {mensagens.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-purple-600 text-white rounded-br-sm"
+                      ? "bg-purple-600 text-white rounded-br-sm whitespace-pre-wrap"
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   }`}
                 >
                   {msg.role === "assistant" && (
                     <span className="text-xs font-semibold text-purple-600 block mb-1">🤖 Assistente IA</span>
                   )}
-                  {msg.content}
+                  {msg.role === "assistant" ? renderMarkdown(msg.content) : msg.content}
                 </div>
               </div>
             ))}
@@ -199,7 +272,7 @@ export default function IAPage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-400">
-        Powered by Claude Sonnet · Os dados são buscados em tempo real do sistema
+        Powered by Claude Opus 4.6 · Consulta o banco em tempo real via tool use
       </p>
     </div>
   );

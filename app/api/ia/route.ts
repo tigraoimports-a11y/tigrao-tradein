@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { supabase } from "@/lib/supabase";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -8,113 +12,321 @@ function auth(req: NextRequest) {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-async function coletarContexto() {
-  // Busca dados do negócio para contexto
-  const [estoqueRes, vendasRes, pendenciasRes] = await Promise.all([
-    supabase
-      .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status")
-      .not("tipo", "eq", "PENDENCIA")
-      .not("tipo", "eq", "A_CAMINHO")
-      .order("produto"),
-    supabase
-      .from("vendas")
-      .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
-      .gte("data", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
-      .neq("status_pagamento", "CANCELADO")
-      .order("data", { ascending: false })
-      .limit(300),
-    supabase
-      .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, cliente, tipo, created_at")
-      .eq("tipo", "PENDENCIA"),
-  ]);
+function getSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
 
-  const estoqueData = estoqueRes.data || [];
-  const vendasData = vendasRes.data || [];
-  const pendenciasData = pendenciasRes.data || [];
+// Tabelas que a IA tem permissão de consultar (read-only).
+const ALLOWED_TABLES: Record<string, string> = {
+  estoque: "Estoque atual: cada linha é uma unidade física. Tipo pode ser NULL (estoque normal), 'PENDENCIA' (trade-in aguardando), 'A_CAMINHO' (em trânsito), 'SEMINOVO', 'ATACADO'. Colunas comuns: produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, status, cliente, data_compra, created_at.",
+  vendas: "Histórico de vendas. Colunas: data (date), produto, cor, storage, preco_vendido, custo, vendedor, cliente, cpf, forma (PIX/CARTAO/FIADO/ESPECIE/...), banco, parcelas, status_pagamento (NULL/CANCELADO/PAGO), origem, troca_produto, troca_valor.",
+  gastos: "Despesas da loja. Colunas: data, descricao, valor, categoria, banco, tipo.",
+  saldos_bancarios: "Saldo atual de cada conta bancária.",
+  trocas: "Trade-ins/trocas finalizadas (separadas das pendências do estoque).",
+  tradein_leads: "Leads gerados pela calculadora de trade-in (interessados que preencheram o formulário).",
+  simulacoes: "Simulações de trade-in feitas no site público.",
+  entregas: "Status de entregas/envios.",
+  encomendas: "Encomendas de clientes (produtos sob demanda).",
+  fornecedores: "Cadastro de fornecedores.",
+  catalogo_modelos: "Catálogo de modelos cadastrados (Apple lineup).",
+  catalogo_categorias: "Categorias do catálogo.",
+  precos: "Tabela de preços de venda configurados.",
+  reajustes: "Histórico de reajustes de preço.",
+  patrimonio_mensal: "Snapshot mensal de patrimônio.",
+  taxas_config: "Configuração de taxas de máquinas/cartão.",
+  taxas_repasse: "Taxas de repasse das maquininhas.",
+  tradein_config: "Configurações do módulo de trade-in.",
+  tradein_perguntas: "Perguntas do questionário de avaliação do usado.",
+  avaliacao_usados: "Tabela de avaliação/preço dos usados aceitos no trade-in.",
+  movimentacoes_estoque: "Log de movimentações do estoque.",
+  estoque_log: "Log adicional de eventos do estoque.",
+  notificacoes_estoque: "Notificações relacionadas a estoque.",
+  comprovantes: "Comprovantes anexados a vendas/pagamentos.",
+  activity_log: "Log de atividades dos usuários no painel.",
+  loja_produtos: "Produtos publicados na loja online.",
+  loja_categorias: "Categorias da loja online.",
+  loja_variacoes: "Variações dos produtos da loja.",
+  produto_views: "Views/visualizações dos produtos na loja.",
+  cotacao_listas: "Listas de cotação criadas.",
+  cotacao_itens: "Itens das listas de cotação.",
+  cotacao_precos: "Preços nas cotações.",
+  descontos_condicao: "Descontos por condição.",
+  produtos_individuais: "Produtos individuais cadastrados.",
+};
 
-  // Agrupar estoque por modelo
-  const estoqueAgrupado: Record<string, { qnt: number; preco?: number; custo?: number; min?: number }> = {};
-  for (const item of estoqueData) {
-    const key = `${item.produto}${item.storage ? " " + item.storage : ""}${item.cor ? " " + item.cor : ""}`.trim();
-    if (!estoqueAgrupado[key]) estoqueAgrupado[key] = { qnt: 0 };
-    estoqueAgrupado[key].qnt += item.qnt || 0;
-    if (item.preco_sugerido) estoqueAgrupado[key].preco = item.preco_sugerido;
-    if (item.custo_unitario) estoqueAgrupado[key].custo = item.custo_unitario;
-    if (item.estoque_minimo) estoqueAgrupado[key].min = item.estoque_minimo;
+// Tabelas em que a IA pode FAZER ESCRITAS (UPDATE/INSERT). Subset estrito.
+// DELETE não é permitido em nenhuma tabela.
+const WRITABLE_TABLES = new Set<string>([
+  "estoque",
+  "catalogo_modelos",
+  "catalogo_categorias",
+  "catalogo_categoria_specs",
+  "catalogo_modelo_configs",
+  "catalogo_spec_tipos",
+  "catalogo_spec_valores",
+  "fornecedores",
+  "loja_produtos",
+  "loja_categorias",
+  "loja_variacoes",
+  "precos",
+  "modelos_excluidos",
+]);
+
+const SYSTEM_PROMPT = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro. Você ajuda o dono (André) e a equipe (Bianca, Laynne, Nicolas, Paloma) a entender o que está acontecendo na operação.
+
+Você tem acesso ao banco de dados real do sistema através de ferramentas. SEMPRE use as ferramentas para responder — nunca invente números ou dados.
+
+ESTRATÉGIA DE USO DAS FERRAMENTAS DE LEITURA:
+1. Comece chamando 'list_tables' se ainda não souber quais tabelas existem.
+2. Use 'describe_table' quando precisar saber as colunas de uma tabela específica antes de filtrar/ordenar.
+3. Use 'query_table' pra rodar a consulta. Limite sempre — pra perguntas amplas comece com limit baixo (50-100) e refine.
+4. Você pode chamar várias ferramentas em sequência. Combine dados de tabelas diferentes quando necessário.
+5. Hoje é ${new Date().toISOString().slice(0, 10)}. Quando o usuário disser "últimos 30 dias", calcule a data inicial.
+
+FERRAMENTAS DE ESCRITA (update_rows, insert_row):
+Você PODE alterar dados no banco, mas SOMENTE em tabelas de produto/estoque (estoque, catalogo_*, fornecedores, loja_*, precos). DELETE não é permitido — nunca tente apagar.
+
+PROTOCOLO OBRIGATÓRIO de escrita (NÃO PULE NENHUM PASSO):
+1. Quando o usuário pedir uma alteração, PRIMEIRO use query_table pra MOSTRAR exatamente quais linhas serão afetadas e seus valores atuais.
+2. Em seguida, em uma mensagem de TEXTO (sem chamar tool), descreva claramente: a tabela, os filtros, os campos que vão mudar, o valor antigo e o novo, e quantas linhas serão afetadas. Termine perguntando "Posso aplicar essa alteração?".
+3. AGUARDE a próxima mensagem do usuário. Só execute update_rows / insert_row se a resposta dele for uma confirmação clara ("sim", "pode", "manda", "confirma", "ok").
+4. Ao chamar a ferramenta de escrita, sempre passe confirmed=true. A ferramenta recusa se confirmed for false.
+5. Se o usuário disser não ou der instrução diferente, NÃO execute. Reformule e peça nova confirmação.
+6. Nunca faça uma escrita sem ter mostrado o preview e recebido confirmação explícita na mesma conversa.
+
+REGRAS DE NEGÓCIO IMPORTANTES:
+- A ORIGEM do aparelho NÃO importa pra contagem de estoque. Aparelhos com sufixos como "LL" (EUA), "J" / "JPA" (Japão), "HN" / "IN" (Índia), "BR", "ZP" (Hong Kong), etc são FISICAMENTE IDÊNTICOS — só muda a região fiscal. Sempre que listar/agrupar produtos, REMOVA esses sufixos do nome e SOME as quantidades.
+  Exemplo: "iPhone 17 256GB Mist Blue J" + "iPhone 17 256GB Mist Blue LL" = "iPhone 17 256GB Mist Blue" com a soma das duas.
+- "(JPA)", "(EUA)", "(IN)", "(JAPÃO)" e variantes idem — descarta.
+- Cor sempre conta: Black ≠ Mist Blue. Storage sempre conta: 256GB ≠ 512GB.
+- Quando o usuário pede "quantos X temos", traga o agrupado já somado, não a lista bruta.
+
+FORMATAÇÃO DA RESPOSTA:
+- Português brasileiro, conversacional, direto.
+- NÃO use tabelas markdown (nada de | --- |). Use listas com hífen.
+- NÃO use cabeçalhos ## ou ###. Parágrafos curtos.
+- Negrito (**) só pra destacar 1-2 números/itens realmente importantes na resposta toda. Não negrite cada item de lista.
+- Não liste itens com quantidade 0 a menos que o usuário tenha pedido especificamente "esgotados". Foque no que existe.
+- No máximo 1 emoji por resposta, e só se fizer sentido.
+- Vá direto ao ponto. Sem preâmbulo ("Aqui vai", "Contando todos") nem "posso ajudar com mais alguma coisa".
+- Cite os números reais que vieram do banco.`;
+
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: "list_tables",
+    description: "Lista todas as tabelas do sistema que você pode consultar, com uma breve descrição de cada uma. Chame isso primeiro se não souber qual tabela usar.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "describe_table",
+    description: "Retorna as colunas (e seus tipos inferidos) de uma tabela. Útil antes de filtrar ou ordenar para confirmar nomes exatos.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Nome exato da tabela" },
+      },
+      required: ["table"],
+    },
+  },
+  {
+    name: "update_rows",
+    description: "Atualiza uma ou mais linhas em uma tabela de produto/estoque. Requer confirmação prévia do usuário no chat. DELETE não é suportado.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Tabela alvo (deve ser uma writable: estoque, catalogo_*, fornecedores, loja_*, precos)" },
+        filters: {
+          type: "array",
+          description: "Filtros que selecionam as linhas a atualizar. OBRIGATÓRIO ter pelo menos 1 filtro pra evitar UPDATE em massa acidental.",
+          items: {
+            type: "object",
+            properties: {
+              column: { type: "string" },
+              op: { type: "string", enum: ["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "in", "is"] },
+              value: {},
+            },
+            required: ["column", "op", "value"],
+          },
+        },
+        updates: {
+          type: "object",
+          description: "Objeto {coluna: novoValor} com os campos que serão atualizados.",
+        },
+        confirmed: { type: "boolean", description: "Deve ser true. A ferramenta recusa se for false. Só passe true depois de ter recebido confirmação explícita do usuário no chat." },
+      },
+      required: ["table", "filters", "updates", "confirmed"],
+    },
+  },
+  {
+    name: "insert_row",
+    description: "Insere uma nova linha numa tabela de produto/estoque. Requer confirmação prévia do usuário no chat.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Tabela alvo (writable)" },
+        values: { type: "object", description: "Objeto {coluna: valor} com os campos da nova linha." },
+        confirmed: { type: "boolean", description: "Deve ser true. A ferramenta recusa se for false." },
+      },
+      required: ["table", "values", "confirmed"],
+    },
+  },
+  {
+    name: "query_table",
+    description: "Executa um SELECT em uma tabela. Suporta filtros, ordenação, contagem e limite. Use isso para responder perguntas com dados reais.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Nome da tabela (uma das listadas em list_tables)" },
+        columns: {
+          type: "string",
+          description: "Colunas separadas por vírgula. Use '*' pra todas. Default: '*'",
+        },
+        filters: {
+          type: "array",
+          description: "Lista de filtros AND. Cada filtro: {column, op, value}. Operadores: eq, neq, gt, gte, lt, lte, like, ilike, in, is. Para 'in', value deve ser um array. Para 'is', value pode ser null/true/false.",
+          items: {
+            type: "object",
+            properties: {
+              column: { type: "string" },
+              op: { type: "string", enum: ["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "in", "is"] },
+              value: {},
+            },
+            required: ["column", "op", "value"],
+          },
+        },
+        order_by: { type: "string", description: "Coluna para ordenar (opcional)" },
+        ascending: { type: "boolean", description: "true=asc, false=desc. Default false." },
+        limit: { type: "number", description: "Máximo de linhas (1-1000). Default 100." },
+        count_only: { type: "boolean", description: "Se true, retorna só a contagem total (sem trazer linhas). Default false." },
+      },
+      required: ["table"],
+    },
+  },
+];
+
+interface Filter {
+  column: string;
+  op: string;
+  value: unknown;
+}
+
+interface QueryArgs {
+  table: string;
+  columns?: string;
+  filters?: Filter[];
+  order_by?: string;
+  ascending?: boolean;
+  limit?: number;
+  count_only?: boolean;
+}
+
+async function runTool(name: string, input: Record<string, unknown>, supabase: SupabaseClient): Promise<unknown> {
+  if (name === "list_tables") {
+    return Object.entries(ALLOWED_TABLES).map(([table, descricao]) => ({ table, descricao }));
   }
 
-  // Estatísticas de vendas
-  const totalVendas = vendasData.length;
-  const receitaTotal = vendasData.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-
-  // Vendas por produto (top 10)
-  const vendasPorProduto: Record<string, number> = {};
-  for (const v of vendasData) {
-    const key = `${v.produto}`.trim();
-    vendasPorProduto[key] = (vendasPorProduto[key] || 0) + 1;
-  }
-  const topProdutos = Object.entries(vendasPorProduto)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([k, v]) => `${k}: ${v} vendas`);
-
-  // Vendas por vendedor
-  const vendasPorVendedor: Record<string, number> = {};
-  for (const v of vendasData) {
-    const nome = v.vendedor || "Sem vendedor";
-    vendasPorVendedor[nome] = (vendasPorVendedor[nome] || 0) + 1;
+  if (name === "describe_table") {
+    const table = String(input.table || "");
+    if (!ALLOWED_TABLES[table]) return { error: `Tabela '${table}' não permitida ou não existe. Use list_tables.` };
+    const { data, error } = await supabase.from(table).select("*").limit(1);
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { columns: [], aviso: "tabela vazia" };
+    const sample = data[0];
+    const columns = Object.entries(sample).map(([col, val]) => ({
+      column: col,
+      tipo_inferido: val === null ? "null" : typeof val,
+      exemplo: val,
+    }));
+    return { columns };
   }
 
-  // Detectar custos divergentes (mesmo produto, custo diferente)
-  const custoPorProduto: Record<string, Set<number>> = {};
-  for (const item of estoqueData) {
-    if (!item.custo_unitario) continue;
-    const key = `${item.produto}${item.storage ? " " + item.storage : ""}${item.cor ? " " + item.cor : ""}`.trim();
-    if (!custoPorProduto[key]) custoPorProduto[key] = new Set();
-    custoPorProduto[key].add(item.custo_unitario);
+  if (name === "update_rows") {
+    const args = input as { table: string; filters?: Filter[]; updates?: Record<string, unknown>; confirmed?: boolean };
+    if (!WRITABLE_TABLES.has(args.table)) {
+      return { error: `Tabela '${args.table}' não é editável. Writable: ${Array.from(WRITABLE_TABLES).join(", ")}` };
+    }
+    if (!args.confirmed) {
+      return { error: "Operação recusada: confirmed=false. Você precisa pedir confirmação explícita ao usuário no chat antes de chamar com confirmed=true." };
+    }
+    if (!args.filters || args.filters.length === 0) {
+      return { error: "Operação recusada: nenhum filtro fornecido. UPDATE em massa não é permitido — informe pelo menos 1 filtro." };
+    }
+    if (!args.updates || Object.keys(args.updates).length === 0) {
+      return { error: "Nenhum campo informado em 'updates'." };
+    }
+    let q = supabase.from(args.table).update(args.updates).select();
+    for (const f of args.filters) q = applyFilter(q, f);
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+    return { ok: true, atualizadas: data?.length ?? 0, linhas: data };
   }
-  const divergencias = Object.entries(custoPorProduto)
-    .filter(([, custos]) => custos.size > 1)
-    .map(([k, custos]) => `${k}: ${Array.from(custos).map(c => `R$${c.toLocaleString("pt-BR")}`).join(" vs ")}`)
-    .slice(0, 10);
 
-  // Produtos zerados
-  const zerados = Object.entries(estoqueAgrupado)
-    .filter(([, v]) => v.qnt === 0)
-    .map(([k]) => k)
-    .slice(0, 20);
+  if (name === "insert_row") {
+    const args = input as { table: string; values?: Record<string, unknown>; confirmed?: boolean };
+    if (!WRITABLE_TABLES.has(args.table)) {
+      return { error: `Tabela '${args.table}' não é editável.` };
+    }
+    if (!args.confirmed) {
+      return { error: "Operação recusada: confirmed=false. Peça confirmação ao usuário primeiro." };
+    }
+    if (!args.values || Object.keys(args.values).length === 0) {
+      return { error: "Nenhum campo informado em 'values'." };
+    }
+    const { data, error } = await supabase.from(args.table).insert(args.values).select();
+    if (error) return { error: error.message };
+    return { ok: true, inserida: data?.[0] };
+  }
 
-  // Produtos abaixo do mínimo
-  const abaixoMin = Object.entries(estoqueAgrupado)
-    .filter(([, v]) => v.min && v.min > 0 && v.qnt < v.min)
-    .map(([k, v]) => `${k}: tem ${v.qnt}, mínimo ${v.min}`)
-    .slice(0, 20);
+  if (name === "query_table") {
+    const args = input as unknown as QueryArgs;
+    if (!ALLOWED_TABLES[args.table]) return { error: `Tabela '${args.table}' não permitida. Use list_tables.` };
 
-  // Pendências antigas (mais de 15 dias)
-  const quinzeDiasAtras = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-  const pendenciasAntigas = pendenciasData
-    .filter(p => p.created_at && p.created_at < quinzeDiasAtras)
-    .map(p => `${p.produto}${p.storage ? " " + p.storage : ""} - cliente: ${p.cliente || "sem nome"}`)
-    .slice(0, 10);
+    if (args.count_only) {
+      let q = supabase.from(args.table).select("*", { count: "exact", head: true });
+      for (const f of args.filters || []) {
+        q = applyFilter(q, f);
+      }
+      const { count, error } = await q;
+      if (error) return { error: error.message };
+      return { count };
+    }
 
-  return {
-    estoqueAgrupado,
-    totalItensEstoque: Object.values(estoqueAgrupado).reduce((s, v) => s + v.qnt, 0),
-    totalModelosEstoque: Object.keys(estoqueAgrupado).length,
-    totalPendencias: pendenciasData.length,
-    pendenciasAntigas,
-    totalVendas30d: totalVendas,
-    receitaTotal30d: receitaTotal,
-    topProdutos10,
-    vendasPorVendedor,
-    divergenciasCusto: divergencias,
-    produtosZerados: zerados,
-    produtosAbaixoMinimo: abaixoMin,
-  };
+    const cols = args.columns || "*";
+    let q = supabase.from(args.table).select(cols);
+    for (const f of args.filters || []) {
+      q = applyFilter(q, f);
+    }
+    if (args.order_by) {
+      q = q.order(args.order_by, { ascending: args.ascending ?? false, nullsFirst: false });
+    }
+    const limit = Math.min(Math.max(args.limit ?? 100, 1), 1000);
+    q = q.limit(limit);
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+    return { rows: data, total_returned: data?.length ?? 0, limit };
+  }
 
-  function topProdutos10() { return topProdutos; }
+  return { error: `Tool desconhecida: ${name}` };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyFilter(q: any, f: Filter): any {
+  const { column, op, value } = f;
+  switch (op) {
+    case "eq": return q.eq(column, value);
+    case "neq": return q.neq(column, value);
+    case "gt": return q.gt(column, value);
+    case "gte": return q.gte(column, value);
+    case "lt": return q.lt(column, value);
+    case "lte": return q.lte(column, value);
+    case "like": return q.like(column, String(value));
+    case "ilike": return q.ilike(column, String(value));
+    case "in": return q.in(column, Array.isArray(value) ? value : [value]);
+    case "is": return q.is(column, value as null | boolean);
+    default: return q;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -122,54 +334,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { mensagem, historico = [], modo } = body;
+    const { mensagem, historico = [] } = body;
 
-    let contexto = "";
-
-    if (modo === "analise" || !historico.length) {
-      // Primeira mensagem ou análise automática: busca dados completos
-      const dados = await coletarContexto();
-      const topProdutos = dados.topProdutos10();
-
-      contexto = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
-Você tem acesso aos dados reais do sistema e ajuda o dono (André) com análises de estoque, vendas e operações.
-Responda em português brasileiro de forma clara e objetiva. Use emojis quando fizer sentido. Seja direto e prático.
-
-=== DADOS DO SISTEMA (TEMPO REAL) ===
-
-ESTOQUE:
-- Total de unidades em estoque: ${dados.totalItensEstoque}
-- Total de modelos diferentes: ${dados.totalModelosEstoque}
-- Produtos nas Pendências (trade-in aguardando): ${dados.totalPendencias}
-${dados.pendenciasAntigas.length ? `- Pendências com mais de 15 dias:\n  ${dados.pendenciasAntigas.join("\n  ")}` : "- Sem pendências antigas ✅"}
-
-VENDAS (últimos 30 dias):
-- Total de vendas: ${dados.totalVendas30d}
-- Receita total: R$ ${dados.receitaTotal30d.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-- Top produtos mais vendidos:
-  ${topProdutos.join("\n  ")}
-- Vendas por vendedor:
-  ${Object.entries(dados.vendasPorVendedor).sort(([,a],[,b]) => b-a).map(([k,v]) => `${k}: ${v} vendas`).join("\n  ")}
-
-ALERTAS:
-Custos divergentes (possível erro cadastro):
-${dados.divergenciasCusto.length ? dados.divergenciasCusto.join("\n") : "Nenhum ✅"}
-
-Produtos esgotados (qnt=0):
-${dados.produtosZerados.length ? dados.produtosZerados.join(", ") : "Nenhum ✅"}
-
-Produtos abaixo do estoque mínimo:
-${dados.produtosAbaixoMinimo.length ? dados.produtosAbaixoMinimo.join("\n") : "Nenhum ✅"}
-
-ESTOQUE ATUAL (modelos com quantidade):
-${Object.entries(dados.estoqueAgrupado)
-  .filter(([, v]) => v.qnt > 0)
-  .sort(([, a], [, b]) => b.qnt - a.qnt)
-  .slice(0, 60)
-  .map(([k, v]) => `• ${k}: ${v.qnt} un | venda R$${v.preco?.toLocaleString("pt-BR") || "—"} | custo R$${v.custo?.toLocaleString("pt-BR") || "—"}`)
-  .join("\n")}
-`;
-    }
+    const supabase = getSupabase();
 
     const messages: Anthropic.MessageParam[] = [
       ...historico.map((h: { role: string; content: string }) => ({
@@ -179,19 +346,67 @@ ${Object.entries(dados.estoqueAgrupado)
       { role: "user", content: mensagem },
     ];
 
-    const response = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1500,
-      system: contexto || `Você é o assistente de IA da TigrãoImports, loja Apple no Rio de Janeiro.
-Ajude com dúvidas sobre estoque, vendas e operações. Responda em português brasileiro, de forma clara e objetiva.`,
+    // Loop agêntico: Claude pode chamar tools várias vezes antes de responder.
+    const MAX_ITER = 25;
+    let iter = 0;
+    let response = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 4000,
+      system: SYSTEM_PROMPT,
+      tools: TOOLS,
       messages,
     });
 
-    const resposta = response.content[0].type === "text" ? response.content[0].text : "";
+    while (response.stop_reason === "tool_use" && iter < MAX_ITER) {
+      iter++;
+      console.log(`[IA] iter=${iter} stop=${response.stop_reason} input_tokens=${response.usage?.input_tokens} output_tokens=${response.usage?.output_tokens}`);
+      const toolUses = response.content.filter(b => b.type === "tool_use");
+      console.log(`[IA] tools chamadas: ${toolUses.map(t => t.type === "tool_use" ? t.name : "").join(", ")}`);
+      const toolResults = await Promise.all(
+        toolUses.map(async tu => {
+          if (tu.type !== "tool_use") return null;
+          try {
+            const result = await runTool(tu.name, tu.input as Record<string, unknown>, supabase);
+            return {
+              type: "tool_result" as const,
+              tool_use_id: tu.id,
+              content: JSON.stringify(result).slice(0, 100000),
+            };
+          } catch (e) {
+            return {
+              type: "tool_result" as const,
+              tool_use_id: tu.id,
+              content: `Erro: ${e instanceof Error ? e.message : String(e)}`,
+              is_error: true,
+            };
+          }
+        })
+      );
+
+      messages.push({ role: "assistant", content: response.content });
+      messages.push({
+        role: "user",
+        content: toolResults.filter((t): t is NonNullable<typeof t> => t !== null),
+      });
+
+      response = await client.messages.create({
+        model: "claude-opus-4-6",
+        max_tokens: 4000,
+        system: SYSTEM_PROMPT,
+        tools: TOOLS,
+        messages,
+      });
+    }
+
+    const resposta = response.content
+      .filter(b => b.type === "text")
+      .map(b => (b.type === "text" ? b.text : ""))
+      .join("\n");
 
     return NextResponse.json({ resposta });
   } catch (error) {
     console.error("Erro na IA:", error);
-    return NextResponse.json({ error: "Erro ao processar" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Erro ao processar", detalhe: msg }, { status: 500 });
   }
 }
