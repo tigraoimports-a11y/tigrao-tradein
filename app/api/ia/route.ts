@@ -56,16 +56,45 @@ const ALLOWED_TABLES: Record<string, string> = {
   produtos_individuais: "Produtos individuais cadastrados.",
 };
 
+// Tabelas em que a IA pode FAZER ESCRITAS (UPDATE/INSERT). Subset estrito.
+// DELETE não é permitido em nenhuma tabela.
+const WRITABLE_TABLES = new Set<string>([
+  "estoque",
+  "catalogo_modelos",
+  "catalogo_categorias",
+  "catalogo_categoria_specs",
+  "catalogo_modelo_configs",
+  "catalogo_spec_tipos",
+  "catalogo_spec_valores",
+  "fornecedores",
+  "loja_produtos",
+  "loja_categorias",
+  "loja_variacoes",
+  "precos",
+  "modelos_excluidos",
+]);
+
 const SYSTEM_PROMPT = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro. Você ajuda o dono (André) e a equipe (Bianca, Laynne, Nicolas, Paloma) a entender o que está acontecendo na operação.
 
 Você tem acesso ao banco de dados real do sistema através de ferramentas. SEMPRE use as ferramentas para responder — nunca invente números ou dados.
 
-ESTRATÉGIA DE USO DAS FERRAMENTAS:
+ESTRATÉGIA DE USO DAS FERRAMENTAS DE LEITURA:
 1. Comece chamando 'list_tables' se ainda não souber quais tabelas existem.
 2. Use 'describe_table' quando precisar saber as colunas de uma tabela específica antes de filtrar/ordenar.
 3. Use 'query_table' pra rodar a consulta. Limite sempre — pra perguntas amplas comece com limit baixo (50-100) e refine.
 4. Você pode chamar várias ferramentas em sequência. Combine dados de tabelas diferentes quando necessário.
 5. Hoje é ${new Date().toISOString().slice(0, 10)}. Quando o usuário disser "últimos 30 dias", calcule a data inicial.
+
+FERRAMENTAS DE ESCRITA (update_rows, insert_row):
+Você PODE alterar dados no banco, mas SOMENTE em tabelas de produto/estoque (estoque, catalogo_*, fornecedores, loja_*, precos). DELETE não é permitido — nunca tente apagar.
+
+PROTOCOLO OBRIGATÓRIO de escrita (NÃO PULE NENHUM PASSO):
+1. Quando o usuário pedir uma alteração, PRIMEIRO use query_table pra MOSTRAR exatamente quais linhas serão afetadas e seus valores atuais.
+2. Em seguida, em uma mensagem de TEXTO (sem chamar tool), descreva claramente: a tabela, os filtros, os campos que vão mudar, o valor antigo e o novo, e quantas linhas serão afetadas. Termine perguntando "Posso aplicar essa alteração?".
+3. AGUARDE a próxima mensagem do usuário. Só execute update_rows / insert_row se a resposta dele for uma confirmação clara ("sim", "pode", "manda", "confirma", "ok").
+4. Ao chamar a ferramenta de escrita, sempre passe confirmed=true. A ferramenta recusa se confirmed for false.
+5. Se o usuário disser não ou der instrução diferente, NÃO execute. Reformule e peça nova confirmação.
+6. Nunca faça uma escrita sem ter mostrado o preview e recebido confirmação explícita na mesma conversa.
 
 REGRAS DE NEGÓCIO IMPORTANTES:
 - A ORIGEM do aparelho NÃO importa pra contagem de estoque. Aparelhos com sufixos como "LL" (EUA), "J" / "JPA" (Japão), "HN" / "IN" (Índia), "BR", "ZP" (Hong Kong), etc são FISICAMENTE IDÊNTICOS — só muda a região fiscal. Sempre que listar/agrupar produtos, REMOVA esses sufixos do nome e SOME as quantidades.
@@ -99,6 +128,48 @@ const TOOLS: Anthropic.Tool[] = [
         table: { type: "string", description: "Nome exato da tabela" },
       },
       required: ["table"],
+    },
+  },
+  {
+    name: "update_rows",
+    description: "Atualiza uma ou mais linhas em uma tabela de produto/estoque. Requer confirmação prévia do usuário no chat. DELETE não é suportado.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Tabela alvo (deve ser uma writable: estoque, catalogo_*, fornecedores, loja_*, precos)" },
+        filters: {
+          type: "array",
+          description: "Filtros que selecionam as linhas a atualizar. OBRIGATÓRIO ter pelo menos 1 filtro pra evitar UPDATE em massa acidental.",
+          items: {
+            type: "object",
+            properties: {
+              column: { type: "string" },
+              op: { type: "string", enum: ["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "in", "is"] },
+              value: {},
+            },
+            required: ["column", "op", "value"],
+          },
+        },
+        updates: {
+          type: "object",
+          description: "Objeto {coluna: novoValor} com os campos que serão atualizados.",
+        },
+        confirmed: { type: "boolean", description: "Deve ser true. A ferramenta recusa se for false. Só passe true depois de ter recebido confirmação explícita do usuário no chat." },
+      },
+      required: ["table", "filters", "updates", "confirmed"],
+    },
+  },
+  {
+    name: "insert_row",
+    description: "Insere uma nova linha numa tabela de produto/estoque. Requer confirmação prévia do usuário no chat.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        table: { type: "string", description: "Tabela alvo (writable)" },
+        values: { type: "object", description: "Objeto {coluna: valor} com os campos da nova linha." },
+        confirmed: { type: "boolean", description: "Deve ser true. A ferramenta recusa se for false." },
+      },
+      required: ["table", "values", "confirmed"],
     },
   },
   {
@@ -169,6 +240,43 @@ async function runTool(name: string, input: Record<string, unknown>, supabase: S
       exemplo: val,
     }));
     return { columns };
+  }
+
+  if (name === "update_rows") {
+    const args = input as { table: string; filters?: Filter[]; updates?: Record<string, unknown>; confirmed?: boolean };
+    if (!WRITABLE_TABLES.has(args.table)) {
+      return { error: `Tabela '${args.table}' não é editável. Writable: ${Array.from(WRITABLE_TABLES).join(", ")}` };
+    }
+    if (!args.confirmed) {
+      return { error: "Operação recusada: confirmed=false. Você precisa pedir confirmação explícita ao usuário no chat antes de chamar com confirmed=true." };
+    }
+    if (!args.filters || args.filters.length === 0) {
+      return { error: "Operação recusada: nenhum filtro fornecido. UPDATE em massa não é permitido — informe pelo menos 1 filtro." };
+    }
+    if (!args.updates || Object.keys(args.updates).length === 0) {
+      return { error: "Nenhum campo informado em 'updates'." };
+    }
+    let q = supabase.from(args.table).update(args.updates).select();
+    for (const f of args.filters) q = applyFilter(q, f);
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+    return { ok: true, atualizadas: data?.length ?? 0, linhas: data };
+  }
+
+  if (name === "insert_row") {
+    const args = input as { table: string; values?: Record<string, unknown>; confirmed?: boolean };
+    if (!WRITABLE_TABLES.has(args.table)) {
+      return { error: `Tabela '${args.table}' não é editável.` };
+    }
+    if (!args.confirmed) {
+      return { error: "Operação recusada: confirmed=false. Peça confirmação ao usuário primeiro." };
+    }
+    if (!args.values || Object.keys(args.values).length === 0) {
+      return { error: "Nenhum campo informado em 'values'." };
+    }
+    const { data, error } = await supabase.from(args.table).insert(args.values).select();
+    if (error) return { error: error.message };
+    return { ok: true, inserida: data?.[0] };
   }
 
   if (name === "query_table") {
