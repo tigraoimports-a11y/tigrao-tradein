@@ -773,15 +773,19 @@ export default function EstoquePage() {
   const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!password) return;
-    fetch("/api/admin/estoque-settings?key=card_title_overrides", {
-      headers: { "x-admin-password": password },
-    })
-      .then(r => r.json())
-      .then(j => {
+    let cancelled = false;
+    const fetchOverrides = async (migrate = false) => {
+      try {
+        const r = await fetch("/api/admin/estoque-settings?key=card_title_overrides", {
+          headers: { "x-admin-password": password },
+          cache: "no-store",
+        });
+        const j = await r.json();
+        if (cancelled) return;
         if (j.value && typeof j.value === "object") {
           setCardTitleOverrides(j.value as Record<string, string>);
-        } else {
-          // Migrar do localStorage se existir
+        } else if (migrate) {
+          // Migrar do localStorage se existir (só na 1ª carga)
           try {
             const local = JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>;
             if (Object.keys(local).length > 0) {
@@ -794,13 +798,18 @@ export default function EstoquePage() {
             }
           } catch { /* ignore */ }
         }
-      })
-      .catch(() => {
-        try {
-          const local = JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>;
-          setCardTitleOverrides(local);
-        } catch { /* ignore */ }
-      });
+      } catch { /* ignore */ }
+    };
+    fetchOverrides(true);
+    // Polling a cada 15s + refetch ao focar a janela (sincronização entre usuários)
+    const interval = setInterval(() => fetchOverrides(false), 15000);
+    const onFocus = () => fetchOverrides(false);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingCardTitle, setEditingCardTitle] = useState("");
   const [editCardTitleValue, setEditCardTitleValue] = useState("");
