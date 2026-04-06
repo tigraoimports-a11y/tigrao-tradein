@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const FORN_ALIASES: Record<string, string> = {
       "ECO": "ECO CELL", "ECO CEL": "ECO CELL", "ECOCEL": "ECO CELL",
       "EMILIO SHOP": "EMILIO",
-      "FABIO BANGU": "FÁBIO BANGU",
+      "FABIO BANGU": "FÁBIO BANGU", "FABIO F/A": "FÁBIO BANGU",
       "MIAMI ZONE": "MIAMI",
       "PLANETA CEL": "PLANETA",
       "TM": "TM CEL",
