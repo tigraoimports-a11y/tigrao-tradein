@@ -3849,43 +3849,6 @@ export default function VendasPage() {
                                         >
                                           ✏️ Editar
                                         </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const vx = v as unknown as Record<string, string | number | null>;
-                                            setEditForm({
-                                              cliente: v.cliente || "",
-                                              produto: v.produto || "",
-                                              custo: String(v.custo || ""),
-                                              preco_vendido: String(v.preco_vendido || ""),
-                                              banco: v.banco || "ITAU",
-                                              forma: v.forma || "",
-                                              recebimento: v.recebimento || "D+0",
-                                              qnt_parcelas: String(v.qnt_parcelas || ""),
-                                              bandeira: v.bandeira || "",
-                                              entrada_pix: String(v.entrada_pix || ""),
-                                              banco_pix: String(vx.banco_pix || "ITAU"),
-                                              entrada_especie: String(v.entrada_especie || ""),
-                                              entrada_fiado: String(v.entrada_fiado || ""),
-                                              valor_comprovante: String(vx.valor_comprovante || ""),
-                                              banco_alt: String(vx.banco_alt || ""),
-                                              parc_alt: String(vx.parc_alt || ""),
-                                              band_alt: String(vx.band_alt || ""),
-                                              comp_alt: String(vx.comp_alt || ""),
-                                              produto_na_troca: String(v.produto_na_troca || ""),
-                                              troca_produto: String(vx.troca_produto || ""),
-                                              troca_cor: String(vx.troca_cor || ""),
-                                              troca_bateria: String(vx.troca_bateria || ""),
-                                              troca_obs: String(vx.troca_obs || ""),
-                                              troca_serial: String(vx.troca_serial || ""),
-                                              troca_imei: String(vx.troca_imei || ""),
-                                            });
-                                            setEditingId(v.id);
-                                          }}
-                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E]/30 hover:bg-[#FFF5EB] transition-colors"
-                                        >
-                                          💳 Editar Pagamento
-                                        </button>
                                       </div>
                                       {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO) */}
                                       {v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
