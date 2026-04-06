@@ -163,10 +163,8 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     campo("Cor", dados.corNova);
     if (dados.detalhesNovo) campo("Detalhes", dados.detalhesNovo);
     doc.moveDown(0.2);
-    p("2.2. O produto será entregue ");
-    // inline bold
-    doc.moveUp(1.2);
-    doc.font("Helvetica").text("2.2. O produto será entregue ", { continued: true });
+    doc.fontSize(10).font("Helvetica").fillColor("#222222");
+    doc.text("2.2. O produto será entregue ", { continued: true });
     doc.font("Helvetica-Bold").text("novo, original, lacrado na caixa, ", { continued: true });
     doc.font("Helvetica").text("em perfeito estado de funcionamento e conservação.");
     doc.moveDown(0.4);
@@ -217,9 +215,8 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     const refClausula = dados.temTroca ? "Cláusula II" : "Cláusula II";
     const prodLabel = `${dados.produtoNovo}`.trim();
 
-    doc.font("Helvetica").text(`${clausulaNum}.1. O valor do produto novo descrito na ${refClausula} (`);
-    doc.moveUp(1.2);
-    doc.font("Helvetica").text(`${clausulaNum}.1. O valor do produto novo descrito na ${refClausula} (`, { continued: true });
+    doc.fontSize(10).font("Helvetica").fillColor("#222222");
+    doc.text(`${clausulaNum}.1. O valor do produto novo descrito na ${refClausula} (`, { continued: true });
     doc.font("Helvetica-Bold").text(prodLabel, { continued: true });
     doc.font("Helvetica").text(") é de:");
     doc.moveDown(0.3);
