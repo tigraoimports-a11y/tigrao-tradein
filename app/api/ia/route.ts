@@ -19,7 +19,9 @@ function getSupabase() {
 
 async function coletarContexto() {
   const supabase = getSupabase();
-  // Busca dados do negócio para contexto
+  const limite30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Busca dados do negócio para contexto.
+  // Vendas: filtra direto no banco pelos últimos 30d (reduz dataset bem abaixo do max-rows).
   const [estoqueRes, vendasRes] = await Promise.all([
     supabase
       .from("estoque")
@@ -29,37 +31,19 @@ async function coletarContexto() {
     supabase
       .from("vendas")
       .select("*")
+      .gte("data", limite30d)
       .order("data", { ascending: false })
       .range(0, 49999),
   ]);
 
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string; envUrl: string; envKey: boolean } = {
-    estoqueRows: estoqueRes.data?.length || 0,
-    vendasRows: vendasRes.data?.length || 0,
-    envUrl: url ? url.replace(/https?:\/\//, "").slice(0, 30) : "MISSING",
-    envKey: hasKey,
-  };
-  if (estoqueRes.error) {
-    console.error("[IA] erro estoque:", estoqueRes.error);
-    debugInfo.estoqueErr = estoqueRes.error.message;
-  }
-  if (vendasRes.error) {
-    console.error("[IA] erro vendas:", vendasRes.error);
-    debugInfo.vendasErr = vendasRes.error.message;
-  }
+  if (estoqueRes.error) console.error("[IA] erro estoque:", estoqueRes.error);
+  if (vendasRes.error) console.error("[IA] erro vendas:", vendasRes.error);
 
   const estoqueAll = estoqueRes.data || [];
   // Filtra em JS para não excluir linhas com tipo NULL (PostgREST .not/.neq descarta NULLs)
   const estoqueData = estoqueAll.filter(i => i.tipo !== "PENDENCIA" && i.tipo !== "A_CAMINHO");
   const pendenciasData = estoqueAll.filter(i => i.tipo === "PENDENCIA");
-  // Vendas: filtra últimos 30 dias e cancelados em JS (mais robusto que .gte do PostgREST)
-  const limite30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const vendasData = (vendasRes.data || []).filter(
-    v => v.status_pagamento !== "CANCELADO" && v.data && String(v.data).slice(0, 10) >= limite30d
-  );
-  console.log(`[IA] estoque rows=${estoqueAll.length} vendas rows=${vendasRes.data?.length || 0} vendas30d=${vendasData.length}`);
+  const vendasData = (vendasRes.data || []).filter(v => v.status_pagamento !== "CANCELADO");
 
   // Agrupar estoque por modelo
   const estoqueAgrupado: Record<string, { qnt: number; preco?: number; custo?: number; min?: number }> = {};
@@ -139,7 +123,6 @@ async function coletarContexto() {
     divergenciasCusto: divergencias,
     produtosZerados: zerados,
     produtosAbaixoMinimo: abaixoMin,
-    debugInfo,
   };
 }
 
@@ -153,11 +136,9 @@ export async function POST(req: NextRequest) {
     // SEMPRE busca contexto — antes só era buscado na primeira mensagem,
     // o que fazia a IA "esquecer" os dados a partir da segunda pergunta.
     let contexto = "";
-    let debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string; envUrl?: string; envKey?: boolean } | null = null;
     {
       const dados = await coletarContexto();
       const topProdutos = dados.topProdutos;
-      debugInfo = dados.debugInfo;
 
       contexto = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
 Você tem acesso aos dados reais do sistema e ajuda o dono (André) com análises de estoque, vendas e operações.
@@ -217,7 +198,7 @@ Ajude com dúvidas sobre estoque, vendas e operações. Responda em português b
 
     const resposta = response.content[0].type === "text" ? response.content[0].text : "";
 
-    return NextResponse.json({ resposta, debug: debugInfo });
+    return NextResponse.json({ resposta });
   } catch (error) {
     console.error("Erro na IA:", error);
     const msg = error instanceof Error ? error.message : String(error);

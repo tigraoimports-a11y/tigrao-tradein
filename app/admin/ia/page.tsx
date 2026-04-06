@@ -55,10 +55,7 @@ export default function IAPage() {
 
       const data = await res.json();
       if (data.resposta) {
-        const debugLine = data.debug
-          ? `\n\n---\n_🛠 debug: estoque=${data.debug.estoqueRows} vendas=${data.debug.vendasRows} | env url=${data.debug.envUrl ?? "?"} key=${data.debug.envKey ? "OK" : "MISSING"}${data.debug.estoqueErr ? ` | erro estoque: ${data.debug.estoqueErr}` : ""}${data.debug.vendasErr ? ` | erro vendas: ${data.debug.vendasErr}` : ""}_`
-          : "";
-        setMensagens([...novaLista, { role: "assistant", content: data.resposta + debugLine }]);
+        setMensagens([...novaLista, { role: "assistant", content: data.resposta }]);
       } else if (data.error) {
         setMensagens([...novaLista, { role: "assistant", content: `❌ ${data.error}${data.detalhe ? `\n\n${data.detalhe}` : ""}` }]);
       }
