@@ -2337,8 +2337,8 @@ export default function VendasPage() {
             <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.preco_vendido)} onChange={(e) => setMoney("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
           </div>
 
-          {/* FORMA DE PAGAMENTO — inline only for single product (no cart) */}
-          {produtosCarrinho.length === 0 && (
+          {/* FORMA DE PAGAMENTO — movido para Editar em "Em Andamento" */}
+          {false && produtosCarrinho.length === 0 && (
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
@@ -2858,8 +2858,8 @@ export default function VendasPage() {
           </div>
           )}
 
-          {/* PRODUTO NA TROCA — sempre junto ao produto atual (antes do botão Adicionar) */}
-          <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+          {/* PRODUTO NA TROCA — movido para Editar em "Em Andamento" */}
+          {false && <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Valor da troca (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.produto_na_troca)} onChange={(e) => {
@@ -2968,7 +2968,7 @@ export default function VendasPage() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Botão Adicionar Produto ao Carrinho — visível quando tem produto selecionado */}
           {form.produto && (
