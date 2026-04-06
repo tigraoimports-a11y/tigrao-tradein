@@ -740,8 +740,8 @@ export async function DELETE(req: NextRequest) {
     }
   }
 
-  // Se tinha produto na troca, remover a pendência específica do estoque
-  if (venda && venda.produto_na_troca && venda.cliente) {
+  // Se tinha produto na troca (valor OU nome de produto), remover a pendência específica do estoque
+  if (venda && (venda.produto_na_troca || venda.troca_produto || venda.produto_na_troca2 || venda.troca_produto2) && venda.cliente) {
     const clienteUpper = (venda.cliente || "").toUpperCase();
     // Helper: busca pendência por produto exato, fallback por cliente+data
     async function removerPendencia(trocaProduto: string | null, label: string) {
@@ -774,9 +774,11 @@ export async function DELETE(req: NextRequest) {
       }
     }
     // 1ª troca
-    await removerPendencia(venda.troca_produto, "troca");
+    if (venda.troca_produto || venda.produto_na_troca) {
+      await removerPendencia(venda.troca_produto, "troca");
+    }
     // 2ª troca
-    if (venda.produto_na_troca2) {
+    if (venda.troca_produto2 || venda.produto_na_troca2) {
       await removerPendencia(venda.troca_produto2, "troca 2");
     }
   }
