@@ -70,6 +70,8 @@ export default function VendasPage() {
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
+  // Pode ver histórico e vendas pendentes (André, Nicolas e admins)
+  const podeVerHistorico = isAdmin || (user?.permissoes?.includes("vendas_ver") ?? false);
 
   const [msg, setMsg] = useState("");
   const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; cnpj: string; email: string; endereco: string; pessoa: string; origem: string; tipo: string } | null>(null);
@@ -1023,8 +1025,8 @@ export default function VendasPage() {
       return;
     }
 
-    // Validação: comprovante obrigatório para vendas no CARTÃO
-    if ((form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico)
+    if (podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
       setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão/débito");
       return;
     }
@@ -1604,11 +1606,11 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]" },
-            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500" },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500" },
-            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
-          ] as const).map((t) => (
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", restrito: false },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", restrito: true },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", restrito: false },
+            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", restrito: true },
+          ] as const).filter(t => !t.restrito || podeVerHistorico).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
@@ -2338,7 +2340,14 @@ export default function VendasPage() {
           {/* FORMA DE PAGAMENTO — inline only for single product (no cart) */}
           {produtosCarrinho.length === 0 && (
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-            <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+              {!podeVerHistorico && (
+                <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
+                  Deixe em branco → André ou Nicolas completam depois
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>

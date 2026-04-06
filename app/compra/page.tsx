@@ -68,6 +68,7 @@ function CompraForm() {
 
   // Payment params (vindos do StepQuote)
   // Normaliza forma de pagamento: gerador usa "Cartao Credito", form usa "Cartao de Credito"
+  const pagamentoPagoParam = searchParams.get("pagamento_pago") || "";
   const formaRaw = searchParams.get("forma") || "";
   const FORMA_MAP: Record<string, string> = {
     "Pix": "PIX", "pix": "PIX",
@@ -75,7 +76,12 @@ function CompraForm() {
     "Cartao Debito": "Debito", "Cartao+Debito": "Debito",
     "Pix + Cartao": "PIX + Cartao", "Pix+%2B+Cartao": "PIX + Cartao",
   };
-  const formaParam = FORMA_MAP[formaRaw] || formaRaw;
+  const pagamentoPagoStr = pagamentoPagoParam === "link"
+    ? "Pedido pago no Instagram via link"
+    : pagamentoPagoParam === "pix"
+    ? "Pedido pago via PIX (Instagram)"
+    : "";
+  const formaParam = pagamentoPagoStr || FORMA_MAP[formaRaw] || formaRaw;
   const parcelasParam = searchParams.get("parcelas") || "";
   const entradaPixParam = searchParams.get("entrada_pix") || "";
 
@@ -301,7 +307,7 @@ function CompraForm() {
       return;
     }
 
-    if (formaPagamento.includes("Cartao") && !parcelas) {
+    if (formaPagamento.includes("Cartao") && !parcelas && !pagamentoPagoParam) {
       alert("Selecione o numero de parcelas antes de enviar.");
       return;
     }

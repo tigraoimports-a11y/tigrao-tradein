@@ -102,6 +102,7 @@ export default function GerarLinkPage() {
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
+  const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
 
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -129,7 +130,7 @@ export default function GerarLinkPage() {
   const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaNum);
   const valorParcelar = Math.max(0, valorSemTaxa - entradaNum);
   const numParcelas = parseInt(parcelas) || 0;
-  const taxa = (forma === "Cartao Credito" && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
+  const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
   const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
   const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
   const valorTotal = entradaNum + valorComTaxa;
@@ -164,6 +165,7 @@ export default function GerarLinkPage() {
     if (trocaProduto) shortData.tp = trocaProduto;
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
+    if (pagamentoPago) shortData.pp = pagamentoPago;
 
     // Salvar no banco e gerar código curto de 6 chars
     try {
@@ -312,7 +314,7 @@ export default function GerarLinkPage() {
   const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
   const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
 
-  const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito";
+  const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Link de Pagamento";
   const showEntradaPix = forma === "Cartao Credito";
 
   return (
@@ -463,7 +465,7 @@ export default function GerarLinkPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className={showParcelas ? "" : "col-span-2"}>
             <label className={labelCls}>Forma de Pagamento</label>
-            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!["Cartao Credito", "Cartao Debito"].includes(e.target.value)) { setParcelas(""); setEntradaPix(""); } }} className={inputCls}>
+            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!["Cartao Credito", "Cartao Debito", "Link de Pagamento"].includes(e.target.value)) { setParcelas(""); setEntradaPix(""); } }} className={inputCls}>
               <option value="">-- Opcional --</option>
               <option value="Pix">Pix</option>
               <option value="Cartao Credito">Cartao Credito</option>
@@ -474,10 +476,10 @@ export default function GerarLinkPage() {
           </div>
           {showParcelas && (
             <div>
-              <label className={labelCls}>Parcelas</label>
+              <label className={labelCls}>Parcelas {forma === "Link de Pagamento" && <span className="text-xs text-[#86868B]">(máx. 12x)</span>}</label>
               <select value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={inputCls}>
                 <option value="">--</option>
-                {Array.from({ length: 21 }, (_, i) => i + 1).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                {Array.from({ length: forma === "Link de Pagamento" ? 12 : 21 }, (_, i) => i + 1).map(n => <option key={n} value={String(n)}>{n}x</option>)}
               </select>
             </div>
           )}
@@ -592,7 +594,7 @@ export default function GerarLinkPage() {
                     <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorParcelar.toLocaleString("pt-BR")}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-red-400">Taxa cartão ({taxa}%)</span>
+                    <span className="text-red-400">Taxa {forma === "Link de Pagamento" ? "link" : "cartão"} ({taxa}%)</span>
                     <span className="font-semibold text-red-400">+ R$ {(valorComTaxa - valorParcelar).toLocaleString("pt-BR")}</span>
                   </div>
                   <div className="flex justify-between">
@@ -608,6 +610,24 @@ export default function GerarLinkPage() {
             </div>
           </div>
         )}
+
+        {/* Pedido já pago */}
+        <div>
+          <label className={labelCls}>Pagamento já efetuado? <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>(opcional)</span></label>
+          <div className="flex gap-2 mt-1">
+            {([["", "Não"], ["link", "Pago via Link"], ["pix", "Pago via PIX"]] as const).map(([val, label]) => (
+              <button key={val} onClick={() => setPagamentoPago(val)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition ${pagamentoPago === val ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#1C1C1E] text-[#98989D] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#86868B] border-[#D2D2D7] hover:border-[#E8740E]")}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {pagamentoPago && (
+            <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+              No formulário o campo pagamento virá preenchido como "pedido pago no Instagram via {pagamentoPago === "link" ? "link" : "PIX"}"
+            </p>
+          )}
+        </div>
 
         <button
           onClick={gerarLink}

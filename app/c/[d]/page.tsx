@@ -10,6 +10,7 @@ const KEY_MAP: Record<string, string> = {
   sh: "shopping", h: "horario", dt: "data_entrega",
   tp: "troca_produto", tv: "troca_valor",
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
+  pp: "pagamento_pago",
 };
 
 async function resolveData(d: string): Promise<Record<string, string>> {
