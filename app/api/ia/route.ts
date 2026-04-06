@@ -52,7 +52,7 @@ async function coletarContexto() {
   // Vendas por produto (top 10)
   const vendasPorProduto: Record<string, number> = {};
   for (const v of vendasData) {
-    const key = `${v.produto}${v.storage ? " " + v.storage : ""}`.trim();
+    const key = `${v.produto}`.trim();
     vendasPorProduto[key] = (vendasPorProduto[key] || 0) + 1;
   }
   const topProdutos = Object.entries(vendasPorProduto)
