@@ -533,10 +533,11 @@ export default function VendasPage() {
 
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
-    if (isAdmin) { setVendasUnlocked(true); return; }
+    const temPermissaoVendas = user?.permissoes?.some(p => p === "vendas_ver" || p === "vendas_registrar");
+    if (isAdmin || temPermissaoVendas) { setVendasUnlocked(true); return; }
     const unlocked = sessionStorage.getItem("vendas_unlocked");
     if (unlocked === "true") setVendasUnlocked(true);
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   // Keep offline queue count in sync
   useEffect(() => {
