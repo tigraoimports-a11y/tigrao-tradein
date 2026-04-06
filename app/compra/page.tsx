@@ -244,7 +244,8 @@ function CompraForm() {
   const [dataEntrega, setDataEntrega] = useState(dataEntregaParam);
   const [formaPagamento, setFormaPagamento] = useState(formaParam);
   const [parcelas, setParcelas] = useState(parcelasParam);
-  const [editPagamento, setEditPagamento] = useState(!formaParam); // fechado se veio do trade-in
+  // Abrir forma de pagamento se: não veio forma, ou veio cartão mas sem parcelas (cliente precisa escolher)
+  const [editPagamento, setEditPagamento] = useState(!formaParam || (formaParam.includes("Cartao") && !parcelasParam));
   const [origem, setOrigem] = useState("");
   const [instagram, setInstagram] = useState(instagramParam);
   const [cepLoading, setCepLoading] = useState(false);
