@@ -2332,9 +2332,8 @@ export default function VendasPage() {
           </div>
 
           {/* Row 3: Valores */}
-          <div className="grid grid-cols-2 gap-4">
+          <div>
             <div><p className={labelCls}>Custo (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.custo)} onChange={(e) => setMoney("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
-            <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.preco_vendido)} onChange={(e) => setMoney("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
           </div>
 
           {/* FORMA DE PAGAMENTO — movido para Editar em "Em Andamento" */}
