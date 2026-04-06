@@ -343,6 +343,9 @@ export async function POST(req: NextRequest) {
   if (body.serial_no && typeof body.serial_no === "string") body.serial_no = body.serial_no.toUpperCase();
   if (body.imei && typeof body.imei === "string") body.imei = body.imei.toUpperCase();
 
+  // Se tem serial_no, força qnt=1 (serial único = 1 unidade)
+  if (body.serial_no) body.qnt = 1;
+
   // Garante custo_compra fixo no insert (igual ao custo_unitario informado, se não veio)
   const insertBody: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
   if (insertBody.custo_compra == null && insertBody.custo_unitario != null) {
@@ -457,6 +460,10 @@ export async function PATCH(req: NextRequest) {
   // Forçar serial_no e imei em caixa alta
   if (fields.serial_no && typeof fields.serial_no === "string") fields.serial_no = fields.serial_no.toUpperCase();
   if (fields.imei && typeof fields.imei === "string") fields.imei = fields.imei.toUpperCase();
+
+  // Se tem serial_no, força qnt=1
+  const serialFinal = fields.serial_no ?? antes?.serial_no;
+  if (serialFinal) fields.qnt = 1;
 
   const { error } = await supabase.from("estoque").update({
     ...fields,

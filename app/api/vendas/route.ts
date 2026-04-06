@@ -253,9 +253,10 @@ export async function POST(req: NextRequest) {
       ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
-  if (sem1 && (sem1.produto || (sem1.valor || 0) > 0 || hasTroca1Info)) {
+  if (hasTroca1Info) {
+    const sem1Final = sem1 || { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null, categoria: null, origem: null, garantia: null };
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
-    const nomeProduto1 = sem1.produto || "PRODUTO DA TROCA — IDENTIFICAR";
+    const nomeProduto1 = sem1Final.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata em caso de venda cancelada e relançada)
     const { data: existingPend1 } = await supabase.from("estoque")
       .select("id")
@@ -265,29 +266,29 @@ export async function POST(req: NextRequest) {
       .eq("status", "PENDENTE")
       .limit(1);
     if (existingPend1 && existingPend1.length > 0) {
-      await logActivity(usuario, "Pendência troca já existia", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend1[0].id);
+      await logActivity(usuario, "Pendência troca já existia", `${nomeProduto1} R$${sem1Final.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend1[0].id);
     } else {
       const { error: errSeminovo } = await supabase.from("estoque").insert({
         produto: nomeProduto1,
-        categoria: sem1.categoria || detectCategoriaSeminovo(sem1.produto),
+        categoria: sem1Final.categoria || detectCategoriaSeminovo(sem1Final.produto),
         qnt: 1,
-        custo_unitario: sem1.valor || 0,
+        custo_unitario: sem1Final.valor || 0,
         status: "PENDENTE",
         tipo: "PENDENCIA",
-        cor: sem1.cor ? String(sem1.cor).toUpperCase() : null,
-        observacao: buildObsComTags(sem1.observacao || null, sem1.grade || null, sem1.caixa || null, sem1.cabo || null, sem1.fonte || null),
-        bateria: sem1.bateria || null,
-        serial_no: sem1.serial_no || null,
-        imei: sem1.imei || null,
-        origem: sem1.origem || null,
-        garantia: sem1.garantia || null,
+        cor: sem1Final.cor ? String(sem1Final.cor).toUpperCase() : null,
+        observacao: buildObsComTags(sem1Final.observacao || null, sem1Final.grade || null, sem1Final.caixa || null, sem1Final.cabo || null, sem1Final.fonte || null),
+        bateria: sem1Final.bateria || null,
+        serial_no: sem1Final.serial_no || null,
+        imei: sem1Final.imei || null,
+        origem: sem1Final.origem || null,
+        garantia: sem1Final.garantia || null,
         cliente: nomeCliente || null,
         fornecedor: nomeCliente || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
       });
       if (errSeminovo) console.error("Erro ao criar pendencia troca 1:", errSeminovo.message);
-      else await logActivity(usuario, "Pendência troca criada (auto)", `${nomeProduto1} R$${sem1.valor} — ${body.cliente || "?"}`, "estoque");
+      else await logActivity(usuario, "Pendência troca criada (auto)", `${nomeProduto1} R$${sem1Final.valor} — ${body.cliente || "?"}`, "estoque");
     }
   }
 
@@ -300,9 +301,10 @@ export async function POST(req: NextRequest) {
       ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
       : null;
 
-  if (sem2 && (sem2.produto || (sem2.valor || 0) > 0 || hasTroca2Info)) {
+  if (hasTroca2Info) {
+    const sem2Final = sem2 || { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null, categoria: null, origem: null, garantia: null };
     const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
-    const nomeProduto2 = sem2.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
+    const nomeProduto2 = sem2Final.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata)
     const { data: existingPend2 } = await supabase.from("estoque")
       .select("id")
@@ -312,29 +314,29 @@ export async function POST(req: NextRequest) {
       .eq("status", "PENDENTE")
       .limit(1);
     if (existingPend2 && existingPend2.length > 0) {
-      await logActivity(usuario, "Pendência troca 2 já existia", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend2[0].id);
+      await logActivity(usuario, "Pendência troca 2 já existia", `${nomeProduto2} R$${sem2Final.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend2[0].id);
     } else {
       const { error: errSeminovo2 } = await supabase.from("estoque").insert({
         produto: nomeProduto2,
-        categoria: sem2.categoria || detectCategoriaSeminovo(sem2.produto),
+        categoria: sem2Final.categoria || detectCategoriaSeminovo(sem2Final.produto),
         qnt: 1,
-        custo_unitario: sem2.valor || 0,
+        custo_unitario: sem2Final.valor || 0,
         status: "PENDENTE",
         tipo: "PENDENCIA",
-        cor: sem2.cor ? String(sem2.cor).toUpperCase() : null,
-        observacao: buildObsComTags(sem2.observacao || null, sem2.grade || null, sem2.caixa || null, sem2.cabo || null, sem2.fonte || null),
-        bateria: sem2.bateria || null,
-        serial_no: sem2.serial_no || null,
-        imei: sem2.imei || null,
-        origem: sem2.origem || null,
-        garantia: sem2.garantia || null,
+        cor: sem2Final.cor ? String(sem2Final.cor).toUpperCase() : null,
+        observacao: buildObsComTags(sem2Final.observacao || null, sem2Final.grade || null, sem2Final.caixa || null, sem2Final.cabo || null, sem2Final.fonte || null),
+        bateria: sem2Final.bateria || null,
+        serial_no: sem2Final.serial_no || null,
+        imei: sem2Final.imei || null,
+        origem: sem2Final.origem || null,
+        garantia: sem2Final.garantia || null,
         cliente: nomeCliente2 || null,
         fornecedor: nomeCliente2 || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
       });
       if (errSeminovo2) console.error("Erro ao criar pendencia troca 2:", errSeminovo2.message);
-      else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${nomeProduto2} R$${sem2.valor} — ${body.cliente || "?"}`, "estoque");
+      else await logActivity(usuario, "Pendência troca 2 criada (auto)", `${nomeProduto2} R$${sem2Final.valor} — ${body.cliente || "?"}`, "estoque");
     }
   }
 
@@ -439,6 +441,7 @@ export async function PATCH(req: NextRequest) {
   delete fields._seminovo2;
   delete fields._estoque_id;
 
+  // Todos os campos de troca existem na tabela vendas após migration 20260406_vendas_troca_serial_imei
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -497,7 +500,9 @@ export async function PATCH(req: NextRequest) {
   if (data?.[0]) {
     const venda = data[0];
     const trocaFields = ["troca_produto", "troca_cor", "troca_categoria", "troca_bateria", "troca_obs", "produto_na_troca",
-                          "troca_produto2", "troca_cor2", "troca_categoria2", "troca_bateria2", "troca_obs2", "produto_na_troca2"];
+                          "troca_serial", "troca_imei", "troca_grade", "troca_caixa", "troca_cabo", "troca_fonte", "troca_pulseira", "troca_ciclos", "troca_garantia",
+                          "troca_produto2", "troca_cor2", "troca_categoria2", "troca_bateria2", "troca_obs2", "produto_na_troca2",
+                          "troca_serial2", "troca_imei2", "troca_grade2", "troca_caixa2", "troca_cabo2", "troca_fonte2", "troca_pulseira2", "troca_ciclos2", "troca_garantia2"];
     const hasTrocaChange = trocaFields.some(f => f in fields);
     if (hasTrocaChange && venda.cliente) {
       const nomeCliente = String(venda.cliente).toUpperCase();
@@ -523,8 +528,29 @@ export async function PATCH(req: NextRequest) {
           if (fields.troca_cor !== undefined) upd1.cor = fields.troca_cor ? String(fields.troca_cor).toUpperCase() : null;
           if (fields.troca_categoria) upd1.categoria = fields.troca_categoria;
           if (fields.troca_bateria !== undefined) { const b = parseInt(String(fields.troca_bateria || "")); upd1.bateria = Number.isFinite(b) ? b : null; }
-          if (fields.troca_obs !== undefined) upd1.observacao = fields.troca_obs || null;
+          // Reconstruir observacao com tags sempre que algum campo flag mudar
+          const obsFlagFields = ["troca_obs", "troca_grade", "troca_caixa", "troca_cabo", "troca_fonte", "troca_pulseira", "troca_ciclos"];
+          if (obsFlagFields.some(k => k in fields)) {
+            const obsBase = (fields.troca_obs !== undefined ? fields.troca_obs : venda.troca_obs) || "";
+            const grade = (fields.troca_grade !== undefined ? fields.troca_grade : venda.troca_grade) || "";
+            const caixa = (fields.troca_caixa !== undefined ? fields.troca_caixa : venda.troca_caixa) || "";
+            const cabo = (fields.troca_cabo !== undefined ? fields.troca_cabo : venda.troca_cabo) || "";
+            const fonte = (fields.troca_fonte !== undefined ? fields.troca_fonte : venda.troca_fonte) || "";
+            const pulseira = (fields.troca_pulseira !== undefined ? fields.troca_pulseira : venda.troca_pulseira) || "";
+            const ciclos = (fields.troca_ciclos !== undefined ? fields.troca_ciclos : venda.troca_ciclos) || "";
+            let result = String(obsBase);
+            if (grade) result += ` [GRADE_${grade === "A+" ? "APLUS" : grade}]`;
+            if (caixa === "SIM") result += " [COM_CAIXA]";
+            if (cabo === "SIM") result += " [COM_CABO]";
+            if (fonte === "SIM") result += " [COM_FONTE]";
+            if (pulseira === "SIM") result += " [COM_PULSEIRA]";
+            if (ciclos) result += ` [CICLOS:${ciclos}]`;
+            upd1.observacao = result.trim() || null;
+          }
           if (fields.produto_na_troca !== undefined) upd1.custo_unitario = parseTrocaValor(fields.produto_na_troca);
+          if (fields.troca_serial !== undefined) upd1.serial_no = fields.troca_serial ? String(fields.troca_serial).toUpperCase() : null;
+          if (fields.troca_imei !== undefined) upd1.imei = fields.troca_imei ? String(fields.troca_imei).toUpperCase() : null;
+          if (fields.troca_garantia !== undefined) upd1.garantia = fields.troca_garantia || null;
           if (Object.keys(upd1).length > 0) {
             upd1.updated_at = new Date().toISOString();
             await supabase.from("estoque").update(upd1).eq("id", p1.id);
@@ -568,6 +594,9 @@ export async function PATCH(req: NextRequest) {
           if (fields.troca_bateria2 !== undefined) { const b = parseInt(String(fields.troca_bateria2 || "")); upd2.bateria = Number.isFinite(b) ? b : null; }
           if (fields.troca_obs2 !== undefined) upd2.observacao = fields.troca_obs2 || null;
           if (fields.produto_na_troca2 !== undefined) upd2.custo_unitario = parseTrocaValor(fields.produto_na_troca2);
+          if (fields.troca_serial2 !== undefined) upd2.serial_no = fields.troca_serial2 ? String(fields.troca_serial2).toUpperCase() : null;
+          if (fields.troca_imei2 !== undefined) upd2.imei = fields.troca_imei2 ? String(fields.troca_imei2).toUpperCase() : null;
+          if (fields.troca_garantia2 !== undefined) upd2.garantia = fields.troca_garantia2 || null;
           if (Object.keys(upd2).length > 0) {
             upd2.updated_at = new Date().toISOString();
             await supabase.from("estoque").update(upd2).eq("id", p2.id);
