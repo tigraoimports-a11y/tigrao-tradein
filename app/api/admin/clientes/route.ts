@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     if (fornErr) return NextResponse.json({ error: fornErr.message }, { status: 500 });
 
     const cadastrados = new Set((fornCadastro || []).map(f => f.nome.trim().toUpperCase()));
+    const cadastroMap = new Map((fornCadastro || []).map(f => [f.nome.trim().toUpperCase(), f]));
 
     // 2) Buscar itens do estoque (com paginação)
     const estoqueQuery = supabase
@@ -59,13 +60,14 @@ export async function GET(req: NextRequest) {
       vFrom += EST_PAGE;
     }
 
-    // Agrupar por fornecedor (só cadastrados)
-    const fornMap = new Map<string, {
+    // Agrupar por fornecedor (todos — cadastrados e não cadastrados)
+    type FornEntry = {
       id: string;
       nome: string;
       contato: string | null;
       observacao: string | null;
       created_at: string;
+      cadastrado: boolean;
       total_produtos: number;
       total_investido: number;
       total_em_estoque: number;
@@ -74,7 +76,8 @@ export async function GET(req: NextRequest) {
       ultima_compra: string;
       categorias: Set<string>;
       compras: { produto: string; cor: string | null; qnt: number; custo_unitario: number; data: string; categoria: string; status: string; serial_no: string | null }[];
-    }>();
+    };
+    const fornMap = new Map<string, FornEntry>();
 
     // Inicializar todos os fornecedores cadastrados (mesmo sem compras)
     for (const fc of (fornCadastro || [])) {
@@ -82,10 +85,30 @@ export async function GET(req: NextRequest) {
       if (search && !key.includes(search.toUpperCase())) continue;
       fornMap.set(key, {
         id: fc.id, nome: fc.nome, contato: fc.contato, observacao: fc.observacao, created_at: fc.created_at,
+        cadastrado: true,
         total_produtos: 0, total_investido: 0, total_em_estoque: 0, total_vendido: 0,
         primeira_compra: "", ultima_compra: "",
         categorias: new Set(), compras: [],
       });
+    }
+
+    // Helper: garante que fornecedor existe no map (cria se necessário)
+    function ensureForn(forn: string): FornEntry | null {
+      if (search && !forn.includes(search.toUpperCase())) return null;
+      if (!fornMap.has(forn)) {
+        // Verificar se tem cadastro com nome parecido
+        const cadastro = cadastroMap.get(forn);
+        fornMap.set(forn, {
+          id: cadastro?.id || "", nome: cadastro?.nome || forn,
+          contato: cadastro?.contato || null, observacao: cadastro?.observacao || null,
+          created_at: cadastro?.created_at || "",
+          cadastrado: !!cadastro,
+          total_produtos: 0, total_investido: 0, total_em_estoque: 0, total_vendido: 0,
+          primeira_compra: "", ultima_compra: "",
+          categorias: new Set(), compras: [],
+        });
+      }
+      return fornMap.get(forn)!;
     }
 
     // Rastrear seriais/produtos já contabilizados (evitar duplicata estoque+venda)
@@ -95,9 +118,10 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const item of estoqueData as any[]) {
       const forn = (item.fornecedor || "").trim().toUpperCase();
-      if (!forn || !cadastrados.has(forn) || !fornMap.has(forn)) continue;
+      if (!forn) continue;
+      const f = ensureForn(forn);
+      if (!f) continue;
 
-      const f = fornMap.get(forn)!;
       const custo = (item.custo_unitario || 0) * (item.qnt || 1);
       f.total_produtos += item.qnt || 1;
       f.total_investido += custo;
@@ -123,14 +147,15 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const v of vendasData as any[]) {
       const forn = (v.fornecedor || "").trim().toUpperCase();
-      if (!forn || !cadastrados.has(forn) || !fornMap.has(forn)) continue;
+      if (!forn) continue;
+      const f = ensureForn(forn);
+      if (!f) continue;
 
       // Evitar duplicata com estoque
       const chave = v.serial_no ? `serial:${v.serial_no}` : `prod:${forn}:${v.produto}:${v.data}:${v.custo}`;
       if (contabilizados.has(chave)) continue;
       contabilizados.add(chave);
 
-      const f = fornMap.get(forn)!;
       const custo = Number(v.custo || 0);
       f.total_produtos += 1;
       f.total_investido += custo;
