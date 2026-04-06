@@ -19,7 +19,6 @@ async function coletarContexto() {
     supabase
       .from("vendas")
       .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
-      .gte("data", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
       .order("data", { ascending: false })
       .range(0, 49999),
   ]);
@@ -31,7 +30,12 @@ async function coletarContexto() {
   // Filtra em JS para não excluir linhas com tipo NULL (PostgREST .not/.neq descarta NULLs)
   const estoqueData = estoqueAll.filter(i => i.tipo !== "PENDENCIA" && i.tipo !== "A_CAMINHO");
   const pendenciasData = estoqueAll.filter(i => i.tipo === "PENDENCIA");
-  const vendasData = (vendasRes.data || []).filter(v => v.status_pagamento !== "CANCELADO");
+  // Vendas: filtra últimos 30 dias e cancelados em JS (mais robusto que .gte do PostgREST)
+  const limite30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const vendasData = (vendasRes.data || []).filter(
+    v => v.status_pagamento !== "CANCELADO" && v.data && String(v.data).slice(0, 10) >= limite30d
+  );
+  console.log(`[IA] estoque rows=${estoqueAll.length} vendas rows=${vendasRes.data?.length || 0} vendas30d=${vendasData.length}`);
 
   // Agrupar estoque por modelo
   const estoqueAgrupado: Record<string, { qnt: number; preco?: number; custo?: number; min?: number }> = {};
