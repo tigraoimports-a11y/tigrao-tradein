@@ -1651,7 +1651,11 @@ export default function EstoquePage() {
       "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
     const words = produto.split(/\s+/);
-    const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
+    // Para MacBook/iPad/Mac Mini a RAM também é "XXGB" — usar o ÚLTIMO match (SSD real)
+    let storageIdx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (/^\d+(GB|TB)$/i.test(words[i])) storageIdx = i;
+    }
     // Watches/AirPods: sem storage, agrupar por modelo+tamanho
     if (storageIdx === -1) {
       const sizeIdx = words.findIndex(w => /^\d+MM$/i.test(w));
@@ -3325,7 +3329,10 @@ export default function EstoquePage() {
                                       <input type="checkbox" checked={allSelected} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (allSelected) group.forEach(p => n.delete(p.id)); else group.forEach(p => n.add(p.id)); return n; })} className="accent-[#E8740E]" />
                                     </td>
                                     <td className={`px-4 py-3 text-sm font-semibold ${textPrimary}`}>
-                                      <span>{baseModel}</span>
+                                      <span>{isSingleUnit ? group[0].produto : baseModel}</span>
+                                      {isSingleUnit && group[0].cor && !group[0].produto.toUpperCase().includes((group[0].cor || "").toUpperCase()) && (
+                                        <span className={`ml-2 text-[11px] font-normal ${textSecondary}`}>{group[0].cor}</span>
+                                      )}
                                       {!isSingleUnit && (
                                         <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"}`}>
                                           {group.length} variantes
@@ -4601,7 +4608,7 @@ export default function EstoquePage() {
                             if (storageMatch) spec.mb_storage = storageMatch[1];
                             if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1];
                           }
-                          setRecatRow({ ...base, categoria: p.categoria || "IPHONES", spec, cor: p.cor || "" });
+                          setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "" });
                           setRecatMode(true);
                         } else {
                           setRecatMode(false);
