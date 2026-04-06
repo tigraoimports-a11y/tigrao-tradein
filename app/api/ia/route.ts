@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -8,24 +11,35 @@ function auth(req: NextRequest) {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function getSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 async function coletarContexto() {
+  const supabase = getSupabase();
   // Busca dados do negócio para contexto
   const [estoqueRes, vendasRes] = await Promise.all([
     supabase
       .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status, cliente, created_at")
+      .select("*")
       .order("produto")
       .range(0, 49999),
     supabase
       .from("vendas")
-      .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
+      .select("*")
       .order("data", { ascending: false })
       .range(0, 49999),
   ]);
 
-  const debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string } = {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string; envUrl: string; envKey: boolean } = {
     estoqueRows: estoqueRes.data?.length || 0,
     vendasRows: vendasRes.data?.length || 0,
+    envUrl: url ? url.replace(/https?:\/\//, "").slice(0, 30) : "MISSING",
+    envKey: hasKey,
   };
   if (estoqueRes.error) {
     console.error("[IA] erro estoque:", estoqueRes.error);
@@ -139,7 +153,7 @@ export async function POST(req: NextRequest) {
     // SEMPRE busca contexto — antes só era buscado na primeira mensagem,
     // o que fazia a IA "esquecer" os dados a partir da segunda pergunta.
     let contexto = "";
-    let debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string } | null = null;
+    let debugInfo: { estoqueRows: number; vendasRows: number; estoqueErr?: string; vendasErr?: string; envUrl?: string; envKey?: boolean } | null = null;
     {
       const dados = await coletarContexto();
       const topProdutos = dados.topProdutos;
