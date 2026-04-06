@@ -344,7 +344,9 @@ export default function ProdutoSpecFields({
       catalogo_modelo_nome: modelo.nome,
       spec: newSpec,
       cor: "",
-      produto: buildProdutoName(row.categoria, newSpec, ""),
+      produto: STRUCTURED_CATS.includes(row.categoria)
+        ? buildProdutoName(row.categoria, newSpec, "")
+        : (modelo.nome || "").toUpperCase(),
     };
     onChange(updated);
   };
