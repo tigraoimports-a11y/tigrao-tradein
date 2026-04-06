@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   }
 
-  let query = supabase.from("estoque").select("*").order("categoria").order("produto");
+  let query = supabase.from("estoque").select("*").order("categoria").order("produto").range(0, 49999);
   if (categoria) query = query.eq("categoria", categoria);
 
   const { data, error } = await query;
