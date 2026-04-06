@@ -11,6 +11,7 @@ import {
   WATCH_BAND_MODELS,
   MACBOOK_RAMS,
   MACBOOK_STORAGES,
+  MACBOOK_NUCLEOS,
   MAC_MINI_RAMS,
   MAC_MINI_STORAGES,
   CORES_POR_CATEGORIA,
@@ -608,6 +609,13 @@ export default function ProdutoSpecFields({
             <select value={row.spec.mb_storage} onChange={(e) => setSpec("mb_storage", e.target.value)} className={inputCls}>
               <option value="">— Não informar —</option>
               {ssdOptionsFinal?.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Núcleos (CPU/GPU)</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Não informar —</option>
+              {MACBOOK_NUCLEOS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>

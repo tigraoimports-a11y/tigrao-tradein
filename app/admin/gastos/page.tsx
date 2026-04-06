@@ -275,18 +275,20 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
         ? buildProdutoName(editRowState.categoria, editRowState.spec, editRowState.cor)
         : editRowState.produto;
 
-      // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
+      // Origem agora é campo próprio (estoque.origem), não vai mais no nome nem na obs.
       const originalObs = original?.observacao || null;
-      const origemOriginal = getOrigemFromObs(originalObs);
-      // Origem vem do spec.ip_origem dentro do ProdutoSpecFields
       const origemNova = editRowState.spec.ip_origem || "";
-      let nomeFinal = newProduto.toUpperCase();
-      if (origemNova !== origemOriginal.split(" ")[0]) {
-        // Remover origem antiga e inserir nova no nome
-        nomeFinal = nomeFinal.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
-        if (origemNova) nomeFinal = `${nomeFinal} ${origemNova}`;
-      }
+      // Limpar qualquer resíduo de origem que ainda esteja no nome (para rows antigas)
+      const nomeFinal = newProduto
+        .toUpperCase()
+        .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?(\s*-\s*[A-Z\s+]+)?$/i, "")
+        .trim();
       if (nomeFinal !== (original?.produto || "")) updates.produto = nomeFinal;
+      // Persistir origem no campo próprio (apenas iPhones)
+      if (editRowState.categoria === "IPHONES") {
+        const origemAtual = original?.origem || "";
+        if (origemNova !== origemAtual) updates.origem = origemNova || null;
+      }
       if (editRowState.cor !== (original?.cor || "")) updates.cor = editRowState.cor || null;
       if (editRowState.categoria !== (original?.categoria || "")) updates.categoria = editRowState.categoria;
       if (editRowState.serial_no !== (original?.serial_no || "")) updates.serial_no = editRowState.serial_no.toUpperCase() || null;
@@ -298,8 +300,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
       if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
 
-      // Observacao: condição + caixa + grade + origem (usa origemNova do spec)
-      const newObs = buildObs(editRowState.condicao || "NOVO", origemNova, editRowState.caixa, editRowState.grade);
+      // Observacao: condição + caixa + grade (origem agora vai no campo próprio)
+      const newObs = buildObs(editRowState.condicao || "NOVO", "", editRowState.caixa, editRowState.grade);
       if (newObs !== originalObs) updates.observacao = newObs;
 
       // Tipo: SEMPRE atualizado conforme condição para produtos já em estoque
@@ -656,6 +658,8 @@ export default function GastosPage() {
           serial_no: p.serial_no || null,
           observacao: obsCondicao,
           condicao: p.condicao || "NOVO",
+          // Origem do iPhone (LL/J/HN/...) vai para o campo próprio na row, não no nome nem na obs.
+          origem: p.categoria === "IPHONES" ? (p.spec.ip_origem || null) : null,
         };
       });
       payload = { gastos: gastoItems, produtos };
