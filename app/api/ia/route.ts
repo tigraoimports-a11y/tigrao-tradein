@@ -10,29 +10,27 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function coletarContexto() {
   // Busca dados do negócio para contexto
-  const [estoqueRes, vendasRes, pendenciasRes] = await Promise.all([
+  const [estoqueRes, vendasRes] = await Promise.all([
     supabase
       .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status")
-      .not("tipo", "eq", "PENDENCIA")
-      .not("tipo", "eq", "A_CAMINHO")
+      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, fornecedor, estoque_minimo, tipo, status, cliente, created_at")
       .order("produto"),
     supabase
       .from("vendas")
       .select("produto, cor, forma, banco, data, preco_vendido, vendedor, origem, status_pagamento")
       .gte("data", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
-      .neq("status_pagamento", "CANCELADO")
       .order("data", { ascending: false })
-      .limit(300),
-    supabase
-      .from("estoque")
-      .select("produto, categoria, cor, storage, qnt, preco_sugerido, custo_unitario, serial, imei, cliente, tipo, created_at")
-      .eq("tipo", "PENDENCIA"),
+      .limit(500),
   ]);
 
-  const estoqueData = estoqueRes.data || [];
-  const vendasData = vendasRes.data || [];
-  const pendenciasData = pendenciasRes.data || [];
+  if (estoqueRes.error) console.error("[IA] erro estoque:", estoqueRes.error);
+  if (vendasRes.error) console.error("[IA] erro vendas:", vendasRes.error);
+
+  const estoqueAll = estoqueRes.data || [];
+  // Filtra em JS para não excluir linhas com tipo NULL (PostgREST .not/.neq descarta NULLs)
+  const estoqueData = estoqueAll.filter(i => i.tipo !== "PENDENCIA" && i.tipo !== "A_CAMINHO");
+  const pendenciasData = estoqueAll.filter(i => i.tipo === "PENDENCIA");
+  const vendasData = (vendasRes.data || []).filter(v => v.status_pagamento !== "CANCELADO");
 
   // Agrupar estoque por modelo
   const estoqueAgrupado: Record<string, { qnt: number; preco?: number; custo?: number; min?: number }> = {};
@@ -107,14 +105,12 @@ async function coletarContexto() {
     pendenciasAntigas,
     totalVendas30d: totalVendas,
     receitaTotal30d: receitaTotal,
-    topProdutos10,
+    topProdutos,
     vendasPorVendedor,
     divergenciasCusto: divergencias,
     produtosZerados: zerados,
     produtosAbaixoMinimo: abaixoMin,
   };
-
-  function topProdutos10() { return topProdutos; }
 }
 
 export async function POST(req: NextRequest) {
@@ -129,7 +125,7 @@ export async function POST(req: NextRequest) {
     if (modo === "analise" || !historico.length) {
       // Primeira mensagem ou análise automática: busca dados completos
       const dados = await coletarContexto();
-      const topProdutos = dados.topProdutos10();
+      const topProdutos = dados.topProdutos;
 
       contexto = `Você é o assistente de IA da TigrãoImports, uma loja de eletrônicos Apple no Rio de Janeiro.
 Você tem acesso aos dados reais do sistema e ajuda o dono (André) com análises de estoque, vendas e operações.
@@ -180,7 +176,7 @@ ${Object.entries(dados.estoqueAgrupado)
     ];
 
     const response = await client.messages.create({
-      model: "claude-opus-4-5",
+      model: "claude-sonnet-4-5",
       max_tokens: 1500,
       system: contexto || `Você é o assistente de IA da TigrãoImports, loja Apple no Rio de Janeiro.
 Ajude com dúvidas sobre estoque, vendas e operações. Responda em português brasileiro, de forma clara e objetiva.`,
