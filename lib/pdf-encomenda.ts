@@ -11,6 +11,7 @@ export interface ContratoEncomendaData {
   produtoNovo: string;      // ex: "iPhone 17"
   storageNovo: string;      // ex: "512GB"
   corNova: string;          // ex: "Mist Blue (Azul névoa)"
+  detalhesNovo?: string;    // ex: "Lacrado, NF inclusa, desbloqueado"
   valorNovo: number;
 
   // Produto na troca (opcional)
@@ -157,6 +158,7 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     campo("Produto", dados.produtoNovo);
     campo("Armazenamento", dados.storageNovo);
     campo("Cor", dados.corNova);
+    if (dados.detalhesNovo) campo("Detalhes", dados.detalhesNovo);
     doc.moveDown(0.2);
     p("2.2. O produto será entregue ");
     // inline bold

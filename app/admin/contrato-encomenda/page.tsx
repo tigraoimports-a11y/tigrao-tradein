@@ -49,6 +49,7 @@ export default function ContratoEncomendaPage() {
   const [produtoNovo, setProdutoNovo] = useState("");
   const [storageNovo, setStorageNovo] = useState("");
   const [corNova, setCorNova] = useState("");
+  const [detalhesNovo, setDetalhesNovo] = useState("");
   const [valorNovo, setValorNovo] = useState("");
 
   // Troca
@@ -123,6 +124,7 @@ export default function ContratoEncomendaPage() {
           produtoNovo,
           storageNovo,
           corNova,
+          detalhesNovo: detalhesNovo || undefined,
           valorNovo: vNovo,
           temTroca,
           produtoUsado: temTroca ? produtoUsado : undefined,
@@ -222,6 +224,10 @@ export default function ContratoEncomendaPage() {
           <div>
             <label className={labelCls}>Cor</label>
             <input className={inputCls} value={corNova} onChange={e => setCorNova(e.target.value)} placeholder="Mist Blue (Azul névoa)" />
+          </div>
+          <div className="col-span-3">
+            <label className={labelCls}>Detalhes adicionais do produto <span className="text-gray-400 font-normal">(opcional)</span></label>
+            <textarea className={inputCls + " resize-none"} rows={2} value={detalhesNovo} onChange={e => setDetalhesNovo(e.target.value)} placeholder="Ex: Lacrado de fábrica, garantia Apple 1 ano, NF inclusa, desbloqueado para todas as operadoras" />
           </div>
           <div className="col-span-3 sm:col-span-1">
             <label className={labelCls}>Valor do produto novo (R$) *</label>
