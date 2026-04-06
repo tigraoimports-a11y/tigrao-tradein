@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
       imei?: string;
       observacao?: string;
       condicao?: string;
+      origem?: string | null;
     }) => ({
       produto: p.produto,
       categoria: p.categoria,
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
       serial_no: p.serial_no ? p.serial_no.toUpperCase() : null,
       imei: p.imei ? p.imei.toUpperCase() : null,
       observacao: p.observacao || null,
+      origem: p.origem || null,
       status: "A CAMINHO",
       tipo: "A_CAMINHO",
       data_compra: dataCompra,

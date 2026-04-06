@@ -412,6 +412,10 @@ interface ProdutoEstoque {
   pedido_fornecedor_id: string | null;
   origem: string | null;
   garantia: string | null;
+  reserva_cliente: string | null;
+  reserva_data: string | null;
+  reserva_para: string | null;
+  reserva_operador: string | null;
 }
 
 interface ImeiSearchResult {
@@ -589,8 +593,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "naoativados", "seminovos", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "naoativados" | "seminovos" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -615,6 +619,10 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  // Modal de reservar produto
+  const [reservaTarget, setReservaTarget] = useState<ProdutoEstoque | null>(null);
+  const [reservaForm, setReservaForm] = useState({ cliente: "", data: "", para: "", operador: "" });
+  const [reservaSaving, setReservaSaving] = useState(false);
   // Configs do catálogo para o modelo do produto no detalhe (cores por modelo específico)
   const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
   const [savedField, setSavedField] = useState<string | null>(null);
@@ -1099,8 +1107,8 @@ export default function EstoquePage() {
     switch (getBaseCat(effectiveCat)) {
       case "IPHONES": {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
-        const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : "";
-        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
+        // Origem (LL/J/HN/...) NÃO entra no nome — é gravada no campo `origem` da row.
+        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}`.toUpperCase();
       }
       case "MAC_MINI":
         const mmNucleos = spec.mm_nucleos ? ` (${spec.mm_nucleos})` : "";
@@ -1108,8 +1116,8 @@ export default function EstoquePage() {
       case "MACBOOK": {
         const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
         const tela = spec.mb_modelo === "NEO" ? spec.mb_tela || '13"' : spec.mb_tela;
-        const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
-        return `${tipo} ${spec.mb_chip}${nucleos} ${tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
+        // Núcleos NÃO entra no nome — fica apenas como spec visível nos detalhes.
+        return `${tipo} ${spec.mb_chip} ${tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
@@ -1882,14 +1890,18 @@ export default function EstoquePage() {
     setImportingInitial(false);
   };
 
-  // Filtrar por tipo
-  const novos = estoque.filter((p) => (p.tipo || "NOVO") === "NOVO");
-  const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
-  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO" && p.status !== "ESGOTADO");
-  const atacado = estoque.filter((p) => p.tipo === "ATACADO");
+  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas)
+  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente;
+  const reservados = estoque.filter(isReservado);
+
+  // Filtrar por tipo (sempre excluindo reservados)
+  const novos = estoque.filter((p) => !isReservado(p) && (p.tipo || "NOVO") === "NOVO");
+  // Seminovos agora engloba SEMINOVO + NAO_ATIVADO (aba "Não Ativados" foi removida)
+  const seminovos = estoque.filter((p) => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO");
+  const atacado = estoque.filter((p) => !isReservado(p) && p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
-  const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
-  const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
+  const pendencias = estoque.filter((p) => !isReservado(p) && p.tipo === "PENDENCIA");
+  const aCaminho = estoque.filter((p) => !isReservado(p) && p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id && !["PENDENCIA", "SEMINOVO"].includes(p.tipo));
@@ -1926,8 +1938,8 @@ export default function EstoquePage() {
     [...aCaminho, ...pedidosRecebidos];
 
   const currentList =
-    tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
+    tab === "reservas" ? reservados :
     tab === "acaminho" ? acaminhoList :
     tab === "atacado" ? atacado :
     tab === "pendencias" ? pendencias :
@@ -2320,8 +2332,8 @@ export default function EstoquePage() {
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
-            { key: "naoativados", label: "Não Ativados", count: naoAtivados.length },
             { key: "seminovos", label: "Seminovos", count: seminovos.length },
+            { key: "reservas", label: "Reservas", count: reservados.length },
             { key: "atacado", label: "Atacado", count: atacado.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
@@ -4626,6 +4638,12 @@ export default function EstoquePage() {
                       >
                         <option value="">— Sem origem —</option>
                         {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        {/* Fallback: se o valor salvo no banco não bate com nenhum option canônico
+                            (ex: formatação antiga / vinda de outro fluxo), renderiza ele mesmo
+                            como uma opção extra para o select conseguir exibi-lo. */}
+                        {p.origem && !IPHONE_ORIGENS.includes(p.origem) && (
+                          <option value={p.origem}>{p.origem}</option>
+                        )}
                       </select>
                     ) : (
                       <p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p>
@@ -5472,6 +5490,37 @@ export default function EstoquePage() {
                         Voltar ao Estoque
                       </button>
                     )}
+                    {/* Reservar / Liberar reserva */}
+                    {isAdmin && !p.reserva_cliente && p.status === "EM ESTOQUE" && (
+                      <button
+                        onClick={() => {
+                          const hoje = new Date().toISOString().slice(0, 10);
+                          setReservaForm({ cliente: "", data: hoje, para: hoje, operador: userName || "" });
+                          setReservaTarget(p);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-purple-900/30 text-purple-300 hover:bg-purple-800" : "bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Reservar
+                      </button>
+                    )}
+                    {isAdmin && p.reserva_cliente && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Liberar reserva de ${p.reserva_cliente}?`)) return;
+                          try {
+                            await apiPatch(p.id, { reserva_cliente: null, reserva_data: null, reserva_para: null, reserva_operador: null });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, reserva_cliente: null, reserva_data: null, reserva_para: null, reserva_operador: null } : x));
+                            setDetailProduct(null);
+                            setMsg(`Reserva liberada: ${p.produto}`);
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-orange-900/30 text-orange-300 hover:bg-orange-800" : "bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        Liberar Reserva
+                      </button>
+                    )}
                     <button
                       onClick={() => { setDetailProduct(null); const params = new URLSearchParams({ tab: "nova", produto: p.produto, custo: String(p.custo_unitario || 0), categoria: p.categoria || "", estoque_id: p.id }); if (p.serial_no) params.set("serial", p.serial_no); if (p.cor) params.set("cor", p.cor); if (p.fornecedor) params.set("fornecedor", p.fornecedor); window.location.href = `/admin/vendas?${params.toString()}`; }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] transition-colors"
@@ -5511,6 +5560,103 @@ export default function EstoquePage() {
 
       {/* Modal Ver Entrada — produtos que entraram juntos */}
       {entradaView && <EntradaModal entradaView={entradaView} setEntradaView={setEntradaView} setDetailProduct={setDetailProduct} setMsg={setMsg} password={password} userName={userName} dm={dm} fetchEstoque={fetchEstoque} />}
+
+      {/* Modal Reservar Produto */}
+      {reservaTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !reservaSaving && setReservaTarget(null)}>
+          <div className={`w-full max-w-md rounded-2xl p-6 ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-base font-bold ${textPrimary}`}>Reservar Produto</h3>
+              <button onClick={() => !reservaSaving && setReservaTarget(null)} className={`${textMuted} hover:${textPrimary}`}>✕</button>
+            </div>
+            <div className={`mb-4 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+              <p className={`text-sm font-semibold ${textPrimary}`}>{reservaTarget.produto}</p>
+              <p className={`text-[11px] ${textMuted}`}>{reservaTarget.cor || ""}{reservaTarget.serial_no ? ` — SN: ${reservaTarget.serial_no}` : ""}</p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Cliente *</label>
+                <input
+                  type="text"
+                  value={reservaForm.cliente}
+                  onChange={(e) => setReservaForm(f => ({ ...f, cliente: e.target.value }))}
+                  placeholder="Nome do cliente"
+                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Data da Reserva *</label>
+                  <input
+                    type="date"
+                    value={reservaForm.data}
+                    onChange={(e) => setReservaForm(f => ({ ...f, data: e.target.value }))}
+                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Para Qual Dia *</label>
+                  <input
+                    type="date"
+                    value={reservaForm.para}
+                    onChange={(e) => setReservaForm(f => ({ ...f, para: e.target.value }))}
+                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Operador *</label>
+                <input
+                  type="text"
+                  value={reservaForm.operador}
+                  onChange={(e) => setReservaForm(f => ({ ...f, operador: e.target.value }))}
+                  placeholder="Quem fez a reserva"
+                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => !reservaSaving && setReservaTarget(null)}
+                disabled={reservaSaving}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"}`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!reservaForm.cliente.trim() || !reservaForm.data || !reservaForm.para || !reservaForm.operador.trim()) {
+                    setMsg("❌ Preencha todos os campos da reserva");
+                    return;
+                  }
+                  setReservaSaving(true);
+                  try {
+                    const patch = {
+                      reserva_cliente: reservaForm.cliente.trim(),
+                      reserva_data: reservaForm.data,
+                      reserva_para: reservaForm.para,
+                      reserva_operador: reservaForm.operador.trim(),
+                    };
+                    await apiPatch(reservaTarget.id, patch);
+                    setEstoque(prev => prev.map(x => x.id === reservaTarget.id ? { ...x, ...patch } : x));
+                    setMsg(`✅ Reservado para ${patch.reserva_cliente}`);
+                    setReservaTarget(null);
+                    setDetailProduct(null);
+                  } catch (err) {
+                    setMsg("❌ " + String(err instanceof Error ? err.message : err));
+                  } finally {
+                    setReservaSaving(false);
+                  }
+                }}
+                disabled={reservaSaving}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#E8740E] text-white text-[13px] font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+              >
+                {reservaSaving ? "Salvando..." : "Confirmar Reserva"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
