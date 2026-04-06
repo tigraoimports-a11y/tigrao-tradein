@@ -4045,7 +4045,7 @@ export default function EstoquePage() {
                                           {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
                                         </td>
                                         <td colSpan={4} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
-                                          {(p.imei || p.serial_no) && <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>#{p.serial_no || p.imei}</span>}
+                                          {(p.imei || p.serial_no) && !CATS_SEM_SERIAL.includes(getBaseCat(p.categoria || "")) && <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>#{p.serial_no || p.imei}</span>}
                                         </td>
                                       </tr>
                                     );
