@@ -4,7 +4,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -347,7 +347,7 @@ export async function POST(req: NextRequest) {
     ];
 
     // Loop agêntico: Claude pode chamar tools várias vezes antes de responder.
-    const MAX_ITER = 8;
+    const MAX_ITER = 25;
     let iter = 0;
     let response = await client.messages.create({
       model: "claude-opus-4-6",
@@ -359,7 +359,9 @@ export async function POST(req: NextRequest) {
 
     while (response.stop_reason === "tool_use" && iter < MAX_ITER) {
       iter++;
+      console.log(`[IA] iter=${iter} stop=${response.stop_reason} input_tokens=${response.usage?.input_tokens} output_tokens=${response.usage?.output_tokens}`);
       const toolUses = response.content.filter(b => b.type === "tool_use");
+      console.log(`[IA] tools chamadas: ${toolUses.map(t => t.type === "tool_use" ? t.name : "").join(", ")}`);
       const toolResults = await Promise.all(
         toolUses.map(async tu => {
           if (tu.type !== "tool_use") return null;

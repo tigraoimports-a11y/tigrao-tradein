@@ -71,14 +71,22 @@ export default function IAPage() {
         }),
       });
 
-      const data = await res.json();
+      let data: { resposta?: string; error?: string; detalhe?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        const txt = await res.text().catch(() => "");
+        setMensagens([...novaLista, { role: "assistant", content: `❌ Resposta inválida do servidor (HTTP ${res.status}). ${txt.slice(0, 200)}` }]);
+        return;
+      }
       if (data.resposta) {
         setMensagens([...novaLista, { role: "assistant", content: data.resposta }]);
       } else if (data.error) {
         setMensagens([...novaLista, { role: "assistant", content: `❌ ${data.error}${data.detalhe ? `\n\n${data.detalhe}` : ""}` }]);
       }
-    } catch {
-      setMensagens([...novaLista, { role: "assistant", content: "❌ Erro ao conectar com a IA. Tente novamente." }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMensagens([...novaLista, { role: "assistant", content: `❌ Erro ao conectar com a IA: ${msg}` }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
