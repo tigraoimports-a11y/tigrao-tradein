@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
@@ -583,6 +584,7 @@ export default function GastosPage() {
   }, [password]);
 
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
+  useAutoRefetch(fetchGastos);
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));

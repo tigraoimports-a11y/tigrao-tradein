@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, editCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 
@@ -1228,6 +1229,7 @@ export default function EstoquePage() {
   }, [password]);
 
   useEffect(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
+  useAutoRefetch(useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]), !!password);
 
   // Reset estados de edição quando abre novo produto no modal
   useEffect(() => {

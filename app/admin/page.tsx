@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { proximoDiaUtil } from "@/lib/business-days";
@@ -96,6 +97,7 @@ export default function DashboardPage() {
   }, [password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   if (loading || !data) return <div className="p-8 text-center text-[#86868B]">Carregando dashboard...</div>;
 
