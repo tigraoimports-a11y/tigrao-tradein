@@ -11,6 +11,7 @@ export default function GerarLinkPage() {
   const [preco, setPreco] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
+  const [pickerIdx, setPickerIdx] = useState<number | null>(null);
 
   // Fetch preços de venda (tabela precos com categoria)
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
@@ -348,7 +349,7 @@ export default function GerarLinkPage() {
         {/* Produto — seleção do estoque ou manual */}
         <div className="flex items-center justify-between">
           <label className={labelCls}>Produto *</label>
-          <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) setCatSel(""); }} className="text-xs text-[#E8740E] font-medium hover:underline">
+          <button onClick={() => { setProdutoManual(!produtoManual); setCatSel(""); setPickerIdx(null); }} className="text-xs text-[#E8740E] font-medium hover:underline">
             {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
           </button>
         </div>
@@ -366,9 +367,47 @@ export default function GerarLinkPage() {
                     className={inputCls}
                   />
                 </div>
-                {idx > 0 && <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
+                <button
+                  onClick={() => { setPickerIdx(pickerIdx === idx ? null : idx); setCatSel(""); }}
+                  className={`shrink-0 px-2 py-2 text-xs rounded-lg border transition-colors ${pickerIdx === idx ? "bg-[#E8740E] text-white border-[#E8740E]" : "text-[#E8740E] border-[#E8740E]/40 hover:bg-[#FFF5EB]"}`}
+                  title="Selecionar do estoque"
+                >📋</button>
+                {idx > 0 && <button onClick={() => { setProdutos(produtos.filter((_, i) => i !== idx)); if (pickerIdx === idx) setPickerIdx(null); }} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
               </div>
             ))}
+            {/* Picker inline para o slot selecionado */}
+            {pickerIdx !== null && (
+              <div className={`space-y-2 p-3 rounded-xl border ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF5EB]/60"}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#E8740E]">Produto {pickerIdx + 1} — selecionar do estoque:</p>
+                  <button onClick={() => { setPickerIdx(null); setCatSel(""); }} className="text-xs text-[#86868B] hover:text-red-500">✕</button>
+                </div>
+                <select value={catSel} onChange={(e) => setCatSel(e.target.value)} className={inputCls}>
+                  <option value="">-- Categoria --</option>
+                  {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                </select>
+                {catSel && (
+                  <div className={`max-h-[250px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
+                    {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                    {produtosFiltradosPreco.map((m) => {
+                      const sel = produtos[pickerIdx] === m.nome;
+                      return (
+                        <button key={m.nome} onClick={() => {
+                          const np = [...produtos];
+                          np[pickerIdx] = sel ? "" : m.nome;
+                          setProdutos(np);
+                          if (pickerIdx === 0) { setPreco(sel ? "" : m.preco.toLocaleString("pt-BR")); setCorSel(""); }
+                          if (!sel) { setPickerIdx(null); setCatSel(""); }
+                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                          <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
@@ -411,7 +450,13 @@ export default function GerarLinkPage() {
             )}
           </div>
         )}
-        <button onClick={() => { setProdutos([...produtos, ""]); if (!produtoManual) setProdutoManual(true); }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+        <button onClick={() => {
+          const newIdx = produtos.length;
+          setProdutos([...produtos, ""]);
+          setProdutoManual(true);
+          setPickerIdx(newIdx);
+          setCatSel("");
+        }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
           <label className={labelCls}>Preco Base (R$)</label>
