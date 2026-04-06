@@ -5354,11 +5354,11 @@ export default function EstoquePage() {
                         <button
                           onClick={() => {
                             if (p.tipo === "PENDENCIA") {
-                              const erro = validarSeminovoParaEstoque(p);
-                              if (erro) { setMsg(erro); return; }
+                              handleMoverParaEstoque(p);
+                            } else {
+                              setMoveConfirmData(hojeBR());
+                              setMoveConfirmId(p.id);
                             }
-                            setMoveConfirmData(hojeBR());
-                            setMoveConfirmId(p.id);
                           }}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
                         >
@@ -5368,7 +5368,7 @@ export default function EstoquePage() {
                       )
                     )}
                     {/* Mover para Pendências — quando item está EM ESTOQUE e admin quer reclassificar como usado */}
-                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && p.tipo !== "SEMINOVO" && (
+                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && (
                       <button
                         onClick={async () => {
                           if (!confirm("Mover para Pendências (seminovo/usado)?")) return;

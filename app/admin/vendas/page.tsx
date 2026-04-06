@@ -3691,60 +3691,6 @@ export default function VendasPage() {
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
                                         <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDuplicar(v);
-                                          }}
-                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
-                                        >
-                                          📋 Duplicar
-                                        </button>
-                                        {v.produto_na_troca && parseFloat(v.produto_na_troca) > 0 && (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              const hoje = new Date().toLocaleDateString("pt-BR");
-                                              const vx = v as unknown as Record<string, unknown>;
-                                              const res = await fetch("/api/admin/contrato", {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({
-                                                  clienteNome: v.cliente,
-                                                  clienteTelefone: "—",
-                                                  aparelhoModelo: (vx.troca_produto as string) || "Aparelho na troca",
-                                                  aparelhoStorage: "",
-                                                  aparelhoIMEI: v.imei || undefined,
-                                                  condicao: "Conforme avaliação presencial",
-                                                  valorAvaliado: parseFloat(v.produto_na_troca || "0"),
-                                                  novoModelo: v.produto,
-                                                  novoStorage: "",
-                                                  novoCor: "—",
-                                                  novoPreco: v.preco_vendido,
-                                                  diferenca: v.preco_vendido - parseFloat(v.produto_na_troca || "0"),
-                                                  formaPagamento: v.forma + (v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""),
-                                                  data: hoje,
-                                                  validade: "24 horas",
-                                                }),
-                                              });
-                                              if (!res.ok) throw new Error("Erro");
-                                              const blob = await res.blob();
-                                              const url = URL.createObjectURL(blob);
-                                              const a = document.createElement("a");
-                                              a.href = url;
-                                              a.download = `contrato_${v.cliente.replace(/\s+/g, "_").toLowerCase()}.pdf`;
-                                              document.body.appendChild(a);
-                                              a.click();
-                                              document.body.removeChild(a);
-                                              URL.revokeObjectURL(url);
-                                            } catch { alert("Erro ao gerar contrato"); }
-                                          }}
-                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
-                                        >
-                                          📄 Contrato
-                                        </button>
-                                        )}
-                                        <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             // Detectar se faz parte de um grupo
@@ -4171,40 +4117,6 @@ export default function VendasPage() {
                                       </div>
                                     </div>
 
-                                    {/* Split de Pagamento Visual */}
-                                    {(() => {
-                                      const pixVal = v.entrada_pix || 0;
-                                      const especieVal = v.entrada_especie || 0;
-                                      const trocaVal = v.produto_na_troca ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
-                                      const totalVenda = v.preco_vendido || 0;
-                                      // Cartao = total minus other payment methods
-                                      const cartaoVal = Math.max(0, totalVenda - pixVal - especieVal - trocaVal);
-                                      const parts = [
-                                        { label: "PIX", value: pixVal, color: "bg-green-500", textColor: "text-green-600" },
-                                        { label: "Cartao", value: cartaoVal, color: "bg-blue-500", textColor: "text-blue-600" },
-                                        { label: "Especie", value: especieVal, color: "bg-[#E8740E]", textColor: "text-[#E8740E]" },
-                                        { label: "Troca", value: trocaVal, color: "bg-purple-500", textColor: "text-purple-600" },
-                                      ].filter(p => p.value > 0);
-                                      if (parts.length < 2) return null;
-                                      return (
-                                        <div className="md:col-span-3 space-y-2">
-                                          <h4 className="text-xs font-bold text-[#86868B] uppercase">Composicao do Pagamento</h4>
-                                          <div className="h-4 rounded-full overflow-hidden flex" style={{ backgroundColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
-                                            {parts.map((p, i) => (
-                                              <div key={i} className={`h-full ${p.color} flex items-center justify-center text-[10px] font-bold text-white`} style={{ width: `${(p.value / totalVenda) * 100}%` }}>
-                                                {Math.round((p.value / totalVenda) * 100)}%
-                                              </div>
-                                            ))}
-                                          </div>
-                                          <div className="flex flex-wrap gap-3 text-xs">
-                                            {parts.map((p, i) => (
-                                              <span key={i} className={p.textColor}>● {p.label}: <strong>R$ {p.value.toLocaleString("pt-BR")}</strong> ({Math.round((p.value / totalVenda) * 100)}%)</span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-
                                     {/* Reajustes existentes */}
                                     {Array.isArray(v.reajustes) && v.reajustes.length > 0 && (
                                       <div className="md:col-span-3 space-y-2">
@@ -4344,65 +4256,6 @@ export default function VendasPage() {
                                         </div>
                                       );
                                     })()}
-
-                                    {/* Comprovante */}
-                                    <div className="space-y-2">
-                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Comprovante</h4>
-                                      {v.comprovante_url ? (
-                                        <div>
-                                          <a href={v.comprovante_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">📎 Ver comprovante</a>
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, comprovante_url: null }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: "" } : r));
-                                            }}
-                                            className="ml-2 text-[10px] text-red-400 hover:text-red-600"
-                                          >remover</button>
-                                        </div>
-                                      ) : (
-                                        <div className="space-y-2">
-                                          <input
-                                            type="file"
-                                            accept="image/*"
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={async (e) => {
-                                              e.stopPropagation();
-                                              const file = e.target.files?.[0];
-                                              if (!file) return;
-                                              setUploadingId(v.id);
-                                              const formData = new FormData();
-                                              formData.append("file", file);
-                                              formData.append("venda_id", v.id);
-                                              try {
-                                                const res = await fetch("/api/vendas/comprovante", {
-                                                  method: "POST",
-                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                  body: formData,
-                                                });
-                                                const json = await res.json();
-                                                if (json.url) {
-                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: json.url } : r));
-                                                  setMsg("Comprovante salvo!");
-                                                } else {
-                                                  setMsg("Erro ao salvar comprovante");
-                                                }
-                                              } catch {
-                                                setMsg("Erro ao enviar arquivo");
-                                              }
-                                              setUploadingId(null);
-                                            }}
-                                            className="text-xs"
-                                          />
-                                          {uploadingId === v.id && <p className="text-[10px] text-[#86868B]">Enviando...</p>}
-                                          <p className="text-[10px] text-[#86868B]">Envie PNG/JPG do comprovante</p>
-                                        </div>
-                                      )}
-                                    </div>
 
                                     {/* NF: botão inline na fileira de STATUS acima */}
                                   </div>)}
