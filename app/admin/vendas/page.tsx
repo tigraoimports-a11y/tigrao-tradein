@@ -3441,6 +3441,11 @@ export default function VendasPage() {
                                                   entrada_pix: parseFloat(ef.entrada_pix) || 0,
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
+                                                  troca_produto: ef.troca_produto || null,
+                                                  troca_cor: ef.troca_cor || null,
+                                                  troca_bateria: ef.troca_bateria ? parseInt(ef.troca_bateria) : null,
+                                                  troca_obs: ef.troca_obs || null,
+                                                  troca_serial: ef.troca_serial || null,
                                                   valor_comprovante: parseFloat(ef.valor_comprovante) || null,
                                                   banco_alt: ef.banco_alt || null,
                                                   parc_alt: parseInt(ef.parc_alt) || null,
@@ -3573,6 +3578,34 @@ export default function VendasPage() {
                                             <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                         </div>
+                                        {/* Detalhes do produto na troca */}
+                                        {(parseFloat(ef.produto_na_troca) || 0) > 0 && (
+                                          <div className={`mt-3 p-3 rounded-lg border ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
+                                            <p className="text-[10px] font-bold text-[#86868B] uppercase mb-2">🔄 Produto na Troca</p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Produto</span>
+                                                <input type="text" value={ef.troca_produto} onChange={e => setEf("troca_produto", e.target.value)} placeholder="Ex: iPhone 13 Pro" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Cor</span>
+                                                <input type="text" value={ef.troca_cor} onChange={e => setEf("troca_cor", e.target.value)} placeholder="Ex: Preto" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Bateria %</span>
+                                                <input type="number" value={ef.troca_bateria} onChange={e => setEf("troca_bateria", e.target.value)} placeholder="Ex: 85" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Serial</span>
+                                                <input type="text" value={ef.troca_serial} onChange={e => setEf("troca_serial", e.target.value)} placeholder="Serial / IMEI" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1 col-span-2" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Observações</span>
+                                                <input type="text" value={ef.troca_obs} onChange={e => setEf("troca_obs", e.target.value)} placeholder="Arranhões, detalhes da condição..." className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                            </div>
+                                          </div>
+                                        )}
                                         {/* 2o Cartao — edição */}
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
@@ -3867,6 +3900,43 @@ export default function VendasPage() {
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
                                         >
                                           ✏️ Editar
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const vx = v as unknown as Record<string, string | number | null>;
+                                            setEditForm({
+                                              cliente: v.cliente || "",
+                                              produto: v.produto || "",
+                                              custo: String(v.custo || ""),
+                                              preco_vendido: String(v.preco_vendido || ""),
+                                              banco: v.banco || "ITAU",
+                                              forma: v.forma || "",
+                                              recebimento: v.recebimento || "D+0",
+                                              qnt_parcelas: String(v.qnt_parcelas || ""),
+                                              bandeira: v.bandeira || "",
+                                              entrada_pix: String(v.entrada_pix || ""),
+                                              banco_pix: String(vx.banco_pix || "ITAU"),
+                                              entrada_especie: String(v.entrada_especie || ""),
+                                              entrada_fiado: String(v.entrada_fiado || ""),
+                                              valor_comprovante: String(vx.valor_comprovante || ""),
+                                              banco_alt: String(vx.banco_alt || ""),
+                                              parc_alt: String(vx.parc_alt || ""),
+                                              band_alt: String(vx.band_alt || ""),
+                                              comp_alt: String(vx.comp_alt || ""),
+                                              produto_na_troca: String(v.produto_na_troca || ""),
+                                              troca_produto: String(vx.troca_produto || ""),
+                                              troca_cor: String(vx.troca_cor || ""),
+                                              troca_bateria: String(vx.troca_bateria || ""),
+                                              troca_obs: String(vx.troca_obs || ""),
+                                              troca_serial: String(vx.troca_serial || ""),
+                                              troca_imei: String(vx.troca_imei || ""),
+                                            });
+                                            setEditingId(v.id);
+                                          }}
+                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8740E] border border-[#E8740E]/30 hover:bg-[#FFF5EB] transition-colors"
+                                        >
+                                          💳 Editar Pagamento
                                         </button>
                                       </div>
                                       {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO) */}
