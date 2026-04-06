@@ -79,7 +79,9 @@ export default function GerarLinkPage() {
         if (item.cor) cores.add(item.cor.toUpperCase());
         continue;
       }
-      // Match flexível: pelo menos 3 keywords em comum (modelo + tamanho/storage)
+      // Match flexível: primeira keyword (família do produto) obrigatória + mínimo de matches
+      const firstKeyword = keywords[0];
+      if (firstKeyword && !prodEstoque.includes(firstKeyword)) continue;
       const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
       if (matchCount >= Math.min(3, keywords.length - 1)) {
         if (item.cor) cores.add(item.cor.toUpperCase());
@@ -97,6 +99,7 @@ export default function GerarLinkPage() {
   const [horario, setHorario] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
   const [desconto, setDesconto] = useState("");
+  const [temTroca, setTemTroca] = useState(false);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
@@ -285,7 +288,7 @@ export default function GerarLinkPage() {
             if (valMatch) { setTrocaValor(formatPreco(valMatch[1].replace(/\./g, ""))); }
             // Produto na troca: texto antes do valor
             const prodTroca = val.replace(/R?\$?\s*[\d.,]+/g, "").replace(/[-–]/g, "").trim();
-            if (prodTroca) setTrocaProduto(prodTroca);
+            if (prodTroca) { setTrocaProduto(prodTroca); setTemTroca(true); }
             filled++;
           }
         } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
@@ -435,31 +438,41 @@ export default function GerarLinkPage() {
         </div>
 
         {/* Troca / Trade-in */}
-        <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
-          <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
-          <div className="space-y-3">
-            <div>
-              <label className={labelCls}>Detalhes do produto na troca</label>
-              <textarea
-                value={trocaProduto}
-                onChange={(e) => setTrocaProduto(e.target.value)}
-                placeholder="Ex: iPhone 16 Plus 128GB, 100% bateria, sem marcas, com caixa e cabo, garantia Apple até Out/2026"
-                rows={3}
-                className={inputCls + " resize-none"}
-              />
+        <div className={`p-3 rounded-xl border ${temTroca && trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={temTroca}
+              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); } }}
+              className="w-4 h-4 rounded accent-[#E8740E]"
+            />
+            <span className="text-sm font-semibold text-[#1D1D1F]">Produto na troca</span>
+          </label>
+          {temTroca && (
+            <div className="space-y-3 mt-3">
+              <div>
+                <label className={labelCls}>Detalhes do produto na troca</label>
+                <textarea
+                  value={trocaProduto}
+                  onChange={(e) => setTrocaProduto(e.target.value)}
+                  placeholder="Ex: iPhone 16 Plus 128GB, 100% bateria, sem marcas, com caixa e cabo, garantia Apple até Out/2026"
+                  rows={3}
+                  className={inputCls + " resize-none"}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Valor de Avaliacao do Usado (R$)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={trocaValor}
+                  onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
+                  placeholder="Ex: 4.500"
+                  className={inputCls}
+                />
+              </div>
             </div>
-            <div>
-              <label className={labelCls}>Valor de Avaliacao do Usado (R$)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={trocaValor}
-                onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
-                placeholder="Ex: 4.500"
-                className={inputCls}
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
