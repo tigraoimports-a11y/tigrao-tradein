@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   }
 
-  let query = supabase.from("estoque").select("*").order("categoria").order("produto");
+  let query = supabase.from("estoque").select("*").order("categoria").order("produto").range(0, 49999);
   if (categoria) query = query.eq("categoria", categoria);
 
   const { data, error } = await query;
@@ -196,21 +196,21 @@ export async function POST(req: NextRequest) {
     const rows = body.rows as Record<string, unknown>[];
     if (!rows?.length) return NextResponse.json({ error: "rows required" }, { status: 400 });
 
-    // Deduplicar por (produto, cor) — mantém o último, mas soma quantidades e calcula custo médio
+    // Deduplicar por (produto, cor) — soma quantidades. NÃO calcula média aqui
+    // (balanço = custo_unitario é recalculado depois pelo endpoint recalc-balancos).
     const seen = new Map<string, Record<string, unknown>>();
     for (const r of rows) {
       const key = `${r.produto}|${r.cor ?? ""}`;
       if (seen.has(key)) {
         const existing = seen.get(key)!;
         const existQnt = Number(existing.qnt || 0);
-        const existCost = Number(existing.custo_unitario || 0);
         const newQnt = Number(r.qnt || 0);
-        const newCost = Number(r.custo_unitario || 0);
-        const totalQnt = existQnt + newQnt;
-        const avgCost = totalQnt > 0 ? Math.round(((existQnt * existCost) + (newQnt * newCost)) / totalQnt) : newCost;
-        seen.set(key, { ...r, qnt: totalQnt, custo_unitario: avgCost, updated_at: new Date().toISOString() });
+        seen.set(key, { ...existing, qnt: existQnt + newQnt, updated_at: new Date().toISOString() });
       } else {
-        seen.set(key, { ...r, updated_at: new Date().toISOString() });
+        // Garante custo_compra no primeiro insert
+        const base: Record<string, unknown> = { ...r, updated_at: new Date().toISOString() };
+        if (base.custo_compra == null) base.custo_compra = base.custo_unitario;
+        seen.set(key, base);
       }
     }
     const unique = [...seen.values()];
@@ -230,26 +230,23 @@ export async function POST(req: NextRequest) {
       const { data: existing } = await existQuery.limit(1).single();
 
       if (existing) {
-        // Merge: somar quantidade e calcular custo médio ponderado
+        // Merge: somar quantidade. NÃO recalcula custo_unitario (balanço)
+        // — use o endpoint /api/admin/recalc-balancos depois.
         const existQnt = Number(existing.qnt || 0);
-        const existCost = Number(existing.custo_unitario || 0);
         const addQnt = Number(row.qnt || 0);
-        const addCost = Number(row.custo_unitario || 0);
         const totalQnt = existQnt + addQnt;
-        const avgCost = totalQnt > 0 && existQnt > 0 && existCost > 0
-          ? Math.round(((existQnt * existCost) + (addQnt * addCost)) / totalQnt)
-          : addCost;
 
         const { error: ue } = await supabase.from("estoque").update({
           qnt: totalQnt,
-          custo_unitario: avgCost,
           status: totalQnt > 0 ? "EM ESTOQUE" : "ESGOTADO",
           updated_at: new Date().toISOString(),
         }).eq("id", existing.id);
         if (ue) errors.push(`${produto} (merge): ${ue.message}`);
         else merged++;
       } else {
-        const { error: ie } = await supabase.from("estoque").insert(row);
+        const rowIns: Record<string, unknown> = { ...row };
+        if (rowIns.custo_compra == null) rowIns.custo_compra = rowIns.custo_unitario;
+        const { error: ie } = await supabase.from("estoque").insert(rowIns);
         if (ie) errors.push(`${produto}: ${ie.message}`);
         else imported++;
       }
@@ -312,37 +309,32 @@ export async function POST(req: NextRequest) {
     const { data: existing } = await existQuery.limit(1).single();
 
     if (existing) {
-      // Merge: calcular custo médio ponderado e somar quantidade
+      // Merge: somar quantidade apenas. NÃO recalcula custo_unitario (balanço)
+      // — balanço é recalculado via endpoint /api/admin/recalc-balancos
+      // agrupando por categoria + modelo (sem cor).
       const existQnt = Number(existing.qnt || 0);
-      const existCost = Number(existing.custo_unitario || 0);
       const addQnt = Number(body.qnt || 1);
-      const addCost = Number(body.custo_unitario || 0);
       const totalQnt = existQnt + addQnt;
-      const avgCost = totalQnt > 0 && existQnt > 0 && existCost > 0
-        ? Math.round(((existQnt * existCost) + (addQnt * addCost)) / totalQnt)
-        : addCost;
 
       const { error: ue } = await supabase.from("estoque").update({
         qnt: totalQnt,
-        custo_unitario: avgCost,
         status: totalQnt > 0 ? "EM ESTOQUE" : "ESGOTADO",
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
       if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
 
       const usuario = getUsuario(req);
-      const mergeLog = `Preço médio aplicado: ${existQnt} un x R$${existCost} + ${addQnt} un x R$${addCost} = ${totalQnt} un x R$${avgCost}`;
       await logEstoque(
         usuario, "alteracao", existing.id, produtoNome,
-        "merge (qnt+custo_medio)",
-        `${existQnt}un x R$${existCost}`,
-        `${totalQnt}un x R$${avgCost}`
+        "qnt (merge)",
+        String(existQnt),
+        String(totalQnt)
       );
-      await logActivity(usuario, "Merge estoque (preço médio)", `${produtoNome}${corNome ? ` ${corNome}` : ""}: ${mergeLog}`, "estoque", existing.id);
+      await logActivity(usuario, "Merge estoque (qnt)", `${produtoNome}${corNome ? ` ${corNome}` : ""}: ${existQnt} + ${addQnt} = ${totalQnt}`, "estoque", existing.id);
 
       return NextResponse.json({
         ok: true, merged: true, id: existing.id,
-        mergeDetails: { existQnt, existCost, addQnt, addCost, totalQnt, avgCost, log: mergeLog },
+        mergeDetails: { existQnt, addQnt, totalQnt },
       });
     }
   }
@@ -351,10 +343,13 @@ export async function POST(req: NextRequest) {
   if (body.serial_no && typeof body.serial_no === "string") body.serial_no = body.serial_no.toUpperCase();
   if (body.imei && typeof body.imei === "string") body.imei = body.imei.toUpperCase();
 
-  const { data, error } = await supabase.from("estoque").insert({
-    ...body,
-    updated_at: new Date().toISOString(),
-  }).select().single();
+  // Garante custo_compra fixo no insert (igual ao custo_unitario informado, se não veio)
+  const insertBody: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
+  if (insertBody.custo_compra == null && insertBody.custo_unitario != null) {
+    insertBody.custo_compra = insertBody.custo_unitario;
+  }
+
+  const { data, error } = await supabase.from("estoque").insert(insertBody).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await logActivity(getUsuario(req), "Adicionou ao estoque", `${produtoNome}. Quantidade: ${parseInt(body.qnt) || 0}`, "estoque", data?.id);
@@ -452,28 +447,11 @@ export async function PATCH(req: NextRequest) {
   // Buscar estado anterior para o log
   const { data: antes } = await supabase.from("estoque").select("*").eq("id", id).single();
 
-  // Custo Médio Automático: quando quantidade aumenta (reposição) e novo custo é informado,
-  // calcular custo médio ponderado automaticamente
-  if (antes && fields.qnt !== undefined && fields.custo_unitario !== undefined) {
-    const existingQty = Number(antes.qnt || 0);
-    const existingCost = Number(antes.custo_unitario || 0);
-    const newQty = Number(fields.qnt);
-    const newCost = Number(fields.custo_unitario);
-
-    // Só calcula média se está AUMENTANDO a quantidade (reposição)
-    if (newQty > existingQty && existingQty > 0 && existingCost > 0 && newCost !== existingCost) {
-      const addedQty = newQty - existingQty;
-      const avgCost = Math.round(((existingQty * existingCost) + (addedQty * newCost)) / newQty);
-      fields.custo_unitario = avgCost;
-
-      // Log da operação de custo médio
-      await logEstoque(
-        usuario, "alteracao", id, antes.produto,
-        "custo_unitario (média ponderada)",
-        String(existingCost),
-        `${avgCost} (${existingQty}un x R$${existingCost} + ${addedQty}un x R$${newCost})`
-      );
-    }
+  // custo_compra é IMUTÁVEL após cadastro (custo real da compra).
+  // custo_unitario = balanço (média ponderada) só muda via endpoint /api/admin/recalc-balancos.
+  // Se o cliente tentar alterar custo_compra, preservamos o valor original.
+  if (antes && fields.custo_compra !== undefined && antes.custo_compra != null && Number(antes.custo_compra) > 0) {
+    delete fields.custo_compra;
   }
 
   // Forçar serial_no e imei em caixa alta
