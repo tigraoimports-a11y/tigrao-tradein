@@ -731,21 +731,34 @@ export default function VendasPage() {
     return result;
   };
 
-  // Recalcular preco_vendido automaticamente quando 2o cartão mudar
+  // Recalcular preco_vendido automaticamente quando 2o cartão mudar (inline, sem side effects)
   useEffect(() => {
-    if (!form.comp_alt) return;
-    const newVendido = recalcVendido({});
-    if (!newVendido) return;
+    const compAltVal = parseFloat(form.comp_alt) || 0;
+    if (compAltVal <= 0) return;
+    const compVal = parseFloat(form.valor_comprovante_input) || 0;
+    const pix = parseFloat(form.entrada_pix) || 0;
+    const esp = parseFloat(form.entrada_especie) || 0;
+    const trc1 = parseFloat(form.produto_na_troca) || 0;
+    const trc2 = parseFloat(form.produto_na_troca2) || 0;
+    const trc = trc1 + trc2;
+    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+    const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
+    let liqPrinc = 0;
+    if (compVal > 0) {
+      const tx = (form.forma === "CARTAO" || form.forma === "LINK")
+        ? getTaxa(form.forma === "LINK" ? "MERCADO_PAGO" : (form.banco || "ITAU"), form.bandeira || null, parseInt(form.qnt_parcelas) || 0, "CARTAO")
+        : form.forma === "DEBITO" ? 0.75 : 0;
+      liqPrinc = tx > 0 ? calcularLiquido(compVal, tx) : compVal;
+    }
+    const newVendido = String(Math.round(liqPrinc + liqAlt + pix + esp + trc));
     if (produtosCarrinho.length === 0) {
       setForm(f => f.preco_vendido === newVendido ? f : { ...f, preco_vendido: newVendido });
     } else if (produtosCarrinho.length === 1) {
-      // Carrinho com 1 item: atualizar o preco_vendido desse item
       setProdutosCarrinho(prev => prev.length === 1 && prev[0].preco_vendido !== newVendido
         ? [{ ...prev[0], preco_vendido: newVendido }]
         : prev);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt]);
+  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
 
   // Distribuir valor total da venda proporcionalmente ao custo de cada produto no carrinho
   const distribuirValorTotal = (totalStr: string) => {
