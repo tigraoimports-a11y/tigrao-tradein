@@ -7,6 +7,12 @@ import {
   calculateTradeInValue, getDiscountsForModel, formatBRL,
   type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts, type WarrantyBonuses,
 } from "@/lib/calculations";
+import { COR_EN_TO_PT_SIMPLES } from "@/lib/cor-pt";
+
+function corParaPT(en: string): string {
+  if (!en) return "";
+  return COR_EN_TO_PT_SIMPLES[en] || en;
+}
 
 interface StepUsedDeviceProps {
   usedValues: UsedDeviceValue[];
@@ -205,16 +211,27 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
           {coresDoModelo.length > 0 ? (
             <>
               <div ref={colorInputRef as unknown as React.RefObject<HTMLDivElement>} className="grid grid-cols-2 gap-2">
-                {coresDoModelo.map((c) => (
-                  <Btn
-                    key={c}
-                    sel={color.toUpperCase() === c.toUpperCase()}
-                    onClick={() => { setColor(c); setColorError(false); tq("color"); }}
-                    className="text-left"
-                  >
-                    {c}
-                  </Btn>
-                ))}
+                {(() => {
+                  // Deduplica cores EN que mapeiam para a mesma cor PT
+                  const seen = new Set<string>();
+                  const unique: { en: string; pt: string }[] = [];
+                  for (const c of coresDoModelo) {
+                    const pt = corParaPT(c);
+                    if (seen.has(pt)) continue;
+                    seen.add(pt);
+                    unique.push({ en: c, pt });
+                  }
+                  return unique.map(({ en, pt }) => (
+                    <Btn
+                      key={en}
+                      sel={color.toUpperCase() === pt.toUpperCase() || color.toUpperCase() === en.toUpperCase()}
+                      onClick={() => { setColor(pt); setColorError(false); tq("color"); }}
+                      className="text-left"
+                    >
+                      {pt}
+                    </Btn>
+                  ));
+                })()}
               </div>
               {colorError && (
                 <p className="text-[12px] mt-2 font-semibold" style={{ color: "var(--ti-error)" }}>Por favor, selecione a cor do aparelho.</p>
