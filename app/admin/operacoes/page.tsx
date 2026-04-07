@@ -220,6 +220,30 @@ export default function OperacoesPage() {
                                   <span className={`text-[9px] font-sans font-bold ${txtS}`}>IMEI</span> {item.imei}
                                 </button>
                               )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const codigo = item.serial_no || item.imei || "";
+                                  if (!codigo) return;
+                                  const win = window.open("", "_blank", "width=300,height=300");
+                                  if (!win) return;
+                                  const produtoNome = item.produto || "";
+                                  const cor = item.cor || "";
+                                  const serial = item.serial_no || "";
+                                  const imei = item.imei || "";
+                                  win.document.write(`<!DOCTYPE html><html><head>
+<title>Etiqueta ${codigo}</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{margin:0;padding:0;width:100%}body{font-family:Arial,Helvetica,sans-serif}.wrap{text-align:center;padding:3mm 5mm 2mm 5mm}.produto{font-size:11pt;font-weight:bold;line-height:1.2}.cor{font-size:8pt;color:#333;margin-top:1mm}.extra{font-size:6pt;color:#444;margin-top:1mm}.qr{margin:2mm auto 1mm;display:flex;justify-content:center}.cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}@page{size:62mm 45mm;margin:0}</style></head><body>
+<div class="wrap"><div class="produto">${produtoNome}</div>${cor ? `<div class="cor">${cor}</div>` : ""}${serial ? `<div class="extra">SN: ${serial}</div>` : ""}${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}<div class="qr"><canvas id="qr"></canvas></div><div class="cod">${codigo}</div></div>
+<script>var qr=qrcode(0,'M');qr.addData('${codigo}');qr.make();var canvas=document.getElementById('qr');var size=150;canvas.width=size;canvas.height=size;canvas.style.width='10mm';canvas.style.height='10mm';var ctx=canvas.getContext('2d');var cells=qr.getModuleCount();var cellSize=size/cells;ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';for(var r=0;r<cells;r++)for(var c=0;c<cells;c++)if(qr.isDark(r,c))ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);window.onload=function(){window.print();window.close();};<\/script></body></html>`);
+                                  win.document.close();
+                                }}
+                                className={`ml-auto flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20"}`}
+                                title="Imprimir etiqueta"
+                              >
+                                🏷️ Etiqueta
+                              </button>
                             </div>
                           )}
                         </div>
