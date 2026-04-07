@@ -529,6 +529,7 @@ export default function GastosPage() {
     venda_id: "",
   });
   const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
+  const [atacados, setAtacados] = useState<{ id: string; nome: string }[]>([]);
   const [vendasDoContato, setVendasDoContato] = useState<{ id: string; data: string; produto: string; preco_vendido: number }[]>([]);
   const [loadingVendas, setLoadingVendas] = useState(false);
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
@@ -588,10 +589,17 @@ export default function GastosPage() {
         }
       } catch { /* ignore */ }
       try {
-        const res = await fetch("/api/admin/clientes", { headers: { "x-admin-password": password } });
+        const res = await fetch("/api/admin/clientes?tab=clientes", { headers: { "x-admin-password": password } });
         if (res.ok) {
           const json = await res.json();
           setClientes(json.clientes ?? json.data ?? []);
+        }
+      } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/admin/clientes?tab=lojistas", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setAtacados(json.clientes ?? json.data ?? []);
         }
       } catch { /* ignore */ }
     })();
@@ -646,7 +654,7 @@ export default function GastosPage() {
         setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
         return;
       }
-      const lista = form.contato_tipo === "cliente" ? clientes : fornecedores;
+      const lista = form.contato_tipo === "cliente" ? clientes : form.contato_tipo === "atacado" ? atacados : fornecedores;
       const exists = lista.some(c => c.nome.toUpperCase() === nome);
       if (!exists) {
         setMsg(`Contato "${nome}" não está cadastrado em ${form.contato_tipo}. Cadastre primeiro.`);
@@ -951,7 +959,7 @@ export default function GastosPage() {
                     className={`${inputCls} uppercase`}
                   />
                   <datalist id="estorno-contatos">
-                    {(form.contato_tipo === "fornecedor" ? fornecedores : clientes).map((c) => (
+                    {(form.contato_tipo === "fornecedor" ? fornecedores : form.contato_tipo === "atacado" ? atacados : clientes).map((c) => (
                       <option key={c.id} value={c.nome} />
                     ))}
                   </datalist>
