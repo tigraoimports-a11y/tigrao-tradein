@@ -3049,7 +3049,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
                   <div><p className={labelCls}>Garantia</p><input value={form.troca_garantia || ""} onChange={(e) => set("troca_garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
                   <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
-                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
+                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="AB">AB (Muito bom)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
                   </select></div>
                   {(() => {
                     const tCat = form.troca_categoria || "";

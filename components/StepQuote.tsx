@@ -258,13 +258,14 @@ export default function StepQuote(p: StepQuoteProps) {
       {/* CTA — leva pro formulário de compra preenchido */}
       {(() => {
         const condLines = getAnyConditionLines(deviceType, condition);
-        const condStr = condLines.slice(0, 3).join(", ");
+        // Propagar TODAS as linhas do trade-in (bateria, caixa, peças trocadas, marcas de uso etc)
+        const condStr = condLines.join(" | ");
         // Determinar forma de pagamento pra pré-preencher
         const formaPagParam = parc === "pix" ? "PIX" : parc && entNum > 0 ? "PIX + Cartao" : parc ? "Cartao de Credito" : "";
         // Valores de troca: quando tem 2 aparelhos, usar valores individuais
         const valor1 = hasSecond && tradeInValue1 !== undefined ? tradeInValue1 : tradeInValue;
         const valor2 = hasSecond && tradeInValue2 !== undefined ? tradeInValue2 : 0;
-        const cond2Lines = hasSecond && condition2 ? getAnyConditionLines(deviceType2 || "iphone", condition2).slice(0, 3).join(", ") : "";
+        const cond2Lines = hasSecond && condition2 ? getAnyConditionLines(deviceType2 || "iphone", condition2).join(" | ") : "";
         const params = new URLSearchParams({
           produto: `${newModel} ${newStorage}`,
           preco: String(Math.round(newPrice)),

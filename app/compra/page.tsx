@@ -364,12 +364,16 @@ function CompraForm() {
 
     // Forma de pagamento com detalhes completos
     let pagStr = formaPagamento;
-    if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
+    if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
+      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} (total R$ ${fmt(parcelasCalc.total)})`;
+    } else if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
       if (entradaFinal > 0) {
         pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
       } else {
         pagStr = `R$ ${fmt(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao`;
       }
+    } else if (formaPagamento === "Link de Pagamento" && parcelas) {
+      pagStr = `Link de Pagamento — ${parcelas}x`;
     } else if (formaPagamento === "PIX") {
       pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {

@@ -647,9 +647,12 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   function toggleConfig(tipoChave: string, valor: string) {
     const key = `${tipoChave}:${valor}`;
     setConfigs((prev) => {
-      if (prev.has(key)) return prev; // Não permite desmarcar — dados fixos
       const next = new Set(prev);
-      next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   }

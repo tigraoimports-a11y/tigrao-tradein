@@ -3804,7 +3804,7 @@ export default function EstoquePage() {
                           // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
                           const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const label = traduzirCor(p.cor) || "—";
+                            const label = p.cor ? p.cor.toUpperCase().trim() : "—";
                             const key = label.toUpperCase().trim();
                             if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
                             colorSummary[key].qnt += p.qnt;
@@ -5390,6 +5390,91 @@ export default function EstoquePage() {
                           {WATCH_BAND_MODELS.map(b => <option key={b} value={b}>{b}</option>)}
                         </select>
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Especificações */}
+              {(() => {
+                const obs = p.observacao || "";
+                const nome = p.produto || "";
+                const baseCat = getBaseCat(p.categoria || "IPHONES");
+                const tag = (re: RegExp) => { const m = obs.match(re); return m ? m[1] : null; };
+                const has = (re: RegExp) => re.test(obs);
+                const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
+                const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
+                const ciclos = tag(/\[CICLOS:(\d+)\]/);
+                const ram = tag(/\[RAM:([^\]]+)\]/);
+                const ssd = tag(/\[SSD:([^\]]+)\]/);
+                const cpu = tag(/\[CPU:([^\]]+)\]/);
+                const gpu = tag(/\[GPU:([^\]]+)\]/);
+                const tela = tag(/\[TELA:([^\]]+)\]/);
+                const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
+                const band = tag(/\[BAND:([^\]]+)\]/);
+                const comCaixa = has(/\[COM_CAIXA\]/);
+                const comCabo = has(/\[COM_CABO\]/);
+                const comFonte = has(/\[COM_FONTE\]/);
+                // Inferências do nome
+                const telaNome = nome.match(/\b(11|13|14|15|16)["”]/);
+                const isCellular = /CELLULAR|CEL\b|\+CEL/i.test(nome);
+                const isWifi = /WI-?FI|WIFI/i.test(nome) && !isCellular;
+                const isGps = /\bGPS\b/i.test(nome);
+                const tamMm = nome.match(/(\d{2})\s?MM/i);
+                const origemM = nome.match(/\b(LL|JPA|HN|IN|BR)\b\s*$/i);
+                const origem = origemM ? origemM[1].toUpperCase() : null;
+                const bateriaM = nome.match(/(\d{2,3})\s?%/);
+                const bateria = bateriaM ? bateriaM[1] + "%" : null;
+                const telaFinal = tela || (telaNome ? telaNome[1] + '"' : null);
+
+                const rows: Array<[string, string]> = [];
+                const push = (l: string, v: string | null | undefined) => { if (v) rows.push([l, v]); };
+
+                if (baseCat === "IPHONES") {
+                  push("Grade", grade);
+                  push("Origem", origem);
+                  push("Bateria", bateria);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Fonte", comFonte ? "Sim" : null);
+                } else if (baseCat === "IPADS") {
+                  push("Grade", grade);
+                  push("Bateria", bateria);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Fonte", comFonte ? "Sim" : null);
+                  push("Conectividade", isCellular ? "Wi-Fi+Cell" : (isWifi ? "Wi-Fi" : null));
+                } else if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
+                  push("Grade", grade);
+                  push("Ciclos de bateria", ciclos);
+                  push("RAM", ram);
+                  push("SSD", ssd);
+                  push("CPU", cpu);
+                  push("GPU", gpu);
+                  push("Tela", telaFinal);
+                } else if (baseCat === "APPLE_WATCH") {
+                  push("Grade", grade);
+                  push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
+                  push("Conectividade", isCellular ? "GPS+Cellular" : (isGps ? "GPS" : null));
+                  push("Tamanho pulseira", pulseiraTam);
+                  push("Modelo pulseira", band);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                } else {
+                  // Outros: tudo que não foi parseado em tags conhecidas
+                  const limpo = obs.replace(/\[[^\]]*\]/g, "").trim();
+                  if (limpo) push("Observação", limpo);
+                }
+                if (rows.length === 0) return null;
+                return (
+                  <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                    <p className={`text-xs font-bold ${mP} mb-3`}>Especificações</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {rows.map(([label, value]) => (
+                        <div key={label}>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                          <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

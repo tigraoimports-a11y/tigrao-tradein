@@ -728,7 +728,14 @@ export default function EntregasPage() {
               </select>
             </div>
             <div>
-              <p className={labelCls}>Valor Base (R$)</p>
+              <p className={labelCls}>
+                Valor Base (R$){" "}
+                {valorBase > 0 ? (
+                  <span title="Valor base preenchido" className="ml-1 inline-flex items-center text-green-600">✅</span>
+                ) : (
+                  <span title="Valor base ausente — preencha ou aguarde auto-preenchimento" className="ml-1 inline-flex items-center text-amber-500">⚠️</span>
+                )}
+              </p>
               <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
             </div>
             {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") && (<>
@@ -778,6 +785,25 @@ export default function EntregasPage() {
                     <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
                   </div>
                 </div>
+                {/* Simulação automática: soma pagamentos vs valor a pagar */}
+                {(() => {
+                  const v1 = parseFloat(form.valor) || 0;
+                  const v2 = parseFloat(form.valor_2) || 0;
+                  if (!v2 || valorAPagar <= 0) return null;
+                  const soma = v1 + v2;
+                  const diff = soma - valorAPagar;
+                  const ok = Math.abs(diff) < 1;
+                  return (
+                    <div className={`mt-2 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                      <span>{ok ? "✅" : "⚠️"}</span>
+                      <span>
+                        Soma {form.forma_pagamento || "1"} (R$ {v1.toLocaleString("pt-BR")}) + {form.forma_pagamento_2} (R$ {v2.toLocaleString("pt-BR")}) = <b>R$ {soma.toLocaleString("pt-BR")}</b>
+                        {" · "}A pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
+                        {!ok && <> {" · "}Divergência: <b>R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="col-span-2 md:col-span-3">
