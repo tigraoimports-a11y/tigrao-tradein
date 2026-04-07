@@ -9,7 +9,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type ProdutoSpec } from "@/lib/produto-specs";
-import { corParaPT, corParaEN } from "@/lib/cor-pt";
+import { corParaPT, corParaEN, normalizarCoresNoTexto } from "@/lib/cor-pt";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -484,7 +484,7 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                           YELLOW: ["YELLOW", "AMARELO"], AMARELO: ["YELLOW", "AMARELO"],
                           ORANGE: ["ORANGE", "LARANJA"], LARANJA: ["ORANGE", "LARANJA"],
                         };
-                        const nomeLimpo = (p.produto || "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+                        const nomeLimpo = normalizarCoresNoTexto((p.produto || "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim());
                         const corLimpa = (p.cor || "").replace(/\[[^\]]*\]/g, "").trim();
                         const nomeUp = nomeLimpo.toUpperCase();
                         const corUp = corLimpa.toUpperCase();

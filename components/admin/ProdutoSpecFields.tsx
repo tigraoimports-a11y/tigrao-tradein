@@ -408,12 +408,16 @@ export default function ProdutoSpecFields({
             {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
           </select>
         </div>
-        {/* Linha (só iPhones) — filtro para reduzir lista de modelos */}
+        {/* Linha (só iPhones) — filtro para reduzir lista de modelos.
+            Base é o número (ou SE), variantes "e"/"Plus"/"Pro"/"Pro Max" pertencem à mesma linha. */}
         {row.categoria === "IPHONES" && categoryModelos.length > 0 && (() => {
+          const linhaOf = (nome: string): string | null => {
+            const m = nome.match(/iPhone\s*(SE|\d+)/i);
+            if (!m) return null;
+            return m[1].toUpperCase();
+          };
           const linhas = Array.from(new Set(
-            categoryModelos
-              .map((m) => { const mm = m.nome.match(/iPhone\s*(\d+\s*e?|SE)/i); return mm ? mm[1].replace(/\s+/g, "").toUpperCase() : null; })
-              .filter((x): x is string => !!x)
+            categoryModelos.map((m) => linhaOf(m.nome)).filter((x): x is string => !!x)
           )).sort((a, b) => {
             if (a === "SE") return 1; if (b === "SE") return -1;
             return parseInt(a) - parseInt(b);
@@ -430,12 +434,12 @@ export default function ProdutoSpecFields({
         })()}
         {/* Modelo — vem logo após categoria */}
         {categoryModelos.length > 0 && (() => {
+          const linhaOf = (nome: string): string | null => {
+            const m = nome.match(/iPhone\s*(SE|\d+)/i);
+            return m ? m[1].toUpperCase() : null;
+          };
           const modelosFiltrados = row.categoria === "IPHONES" && linhaFiltro
-            ? categoryModelos.filter((m) => {
-                const mm = m.nome.match(/iPhone\s*(\d+\s*e?|SE)/i);
-                const l = mm ? mm[1].replace(/\s+/g, "").toUpperCase() : "";
-                return l === linhaFiltro;
-              })
+            ? categoryModelos.filter((m) => linhaOf(m.nome) === linhaFiltro)
             : categoryModelos;
           return (
           <div>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { corParaPT, corParaEN } from "@/lib/cor-pt";
+import { corParaPT, corParaEN, setCorPTOverride } from "@/lib/cor-pt";
 
 // Traduz valores de specs em inglês pra português no display (não altera o banco).
 // A chave continua sendo a string original, então selecionar/comparar funciona igual.
@@ -53,12 +53,11 @@ function traduzirValor(valor: string, tipoChave?: string): string {
   return pt || valor;
 }
 
-/** Para tipos de cor: retorna { en, pt } para renderizar EN principal + PT cinza */
-function corEnPt(valor: string): { en: string; pt: string | null } {
+/** Para tipos de cor: retorna { en, pt } — PT é principal, EN canônico secundário */
+function corEnPt(valor: string): { en: string; pt: string } {
   const en = corParaEN(valor) || valor;
   const pt = corParaPT(valor);
-  if (!pt || pt === "—" || pt.toLowerCase() === en.toLowerCase()) return { en, pt: null };
-  return { en, pt };
+  return { en, pt: pt === "—" ? valor : pt };
 }
 
 function isCorTipo(chave?: string): boolean {
@@ -925,7 +924,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
                               <span className="text-sm text-[#1D1D1F]">
-                                {isCorTipo(cs.tipo_chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{en}{pt && <span className="ml-1 text-xs text-[#86868B]">{pt}</span>}</>; })() : traduzirValor(v.valor, cs.tipo_chave)}
+                                {isCorTipo(cs.tipo_chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{pt}<span className="ml-1 text-xs text-[#86868B]">{en}</span></>; })() : traduzirValor(v.valor, cs.tipo_chave)}
                               </span>
                             </label>
                           );
@@ -1178,7 +1177,22 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
                     <span>
-                      {isCorTipo(selectedTipo.chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{en}{pt && <span className="ml-1 text-xs text-[#86868B]">{pt}</span>}</>; })() : traduzirValor(v.valor, selectedTipo.chave)}
+                      {isCorTipo(selectedTipo.chave) ? (() => {
+                        const { en, pt } = corEnPt(v.valor);
+                        return (
+                          <>
+                            <span
+                              className="cursor-pointer hover:text-[#E8740E]"
+                              title="Clique para editar o nome em português"
+                              onClick={() => {
+                                const novoPT = prompt(`Nome em português para "${en}":`, pt);
+                                if (novoPT !== null) { setCorPTOverride(en, novoPT.trim()); reload(); }
+                              }}
+                            >{pt}</span>
+                            <span className="ml-1 text-xs text-[#86868B]">{en}</span>
+                          </>
+                        );
+                      })() : traduzirValor(v.valor, selectedTipo.chave)}
                     </span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
