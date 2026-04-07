@@ -241,6 +241,9 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
   const hasCabo = /\[COM_CABO\]/.test(obs);
   const hasFonte = /\[COM_FONTE\]/.test(obs);
   const hasPulseira = /\[COM_PULSEIRA\]/.test(obs);
+  const pulseiraTamMatch = obs.match(/\[PULSEIRA_TAM:([^\]]+)\]/);
+  const bandModelMatch = obs.match(/\[BAND:([^\]]+)\]/);
+  const watchTamanhoMatch = (item.produto || "").match(/\b(38|40|41|42|44|45|46|49)\s*MM\b/i);
   const obsLimpa = obs.replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(?:A\+|AB|A|B)|CICLOS:\d+)\]/g, "").trim();
   const isSeminovo = item.tipo_produto === "SEMINOVO" || !!gradeMatch || !!ciclosMatch || hasCaixa || hasCabo || hasFonte || hasPulseira;
   // Campos visíveis por categoria (conforme spec de seminovos)
@@ -256,7 +259,10 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
   const showCabo = !isWatch && hasCabo;
   const showPulseira = isWatch && hasPulseira;
   const showCaixa = hasCaixa;
-  const hasSpecs = isSeminovo || !!item.origem || !!item.garantia || !!gradeMatch;
+  const showWatchTamanho = isWatch && !!watchTamanhoMatch;
+  const showPulseiraTam = isWatch && !!pulseiraTamMatch;
+  const showBandModel = isWatch && !!bandModelMatch;
+  const hasSpecs = isSeminovo || !!item.origem || !!item.garantia || !!gradeMatch || showWatchTamanho || showPulseiraTam || showBandModel;
 
   const statusColor = (s: string) => {
     if (s === "EM ESTOQUE") return "text-green-600";
@@ -514,13 +520,31 @@ window.onload=function(){window.print();window.close();};
                   <p className={`text-sm ${textPrimary}`}>{item.garantia}</p>
                 </div>
               )}
+              {showWatchTamanho && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Tamanho</p>
+                  <p className={`text-sm ${textPrimary}`}>⌚ {watchTamanhoMatch![0].toUpperCase()}</p>
+                </div>
+              )}
+              {showPulseiraTam && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Tamanho Pulseira</p>
+                  <p className={`text-sm ${textPrimary}`}>{pulseiraTamMatch![1]}</p>
+                </div>
+              )}
+              {showBandModel && (
+                <div className="col-span-2">
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Modelo Pulseira</p>
+                  <p className={`text-sm ${textPrimary}`}>{bandModelMatch![1]}</p>
+                </div>
+              )}
             </div>
             {(showCaixa || showCabo || showFonte || showPulseira) && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {showCaixa && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>📦 Caixa</span>}
-                {showCabo && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔌 Cabo</span>}
-                {showFonte && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔋 Fonte</span>}
-                {showPulseira && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>⌚ Pulseira</span>}
+                {showCaixa && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">📦 Com Caixa</span>}
+                {showCabo && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">🔌 Com Cabo</span>}
+                {showFonte && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">🔋 Com Carregador</span>}
+                {showPulseira && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">⌚ Com Pulseira</span>}
               </div>
             )}
           </div>
