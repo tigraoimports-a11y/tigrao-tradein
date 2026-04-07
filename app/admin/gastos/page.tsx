@@ -10,6 +10,7 @@ import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type ProdutoSpec } from "@/lib/produto-specs";
 import { corParaPT, corParaEN, normalizarCoresNoTexto } from "@/lib/cor-pt";
+import { formatProdutoDisplay } from "@/lib/produto-display";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -470,38 +471,14 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                       return null;
                     })()}
                     <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                      {formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: p.cor, observacao: p.observacao })}
                       {(() => {
-                        const COLOR_ALIASES: Record<string, string[]> = {
-                          BLACK: ["BLACK", "PRETO"], PRETO: ["BLACK", "PRETO"],
-                          BLUE: ["BLUE", "AZUL"], AZUL: ["BLUE", "AZUL"],
-                          WHITE: ["WHITE", "BRANCO"], BRANCO: ["WHITE", "BRANCO"],
-                          GOLD: ["GOLD", "DOURADO"], DOURADO: ["GOLD", "DOURADO"],
-                          SILVER: ["SILVER", "PRATA"], PRATA: ["SILVER", "PRATA"],
-                          GREEN: ["GREEN", "VERDE"], VERDE: ["GREEN", "VERDE"],
-                          PURPLE: ["PURPLE", "ROXO"], ROXO: ["PURPLE", "ROXO"],
-                          PINK: ["PINK", "ROSA"], ROSA: ["PINK", "ROSA"],
-                          RED: ["RED", "VERMELHO"], VERMELHO: ["RED", "VERMELHO"],
-                          YELLOW: ["YELLOW", "AMARELO"], AMARELO: ["YELLOW", "AMARELO"],
-                          ORANGE: ["ORANGE", "LARANJA"], LARANJA: ["ORANGE", "LARANJA"],
-                        };
-                        const nomeLimpo = normalizarCoresNoTexto((p.produto || "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim());
-                        const corLimpa = (p.cor || "").replace(/\[[^\]]*\]/g, "").trim();
-                        const nomeUp = nomeLimpo.toUpperCase();
-                        const corUp = corLimpa.toUpperCase();
-                        const aliases = COLOR_ALIASES[corUp] || [corUp];
-                        const corJaNoNome = corUp && aliases.some(a => new RegExp(`\\b${a}\\b`).test(nomeUp));
-                        const ptSimples = corLimpa ? corParaPT(corLimpa) : "";
-                        const enOrig = corLimpa ? corParaEN(corLimpa) : null;
-                        return (
-                          <>
-                            {nomeLimpo}
-                            {corLimpa && !corJaNoNome && ptSimples && <> — {ptSimples}</>}
-                            {enOrig && ptSimples && enOrig.toLowerCase() !== ptSimples.toLowerCase() && (
-                              <span className={`ml-1 text-[11px] font-normal ${dm ? "text-[#8E8E93]" : "text-[#86868B]"}`}>{enOrig}</span>
-                            )}
-                          </>
-                        );
-                      })()}{(() => {
+                        const en = p.cor ? corParaEN(p.cor) : null;
+                        const pt = p.cor ? corParaPT(p.cor) : "";
+                        if (!en || !pt || en.toLowerCase() === pt.toLowerCase()) return null;
+                        return <span className={`ml-1 text-[11px] font-normal ${dm ? "text-[#8E8E93]" : "text-[#86868B]"}`}>{en}</span>;
+                      })()}
+                      {(() => {
                         const origem = getOrigemFromObs(p.observacao);
                         if (!origem) return "";
                         const code = origem.split(" ")[0];
