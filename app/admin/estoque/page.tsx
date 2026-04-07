@@ -530,10 +530,13 @@ function getModeloBase(produto: string, categoria: string): string {
     return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
-    // Watch: agrupar por modelo + geração + tamanho
+    // Watch: agrupar por modelo + geração + tamanho + conectividade
+    // GPS e GPS+CELL são modelos diferentes, não compartilham card/balanço
     const sizeW = p.match(/(\d{2})\s*MM/i);
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
-    // Ultra com geração (Ultra 2, Ultra 3)
+    const isCell = /\+\s*CEL|GPS\s*\+\s*CEL|CELL|CELULAR/.test(p);
+    const conn = isCell ? " GPS+CEL" : " GPS";
+    // Ultra com geração (Ultra 2, Ultra 3) — Ultra é sempre GPS+CEL, não sufixa
     const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
     if (ultraMatch) {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
@@ -541,12 +544,12 @@ function getModeloBase(produto: string, categoria: string): string {
     }
     // SE com geração (SE 2, SE 3)
     const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}`;
+    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
     // Series com número
     const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
-    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}`;
-    return `Apple Watch${sz}`;
+    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
+    return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
     // AirPods com geração
@@ -3769,15 +3772,18 @@ export default function EstoquePage() {
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
                           // Agrupar por cor pra mostrar resumo no header (em português)
-                          const colorSummary: Record<string, number> = {};
+                          // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
+                          const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const c = traduzirCor(p.cor);
-                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
+                            const label = traduzirCor(p.cor) || "—";
+                            const key = label.toUpperCase().trim();
+                            if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
+                            colorSummary[key].qnt += p.qnt;
                           });
                           return (
-                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer max-w-[300px] overflow-hidden max-h-[1.4em]`}>
-                              {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
-                                <span key={c} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer`}>
+                              {Object.values(colorSummary).sort((a,b) => a.label.localeCompare(b.label)).map((c, i) => (
+                                <span key={c.label} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{c.qnt}x {c.label}</span>
                               ))}
                             </span>
                           );
