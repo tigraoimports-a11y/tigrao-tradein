@@ -44,6 +44,34 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
+  // Card title overrides (sincronizado com a página de Estoque)
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/estoque-settings?key=card_title_overrides", { headers: { "x-admin-password": password }, cache: "no-store" })
+      .then(r => r.json())
+      .then(j => {
+        if (j.value && typeof j.value === "object") {
+          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
+          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [password]);
+  const applyCardTitleOverride = (modelo: string): string => {
+    if (cardTitleOverrides[modelo]) return cardTitleOverrides[modelo].toUpperCase();
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return modelo;
+  };
+
   // Client history state
   const [clienteHistorico, setClienteHistorico] = useState<{
     nome: string;
@@ -2305,7 +2333,7 @@ export default function VendasPage() {
                           <div key={modeloBase} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
                             {/* Header: modelo + memória */}
                             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modeloBase}</span>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{applyCardTitleOverride(modeloBase)}</span>
                               <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{totalQnt} un.</span>
                             </div>
                             {/* Cores como chips */}
