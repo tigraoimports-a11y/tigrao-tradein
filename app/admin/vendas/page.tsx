@@ -8,6 +8,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
+import { corParaPT } from "@/lib/cor-pt";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 
@@ -2351,7 +2352,7 @@ export default function VendasPage() {
                                     >
                                       <span className="flex items-center gap-2">
                                         <span className="text-[10px] text-[#86868B]">{isCorExpanded ? "▼" : "▶"}</span>
-                                        <span className="font-semibold">{cor}</span>
+                                        <span className="font-semibold">{corParaPT(cor)}</span>
                                       </span>
                                       <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#C7C7CC]"}`}>{corQnt} un.</span>
                                     </button>
@@ -4442,7 +4443,7 @@ export default function VendasPage() {
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 Produto na Troca</h4>
                                           <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                             {tProd && <p><strong>Modelo:</strong> {tProd}</p>}
-                                            {tCor && <p><strong>Cor:</strong> {tCor}</p>}
+                                            {tCor && <p><strong>Cor:</strong> {corParaPT(tCor)}</p>}
                                             {tBat && <p><strong>Bateria:</strong> {tBat}%</p>}
                                             {tSerial && <p><strong>Serial:</strong> {tSerial}</p>}
                                             {tImei && <p><strong>IMEI:</strong> {tImei}</p>}
@@ -4469,7 +4470,7 @@ export default function VendasPage() {
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 2º Produto na Troca</h4>
                                           <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                             {t2Prod && <p><strong>Modelo:</strong> {t2Prod}</p>}
-                                            {t2Cor && <p><strong>Cor:</strong> {t2Cor}</p>}
+                                            {t2Cor && <p><strong>Cor:</strong> {corParaPT(t2Cor)}</p>}
                                             {t2Bat && <p><strong>Bateria:</strong> {t2Bat}%</p>}
                                             {t2Serial && <p><strong>Serial:</strong> {t2Serial}</p>}
                                             {t2Imei && <p><strong>IMEI:</strong> {t2Imei}</p>}

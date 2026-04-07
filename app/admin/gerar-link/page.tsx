@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
+import { corParaPT } from "@/lib/cor-pt";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -549,7 +550,7 @@ export default function GerarLinkPage() {
                               {coresDisponiveis.map(cor => (
                                 <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
                                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                                >{cor}</button>
+                                >{corParaPT(cor)}</button>
                               ))}
                             </div>
                           </div>

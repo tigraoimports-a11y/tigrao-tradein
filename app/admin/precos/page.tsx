@@ -5,6 +5,7 @@ import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { getCategoriasPrecos, addCategoriaPrecos, removeCategoriaPrecos, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
+import { corParaPT } from "@/lib/cor-pt";
 
 const UsadosContent = lazy(() => import("@/app/admin/usados/page").then(m => ({ default: m.UsadosContent })));
 
@@ -1184,7 +1185,7 @@ function HistoricoPrecos() {
                       <tr key={i} className="border-b border-[#F5F5F7] last:border-0 hover:bg-[#F5F5F7] transition-colors">
                         <td className="px-4 py-2.5 text-[#86868B]">{d.data}</td>
                         <td className="px-4 py-2.5 font-medium">{d.fornecedor}</td>
-                        <td className="px-4 py-2.5">{d.produto}{d.cor ? ` ${d.cor}` : ""}</td>
+                        <td className="px-4 py-2.5">{d.produto}{d.cor ? ` ${corParaPT(d.cor)}` : ""}</td>
                         <td className="px-4 py-2.5 text-right font-semibold">{fmt(d.custo)}</td>
                         <td className="px-4 py-2.5 text-right text-[#86868B]">{d.qnt}</td>
                       </tr>

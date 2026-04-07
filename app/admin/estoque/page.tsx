@@ -35,7 +35,8 @@ function formatProdutoDisplay(p: {
   const src = `${nomeRaw} ${obs}`;
   const up = src.toUpperCase();
   const baseCat = getBaseCat(p.categoria || "IPHONES");
-  const cor = (p.cor || "").trim();
+  const corRaw = (p.cor || "").trim();
+  const cor = corRaw ? corParaPT(corRaw) : "";
 
   // Maior valor GB/TB = armazenamento (storage)
   const memMatches = [...up.matchAll(/(\d+)\s*(GB|TB)/g)];
@@ -94,21 +95,19 @@ function formatProdutoDisplay(p: {
     if (hasCell) parts.push("Wi-Fi + Cellular");
     else if (hasWifi) parts.push("Wi-Fi");
   } else if (baseCat === "MACBOOK") {
-    const chipM = up.match(/M(\d+)(\s*PRO|\s*MAX)?/);
-    const chip = chipM ? ` M${chipM[1]}${chipM[2] ? " " + chipM[2].trim().replace(/^PRO$/i, "Pro").replace(/^MAX$/i, "Max") : ""}` : "";
+    // Chip NÃO entra no nome de preview — só no modal de detalhes.
     let modelo = "MacBook";
     if (/NEO/.test(up)) modelo = "MacBook Neo";
     else if (/AIR/.test(up)) modelo = "MacBook Air";
     else if (/PRO/.test(up)) modelo = "MacBook Pro";
-    parts.push(modelo + chip);
+    parts.push(modelo);
     if (tela) parts.push(tela);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
     if (cor) parts.push(cor);
   } else if (baseCat === "MAC_MINI") {
-    const chipM = up.match(/M(\d+)(\s*PRO|\s*MAX)?/);
-    const chip = chipM ? ` M${chipM[1]}${chipM[2] ? " " + chipM[2].trim().replace(/^PRO$/i, "Pro").replace(/^MAX$/i, "Max") : ""}` : "";
-    parts.push("Mac Mini" + chip);
+    // Chip NÃO entra no nome de preview — só no modal de detalhes.
+    parts.push("Mac Mini");
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
   } else if (baseCat === "APPLE_WATCH") {
@@ -131,7 +130,7 @@ function formatProdutoDisplay(p: {
     return cleanProdutoDisplay(nomeRaw);
   }
 
-  return parts.filter(Boolean).join(" - ");
+  return parts.filter(Boolean).join(" ");
 }
 
 /** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
@@ -1185,13 +1184,49 @@ export default function EstoquePage() {
 
   // ── Catálogo dinâmico de modelos ──────────────────────────────────────────
   const [catalogoModelos, setCatalogoModelos] = useState<{id: string; categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
+  // Mapa modelo_id -> array de cores válidas (em inglês canônico)
+  const [coresPorModelo, setCoresPorModelo] = useState<Record<string, string[]>>({});
   useEffect(() => {
     if (!password) return;
     fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } })
       .then(r => r.json())
       .then(json => { if (Array.isArray(json.modelos)) setCatalogoModelos(json.modelos); })
       .catch(() => {});
+    fetch("/api/admin/catalogo?all_configs=1", { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(json => {
+        if (!Array.isArray(json.configs)) return;
+        const byModel: Record<string, string[]> = {};
+        for (const c of json.configs as { modelo_id: string; tipo_chave: string; valor: string }[]) {
+          if (c.tipo_chave !== "cores") continue;
+          if (!byModel[c.modelo_id]) byModel[c.modelo_id] = [];
+          byModel[c.modelo_id].push(c.valor);
+        }
+        setCoresPorModelo(byModel);
+      })
+      .catch(() => {});
   }, [password]);
+
+  // Dado um nome de produto, devolve as cores válidas do catálogo (em EN canônico)
+  const getCoresValidasParaProduto = useCallback((produtoNome: string, categoriaEstoque: string): string[] => {
+    if (!produtoNome || !catalogoModelos.length) return [];
+    const CAT_CATALOG: Record<string, string[]> = {
+      IPHONES: ["IPHONES"], MACBOOK: ["MACBOOK_AIR", "MACBOOK_PRO", "MACBOOK_NEO"],
+      MAC_MINI: ["MAC_MINI"], IPADS: ["IPADS"], APPLE_WATCH: ["APPLE_WATCH"],
+      AIRPODS: ["AIRPODS"], ACESSORIOS: ["ACESSORIOS"],
+    };
+    const keys = CAT_CATALOG[categoriaEstoque] || [];
+    if (!keys.length) return [];
+    const catModelos = catalogoModelos.filter(m => keys.includes(m.categoria_key) && m.ativo !== false);
+    const prodNorm = normalizeModelName(produtoNome);
+    const match = catModelos
+      .map(m => ({ m, norm: normalizeModelName(m.nome) }))
+      .filter(({ norm }) => modelMatchesProduct(norm, prodNorm))
+      .sort((a, b) => b.norm.length - a.norm.length)[0];
+    if (!match) return [];
+    return coresPorModelo[match.m.id] || [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogoModelos, coresPorModelo]);
   function getCatModelos(catKey: string, fallback: string[]): string[] {
     const db = catalogoModelos.filter(m => m.categoria_key === catKey && m.ativo !== false).sort((a, b) => a.ordem - b.ordem).map(m => m.nome);
     return db.length > 0 ? db : fallback;
@@ -3949,6 +3984,17 @@ export default function EstoquePage() {
                             if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
                             colorSummary[key].qnt += p.qnt;
                           });
+                          // Apenas para LACRADOS (tipo NOVO) — injeta cores do catálogo que zeraram como 0x
+                          const isLacrado = (items[0]?.tipo || "NOVO") === "NOVO" && items[0]?.categoria !== "SEMINOVOS";
+                          if (isLacrado) {
+                            const coresValidas = getCoresValidasParaProduto(items[0]?.produto || "", items[0]?.categoria || "");
+                            coresValidas.forEach(corEN => {
+                              const label = corParaPT(corEN);
+                              if (!label || label === "—") return;
+                              const key = label.toUpperCase().trim();
+                              if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
+                            });
+                          }
                           return (
                             <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer`}>
                               {Object.values(colorSummary).sort((a,b) => a.label.localeCompare(b.label)).map((c, i) => (
@@ -5576,7 +5622,7 @@ export default function EstoquePage() {
 
                 if (baseCat === "IPHONES") {
                   push("Armazenamento", armazenamento);
-                  push("Cor", p.cor);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Origem", origem);
                   push("Bateria", bateria);
                   if (isSeminovo) {
@@ -5592,7 +5638,7 @@ export default function EstoquePage() {
                 } else if (baseCat === "IPADS") {
                   push("Tamanho", telaFinal);
                   push("Armazenamento", armazenamento);
-                  push("Cor", p.cor);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Conectividade", isCellular ? "Wi-Fi + Cellular" : (isWifi ? "Wi-Fi" : null));
                   push("Bateria", bateria);
                   push("Caixa", comCaixa ? "Sim" : null);
@@ -5604,18 +5650,18 @@ export default function EstoquePage() {
                   push("RAM", ram);
                   push("SSD", ssd);
                   push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
-                  push("Cor", p.cor);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Ciclos de bateria", ciclos);
                   push("Grade", grade);
                 } else if (baseCat === "MAC_MINI") {
                   push("RAM", ram);
                   push("SSD", ssd);
                   push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
-                  push("Cor", p.cor);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
                 } else if (baseCat === "APPLE_WATCH") {
                   push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
                   push("Conectividade", isCellular ? "GPS + Cellular" : (isGps ? "GPS" : null));
-                  push("Cor", p.cor);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Modelo da pulseira", band);
                   push("Tamanho da pulseira", pulseiraTam);
                   push("Caixa", comCaixa ? "Sim" : null);

@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface Encomenda {
   id: string;
@@ -195,7 +196,7 @@ export default function EncomendasPage() {
                         <a href={`https://wa.me/${enc.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="ml-1 text-green-500 text-xs">WA</a>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{enc.produto}{enc.cor ? ` (${enc.cor})` : ""}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{enc.produto}{enc.cor ? ` (${corParaPT(enc.cor)})` : ""}</td>
                     <td className="px-4 py-3 font-medium">{fmt(enc.valor_venda)}</td>
                     <td className="px-4 py-3 text-green-600">{enc.sinal_recebido ? fmt(enc.sinal_recebido) : "—"}</td>
                     <td className="px-4 py-3 text-[#E8740E] font-bold">{fmt(enc.valor_venda - (enc.sinal_recebido || 0))}</td>

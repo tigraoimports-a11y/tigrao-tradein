@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS, CAT_LABELS } from "@/lib/produto-specs";
+import { corParaPT } from "@/lib/cor-pt";
 import { QRCodeCanvas } from "qrcode.react";
 
 interface ProdutoEstoque {
@@ -98,7 +99,7 @@ function EtiquetaPreco({
         </p>
         {produto.cor && tamanho !== "pequena" && (
           <p className="text-gray-500" style={{ fontSize: config.fontSize.serial, marginTop: "0.5mm" }}>
-            {produto.cor}
+            {corParaPT(produto.cor)}
           </p>
         )}
       </div>
@@ -340,7 +341,7 @@ export default function EtiquetasPrecoPage() {
       <div class="wrap" ${idx < produtosSelecionados.length - 1 ? 'style="page-break-after:always"' : ''}>
         <div class="marca">TIGRAO IMPORTS</div>
         <div class="produto">${p.produto}</div>
-        ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+        ${p.cor ? `<div class="cor">${corParaPT(p.cor)}</div>` : ""}
         <div class="preco">${formatPrice(precoVal)}</div>
         <div class="pix">a vista no PIX</div>
         <div class="qr"><canvas id="qr-${idx}" data-qr="${qrData.replace(/"/g, "&quot;")}"></canvas></div>
@@ -556,7 +557,7 @@ export default function EtiquetasPrecoPage() {
                           <p className="font-semibold text-gray-900">{p.produto}</p>
                           <p className="text-xs text-gray-400">{CAT_LABELS[p.categoria] || p.categoria} {p.tipo === "SEMINOVO" && <span className="text-amber-500 font-semibold">SEMINOVO</span>}</p>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{p.cor || "—"}</td>
+                        <td className="px-4 py-3 text-gray-600">{corParaPT(p.cor)}</td>
                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                           {p.serial_no || p.imei || "—"}
                         </td>
