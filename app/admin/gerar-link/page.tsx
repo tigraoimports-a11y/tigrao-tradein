@@ -114,6 +114,9 @@ export default function GerarLinkPage() {
   const [temTroca, setTemTroca] = useState(false);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
+  const [temSegundaTroca, setTemSegundaTroca] = useState(false);
+  const [trocaProduto2, setTrocaProduto2] = useState("");
+  const [trocaValor2, setTrocaValor2] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
@@ -128,6 +131,7 @@ export default function GerarLinkPage() {
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
   const rawTrocaVal = trocaValor.replace(/\./g, "").replace(",", ".");
+  const rawTrocaVal2 = trocaValor2.replace(/\./g, "").replace(",", ".");
 
   // Taxas de parcelamento (mesma tabela do sistema)
   const TAXAS: Record<number, number> = {
@@ -141,8 +145,10 @@ export default function GerarLinkPage() {
   const precoBase = parseFloat(rawPreco) || 0;
   const descontoNum = parseFloat(desconto.replace(/\./g, "").replace(",", ".")) || 0;
   const trocaNum = parseFloat(rawTrocaVal) || 0;
+  const trocaNum2 = parseFloat(rawTrocaVal2) || 0;
+  const trocaTotal = trocaNum + trocaNum2;
   const entradaNum = parseFloat(rawEntrada) || 0;
-  const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaNum);
+  const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaTotal);
   const valorParcelar = Math.max(0, valorSemTaxa - entradaNum);
   const numParcelas = parseInt(parcelas) || 0;
   const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
@@ -180,6 +186,9 @@ export default function GerarLinkPage() {
     if (trocaProduto) shortData.tp = trocaProduto;
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
+    if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
+    const rawTroca2Data = trocaValor2.replace(/\./g, "").replace(",", ".");
+    if (temSegundaTroca && rawTroca2Data && rawTroca2Data !== "0") shortData.tv2 = rawTroca2Data;
     if (pagamentoPago) shortData.pp = pagamentoPago;
 
     // Salvar no banco e gerar código curto de 6 chars
@@ -507,7 +516,7 @@ export default function GerarLinkPage() {
             <input
               type="checkbox"
               checked={temTroca}
-              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); } }}
+              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); } }}
               className="w-4 h-4 rounded accent-[#E8740E]"
             />
             <span className="text-sm font-semibold text-[#1D1D1F]">Produto na troca</span>
@@ -515,7 +524,7 @@ export default function GerarLinkPage() {
           {temTroca && (
             <div className="space-y-3 mt-3">
               <div>
-                <label className={labelCls}>Detalhes do produto na troca</label>
+                <label className={labelCls}>{temSegundaTroca ? "Detalhes do 1º produto na troca" : "Detalhes do produto na troca"}</label>
                 <textarea
                   value={trocaProduto}
                   onChange={(e) => setTrocaProduto(e.target.value)}
@@ -525,7 +534,7 @@ export default function GerarLinkPage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Valor de Avaliacao do Usado (R$)</label>
+                <label className={labelCls}>Valor de Avaliacao do {temSegundaTroca ? "1º " : ""}Usado (R$)</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -535,6 +544,52 @@ export default function GerarLinkPage() {
                   className={inputCls}
                 />
               </div>
+
+              {!temSegundaTroca && (
+                <button
+                  type="button"
+                  onClick={() => setTemSegundaTroca(true)}
+                  className="text-xs text-[#E8740E] hover:underline font-semibold"
+                >
+                  ➕ Adicionar 2º produto na troca
+                </button>
+              )}
+
+              {temSegundaTroca && (
+                <div className="space-y-3 pt-3 border-t border-dashed border-[#E8740E]/40">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[#E8740E]">2º Produto na troca</span>
+                    <button
+                      type="button"
+                      onClick={() => { setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); }}
+                      className="text-xs text-[#86868B] hover:text-red-500"
+                    >
+                      ✕ Remover
+                    </button>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Detalhes do 2º produto na troca</label>
+                    <textarea
+                      value={trocaProduto2}
+                      onChange={(e) => setTrocaProduto2(e.target.value)}
+                      placeholder="Ex: Apple Watch Series 9 45mm, bateria 98%, com caixa"
+                      rows={3}
+                      className={inputCls + " resize-none"}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Valor de Avaliacao do 2º Usado (R$)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={trocaValor2}
+                      onChange={(e) => setTrocaValor2(formatPreco(e.target.value))}
+                      placeholder="Ex: 1.800"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -648,11 +703,17 @@ export default function GerarLinkPage() {
               )}
               {trocaNum > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-green-500">Troca (avaliação)</span>
+                  <span className="text-green-500">{trocaNum2 > 0 ? "1ª Troca (avaliação)" : "Troca (avaliação)"}</span>
                   <span className="font-semibold text-green-500">- R$ {trocaNum.toLocaleString("pt-BR")}</span>
                 </div>
               )}
-              {trocaNum > 0 && (
+              {trocaNum2 > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-green-500">2ª Troca (avaliação)</span>
+                  <span className="font-semibold text-green-500">- R$ {trocaNum2.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+              {trocaTotal > 0 && (
                 <div className="flex justify-between">
                   <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Subtotal</span>
                   <span className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>R$ {valorSemTaxa.toLocaleString("pt-BR")}</span>
