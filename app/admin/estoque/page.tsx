@@ -791,8 +791,11 @@ export default function EstoquePage() {
         if (cancelled) return;
         if (j.value && typeof j.value === "object" && Object.keys(j.value).length > 0) {
           // Merge remoto com local (local tem prioridade se ainda não sincronizado)
-          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
-          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
+          setCardTitleOverrides(prev => {
+            const merged = { ...(j.value as Record<string, string>), ...prev };
+            try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
         } else if (migrate) {
           // Migrar do localStorage se existir (só na 1ª carga)
           try {
@@ -842,14 +845,27 @@ export default function EstoquePage() {
         if (!r.ok) {
           const j = await r.json().catch(() => ({}));
           console.error("[card_title_overrides] save failed", j);
+          alert(`Erro ao salvar nome do card no banco: ${j.error || r.statusText}. O nome ficou salvo localmente neste navegador.`);
         }
       })
-      .catch(err => console.error("[card_title_overrides] save error", err));
+      .catch(err => {
+        console.error("[card_title_overrides] save error", err);
+        alert(`Erro de rede ao salvar nome do card. Ficou salvo localmente. Detalhe: ${err?.message || err}`);
+      });
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
   function getCardTitle(modelo: string): string {
-    return (cardTitleOverrides[modelo] || modelo).toUpperCase();
+    // 1. Match exato
+    if (cardTitleOverrides[modelo]) return cardTitleOverrides[modelo].toUpperCase();
+    // 2. Fallback: chave antiga sem sufixo " GPS+CEL" ou " GPS" (Apple Watch agrupava sem connectivity antes)
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return modelo.toUpperCase();
   }
 
   // Drag-and-drop para reordenar
@@ -3652,10 +3668,23 @@ export default function EstoquePage() {
                     .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
+                  // Normaliza cor: traduz PT→EN e remove código de origem (LL/BR/etc)
+                  const canonicalCor = (cor: string | null | undefined, categoria: string | null | undefined): string => {
+                    if (!cor) return "";
+                    const isIphone = (categoria || "").toUpperCase() === "IPHONES" || !categoria;
+                    const c = isIphone ? stripCode(cor) : cor;
+                    const upper = c.toUpperCase().trim();
+                    return (PT_TO_EN[upper] || upper).toUpperCase();
+                  };
                   items.forEach((p) => {
                     // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
                     if (tab === "seminovos" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto).toUpperCase();
+                    // Agrupar por modelo base (sem cor) + cor canônica (PT→EN)
+                    // Isso evita duplicação quando o produto foi cadastrado com cor diferente
+                    // (ex: "IPHONE 17 PRO 256GB COSMIC ORANGE" vs "IPHONE 17 PRO 256GB LARANJA")
+                    const baseModelo = getModeloBase(p.produto, p.categoria).toUpperCase();
+                    const corCanon = canonicalCor(p.cor, p.categoria);
+                    const groupKey = `${baseModelo}|||${corCanon}`;
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
@@ -3775,7 +3804,7 @@ export default function EstoquePage() {
                           // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
                           const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const label = traduzirCor(p.cor) || "—";
+                            const label = p.cor ? p.cor.toUpperCase().trim() : "—";
                             const key = label.toUpperCase().trim();
                             if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
                             colorSummary[key].qnt += p.qnt;
@@ -3949,7 +3978,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
+                                          {displayNomeProduto(prodItems[0]?.produto || prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {/* Badge de núcleos para MacBooks */}
                                           {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
                                             const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
@@ -5365,6 +5394,91 @@ export default function EstoquePage() {
                   </div>
                 );
               })()}
+              {/* Especificações */}
+              {(() => {
+                const obs = p.observacao || "";
+                const nome = p.produto || "";
+                const baseCat = getBaseCat(p.categoria || "IPHONES");
+                const tag = (re: RegExp) => { const m = obs.match(re); return m ? m[1] : null; };
+                const has = (re: RegExp) => re.test(obs);
+                const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
+                const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
+                const ciclos = tag(/\[CICLOS:(\d+)\]/);
+                const ram = tag(/\[RAM:([^\]]+)\]/);
+                const ssd = tag(/\[SSD:([^\]]+)\]/);
+                const cpu = tag(/\[CPU:([^\]]+)\]/);
+                const gpu = tag(/\[GPU:([^\]]+)\]/);
+                const tela = tag(/\[TELA:([^\]]+)\]/);
+                const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
+                const band = tag(/\[BAND:([^\]]+)\]/);
+                const comCaixa = has(/\[COM_CAIXA\]/);
+                const comCabo = has(/\[COM_CABO\]/);
+                const comFonte = has(/\[COM_FONTE\]/);
+                // Inferências do nome
+                const telaNome = nome.match(/\b(11|13|14|15|16)["”]/);
+                const isCellular = /CELLULAR|CEL\b|\+CEL/i.test(nome);
+                const isWifi = /WI-?FI|WIFI/i.test(nome) && !isCellular;
+                const isGps = /\bGPS\b/i.test(nome);
+                const tamMm = nome.match(/(\d{2})\s?MM/i);
+                const origemM = nome.match(/\b(LL|JPA|HN|IN|BR)\b\s*$/i);
+                const origem = origemM ? origemM[1].toUpperCase() : null;
+                const bateriaM = nome.match(/(\d{2,3})\s?%/);
+                const bateria = bateriaM ? bateriaM[1] + "%" : null;
+                const telaFinal = tela || (telaNome ? telaNome[1] + '"' : null);
+
+                const rows: Array<[string, string]> = [];
+                const push = (l: string, v: string | null | undefined) => { if (v) rows.push([l, v]); };
+
+                if (baseCat === "IPHONES") {
+                  push("Grade", grade);
+                  push("Origem", origem);
+                  push("Bateria", bateria);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Fonte", comFonte ? "Sim" : null);
+                } else if (baseCat === "IPADS") {
+                  push("Grade", grade);
+                  push("Bateria", bateria);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Fonte", comFonte ? "Sim" : null);
+                  push("Conectividade", isCellular ? "Wi-Fi+Cell" : (isWifi ? "Wi-Fi" : null));
+                } else if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
+                  push("Grade", grade);
+                  push("Ciclos de bateria", ciclos);
+                  push("RAM", ram);
+                  push("SSD", ssd);
+                  push("CPU", cpu);
+                  push("GPU", gpu);
+                  push("Tela", telaFinal);
+                } else if (baseCat === "APPLE_WATCH") {
+                  push("Grade", grade);
+                  push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
+                  push("Conectividade", isCellular ? "GPS+Cellular" : (isGps ? "GPS" : null));
+                  push("Tamanho pulseira", pulseiraTam);
+                  push("Modelo pulseira", band);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                } else {
+                  // Outros: tudo que não foi parseado em tags conhecidas
+                  const limpo = obs.replace(/\[[^\]]*\]/g, "").trim();
+                  if (limpo) push("Observação", limpo);
+                }
+                if (rows.length === 0) return null;
+                return (
+                  <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                    <p className={`text-xs font-bold ${mP} mb-3`}>Especificações</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {rows.map(([label, value]) => (
+                        <div key={label}>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                          <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
@@ -5388,7 +5502,33 @@ export default function EstoquePage() {
                       />
                     </div>
                   )}
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p>
+                    {canEdit && isAdmin ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[13px] ${mS}`}>R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          defaultValue={p.custo_unitario ? String(p.custo_unitario) : ""}
+                          placeholder="0"
+                          onBlur={async (e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            const num = val ? parseInt(val) : null;
+                            if (num !== p.custo_unitario) {
+                              await apiPatch(p.id, { custo_unitario: num });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_unitario: num ?? 0 } : x));
+                              setDetailProduct({ ...p, custo_unitario: num ?? 0 });
+                              showSaved("custo");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
+                    ) : (
+                      <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
+                    )}
+                  </div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
                 {/* Estoque mínimo — para lacrados, editável pelo admin */}

@@ -3,6 +3,55 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
+// Traduz valores de specs em inglês pra português no display (não altera o banco).
+// A chave continua sendo a string original, então selecionar/comparar funciona igual.
+const COR_PT: Record<string, string> = {
+  "alpine green": "Verde Alpino",
+  "black": "Preto",
+  "black titanium": "Titânio Preto",
+  "blue": "Azul",
+  "blue titanium": "Titânio Azul",
+  "blush": "Rosa Claro",
+  "citrus": "Amarelo Cítrico",
+  "cloud white": "Branco Nuvem",
+  "cosmic orange": "Laranja Cósmico",
+  "deep blue": "Azul Profundo",
+  "deep purple": "Roxo Profundo",
+  "desert titanium": "Titânio Deserto",
+  "gold": "Dourado",
+  "graphite": "Grafite",
+  "green": "Verde",
+  "indigo": "Índigo",
+  "lavender": "Lavanda",
+  "light gold": "Dourado Claro",
+  "midnight": "Meia-Noite",
+  "midnight green": "Verde Meia-Noite",
+  "orange": "Laranja",
+  "mist blue": "Azul Névoa",
+  "natural titanium": "Titânio Natural",
+  "pacific blue": "Azul Pacífico",
+  "pink": "Rosa",
+  "purple": "Roxo",
+  "red": "Vermelho",
+  "sage": "Sálvia",
+  "sierra blue": "Azul Serra",
+  "silver": "Prata",
+  "sky blue": "Azul Céu",
+  "space black": "Preto Espacial",
+  "space gray": "Cinza Espacial",
+  "starlight": "Estelar",
+  "teal": "Verde Água",
+  "ultramarine": "Azul Ultramarino",
+  "white": "Branco",
+  "white titanium": "Titânio Branco",
+  "yellow": "Amarelo",
+};
+
+function traduzirValor(valor: string): string {
+  const pt = COR_PT[valor.toLowerCase().trim()];
+  return pt || valor;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Categoria {
@@ -512,6 +561,7 @@ const PAGE_SIZE = 15;
 
 function ModelosTab({ data, headers, reload }: TabProps) {
   const [search, setSearch] = useState("");
+  const [filtroCat, setFiltroCat] = useState<string>("");
   const [page, setPage] = useState(1);
   const [selectedModelo, setSelectedModelo] = useState<Modelo | null>(null);
   const [configs, setConfigs] = useState<Set<string>>(new Set());
@@ -530,6 +580,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   }
 
   const filteredModelos = data.modelos
+    .filter((m) => !filtroCat || m.categoria_key === filtroCat)
     .filter(
       (m) =>
         m.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -596,9 +647,12 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   function toggleConfig(tipoChave: string, valor: string) {
     const key = `${tipoChave}:${valor}`;
     setConfigs((prev) => {
-      if (prev.has(key)) return prev; // Não permite desmarcar — dados fixos
       const next = new Set(prev);
-      next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   }
@@ -692,7 +746,25 @@ function ModelosTab({ data, headers, reload }: TabProps) {
           </form>
         )}
 
-        <div className="p-3 border-b border-[#F5F5F7]">
+        <div className="p-3 border-b border-[#F5F5F7] space-y-2">
+          <select
+            value={filtroCat}
+            onChange={(e) => { setFiltroCat(e.target.value); setPage(1); }}
+            className={`${inputCls} w-full`}
+          >
+            <option value="">Todas as categorias ({data.modelos.length})</option>
+            {data.categorias
+              .slice()
+              .sort((a, b) => a.ordem - b.ordem)
+              .map((c) => {
+                const count = data.modelos.filter((m) => m.categoria_key === c.key).length;
+                return (
+                  <option key={c.key} value={c.key}>
+                    {c.emoji} {c.nome} ({count})
+                  </option>
+                );
+              })}
+          </select>
           <input
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
@@ -839,7 +911,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                               >
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
-                              <span className="text-sm text-[#1D1D1F]">{v.valor}</span>
+                              <span className="text-sm text-[#1D1D1F]">{traduzirValor(v.valor)}</span>
                             </label>
                           );
                         })}
@@ -1090,7 +1162,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     key={v.id}
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
-                    <span>{v.valor}</span>
+                    <span>{traduzirValor(v.valor)}</span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
                       disabled={saving === v.id}

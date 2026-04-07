@@ -12,6 +12,7 @@ interface StepNewDeviceProps {
   onBack: () => void;
   usedModel?: string;
   usedStorage?: string;
+  usedColor?: string;
   whatsappNumber?: string;
   condition?: AnyConditionData;
   deviceType?: DeviceType;
@@ -19,6 +20,7 @@ interface StepNewDeviceProps {
   // 2º aparelho na troca
   usedModel2?: string;
   usedStorage2?: string;
+  usedColor2?: string;
   condition2?: AnyConditionData;
   deviceType2?: DeviceType;
   tradeInValue1?: number;
@@ -55,7 +57,7 @@ const SEMINOVOS = [
   { modelo: "iPhone 16 Pro Max", storages: ["256GB"] },
 ];
 
-export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, whatsappNumber, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
+export default function StepNewDevice({ products, tradeInValue, onNext, onBack, usedModel, usedStorage, usedColor, whatsappNumber, condition, deviceType, tradeinConfig, usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2 }: StepNewDeviceProps) {
   const [mode, setMode] = useState<"" | "lacrado" | "seminovo">("");
   const [category, setCategory] = useState<ProductCategory | "">("");
   const [line, setLine] = useState(""); const [model, setModel] = useState(""); const [storage, setStorage] = useState("");
@@ -135,6 +137,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
       lines.push(hasSecond ? `*MEUS APARELHOS NA TROCA:*` : `*MEU APARELHO NA TROCA:*`);
       if (hasSecond) lines.push("", `*Aparelho 1:*`);
       lines.push(`Modelo: ${usedModel || "?"} ${usedStorage || ""}`);
+      if (usedColor) lines.push(`Cor: ${usedColor}`);
       const val1 = hasSecond && tradeInValue1 ? tradeInValue1 : tradeInValue;
       if (val1 > 0) lines.push(`Valor avaliado: R$ ${Math.round(val1).toLocaleString("pt-BR")}`);
       if (condition && deviceType) {
@@ -145,6 +148,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
     if (hasSecond) {
       lines.push("", `*Aparelho 2:*`);
       lines.push(`Modelo: ${usedModel2} ${usedStorage2 || ""}`);
+      if (usedColor2) lines.push(`Cor: ${usedColor2}`);
       if (tradeInValue2 && tradeInValue2 > 0) lines.push(`Valor avaliado: R$ ${Math.round(tradeInValue2).toLocaleString("pt-BR")}`);
       if (condition2 && deviceType2) {
         lines.push(`Condicao: ${getAnyConditionLines(deviceType2, condition2).join(", ")}`);
@@ -348,11 +352,12 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       precoNovo: 0,
                       modeloUsado: usedModel || "",
                       storageUsado: usedStorage || "",
+                      corUsado: usedColor || "",
                       avaliacaoUsado: (usedModel2 && tradeInValue1) ? tradeInValue1 : (tradeInValue || 0),
                       diferenca: 0,
                       status: "GOSTEI",
                       formaPagamento: "WhatsApp Seminovo",
-                      ...(usedModel2 ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, avaliacaoUsado2: tradeInValue2 || 0 } : {}),
+                      ...(usedModel2 ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, corUsado2: usedColor2 || "", avaliacaoUsado2: tradeInValue2 || 0 } : {}),
                     }),
                   }).catch(() => {});
                   const waNum = whatsappNumber || "5521967442665";

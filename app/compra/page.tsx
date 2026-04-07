@@ -13,6 +13,19 @@ function maskCPF(value: string) {
   return digits.slice(0, 3) + "." + digits.slice(3, 6) + "." + digits.slice(6, 9) + "-" + digits.slice(9);
 }
 
+function maskCNPJ(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return digits.slice(0, 2) + "." + digits.slice(2);
+  if (digits.length <= 8) return digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5);
+  if (digits.length <= 12)
+    return digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5, 8) + "/" + digits.slice(8);
+  return (
+    digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5, 8) +
+    "/" + digits.slice(8, 12) + "-" + digits.slice(12)
+  );
+}
+
 function maskPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits;
@@ -58,13 +71,22 @@ function CompraForm() {
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
   const trocaValorParam = searchParams.get("troca_valor") || "";
   const trocaCondParam = searchParams.get("troca_cond") || "";
+  const trocaCorParam = searchParams.get("troca_cor") || "";
   // 2º produto na troca
   const trocaProduto2Param = searchParams.get("troca_produto2") || "";
   const trocaValor2Param = searchParams.get("troca_valor2") || "";
   const trocaCond2Param = searchParams.get("troca_cond2") || "";
+  const trocaCor2Param = searchParams.get("troca_cor2") || "";
   const nomeParam = searchParams.get("nome") || "";
-  const whatsappClienteParam = searchParams.get("whatsapp_cliente") || "";
+  const cpfParam = searchParams.get("cpf") || "";
+  const emailParam = searchParams.get("email") || "";
+  const whatsappClienteParam = searchParams.get("whatsapp_cliente") || searchParams.get("telefone") || "";
   const instagramParam = searchParams.get("instagram") || "";
+  const cepParam = searchParams.get("cep") || "";
+  const enderecoParam = searchParams.get("endereco") || "";
+  const numeroParam = searchParams.get("numero") || "";
+  const complementoParam = searchParams.get("complemento") || "";
+  const bairroParam = searchParams.get("bairro") || "";
 
   // Payment params (vindos do StepQuote)
   // Normaliza forma de pagamento: gerador usa "Cartao Credito", form usa "Cartao de Credito"
@@ -227,16 +249,18 @@ function CompraForm() {
 
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
-  // Form state
+  // Form state — aceita pre-preenchimento vindo do gerar-link
+  const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [nome, setNome] = useState(nomeParam);
-  const [cpf, setCpf] = useState("");
-  const [email, setEmail] = useState("");
-  const [telefone, setTelefone] = useState(whatsappClienteParam);
-  const [cep, setCep] = useState("");
-  const [endereco, setEndereco] = useState("");
-  const [numero, setNumero] = useState("");
-  const [complemento, setComplemento] = useState("");
-  const [bairro, setBairro] = useState("");
+  const [cpf, setCpf] = useState(cpfParam ? maskCPF(cpfParam) : "");
+  const [cnpj, setCnpj] = useState("");
+  const [email, setEmail] = useState(emailParam);
+  const [telefone, setTelefone] = useState(whatsappClienteParam ? maskPhone(whatsappClienteParam) : "");
+  const [cep, setCep] = useState(cepParam ? maskCEP(cepParam) : "");
+  const [endereco, setEndereco] = useState(enderecoParam);
+  const [numero, setNumero] = useState(numeroParam);
+  const [complemento, setComplemento] = useState(complementoParam);
+  const [bairro, setBairro] = useState(bairroParam);
   const [horario, setHorario] = useState(horarioParam);
   const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
@@ -340,12 +364,16 @@ function CompraForm() {
 
     // Forma de pagamento com detalhes completos
     let pagStr = formaPagamento;
-    if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
+    if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
+      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} (total R$ ${fmt(parcelasCalc.total)})`;
+    } else if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
       if (entradaFinal > 0) {
         pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
       } else {
         pagStr = `R$ ${fmt(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao`;
       }
+    } else if (formaPagamento === "Link de Pagamento" && parcelas) {
+      pagStr = `Link de Pagamento — ${parcelas}x`;
     } else if (formaPagamento === "PIX") {
       pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {
@@ -363,9 +391,17 @@ function CompraForm() {
       "",
       `*DADOS DA COMPRA -- TigraoImports*`,
       "",
-      // Dados pessoais
-      `*Nome completo:* ${nome}`,
-      `*CPF:* ${cpf}`,
+      // Dados pessoais / empresa
+      ...(pessoa === "PJ"
+        ? [
+            `*Tipo:* Pessoa Juridica`,
+            `*Razao Social:* ${nome}`,
+            `*CNPJ:* ${cnpj}`,
+          ]
+        : [
+            `*Nome completo:* ${nome}`,
+            `*CPF:* ${cpf}`,
+          ]),
       `*E-mail:* ${email}`,
       `*Telefone:* ${telefone}`,
       ...(instagram ? [`*Instagram:* ${instagram}`] : []),
@@ -387,6 +423,7 @@ function CompraForm() {
       if (trocaProduto) {
         if (temDoisUsados) lines.push(``, `*Aparelho 1:*`);
         lines.push(`Modelo: ${trocaProduto}`);
+        if (trocaCorParam) lines.push(`Cor: ${trocaCorParam}`);
         if (trocaNum1 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
       } else if (descTroca) {
@@ -396,6 +433,7 @@ function CompraForm() {
       if (temDoisUsados) {
         lines.push(``, `*Aparelho 2:*`);
         lines.push(`Modelo: ${trocaProduto2Param}`);
+        if (trocaCor2Param) lines.push(`Cor: ${trocaCor2Param}`);
         if (trocaNum2 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum2)}`);
         if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
       }
@@ -617,18 +655,67 @@ function CompraForm() {
       <form onSubmit={handleSubmit} className="mx-4 mt-4 mb-8 space-y-3">
         {/* Dados Pessoais */}
         <div className={cardCls}>
-          <p className={sectionTitle}>Dados Pessoais</p>
-          <div>
-            <label className={labelCls}>Nome Completo *</label>
-            <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome completo" className={inputCls} />
+          <p className={sectionTitle}>{pessoa === "PJ" ? "Dados da Empresa" : "Dados Pessoais"}</p>
+
+          {/* Toggle PF / PJ */}
+          <div className="flex gap-2">
+            {(["PF", "PJ"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPessoa(p)}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors border-2 ${
+                  pessoa === p
+                    ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]"
+                    : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"
+                }`}
+              >
+                {p === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+              </button>
+            ))}
           </div>
+
           <div>
-            <label className={labelCls}>CPF *</label>
-            <input type="text" required inputMode="numeric" value={cpf} onChange={(e) => setCpf(maskCPF(e.target.value))} placeholder="000.000.000-00" className={inputCls} />
+            <label className={labelCls}>{pessoa === "PJ" ? "Razão Social *" : "Nome Completo *"}</label>
+            <input
+              type="text"
+              required
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder={pessoa === "PJ" ? "Nome da empresa" : "Seu nome completo"}
+              className={inputCls}
+            />
           </div>
+          {pessoa === "PJ" ? (
+            <div>
+              <label className={labelCls}>CNPJ *</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                value={cnpj}
+                onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
+                placeholder="00.000.000/0000-00"
+                className={inputCls}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className={labelCls}>CPF *</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                value={cpf}
+                onChange={(e) => setCpf(maskCPF(e.target.value))}
+                placeholder="000.000.000-00"
+                className={inputCls}
+              />
+            </div>
+          )}
           <div>
             <label className={labelCls}>E-mail *</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" className={inputCls} />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={pessoa === "PJ" ? "financeiro@empresa.com" : "seu@email.com"} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Telefone *</label>

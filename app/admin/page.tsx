@@ -13,7 +13,7 @@ interface SaldoRow { data?: string; itau_base: number; inf_base: number; mp_base
 interface DashData {
   saldos: SaldoRow | null;
   saldoAnterior: SaldoRow | null;
-  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string; valor_comprovante?: number; qnt_parcelas?: number; bandeira?: string }[];
+  vendas: { id: string; data: string; cliente: string; tipo: string; origem: string; produto: string; custo: number; preco_vendido: number; lucro: number; banco: string; forma: string; recebimento: string; entrada_pix: number; banco_pix: string; entrada_especie: number; produto_na_troca: string; status_pagamento: string; valor_comprovante?: number; qnt_parcelas?: number; bandeira?: string; frete_valor?: number | null; frete_recebido?: boolean | null }[];
   gastos: { id: string; data: string; tipo: string; categoria: string; descricao: string; valor: number; banco: string; is_dep_esp?: boolean }[];
   estoque: { tipo: string; qnt: number; custo_unitario: number }[];
   pendencias: number;
@@ -153,6 +153,12 @@ export default function DashboardPage() {
   const somenteVendas = vendasMes.filter(v => v.tipo === "VENDA");
   const atacado = vendasMes.filter(v => v.tipo === "ATACADO");
   const clienteFinal = vendasMes.filter(v => v.tipo !== "ATACADO");
+
+  // Entregas atacado (faturamento de frete) — só conta vendas com frete_valor > 0
+  const vendasComFrete = vendasMes.filter(v => (v.frete_valor || 0) > 0);
+  const freteTotalMes = vendasComFrete.reduce((s, v) => s + (Number(v.frete_valor) || 0), 0);
+  const freteRecebidoMes = vendasComFrete.filter(v => v.frete_recebido).reduce((s, v) => s + (Number(v.frete_valor) || 0), 0);
+  const fretePendenteMes = freteTotalMes - freteRecebidoMes;
 
   // Vendas pendentes
   const vendasPendentes = data.vendas.filter(v => v.status_pagamento === "AGUARDANDO");
@@ -475,6 +481,17 @@ export default function DashboardPage() {
           <Card icon="📤" title="Gastos do Mês" value={fmt(saidasMes)} color="text-red-600" sub={`Compras fornecedor: ${fmt(comprasFornecedorMes)} (não contabilizado)`} />
           <Card icon="💎" title="Lucro Líquido" value={fmt(lucroMes - saidasMes)} color={lucroMes - saidasMes >= 0 ? "text-green-700" : "text-red-600"} sub={`Bruto ${fmt(lucroMes)} - Gastos ${fmt(saidasMes)}`} />
         </div>
+        {vendasComFrete.length > 0 && (
+          <div className="mt-3">
+            <Card
+              icon="🚚"
+              title="Entregas Atacado (faturamento)"
+              value={fmt(freteTotalMes)}
+              color="text-indigo-700"
+              sub={`${vendasComFrete.length} entrega(s) | Recebido: ${fmt(freteRecebidoMes)} | Pendente: ${fmt(fretePendenteMes)}`}
+            />
+          </div>
+        )}
       </div>
 
       {/* Projeção do Mês */}

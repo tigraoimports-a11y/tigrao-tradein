@@ -44,6 +44,34 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
+  // Card title overrides (sincronizado com a página de Estoque)
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/estoque-settings?key=card_title_overrides", { headers: { "x-admin-password": password }, cache: "no-store" })
+      .then(r => r.json())
+      .then(j => {
+        if (j.value && typeof j.value === "object") {
+          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
+          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [password]);
+  const applyCardTitleOverride = (modelo: string): string => {
+    if (cardTitleOverrides[modelo]) return cardTitleOverrides[modelo].toUpperCase();
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return modelo;
+  };
+
   // Client history state
   const [clienteHistorico, setClienteHistorico] = useState<{
     nome: string;
@@ -95,6 +123,8 @@ export default function VendasPage() {
     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
+    // Atacado: frete/entrega cobrado a parte
+    frete_valor: "", frete_recebido: false as boolean,
   });
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -914,6 +944,9 @@ export default function VendasPage() {
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
       status_pagamento: "AGUARDANDO",
       vendedor: user?.nome || null,
+      // Entrega atacado (cobrada à parte)
+      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
+      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
     };
 
     if (prodFields._estoqueId) {
@@ -1368,6 +1401,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
+        frete_valor: "", frete_recebido: false,
       });
       setCatSel("");
       setEstoqueId("");
@@ -1632,6 +1666,8 @@ export default function VendasPage() {
       bairro: "",
       cidade: "",
       uf: "",
+      frete_valor: "",
+      frete_recebido: false,
     });
     setCatSel("");
     setEstoqueId("");
@@ -1843,6 +1879,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
@@ -1971,6 +2008,37 @@ export default function VendasPage() {
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+
+              {/* Entrega cobrada à parte */}
+              <div className="p-3 rounded-xl border border-[#E0E0E5] bg-[#FAFAFA]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Entrega (cobrada à parte)</span>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
+                    <input
+                      type="checkbox"
+                      checked={!!form.frete_recebido}
+                      onChange={(e) => set("frete_recebido", e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#E8740E]"
+                    />
+                    Já recebido
+                  </label>
+                </div>
+                <div>
+                  <p className={labelCls}>Valor do frete (R$)</p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.frete_valor}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : "");
+                    }}
+                    placeholder="Ex: 150 — deixe vazio se não há entrega"
+                    className={inputCls}
+                  />
+                  <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -2265,7 +2333,7 @@ export default function VendasPage() {
                           <div key={modeloBase} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
                             {/* Header: modelo + memória */}
                             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modeloBase}</span>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{applyCardTitleOverride(modeloBase)}</span>
                               <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{totalQnt} un.</span>
                             </div>
                             {/* Cores como chips */}
@@ -2383,6 +2451,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -2980,7 +3049,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
                   <div><p className={labelCls}>Garantia</p><input value={form.troca_garantia || ""} onChange={(e) => set("troca_garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
                   <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
-                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
+                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="AB">AB (Muito bom)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
                   </select></div>
                   {(() => {
                     const tCat = form.troca_categoria || "";
@@ -3937,6 +4006,8 @@ export default function VendasPage() {
                                               bairro: primaryVenda.bairro || "",
                                               cidade: primaryVenda.cidade || "",
                                               uf: primaryVenda.uf || "",
+                                              frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
+                                              frete_recebido: !!primaryVenda.frete_recebido,
                                             });
                                             setProdutoManual(true);
 
@@ -4249,6 +4320,14 @@ export default function VendasPage() {
                                         </p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                          <p>
+                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                                              {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
+                                            </span>
+                                          </p>
+                                        )}
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
@@ -4504,6 +4583,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -4537,6 +4617,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);

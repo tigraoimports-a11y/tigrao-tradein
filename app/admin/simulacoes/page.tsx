@@ -18,6 +18,8 @@ interface SimulacaoRow {
   preco_novo: number;
   modelo_usado: string;
   storage_usado: string;
+  cor_usado?: string | null;
+  cor_usado2?: string | null;
   avaliacao_usado: number;
   diferenca: number;
   status: "GOSTEI" | "SAIR";
@@ -773,7 +775,7 @@ export default function AdminPage() {
               {/* Used device */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca</h3>
-                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}</p>
+                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${modalRow.cor_usado}` : ""}</p>
                 {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
                   <div className="text-xs text-[#6E6E73] space-y-0.5">
                     {modalRow.condicao_linhas.map((linha, i) => (

@@ -11,9 +11,9 @@ const MOTIVOS_SAIDA = ["Achei o valor alto","Quero me organizar financeiramente"
 
 interface StepQuoteProps {
   newModel: string; newStorage: string; newPrice: number;
-  usedModel: string; usedStorage: string; condition: AnyConditionData; deviceType: DeviceType;
+  usedModel: string; usedStorage: string; usedColor?: string; condition: AnyConditionData; deviceType: DeviceType;
   tradeInValue: number;
-  usedModel2?: string; usedStorage2?: string; condition2?: AnyConditionData; deviceType2?: DeviceType;
+  usedModel2?: string; usedStorage2?: string; usedColor2?: string; condition2?: AnyConditionData; deviceType2?: DeviceType;
   tradeInValue1?: number; tradeInValue2?: number;
   clienteNome: string; clienteWhatsApp: string; clienteInstagram: string; clienteOrigem: string;
   whatsappNumero: string; validadeHoras: number; vendedor?: string | null;
@@ -51,8 +51,8 @@ function useCountdown(hours: number) {
 }
 
 export default function StepQuote(p: StepQuoteProps) {
-  const { newModel, newStorage, newPrice, usedModel, usedStorage, condition, deviceType, tradeInValue,
-    usedModel2, usedStorage2, condition2, deviceType2, tradeInValue1, tradeInValue2,
+  const { newModel, newStorage, newPrice, usedModel, usedStorage, usedColor, condition, deviceType, tradeInValue,
+    usedModel2, usedStorage2, usedColor2, condition2, deviceType2, tradeInValue1, tradeInValue2,
     clienteNome, clienteWhatsApp, clienteInstagram, clienteOrigem, whatsappNumero, validadeHoras, vendedor, allProducts, onReset, onCotarOutro, onGoToStep, onTrackAction } = p;
 
   const hasSecond = !!(usedModel2 && usedStorage2);
@@ -73,12 +73,14 @@ export default function StepQuote(p: StepQuoteProps) {
   const cL1 = getAnyConditionLines(deviceType, condition);
   const igLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
 
+  const corLine1 = usedColor ? `Cor: ${usedColor}\n` : "";
+  const corLine2 = usedColor2 ? `Cor: ${usedColor2}\n` : "";
   let usadoSec: string;
   if (hasSecond && condition2) {
     const cL2 = getAnyConditionLines(deviceType2 ?? "iphone", condition2);
-    usadoSec = `*PRODUTO 1 na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliação: ${f2(tradeInValue1??0)}\n\n*PRODUTO 2 na troca:*\n${usedModel2} ${usedStorage2}\n${cL2.join("\n")}\nAvaliação: ${f2(tradeInValue2??0)}\n\n*Total avaliação: ${f2(tradeInValue)}*`;
+    usadoSec = `*PRODUTO 1 na troca:*\n${usedModel} ${usedStorage}\n${corLine1}${cL1.join("\n")}\nAvaliação: ${f2(tradeInValue1??0)}\n\n*PRODUTO 2 na troca:*\n${usedModel2} ${usedStorage2}\n${corLine2}${cL2.join("\n")}\nAvaliação: ${f2(tradeInValue2??0)}\n\n*Total avaliação: ${f2(tradeInValue)}*`;
   } else {
-    usadoSec = `*Seu aparelho na troca:*\n${usedModel} ${usedStorage}\n${cL1.join("\n")}\nAvaliação do usado: ${f2(tradeInValue)}`;
+    usadoSec = `*Seu aparelho na troca:*\n${usedModel} ${usedStorage}\n${corLine1}${cL1.join("\n")}\nAvaliação do usado: ${f2(tradeInValue)}`;
   }
 
   const origemMap: Record<string, string> = {
@@ -103,9 +105,9 @@ export default function StepQuote(p: StepQuoteProps) {
 
   const leadBase = { nome: clienteNome, whatsapp: clienteWhatsApp, instagram: clienteInstagram,
     modeloNovo: newModel, storageNovo: newStorage, precoNovo: newPrice, modeloUsado: usedModel,
-    storageUsado: usedStorage, avaliacaoUsado: hasSecond ? (tradeInValue1 ?? tradeInValue) : tradeInValue, diferenca: dif, condicaoLinhas: condLines,
+    storageUsado: usedStorage, corUsado: usedColor || "", avaliacaoUsado: hasSecond ? (tradeInValue1 ?? tradeInValue) : tradeInValue, diferenca: dif, condicaoLinhas: condLines,
     vendedor: vendedor || undefined, origem: clienteOrigem || undefined,
-    ...(hasSecond ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, avaliacaoUsado2: tradeInValue2 ?? 0 } : {}) };
+    ...(hasSecond ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, corUsado2: usedColor2 || "", avaliacaoUsado2: tradeInValue2 ?? 0 } : {}) };
 
   const cardStyle: React.CSSProperties = { backgroundColor: "var(--ti-card-bg)", border: "1px solid var(--ti-card-border)" };
   const inputStyle: React.CSSProperties = { backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)", outline: "none" };
@@ -256,13 +258,14 @@ export default function StepQuote(p: StepQuoteProps) {
       {/* CTA — leva pro formulário de compra preenchido */}
       {(() => {
         const condLines = getAnyConditionLines(deviceType, condition);
-        const condStr = condLines.slice(0, 3).join(", ");
+        // Propagar TODAS as linhas do trade-in (bateria, caixa, peças trocadas, marcas de uso etc)
+        const condStr = condLines.join(" | ");
         // Determinar forma de pagamento pra pré-preencher
         const formaPagParam = parc === "pix" ? "PIX" : parc && entNum > 0 ? "PIX + Cartao" : parc ? "Cartao de Credito" : "";
         // Valores de troca: quando tem 2 aparelhos, usar valores individuais
         const valor1 = hasSecond && tradeInValue1 !== undefined ? tradeInValue1 : tradeInValue;
         const valor2 = hasSecond && tradeInValue2 !== undefined ? tradeInValue2 : 0;
-        const cond2Lines = hasSecond && condition2 ? getAnyConditionLines(deviceType2 || "iphone", condition2).slice(0, 3).join(", ") : "";
+        const cond2Lines = hasSecond && condition2 ? getAnyConditionLines(deviceType2 || "iphone", condition2).join(" | ") : "";
         const params = new URLSearchParams({
           produto: `${newModel} ${newStorage}`,
           preco: String(Math.round(newPrice)),
@@ -271,9 +274,11 @@ export default function StepQuote(p: StepQuoteProps) {
           ...(usedModel ? { troca_produto: `${usedModel} ${usedStorage || ""}`.trim() } : {}),
           ...(valor1 > 0 ? { troca_valor: String(Math.round(valor1)) } : {}),
           ...(condStr ? { troca_cond: condStr } : {}),
+          ...(usedColor ? { troca_cor: usedColor } : {}),
           ...(hasSecond && usedModel2 ? { troca_produto2: `${usedModel2} ${usedStorage2 || ""}`.trim() } : {}),
           ...(hasSecond && valor2 > 0 ? { troca_valor2: String(Math.round(valor2)) } : {}),
           ...(cond2Lines ? { troca_cond2: cond2Lines } : {}),
+          ...(hasSecond && usedColor2 ? { troca_cor2: usedColor2 } : {}),
           ...(clienteNome ? { nome: clienteNome } : {}),
           ...(clienteWhatsApp ? { whatsapp_cliente: clienteWhatsApp } : {}),
           ...(clienteInstagram ? { instagram: clienteInstagram } : {}),

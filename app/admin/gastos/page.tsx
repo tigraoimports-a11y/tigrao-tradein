@@ -469,7 +469,28 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                       return null;
                     })()}
                     <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}{(() => {
+                      {(() => {
+                        const COLOR_ALIASES: Record<string, string[]> = {
+                          BLACK: ["BLACK", "PRETO"], PRETO: ["BLACK", "PRETO"],
+                          BLUE: ["BLUE", "AZUL"], AZUL: ["BLUE", "AZUL"],
+                          WHITE: ["WHITE", "BRANCO"], BRANCO: ["WHITE", "BRANCO"],
+                          GOLD: ["GOLD", "DOURADO"], DOURADO: ["GOLD", "DOURADO"],
+                          SILVER: ["SILVER", "PRATA"], PRATA: ["SILVER", "PRATA"],
+                          GREEN: ["GREEN", "VERDE"], VERDE: ["GREEN", "VERDE"],
+                          PURPLE: ["PURPLE", "ROXO"], ROXO: ["PURPLE", "ROXO"],
+                          PINK: ["PINK", "ROSA"], ROSA: ["PINK", "ROSA"],
+                          RED: ["RED", "VERMELHO"], VERMELHO: ["RED", "VERMELHO"],
+                          YELLOW: ["YELLOW", "AMARELO"], AMARELO: ["YELLOW", "AMARELO"],
+                          ORANGE: ["ORANGE", "LARANJA"], LARANJA: ["ORANGE", "LARANJA"],
+                        };
+                        const nomeLimpo = (p.produto || "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+                        const corLimpa = (p.cor || "").replace(/\[[^\]]*\]/g, "").trim();
+                        const nomeUp = nomeLimpo.toUpperCase();
+                        const corUp = corLimpa.toUpperCase();
+                        const aliases = COLOR_ALIASES[corUp] || [corUp];
+                        const corJaNoNome = corUp && aliases.some(a => new RegExp(`\\b${a}\\b`).test(nomeUp));
+                        return `${nomeLimpo}${corLimpa && !corJaNoNome ? ` — ${corLimpa}` : ""}`;
+                      })()}{(() => {
                         const origem = getOrigemFromObs(p.observacao);
                         if (!origem) return "";
                         const code = origem.split(" ")[0];

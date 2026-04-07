@@ -14,7 +14,7 @@ interface StepUsedDeviceProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   warrantyBonuses?: WarrantyBonuses;
   questionsConfig?: TradeInQuestion[] | null;
-  onNext: (data: { usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
+  onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
 
@@ -41,6 +41,10 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
+  const [color, setColor] = useState("");
+  const [colorError, setColorError] = useState(false);
+  const [topAlert, setTopAlert] = useState<string | null>(null);
+  const colorInputRef = useRef<HTMLInputElement>(null);
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
@@ -110,14 +114,35 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storage && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
+  const canProceed = model && storage && color.trim() && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setColor(""); setHasDamage(null); tq("line"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setColor(""); setHasDamage(null); tq("model"); }
+
+  const handleAdvance = () => {
+    if (!color.trim()) {
+      setColorError(true);
+      setTopAlert("Por favor, selecione a cor do aparelho.");
+      setTimeout(() => {
+        colorInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        colorInputRef.current?.focus();
+      }, 50);
+      setTimeout(() => setTopAlert(null), 4000);
+      return;
+    }
+    if (!canProceed) return;
+    onNext({ usedModel: model, usedStorage: storage, usedColor: color.trim(), condition: cond, tradeInValue, deviceType: "iphone" });
+  };
 
   return (
     <div className="space-y-8">
+      {topAlert && (
+        <div className="sticky top-2 z-50 mx-auto max-w-md rounded-xl px-4 py-3 text-center text-[14px] font-semibold shadow-lg"
+          style={{ backgroundColor: "var(--ti-error-light)", color: "var(--ti-error)", border: "1px solid var(--ti-error)" }}>
+          {topAlert}
+        </div>
+      )}
       <div className="text-center">
         <h2 className="text-[22px] font-bold" style={{ color: "var(--ti-text)" }}>Qual iPhone voce tem?</h2>
         <p className="text-[14px] mt-1" style={{ color: "var(--ti-muted)" }}>Selecione a linha pra comecar</p>
@@ -153,6 +178,26 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
           <div className="flex gap-2 flex-wrap">
             {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => { setStorage(s); tq("storage"); }} className="flex-1 min-w-[80px]">{s}</Btn>)}
           </div>
+        </Section>
+      )}
+
+      {model && storage && !isExcluded && (
+        <Section title="Qual a cor do seu aparelho?">
+          <input
+            ref={colorInputRef}
+            type="text"
+            value={color}
+            onChange={(e) => { setColor(e.target.value); if (e.target.value.trim()) setColorError(false); }}
+            onBlur={() => { if (color.trim()) tq("color"); }}
+            placeholder="Ex: Preto, Titânio Natural, Azul..."
+            maxLength={40}
+            className="w-full px-4 py-3 rounded-xl text-[16px] font-medium focus:outline-none transition-colors"
+            style={{ backgroundColor: "var(--ti-input-bg)", border: colorError ? "2px solid var(--ti-error)" : "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
+          />
+          {colorError && (
+            <p className="text-[12px] mt-1.5 font-semibold" style={{ color: "var(--ti-error)" }}>Por favor, informe a cor do aparelho.</p>
+          )}
+          <p className="text-[11px] mt-1.5" style={{ color: "var(--ti-muted)" }}>Informe a cor exata como aparece no seu iPhone.</p>
         </Section>
       )}
 
@@ -377,10 +422,10 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
         </>
       )}
 
-      {canProceed && (
-        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, condition: cond, tradeInValue, deviceType: "iphone" })}
-          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
-          style={{ backgroundColor: "#22c55e" }}>
+      {model && storage && !isExcluded && (
+        <button onClick={handleAdvance}
+          className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg disabled:opacity-50"
+          style={{ backgroundColor: canProceed ? "#22c55e" : "#9ca3af" }}>
           Ver minha avaliacao →
         </button>
       )}
