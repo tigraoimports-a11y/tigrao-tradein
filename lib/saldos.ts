@@ -154,6 +154,18 @@ export async function recalcularSaldoDia(
   const saiu_mp = sumByBancoField(gastoRows, "MERCADO_PAGO");
   const saiu_esp = sumByBancoField(gastoRows, "ESPECIE");
 
+  // 5c. Entradas (reembolsos etc — gastos com tipo ENTRADA)
+  const { data: entradas } = await supabase
+    .from("gastos")
+    .select("*")
+    .eq("data", dataISO)
+    .eq("tipo", "ENTRADA");
+  const entradaRows = (entradas ?? []) as { valor: number; banco: string | null }[];
+  const ent_itau = sumByBancoField(entradaRows, "ITAU");
+  const ent_inf = sumByBancoField(entradaRows, "INFINITE");
+  const ent_mp = sumByBancoField(entradaRows, "MERCADO_PAGO");
+  const ent_esp = sumByBancoField(entradaRows, "ESPECIE");
+
   // 5a. Depósitos de espécie no banco (is_dep_esp = true)
   // banco indica DESTINO do depósito, dinheiro SAI do caixa espécie
   const { data: depositos } = await supabase
@@ -177,10 +189,10 @@ export async function recalcularSaldoDia(
   const entradaEspecieHoje = (todasVendasHoje ?? []).reduce((s: number, v: { entrada_especie: number }) => s + Number(v.entrada_especie || 0), 0);
 
   // 6. Calcular saldos finais (depósitos: entram no banco, saem do caixa)
-  const esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau + dep_itau;
-  const esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf + dep_inf;
-  const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp + dep_mp;
-  const esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp - dep_esp_total;
+  const esp_itau = itau_base + pix_itau + d1_itau + reaj_itau - saiu_itau + dep_itau + ent_itau;
+  const esp_inf = inf_base + pix_inf + d1_inf + reaj_inf - saiu_inf + dep_inf + ent_inf;
+  const esp_mp = mp_base + pix_mp + d1_mp + reaj_mp - saiu_mp + dep_mp + ent_mp;
+  const esp_especie = esp_especie_base + pix_esp + entradaEspecieHoje + reaj_esp - saiu_esp - dep_esp_total + ent_esp;
 
   // 7. Gravar — só atualiza campos de fechamento (esp_*), nunca sobrescreve bases
   const { data: existing } = await supabase

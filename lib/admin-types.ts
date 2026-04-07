@@ -246,4 +246,5 @@ export const CATEGORIAS_GASTO = [
   "TRANSPORTE",
   "TROCA",
   "OUTROS",
+  "REEMBOLSO",
 ] as const;

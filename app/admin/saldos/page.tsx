@@ -119,7 +119,25 @@ export default function SaldosPage() {
   const handleDepositar = async () => {
     const espVal = parseFloat(fromDisplayBR(esp));
     if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
-    if (!confirm(`Depositar R$ ${toDisplayBR(String(espVal))} de Especie no Itau?`)) return;
+    // Pergunta o valor (default = total). Aceita vírgula ou ponto.
+    const raw = window.prompt(
+      `Quanto depositar em espécie?\n\nDisponível: R$ ${toDisplayBR(String(espVal))}\n\nDigite o valor (ou ENTER para depositar tudo):`,
+      toDisplayBR(String(espVal))
+    );
+    if (raw === null) return; // cancelado
+    const valorDep = parseFloat(fromDisplayBR(raw.trim()));
+    if (!valorDep || valorDep <= 0) { setMsg("Valor inválido"); return; }
+    if (valorDep > espVal + 0.01) { setMsg(`Valor maior que o disponível (R$ ${toDisplayBR(String(espVal))})`); return; }
+    // Pergunta o banco destino
+    const bancoRaw = window.prompt("Depositar em qual banco?\n\n1 = Itaú\n2 = Infinite\n3 = Mercado Pago", "1");
+    if (bancoRaw === null) return;
+    const bancoMap: Record<string, { key: string; label: string }> = {
+      "1": { key: "ITAU", label: "Itaú" },
+      "2": { key: "INFINITE", label: "Infinite" },
+      "3": { key: "MERCADO_PAGO", label: "Mercado Pago" },
+    };
+    const bancoSel = bancoMap[bancoRaw.trim()] || bancoMap["1"];
+    if (!confirm(`Depositar R$ ${toDisplayBR(String(valorDep))} de Espécie no ${bancoSel.label}?`)) return;
 
     setDepositando(true);
     setMsg("");
@@ -136,15 +154,15 @@ export default function SaldosPage() {
           data: dataAtual,
           tipo: "SAIDA",
           categoria: "TRANSFERENCIA",
-          descricao: `Depósito espécie → Itaú`,
-          banco: "ITAU",
-          valor: espVal,
+          descricao: `Depósito espécie → ${bancoSel.label}`,
+          banco: bancoSel.key,
+          valor: valorDep,
           is_dep_esp: true,
         }),
       });
       const json = await res.json();
       if (json.ok || json.data) {
-        setMsg(`R$ ${toDisplayBR(String(espVal))} depositado de Espécie no Itaú com sucesso!`);
+        setMsg(`R$ ${toDisplayBR(String(valorDep))} depositado de Espécie no ${bancoSel.label} com sucesso!`);
         // Recalcular saldos
         await fetch("/api/saldos", {
           method: "PUT",
@@ -205,7 +223,7 @@ export default function SaldosPage() {
               )}
               {bank.label === "Especie" && parseFloat(fromDisplayBR(esp)) > 0 && (
                 <button onClick={handleDepositar} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
-                  {depositando ? "Depositando..." : `Depositar ${esp} no Itau`}
+                  {depositando ? "Depositando..." : `Depositar espécie no banco…`}
                 </button>
               )}
             </div>

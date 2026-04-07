@@ -77,6 +77,8 @@ function CompraForm() {
   const trocaValor2Param = searchParams.get("troca_valor2") || "";
   const trocaCond2Param = searchParams.get("troca_cond2") || "";
   const trocaCor2Param = searchParams.get("troca_cor2") || "";
+  const trocaCaixaParam = searchParams.get("troca_caixa") || "";
+  const trocaCaixa2Param = searchParams.get("troca_caixa2") || "";
   const nomeParam = searchParams.get("nome") || "";
   const cpfParam = searchParams.get("cpf") || "";
   const emailParam = searchParams.get("email") || "";
@@ -426,6 +428,7 @@ function CompraForm() {
         if (trocaCorParam) lines.push(`Cor: ${trocaCorParam}`);
         if (trocaNum1 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
+        if (trocaCaixaParam) lines.push(`Caixa original: ${trocaCaixaParam === "1" ? "Sim" : "Nao"}`);
       } else if (descTroca) {
         lines.push(`Modelo: ${descTroca}`);
       }
@@ -436,6 +439,7 @@ function CompraForm() {
         if (trocaCor2Param) lines.push(`Cor: ${trocaCor2Param}`);
         if (trocaNum2 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum2)}`);
         if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
+        if (trocaCaixa2Param) lines.push(`Caixa original: ${trocaCaixa2Param === "1" ? "Sim" : "Nao"}`);
       }
       if (valorBase > 0) { lines.push(""); lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`); }
     }
@@ -639,12 +643,22 @@ function CompraForm() {
             <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaProduto2Param ? " (1º)" : ""}</p>
             {trocaNum1 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum1)}</p>}
             {trocaCond && <p className="text-[#86868B] text-xs">{trocaCond}</p>}
+            {trocaCaixaParam && (
+              <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${trocaCaixaParam === "1" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                {trocaCaixaParam === "1" ? "📦 Com caixa original" : "📦 Sem caixa original"}
+              </span>
+            )}
           </div>
           {trocaProduto2Param && (
             <div className="pt-2 border-t border-green-200">
               <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param} (2º)</p>
               {trocaNum2 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum2)}</p>}
               {trocaCond2Param && <p className="text-[#86868B] text-xs">{trocaCond2Param}</p>}
+              {trocaCaixa2Param && (
+                <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${trocaCaixa2Param === "1" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                  {trocaCaixa2Param === "1" ? "📦 Com caixa original" : "📦 Sem caixa original"}
+                </span>
+              )}
             </div>
           )}
           {preco > 0 && <p className="text-[#E8740E] font-bold text-lg pt-2 border-t border-green-200">Diferenca a pagar: R$ {fmt(valorBase)}</p>}

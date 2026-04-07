@@ -635,7 +635,16 @@ const STATUS_COLORS: Record<string, string> = {
 /** Extrai o "modelo base" de um produto para agrupar em cards */
 function getModeloBase(produto: string, categoria: string): string {
   const p = produto.toUpperCase().trim();
-  const baseCat = getBaseCat(categoria);
+  // Inferir categoria quando vier vazia/inválida baseado no nome do produto
+  let baseCat = getBaseCat(categoria || "");
+  if (!baseCat || !["IPHONES","IPADS","MACBOOK","MAC_MINI","APPLE_WATCH","AIRPODS","ACESSORIOS"].includes(baseCat)) {
+    if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
+    else if (/\bIPAD\b/.test(p)) baseCat = "IPADS";
+    else if (/\bMACBOOK\b/.test(p)) baseCat = "MACBOOK";
+    else if (/\bMAC\s*MINI\b/.test(p)) baseCat = "MAC_MINI";
+    else if (/\bWATCH\b/.test(p)) baseCat = "APPLE_WATCH";
+    else if (/\bAIRPODS?\b/.test(p)) baseCat = "AIRPODS";
+  }
 
   // Helpers — pega o MAIOR valor de GB/TB (armazenamento, não RAM)
   const getMem = () => {
@@ -1923,14 +1932,28 @@ export default function EstoquePage() {
       .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
+      .replace(/\[RESP:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
   /** Extrai todas as tags [...] da observação */
   const extractTags = (obs: string | null): string => {
     if (!obs) return "";
-    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+)\]/g);
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+|RESP:[^\]]+)\]/g);
     return tags ? tags.join(" ") : "";
+  };
+  /** Extrai [RESP:xxx] da observação */
+  const getResp = (obs: string | null): string => {
+    if (!obs) return "";
+    const m = obs.match(/\[RESP:([^\]]+)\]/);
+    return m ? m[1] : "";
+  };
+  /** Substitui/remove tag [RESP:xxx] numa observação */
+  const setResp = (obs: string | null, resp: string): string | null => {
+    const base = (obs || "").replace(/\[RESP:[^\]]+\]/g, "").trim();
+    const trimmed = resp.trim();
+    const val = trimmed ? `[RESP:${trimmed}] ${base}`.trim() : base;
+    return val || null;
   };
 
   const handleSubmitMulti = async () => {
@@ -2857,9 +2880,10 @@ export default function EstoquePage() {
           let corPT = "";
           if (ptFromEN) { corEN = cor!; corPT = ptFromEN; }
           else if (enFromPT) { corEN = enFromPT; corPT = cor!; }
-          const corDisplay = corPT && corPT.toLowerCase() !== corEN.toLowerCase()
-            ? `${corEN.toUpperCase()} (${corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase()})`
-            : (cor || "—");
+          const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
+          const corDisplay = corPTCap && corPT.toLowerCase() !== corEN.toLowerCase()
+            ? `${corPTCap} · ${corEN.toUpperCase()}`
+            : (corPTCap || cor || "—");
 
           if (!byCatModel[cat]) byCatModel[cat] = {};
           if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
@@ -2969,7 +2993,7 @@ export default function EstoquePage() {
                               }`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
-                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1 font-normal opacity-60 text-[11px]`}>({c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()})</span>}</span>
+                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1.5 font-normal text-[11px] ${textMuted}`}>{c.corEN.toUpperCase()}</span>}</span>
                                   {c.jaCaminho && (
                                     <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
                                   )}
@@ -3817,13 +3841,21 @@ export default function EstoquePage() {
                   {tab === "pendencias" ? (() => {
                     const [dateStr, cliente] = cat.split("|||");
                     const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
+                    const resps = Array.from(new Set(
+                      Object.values(modelos).flat().map(p => getResp(p.observacao)).filter(Boolean)
+                    ));
                     return (
-                      <span className="flex items-center gap-3">
+                      <span className="flex items-center gap-3 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
                         <span className="flex items-center gap-1.5">
                           <span className={`text-sm ${textSecondary}`}>👤</span>
                           {cliente}
                         </span>
+                        {resps.length > 0 && (
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-blue-900/30 text-blue-300" : "bg-blue-50 text-blue-700"}`}>
+                            📦 {resps.join(", ")}
+                          </span>
+                        )}
                       </span>
                     );
                   })() : (dynamicCatLabels[cat] || cat)}
@@ -5658,12 +5690,30 @@ export default function EstoquePage() {
                     <p className={`text-xs font-bold ${mP} mb-3`}>Especificações</p>
                     {rows.length > 0 && (
                       <div className="grid grid-cols-2 gap-3">
-                        {rows.map(([label, value]) => (
-                          <div key={label}>
-                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
-                            <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
-                          </div>
-                        ))}
+                        {rows.map(([label, value]) => {
+                          // Cor: mostrar PT principal + EN canônico em cinza
+                          if (label === "Cor" && p.cor) {
+                            const en = corEnOriginal(p.cor);
+                            const pt = corParaPT(p.cor);
+                            return (
+                              <div key={label}>
+                                <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                                <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>
+                                  {pt}
+                                  {en && en.toLowerCase() !== pt.toLowerCase() && (
+                                    <span className={`ml-1.5 text-[11px] font-normal ${mS}`}>{en}</span>
+                                  )}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={label}>
+                              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                              <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {canEdit && isAdmin && editableTags.length > 0 && (
@@ -5856,6 +5906,36 @@ export default function EstoquePage() {
                     ) : <p className={`text-[13px] ${mP} mt-0.5`}>Não informado</p>}
                   </div>
                 </div>
+                {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (
+                  <div className="mt-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Responsável pela pendência {saved("resp")}</p>
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        id={`resp-${p.id}`}
+                        key={`resp-${p.id}`}
+                        defaultValue={getResp(p.observacao)}
+                        placeholder="Ex: Bia, Entregador João…"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={async () => {
+                          const el = document.getElementById(`resp-${p.id}`) as HTMLInputElement;
+                          const novo = setResp(p.observacao, el?.value || "");
+                          if (novo !== (p.observacao || null)) {
+                            await apiPatch(p.id, { observacao: novo });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: novo } : x));
+                            setDetailProduct(prev => prev ? { ...prev, observacao: novo } : null);
+                            showSaved("resp");
+                          }
+                        }}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                        title="Salvar responsável"
+                      >✓</button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3">
                   <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao {saved("obs")}</p>
                   {(canEdit || isAdmin) ? (() => {
