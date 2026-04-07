@@ -78,8 +78,15 @@ function CompraForm() {
   const trocaCond2Param = searchParams.get("troca_cond2") || "";
   const trocaCor2Param = searchParams.get("troca_cor2") || "";
   const nomeParam = searchParams.get("nome") || "";
-  const whatsappClienteParam = searchParams.get("whatsapp_cliente") || "";
+  const cpfParam = searchParams.get("cpf") || "";
+  const emailParam = searchParams.get("email") || "";
+  const whatsappClienteParam = searchParams.get("whatsapp_cliente") || searchParams.get("telefone") || "";
   const instagramParam = searchParams.get("instagram") || "";
+  const cepParam = searchParams.get("cep") || "";
+  const enderecoParam = searchParams.get("endereco") || "";
+  const numeroParam = searchParams.get("numero") || "";
+  const complementoParam = searchParams.get("complemento") || "";
+  const bairroParam = searchParams.get("bairro") || "";
 
   // Payment params (vindos do StepQuote)
   // Normaliza forma de pagamento: gerador usa "Cartao Credito", form usa "Cartao de Credito"
@@ -242,18 +249,18 @@ function CompraForm() {
 
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
-  // Form state
+  // Form state — aceita pre-preenchimento vindo do gerar-link
   const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [nome, setNome] = useState(nomeParam);
-  const [cpf, setCpf] = useState("");
+  const [cpf, setCpf] = useState(cpfParam ? maskCPF(cpfParam) : "");
   const [cnpj, setCnpj] = useState("");
-  const [email, setEmail] = useState("");
-  const [telefone, setTelefone] = useState(whatsappClienteParam);
-  const [cep, setCep] = useState("");
-  const [endereco, setEndereco] = useState("");
-  const [numero, setNumero] = useState("");
-  const [complemento, setComplemento] = useState("");
-  const [bairro, setBairro] = useState("");
+  const [email, setEmail] = useState(emailParam);
+  const [telefone, setTelefone] = useState(whatsappClienteParam ? maskPhone(whatsappClienteParam) : "");
+  const [cep, setCep] = useState(cepParam ? maskCEP(cepParam) : "");
+  const [endereco, setEndereco] = useState(enderecoParam);
+  const [numero, setNumero] = useState(numeroParam);
+  const [complemento, setComplemento] = useState(complementoParam);
+  const [bairro, setBairro] = useState(bairroParam);
   const [horario, setHorario] = useState(horarioParam);
   const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");

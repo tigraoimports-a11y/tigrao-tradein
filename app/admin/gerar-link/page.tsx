@@ -122,11 +122,82 @@ export default function GerarLinkPage() {
   const [pasteMsg, setPasteMsg] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
 
+  // Dados do cliente (pré-preenchimento via cola de texto)
+  const [incluirDadosCliente, setIncluirDadosCliente] = useState(false);
+  const [dadosClienteTexto, setDadosClienteTexto] = useState("");
+  const [cliNome, setCliNome] = useState("");
+  const [cliCpf, setCliCpf] = useState("");
+  const [cliEmail, setCliEmail] = useState("");
+  const [cliTelefone, setCliTelefone] = useState("");
+  const [cliCep, setCliCep] = useState("");
+  const [cliEndereco, setCliEndereco] = useState("");
+  const [cliNumero, setCliNumero] = useState("");
+  const [cliComplemento, setCliComplemento] = useState("");
+  const [cliBairro, setCliBairro] = useState("");
+  const [parseMsg, setParseMsg] = useState("");
+
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
     if (!digits) return "";
     return Number(digits).toLocaleString("pt-BR");
   };
+
+  // Parser de bloco de texto colado pelo vendedor (formato WhatsApp antigo)
+  function parseDadosCliente(text: string) {
+    const out: { nome?: string; cpf?: string; email?: string; telefone?: string; cep?: string; endereco?: string; numero?: string; complemento?: string; bairro?: string } = {};
+    if (!text.trim()) return out;
+    // Limpa emojis/asteriscos/markdown
+    const clean = text.replace(/[✅☑️✔️]/g, "").replace(/\*/g, "").replace(/_/g, "");
+    const lines = clean.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/^([^:]{2,30}):\s*(.+)$/);
+      if (!m) continue;
+      const label = m[1].toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const value = m[2].trim();
+      if (/nome/.test(label)) out.nome = value;
+      else if (/cpf/.test(label)) out.cpf = value;
+      else if (/e[-\s]?mail|email/.test(label)) out.email = value;
+      else if (/telefone|celular|whats|fone|tel\b/.test(label)) out.telefone = value;
+      else if (/cep/.test(label)) out.cep = value;
+      else if (/endereco|rua|logradouro/.test(label)) {
+        const parts = value.split(",").map((p) => p.trim());
+        out.endereco = parts[0];
+        if (parts[1]) out.numero = parts[1].replace(/^n[oº°]?\.?\s*/i, "");
+        if (parts[2]) out.complemento = parts.slice(2).join(", ");
+      } else if (/numero|número/.test(label)) out.numero = value.replace(/^n[oº°]?\.?\s*/i, "");
+      else if (/complemento/.test(label)) out.complemento = value;
+      else if (/bairro/.test(label)) {
+        // "São Francisco - Niterói - RJ" — pega só a 1ª parte
+        const parts = value.split(/\s*-\s*/).map((p) => p.trim());
+        out.bairro = parts[0];
+      }
+    }
+    return out;
+  }
+
+  function aplicarParse() {
+    const d = parseDadosCliente(dadosClienteTexto);
+    const encontrados: string[] = [];
+    if (d.nome) { setCliNome(d.nome); encontrados.push("Nome"); }
+    if (d.cpf) { setCliCpf(d.cpf); encontrados.push("CPF"); }
+    if (d.email) { setCliEmail(d.email); encontrados.push("E-mail"); }
+    if (d.telefone) { setCliTelefone(d.telefone); encontrados.push("Telefone"); }
+    if (d.cep) { setCliCep(d.cep); encontrados.push("CEP"); }
+    if (d.endereco) { setCliEndereco(d.endereco); encontrados.push("Endereço"); }
+    if (d.numero) { setCliNumero(d.numero); encontrados.push("Número"); }
+    if (d.complemento) { setCliComplemento(d.complemento); encontrados.push("Complemento"); }
+    if (d.bairro) { setCliBairro(d.bairro); encontrados.push("Bairro"); }
+    if (encontrados.length === 0) setParseMsg("❌ Não consegui identificar nenhum dado. Verifique o formato.");
+    else setParseMsg(`✅ ${encontrados.length} campo(s) extraído(s): ${encontrados.join(", ")}`);
+    setTimeout(() => setParseMsg(""), 5000);
+  }
+
+  function limparDadosCliente() {
+    setDadosClienteTexto("");
+    setCliNome(""); setCliCpf(""); setCliEmail(""); setCliTelefone("");
+    setCliCep(""); setCliEndereco(""); setCliNumero(""); setCliComplemento(""); setCliBairro("");
+    setParseMsg("");
+  }
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
@@ -190,6 +261,19 @@ export default function GerarLinkPage() {
     const rawTroca2Data = trocaValor2.replace(/\./g, "").replace(",", ".");
     if (temSegundaTroca && rawTroca2Data && rawTroca2Data !== "0") shortData.tv2 = rawTroca2Data;
     if (pagamentoPago) shortData.pp = pagamentoPago;
+
+    // Dados do cliente pré-preenchidos (quando o vendedor incluir)
+    if (incluirDadosCliente) {
+      if (cliNome.trim()) shortData.cn = cliNome.trim();
+      if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
+      if (cliEmail.trim()) shortData.cem = cliEmail.trim();
+      if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
+      if (cliCep.trim()) shortData.ccep = cliCep.trim();
+      if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
+      if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
+      if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
+      if (cliBairro.trim()) shortData.cba = cliBairro.trim();
+    }
 
     // Salvar no banco e gerar código curto de 6 chars
     try {
@@ -590,6 +674,93 @@ export default function GerarLinkPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Dados do cliente — pré-preenchimento opcional */}
+        <div className={`p-3 rounded-xl border ${incluirDadosCliente ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={incluirDadosCliente}
+              onChange={(e) => { setIncluirDadosCliente(e.target.checked); if (!e.target.checked) limparDadosCliente(); }}
+              className="w-4 h-4 rounded accent-[#E8740E]"
+            />
+            <span className="text-sm font-semibold text-[#1D1D1F]">Deseja incluir dados do cliente?</span>
+          </label>
+          {incluirDadosCliente && (
+            <div className="space-y-3 mt-3">
+              <div>
+                <label className={labelCls}>Colar dados do cliente (formato WhatsApp)</label>
+                <textarea
+                  value={dadosClienteTexto}
+                  onChange={(e) => setDadosClienteTexto(e.target.value)}
+                  placeholder={"Cole o bloco do formulário antigo. Exemplo:\n\n✅ Nome completo: João da Silva\n✅ CPF: 000.000.000-00\n✅ E-mail: joao@email.com\n✅ Telefone: 21 99999-9999\n✅ CEP: 00000-000\n✅ Endereço: Rua Exemplo, 100\n✅ Bairro: Centro"}
+                  rows={6}
+                  className={inputCls + " resize-none font-mono text-xs"}
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={aplicarParse}
+                    disabled={!dadosClienteTexto.trim()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-40 transition-colors"
+                  >
+                    🧠 Extrair dados do texto
+                  </button>
+                  {(cliNome || cliCpf || cliEmail) && (
+                    <button
+                      type="button"
+                      onClick={limparDadosCliente}
+                      className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50"
+                    >
+                      🗑️ Limpar
+                    </button>
+                  )}
+                  {parseMsg && <span className="text-[11px] text-[#6E6E73]">{parseMsg}</span>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Nome completo</label>
+                  <input type="text" value={cliNome} onChange={(e) => setCliNome(e.target.value)} placeholder="João da Silva" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>CPF</label>
+                  <input type="text" value={cliCpf} onChange={(e) => setCliCpf(e.target.value)} placeholder="000.000.000-00" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Telefone</label>
+                  <input type="text" value={cliTelefone} onChange={(e) => setCliTelefone(e.target.value)} placeholder="(21) 99999-9999" className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>E-mail</label>
+                  <input type="email" value={cliEmail} onChange={(e) => setCliEmail(e.target.value)} placeholder="cliente@email.com" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>CEP</label>
+                  <input type="text" value={cliCep} onChange={(e) => setCliCep(e.target.value)} placeholder="00000-000" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Bairro</label>
+                  <input type="text" value={cliBairro} onChange={(e) => setCliBairro(e.target.value)} placeholder="Bairro" className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Endereço (rua)</label>
+                  <input type="text" value={cliEndereco} onChange={(e) => setCliEndereco(e.target.value)} placeholder="Rua exemplo" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Número</label>
+                  <input type="text" value={cliNumero} onChange={(e) => setCliNumero(e.target.value)} placeholder="100" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Complemento</label>
+                  <input type="text" value={cliComplemento} onChange={(e) => setCliComplemento(e.target.value)} placeholder="Apto, bloco..." className={inputCls} />
+                </div>
+              </div>
+              <p className="text-[10px] text-[#86868B]">Esses dados vão pré-preenchidos quando o cliente abrir o link — ele só precisa conferir e confirmar.</p>
             </div>
           )}
         </div>
