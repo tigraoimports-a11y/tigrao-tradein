@@ -529,6 +529,8 @@ export default function GastosPage() {
     venda_id: "",
   });
   const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
+  const [vendasDoContato, setVendasDoContato] = useState<{ id: string; data: string; produto: string; preco_vendido: number }[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
 
   // Produtos do pedido fornecedor
@@ -606,6 +608,24 @@ export default function GastosPage() {
 
   const isFornecedor = form.categoria === "FORNECEDOR";
   const isEstorno = form.categoria === "ESTORNO";
+
+  // Carrega vendas do contato selecionado para popular o dropdown de venda relacionada
+  useEffect(() => {
+    if (!isEstorno || !form.contato_nome.trim()) {
+      setVendasDoContato([]);
+      return;
+    }
+    const nome = form.contato_nome.trim().toUpperCase();
+    const param = form.contato_tipo === "cliente" ? "cliente" : "fornecedor";
+    let cancelled = false;
+    setLoadingVendas(true);
+    fetch(`/api/vendas?${param}=${encodeURIComponent(nome)}&limit=100`, { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setVendasDoContato(j.data || []); })
+      .catch(() => { if (!cancelled) setVendasDoContato([]); })
+      .finally(() => { if (!cancelled) setLoadingVendas(false); });
+    return () => { cancelled = true; };
+  }, [isEstorno, form.contato_nome, form.contato_tipo, password]);
 
   const handleSubmit = async () => {
     const filled = BANCOS.filter((b) => parseBR(bancoValores[b]) > 0);
@@ -938,13 +958,32 @@ export default function GastosPage() {
                 </div>
               </div>
               <div>
-                <p className={labelCls}>ID da venda relacionada (opcional)</p>
-                <input
-                  value={form.venda_id}
-                  onChange={(e) => set("venda_id", e.target.value)}
-                  placeholder="UUID da venda — deixe em branco se não souber"
-                  className={inputCls}
-                />
+                <p className={labelCls}>Venda relacionada (opcional)</p>
+                {!form.contato_nome.trim() ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Selecione um contato primeiro</p>
+                ) : loadingVendas ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Carregando vendas…</p>
+                ) : vendasDoContato.length === 0 ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Nenhuma venda encontrada para este contato</p>
+                ) : (
+                  <select
+                    value={form.venda_id}
+                    onChange={(e) => set("venda_id", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— Sem venda específica —</option>
+                    {vendasDoContato.map((v) => {
+                      const [y, m, d] = (v.data || "").split("-");
+                      const dataFmt = y ? `${d}/${m}/${y}` : "—";
+                      const valor = `R$ ${Math.round(v.preco_vendido || 0).toLocaleString("pt-BR")}`;
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {dataFmt} · {v.produto} · {valor}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
               </div>
             </div>
           )}

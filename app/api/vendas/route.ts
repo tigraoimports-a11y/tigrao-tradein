@@ -90,6 +90,12 @@ export async function GET(req: NextRequest) {
   const estoqueId = searchParams.get("estoque_id");
   if (estoqueId) query = query.eq("estoque_id", estoqueId);
 
+  // Filtros para o seletor de venda no Estorno
+  const cliente = searchParams.get("cliente");
+  if (cliente) query = query.ilike("cliente", cliente);
+  const fornecedor = searchParams.get("fornecedor");
+  if (fornecedor) query = query.ilike("fornecedor", fornecedor);
+
   const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 1000;
   const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
