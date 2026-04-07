@@ -95,6 +95,8 @@ export default function VendasPage() {
     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
+    // Atacado: frete/entrega cobrado a parte
+    frete_valor: "", frete_recebido: false as boolean,
   });
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -914,6 +916,9 @@ export default function VendasPage() {
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
       status_pagamento: "AGUARDANDO",
       vendedor: user?.nome || null,
+      // Entrega atacado (cobrada à parte)
+      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
+      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
     };
 
     if (prodFields._estoqueId) {
@@ -1971,6 +1976,37 @@ export default function VendasPage() {
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+
+              {/* Entrega cobrada à parte */}
+              <div className="p-3 rounded-xl border border-[#E0E0E5] bg-[#FAFAFA]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Entrega (cobrada à parte)</span>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
+                    <input
+                      type="checkbox"
+                      checked={!!form.frete_recebido}
+                      onChange={(e) => set("frete_recebido", e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#E8740E]"
+                    />
+                    Já recebido
+                  </label>
+                </div>
+                <div>
+                  <p className={labelCls}>Valor do frete (R$)</p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.frete_valor}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : "");
+                    }}
+                    placeholder="Ex: 150 — deixe vazio se não há entrega"
+                    className={inputCls}
+                  />
+                  <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -4249,6 +4285,14 @@ export default function VendasPage() {
                                         </p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                          <p>
+                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                                              {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
+                                            </span>
+                                          </p>
+                                        )}
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>

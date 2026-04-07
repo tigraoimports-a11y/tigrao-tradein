@@ -69,6 +69,9 @@ export interface Venda {
   troca_bateria2: string | null;
   troca_obs2: string | null;
   produto_na_troca2: number;
+  // Entrega atacado cobrada à parte
+  frete_valor: number | null;
+  frete_recebido: boolean | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
 }
 
