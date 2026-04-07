@@ -4224,14 +4224,9 @@ export default function EstoquePage() {
                                         <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
                                           {(() => {
                                             if (!p.cor) return "—";
-                                            const upper = p.cor.toUpperCase().trim();
-                                            const en = PT_TO_EN[upper];
-                                            const ptFromMap = COR_PT[upper];
-                                            const ptCustom = CUSTOM_COR_PT[upper];
-                                            if (ptCustom) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptCustom}</span></>;
-                                            if (en) return <>{en.charAt(0).toUpperCase() + en.slice(1).toLowerCase()}<span className={`ml-1 text-[12px] ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
-                                            if (ptFromMap && ptFromMap.toLowerCase() !== p.cor.toLowerCase()) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptFromMap}</span></>;
-                                            return p.cor;
+                                            const pt = corParaPT(p.cor);
+                                            const en = corEnOriginal(p.cor);
+                                            return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[12px] ${textSecondary}`}>{en}</span>}</>;
                                           })()}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right`}>
