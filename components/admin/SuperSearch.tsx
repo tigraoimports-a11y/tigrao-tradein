@@ -233,6 +233,18 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
     custo_unitario: item.custo ? String(item.custo) : "",
   });
 
+  // Parse tags estruturadas da observacao (seminovos)
+  const obs: string = item.observacao || "";
+  const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
+  const ciclosMatch = obs.match(/\[CICLOS:(\d+)\]/);
+  const hasCaixa = /\[COM_CAIXA\]/.test(obs);
+  const hasCabo = /\[COM_CABO\]/.test(obs);
+  const hasFonte = /\[COM_FONTE\]/.test(obs);
+  const hasPulseira = /\[COM_PULSEIRA\]/.test(obs);
+  const obsLimpa = obs.replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(?:A\+|AB|A|B)|CICLOS:\d+)\]/g, "").trim();
+  const isSeminovo = item.tipo_produto === "SEMINOVO" || !!gradeMatch || !!ciclosMatch || hasCaixa || hasCabo || hasFonte || hasPulseira;
+  const hasSpecs = isSeminovo || !!item.origem || !!item.garantia || !!gradeMatch;
+
   const statusColor = (s: string) => {
     if (s === "EM ESTOQUE") return "text-green-600";
     if (s === "A CAMINHO") return "text-yellow-600";
@@ -360,6 +372,47 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
           </div>
         </div>
 
+        {/* Especificações (seminovos) */}
+        {hasSpecs && (
+          <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
+            <p className={`text-xs font-bold ${textPrimary} mb-3`}>Especificações</p>
+            <div className="grid grid-cols-2 gap-3">
+              {gradeMatch && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Grade</p>
+                  <p className={`text-sm font-bold ${textPrimary}`}>{gradeMatch[1]}</p>
+                </div>
+              )}
+              {item.origem && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Origem</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.origem}</p>
+                </div>
+              )}
+              {ciclosMatch && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Ciclos</p>
+                  <p className={`text-sm ${textPrimary}`}>{ciclosMatch[1]}</p>
+                </div>
+              )}
+              {item.garantia && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Garantia</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.garantia}</p>
+                </div>
+              )}
+            </div>
+            {(hasCaixa || hasCabo || hasFonte || hasPulseira) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {hasCaixa && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>📦 Caixa</span>}
+                {hasCabo && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔌 Cabo</span>}
+                {hasFonte && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔋 Fonte</span>}
+                {hasPulseira && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>⌚ Pulseira</span>}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Datas e Fornecedor */}
         <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
           <div className="grid grid-cols-2 gap-3">
@@ -399,10 +452,10 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
               </div>
             )}
           </div>
-          {item.observacao && !editing && (
+          {obsLimpa && !editing && (
             <div className="mt-3">
               <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Observacao</p>
-              <p className={`text-sm ${textPrimary}`}>{item.observacao}</p>
+              <p className={`text-sm ${textPrimary}`}>{obsLimpa}</p>
             </div>
           )}
           {editing && (

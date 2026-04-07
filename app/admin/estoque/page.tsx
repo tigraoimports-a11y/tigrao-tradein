@@ -802,14 +802,18 @@ export default function EstoquePage() {
       } catch { /* ignore */ }
     };
     fetchOverrides(true);
-    // Polling a cada 15s + refetch ao focar a janela (sincronização entre usuários)
-    const interval = setInterval(() => fetchOverrides(false), 15000);
-    const onFocus = () => fetchOverrides(false);
-    window.addEventListener("focus", onFocus);
+    // Polling a cada 60s + refetch ao voltar de aba oculta (evita disparos em cada foco de janela)
+    const interval = setInterval(() => fetchOverrides(false), 60000);
+    let wasHidden = false;
+    const onVisibility = () => {
+      if (document.hidden) { wasHidden = true; return; }
+      if (wasHidden) { wasHidden = false; fetchOverrides(false); }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingCardTitle, setEditingCardTitle] = useState("");

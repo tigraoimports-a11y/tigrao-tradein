@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // ── 1. Buscar no estoque (produtos com serial/IMEI) ──
   const { data: estoqueResults } = await supabase
     .from("estoque")
-    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei")
+    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei, origem, garantia")
     .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cliente.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
@@ -131,6 +131,8 @@ export async function GET(req: NextRequest) {
     observacao: e.observacao,
     bateria: e.bateria,
     qnt: e.qnt,
+    origem: e.origem,
+    garantia: e.garantia,
   }));
 
   // ── 6. Montar resultados de vendas ──
