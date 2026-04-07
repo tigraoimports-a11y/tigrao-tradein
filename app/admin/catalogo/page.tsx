@@ -560,6 +560,7 @@ const PAGE_SIZE = 15;
 
 function ModelosTab({ data, headers, reload }: TabProps) {
   const [search, setSearch] = useState("");
+  const [filtroCat, setFiltroCat] = useState<string>("");
   const [page, setPage] = useState(1);
   const [selectedModelo, setSelectedModelo] = useState<Modelo | null>(null);
   const [configs, setConfigs] = useState<Set<string>>(new Set());
@@ -578,6 +579,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   }
 
   const filteredModelos = data.modelos
+    .filter((m) => !filtroCat || m.categoria_key === filtroCat)
     .filter(
       (m) =>
         m.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -740,7 +742,25 @@ function ModelosTab({ data, headers, reload }: TabProps) {
           </form>
         )}
 
-        <div className="p-3 border-b border-[#F5F5F7]">
+        <div className="p-3 border-b border-[#F5F5F7] space-y-2">
+          <select
+            value={filtroCat}
+            onChange={(e) => { setFiltroCat(e.target.value); setPage(1); }}
+            className={`${inputCls} w-full`}
+          >
+            <option value="">Todas as categorias ({data.modelos.length})</option>
+            {data.categorias
+              .slice()
+              .sort((a, b) => a.ordem - b.ordem)
+              .map((c) => {
+                const count = data.modelos.filter((m) => m.categoria_key === c.key).length;
+                return (
+                  <option key={c.key} value={c.key}>
+                    {c.emoji} {c.nome} ({count})
+                  </option>
+                );
+              })}
+          </select>
           <input
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
