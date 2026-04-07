@@ -540,6 +540,69 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
           </div>
         )}
 
+        {/* Botão imprimir etiqueta — quando tem serial ou imei */}
+        {!editing && (item.serial_no || item.imei) && (
+          <div className="mx-4 mt-2 mb-1">
+            <button
+              onClick={() => {
+                const codigo = item.serial_no || item.imei || "";
+                if (!codigo) return;
+                const win = window.open("", "_blank", "width=300,height=300");
+                if (!win) return;
+                const produtoNome = item.produto || "";
+                const cor = item.cor || "";
+                const serial = item.serial_no || "";
+                const imei = item.imei || "";
+                win.document.write(`<!DOCTYPE html><html><head>
+<title>Etiqueta ${codigo}</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{margin:0;padding:0;width:100%}
+body{font-family:Arial,Helvetica,sans-serif}
+.wrap{text-align:center;padding:3mm 5mm 2mm 5mm}
+.produto{font-size:11pt;font-weight:bold;line-height:1.2}
+.cor{font-size:8pt;color:#333;margin-top:1mm}
+.extra{font-size:6pt;color:#444;margin-top:1mm}
+.qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+.cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
+@page{size:62mm 45mm;margin:0}
+</style></head><body>
+<div class="wrap">
+<div class="produto">${produtoNome}</div>
+${cor ? `<div class="cor">${cor}</div>` : ""}
+${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+<div class="qr"><canvas id="qr"></canvas></div>
+<div class="cod">${codigo}</div>
+</div>
+<script>
+var qr = qrcode(0, 'M');
+qr.addData('${codigo}');
+qr.make();
+var canvas = document.getElementById('qr');
+var size = 150;
+canvas.width = size; canvas.height = size;
+canvas.style.width = '10mm'; canvas.style.height = '10mm';
+var ctx = canvas.getContext('2d');
+var cells = qr.getModuleCount();
+var cellSize = size / cells;
+ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+ctx.fillStyle = '#000';
+for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+  if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
+window.onload=function(){window.print();window.close();};
+<\/script></body></html>`);
+                win.document.close();
+              }}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]" : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:bg-[#F5F5F7]"}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Imprimir Etiqueta
+            </button>
+          </div>
+        )}
+
         {/* Botão salvar edição */}
         {editing && (
           <div className="mx-4 mt-3 mb-4 flex gap-2">
