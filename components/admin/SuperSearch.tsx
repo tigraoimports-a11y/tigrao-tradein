@@ -385,6 +385,48 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
           </div>
         </div>
 
+        {/* Origem por Troca */}
+        {item.troca_info && (
+          <div className={`mx-4 mt-3 p-4 rounded-xl border ${dm ? "bg-[#3A2A1C] border-[#E8740E]/40" : "bg-[#FFF3E8] border-[#E8740E]/40"}`}>
+            <p className={`text-xs font-bold ${textPrimary} mb-2 flex items-center gap-2`}>
+              <span>🔄</span> Veio de uma Troca
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Operação</p>
+                <p className={`text-sm font-mono ${textPrimary}`}>{item.troca_info.codigo}</p>
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Motivo</p>
+                <p className={`text-sm ${textPrimary}`}>{item.troca_info.motivo}</p>
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Data</p>
+                <p className={`text-sm ${textPrimary}`}>{(() => { const [y,m,d] = (item.troca_info.data || "").split("-"); return y ? `${d}/${m}/${y}` : "—"; })()}</p>
+              </div>
+              {item.troca_info.fornecedor && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Contato</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.troca_info.fornecedor}</p>
+                </div>
+              )}
+              <div className="col-span-2">
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Produto que saiu</p>
+                <p className={`text-sm ${textPrimary}`}>{item.troca_info.produto_saida_nome}{item.troca_info.produto_saida_cor ? ` · ${item.troca_info.produto_saida_cor}` : ""}</p>
+                {(item.troca_info.produto_saida_serial || item.troca_info.produto_saida_imei) && (
+                  <p className={`text-xs font-mono ${textSecondary}`}>{item.troca_info.produto_saida_serial ? `SN ${item.troca_info.produto_saida_serial}` : ""}{item.troca_info.produto_saida_imei ? `  ·  IMEI ${item.troca_info.produto_saida_imei}` : ""}</p>
+                )}
+              </div>
+              {item.troca_info.observacao && (
+                <div className="col-span-2">
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Observação</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.troca_info.observacao}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Especificações (seminovos) */}
         {hasSpecs && (
           <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
