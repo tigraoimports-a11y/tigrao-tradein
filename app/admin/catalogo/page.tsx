@@ -3,6 +3,54 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 
+// Traduz valores de specs em inglês pra português no display (não altera o banco).
+// A chave continua sendo a string original, então selecionar/comparar funciona igual.
+const COR_PT: Record<string, string> = {
+  "alpine green": "Verde Alpino",
+  "black": "Preto",
+  "black titanium": "Titânio Preto",
+  "blue": "Azul",
+  "blue titanium": "Titânio Azul",
+  "blush": "Rosa Claro",
+  "citrus": "Amarelo Cítrico",
+  "cloud white": "Branco Nuvem",
+  "cosmic orange": "Laranja Cósmico",
+  "deep blue": "Azul Profundo",
+  "deep purple": "Roxo Profundo",
+  "desert titanium": "Titânio Deserto",
+  "gold": "Dourado",
+  "graphite": "Grafite",
+  "green": "Verde",
+  "indigo": "Índigo",
+  "lavender": "Lavanda",
+  "light gold": "Dourado Claro",
+  "midnight": "Meia-Noite",
+  "midnight green": "Verde Meia-Noite",
+  "mist blue": "Azul Névoa",
+  "natural titanium": "Titânio Natural",
+  "pacific blue": "Azul Pacífico",
+  "pink": "Rosa",
+  "purple": "Roxo",
+  "red": "Vermelho",
+  "sage": "Sálvia",
+  "sierra blue": "Azul Serra",
+  "silver": "Prata",
+  "sky blue": "Azul Céu",
+  "space black": "Preto Espacial",
+  "space gray": "Cinza Espacial",
+  "starlight": "Estelar",
+  "teal": "Verde Água",
+  "ultramarine": "Azul Ultramarino",
+  "white": "Branco",
+  "white titanium": "Titânio Branco",
+  "yellow": "Amarelo",
+};
+
+function traduzirValor(valor: string): string {
+  const pt = COR_PT[valor.toLowerCase().trim()];
+  return pt || valor;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Categoria {
@@ -839,7 +887,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                               >
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
-                              <span className="text-sm text-[#1D1D1F]">{v.valor}</span>
+                              <span className="text-sm text-[#1D1D1F]">{traduzirValor(v.valor)}</span>
                             </label>
                           );
                         })}
@@ -1090,7 +1138,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     key={v.id}
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
-                    <span>{v.valor}</span>
+                    <span>{traduzirValor(v.valor)}</span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
                       disabled={saving === v.id}
