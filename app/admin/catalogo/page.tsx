@@ -118,7 +118,7 @@ interface CatalogoData {
   categoriaSpecs: CategoriaSpec[];
 }
 
-type TabKey = "categorias" | "modelos" | "especificacoes";
+type TabKey = "categorias" | "modelos" | "especificacoes" | "cores";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -214,6 +214,9 @@ export default function CatalogoPage() {
           <button className={tabCls("especificacoes")} onClick={() => setTab("especificacoes")}>
             Especificações
           </button>
+          <button className={tabCls("cores")} onClick={() => setTab("cores")}>
+            🎨 Cores
+          </button>
         </div>
 
         {/* Tab content */}
@@ -225,6 +228,9 @@ export default function CatalogoPage() {
         )}
         {tab === "especificacoes" && (
           <EspecificacoesTab data={data} setData={setData} headers={headers} reload={load} />
+        )}
+        {tab === "cores" && (
+          <CoresGlobalTab data={data} headers={headers} reload={load} />
         )}
       </div>
     </div>
@@ -944,6 +950,296 @@ function ModelosTab({ data, headers, reload }: TabProps) {
 
 // ─── Especificacoes Tab ───────────────────────────────────────────────────────
 
+// ─── Cores Global Tab ─────────────────────────────────────────────────────────
+// UI dedicada para gerenciar Cores e Cores AW.
+// Permite editar tanto o nome em INGLÊS (canônico, salvo no banco em
+// catalogo_spec_valores) quanto o nome em PORTUGUÊS (override via
+// setCorPTOverride → localStorage). Add / Edit / Remove inline.
+function CoresGlobalTab({
+  data,
+  headers,
+  reload,
+}: {
+  data: CatalogoData;
+  headers: () => Record<string, string>;
+  reload: () => void;
+}) {
+  type Grupo = { chave: "cores" | "cores_aw"; titulo: string; subtitulo: string };
+  const grupos: Grupo[] = [
+    { chave: "cores", titulo: "Cores (geral)", subtitulo: "iPhone, iPad, MacBook, Mac Mini, AirPods…" },
+    { chave: "cores_aw", titulo: "Cores AW", subtitulo: "Apple Watch (cores específicas)" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#FFF5EB] border border-[#E8740E]/20 rounded-xl p-4 text-sm text-[#1D1D1F]">
+        <strong className="text-[#E8740E]">Como funciona:</strong> O nome em <em>inglês</em> é o
+        canônico salvo no banco — usado em todo o sistema para identificar a cor. O nome em{" "}
+        <em>português</em> é apenas o rótulo de exibição (override local). Edite os dois lados livremente;
+        a sincronização acontece automaticamente em todas as telas (estoque, gastos, vendas, etc.).
+      </div>
+
+      {grupos.map((g) => (
+        <CoresGrupo key={g.chave} grupo={g} data={data} headers={headers} reload={reload} />
+      ))}
+    </div>
+  );
+}
+
+function CoresGrupo({
+  grupo,
+  data,
+  headers,
+  reload,
+}: {
+  grupo: { chave: "cores" | "cores_aw"; titulo: string; subtitulo: string };
+  data: CatalogoData;
+  headers: () => Record<string, string>;
+  reload: () => void;
+}) {
+  const valores = data.specValores
+    .filter((v) => v.tipo_chave === grupo.chave)
+    .sort((a, b) => a.ordem - b.ordem);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEN, setEditEN] = useState("");
+  const [editPT, setEditPT] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newEN, setNewEN] = useState("");
+  const [newPT, setNewPT] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const inputCls =
+    "border border-[#E8E8ED] rounded-lg px-2.5 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
+
+  function startEdit(v: SpecValor) {
+    const en = corParaEN(v.valor) || v.valor;
+    const pt = corParaPT(v.valor);
+    setEditingId(v.id);
+    setEditEN(en);
+    setEditPT(pt === "—" ? "" : pt);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditEN("");
+    setEditPT("");
+  }
+
+  async function saveEdit(v: SpecValor) {
+    const en = editEN.trim();
+    const pt = editPT.trim();
+    if (!en) return alert("O nome em inglês é obrigatório.");
+    setBusy(v.id);
+    try {
+      // 1) Renomeia EN canônico no banco se mudou
+      if (en !== v.valor) {
+        const res = await fetch(BASE, {
+          method: "PATCH",
+          headers: headers(),
+          body: JSON.stringify({ resource: "spec_valores", id: v.id, valor: en }),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+      }
+      // 2) Atualiza override em PT
+      setCorPTOverride(en, pt);
+      cancelEdit();
+      reload();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function addCor(e: React.FormEvent) {
+    e.preventDefault();
+    const en = newEN.trim();
+    const pt = newPT.trim();
+    if (!en) return;
+    setBusy("__add__");
+    try {
+      const ordem = valores.length > 0 ? Math.max(...valores.map((v) => v.ordem)) + 1 : 1;
+      const res = await fetch(BASE, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          resource: "spec_valores",
+          tipo_chave: grupo.chave,
+          valor: en,
+          ordem,
+        }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      if (pt) setCorPTOverride(en, pt);
+      setNewEN("");
+      setNewPT("");
+      setAdding(false);
+      reload();
+    } catch (err) {
+      alert(String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeCor(v: SpecValor) {
+    if (!confirm(`Remover a cor "${corParaPT(v.valor)} (${v.valor})"?`)) return;
+    setBusy(v.id);
+    try {
+      const res = await fetch(BASE, {
+        method: "DELETE",
+        headers: headers(),
+        body: JSON.stringify({ resource: "spec_valores", id: v.id }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      reload();
+    } catch (err) {
+      alert(String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-[#1D1D1F]">{grupo.titulo}</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">{grupo.subtitulo} · {valores.length} cores</p>
+        </div>
+        <button
+          onClick={() => setAdding((a) => !a)}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+        >
+          {adding ? "Cancelar" : "+ Nova cor"}
+        </button>
+      </div>
+
+      {adding && (
+        <form
+          onSubmit={addCor}
+          className="p-4 bg-[#FFF5EB] border-b border-[#E8740E]/20 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end"
+        >
+          <div>
+            <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+              Nome em INGLÊS (canônico)
+            </label>
+            <input
+              value={newEN}
+              onChange={(e) => setNewEN(e.target.value)}
+              placeholder="ex: Sky Blue"
+              className={`${inputCls} w-full`}
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+              Nome em PORTUGUÊS (exibição)
+            </label>
+            <input
+              value={newPT}
+              onChange={(e) => setNewPT(e.target.value)}
+              placeholder="ex: Azul"
+              className={`${inputCls} w-full`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busy === "__add__" || !newEN.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#E8740E] text-white disabled:opacity-50"
+          >
+            Salvar
+          </button>
+        </form>
+      )}
+
+      {valores.length === 0 ? (
+        <div className="p-6 text-center text-[#86868B] text-sm">
+          Nenhuma cor cadastrada ainda. Clique em <strong>+ Nova cor</strong>.
+        </div>
+      ) : (
+        <div className="divide-y divide-[#F5F5F7]">
+          {valores.map((v) => {
+            const isEditing = editingId === v.id;
+            const en = corParaEN(v.valor) || v.valor;
+            const pt = corParaPT(v.valor);
+            const ptDisp = pt === "—" ? "" : pt;
+            return (
+              <div key={v.id} className="px-4 py-3">
+                {isEditing ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+                        Inglês (canônico)
+                      </label>
+                      <input
+                        value={editEN}
+                        onChange={(e) => setEditEN(e.target.value)}
+                        className={`${inputCls} w-full`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+                        Português (exibição)
+                      </label>
+                      <input
+                        value={editPT}
+                        onChange={(e) => setEditPT(e.target.value)}
+                        className={`${inputCls} w-full`}
+                      />
+                    </div>
+                    <button
+                      onClick={() => saveEdit(v)}
+                      disabled={busy === v.id}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white disabled:opacity-50"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#F5F5F7] text-[#1D1D1F]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-[#1D1D1F] truncate">
+                        {ptDisp || <span className="text-[#86868B] italic">sem PT</span>}
+                      </div>
+                      <div className="text-xs text-[#86868B] truncate font-mono">{en}</div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => startEdit(v)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+                      >
+                        ✎ Editar
+                      </button>
+                      <button
+                        onClick={() => removeCor(v)}
+                        disabled={busy === v.id}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        🗑️ Remover
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EspecificacoesTab({ data, headers, reload }: TabProps) {
   const [selectedTipo, setSelectedTipo] = useState<SpecTipo | null>(null);
   const [newTipoForm, setNewTipoForm] = useState(false);
@@ -1108,7 +1404,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
           )}
 
           <div className="divide-y divide-[#F5F5F7]">
-            {data.specTipos.map((tipo) => (
+            {data.specTipos.filter((t) => !isCorTipo(t.chave)).map((tipo) => (
               <div
                 key={tipo.id}
                 className={`flex items-center justify-between px-4 py-3 transition-colors ${
