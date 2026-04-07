@@ -655,15 +655,6 @@ export default function GastosPage() {
         setSaving(false);
         return;
       }
-      const lista = form.contato_tipo === "cliente" ? clientes : form.contato_tipo === "atacado" ? atacados : fornecedores;
-      const existsLocal = lista.some(c => c.nome.toUpperCase() === nome);
-      // Se o dropdown de vendas já encontrou vendas para esse contato, ele existe — aceita
-      const hasVendas = vendasDoContato.length > 0;
-      if (!existsLocal && !hasVendas) {
-        setMsg(`Contato "${nome}" não foi encontrado em ${form.contato_tipo}. Verifique o cadastro.`);
-        setSaving(false);
-        return;
-      }
     }
 
     const base = {
