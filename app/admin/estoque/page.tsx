@@ -791,8 +791,11 @@ export default function EstoquePage() {
         if (cancelled) return;
         if (j.value && typeof j.value === "object" && Object.keys(j.value).length > 0) {
           // Merge remoto com local (local tem prioridade se ainda não sincronizado)
-          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
-          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
+          setCardTitleOverrides(prev => {
+            const merged = { ...(j.value as Record<string, string>), ...prev };
+            try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
         } else if (migrate) {
           // Migrar do localStorage se existir (só na 1ª carga)
           try {
@@ -842,9 +845,13 @@ export default function EstoquePage() {
         if (!r.ok) {
           const j = await r.json().catch(() => ({}));
           console.error("[card_title_overrides] save failed", j);
+          alert(`Erro ao salvar nome do card no banco: ${j.error || r.statusText}. O nome ficou salvo localmente neste navegador.`);
         }
       })
-      .catch(err => console.error("[card_title_overrides] save error", err));
+      .catch(err => {
+        console.error("[card_title_overrides] save error", err);
+        alert(`Erro de rede ao salvar nome do card. Ficou salvo localmente. Detalhe: ${err?.message || err}`);
+      });
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
