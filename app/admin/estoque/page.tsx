@@ -530,10 +530,13 @@ function getModeloBase(produto: string, categoria: string): string {
     return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
-    // Watch: agrupar por modelo + geração + tamanho
+    // Watch: agrupar por modelo + geração + tamanho + conectividade
+    // GPS e GPS+CELL são modelos diferentes, não compartilham card/balanço
     const sizeW = p.match(/(\d{2})\s*MM/i);
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
-    // Ultra com geração (Ultra 2, Ultra 3)
+    const isCell = /\+\s*CEL|GPS\s*\+\s*CEL|CELL|CELULAR/.test(p);
+    const conn = isCell ? " GPS+CEL" : " GPS";
+    // Ultra com geração (Ultra 2, Ultra 3) — Ultra é sempre GPS+CEL, não sufixa
     const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
     if (ultraMatch) {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
@@ -541,12 +544,12 @@ function getModeloBase(produto: string, categoria: string): string {
     }
     // SE com geração (SE 2, SE 3)
     const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}`;
+    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
     // Series com número
     const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
-    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}`;
-    return `Apple Watch${sz}`;
+    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
+    return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
     // AirPods com geração
@@ -771,7 +774,10 @@ export default function EstoquePage() {
   }
 
   // Override de títulos de cards (modelo agrupador) — persiste no banco pra sincronizar entre usuários
-  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>({});
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
+  });
   useEffect(() => {
     if (!password) return;
     let cancelled = false;
@@ -783,8 +789,10 @@ export default function EstoquePage() {
         });
         const j = await r.json();
         if (cancelled) return;
-        if (j.value && typeof j.value === "object") {
-          setCardTitleOverrides(j.value as Record<string, string>);
+        if (j.value && typeof j.value === "object" && Object.keys(j.value).length > 0) {
+          // Merge remoto com local (local tem prioridade se ainda não sincronizado)
+          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
+          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
         } else if (migrate) {
           // Migrar do localStorage se existir (só na 1ª carga)
           try {
@@ -802,14 +810,18 @@ export default function EstoquePage() {
       } catch { /* ignore */ }
     };
     fetchOverrides(true);
-    // Polling a cada 15s + refetch ao focar a janela (sincronização entre usuários)
-    const interval = setInterval(() => fetchOverrides(false), 15000);
-    const onFocus = () => fetchOverrides(false);
-    window.addEventListener("focus", onFocus);
+    // Polling a cada 60s + refetch ao voltar de aba oculta (evita disparos em cada foco de janela)
+    const interval = setInterval(() => fetchOverrides(false), 60000);
+    let wasHidden = false;
+    const onVisibility = () => {
+      if (document.hidden) { wasHidden = true; return; }
+      if (wasHidden) { wasHidden = false; fetchOverrides(false); }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingCardTitle, setEditingCardTitle] = useState("");
@@ -818,12 +830,21 @@ export default function EstoquePage() {
     const updated = { ...cardTitleOverrides, [originalTitle]: newTitle.trim() };
     if (!newTitle.trim() || newTitle.trim() === originalTitle) delete updated[originalTitle];
     setCardTitleOverrides(updated);
+    // Persiste no localStorage como fallback imediato
+    try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated)); } catch {}
     // Salva no banco (sincroniza entre usuários)
     fetch("/api/admin/estoque-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
       body: JSON.stringify({ key: "card_title_overrides", value: updated }),
-    }).catch(() => {});
+    })
+      .then(async r => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          console.error("[card_title_overrides] save failed", j);
+        }
+      })
+      .catch(err => console.error("[card_title_overrides] save error", err));
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
@@ -1515,8 +1536,8 @@ export default function EstoquePage() {
     const qrData = serial || imei || p.id;
     const cor = p.cor ? ` ${p.cor}` : "";
     const obs = p.observacao || "";
-    const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-    const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+    const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+    const grade = gradeMatch || null;
     const hasCaixa = obs.includes("[COM_CAIXA]");
     const hasCabo = obs.includes("[COM_CABO]");
     const win = window.open("", "_blank", "width=600,height=400");
@@ -1694,7 +1715,7 @@ export default function EstoquePage() {
     if (!obs) return null;
     return obs
       .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
-      .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+      .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
       .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
@@ -1704,7 +1725,7 @@ export default function EstoquePage() {
   /** Extrai todas as tags [...] da observação */
   const extractTags = (obs: string | null): string => {
     if (!obs) return "";
-    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(APLUS|AB|A|B)|CICLOS:\d+)\]/g);
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+)\]/g);
     return tags ? tags.join(" ") : "";
   };
 
@@ -1982,7 +2003,7 @@ export default function EstoquePage() {
         if (f === "SEM_CAIXA" && obs.includes("[COM_CAIXA]")) return false;
         if (f === "COM_CABO" && !obs.includes("[COM_CABO]")) return false;
         if (f === "COM_GARANTIA" && !p.garantia) return false;
-        if (f === "GRADE_A+" && !obs.includes("[GRADE_APLUS]")) return false;
+        if (f === "GRADE_A+" && !obs.includes("[GRADE_A+]")) return false;
         if (f === "GRADE_A" && !obs.includes("[GRADE_A]")) return false;
         if (f === "GRADE_AB" && !obs.includes("[GRADE_AB]")) return false;
         if (f === "GRADE_B" && !obs.includes("[GRADE_B]")) return false;
@@ -3158,10 +3179,10 @@ export default function EstoquePage() {
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
               <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
-              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] === "APLUS" ? "A+" : form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
+              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
                 const obs = form.observacao || "";
-                const cleaned = obs.replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "").trim();
-                const tag = e.target.value ? `[GRADE_${e.target.value === "A+" ? "APLUS" : e.target.value}]` : "";
+                const cleaned = obs.replace(/\[GRADE_(A\+|AB|A|B)\]/g, "").trim();
+                const tag = e.target.value ? `[GRADE_${e.target.value}]` : "";
                 set("observacao", tag ? `${cleaned} ${tag}`.trim() : cleaned || "");
               }} className={inputCls}>
                 <option value="">— Sem grade —</option>
@@ -3751,15 +3772,18 @@ export default function EstoquePage() {
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
                           // Agrupar por cor pra mostrar resumo no header (em português)
-                          const colorSummary: Record<string, number> = {};
+                          // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
+                          const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const c = traduzirCor(p.cor);
-                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
+                            const label = traduzirCor(p.cor) || "—";
+                            const key = label.toUpperCase().trim();
+                            if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
+                            colorSummary[key].qnt += p.qnt;
                           });
                           return (
-                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer max-w-[300px] overflow-hidden max-h-[1.4em]`}>
-                              {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
-                                <span key={c} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer`}>
+                              {Object.values(colorSummary).sort((a,b) => a.label.localeCompare(b.label)).map((c, i) => (
+                                <span key={c.label} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{c.qnt}x {c.label}</span>
                               ))}
                             </span>
                           );
@@ -4127,8 +4151,8 @@ export default function EstoquePage() {
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
-                                              const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-                                              const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+                                              const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+                                              const grade = gradeMatch || null;
                                               const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
                                               const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
                                               const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
@@ -4909,8 +4933,8 @@ export default function EstoquePage() {
                       })()}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
-                        const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                        const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                        const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                        const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                         const g = tagKey ? GRADE_TAG[tagKey]
                           : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase();
                         if (!g) return null;
@@ -5165,8 +5189,8 @@ export default function EstoquePage() {
                   )}
                   {/* Grade + Caixa + Cabo + Carregador */}
                   {!isLac && (canEdit || isAdmin) && (() => {
-                    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                    const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                    const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                    const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                     const currentGrade = tagKey ? GRADE_TAG[tagKey]
                       : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
@@ -5214,10 +5238,10 @@ export default function EstoquePage() {
                             const newGrade = e.target.value;
                             const obs = getLatestObs();
                             const cleaned = obs
-                              .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+                              .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
                               .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
                               .trim();
-                            const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
+                            const gradeTag = newGrade ? `[GRADE_${newGrade}]` : "";
                             const finalObs = gradeTag ? `${cleaned} ${gradeTag}`.trim() : (cleaned || null);
                             await apiPatch(p.id, { observacao: finalObs });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));

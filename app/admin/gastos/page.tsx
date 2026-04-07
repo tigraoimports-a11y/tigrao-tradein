@@ -153,8 +153,8 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     spec.ip_origem = fullOrigem;
   }
   const caixaInicial = !!(p.observacao && p.observacao.includes("[COM_CAIXA]"));
-  const GRADE_TAG_MAP: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-  const gradeTagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+  const GRADE_TAG_MAP: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+  const gradeTagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
   const gradeInicial = gradeTagKey ? GRADE_TAG_MAP[gradeTagKey] : "";
   const fornNome = p.fornecedor || "";
   const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
@@ -213,20 +213,20 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   };
   const getOrigemFromObs = (obs: string | null): string => {
     if (!obs) return "";
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_(APLUS|AB|A|B)\])?\s*/, "");
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_(A\+|AB|A|B)\])?\s*/, "");
   };
   const getCaixaFromObs = (obs: string | null): boolean => {
     return !!(obs && obs.includes("[COM_CAIXA]"));
   };
   const getGradeFromObs = (obs: string | null): string => {
-    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-    const key = obs?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+    const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+    const key = obs?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     return key ? GRADE_TAG[key] : "";
   };
   const buildObs = (condicao: string, origem: string, caixa?: boolean, grade?: string): string | null => {
     const prefix = condicao && condicao !== "NOVO" ? `[${condicao}]` : "";
     const caixaTag = caixa ? "[COM_CAIXA]" : "";
-    const gradeKey = grade ? (grade === "A+" ? "APLUS" : grade) : "";
+    const gradeKey = grade ? (grade) : "";
     const gradeTag = gradeKey ? `[GRADE_${gradeKey}]` : "";
     const tags = `${prefix}${caixaTag}${gradeTag}`;
     const combined = tags ? (origem ? `${tags} ${origem}` : tags) : origem;
@@ -642,7 +642,7 @@ export default function GastosPage() {
         const _cond = p.condicao || "NOVO";
         const _prefix = _cond !== "NOVO" ? `[${_cond}]` : "";
         const _caixaTag = p.caixa ? "[COM_CAIXA]" : "";
-        const _gradeKey = p.grade ? (p.grade === "A+" ? "APLUS" : p.grade) : "";
+        const _gradeKey = p.grade ? (p.grade) : "";
         const _gradeTag = _gradeKey ? `[GRADE_${_gradeKey}]` : "";
         const _tags = `${_prefix}${_caixaTag}${_gradeTag}`;
         const obsCondicao = _tags || null;
