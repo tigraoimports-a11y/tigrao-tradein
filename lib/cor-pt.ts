@@ -62,10 +62,28 @@ export const COR_EN_TO_PT_SIMPLES: Record<string, string> = {
   "Natural": "Titânio Natural",
 };
 
+const CUSTOM_KEY = "custom_cor_pt_v1";
+function getCustomOverrides(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || "{}"); } catch { return {}; }
+}
+export function setCorPTOverride(enCanonico: string, pt: string) {
+  if (typeof window === "undefined") return;
+  const map = getCustomOverrides();
+  if (pt && pt.trim()) map[enCanonico.toLowerCase()] = pt.trim();
+  else delete map[enCanonico.toLowerCase()];
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(map));
+  try { window.dispatchEvent(new Event("cor-pt-updated")); } catch {}
+}
+
 export function corParaPT(corEN: string | null | undefined): string {
   if (!corEN) return "—";
   const trimmed = corEN.trim();
   if (!trimmed || trimmed === "—") return "—";
+  // Override customizado (localStorage)
+  const overrides = getCustomOverrides();
+  const ovr = overrides[trimmed.toLowerCase()];
+  if (ovr) return ovr;
   // Tenta match exato (case-insensitive) EN → PT simples
   for (const [en, pt] of Object.entries(COR_EN_TO_PT_SIMPLES)) {
     if (en.toLowerCase() === trimmed.toLowerCase()) return pt;
@@ -80,6 +98,19 @@ export function corParaPT(corEN: string | null | undefined): string {
   }
   // Fallback: retorna o original
   return trimmed;
+}
+
+/** Substitui qualquer cor em inglês conhecida dentro de um texto pela versão PT simplificada. */
+export function normalizarCoresNoTexto(texto: string): string {
+  if (!texto) return texto;
+  let out = texto;
+  // Ordena por tamanho desc para evitar match parcial (ex: "Rose Gold" antes de "Gold")
+  const entries = Object.entries(COR_EN_TO_PT_SIMPLES).sort((a, b) => b[0].length - a[0].length);
+  for (const [en, pt] of entries) {
+    const re = new RegExp(`\\b${en.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    out = out.replace(re, pt);
+  }
+  return out;
 }
 
 /** Retorna a cor em inglês canônico (ex: "Sky Blue", "Teal", "Lavender"). */
