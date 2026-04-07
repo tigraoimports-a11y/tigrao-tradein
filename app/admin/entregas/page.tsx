@@ -158,6 +158,19 @@ export default function EntregasPage() {
   const valorFinal = Math.max(0, valorBase - descontoNum);
   const valorAPagar = Math.max(0, valorFinal - trocaNum);
 
+  // Cálculo de parcelas com taxa embutida (mesma tabela do /gerar-link e Nova Venda)
+  const TAXAS_PARCELAS: Record<number, number> = {
+    1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+    7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+    13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+    19: 20, 20: 21, 21: 22,
+  };
+  const isCartaoCredito = form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Link de Pagamento";
+  const nParcelas = parseInt(form.parcelas) || 0;
+  const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
+  const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorAPagar * (1 + taxaAtual / 100)) : valorAPagar;
+  const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
+
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const fetchEntregas = useCallback(async () => {
@@ -244,13 +257,17 @@ export default function EntregasPage() {
       ? prods.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
       : prods[0] || "—";
 
-    // Pagamento principal
+    // Pagamento principal — quando é cartão crédito/link com parcelas, mostra breakdown calculado
     let pagText = `${form.forma_pagamento || "—"}`;
-    if (form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") {
+    if (form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") {
       if (form.parcelas) pagText += ` ${form.parcelas}x`;
       if (form.maquina) pagText += ` (${form.maquina})`;
     }
-    pagText += ` R$${form.valor || "0"}`;
+    if (isCartaoCredito && nParcelas > 0 && valorAPagar > 0) {
+      pagText += ` — ${nParcelas}x de R$${valorParcela.toLocaleString("pt-BR")} (total c/ taxa R$${totalComTaxa.toLocaleString("pt-BR")} | base R$${valorAPagar.toLocaleString("pt-BR")} + ${taxaAtual}%)`;
+    } else {
+      pagText += ` R$${form.valor || "0"}`;
+    }
 
     // Pagamento alternativo
     let pagAlt = "";
@@ -714,12 +731,12 @@ export default function EntregasPage() {
               <p className={labelCls}>Valor Base (R$)</p>
               <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
             </div>
-            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && (<>
+            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") && (<>
               <div>
-                <p className={labelCls}>Parcelas</p>
+                <p className={labelCls}>Parcelas {form.forma_pagamento === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
                 <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
                   <option value="">—</option>
-                  {[1,2,3,4,5,6,7,8,9,10,11,12,18,21].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                  {(form.forma_pagamento === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
                 </select>
               </div>
               <div>
@@ -730,6 +747,17 @@ export default function EntregasPage() {
                   <option value="INFINITE">Infinite</option>
                 </select>
               </div>
+              {/* Breakdown automático da parcela com taxa embutida */}
+              {isCartaoCredito && nParcelas > 0 && valorAPagar > 0 && (
+                <div className="col-span-2 md:col-span-3 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorAPagar.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorAPagar).toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#86868B]">Total c/ taxa: <b className="text-[#1D1D1F]">R$ {totalComTaxa.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                  </div>
+                </div>
+              )}
             </>)}
             {/* Pagamento alternativo */}
             {showPagAlt ? (
