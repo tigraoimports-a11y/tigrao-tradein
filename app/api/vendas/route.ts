@@ -190,11 +190,41 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Se não tem estoque_id mas tem serial, buscar automaticamente no estoque
+  // (sem .single() — evita erro silencioso quando há 0 ou N matches)
   if (!estoqueId && body.serial_no) {
-    const { data: foundBySerial } = await supabase.from("estoque").select("id").eq("serial_no", body.serial_no.toUpperCase()).eq("status", "EM ESTOQUE").limit(1).single();
-    if (foundBySerial) {
-      estoqueId = foundBySerial.id;
+    const serialU = String(body.serial_no).toUpperCase();
+    const { data: foundBySerial } = await supabase
+      .from("estoque")
+      .select("id, status")
+      .eq("serial_no", serialU)
+      .in("status", ["EM ESTOQUE", "PENDENTE"])
+      .order("status", { ascending: true }) // "EM ESTOQUE" antes de "PENDENTE"
+      .limit(1);
+    if (foundBySerial && foundBySerial.length > 0) {
+      estoqueId = foundBySerial[0].id;
       await supabase.from("vendas").update({ estoque_id: estoqueId }).eq("id", data?.id);
+    }
+  }
+
+  // Proteção anti-duplicidade: marcar como ESGOTADO quaisquer outros itens ativos
+  // com o mesmo serial (exceto o que acabou de ser vinculado).
+  if (body.serial_no) {
+    const serialU = String(body.serial_no).toUpperCase();
+    const { data: duplicados } = await supabase
+      .from("estoque")
+      .select("id")
+      .eq("serial_no", serialU)
+      .in("status", ["EM ESTOQUE", "PENDENTE"]);
+    if (duplicados && duplicados.length > 0) {
+      const idsParaEsgotar = duplicados
+        .filter(d => d.id !== estoqueId)
+        .map(d => d.id);
+      if (idsParaEsgotar.length > 0) {
+        await supabase.from("estoque")
+          .update({ qnt: 0, status: "ESGOTADO", updated_at: new Date().toISOString() })
+          .in("id", idsParaEsgotar);
+        await logActivity(usuario, "Duplicidade de serial resolvida (auto)", `Serial ${serialU}: ${idsParaEsgotar.length} item(s) ESGOTADO`, "estoque");
+      }
     }
   }
 
