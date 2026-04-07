@@ -4556,7 +4556,17 @@ export default function EstoquePage() {
             <div className={`w-full max-w-lg mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
-                <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                <div className="flex items-center gap-2">
+                  {(p.serial_no || p.imei) && (
+                    <button
+                      onClick={() => handlePrintEtiquetaDirect([p])}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
+                    >
+                      🏷️ Etiqueta
+                    </button>
+                  )}
+                  <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                </div>
               </div>
               {/* Produto — editável para pendências */}
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
