@@ -5378,7 +5378,33 @@ export default function EstoquePage() {
                       />
                     </div>
                   )}
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p>
+                    {canEdit && isAdmin ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[13px] ${mS}`}>R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          defaultValue={p.custo_unitario ? String(p.custo_unitario) : ""}
+                          placeholder="0"
+                          onBlur={async (e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            const num = val ? parseInt(val) : null;
+                            if (num !== p.custo_unitario) {
+                              await apiPatch(p.id, { custo_unitario: num });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_unitario: num ?? 0 } : x));
+                              setDetailProduct({ ...p, custo_unitario: num ?? 0 });
+                              showSaved("custo");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
+                    ) : (
+                      <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
+                    )}
+                  </div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
                 {/* Estoque mínimo — para lacrados, editável pelo admin */}
