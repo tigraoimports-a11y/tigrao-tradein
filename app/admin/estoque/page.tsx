@@ -3668,10 +3668,23 @@ export default function EstoquePage() {
                     .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
+                  // Normaliza cor: traduz PT→EN e remove código de origem (LL/BR/etc)
+                  const canonicalCor = (cor: string | null | undefined, categoria: string | null | undefined): string => {
+                    if (!cor) return "";
+                    const isIphone = (categoria || "").toUpperCase() === "IPHONES" || !categoria;
+                    const c = isIphone ? stripCode(cor) : cor;
+                    const upper = c.toUpperCase().trim();
+                    return (PT_TO_EN[upper] || upper).toUpperCase();
+                  };
                   items.forEach((p) => {
                     // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
                     if (tab === "seminovos" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto).toUpperCase();
+                    // Agrupar por modelo base (sem cor) + cor canônica (PT→EN)
+                    // Isso evita duplicação quando o produto foi cadastrado com cor diferente
+                    // (ex: "IPHONE 17 PRO 256GB COSMIC ORANGE" vs "IPHONE 17 PRO 256GB LARANJA")
+                    const baseModelo = getModeloBase(p.produto, p.categoria).toUpperCase();
+                    const corCanon = canonicalCor(p.cor, p.categoria);
+                    const groupKey = `${baseModelo}|||${corCanon}`;
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
@@ -3965,7 +3978,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
+                                          {displayNomeProduto(prodItems[0]?.produto || prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
                                           {/* Badge de núcleos para MacBooks */}
                                           {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
                                             const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
