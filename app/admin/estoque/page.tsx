@@ -512,6 +512,21 @@ function corSoPT(cor: string | null | undefined, nome?: string | null): string |
   return null;
 }
 
+/** Retorna a cor em EN canônico (ex: "Lavender", "Teal", "Ultramarine") a partir de p.cor (que pode estar em PT ou EN). */
+function corEnOriginal(cor: string | null | undefined): string | null {
+  if (!cor) return null;
+  const clean = stripCode(cor).trim();
+  if (!clean || clean === "—") return null;
+  const upper = clean.toUpperCase();
+  // Já em EN?
+  if (COR_PT[upper]) return clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  // PT → EN
+  const en = PT_TO_EN[upper];
+  if (en) return en;
+  // Fallback: devolve formatado
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
 /** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
 function corBilingual(cor: string | null | undefined): string {
   if (!cor) return "—";
@@ -3583,16 +3598,9 @@ export default function EstoquePage() {
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
                                           {(() => {
                                             if (!p.cor) return p.produto;
-                                            const upper = p.cor.toUpperCase().trim();
-                                            const ptFromEN = COR_PT[upper];
-                                            if (ptFromEN && ptFromEN.toLowerCase() !== p.cor.toLowerCase()) {
-                                              return <>{p.cor} <span className={`text-[11px] font-normal ${textSecondary}`}>{ptFromEN}</span></>;
-                                            }
-                                            const enFromPT = PT_TO_EN[upper];
-                                            if (enFromPT) {
-                                              return <>{enFromPT} <span className={`text-[11px] font-normal ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
-                                            }
-                                            return p.cor;
+                                            const pt = corParaPT(p.cor);
+                                            const en = corEnOriginal(p.cor);
+                                            return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[11px] font-normal ${textSecondary}`}>{en}</span>}</>;
                                           })()}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
@@ -4165,61 +4173,11 @@ export default function EstoquePage() {
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
                                           {formatProdutoDisplay(prodItems[0] || { produto: prodNome })}
-                                          {/* Badge de núcleos para MacBooks */}
-                                          {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
-                                            const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
-                                            const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
-                                            if (!nucleosMatch) return null;
-                                            return <span className="px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-bold text-white/70 tracking-wide">{nucleosMatch[1]}</span>;
-                                          })()}
                                           {(() => {
-                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
-                                            const corKey = prodItems[0]?.cor || extractCorEN(prodItems[0]?.produto) || "";
-                                            const editKey = `${prodItems[0]?.id}_corpt`;
-                                            if (editingCorPT[editKey] !== undefined) {
-                                              const savePT = (corEN: string, newPT: string) => {
-                                                if (newPT) {
-                                                  saveCustomCorPT(corEN, newPT);
-                                                  setEstoque(prev => [...prev]); // force re-render
-                                                }
-                                              };
-                                              return (
-                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
-                                                  <input
-                                                    value={editingCorPT[editKey]}
-                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === "Enter") {
-                                                        savePT(corKey, editingCorPT[editKey]?.trim() || "");
-                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                      }
-                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                    }}
-                                                    className={`w-24 px-1 py-0.5 rounded border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
-                                                    autoFocus
-                                                    placeholder="Cor em PT..."
-                                                  />
-                                                  <button onClick={() => {
-                                                    savePT(corKey, editingCorPT[editKey]?.trim() || "");
-                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                  }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                  <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
-                                                </span>
-                                              );
-                                            }
-                                            return ptLabel ? (
-                                              <span
-                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: ptLabel || "" })); }}
-                                                title="Clique para editar a cor em PT"
-                                              >{ptLabel}</span>
-                                            ) : corKey ? (
-                                              <span
-                                                className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: "" })); }}
-                                                title="Adicionar nome em PT"
-                                              >+PT</span>
-                                            ) : null;
+                                            const en = corEnOriginal(prodItems[0]?.cor);
+                                            const pt = prodItems[0]?.cor ? corParaPT(prodItems[0].cor) : "";
+                                            if (!en || (pt && en.toLowerCase() === pt.toLowerCase())) return null;
+                                            return <span className="text-[11px] font-normal opacity-60 ml-1">{en}</span>;
                                           })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
@@ -4806,13 +4764,12 @@ export default function EstoquePage() {
                     ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
                         {formatProdutoDisplay(p)}
-                        {/* Badge de núcleos para MacBooks e Mac Mini */}
-                        {(getBaseCat(p.categoria) === "MACBOOK" || getBaseCat(p.categoria) === "MAC_MINI") && (() => {
-                          const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
-                          if (!nucleosMatch) return null;
-                          return <span className={`ml-2 px-2 py-0.5 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{nucleosMatch[1]}</span>;
+                        {(() => {
+                          const en = corEnOriginal(p.cor);
+                          const pt = p.cor ? corParaPT(p.cor) : "";
+                          if (!en || (pt && en.toLowerCase() === pt.toLowerCase())) return null;
+                          return <span className={`ml-2 text-[13px] font-normal ${mS}`}>{en}</span>;
                         })()}
-                        {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
                       </p>
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho, pulseira } = extractWatchBadges(p.produto);
@@ -5597,8 +5554,13 @@ export default function EstoquePage() {
                 const ciclos = tag(/\[CICLOS:(\d+)\]/);
                 const ram = tag(/\[RAM:([^\]]+)\]/);
                 const ssd = tag(/\[SSD:([^\]]+)\]/);
-                const cpu = tag(/\[CPU:([^\]]+)\]/);
-                const gpu = tag(/\[GPU:([^\]]+)\]/);
+                let cpu = tag(/\[CPU:([^\]]+)\]/);
+                let gpu = tag(/\[GPU:([^\]]+)\]/);
+                // Fallback: extrai do nome ex "(10C CPU/8C GPU)"
+                if (!cpu || !gpu) {
+                  const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
+                  if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
+                }
                 const tela = tag(/\[TELA:([^\]]+)\]/);
                 const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
                 const band = tag(/\[BAND:([^\]]+)\]/);
