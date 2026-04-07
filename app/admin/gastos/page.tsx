@@ -523,7 +523,12 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
+    // Estorno
+    contato_tipo: "cliente" as "cliente" | "fornecedor" | "atacado",
+    contato_nome: "",
+    venda_id: "",
   });
+  const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
 
   // Produtos do pedido fornecedor
@@ -570,7 +575,7 @@ export default function GastosPage() {
     setLoading(false);
   }, [password]);
 
-  // Buscar fornecedores
+  // Buscar fornecedores e clientes
   useEffect(() => {
     (async () => {
       try {
@@ -578,6 +583,13 @@ export default function GastosPage() {
         if (res.ok) {
           const json = await res.json();
           setFornecedores(json.data ?? []);
+        }
+      } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/clientes", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setClientes(json.data ?? []);
         }
       } catch { /* ignore */ }
     })();
@@ -593,6 +605,7 @@ export default function GastosPage() {
   const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
 
   const isFornecedor = form.categoria === "FORNECEDOR";
+  const isEstorno = form.categoria === "ESTORNO";
 
   const handleSubmit = async () => {
     const filled = BANCOS.filter((b) => parseBR(bancoValores[b]) > 0);
@@ -607,6 +620,11 @@ export default function GastosPage() {
     setSaving(true);
     setMsg("");
 
+    if (isEstorno && !form.contato_nome.trim()) {
+      setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
+      return;
+    }
+
     const base = {
       data: form.data,
       hora: form.horario || null,
@@ -615,6 +633,9 @@ export default function GastosPage() {
       descricao: form.descricao || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
+      contato_nome: isEstorno ? form.contato_nome.trim().toUpperCase() : null,
+      contato_tipo: isEstorno ? form.contato_tipo : null,
+      venda_id: isEstorno && form.venda_id.trim() ? form.venda_id.trim() : null,
     };
 
     // Montar gastos (single ou multi-banco)
@@ -680,7 +701,7 @@ export default function GastosPage() {
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
       setMsg(`Gasto registrado!${prodMsg}`);
-      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "" }));
       setBancoValores(emptyBancoValores());
       setPedidoProdutos([]);
       fetchGastos();
@@ -868,6 +889,56 @@ export default function GastosPage() {
             <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
           </div>
+
+          {/* Bloco de Estorno — vínculo com contato */}
+          {isEstorno && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-red-500/40 bg-red-500/5" : "border-red-400/30 bg-red-50"} space-y-3`}>
+              <div>
+                <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>↩️ Estorno — vincular ao contato</p>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  A venda original permanece. Este registro contabiliza a saída de caixa do valor estornado.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <p className={labelCls}>Tipo</p>
+                  <select
+                    value={form.contato_tipo}
+                    onChange={(e) => set("contato_tipo", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="cliente">Cliente</option>
+                    <option value="fornecedor">Fornecedor</option>
+                    <option value="atacado">Atacado</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <p className={labelCls}>Nome do contato</p>
+                  <input
+                    list="estorno-contatos"
+                    value={form.contato_nome}
+                    onChange={(e) => set("contato_nome", e.target.value.toUpperCase())}
+                    placeholder="Comece a digitar para buscar"
+                    className={`${inputCls} uppercase`}
+                  />
+                  <datalist id="estorno-contatos">
+                    {(form.contato_tipo === "fornecedor" ? fornecedores : clientes).map((c) => (
+                      <option key={c.id} value={c.nome} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <p className={labelCls}>ID da venda relacionada (opcional)</p>
+                <input
+                  value={form.venda_id}
+                  onChange={(e) => set("venda_id", e.target.value)}
+                  placeholder="UUID da venda — deixe em branco se não souber"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Distribuição por banco */}
           <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
