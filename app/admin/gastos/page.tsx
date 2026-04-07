@@ -588,10 +588,10 @@ export default function GastosPage() {
         }
       } catch { /* ignore */ }
       try {
-        const res = await fetch("/api/clientes", { headers: { "x-admin-password": password } });
+        const res = await fetch("/api/admin/clientes", { headers: { "x-admin-password": password } });
         if (res.ok) {
           const json = await res.json();
-          setClientes(json.data ?? []);
+          setClientes(json.clientes ?? json.data ?? []);
         }
       } catch { /* ignore */ }
     })();
