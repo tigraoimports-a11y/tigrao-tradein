@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useSearchParams } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface VendaResumo {
   id: string;
@@ -574,7 +575,7 @@ export default function ClientesPage() {
                                         <div key={i} className="flex items-center justify-between text-[11px] py-1">
                                           <div className="flex items-center gap-2 flex-1 min-w-0">
                                             <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
-                                            {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
+                                            {c.cor && <span className={`shrink-0 ${mS}`}>{corParaPT(c.cor)}</span>}
                                             {c.serial_no
                                               ? <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>
                                               : <span className="text-amber-600 shrink-0">⚠ sem SN</span>}

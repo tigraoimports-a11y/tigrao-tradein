@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase();
     const modeloId = req.nextUrl.searchParams.get("modelo_id");
+    const allConfigs = req.nextUrl.searchParams.get("all_configs");
 
     // Return configs for a specific model
     if (modeloId) {
@@ -23,6 +24,15 @@ export async function GET(req: NextRequest) {
         .from("catalogo_modelo_configs")
         .select("*")
         .eq("modelo_id", modeloId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ configs: data ?? [] });
+    }
+
+    // Return ALL model configs (used by estoque page to know all valid colors per model)
+    if (allConfigs) {
+      const { data, error } = await supabase
+        .from("catalogo_modelo_configs")
+        .select("modelo_id,tipo_chave,valor");
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ configs: data ?? [] });
     }

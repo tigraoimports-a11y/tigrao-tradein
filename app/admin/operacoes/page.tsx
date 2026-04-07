@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
+import { corParaPT } from "@/lib/cor-pt";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Operacao {
@@ -206,7 +207,7 @@ export default function OperacoesPage() {
                           <p className={`text-sm font-semibold ${txtP}`}>{item.produto}</p>
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             {item.tipo_venda && <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${item.tipo_venda === "NOVO" || item.tipo_venda === "VENDA" ? "bg-green-100 text-green-700" : item.tipo_venda === "UPGRADE" ? "bg-purple-100 text-purple-700" : item.tipo_venda === "ATACADO" ? "bg-blue-100 text-blue-700" : item.tipo_venda === "SEMINOVO" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700"}`}>{item.tipo_venda}</span>}
-                            {item.cor && <span className={`text-[11px] ${txtS}`}>{item.cor}</span>}
+                            {item.cor && <span className={`text-[11px] ${txtS}`}>{corParaPT(item.cor)}</span>}
                           </div>
                           {(item.serial_no || item.imei) && (
                             <div className={`flex items-center gap-4 mt-2 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
@@ -228,7 +229,7 @@ export default function OperacoesPage() {
                                   const win = window.open("", "_blank", "width=300,height=300");
                                   if (!win) return;
                                   const produtoNome = item.produto || "";
-                                  const cor = item.cor || "";
+                                  const cor = item.cor ? corParaPT(item.cor) : "";
                                   const serial = item.serial_no || "";
                                   const imei = item.imei || "";
                                   win.document.write(`<!DOCTYPE html><html><head>

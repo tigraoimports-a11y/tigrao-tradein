@@ -3,35 +3,63 @@ import { COR_PT_TO_EN } from "./produto-specs";
 // Tradução simplificada: cores em inglês do catálogo → PT base.
 // Várias variantes em inglês colapsam pra mesma cor genérica em PT.
 export const COR_EN_TO_PT_SIMPLES: Record<string, string> = {
+  // Pretos
   "Black": "Preto",
-  "Black Titanium": "Titânio Preto",
-  "Blue": "Azul",
-  "Blue Titanium": "Titânio Azul",
-  "Cloud White": "Branco",
-  "Deep Purple": "Roxo",
-  "Desert Titanium": "Titânio Deserto",
-  "Gold": "Dourado",
-  "Graphite": "Cinza",
-  "Green": "Verde",
-  "Indigo": "Azul",
   "Jet Black": "Preto",
-  "Lavender": "Lavanda",
   "Midnight": "Preto",
-  "Natural": "Natural",
-  "Natural Titanium": "Titânio Natural",
-  "Orange": "Laranja",
-  "Pink": "Rosa",
-  "Purple": "Roxo",
-  "Red": "Vermelho",
-  "Rose Gold": "Dourado",
-  "Silver": "Prata",
-  "Slate": "Cinza",
   "Space Black": "Preto",
-  "Space Gray": "Cinza",
-  "Starlight": "Estelar",
+  // Brancos
   "White": "Branco",
-  "White Titanium": "Titânio Branco",
+  "Cloud White": "Branco",
+  // Azuis (todos colapsam)
+  "Blue": "Azul",
+  "Sky Blue": "Azul",
+  "Mist Blue": "Azul",
+  "Sierra Blue": "Azul",
+  "Pacific Blue": "Azul",
+  "Deep Blue": "Azul",
+  "Indigo": "Azul",
+  "Ultramarine": "Azul",
+  // Verdes
+  "Green": "Verde",
+  "Alpine Green": "Verde",
+  "Midnight Green": "Verde",
+  "Sage": "Verde",
+  "Teal": "Verde",
+  // Cinzas / Prata
+  "Silver": "Prata",
+  "Graphite": "Cinza",
+  "Slate": "Cinza",
+  "Space Gray": "Cinza",
+  // Dourados
+  "Gold": "Dourado",
+  "Light Gold": "Dourado",
+  "Rose Gold": "Dourado",
+  // Roxos
+  "Purple": "Roxo",
+  "Deep Purple": "Roxo",
+  "Lavender": "Roxo",
+  // Rosas
+  "Pink": "Rosa",
+  "Blush": "Rosa",
+  // Laranjas
+  "Orange": "Laranja",
+  "Cosmic Orange": "Laranja",
+  // Amarelos
   "Yellow": "Amarelo",
+  "Citrus": "Amarelo",
+  // Vermelhos
+  "Red": "Vermelho",
+  "(PRODUCT)RED": "Vermelho",
+  // Estelar
+  "Starlight": "Estelar",
+  // Titânios
+  "Black Titanium": "Titânio Preto",
+  "Blue Titanium": "Titânio Azul",
+  "Desert Titanium": "Titânio Deserto",
+  "Natural Titanium": "Titânio Natural",
+  "White Titanium": "Titânio Branco",
+  "Natural": "Titânio Natural",
 };
 
 export function corParaPT(corEN: string | null | undefined): string {

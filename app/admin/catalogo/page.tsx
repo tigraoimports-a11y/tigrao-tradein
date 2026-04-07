@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 // Traduz valores de specs em inglês pra português no display (não altera o banco).
 // A chave continua sendo a string original, então selecionar/comparar funciona igual.
@@ -48,8 +49,12 @@ const COR_PT: Record<string, string> = {
 };
 
 function traduzirValor(valor: string, tipoChave?: string): string {
-  // Para cores, manter o valor original em inglês (sem tradução PT).
-  if (tipoChave === "cores") return valor;
+  // Para cores: mostra EN + PT simplificado lado a lado, ex: "Sky Blue  Azul"
+  if (tipoChave === "cores") {
+    const pt = corParaPT(valor);
+    if (pt && pt !== valor && pt !== "—") return `${valor}  ${pt}`;
+    return valor;
+  }
   const pt = COR_PT[valor.toLowerCase().trim()];
   return pt || valor;
 }

@@ -20,6 +20,7 @@ import {
   DEFAULT_SPEC, buildProdutoName,
   type ProdutoSpec,
 } from "@/lib/produto-specs";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface Etiqueta {
   id: string;
@@ -265,7 +266,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       </style></head><body>
       <div class="wrap">
         <div class="produto">${etiqueta.produto}</div>
-        ${etiqueta.cor ? `<div class="cor">${etiqueta.cor}</div>` : ""}
+        ${etiqueta.cor ? `<div class="cor">${corParaPT(etiqueta.cor)}</div>` : ""}
         ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
         ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr"></canvas></div>
@@ -495,7 +496,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       return `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
         <div class="produto">${et.produto}</div>
-        ${et.cor ? `<div class="cor">${et.cor}</div>` : ""}
+        ${et.cor ? `<div class="cor">${corParaPT(et.cor)}</div>` : ""}
         ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
         ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr-${idx}"></canvas></div>
@@ -670,7 +671,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                     <p className={labelCls}>Cor</p>
                     <select value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls}>
                       <option value="">Selecione a cor...</option>
-                      {coresUnicas.map((c) => <option key={c} value={c}>{c}</option>)}
+                      {coresUnicas.map((c) => <option key={c} value={c}>{corParaPT(c)}</option>)}
                     </select>
                   </div>
                 )}
@@ -679,7 +680,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                 {produtoEstoque && (
                   <div className="px-4 py-3 bg-gray-900 rounded-xl">
                     <p className="text-xs text-gray-400">Produto na etiqueta:</p>
-                    <p className="text-white font-bold">{produtoEstoque}{cor ? ` — ${cor}` : ""}</p>
+                    <p className="text-white font-bold">{produtoEstoque}{cor ? ` — ${corParaPT(cor)}` : ""}</p>
                   </div>
                 )}
               </>
@@ -943,7 +944,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50 flex justify-center">
               <div className="bg-white border border-gray-400 rounded p-3 shadow-sm" style={{ minWidth: 200, maxWidth: 280 }}>
                 <p className="text-sm font-bold text-gray-900 leading-tight text-center">{etiquetaGerada.produto}</p>
-                {etiquetaGerada.cor && <p className="text-xs text-gray-500 text-center">{etiquetaGerada.cor}</p>}
+                {etiquetaGerada.cor && <p className="text-xs text-gray-500 text-center">{corParaPT(etiquetaGerada.cor)}</p>}
                 {(etiquetaGerada.serial_no || etiquetaGerada.imei) && (
                   <p className="text-[10px] text-gray-400 text-center mt-1">
                     {etiquetaGerada.serial_no && `SN: ${etiquetaGerada.serial_no}`}
@@ -1119,7 +1120,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">{et.codigo_barras}</td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{et.produto}</p>
-                            {et.cor && <p className="text-xs text-gray-400">{et.cor}</p>}
+                            {et.cor && <p className="text-xs text-gray-400">{corParaPT(et.cor)}</p>}
                           </td>
                           <td className="px-4 py-3 text-gray-600">{et.fornecedor || "—"}</td>
                           <td className="px-4 py-3">
@@ -1177,7 +1178,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             <div className="p-6 space-y-4">
               <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                 <p className="font-bold text-gray-900 text-lg">{modalScan.produto}</p>
-                {modalScan.cor && <p className="text-sm text-gray-600">Cor: {modalScan.cor}</p>}
+                {modalScan.cor && <p className="text-sm text-gray-600">Cor: {corParaPT(modalScan.cor)}</p>}
                 {modalScan.armazenamento && <p className="text-sm text-gray-600">Armazenamento: {modalScan.armazenamento}</p>}
                 {modalScan.fornecedor && <p className="text-sm text-gray-600">Fornecedor: {modalScan.fornecedor}</p>}
                 {/* Custo salvo internamente, não exibido na tela */}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SearchResult = Record<string, any>;
@@ -302,7 +303,7 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
                   const win = window.open("", "_blank", "width=300,height=300");
                   if (!win) return;
                   const produtoNome = item.produto || "";
-                  const cor = item.cor || "";
+                  const cor = item.cor ? corParaPT(item.cor) : "";
                   const serial = item.serial_no || "";
                   const imei = item.imei || "";
                   win.document.write(`<!DOCTYPE html><html><head>
@@ -395,7 +396,7 @@ window.onload=function(){window.print();window.close();};
               <div>
                 <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Cor</p>
                 {editing ? <input value={editFields.cor} onChange={(e) => setEditFields(f => ({ ...f, cor: e.target.value }))} className={inputCls} />
-                  : <p className={`text-sm ${textPrimary}`}>{item.cor}</p>}
+                  : <p className={`text-sm ${textPrimary}`}>{corParaPT(item.cor)}</p>}
               </div>
             )}
             {item.categoria && (
@@ -476,7 +477,7 @@ window.onload=function(){window.print();window.close();};
               )}
               <div className="col-span-2">
                 <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Produto que saiu</p>
-                <p className={`text-sm ${textPrimary}`}>{item.troca_info.produto_saida_nome}{item.troca_info.produto_saida_cor ? ` · ${item.troca_info.produto_saida_cor}` : ""}</p>
+                <p className={`text-sm ${textPrimary}`}>{item.troca_info.produto_saida_nome}{item.troca_info.produto_saida_cor ? ` · ${corParaPT(item.troca_info.produto_saida_cor)}` : ""}</p>
                 {(item.troca_info.produto_saida_serial || item.troca_info.produto_saida_imei) && (
                   <p className={`text-xs font-mono ${textSecondary}`}>{item.troca_info.produto_saida_serial ? `SN ${item.troca_info.produto_saida_serial}` : ""}{item.troca_info.produto_saida_imei ? `  ·  IMEI ${item.troca_info.produto_saida_imei}` : ""}</p>
                 )}
