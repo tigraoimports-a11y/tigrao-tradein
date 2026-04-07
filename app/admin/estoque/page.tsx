@@ -14,6 +14,126 @@ import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT } from "@/lib/cor-pt";
 
+/**
+ * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
+ * montando do zero a partir dos campos parseados, ignorando o que está cru no nome.
+ *
+ * - iPhone: Modelo - Armazenamento - Cor
+ * - iPad: Modelo - Tamanho - Armazenamento - Cor - Conectividade
+ * - MacBook: Modelo - Tamanho - RAM - SSD - Cor
+ * - Mac Mini: Modelo - RAM - SSD
+ * - Apple Watch: Modelo - Tamanho - Conectividade - Cor
+ */
+function formatProdutoDisplay(p: {
+  produto?: string | null;
+  categoria?: string | null;
+  cor?: string | null;
+  observacao?: string | null;
+}): string {
+  const nomeRaw = String(p.produto || "");
+  const obs = String(p.observacao || "");
+  const src = `${nomeRaw} ${obs}`;
+  const up = src.toUpperCase();
+  const baseCat = getBaseCat(p.categoria || "IPHONES");
+  const cor = (p.cor || "").trim();
+
+  // Maior valor GB/TB = armazenamento (storage)
+  const memMatches = [...up.matchAll(/(\d+)\s*(GB|TB)/g)];
+  const mems = memMatches.map(m => ({
+    raw: `${m[1]}${m[2]}`,
+    gb: m[2] === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]),
+  }));
+  const sorted = [...mems].sort((a, b) => b.gb - a.gb);
+  const storage = sorted[0]?.raw || "";
+  // RAM: vem de tag [RAM:X] ou, se não, o menor valor GB/TB quando há 2+
+  const ramTag = obs.match(/\[RAM:([^\]]+)\]/);
+  let ram = ramTag ? ramTag[1].trim().toUpperCase() : "";
+  if (!ram && sorted.length >= 2) {
+    ram = sorted[sorted.length - 1].raw;
+  }
+  // SSD: tag [SSD:X] ou storage principal
+  const ssdTag = obs.match(/\[SSD:([^\]]+)\]/);
+  const ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+
+  // Tela (polegadas)
+  const telaTag = obs.match(/\[TELA:([^\]]+)\]/);
+  const telaNome = up.match(/\b(11|13|14|15|16)["”]/);
+  const tela = telaTag ? telaTag[1].trim().replace(/"?$/, '"') : (telaNome ? `${telaNome[1]}"` : "");
+
+  // Tamanho mm (watch)
+  const mmMatch = up.match(/(\d{2})\s*MM/);
+  const tamMm = mmMatch ? `${mmMatch[1]}mm` : "";
+
+  // Conectividade
+  const hasCell = /\+\s*CEL|CELLULAR|\+CELL|GPS\s*\+\s*CEL|\bCEL\b/.test(up);
+  const hasGps = /\bGPS\b/.test(up);
+  const hasWifi = /WI-?FI|WIFI/.test(up);
+
+  const parts: string[] = [];
+
+  if (baseCat === "IPHONES") {
+    // Modelo: iPhone N [Pro Max|Pro|Plus|Air]
+    const m = up.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/);
+    const modelo = m
+      ? `iPhone ${m[1]}${m[2] ? " " + m[2].replace(/\s+/g, " ").replace(/\bPRO MAX\b/, "Pro Max").replace(/\bPRO\b/, "Pro").replace(/\bPLUS\b/, "Plus").replace(/\bAIR\b/, "Air") : ""}`
+      : nomeRaw;
+    parts.push(modelo);
+    if (storage) parts.push(storage);
+    if (cor) parts.push(cor);
+  } else if (baseCat === "IPADS") {
+    const chipM = up.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/);
+    const chip = chipM ? " " + chipM[1].replace(/\s+/g, " ").toUpperCase() : "";
+    let modelo = "iPad";
+    if (/MINI/.test(up)) modelo = "iPad Mini";
+    else if (/AIR/.test(up)) modelo = "iPad Air";
+    else if (/PRO/.test(up)) modelo = "iPad Pro";
+    parts.push(modelo + chip);
+    if (tela) parts.push(tela);
+    if (storage) parts.push(storage);
+    if (cor) parts.push(cor);
+    if (hasCell) parts.push("Wi-Fi + Cellular");
+    else if (hasWifi) parts.push("Wi-Fi");
+  } else if (baseCat === "MACBOOK") {
+    const chipM = up.match(/M(\d+)(\s*PRO|\s*MAX)?/);
+    const chip = chipM ? ` M${chipM[1]}${chipM[2] ? " " + chipM[2].trim().replace(/^PRO$/i, "Pro").replace(/^MAX$/i, "Max") : ""}` : "";
+    let modelo = "MacBook";
+    if (/NEO/.test(up)) modelo = "MacBook Neo";
+    else if (/AIR/.test(up)) modelo = "MacBook Air";
+    else if (/PRO/.test(up)) modelo = "MacBook Pro";
+    parts.push(modelo + chip);
+    if (tela) parts.push(tela);
+    if (ram) parts.push(ram);
+    if (ssd) parts.push(ssd);
+    if (cor) parts.push(cor);
+  } else if (baseCat === "MAC_MINI") {
+    const chipM = up.match(/M(\d+)(\s*PRO|\s*MAX)?/);
+    const chip = chipM ? ` M${chipM[1]}${chipM[2] ? " " + chipM[2].trim().replace(/^PRO$/i, "Pro").replace(/^MAX$/i, "Max") : ""}` : "";
+    parts.push("Mac Mini" + chip);
+    if (ram) parts.push(ram);
+    if (ssd) parts.push(ssd);
+  } else if (baseCat === "APPLE_WATCH") {
+    let modelo = "Apple Watch";
+    const ultra = up.match(/ULTRA\s*(\d+)?/);
+    const se = up.match(/\bSE\s*(\d+)?/);
+    const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
+    if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
+    else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
+    else if (series) modelo = `Apple Watch Series ${series[1]}`;
+    parts.push(modelo);
+    if (tamMm) parts.push(tamMm);
+    // Ultra é sempre cellular; os outros respeitam detecção
+    if (ultra) parts.push("GPS + Cellular");
+    else if (hasCell) parts.push("GPS + Cellular");
+    else if (hasGps) parts.push("GPS");
+    if (cor) parts.push(cor);
+  } else {
+    // Fallback: usa o nome limpo
+    return cleanProdutoDisplay(nomeRaw);
+  }
+
+  return parts.filter(Boolean).join(" - ");
+}
+
 /** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
 function cleanProdutoDisplay(nome: string | null | undefined): string {
   if (!nome) return "";
@@ -3998,7 +4118,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {cleanProdutoDisplay(displayNomeProduto(prodItems[0]?.produto || prodNome, prodItems[0]?.cor, prodItems[0]?.categoria))}
+                                          {formatProdutoDisplay(prodItems[0] || { produto: prodNome })}
                                           {/* Badge de núcleos para MacBooks */}
                                           {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
                                             const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
@@ -4639,7 +4759,7 @@ export default function EstoquePage() {
                       />
                     ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
-                        {cleanProdutoDisplay(displayNomeProduto(p.produto, p.cor, p.categoria))}
+                        {formatProdutoDisplay(p)}
                         {/* Badge de núcleos para MacBooks e Mac Mini */}
                         {(getBaseCat(p.categoria) === "MACBOOK" || getBaseCat(p.categoria) === "MAC_MINI") && (() => {
                           const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
@@ -5419,8 +5539,13 @@ export default function EstoquePage() {
                 const obs = p.observacao || "";
                 const nome = p.produto || "";
                 const baseCat = getBaseCat(p.categoria || "IPHONES");
+                const isSeminovo = p.categoria === "SEMINOVOS" || p.tipo === "SEMINOVO";
                 const tag = (re: RegExp) => { const m = obs.match(re); return m ? m[1] : null; };
                 const has = (re: RegExp) => re.test(obs);
+                // Armazenamento (maior valor GB/TB do nome)
+                const upNome = nome.toUpperCase();
+                const memAll = [...upNome.matchAll(/(\d+)\s*(GB|TB)/g)].map(m => ({ raw: `${m[1]}${m[2]}`, gb: m[2] === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+                const armazenamento = memAll.length ? memAll.sort((a, b) => b.gb - a.gb)[0].raw : null;
                 const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
                 const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
                 const ciclos = tag(/\[CICLOS:(\d+)\]/);
@@ -5450,35 +5575,53 @@ export default function EstoquePage() {
                 const push = (l: string, v: string | null | undefined) => { if (v) rows.push([l, v]); };
 
                 if (baseCat === "IPHONES") {
-                  push("Grade", grade);
+                  push("Armazenamento", armazenamento);
+                  push("Cor", p.cor);
                   push("Origem", origem);
                   push("Bateria", bateria);
-                  push("Caixa", comCaixa ? "Sim" : null);
-                  push("Cabo", comCabo ? "Sim" : null);
-                  push("Fonte", comFonte ? "Sim" : null);
-                } else if (baseCat === "IPADS") {
+                  if (isSeminovo) {
+                    push("Caixa", comCaixa ? "Com Caixa" : "Sem Caixa");
+                    push("Cabo", comCabo ? "Com Cabo" : "Sem Cabo");
+                    push("Fonte", comFonte ? "Com Fonte" : "Sem Fonte");
+                  } else {
+                    push("Caixa", comCaixa ? "Sim" : null);
+                    push("Cabo", comCabo ? "Sim" : null);
+                    push("Fonte", comFonte ? "Sim" : null);
+                  }
                   push("Grade", grade);
+                } else if (baseCat === "IPADS") {
+                  push("Tamanho", telaFinal);
+                  push("Armazenamento", armazenamento);
+                  push("Cor", p.cor);
+                  push("Conectividade", isCellular ? "Wi-Fi + Cellular" : (isWifi ? "Wi-Fi" : null));
                   push("Bateria", bateria);
                   push("Caixa", comCaixa ? "Sim" : null);
                   push("Cabo", comCabo ? "Sim" : null);
                   push("Fonte", comFonte ? "Sim" : null);
-                  push("Conectividade", isCellular ? "Wi-Fi+Cell" : (isWifi ? "Wi-Fi" : null));
-                } else if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
                   push("Grade", grade);
-                  push("Ciclos de bateria", ciclos);
+                } else if (baseCat === "MACBOOK") {
+                  push("Tamanho", telaFinal);
                   push("RAM", ram);
                   push("SSD", ssd);
-                  push("CPU", cpu);
-                  push("GPU", gpu);
-                  push("Tela", telaFinal);
-                } else if (baseCat === "APPLE_WATCH") {
+                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  push("Cor", p.cor);
+                  push("Ciclos de bateria", ciclos);
                   push("Grade", grade);
+                } else if (baseCat === "MAC_MINI") {
+                  push("RAM", ram);
+                  push("SSD", ssd);
+                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  push("Cor", p.cor);
+                } else if (baseCat === "APPLE_WATCH") {
                   push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
-                  push("Conectividade", isCellular ? "GPS+Cellular" : (isGps ? "GPS" : null));
-                  push("Tamanho pulseira", pulseiraTam);
-                  push("Modelo pulseira", band);
+                  push("Conectividade", isCellular ? "GPS + Cellular" : (isGps ? "GPS" : null));
+                  push("Cor", p.cor);
+                  push("Modelo da pulseira", band);
+                  push("Tamanho da pulseira", pulseiraTam);
                   push("Caixa", comCaixa ? "Sim" : null);
                   push("Cabo", comCabo ? "Sim" : null);
+                  push("Carregador", has(/\[CARREGADOR\]/) ? "Sim" : null);
+                  push("Grade", grade);
                 } else {
                   // Outros: tudo que não foi parseado em tags conhecidas
                   const limpo = obs.replace(/\[[^\]]*\]/g, "").trim();
