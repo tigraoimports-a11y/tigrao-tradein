@@ -620,9 +620,18 @@ export default function GastosPage() {
     setSaving(true);
     setMsg("");
 
-    if (isEstorno && !form.contato_nome.trim()) {
-      setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
-      return;
+    if (isEstorno) {
+      const nome = form.contato_nome.trim().toUpperCase();
+      if (!nome) {
+        setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
+        return;
+      }
+      const lista = form.contato_tipo === "cliente" ? clientes : fornecedores;
+      const exists = lista.some(c => c.nome.toUpperCase() === nome);
+      if (!exists) {
+        setMsg(`Contato "${nome}" não está cadastrado em ${form.contato_tipo}. Cadastre primeiro.`);
+        return;
+      }
     }
 
     const base = {

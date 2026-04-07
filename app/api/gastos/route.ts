@@ -29,10 +29,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const categoria = searchParams.get("categoria");
+  const contatoNome = searchParams.get("contato_nome");
 
   let query = supabase.from("gastos").select("*").order("data", { ascending: false }).order("hora", { ascending: false });
   if (from) query = query.gte("data", from);
   if (to) query = query.lte("data", to);
+  if (categoria) query = query.eq("categoria", categoria);
+  if (contatoNome) query = query.eq("contato_nome", contatoNome.toUpperCase());
 
   const { data, error } = await query.limit(500);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
