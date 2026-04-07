@@ -523,7 +523,14 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
+    // Estorno
+    contato_tipo: "cliente" as "cliente" | "fornecedor" | "atacado",
+    contato_nome: "",
+    venda_id: "",
   });
+  const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
+  const [vendasDoContato, setVendasDoContato] = useState<{ id: string; data: string; produto: string; preco_vendido: number }[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
 
   // Produtos do pedido fornecedor
@@ -570,7 +577,7 @@ export default function GastosPage() {
     setLoading(false);
   }, [password]);
 
-  // Buscar fornecedores
+  // Buscar fornecedores e clientes
   useEffect(() => {
     (async () => {
       try {
@@ -578,6 +585,13 @@ export default function GastosPage() {
         if (res.ok) {
           const json = await res.json();
           setFornecedores(json.data ?? []);
+        }
+      } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/clientes", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setClientes(json.data ?? []);
         }
       } catch { /* ignore */ }
     })();
@@ -593,6 +607,25 @@ export default function GastosPage() {
   const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
 
   const isFornecedor = form.categoria === "FORNECEDOR";
+  const isEstorno = form.categoria === "ESTORNO";
+
+  // Carrega vendas do contato selecionado para popular o dropdown de venda relacionada
+  useEffect(() => {
+    if (!isEstorno || !form.contato_nome.trim()) {
+      setVendasDoContato([]);
+      return;
+    }
+    const nome = form.contato_nome.trim().toUpperCase();
+    const param = form.contato_tipo === "cliente" ? "cliente" : "fornecedor";
+    let cancelled = false;
+    setLoadingVendas(true);
+    fetch(`/api/vendas?${param}=${encodeURIComponent(nome)}&limit=100`, { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setVendasDoContato(j.data || []); })
+      .catch(() => { if (!cancelled) setVendasDoContato([]); })
+      .finally(() => { if (!cancelled) setLoadingVendas(false); });
+    return () => { cancelled = true; };
+  }, [isEstorno, form.contato_nome, form.contato_tipo, password]);
 
   const handleSubmit = async () => {
     const filled = BANCOS.filter((b) => parseBR(bancoValores[b]) > 0);
@@ -607,6 +640,20 @@ export default function GastosPage() {
     setSaving(true);
     setMsg("");
 
+    if (isEstorno) {
+      const nome = form.contato_nome.trim().toUpperCase();
+      if (!nome) {
+        setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
+        return;
+      }
+      const lista = form.contato_tipo === "cliente" ? clientes : fornecedores;
+      const exists = lista.some(c => c.nome.toUpperCase() === nome);
+      if (!exists) {
+        setMsg(`Contato "${nome}" não está cadastrado em ${form.contato_tipo}. Cadastre primeiro.`);
+        return;
+      }
+    }
+
     const base = {
       data: form.data,
       hora: form.horario || null,
@@ -615,6 +662,9 @@ export default function GastosPage() {
       descricao: form.descricao || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
+      contato_nome: isEstorno ? form.contato_nome.trim().toUpperCase() : null,
+      contato_tipo: isEstorno ? form.contato_tipo : null,
+      venda_id: isEstorno && form.venda_id.trim() ? form.venda_id.trim() : null,
     };
 
     // Montar gastos (single ou multi-banco)
@@ -680,7 +730,7 @@ export default function GastosPage() {
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
       setMsg(`Gasto registrado!${prodMsg}`);
-      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "" }));
       setBancoValores(emptyBancoValores());
       setPedidoProdutos([]);
       fetchGastos();
@@ -868,6 +918,75 @@ export default function GastosPage() {
             <div><p className={labelCls}>Descricao</p><input value={form.descricao} onChange={(e) => set("descricao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
           </div>
+
+          {/* Bloco de Estorno — vínculo com contato */}
+          {isEstorno && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-red-500/40 bg-red-500/5" : "border-red-400/30 bg-red-50"} space-y-3`}>
+              <div>
+                <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>↩️ Estorno — vincular ao contato</p>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  A venda original permanece. Este registro contabiliza a saída de caixa do valor estornado.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <p className={labelCls}>Tipo</p>
+                  <select
+                    value={form.contato_tipo}
+                    onChange={(e) => set("contato_tipo", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="cliente">Cliente</option>
+                    <option value="fornecedor">Fornecedor</option>
+                    <option value="atacado">Atacado</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <p className={labelCls}>Nome do contato</p>
+                  <input
+                    list="estorno-contatos"
+                    value={form.contato_nome}
+                    onChange={(e) => set("contato_nome", e.target.value.toUpperCase())}
+                    placeholder="Comece a digitar para buscar"
+                    className={`${inputCls} uppercase`}
+                  />
+                  <datalist id="estorno-contatos">
+                    {(form.contato_tipo === "fornecedor" ? fornecedores : clientes).map((c) => (
+                      <option key={c.id} value={c.nome} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <p className={labelCls}>Venda relacionada (opcional)</p>
+                {!form.contato_nome.trim() ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Selecione um contato primeiro</p>
+                ) : loadingVendas ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Carregando vendas…</p>
+                ) : vendasDoContato.length === 0 ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Nenhuma venda encontrada para este contato</p>
+                ) : (
+                  <select
+                    value={form.venda_id}
+                    onChange={(e) => set("venda_id", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— Sem venda específica —</option>
+                    {vendasDoContato.map((v) => {
+                      const [y, m, d] = (v.data || "").split("-");
+                      const dataFmt = y ? `${d}/${m}/${y}` : "—";
+                      const valor = `R$ ${Math.round(v.preco_vendido || 0).toLocaleString("pt-BR")}`;
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {dataFmt} · {v.produto} · {valor}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Distribuição por banco */}
           <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
