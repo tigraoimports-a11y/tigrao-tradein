@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // ── 1. Buscar no estoque (produtos com serial/IMEI) ──
   const { data: estoqueResults } = await supabase
     .from("estoque")
-    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei, origem, garantia")
+    .select("id, produto, categoria, cor, qnt, custo_unitario, status, tipo, fornecedor, data_compra, data_entrada, observacao, bateria, serial_no, imei, origem, garantia, troca_id")
     .or(`produto.ilike.${searchTerm},fornecedor.ilike.${searchTerm},cliente.ilike.${searchTerm},cor.ilike.${searchTerm},serial_no.ilike.${searchTerm},imei.ilike.${searchTerm}`)
     .order("data_entrada", { ascending: false })
     .limit(30);
@@ -106,6 +106,27 @@ export async function GET(req: NextRequest) {
     op.total_itens++;
     op.valor_total += Number(e.custo_unitario || 0);
   }
+  // Trocas (operações OP-T) — buscar por produto/serial/imei/fornecedor
+  const { data: trocasSearch } = await supabase
+    .from("trocas")
+    .select("id, data, motivo, fornecedor, produto_saida_nome, produto_saida_serial, produto_saida_imei, produto_entrada_nome, produto_entrada_serial, produto_entrada_imei, diferenca_valor, created_at")
+    .or(`produto_saida_nome.ilike.${searchTerm},produto_entrada_nome.ilike.${searchTerm},produto_saida_serial.ilike.${searchTerm},produto_entrada_serial.ilike.${searchTerm},produto_saida_imei.ilike.${searchTerm},produto_entrada_imei.ilike.${searchTerm},fornecedor.ilike.${searchTerm}`)
+    .order("created_at", { ascending: false })
+    .limit(15);
+  const trocasOps = (trocasSearch ?? []).map((t) => {
+    const ts = new Date(t.created_at).getTime();
+    return {
+      codigo: `OP-T${ts}000`,
+      contato: t.fornecedor || "—",
+      data: t.data,
+      tipo: "Troca" as const,
+      total_itens: 2,
+      valor_total: Number(t.diferenca_valor) || 0,
+      created_at: t.created_at,
+      status: "Concluída",
+    };
+  });
+
   const operacoes = [...opMap.values()]
     .sort((a, b) => b.data.localeCompare(a.data))
     .slice(0, 15)
@@ -113,7 +134,20 @@ export async function GET(req: NextRequest) {
       codigo: `OP-${String(op.tipo) === "Entrada" ? "E" : "S"}${new Date(op.data).getTime()}${String(i).padStart(3, "0")}`,
       ...op,
       status: "Concluída",
-    }));
+    }))
+    .concat(trocasOps as any)
+    .sort((a: any, b: any) => (b.data || "").localeCompare(a.data || ""));
+
+  // ── 4.5 Buscar trocas vinculadas aos itens de estoque ──
+  const trocaIds = [...new Set((estoqueResults ?? []).map(e => e.troca_id).filter(Boolean))] as string[];
+  const trocasMap = new Map<string, { id: string; data: string; motivo: string; produto_saida_nome: string; produto_saida_serial: string | null; produto_saida_imei: string | null; produto_saida_cor: string | null; fornecedor: string | null; observacao: string | null; created_at: string; codigo: string }>();
+  if (trocaIds.length > 0) {
+    const { data: trocasInfo } = await supabase.from("trocas").select("id, data, motivo, produto_saida_nome, produto_saida_serial, produto_saida_imei, produto_saida_cor, fornecedor, observacao, created_at").in("id", trocaIds);
+    for (const t of trocasInfo ?? []) {
+      const ts = new Date(t.created_at).getTime();
+      trocasMap.set(t.id, { ...t, codigo: `OP-T${ts}000` });
+    }
+  }
 
   // ── 5. Montar resultados de estoque ──
   const estoque = (estoqueResults ?? []).map(e => ({
@@ -133,6 +167,8 @@ export async function GET(req: NextRequest) {
     qnt: e.qnt,
     origem: e.origem,
     garantia: e.garantia,
+    troca_id: e.troca_id,
+    troca_info: e.troca_id ? trocasMap.get(e.troca_id) || null : null,
   }));
 
   // ── 6. Montar resultados de vendas ──
