@@ -215,6 +215,7 @@ export default function ProdutoSpecFields({
   const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
   const [clienteLoading, setClienteLoading] = useState(false);
   const [showClienteSugg, setShowClienteSugg] = useState(false);
+  const [linhaFiltro, setLinhaFiltro] = useState<string>("");
   const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch all catalog models once
@@ -407,8 +408,36 @@ export default function ProdutoSpecFields({
             {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
           </select>
         </div>
+        {/* Linha (só iPhones) — filtro para reduzir lista de modelos */}
+        {row.categoria === "IPHONES" && categoryModelos.length > 0 && (() => {
+          const linhas = Array.from(new Set(
+            categoryModelos
+              .map((m) => { const mm = m.nome.match(/iPhone\s*(\d+\s*e?|SE)/i); return mm ? mm[1].replace(/\s+/g, "").toUpperCase() : null; })
+              .filter((x): x is string => !!x)
+          )).sort((a, b) => {
+            if (a === "SE") return 1; if (b === "SE") return -1;
+            return parseInt(a) - parseInt(b);
+          });
+          return (
+            <div>
+              <p className={labelCls}>Linha</p>
+              <select value={linhaFiltro} onChange={(e) => setLinhaFiltro(e.target.value)} className={inputCls}>
+                <option value="">— Todas —</option>
+                {linhas.map((l) => <option key={l} value={l}>{l === "SE" ? "iPhone SE" : `iPhone ${l}`}</option>)}
+              </select>
+            </div>
+          );
+        })()}
         {/* Modelo — vem logo após categoria */}
-        {categoryModelos.length > 0 && (
+        {categoryModelos.length > 0 && (() => {
+          const modelosFiltrados = row.categoria === "IPHONES" && linhaFiltro
+            ? categoryModelos.filter((m) => {
+                const mm = m.nome.match(/iPhone\s*(\d+\s*e?|SE)/i);
+                const l = mm ? mm[1].replace(/\s+/g, "").toUpperCase() : "";
+                return l === linhaFiltro;
+              })
+            : categoryModelos;
+          return (
           <div>
             <p className={labelCls}>
               Modelo
@@ -423,10 +452,11 @@ export default function ProdutoSpecFields({
               className={inputCls}
             >
               <option value="">— Selecionar modelo —</option>
-              {categoryModelos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              {modelosFiltrados.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
             </select>
           </div>
-        )}
+          );
+        })()}
         {!compactMode && <div>
           <p className={labelCls}>Condição</p>
           <select value={row.condicao || "NOVO"} onChange={(e) => set("condicao", e.target.value)} className={inputCls}>

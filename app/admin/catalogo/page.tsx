@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, corParaEN } from "@/lib/cor-pt";
 
 // Traduz valores de specs em inglês pra português no display (não altera o banco).
 // A chave continua sendo a string original, então selecionar/comparar funciona igual.
@@ -49,14 +49,20 @@ const COR_PT: Record<string, string> = {
 };
 
 function traduzirValor(valor: string, tipoChave?: string): string {
-  // Para cores: mostra EN + PT simplificado lado a lado, ex: "Sky Blue  Azul"
-  if (tipoChave === "cores") {
-    const pt = corParaPT(valor);
-    if (pt && pt !== valor && pt !== "—") return `${valor}  ${pt}`;
-    return valor;
-  }
   const pt = COR_PT[valor.toLowerCase().trim()];
   return pt || valor;
+}
+
+/** Para tipos de cor: retorna { en, pt } para renderizar EN principal + PT cinza */
+function corEnPt(valor: string): { en: string; pt: string | null } {
+  const en = corParaEN(valor) || valor;
+  const pt = corParaPT(valor);
+  if (!pt || pt === "—" || pt.toLowerCase() === en.toLowerCase()) return { en, pt: null };
+  return { en, pt };
+}
+
+function isCorTipo(chave?: string): boolean {
+  return chave === "cores" || chave === "cores_aw";
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -918,7 +924,9 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                               >
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
-                              <span className="text-sm text-[#1D1D1F]">{traduzirValor(v.valor, cs.tipo_chave)}</span>
+                              <span className="text-sm text-[#1D1D1F]">
+                                {isCorTipo(cs.tipo_chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{en}{pt && <span className="ml-1 text-xs text-[#86868B]">{pt}</span>}</>; })() : traduzirValor(v.valor, cs.tipo_chave)}
+                              </span>
                             </label>
                           );
                         })}
@@ -1169,7 +1177,9 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     key={v.id}
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
-                    <span>{traduzirValor(v.valor, selectedTipo.chave)}</span>
+                    <span>
+                      {isCorTipo(selectedTipo.chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{en}{pt && <span className="ml-1 text-xs text-[#86868B]">{pt}</span>}</>; })() : traduzirValor(v.valor, selectedTipo.chave)}
+                    </span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
                       disabled={saving === v.id}

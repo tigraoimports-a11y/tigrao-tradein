@@ -5635,18 +5635,61 @@ export default function EstoquePage() {
                   const limpo = obs.replace(/\[[^\]]*\]/g, "").trim();
                   if (limpo) push("Observação", limpo);
                 }
-                if (rows.length === 0) return null;
+                if (rows.length === 0 && !(canEdit && isAdmin)) return null;
+                // Helper para reescrever tag no observacao
+                const setTag = async (tagName: string, value: string | null) => {
+                  let newObs = (p.observacao || "").replace(new RegExp(`\\[${tagName}:[^\\]]*\\]`, "g"), "").trim();
+                  if (value && value.trim()) newObs = `${newObs} [${tagName}:${value.trim()}]`.trim();
+                  await apiPatch(p.id, { observacao: newObs });
+                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                  setDetailProduct({ ...p, observacao: newObs });
+                  showSaved("spec");
+                };
+                const editableTags: { label: string; tag: string; current: string }[] = [];
+                if (baseCat === "MACBOOK" || baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
+                if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
+                  editableTags.push({ label: "RAM", tag: "RAM", current: ram || "" });
+                  editableTags.push({ label: "SSD", tag: "SSD", current: ssd || "" });
+                  editableTags.push({ label: "CPU (núcleos)", tag: "CPU", current: cpu || "" });
+                  editableTags.push({ label: "GPU (núcleos)", tag: "GPU", current: gpu || "" });
+                  editableTags.push({ label: "Ciclos de bateria", tag: "CICLOS", current: ciclos || "" });
+                }
+                if (baseCat === "APPLE_WATCH") {
+                  editableTags.push({ label: "Modelo da pulseira", tag: "BAND", current: band || "" });
+                  editableTags.push({ label: "Tamanho da pulseira", tag: "PULSEIRA_TAM", current: pulseiraTam || "" });
+                }
                 return (
                   <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                     <p className={`text-xs font-bold ${mP} mb-3`}>Especificações</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {rows.map(([label, value]) => (
-                        <div key={label}>
-                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
-                          <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                    {rows.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {rows.map(([label, value]) => (
+                          <div key={label}>
+                            <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                            <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {canEdit && isAdmin && editableTags.length > 0 && (
+                      <>
+                        <p className={`text-[10px] uppercase tracking-wider mt-4 mb-2 ${mS}`}>Editar (admin)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {editableTags.map(({ label, tag, current }) => (
+                            <div key={tag}>
+                              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                              <input
+                                defaultValue={current}
+                                placeholder="—"
+                                onBlur={(e) => { const v = e.target.value.trim(); if (v !== current) setTag(tag, v || null); }}
+                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                className={`w-full text-[13px] font-bold mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </>
+                    )}
                   </div>
                 );
               })()}
