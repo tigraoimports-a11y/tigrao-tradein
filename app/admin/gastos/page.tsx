@@ -9,7 +9,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type ProdutoSpec } from "@/lib/produto-specs";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, corParaEN } from "@/lib/cor-pt";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -490,7 +490,17 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                         const corUp = corLimpa.toUpperCase();
                         const aliases = COLOR_ALIASES[corUp] || [corUp];
                         const corJaNoNome = corUp && aliases.some(a => new RegExp(`\\b${a}\\b`).test(nomeUp));
-                        return `${nomeLimpo}${corLimpa && !corJaNoNome ? ` — ${corParaPT(corLimpa)}` : ""}`;
+                        const ptSimples = corLimpa ? corParaPT(corLimpa) : "";
+                        const enOrig = corLimpa ? corParaEN(corLimpa) : null;
+                        return (
+                          <>
+                            {nomeLimpo}
+                            {corLimpa && !corJaNoNome && ptSimples && <> — {ptSimples}</>}
+                            {enOrig && ptSimples && enOrig.toLowerCase() !== ptSimples.toLowerCase() && (
+                              <span className={`ml-1 text-[11px] font-normal ${dm ? "text-[#8E8E93]" : "text-[#86868B]"}`}>{enOrig}</span>
+                            )}
+                          </>
+                        );
                       })()}{(() => {
                         const origem = getOrigemFromObs(p.observacao);
                         if (!origem) return "";

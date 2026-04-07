@@ -81,3 +81,23 @@ export function corParaPT(corEN: string | null | undefined): string {
   // Fallback: retorna o original
   return trimmed;
 }
+
+/** Retorna a cor em inglês canônico (ex: "Sky Blue", "Teal", "Lavender"). */
+export function corParaEN(cor: string | null | undefined): string | null {
+  if (!cor) return null;
+  const trimmed = cor.trim();
+  if (!trimmed || trimmed === "—") return null;
+  // Já em EN canônico?
+  for (const en of Object.keys(COR_EN_TO_PT_SIMPLES)) {
+    if (en.toLowerCase() === trimmed.toLowerCase()) return en;
+  }
+  // PT → EN canônico
+  const en = COR_PT_TO_EN[trimmed.toUpperCase()];
+  if (en) {
+    for (const k of Object.keys(COR_EN_TO_PT_SIMPLES)) {
+      if (k.toLowerCase() === en.toLowerCase()) return k;
+    }
+    return en;
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
