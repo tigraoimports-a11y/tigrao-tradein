@@ -71,10 +71,12 @@ function CompraForm() {
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
   const trocaValorParam = searchParams.get("troca_valor") || "";
   const trocaCondParam = searchParams.get("troca_cond") || "";
+  const trocaCorParam = searchParams.get("troca_cor") || "";
   // 2º produto na troca
   const trocaProduto2Param = searchParams.get("troca_produto2") || "";
   const trocaValor2Param = searchParams.get("troca_valor2") || "";
   const trocaCond2Param = searchParams.get("troca_cond2") || "";
+  const trocaCor2Param = searchParams.get("troca_cor2") || "";
   const nomeParam = searchParams.get("nome") || "";
   const whatsappClienteParam = searchParams.get("whatsapp_cliente") || "";
   const instagramParam = searchParams.get("instagram") || "";
@@ -410,6 +412,7 @@ function CompraForm() {
       if (trocaProduto) {
         if (temDoisUsados) lines.push(``, `*Aparelho 1:*`);
         lines.push(`Modelo: ${trocaProduto}`);
+        if (trocaCorParam) lines.push(`Cor: ${trocaCorParam}`);
         if (trocaNum1 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum1)}`);
         if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
       } else if (descTroca) {
@@ -419,6 +422,7 @@ function CompraForm() {
       if (temDoisUsados) {
         lines.push(``, `*Aparelho 2:*`);
         lines.push(`Modelo: ${trocaProduto2Param}`);
+        if (trocaCor2Param) lines.push(`Cor: ${trocaCor2Param}`);
         if (trocaNum2 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum2)}`);
         if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
       }

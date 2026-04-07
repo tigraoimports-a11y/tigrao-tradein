@@ -14,7 +14,7 @@ interface StepUsedDeviceProps {
   modelDiscounts?: Record<string, ModelDiscounts>;
   warrantyBonuses?: WarrantyBonuses;
   questionsConfig?: TradeInQuestion[] | null;
-  onNext: (data: { usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
+  onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
 
@@ -41,6 +41,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [line, setLine] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
+  const [color, setColor] = useState("");
   const [hasDamage, setHasDamage] = useState<boolean | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   const [screenScratch, setScreenScratch] = useState<"none"|"one"|"multiple"|null>(null);
@@ -110,11 +111,11 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storage && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
+  const canProceed = model && storage && color.trim() && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
-  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
-  function handleModelChange(m: string) { setModel(m); setStorage(""); setHasDamage(null); tq("model"); }
+  function handleLineChange(l: string) { setLine(l); setModel(""); setStorage(""); setColor(""); setHasDamage(null); tq("line"); }
+  function handleModelChange(m: string) { setModel(m); setStorage(""); setColor(""); setHasDamage(null); tq("model"); }
 
   return (
     <div className="space-y-8">
@@ -153,6 +154,22 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
           <div className="flex gap-2 flex-wrap">
             {storages.map((s) => <Btn key={s} sel={storage===s} onClick={() => { setStorage(s); tq("storage"); }} className="flex-1 min-w-[80px]">{s}</Btn>)}
           </div>
+        </Section>
+      )}
+
+      {model && storage && !isExcluded && (
+        <Section title="Qual a cor do seu aparelho?">
+          <input
+            type="text"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            onBlur={() => { if (color.trim()) tq("color"); }}
+            placeholder="Ex: Preto, Titânio Natural, Azul..."
+            maxLength={40}
+            className="w-full px-4 py-3 rounded-xl text-[16px] font-medium focus:outline-none transition-colors"
+            style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
+          />
+          <p className="text-[11px] mt-1.5" style={{ color: "var(--ti-muted)" }}>Informe a cor exata como aparece no seu iPhone.</p>
         </Section>
       )}
 
@@ -378,7 +395,7 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
       )}
 
       {canProceed && (
-        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, condition: cond, tradeInValue, deviceType: "iphone" })}
+        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, usedColor: color.trim(), condition: cond, tradeInValue, deviceType: "iphone" })}
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
           style={{ backgroundColor: "#22c55e" }}>
           Ver minha avaliacao →
