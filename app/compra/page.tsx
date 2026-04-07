@@ -13,6 +13,19 @@ function maskCPF(value: string) {
   return digits.slice(0, 3) + "." + digits.slice(3, 6) + "." + digits.slice(6, 9) + "-" + digits.slice(9);
 }
 
+function maskCNPJ(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return digits.slice(0, 2) + "." + digits.slice(2);
+  if (digits.length <= 8) return digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5);
+  if (digits.length <= 12)
+    return digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5, 8) + "/" + digits.slice(8);
+  return (
+    digits.slice(0, 2) + "." + digits.slice(2, 5) + "." + digits.slice(5, 8) +
+    "/" + digits.slice(8, 12) + "-" + digits.slice(12)
+  );
+}
+
 function maskPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits;
@@ -228,8 +241,10 @@ function CompraForm() {
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
   // Form state
+  const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [nome, setNome] = useState(nomeParam);
   const [cpf, setCpf] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState(whatsappClienteParam);
   const [cep, setCep] = useState("");
@@ -363,9 +378,17 @@ function CompraForm() {
       "",
       `*DADOS DA COMPRA -- TigraoImports*`,
       "",
-      // Dados pessoais
-      `*Nome completo:* ${nome}`,
-      `*CPF:* ${cpf}`,
+      // Dados pessoais / empresa
+      ...(pessoa === "PJ"
+        ? [
+            `*Tipo:* Pessoa Juridica`,
+            `*Razao Social:* ${nome}`,
+            `*CNPJ:* ${cnpj}`,
+          ]
+        : [
+            `*Nome completo:* ${nome}`,
+            `*CPF:* ${cpf}`,
+          ]),
       `*E-mail:* ${email}`,
       `*Telefone:* ${telefone}`,
       ...(instagram ? [`*Instagram:* ${instagram}`] : []),
@@ -617,18 +640,67 @@ function CompraForm() {
       <form onSubmit={handleSubmit} className="mx-4 mt-4 mb-8 space-y-3">
         {/* Dados Pessoais */}
         <div className={cardCls}>
-          <p className={sectionTitle}>Dados Pessoais</p>
-          <div>
-            <label className={labelCls}>Nome Completo *</label>
-            <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome completo" className={inputCls} />
+          <p className={sectionTitle}>{pessoa === "PJ" ? "Dados da Empresa" : "Dados Pessoais"}</p>
+
+          {/* Toggle PF / PJ */}
+          <div className="flex gap-2">
+            {(["PF", "PJ"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPessoa(p)}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors border-2 ${
+                  pessoa === p
+                    ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]"
+                    : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"
+                }`}
+              >
+                {p === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+              </button>
+            ))}
           </div>
+
           <div>
-            <label className={labelCls}>CPF *</label>
-            <input type="text" required inputMode="numeric" value={cpf} onChange={(e) => setCpf(maskCPF(e.target.value))} placeholder="000.000.000-00" className={inputCls} />
+            <label className={labelCls}>{pessoa === "PJ" ? "Razão Social *" : "Nome Completo *"}</label>
+            <input
+              type="text"
+              required
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder={pessoa === "PJ" ? "Nome da empresa" : "Seu nome completo"}
+              className={inputCls}
+            />
           </div>
+          {pessoa === "PJ" ? (
+            <div>
+              <label className={labelCls}>CNPJ *</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                value={cnpj}
+                onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
+                placeholder="00.000.000/0000-00"
+                className={inputCls}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className={labelCls}>CPF *</label>
+              <input
+                type="text"
+                required
+                inputMode="numeric"
+                value={cpf}
+                onChange={(e) => setCpf(maskCPF(e.target.value))}
+                placeholder="000.000.000-00"
+                className={inputCls}
+              />
+            </div>
+          )}
           <div>
             <label className={labelCls}>E-mail *</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" className={inputCls} />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={pessoa === "PJ" ? "financeiro@empresa.com" : "seu@email.com"} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Telefone *</label>
