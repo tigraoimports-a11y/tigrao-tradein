@@ -923,7 +923,7 @@ export default function VendasPage() {
     // Helper: build observacao with tags from checkboxes
     const buildSeminovoObs = (obs: string, grade: string, caixa: string, cabo: string, fonte: string, pulseira: string, ciclos: string) => {
       let result = obs || "";
-      if (grade) result += ` [GRADE_${grade === "A+" ? "APLUS" : grade}]`;
+      if (grade) result += ` [GRADE_${grade}]`;
       if (caixa === "SIM") result += " [COM_CAIXA]";
       if (cabo === "SIM") result += " [COM_CABO]";
       if (fonte === "SIM") result += " [COM_FONTE]";
@@ -3849,8 +3849,8 @@ export default function VendasPage() {
                                                     trocaValorPend = Number(pendencia.custo_unitario) || 0;
                                                     // Extrair tags da observacao
                                                     const obsRaw = pendencia.observacao || "";
-                                                    const gradeMatch = obsRaw.match(/\[GRADE_(APLUS|A|B|C)\]/);
-                                                    if (gradeMatch) trocaGrade = gradeMatch[1] === "APLUS" ? "A+" : gradeMatch[1];
+                                                    const gradeMatch = obsRaw.match(/\[GRADE_(A\+|A|B|C)\]/);
+                                                    if (gradeMatch) trocaGrade = gradeMatch[1];
                                                     if (/\[COM_CAIXA\]/.test(obsRaw)) trocaCaixa = "SIM";
                                                     if (/\[COM_CABO\]/.test(obsRaw)) trocaCabo = "SIM";
                                                     if (/\[COM_FONTE\]/.test(obsRaw)) trocaFonte = "SIM";

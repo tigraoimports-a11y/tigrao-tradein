@@ -1515,8 +1515,8 @@ export default function EstoquePage() {
     const qrData = serial || imei || p.id;
     const cor = p.cor ? ` ${p.cor}` : "";
     const obs = p.observacao || "";
-    const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-    const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+    const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+    const grade = gradeMatch || null;
     const hasCaixa = obs.includes("[COM_CAIXA]");
     const hasCabo = obs.includes("[COM_CABO]");
     const win = window.open("", "_blank", "width=600,height=400");
@@ -1694,7 +1694,7 @@ export default function EstoquePage() {
     if (!obs) return null;
     return obs
       .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
-      .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+      .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
       .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
@@ -1704,7 +1704,7 @@ export default function EstoquePage() {
   /** Extrai todas as tags [...] da observação */
   const extractTags = (obs: string | null): string => {
     if (!obs) return "";
-    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(APLUS|AB|A|B)|CICLOS:\d+)\]/g);
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+)\]/g);
     return tags ? tags.join(" ") : "";
   };
 
@@ -1982,7 +1982,7 @@ export default function EstoquePage() {
         if (f === "SEM_CAIXA" && obs.includes("[COM_CAIXA]")) return false;
         if (f === "COM_CABO" && !obs.includes("[COM_CABO]")) return false;
         if (f === "COM_GARANTIA" && !p.garantia) return false;
-        if (f === "GRADE_A+" && !obs.includes("[GRADE_APLUS]")) return false;
+        if (f === "GRADE_A+" && !obs.includes("[GRADE_A+]")) return false;
         if (f === "GRADE_A" && !obs.includes("[GRADE_A]")) return false;
         if (f === "GRADE_AB" && !obs.includes("[GRADE_AB]")) return false;
         if (f === "GRADE_B" && !obs.includes("[GRADE_B]")) return false;
@@ -3158,10 +3158,10 @@ export default function EstoquePage() {
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
               <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
-              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] === "APLUS" ? "A+" : form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
+              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
                 const obs = form.observacao || "";
-                const cleaned = obs.replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "").trim();
-                const tag = e.target.value ? `[GRADE_${e.target.value === "A+" ? "APLUS" : e.target.value}]` : "";
+                const cleaned = obs.replace(/\[GRADE_(A\+|AB|A|B)\]/g, "").trim();
+                const tag = e.target.value ? `[GRADE_${e.target.value}]` : "";
                 set("observacao", tag ? `${cleaned} ${tag}`.trim() : cleaned || "");
               }} className={inputCls}>
                 <option value="">— Sem grade —</option>
@@ -4127,8 +4127,8 @@ export default function EstoquePage() {
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
-                                              const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-                                              const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+                                              const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+                                              const grade = gradeMatch || null;
                                               const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
                                               const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
                                               const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
@@ -4909,8 +4909,8 @@ export default function EstoquePage() {
                       })()}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
-                        const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                        const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                        const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                        const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                         const g = tagKey ? GRADE_TAG[tagKey]
                           : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase();
                         if (!g) return null;
@@ -5165,8 +5165,8 @@ export default function EstoquePage() {
                   )}
                   {/* Grade + Caixa + Cabo + Carregador */}
                   {!isLac && (canEdit || isAdmin) && (() => {
-                    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                    const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                    const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                    const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                     const currentGrade = tagKey ? GRADE_TAG[tagKey]
                       : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
@@ -5214,10 +5214,10 @@ export default function EstoquePage() {
                             const newGrade = e.target.value;
                             const obs = getLatestObs();
                             const cleaned = obs
-                              .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+                              .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
                               .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
                               .trim();
-                            const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
+                            const gradeTag = newGrade ? `[GRADE_${newGrade}]` : "";
                             const finalObs = gradeTag ? `${cleaned} ${gradeTag}`.trim() : (cleaned || null);
                             await apiPatch(p.id, { observacao: finalObs });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));

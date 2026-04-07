@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
   const buildObsComTags = (obs: string | null, grade: string | null, caixa: string | null, cabo: string | null, fonte: string | null): string | null => {
     const parts: string[] = [];
     if (obs) parts.push(obs.trim());
-    if (grade) parts.push(`[GRADE_${grade === "A+" ? "APLUS" : grade}]`);
+    if (grade) parts.push(`[GRADE_${grade}]`);
     if (caixa === "SIM") parts.push("[COM_CAIXA]");
     if (cabo === "SIM") parts.push("[COM_CABO]");
     if (fonte === "SIM") parts.push("[COM_FONTE]");
@@ -539,7 +539,7 @@ export async function PATCH(req: NextRequest) {
             const pulseira = (fields.troca_pulseira !== undefined ? fields.troca_pulseira : venda.troca_pulseira) || "";
             const ciclos = (fields.troca_ciclos !== undefined ? fields.troca_ciclos : venda.troca_ciclos) || "";
             let result = String(obsBase);
-            if (grade) result += ` [GRADE_${grade === "A+" ? "APLUS" : grade}]`;
+            if (grade) result += ` [GRADE_${grade}]`;
             if (caixa === "SIM") result += " [COM_CAIXA]";
             if (cabo === "SIM") result += " [COM_CABO]";
             if (fonte === "SIM") result += " [COM_FONTE]";
