@@ -771,7 +771,10 @@ export default function EstoquePage() {
   }
 
   // Override de títulos de cards (modelo agrupador) — persiste no banco pra sincronizar entre usuários
-  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>({});
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
+  });
   useEffect(() => {
     if (!password) return;
     let cancelled = false;
@@ -783,8 +786,10 @@ export default function EstoquePage() {
         });
         const j = await r.json();
         if (cancelled) return;
-        if (j.value && typeof j.value === "object") {
-          setCardTitleOverrides(j.value as Record<string, string>);
+        if (j.value && typeof j.value === "object" && Object.keys(j.value).length > 0) {
+          // Merge remoto com local (local tem prioridade se ainda não sincronizado)
+          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
+          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
         } else if (migrate) {
           // Migrar do localStorage se existir (só na 1ª carga)
           try {
@@ -822,12 +827,21 @@ export default function EstoquePage() {
     const updated = { ...cardTitleOverrides, [originalTitle]: newTitle.trim() };
     if (!newTitle.trim() || newTitle.trim() === originalTitle) delete updated[originalTitle];
     setCardTitleOverrides(updated);
+    // Persiste no localStorage como fallback imediato
+    try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated)); } catch {}
     // Salva no banco (sincroniza entre usuários)
     fetch("/api/admin/estoque-settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "x-admin-password": password },
       body: JSON.stringify({ key: "card_title_overrides", value: updated }),
-    }).catch(() => {});
+    })
+      .then(async r => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          console.error("[card_title_overrides] save failed", j);
+        }
+      })
+      .catch(err => console.error("[card_title_overrides] save error", err));
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
