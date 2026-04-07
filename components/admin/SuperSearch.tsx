@@ -249,9 +249,9 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
   const isIpad = catUpper.includes("IPAD");
   const isMac = catUpper.includes("MAC");
   const isWatch = catUpper.includes("WATCH");
-  const showOrigem = isSeminovo && (isIphone || isIpad || (!isMac && !isWatch && !isIphone && !isIpad)) && !!item.origem;
-  const showBateria = isSeminovo && !isIpad && !!item.bateria; // iPad bateria é opcional e geralmente não exibida
-  const showCiclos = isMac && !!ciclosMatch;
+  // Origem: apenas iPhone
+  const showOrigem = isSeminovo && isIphone && !!item.origem;
+  const showCiclos = isMac && !!ciclosMatch; // Ciclos: apenas MacBook (opcional)
   const showFonte = (isIpad || isMac) && hasFonte;
   const showCabo = !isWatch && hasCabo;
   const showPulseira = isWatch && hasPulseira;
