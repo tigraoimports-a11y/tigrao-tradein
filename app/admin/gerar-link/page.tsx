@@ -212,6 +212,21 @@ export default function GerarLinkPage() {
     fetchHistorico();
   }
 
+  async function excluirLink(id: string) {
+    if (!confirm("Excluir este link do histórico definitivamente? Essa ação não pode ser desfeita.")) return;
+    const res = await fetch("/api/admin/link-compras", {
+      method: "DELETE",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert("Erro ao excluir: " + (j.error || res.status));
+      return;
+    }
+    fetchHistorico();
+  }
+
   async function copiarLinkHist(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -392,7 +407,7 @@ export default function GerarLinkPage() {
 
         // Salvar no histórico persistente de links de compra
         try {
-          await fetch("/api/admin/link-compras", {
+          const resHist = await fetch("/api/admin/link-compras", {
             method: "POST",
             headers: adminHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
@@ -418,7 +433,13 @@ export default function GerarLinkPage() {
               simulacao_id: simulacaoId,
             }),
           });
-        } catch { /* silencioso — não bloqueia geração do link */ }
+          if (!resHist.ok) {
+            const err = await resHist.json().catch(() => ({ error: `HTTP ${resHist.status}` }));
+            setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${err.error || resHist.status}`);
+          }
+        } catch (e) {
+          setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${String(e)}`);
+        }
 
         return;
       }
@@ -647,10 +668,18 @@ export default function GerarLinkPage() {
                   </button>
                   <button
                     onClick={() => arquivarLink(l.id, !l.arquivado)}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-red-400 hover:text-red-500 font-medium"
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-amber-400 hover:text-amber-600 font-medium"
                   >
-                    {l.arquivado ? "↩️ Desarquivar" : "🗑️ Arquivar"}
+                    {l.arquivado ? "↩️ Desarquivar" : "📦 Arquivar"}
                   </button>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => excluirLink(l.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-red-300 text-red-500 hover:bg-red-50 font-medium"
+                    >
+                      🗑️ Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
