@@ -26,6 +26,7 @@ const COR_PT: Record<string, string> = {
   "light gold": "Dourado Claro",
   "midnight": "Meia-Noite",
   "midnight green": "Verde Meia-Noite",
+  "orange": "Laranja",
   "mist blue": "Azul Névoa",
   "natural titanium": "Titânio Natural",
   "pacific blue": "Azul Pacífico",
