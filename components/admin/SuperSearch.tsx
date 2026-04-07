@@ -243,6 +243,19 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
   const hasPulseira = /\[COM_PULSEIRA\]/.test(obs);
   const obsLimpa = obs.replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(?:A\+|AB|A|B)|CICLOS:\d+)\]/g, "").trim();
   const isSeminovo = item.tipo_produto === "SEMINOVO" || !!gradeMatch || !!ciclosMatch || hasCaixa || hasCabo || hasFonte || hasPulseira;
+  // Campos visíveis por categoria (conforme spec de seminovos)
+  const catUpper = String(item.categoria || "").toUpperCase();
+  const isIphone = catUpper.includes("IPHONE");
+  const isIpad = catUpper.includes("IPAD");
+  const isMac = catUpper.includes("MAC");
+  const isWatch = catUpper.includes("WATCH");
+  const showOrigem = isSeminovo && (isIphone || isIpad || (!isMac && !isWatch && !isIphone && !isIpad)) && !!item.origem;
+  const showBateria = isSeminovo && !isIpad && !!item.bateria; // iPad bateria é opcional e geralmente não exibida
+  const showCiclos = isMac && !!ciclosMatch;
+  const showFonte = (isIpad || isMac) && hasFonte;
+  const showCabo = !isWatch && hasCabo;
+  const showPulseira = isWatch && hasPulseira;
+  const showCaixa = hasCaixa;
   const hasSpecs = isSeminovo || !!item.origem || !!item.garantia || !!gradeMatch;
 
   const statusColor = (s: string) => {
@@ -383,16 +396,16 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
                   <p className={`text-sm font-bold ${textPrimary}`}>{gradeMatch[1]}</p>
                 </div>
               )}
-              {item.origem && (
+              {showOrigem && (
                 <div>
                   <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Origem</p>
                   <p className={`text-sm ${textPrimary}`}>{item.origem}</p>
                 </div>
               )}
-              {ciclosMatch && (
+              {showCiclos && (
                 <div>
                   <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Ciclos</p>
-                  <p className={`text-sm ${textPrimary}`}>{ciclosMatch[1]}</p>
+                  <p className={`text-sm ${textPrimary}`}>{ciclosMatch![1]}</p>
                 </div>
               )}
               {item.garantia && (
@@ -402,12 +415,12 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
                 </div>
               )}
             </div>
-            {(hasCaixa || hasCabo || hasFonte || hasPulseira) && (
+            {(showCaixa || showCabo || showFonte || showPulseira) && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {hasCaixa && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>📦 Caixa</span>}
-                {hasCabo && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔌 Cabo</span>}
-                {hasFonte && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔋 Fonte</span>}
-                {hasPulseira && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>⌚ Pulseira</span>}
+                {showCaixa && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>📦 Caixa</span>}
+                {showCabo && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔌 Cabo</span>}
+                {showFonte && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>🔋 Fonte</span>}
+                {showPulseira && <span className={`px-2 py-1 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F0F0F3] text-[#1D1D1F]"}`}>⌚ Pulseira</span>}
               </div>
             )}
           </div>
