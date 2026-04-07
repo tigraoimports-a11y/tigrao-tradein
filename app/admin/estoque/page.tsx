@@ -849,7 +849,16 @@ export default function EstoquePage() {
     setEditCardTitleValue("");
   }
   function getCardTitle(modelo: string): string {
-    return (cardTitleOverrides[modelo] || modelo).toUpperCase();
+    // 1. Match exato
+    if (cardTitleOverrides[modelo]) return cardTitleOverrides[modelo].toUpperCase();
+    // 2. Fallback: chave antiga sem sufixo " GPS+CEL" ou " GPS" (Apple Watch agrupava sem connectivity antes)
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return modelo.toUpperCase();
   }
 
   // Drag-and-drop para reordenar
