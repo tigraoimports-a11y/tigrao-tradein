@@ -507,18 +507,34 @@ export default function TrocasPage() {
                       </div>
 
                       {/* Saída → Entrada */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-red-500 text-xs font-medium">SAIU</span>
-                          <span className={`text-sm ${txtP}`}>{t.produto_saida_nome}</span>
-                          {t.produto_saida_cor && <span className={`text-xs ${txtS}`}>{t.produto_saida_cor}</span>}
-                          <span className={`text-xs ${txtS}`}>{fmt(t.produto_saida_custo)}</span>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-red-500 text-xs font-medium">SAIU</span>
+                            <span className={`text-sm ${txtP}`}>{t.produto_saida_nome}</span>
+                            {t.produto_saida_cor && <span className={`text-xs ${txtS}`}>{t.produto_saida_cor}</span>}
+                            <span className={`text-xs ${txtS}`}>{fmt(t.produto_saida_custo)}</span>
+                          </div>
+                          {(t.produto_saida_serial || t.produto_saida_imei) && (
+                            <div className="flex items-center gap-3 mt-0.5 ml-10">
+                              {t.produto_saida_serial && <span className="text-[11px] font-mono text-purple-500"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>SN</span>{t.produto_saida_serial}</span>}
+                              {t.produto_saida_imei && <span className="text-[11px] font-mono text-[#0071E3]"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>IMEI</span>{t.produto_saida_imei}</span>}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-500 text-xs font-medium">ENTROU</span>
-                          <span className={`text-sm ${txtP}`}>{t.produto_entrada_nome}</span>
-                          {t.produto_entrada_cor && <span className={`text-xs ${txtS}`}>{t.produto_entrada_cor}</span>}
-                          <span className={`text-xs ${txtS}`}>{fmt(t.produto_entrada_custo)}</span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-green-500 text-xs font-medium">ENTROU</span>
+                            <span className={`text-sm ${txtP}`}>{t.produto_entrada_nome}</span>
+                            {t.produto_entrada_cor && <span className={`text-xs ${txtS}`}>{t.produto_entrada_cor}</span>}
+                            <span className={`text-xs ${txtS}`}>{fmt(t.produto_entrada_custo)}</span>
+                          </div>
+                          {(t.produto_entrada_serial || t.produto_entrada_imei) && (
+                            <div className="flex items-center gap-3 mt-0.5 ml-14">
+                              {t.produto_entrada_serial && <span className="text-[11px] font-mono text-purple-500"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>SN</span>{t.produto_entrada_serial}</span>}
+                              {t.produto_entrada_imei && <span className="text-[11px] font-mono text-[#0071E3]"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>IMEI</span>{t.produto_entrada_imei}</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
 
