@@ -47,7 +47,9 @@ const COR_PT: Record<string, string> = {
   "yellow": "Amarelo",
 };
 
-function traduzirValor(valor: string): string {
+function traduzirValor(valor: string, tipoChave?: string): string {
+  // Para cores, manter o valor original em inglês (sem tradução PT).
+  if (tipoChave === "cores") return valor;
   const pt = COR_PT[valor.toLowerCase().trim()];
   return pt || valor;
 }
@@ -911,7 +913,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                               >
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
-                              <span className="text-sm text-[#1D1D1F]">{traduzirValor(v.valor)}</span>
+                              <span className="text-sm text-[#1D1D1F]">{traduzirValor(v.valor, cs.tipo_chave)}</span>
                             </label>
                           );
                         })}
@@ -1162,7 +1164,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     key={v.id}
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
-                    <span>{traduzirValor(v.valor)}</span>
+                    <span>{traduzirValor(v.valor, selectedTipo.chave)}</span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
                       disabled={saving === v.id}

@@ -12,6 +12,24 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
+import { corParaPT } from "@/lib/cor-pt";
+
+/** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
+function cleanProdutoDisplay(nome: string | null | undefined): string {
+  if (!nome) return "";
+  let s = String(nome);
+  // Remove parêntese com código de origem, ex: "(IN)", "(LL)"
+  s = s.replace(/\s*\((LL|JPA|HN|IN|BR|BZ|CH|ZA|KH|TH|SG)\)\s*/gi, " ");
+  // Remove " - CHIP FÍSICO...", "+ E-SIM", etc
+  s = s.replace(/\s*[-–]\s*CHIP\s*F[IÍ]SICO[^[]*$/i, "");
+  s = s.replace(/\s*\+?\s*E[-\s]?SIM\b.*$/i, "");
+  s = s.replace(/\s*CHIP\s*F[IÍ]SICO\b.*$/i, "");
+  // Remove códigos de origem isolados precedidos por espaço, ex: " HN", " LL"
+  s = s.replace(/\s+(LL|JPA|HN|IN|BR|BZ|CH|ZA|KH|TH|SG)\b.*$/i, "");
+  // Remove tags [...] residuais
+  s = s.replace(/\[[^\]]*\]/g, "");
+  return s.replace(/\s+/g, " ").trim();
+}
 
 /* ── OCR: colar imagem → texto no campo serial ── */
 let tesseractWorker: import("tesseract.js").Worker | null = null;
@@ -3804,7 +3822,9 @@ export default function EstoquePage() {
                           // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
                           const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const label = p.cor ? p.cor.toUpperCase().trim() : "—";
+                            if (!p.cor || !p.cor.trim() || p.cor.trim() === "—") return;
+                            const label = corParaPT(p.cor);
+                            if (!label || label === "—") return;
                             const key = label.toUpperCase().trim();
                             if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
                             colorSummary[key].qnt += p.qnt;
@@ -3978,7 +3998,7 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {displayNomeProduto(prodItems[0]?.produto || prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
+                                          {cleanProdutoDisplay(displayNomeProduto(prodItems[0]?.produto || prodNome, prodItems[0]?.cor, prodItems[0]?.categoria))}
                                           {/* Badge de núcleos para MacBooks */}
                                           {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
                                             const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
@@ -4619,7 +4639,7 @@ export default function EstoquePage() {
                       />
                     ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
-                        {displayNomeProduto(p.produto, p.cor, p.categoria)}
+                        {cleanProdutoDisplay(displayNomeProduto(p.produto, p.cor, p.categoria))}
                         {/* Badge de núcleos para MacBooks e Mac Mini */}
                         {(getBaseCat(p.categoria) === "MACBOOK" || getBaseCat(p.categoria) === "MAC_MINI") && (() => {
                           const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
