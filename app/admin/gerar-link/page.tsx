@@ -125,7 +125,7 @@ export default function GerarLinkPage() {
     return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
   }, [produtos, catalogoCores]);
 
-  const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
+  const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
   const [entradaPix, setEntradaPix] = useState("");
