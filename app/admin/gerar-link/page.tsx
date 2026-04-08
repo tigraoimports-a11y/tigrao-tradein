@@ -104,7 +104,18 @@ export default function GerarLinkPage() {
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
-    const tokens = (s: string) => stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t));
+    const expandSynonyms = (toks: string[]): string[] => {
+      const set = new Set(toks);
+      // iPad chip ↔ geração (iPad A16 = iPad 11, A15 = 10, A14 = 9/10)
+      if (set.has("ipad")) {
+        if (set.has("a16")) set.add("11");
+        if (set.has("11")) set.add("a16");
+        if (set.has("a14")) set.add("10");
+        if (set.has("10")) set.add("a14");
+      }
+      return [...set];
+    };
+    const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
     const prodTokens = new Set(tokens(produtos[0]));
 
     // Match por tokens: todos os tokens do catálogo devem existir no produto.
@@ -888,7 +899,20 @@ export default function GerarLinkPage() {
                       {l.operador && l.vendedor ? " · " : null}
                       {l.vendedor ? <>Vendedora <strong>{l.vendedor}</strong></> : null}
                     </p>
-                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{l.produto}{l.cor ? ` — ${l.cor}` : ""}</p>
+                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{(() => {
+                      const cor = l.cor || "";
+                      if (!cor) return l.produto;
+                      const corPT = corParaPT(cor);
+                      const corEN = corParaEN(cor) || cor;
+                      // Strip qualquer sufixo de cor (EN ou PT) do produto pra não duplicar
+                      let base = l.produto;
+                      for (const s of [cor, corPT, corEN]) {
+                        if (!s) continue;
+                        const re = new RegExp(`\\s+${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+                        base = base.replace(re, "").trim();
+                      }
+                      return `${base} ${corPT} — ${corEN}`;
+                    })()}</p>
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">

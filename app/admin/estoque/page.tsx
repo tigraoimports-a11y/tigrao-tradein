@@ -2911,7 +2911,17 @@ export default function EstoquePage() {
           .replace(/[""\(\)\+\-]/g, " ")
           .replace(/\s+/g, " ").trim();
         const STOP_REPO = new Set(["de","the","with","com","e","a","o","gen"]);
-        const tokenize = (s: string) => stripRepoNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP_REPO.has(t));
+        const expandSynonymsRepo = (toks: string[]): string[] => {
+          const set = new Set(toks);
+          if (set.has("ipad")) {
+            if (set.has("a16")) set.add("11");
+            if (set.has("11")) set.add("a16");
+            if (set.has("a14")) set.add("10");
+            if (set.has("10")) set.add("a14");
+          }
+          return [...set];
+        };
+        const tokenize = (s: string) => expandSynonymsRepo(stripRepoNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP_REPO.has(t)));
 
         // Index catálogo: nomeCat original → { tokens, cores normalizadas }
         type CatEntry = { nomeCat: string; tokens: string[]; cores: Set<string> };
