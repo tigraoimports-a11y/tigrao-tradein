@@ -605,7 +605,7 @@ export default function GerarLinkPage() {
   const numParcelas = parseInt(parcelas) || 0;
   const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
   const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
-  const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
+  const valorParcela = numParcelas > 0 ? valorComTaxa / numParcelas : 0;
   const valorTotal = entradaNum + valorComTaxa;
 
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
@@ -1751,7 +1751,7 @@ export default function GerarLinkPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Parcelamento</span>
-                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </>
               )}

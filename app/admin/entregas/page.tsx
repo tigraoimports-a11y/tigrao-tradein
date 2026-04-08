@@ -330,7 +330,7 @@ export default function EntregasPage() {
   const nParcelas = parseInt(form.parcelas) || 0;
   const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
   const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorAPagar * (1 + taxaAtual / 100)) : valorAPagar;
-  const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
+  const valorParcela = nParcelas > 0 ? totalComTaxa / nParcelas : 0;
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -490,7 +490,7 @@ export default function EntregasPage() {
       if (form.maquina) pagText += ` (${form.maquina})`;
     }
     if (isCartaoCredito && nParcelas > 0 && valorAPagar > 0) {
-      pagText += ` — ${nParcelas}x de R$${valorParcela.toLocaleString("pt-BR")} (total c/ taxa R$${totalComTaxa.toLocaleString("pt-BR")} | base R$${valorAPagar.toLocaleString("pt-BR")} + ${taxaAtual}%)`;
+      pagText += ` — ${nParcelas}x de R$${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (total c/ taxa R$${totalComTaxa.toLocaleString("pt-BR")} | base R$${valorAPagar.toLocaleString("pt-BR")} + ${taxaAtual}%)`;
     } else {
       pagText += ` R$${form.valor || "0"}`;
     }
@@ -1183,7 +1183,7 @@ export default function EntregasPage() {
                     <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorAPagar.toLocaleString("pt-BR")}</b></span>
                     <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorAPagar).toLocaleString("pt-BR")}</b></span>
                     <span className="text-[#86868B]">Total c/ taxa: <b className="text-[#1D1D1F]">R$ {totalComTaxa.toLocaleString("pt-BR")}</b></span>
-                    <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                    <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               )}
