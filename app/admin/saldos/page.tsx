@@ -118,6 +118,22 @@ export default function SaldosPage() {
   const [depModal, setDepModal] = useState(false);
   const [depValor, setDepValor] = useState("");
   const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
+  const [depData, setDepData] = useState("");
+  // Histórico de depósitos em espécie
+  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string };
+  const [depHistModal, setDepHistModal] = useState(false);
+  const [depHist, setDepHist] = useState<DepHist[]>([]);
+  const [depHistLoading, setDepHistLoading] = useState(false);
+  const fetchDepHist = async () => {
+    setDepHistLoading(true);
+    try {
+      const res = await fetch(`/api/gastos?is_dep_esp=1&limit=100`, { headers: { "x-admin-password": password } });
+      const j = await res.json();
+      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string }) => g.is_dep_esp || g.categoria === "TRANSFERENCIA");
+      setDepHist(rows);
+    } catch { /* ignore */ }
+    setDepHistLoading(false);
+  };
 
   // Valor disponível = fechamento noite da espécie (nunca a base manual)
   const especieDisponivel = Number(saldoHoje?.esp_especie ?? 0);
@@ -129,6 +145,7 @@ export default function SaldosPage() {
     }
     setDepValor(toDisplayBR(String(especieDisponivel)));
     setDepBanco("ITAU");
+    setDepData(dataAtual);
     setMsg("");
     setDepModal(true);
   };
@@ -147,7 +164,7 @@ export default function SaldosPage() {
       MERCADO_PAGO: "Mercado Pago",
     };
     const bancoSel = { key: depBanco, label: bancoLabelMap[depBanco] };
-    const dataDep = dataAtual; // depósito SEMPRE na data selecionada na página
+    const dataDep = depData || dataAtual; // usa data escolhida no modal
 
     setDepositando(true);
     setMsg("");
@@ -209,10 +226,53 @@ export default function SaldosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <h2 className="text-lg font-bold text-[#1D1D1F]">Saldos Bancarios</h2>
         <input type="date" value={dataAtual} onChange={(e) => setDataAtual(e.target.value)} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm" />
+        <button onClick={() => { setDepHistModal(true); fetchDepHist(); }}
+          className="ml-auto px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm font-semibold hover:bg-[#F5F5F7]">
+          📋 Histórico de depósitos
+        </button>
       </div>
+
+      {depHistModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDepHistModal(false)}>
+          <div className={`w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b flex items-center justify-between ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+              <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
+              <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="overflow-y-auto">
+              {depHistLoading ? (
+                <p className="p-8 text-center text-sm text-[#86868B]">Carregando...</p>
+              ) : depHist.length === 0 ? (
+                <p className="p-8 text-center text-sm text-[#86868B]">Nenhum depósito encontrado.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"} sticky top-0`}>
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Data</th>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Banco</th>
+                      <th className="px-4 py-2 text-right text-xs uppercase text-[#86868B]">Valor</th>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depHist.map((d) => (
+                      <tr key={d.id} className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
+                        <td className="px-4 py-2 font-medium">{d.data}</td>
+                        <td className="px-4 py-2">{d.banco}</td>
+                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">R$ {fmt(Number(d.valor))}</td>
+                        <td className="px-4 py-2 text-xs text-[#86868B]">{d.descricao}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -320,7 +380,11 @@ export default function SaldosPage() {
                   <div>
                     <p className={`text-[11px] uppercase tracking-wider font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Depósito de espécie</p>
                     <h3 className={`text-xl font-bold mt-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Transferir para banco</h3>
-                    <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data: {dataAtual}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <label className={`text-[10px] uppercase tracking-wider font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data do depósito:</label>
+                      <input type="date" value={depData} onChange={(e) => setDepData(e.target.value)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                    </div>
                   </div>
                   <button onClick={() => !depositando && setDepModal(false)} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${dm ? "hover:bg-[#2C2C2E] text-[#98989D]" : "hover:bg-[#F5F5F7] text-[#86868B]"}`}>×</button>
                 </div>

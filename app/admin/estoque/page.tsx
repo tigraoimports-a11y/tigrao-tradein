@@ -798,12 +798,29 @@ export default function EstoquePage() {
   const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
   // Mapa completo modelo → [cores EN] do catálogo (usado na reposição)
   const [catalogoCoresMap, setCatalogoCoresMap] = useState<Record<string, string[]>>({});
+  const [catalogoCatByModel, setCatalogoCatByModel] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch("/api/catalogo-cores")
       .then(r => r.json())
-      .then(j => { if (j?.modelos) setCatalogoCoresMap(j.modelos); })
+      .then(j => {
+        if (j?.modelos) setCatalogoCoresMap(j.modelos);
+        if (j?.categorias) setCatalogoCatByModel(j.categorias);
+      })
       .catch(() => {});
   }, []);
+  // Modelos ocultos da reposição (controle do usuário, localStorage)
+  const [reposicaoOcultos, setReposicaoOcultos] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("tigrao_reposicao_ocultos") || "[]")); } catch { return new Set(); }
+  });
+  const toggleReposicaoOculto = (nomeModelo: string) => {
+    setReposicaoOcultos(prev => {
+      const next = new Set(prev);
+      if (next.has(nomeModelo)) next.delete(nomeModelo); else next.add(nomeModelo);
+      localStorage.setItem("tigrao_reposicao_ocultos", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const [showReposicaoConfig, setShowReposicaoConfig] = useState(false);
   const [savedField, setSavedField] = useState<string | null>(null);
   const showSaved = (field: string) => { setSavedField(field); setTimeout(() => setSavedField(null), 1800); };
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
@@ -2875,75 +2892,90 @@ export default function EstoquePage() {
 
         const catOrder = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
 
-        // Agrupar novos por modelo_base+cor → {totalQnt, min, jaCaminho, corDisplay}
+        // === FONTE ÚNICA: catalogo_modelo_configs ===
+        // Lógica invertida: iterar catálogo como base, contar estoque por cor.
+        // Cores que não estão no catálogo NÃO aparecem (mesmo se existirem no estoque com lixo histórico).
         type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
-        for (const p of novos) {
-          const cat = p.categoria || "OUTROS";
-          // Usar getModeloBase (mesma função do Lacrados) para consistência de agrupamento
-          const base = getModeloBase(p.produto, p.categoria).toUpperCase();
-          // Usar p.cor como chave primária (mesma cor para BLUE e BLUE WI-FI)
-          const cor = p.cor || extractCor(stripOrigemRepo(p.produto), null);
-          const corKey = (cor || "—").toUpperCase();
-          // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
-          const corUpper = (cor || "").toUpperCase().trim();
-          const ptFromEN = COR_PT[corUpper]; // se cor é EN → pega PT
-          const enFromPT = PT_TO_EN[corUpper]; // se cor é PT → pega EN
-          let corEN = cor || "—";
-          let corPT = "";
-          if (ptFromEN) { corEN = cor!; corPT = ptFromEN; }
-          else if (enFromPT) { corEN = enFromPT; corPT = cor!; }
-          const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
-          const corDisplay = corPTCap && corPT.toLowerCase() !== corEN.toLowerCase()
-            ? `${corPTCap} · ${corEN.toUpperCase()}`
-            : (corPTCap || cor || "—");
-
-          if (!byCatModel[cat]) byCatModel[cat] = {};
-          if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
-
-          const existing = byCatModel[cat][base].find(c => c.corEN.toUpperCase() === corEN.toUpperCase() || (c.corDisplay || "—").toUpperCase() === corKey);
-          if (existing) {
-            existing.totalQnt += p.qnt;
-            if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) existing.min = p.estoque_minimo;
-          } else {
-            byCatModel[cat][base].push({
-              totalQnt: p.qnt,
-              min: (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) ? p.estoque_minimo : 0,
-              corEN, corPT, corDisplay,
-              jaCaminho: produtosACaminho.has(p.produto.toUpperCase()),
-              falta: 0,
-            });
-          }
-        }
-
-        // Enriquecer com cores do catálogo que ainda não estão no estoque.
-        // Match: strip storage do base → procura no catalogoCoresMap por match exato (case-insensitive).
         const stripStorageBase = (b: string) => b.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
         const normCmp = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-        for (const [, models] of Object.entries(byCatModel)) {
-          for (const [base, cores] of Object.entries(models)) {
-            const baseSemStorage = normCmp(stripStorageBase(base));
-            let catCores: string[] | null = null;
-            for (const [nomeCat, lista] of Object.entries(catalogoCoresMap)) {
-              if (normCmp(nomeCat) === baseSemStorage) { catCores = lista; break; }
-            }
-            if (!catCores || catCores.length === 0) continue;
-            // Precisa de um estoque_minimo representativo pra esse modelo
-            const minGrupo = Math.max(0, ...cores.map(c => c.min || 0));
-            for (const corEN of catCores) {
-              const corPTnew = COR_PT[corEN.toUpperCase()] || "";
-              const jaExiste = cores.some(c =>
-                c.corEN.toUpperCase() === corEN.toUpperCase() ||
-                (corPTnew && c.corPT && c.corPT.toLowerCase() === corPTnew.toLowerCase())
-              );
-              if (jaExiste) continue;
-              cores.push({
-                totalQnt: 0,
-                min: minGrupo,
+
+        // Index por estoque: modelo_base_sem_storage → Map<corNormalizada, {qnt, min, storage}>
+        // Acumula estoque por storage tb pra podermos expandir uma linha por storage.
+        type EstIdx = { totalQnt: number; min: number; jaCaminho: boolean; storage: string };
+        const estoqueIdx = new Map<string, Map<string, EstIdx>>(); // baseSemStorage → storage → dados
+        const storagesPorModelo = new Map<string, Set<string>>(); // baseSemStorage → storages presentes
+        const minPorModelo = new Map<string, Map<string, Map<string, number>>>(); // base → storage → corNorm → min
+        const qntPorModelo = new Map<string, Map<string, Map<string, number>>>(); // base → storage → corNorm → qnt
+        const caminhoPorProduto = produtosACaminho;
+
+        const getStorage = (s: string) => { const m = s.match(/\b(\d+)\s*(GB|TB)\b/i); return m ? `${m[1]}${m[2].toUpperCase()}` : ""; };
+
+        for (const p of novos) {
+          const baseFull = getModeloBase(p.produto, p.categoria).toUpperCase();
+          const storage = getStorage(baseFull) || getStorage(p.produto) || "";
+          const baseSemStorage = normCmp(stripStorageBase(baseFull));
+          const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString();
+          const corUpper = corRaw.toUpperCase().trim();
+          // Normaliza para EN (para comparar com catálogo)
+          const enFromPT = PT_TO_EN[corUpper];
+          const corEN = enFromPT || corUpper;
+          const corNorm = corEN.toLowerCase();
+
+          if (!storagesPorModelo.has(baseSemStorage)) storagesPorModelo.set(baseSemStorage, new Set());
+          storagesPorModelo.get(baseSemStorage)!.add(storage);
+
+          if (!qntPorModelo.has(baseSemStorage)) qntPorModelo.set(baseSemStorage, new Map());
+          const qntStor = qntPorModelo.get(baseSemStorage)!;
+          if (!qntStor.has(storage)) qntStor.set(storage, new Map());
+          const qntCor = qntStor.get(storage)!;
+          qntCor.set(corNorm, (qntCor.get(corNorm) || 0) + p.qnt);
+
+          if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
+            if (!minPorModelo.has(baseSemStorage)) minPorModelo.set(baseSemStorage, new Map());
+            const minStor = minPorModelo.get(baseSemStorage)!;
+            if (!minStor.has(storage)) minStor.set(storage, new Map());
+            const minCor = minStor.get(storage)!;
+            minCor.set(corNorm, Math.max(minCor.get(corNorm) || 0, p.estoque_minimo));
+          }
+        }
+        void estoqueIdx; void caminhoPorProduto;
+
+        // Iterar catálogo e construir grupos
+        for (const [nomeCat, coresCat] of Object.entries(catalogoCoresMap)) {
+          if (reposicaoOcultos.has(nomeCat)) continue;
+          if (!coresCat || coresCat.length === 0) continue;
+          const cat = catalogoCatByModel[nomeCat] || "OUTROS";
+          const baseSemStorage = normCmp(nomeCat);
+          const storages = storagesPorModelo.get(baseSemStorage);
+          // Se o modelo ainda não tem estoque nenhum, ainda assim mostra uma linha por storage padrão do próprio nome
+          const listaStorages = storages && storages.size > 0 ? [...storages] : [""];
+
+          for (const storage of listaStorages) {
+            const baseKey = (nomeCat + (storage ? ` ${storage}` : "")).toUpperCase();
+            if (!byCatModel[cat]) byCatModel[cat] = {};
+            if (!byCatModel[cat][baseKey]) byCatModel[cat][baseKey] = [];
+            const grupoAtual = byCatModel[cat][baseKey];
+            const qntCor = qntPorModelo.get(baseSemStorage)?.get(storage);
+            const minCor = minPorModelo.get(baseSemStorage)?.get(storage);
+            const minGrupoFallback = minCor ? Math.max(0, ...minCor.values()) : 0;
+
+            for (const corEN of coresCat) {
+              const corNorm = corEN.toLowerCase();
+              const corPT = COR_PT[corEN.toUpperCase()] || "";
+              const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
+              const corDisplay = corPTCap || corEN;
+              const totalQnt = qntCor?.get(corNorm) || 0;
+              const min = (minCor?.get(corNorm)) || minGrupoFallback;
+              // já existe? (dedup)
+              if (grupoAtual.some(c => c.corEN.toUpperCase() === corEN.toUpperCase())) continue;
+              grupoAtual.push({
+                totalQnt,
+                min,
                 corEN,
-                corPT: corPTnew,
-                corDisplay: corPTnew || corEN,
+                corPT,
+                corDisplay,
                 jaCaminho: false,
                 falta: 0,
               });
@@ -3002,14 +3034,49 @@ export default function EstoquePage() {
                     {totalFalta > 0 ? `${totalFalta} unidades precisam ser compradas` : "Estoque OK!"}
                   </p>
                 </div>
-                {totalFalta > 0 && (
-                  <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
-                    📋 Copiar Lista
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowReposicaoConfig(true)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:bg-[#F2F2F7]"}`}
+                    title="Controlar quais modelos aparecem na reposição">
+                    ⚙️ Modelos
                   </button>
-                )}
+                  {totalFalta > 0 && (
+                    <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
+                      📋 Copiar Lista
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
+
+            {showReposicaoConfig && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowReposicaoConfig(false)}>
+                <div className={`${bgCard} border ${borderCard} rounded-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+                  <div className={`px-5 py-4 border-b ${borderCard} flex items-center justify-between`}>
+                    <div>
+                      <h3 className={`text-[15px] font-bold ${textPrimary}`}>Modelos na Reposição</h3>
+                      <p className={`text-[11px] ${textMuted} mt-0.5`}>Desmarque modelos que você não quer ver na lista de reposição.</p>
+                    </div>
+                    <button onClick={() => setShowReposicaoConfig(false)} className={`text-[18px] ${textSecondary} hover:text-red-500`}>✕</button>
+                  </div>
+                  <div className="overflow-y-auto p-4 space-y-1">
+                    {Object.entries(catalogoCoresMap)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([nome]) => {
+                        const oculto = reposicaoOcultos.has(nome);
+                        return (
+                          <label key={nome} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]"}`}>
+                            <input type="checkbox" checked={!oculto} onChange={() => toggleReposicaoOculto(nome)} className="w-4 h-4 accent-[#E8740E]" />
+                            <span className={`text-[13px] ${oculto ? textMuted : textPrimary} ${oculto ? "line-through" : ""}`}>{nome}</span>
+                            <span className={`ml-auto text-[10px] ${textMuted}`}>{catalogoCatByModel[nome] || ""}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {sortedCats.length === 0 ? (
               <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 text-center`}>

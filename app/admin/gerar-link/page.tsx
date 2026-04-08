@@ -149,23 +149,39 @@ export default function GerarLinkPage() {
   const [parseMsg, setParseMsg] = useState("");
   const [simulacaoId, setSimulacaoId] = useState<string | null>(null);
 
-  // Autocomplete de clientes cadastrados
+  // Autocomplete de clientes cadastrados — dispara por nome OU CPF
   type CliSug = { nome: string; telefone: string | null; cpf: string | null; email: string | null; endereco: string | null; bairro: string | null; cidade: string | null; uf: string | null };
   const [cliSugs, setCliSugs] = useState<CliSug[]>([]);
   const [showCliSugs, setShowCliSugs] = useState(false);
+  const [cliSugSource, setCliSugSource] = useState<"nome" | "cpf">("nome");
   useEffect(() => {
     const q = cliNome.trim();
-    if (q.length < 2) { setCliSugs([]); return; }
+    if (q.length < 2) { if (cliSugSource === "nome") setCliSugs([]); return; }
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: adminHeaders() });
         const j = await res.json();
-        if (Array.isArray(j?.clientes)) setCliSugs(j.clientes);
+        if (Array.isArray(j?.clientes)) { setCliSugs(j.clientes); setCliSugSource("nome"); }
       } catch {}
     }, 250);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliNome]);
+  useEffect(() => {
+    const q = cliCpf.replace(/\D/g, "");
+    if (q.length < 3) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: adminHeaders() });
+        const j = await res.json();
+        if (Array.isArray(j?.clientes) && j.clientes.length > 0) {
+          setCliSugs(j.clientes); setCliSugSource("cpf"); setShowCliSugs(true);
+        }
+      } catch {}
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliCpf]);
   const aplicarCliente = (c: CliSug) => {
     setCliNome(c.nome || "");
     if (c.telefone) setCliTelefone(c.telefone);
@@ -206,13 +222,23 @@ export default function GerarLinkPage() {
     cliente_nome: string | null;
     cliente_telefone: string | null;
     cliente_cpf: string | null;
+    cliente_email: string | null;
     produto: string;
     cor: string | null;
     valor: number;
     forma_pagamento: string | null;
+    parcelas: string | null;
+    entrada: number;
     troca_produto: string | null;
     troca_valor: number;
+    troca_produto2: string | null;
+    troca_valor2: number;
     vendedor: string | null;
+    operador: string | null;
+    status: string | null;
+    cliente_dados_preenchidos: Record<string, unknown> | null;
+    cliente_preencheu_em: string | null;
+    entrega_id: string | null;
     arquivado: boolean;
     created_at: string;
   };
@@ -270,6 +296,79 @@ export default function GerarLinkPage() {
     try {
       await navigator.clipboard.writeText(url);
     } catch { /* ignore */ }
+  }
+
+  // === Editar link existente ===
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
+  const [encaminharLink, setEncaminharLink] = useState<LinkCompra | null>(null);
+  const [encaminharData, setEncaminharData] = useState("");
+  const [encaminharHorario, setEncaminharHorario] = useState("");
+  const [encaminharObs, setEncaminharObs] = useState("");
+
+  function editarLink(l: LinkCompra) {
+    reutilizarLink(l);
+    setEditingLinkId(l.id);
+    setPasteMsg(`✏️ Editando link ${l.short_code}. Ao clicar em "Gerar Link" as alterações serão salvas.`);
+  }
+
+  async function salvarEdicaoLink() {
+    if (!editingLinkId) return false;
+    const prodsFilled = produtos.filter(Boolean);
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : (prodsFilled[0] || "");
+    try {
+      const res = await fetch("/api/admin/link-compras", {
+        method: "PATCH",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: editingLinkId,
+          produto: nomeProdutoFinal,
+          cor: corSel || null,
+          valor: Number(rawPreco) || 0,
+          forma_pagamento: forma || null,
+          parcelas: parcelas || null,
+          entrada: Number(rawEntrada) || 0,
+          troca_produto: trocaProduto || null,
+          troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+          troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
+          troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
+          vendedor: vendedorNome || null,
+          cliente_nome: cliNome.trim() || null,
+          cliente_telefone: cliTelefone.trim() || null,
+          cliente_cpf: cliCpf.trim() || null,
+          cliente_email: cliEmail.trim() || null,
+        }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setPasteMsg(`❌ Erro ao salvar: ${j.error || res.status}`); return false; }
+      setPasteMsg(`✅ Link ${editingLinkId.slice(0, 6)} atualizado.`);
+      setEditingLinkId(null);
+      return true;
+    } catch (e) {
+      setPasteMsg(`❌ Erro: ${String(e)}`);
+      return false;
+    }
+  }
+
+  async function encaminharParaEntrega() {
+    if (!encaminharLink || !encaminharData) return;
+    try {
+      const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+        method: "POST",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          link_id: encaminharLink.id,
+          data_entrega: encaminharData,
+          horario: encaminharHorario || null,
+          observacao: encaminharObs || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) { alert("Erro: " + (j.error || res.status)); return; }
+      setEncaminharLink(null);
+      setEncaminharData(""); setEncaminharHorario(""); setEncaminharObs("");
+      fetchHistorico();
+      alert("✅ Entrega criada com sucesso!");
+    } catch (e) { alert("Erro: " + String(e)); }
   }
 
   function reutilizarLink(l: LinkCompra) {
@@ -386,8 +485,24 @@ export default function GerarLinkPage() {
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
   async function gerarLink() {
+    // Snapshot local — evita race com re-renders/setState que possam limpar produtos[0]
     const prodsFilled = produtos.filter(Boolean);
-    if (prodsFilled.length === 0) return;
+    if (prodsFilled.length === 0) {
+      setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
+      return;
+    }
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
+    if (!nomeProdutoFinal || !nomeProdutoFinal.trim()) {
+      setPasteMsg("⚠️ Nome do produto vazio — selecione novamente.");
+      return;
+    }
+
+    // Modo edição: salva por cima e não cria short_code novo
+    if (editingLinkId) {
+      const ok = await salvarEdicaoLink();
+      if (ok) { setAba("historico"); fetchHistorico(); }
+      return;
+    }
 
     const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -395,7 +510,7 @@ export default function GerarLinkPage() {
     // Montar dados com keys curtas
     const shortData: Record<string, string> = {};
     // Incluir cor no nome do produto se selecionada
-    shortData.p = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
+    shortData.p = nomeProdutoFinal;
     for (let i = 1; i < prodsFilled.length; i++) {
       shortData[`p${i + 1}`] = prodsFilled[i];
     }
@@ -457,7 +572,7 @@ export default function GerarLinkPage() {
               cliente_telefone: cliTelefone.trim() || null,
               cliente_cpf: cliCpf.trim() || null,
               cliente_email: cliEmail.trim() || null,
-              produto: corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0],
+              produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1) : null,
               cor: corSel || null,
               valor: Number(rawPreco) || 0,
@@ -621,6 +736,65 @@ export default function GerarLinkPage() {
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
+      {/* Modal: Ver dados preenchidos pelo cliente */}
+      {viewDataLink && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setViewDataLink(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-[#1D1D1F]">Dados preenchidos pelo cliente</h3>
+                <p className="text-[11px] text-[#86868B] mt-0.5">Link {viewDataLink.short_code} · {viewDataLink.cliente_preencheu_em ? new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR") : ""}</p>
+              </div>
+              <button onClick={() => setViewDataLink(null)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="overflow-y-auto p-4">
+              {viewDataLink.cliente_dados_preenchidos ? (
+                <dl className="space-y-2 text-xs">
+                  {Object.entries(viewDataLink.cliente_dados_preenchidos).map(([k, v]) => (
+                    <div key={k} className="flex gap-2 border-b border-[#F2F2F7] pb-1.5">
+                      <dt className="text-[#86868B] font-semibold min-w-[110px] capitalize">{k.replace(/_/g, " ")}:</dt>
+                      <dd className="text-[#1D1D1F] break-words">{String(v ?? "")}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-xs text-[#86868B] text-center py-6">Cliente ainda não preencheu.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Encaminhar pra entrega */}
+      {encaminharLink && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setEncaminharLink(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#1D1D1F]">Encaminhar para entrega</h3>
+              <button onClick={() => setEncaminharLink(null)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#86868B]">Uma entrega será criada em /admin/entregas com os dados preenchidos pelo cliente.</p>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Data da entrega *</label>
+                <input type="date" value={encaminharData} onChange={(e) => setEncaminharData(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Horário (opcional)</label>
+                <input type="time" value={encaminharHorario} onChange={(e) => setEncaminharHorario(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Observação (opcional)</label>
+                <textarea value={encaminharObs} onChange={(e) => setEncaminharObs(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <button onClick={encaminharParaEntrega} disabled={!encaminharData} className="w-full py-2.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50">
+                Criar entrega
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-xl font-bold text-[#1D1D1F]">Gerar Link de Compra</h1>
       <p className="text-sm text-[#86868B]">
         Gere um link pre-preenchido para enviar ao cliente. Ele completa os dados pessoais e envia direto pro WhatsApp da Bianca.
@@ -677,8 +851,19 @@ export default function GerarLinkPage() {
                       <span className="text-[10px] text-[#86868B]">
                         {new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      {l.vendedor && <span className="text-[10px] text-[#86868B]">· {l.vendedor}</span>}
+                      {l.entrega_id ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-200 text-green-800">✅ Entrega criada</span>
+                      ) : l.cliente_preencheu_em ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-200 text-blue-800">📝 Preenchido</span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-200 text-gray-700">⏳ Aguardando</span>
+                      )}
                     </div>
+                    <p className="text-[10px] text-[#86868B] mt-0.5">
+                      {l.operador ? <>Criado por <strong>{l.operador}</strong></> : null}
+                      {l.operador && l.vendedor ? " · " : null}
+                      {l.vendedor ? <>Vendedora <strong>{l.vendedor}</strong></> : null}
+                    </p>
                     <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{l.produto}{l.cor ? ` — ${l.cor}` : ""}</p>
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
                     {(l.cliente_nome || l.cliente_telefone) && (
@@ -705,6 +890,28 @@ export default function GerarLinkPage() {
                   >
                     ♻️ Reutilizar
                   </button>
+                  <button
+                    onClick={() => editarLink(l)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-blue-400 hover:text-blue-600 font-medium"
+                  >
+                    ✏️ Editar
+                  </button>
+                  {l.cliente_preencheu_em && (
+                    <button
+                      onClick={() => setViewDataLink(l)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
+                    >
+                      👁 Dados cliente
+                    </button>
+                  )}
+                  {l.cliente_preencheu_em && !l.entrega_id && (
+                    <button
+                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-medium"
+                    >
+                      → Encaminhar entrega
+                    </button>
+                  )}
                   <button
                     onClick={() => arquivarLink(l.id, !l.arquivado)}
                     className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-amber-400 hover:text-amber-600 font-medium"
@@ -838,16 +1045,20 @@ export default function GerarLinkPage() {
                           <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
                           <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
                         </button>
-                        {sel && catSel !== "SEMINOVOS" && coresDisponiveis.length > 0 && (
+                        {sel && catSel !== "SEMINOVOS" && (
                           <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
                             <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {coresDisponiveis.map(cor => (
-                                <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                                >{corParaPT(cor)}</button>
-                              ))}
-                            </div>
+                            {coresDisponiveis.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {coresDisponiveis.map(cor => (
+                                  <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                  >{corParaPT(cor)}</button>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className={`text-xs italic ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Nenhuma cor cadastrada para este modelo no catálogo.</p>
+                            )}
                           </div>
                         )}
                       </div>
