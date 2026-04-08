@@ -108,7 +108,21 @@ export async function GET(request: Request) {
 
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data: data ?? [], total: count ?? 0 });
+
+  // Heal orphan entrega_id: entregas podem ter sido apagadas.
+  const rows = data ?? [];
+  const entregaIds = Array.from(new Set(rows.map(r => r.entrega_id).filter(Boolean))) as string[];
+  if (entregaIds.length) {
+    const { data: ex } = await supabase.from("entregas").select("id").in("id", entregaIds);
+    const alive = new Set((ex || []).map(e => e.id));
+    const orphans = entregaIds.filter(id => !alive.has(id));
+    if (orphans.length) {
+      await supabase.from("link_compras").update({ entrega_id: null, status: "PREENCHIDO" }).in("entrega_id", orphans);
+      for (const r of rows) if (r.entrega_id && !alive.has(r.entrega_id)) { r.entrega_id = null; r.status = "PREENCHIDO"; }
+    }
+  }
+
+  return NextResponse.json({ data: rows, total: count ?? 0 });
 }
 
 // POST: criar registro — chamado pelo /gerar-link após gerar o short_code

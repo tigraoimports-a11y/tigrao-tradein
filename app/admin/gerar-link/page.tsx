@@ -335,6 +335,45 @@ export default function GerarLinkPage() {
   // === Editar link existente ===
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
+  const [editDados, setEditDados] = useState<Record<string, string>>({});
+  const [savingDados, setSavingDados] = useState(false);
+
+  useEffect(() => {
+    if (viewDataLink?.cliente_dados_preenchidos) {
+      const src = viewDataLink.cliente_dados_preenchidos as Record<string, unknown>;
+      const obj: Record<string, string> = {};
+      for (const [k, v] of Object.entries(src)) obj[k] = v == null ? "" : String(v);
+      setEditDados(obj);
+    } else {
+      setEditDados({});
+    }
+  }, [viewDataLink]);
+
+  async function salvarDadosCliente() {
+    if (!viewDataLink) return;
+    setSavingDados(true);
+    try {
+      const payload: Record<string, unknown> = { ...editDados };
+      // Recalcula endereco_completo se campos alterados
+      if (editDados.endereco || editDados.numero || editDados.complemento) {
+        payload.endereco_completo = `${editDados.endereco || ""}${editDados.numero ? `, ${editDados.numero}` : ""}${editDados.complemento ? ` - ${editDados.complemento}` : ""}`.trim();
+      }
+      const res = await fetch("/api/admin/link-compras", {
+        method: "PATCH",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ id: viewDataLink.id, cliente_dados_preenchidos: payload }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert("Erro ao salvar: " + (j.error || res.status));
+      } else {
+        setViewDataLink(null);
+        fetchHistorico();
+      }
+    } finally {
+      setSavingDados(false);
+    }
+  }
   const [encaminharLink, setEncaminharLink] = useState<LinkCompra | null>(null);
   const [encaminharData, setEncaminharData] = useState("");
   const [encaminharHorario, setEncaminharHorario] = useState("");
@@ -787,28 +826,92 @@ export default function GerarLinkPage() {
       {/* Modal: Ver dados preenchidos pelo cliente */}
       {viewDataLink && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setViewDataLink(null)}>
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between bg-gradient-to-r from-[#FFF8F2] to-white">
               <div>
-                <h3 className="text-sm font-bold text-[#1D1D1F]">Dados preenchidos pelo cliente</h3>
-                <p className="text-[11px] text-[#86868B] mt-0.5">Link {viewDataLink.short_code} · {viewDataLink.cliente_preencheu_em ? new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR") : ""}</p>
+                <h3 className="text-base font-bold text-[#1D1D1F]">📋 Dados preenchidos pelo cliente</h3>
+                <p className="text-[11px] text-[#86868B] mt-0.5">
+                  Link <span className="font-mono font-semibold">{viewDataLink.short_code}</span>
+                  {viewDataLink.cliente_preencheu_em && <> · {new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR")}</>}
+                </p>
               </div>
-              <button onClick={() => setViewDataLink(null)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+              <button onClick={() => setViewDataLink(null)} className="text-xl text-[#86868B] hover:text-red-500 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>
             </div>
-            <div className="overflow-y-auto p-4">
-              {viewDataLink.cliente_dados_preenchidos ? (
-                <dl className="space-y-2 text-xs">
-                  {Object.entries(viewDataLink.cliente_dados_preenchidos).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 border-b border-[#F2F2F7] pb-1.5">
-                      <dt className="text-[#86868B] font-semibold min-w-[110px] capitalize">{k.replace(/_/g, " ")}:</dt>
-                      <dd className="text-[#1D1D1F] break-words">{String(v ?? "")}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="text-xs text-[#86868B] text-center py-6">Cliente ainda não preencheu.</p>
-              )}
-            </div>
+            {viewDataLink.cliente_dados_preenchidos ? (
+              <>
+                <div className="overflow-y-auto p-5 space-y-5">
+                  {(() => {
+                    const F = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
+                      <div className={full ? "col-span-2" : ""}>
+                        <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
+                        <input
+                          type={type}
+                          value={editDados[k] || ""}
+                          onChange={(e) => setEditDados({ ...editDados, [k]: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                        />
+                      </div>
+                    );
+                    return (
+                      <>
+                        {/* Pessoa */}
+                        <section>
+                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">👤 Pessoa</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <F label="Nome" k="nome" full />
+                            <F label="Tipo" k="pessoa" />
+                            <F label={editDados.pessoa === "PJ" ? "CNPJ" : "CPF"} k={editDados.pessoa === "PJ" ? "cnpj" : "cpf"} />
+                            <F label="Telefone" k="telefone" />
+                            <F label="Email" k="email" type="email" full />
+                            <F label="Instagram" k="instagram" full />
+                          </div>
+                        </section>
+
+                        {/* Endereço */}
+                        <section>
+                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">📍 Endereço</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <F label="CEP" k="cep" />
+                            <F label="Bairro" k="bairro" />
+                            <F label="Rua" k="endereco" full />
+                            <F label="Número" k="numero" />
+                            <F label="Complemento" k="complemento" />
+                          </div>
+                        </section>
+
+                        {/* Pedido */}
+                        <section>
+                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">🛒 Pedido</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <F label="Produto" k="produto" full />
+                            <F label="Cor" k="cor" />
+                            <F label="Preço (R$)" k="preco" />
+                            <F label="Forma de pagamento" k="forma_pagamento" full />
+                            <F label="Local" k="local" />
+                            <F label="Origem" k="origem" />
+                            <F label="Data entrega" k="data_entrega" type="date" />
+                            <F label="Horário" k="horario" type="time" />
+                            <F label="Vendedor" k="vendedor" full />
+                          </div>
+                        </section>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-end gap-2">
+                  <button onClick={() => setViewDataLink(null)} className="px-4 py-2 text-sm font-semibold text-[#86868B] hover:text-[#1D1D1F]">Cancelar</button>
+                  <button
+                    onClick={salvarDadosCliente}
+                    disabled={savingDados}
+                    className="px-4 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D4640A] disabled:opacity-50"
+                  >
+                    {savingDados ? "Salvando…" : "💾 Salvar alterações"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="p-10 text-center text-sm text-[#86868B]">Cliente ainda não preencheu.</div>
+            )}
           </div>
         </div>
       )}

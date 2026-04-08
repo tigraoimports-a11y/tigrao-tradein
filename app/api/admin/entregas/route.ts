@@ -129,6 +129,13 @@ export async function DELETE(req: NextRequest) {
 
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
+  // Limpa vínculo em link_compras antes de remover a entrega,
+  // para que o link possa ser reencaminhado.
+  await supabase
+    .from("link_compras")
+    .update({ entrega_id: null, status: "PREENCHIDO", updated_at: new Date().toISOString() })
+    .eq("entrega_id", id);
+
   const { error } = await supabase
     .from("entregas")
     .delete()

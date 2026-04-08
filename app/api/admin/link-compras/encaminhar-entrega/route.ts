@@ -28,7 +28,13 @@ export async function POST(request: Request) {
     .eq("id", link_id)
     .single();
   if (e1 || !link) return NextResponse.json({ error: "Link não encontrado" }, { status: 404 });
-  if (link.entrega_id) return NextResponse.json({ error: "Este link já foi encaminhado para uma entrega." }, { status: 409 });
+  if (link.entrega_id) {
+    // Verifica se a entrega ainda existe; se foi apagada, libera o link automaticamente.
+    const { data: ex } = await supabase.from("entregas").select("id").eq("id", link.entrega_id).maybeSingle();
+    if (ex) return NextResponse.json({ error: "Este link já foi encaminhado para uma entrega." }, { status: 409 });
+    await supabase.from("link_compras").update({ entrega_id: null, status: "PREENCHIDO" }).eq("id", link_id);
+    link.entrega_id = null;
+  }
 
   const preench = link.cliente_dados_preenchidos || {};
   const cliente = preench.nome || link.cliente_nome || "";
