@@ -589,6 +589,29 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   const [showNewForm, setShowNewForm] = useState(false);
   const [newNome, setNewNome] = useState("");
   const [newCat, setNewCat] = useState(data.categorias[0]?.key ?? "IPHONES");
+  const [editingModeloId, setEditingModeloId] = useState<string | null>(null);
+  const [editingNomeVal, setEditingNomeVal] = useState("");
+
+  async function handleRenameModelo(m: Modelo, novoNome: string) {
+    const nome = novoNome.trim();
+    if (!nome || nome === m.nome) { setEditingModeloId(null); return; }
+    setSaving(m.id);
+    try {
+      const res = await fetch(BASE, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ resource: "modelos", id: m.id, nome }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setEditingModeloId(null);
+      reload();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setSaving(null);
+    }
+  }
 
   const inputCls =
     "border border-[#E8E8ED] rounded-lg px-3 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
@@ -802,8 +825,33 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                   : "hover:bg-[#F5F5F7] text-[#1D1D1F]"
               }`}
             >
-              <div className="min-w-0">
-                <div className="font-semibold text-sm truncate">{m.nome}</div>
+              <div className="min-w-0 flex-1">
+                {editingModeloId === m.id ? (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      value={editingNomeVal}
+                      onChange={(e) => setEditingNomeVal(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRenameModelo(m, editingNomeVal);
+                        if (e.key === "Escape") setEditingModeloId(null);
+                      }}
+                      autoFocus
+                      className="w-full px-2 py-0.5 rounded border border-[#0071E3] text-sm text-[#1D1D1F] bg-white"
+                    />
+                    <button onClick={() => handleRenameModelo(m, editingNomeVal)} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 group/nome">
+                    <div className="font-semibold text-sm truncate">{m.nome}</div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingModeloId(m.id); setEditingNomeVal(m.nome); }}
+                      className={`text-[10px] shrink-0 ${selectedModelo?.id === m.id ? "text-blue-200 hover:text-white" : "text-[#C7C7CC] hover:text-[#E8740E]"} opacity-60 hover:opacity-100`}
+                      title="Renomear"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                )}
                 <div className={`text-xs mt-0.5 ${selectedModelo?.id === m.id ? "text-blue-200" : "text-[#86868B]"}`}>
                   {getCatNome(m.categoria_key)}
                 </div>

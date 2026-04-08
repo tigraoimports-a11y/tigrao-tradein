@@ -28,12 +28,20 @@ export async function GET(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ lojistas: data || [] });
   }
-  const key = buildClienteKey({ cpf, cnpj, nome });
-  const { data: lojista } = await supabase
-    .from("lojistas_credito")
-    .select("*")
-    .eq("cliente_key", key)
-    .maybeSingle();
+  // Tenta achar por cpf, depois cnpj, depois nome (ordem de prioridade)
+  const keys: string[] = [];
+  if (cpf) keys.push(buildClienteKey({ cpf }));
+  if (cnpj) keys.push(buildClienteKey({ cnpj }));
+  if (nome) keys.push(buildClienteKey({ nome }));
+  let lojista: Record<string, unknown> | null = null;
+  for (const k of keys) {
+    const { data } = await supabase
+      .from("lojistas_credito")
+      .select("*")
+      .eq("cliente_key", k)
+      .maybeSingle();
+    if (data) { lojista = data; break; }
+  }
   if (!lojista) return NextResponse.json({ lojista: null, saldo: 0, log: [] });
   const { data: log } = await supabase
     .from("lojistas_credito_log")
