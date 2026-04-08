@@ -1430,7 +1430,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false,
+        frete_valor: "", frete_recebido: false, usar_credito_loja: "",
       });
       setCatSel("");
       setEstoqueId("");
@@ -1908,7 +1908,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
@@ -2513,7 +2513,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -4705,7 +4705,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -4739,7 +4739,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
