@@ -127,7 +127,10 @@ export default function VendasPage() {
     cep: "", bairro: "", cidade: "", uf: "",
     // Atacado: frete/entrega cobrado a parte
     frete_valor: "", frete_recebido: false as boolean,
+    // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
+    usar_credito_loja: "",
   });
+  const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -573,6 +576,28 @@ export default function VendasPage() {
     return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
   }, [form.cliente, fetchClienteHistorico]);
 
+  // Buscar saldo de crédito do lojista quando cliente/cpf/cnpj mudar (só ATACADO)
+  useEffect(() => {
+    if (form.tipo !== "ATACADO" || (!form.cliente && !form.cpf && !form.cnpj)) {
+      setCreditoLojistaSaldo(0);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (form.cpf) params.set("cpf", form.cpf);
+        if (form.cnpj) params.set("cnpj", form.cnpj);
+        if (!form.cpf && !form.cnpj && form.cliente) params.set("nome", form.cliente);
+        const res = await fetch(`/api/admin/lojistas-credito?${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+        if (res.ok) {
+          const json = await res.json();
+          setCreditoLojistaSaldo(Number(json.saldo || 0));
+        }
+      } catch { /* ignore */ }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.tipo, form.cliente, form.cpf, form.cnpj, password, user?.nome]);
+
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
     const temPermissaoVendas = user?.permissoes?.some(p => p === "vendas_ver" || p === "vendas_registrar");
@@ -949,6 +974,8 @@ export default function VendasPage() {
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
+      // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
+      usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
     };
 
     if (prodFields._estoqueId) {
@@ -2041,6 +2068,41 @@ export default function VendasPage() {
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
               </div>
+
+              {/* Crédito de Lojista — aparece quando há saldo */}
+              {creditoLojistaSaldo > 0 && (
+                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-700">💳 Crédito do Lojista</span>
+                    <span className="text-sm font-bold text-blue-700">Saldo: R$ {creditoLojistaSaldo.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <p className={labelCls}>Usar crédito (R$)</p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.usar_credito_loja}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          const v = digits ? Math.min(parseInt(digits), creditoLojistaSaldo) : 0;
+                          set("usar_credito_loja", v ? String(v) : "");
+                        }}
+                        placeholder="0"
+                        className={inputCls}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => set("usar_credito_loja", String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo)))}
+                      className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Usar tudo
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-blue-600 mt-1">Este valor será debitado do saldo ao finalizar a venda.</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

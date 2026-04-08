@@ -29,3 +29,13 @@ create table if not exists lojistas_credito_log (
 
 create index if not exists idx_lojistas_credito_log_lojista on lojistas_credito_log(lojista_id, created_at desc);
 create index if not exists idx_lojistas_credito_log_venda on lojistas_credito_log(venda_id);
+
+-- Grants + RLS
+grant all on lojistas_credito to service_role, authenticated, anon;
+grant all on lojistas_credito_log to service_role, authenticated, anon;
+alter table lojistas_credito enable row level security;
+alter table lojistas_credito_log enable row level security;
+drop policy if exists "service_role_all" on lojistas_credito;
+drop policy if exists "service_role_all" on lojistas_credito_log;
+create policy "service_role_all" on lojistas_credito for all to service_role using (true) with check (true);
+create policy "service_role_all" on lojistas_credito_log for all to service_role using (true) with check (true);
