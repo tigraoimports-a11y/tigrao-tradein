@@ -1696,7 +1696,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false,
+      frete_recebido: false, usar_credito_loja: "",
     });
     setCatSel("");
     setEstoqueId("");
@@ -4120,6 +4120,7 @@ export default function VendasPage() {
                                               uf: primaryVenda.uf || "",
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
+                                              usar_credito_loja: "",
                                             });
                                             setProdutoManual(true);
 
