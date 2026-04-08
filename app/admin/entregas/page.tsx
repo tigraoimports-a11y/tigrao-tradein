@@ -80,6 +80,15 @@ export default function EntregasPage() {
   const [showForm, setShowForm] = useState(false);
   const [modoSimples, setModoSimples] = useState(false);
   const [rastreio, setRastreio] = useState("");
+
+  // Autocomplete de clientes cadastrados (baseado em entregas anteriores)
+  type ClienteSug = { cliente: string; telefone: string | null; endereco: string | null; bairro: string | null; regiao: string | null };
+  const [clienteSugs, setClienteSugs] = useState<ClienteSug[]>([]);
+  const [showSugs, setShowSugs] = useState(false);
+
+  // Seleção em massa para finalizar várias entregas
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [entregasSelecionadas, setEntregasSelecionadas] = useState<Set<string>>(new Set());
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -619,7 +628,54 @@ export default function EntregasPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
               <p className={labelCls}>Cliente</p>
-              <input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Nome do cliente" className={inputCls} />
+              <div className="relative">
+                <input
+                  value={form.cliente}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    set("cliente", v);
+                    if (v.trim().length >= 2) {
+                      try {
+                        const res = await fetch(`/api/admin/entregas?search_clientes=${encodeURIComponent(v.trim())}`, { headers: apiHeaders() });
+                        const j = await res.json();
+                        setClienteSugs(j.clientes || []);
+                        setShowSugs(true);
+                      } catch { /* ignore */ }
+                    } else {
+                      setClienteSugs([]);
+                      setShowSugs(false);
+                    }
+                  }}
+                  onFocus={() => { if (clienteSugs.length > 0) setShowSugs(true); }}
+                  onBlur={() => setTimeout(() => setShowSugs(false), 200)}
+                  placeholder="Nome do cliente (digite 2+ letras p/ buscar)"
+                  className={inputCls}
+                />
+                {showSugs && clienteSugs.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg max-h-[280px] overflow-y-auto">
+                    {clienteSugs.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          set("cliente", s.cliente);
+                          if (s.telefone) set("telefone", s.telefone);
+                          if (s.endereco) set("endereco", s.endereco);
+                          if (s.bairro) set("bairro", s.bairro);
+                          if (s.regiao) set("regiao", s.regiao);
+                          setShowSugs(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-[#FFF5EB] border-b border-[#F5F5F7] last:border-b-0"
+                      >
+                        <p className="text-sm font-semibold text-[#1D1D1F]">{s.cliente}</p>
+                        <p className="text-[10px] text-[#86868B]">
+                          {s.telefone || "—"}{s.bairro ? ` · ${s.bairro}` : ""}{s.endereco ? ` · ${s.endereco.slice(0, 40)}${s.endereco.length > 40 ? "..." : ""}` : ""}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <p className={labelCls}>Telefone</p>
@@ -1003,7 +1059,63 @@ export default function EntregasPage() {
             {f.label}
           </button>
         ))}
+        <button
+          onClick={() => { setModoSelecao(!modoSelecao); setEntregasSelecionadas(new Set()); }}
+          className={`ml-auto px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${modoSelecao ? "bg-blue-500 text-white" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-blue-400"}`}
+        >
+          {modoSelecao ? "✖️ Sair da seleção" : "☑️ Selecionar várias"}
+        </button>
       </div>
+
+      {modoSelecao && entregasSelecionadas.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
+          <span className="text-sm font-semibold text-blue-700">{entregasSelecionadas.size} selecionada{entregasSelecionadas.size > 1 ? "s" : ""}</span>
+          <button
+            onClick={async () => {
+              if (!confirm(`Finalizar ${entregasSelecionadas.size} entregas?`)) return;
+              const ids = Array.from(entregasSelecionadas);
+              for (const id of ids) {
+                await fetch("/api/admin/entregas", {
+                  method: "PATCH",
+                  headers: apiHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify({ id, finalizada: true, status: "ENTREGUE" }),
+                });
+              }
+              setEntregasSelecionadas(new Set());
+              setModoSelecao(false);
+              fetchEntregas();
+            }}
+            className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
+          >
+            ✅ Finalizar selecionadas
+          </button>
+          <button
+            onClick={async () => {
+              if (!confirm(`Marcar comprovante lançado em ${entregasSelecionadas.size} entregas?`)) return;
+              const ids = Array.from(entregasSelecionadas);
+              for (const id of ids) {
+                await fetch("/api/admin/entregas", {
+                  method: "PATCH",
+                  headers: apiHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify({ id, comprovante_lancado: true }),
+                });
+              }
+              setEntregasSelecionadas(new Set());
+              setModoSelecao(false);
+              fetchEntregas();
+            }}
+            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
+          >
+            🧾 Marcar comprovante
+          </button>
+          <button
+            onClick={() => setEntregasSelecionadas(new Set())}
+            className="ml-auto text-xs text-blue-700 hover:underline"
+          >
+            Limpar seleção
+          </button>
+        </div>
+      )}
 
       {/* Calendario semanal */}
       {loading ? (
@@ -1043,11 +1155,20 @@ export default function EntregasPage() {
                     )}
                     {dayEntregas.map((e) => {
                       const sc = STATUS_CONFIG[e.status];
+                      const isSel = entregasSelecionadas.has(e.id);
                       return (
                         <button
                           key={e.id}
-                          onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
+                          onClick={() => {
+                            if (modoSelecao) {
+                              const next = new Set(entregasSelecionadas);
+                              if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                              setEntregasSelecionadas(next);
+                            } else {
+                              setSelectedEntrega(e);
+                            }
+                          }}
+                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
                         >
                           <div className="flex items-center gap-1 mb-0.5">
                             <span className="text-[10px]">{sc.icon}</span>
@@ -1100,11 +1221,20 @@ export default function EntregasPage() {
                     )}
                     {dayEntregas.map((e) => {
                       const sc = STATUS_CONFIG[e.status];
+                      const isSel = entregasSelecionadas.has(e.id);
                       return (
                         <button
                           key={e.id}
-                          onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
+                          onClick={() => {
+                            if (modoSelecao) {
+                              const next = new Set(entregasSelecionadas);
+                              if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                              setEntregasSelecionadas(next);
+                            } else {
+                              setSelectedEntrega(e);
+                            }
+                          }}
+                          className={`w-full text-left p-3 rounded-lg border transition-all ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
