@@ -46,6 +46,7 @@ export default function GerarLinkPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel]);
   const [corSel, setCorSel] = useState("");
+  const [coresExtras, setCoresExtras] = useState<string[]>([]); // cor por índice extra (produto 2, 3, ...)
 
   // Fetch estoque para obter cores reais disponíveis + seminovos
   const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
@@ -87,10 +88,9 @@ export default function GerarLinkPage() {
       .catch(() => {});
   }, []);
 
-  // Cores disponíveis para o produto selecionado — fonte ÚNICA = catalogo_modelo_configs.
-  // Sem fallback pro estoque (estoque pode ter lixo de cor errada).
-  const coresDisponiveis = useMemo(() => {
-    if (!produtos[0]) return [];
+  // Cores disponíveis pra QUALQUER nome de produto — fonte: catalogo_modelo_configs.
+  const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
+    if (!nomeProduto) return [];
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
@@ -116,7 +116,7 @@ export default function GerarLinkPage() {
       return [...set];
     };
     const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
-    const prodTokens = new Set(tokens(produtos[0]));
+    const prodTokens = new Set(tokens(nomeProduto));
 
     // Match por tokens: todos os tokens do catálogo devem existir no produto.
     // Escolhe o match com mais tokens (mais específico).
@@ -143,7 +143,9 @@ export default function GerarLinkPage() {
       out.push(c);
     }
     return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
-  }, [produtos, catalogoCores]);
+  }, [catalogoCores]);
+
+  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
 
   const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
@@ -255,6 +257,7 @@ export default function GerarLinkPage() {
     cliente_cpf: string | null;
     cliente_email: string | null;
     produto: string;
+    produtos_extras: string[] | null;
     cor: string | null;
     valor: number;
     forma_pagamento: string | null;
@@ -356,6 +359,9 @@ export default function GerarLinkPage() {
         body: JSON.stringify({
           id: editingLinkId,
           produto: nomeProdutoFinal,
+          produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => {
+            const c = coresExtras[i]; return c ? `${nome} ${corParaPT(c)}` : nome;
+          }) : null,
           cor: corENCanon || null,
           valor: Number(rawPreco) || 0,
           forma_pagamento: forma || null,
@@ -542,12 +548,19 @@ export default function GerarLinkPage() {
     const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+    // Helper: aplica cor extra no nome (PT simples)
+    const aplicarCorExtra = (nome: string, idx: number): string => {
+      const cor = coresExtras[idx - 1];
+      if (!cor) return nome;
+      return `${nome} ${corParaPT(cor)}`;
+    };
+
     // Montar dados com keys curtas
     const shortData: Record<string, string> = {};
     // Incluir cor no nome do produto se selecionada
     shortData.p = nomeProdutoFinal;
     for (let i = 1; i < prodsFilled.length; i++) {
-      shortData[`p${i + 1}`] = prodsFilled[i];
+      shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
     }
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
@@ -608,7 +621,7 @@ export default function GerarLinkPage() {
               cliente_cpf: cliCpf.trim() || null,
               cliente_email: cliEmail.trim() || null,
               produto: nomeProdutoFinal,
-              produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1) : null,
+              produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
               valor: Number(rawPreco) || 0,
               forma_pagamento: forma || null,
@@ -913,6 +926,11 @@ export default function GerarLinkPage() {
                       }
                       return `${base} ${corPT} — ${corEN}`;
                     })()}</p>
+                    {l.produtos_extras && l.produtos_extras.length > 0 && (
+                      <ul className="text-xs text-[#86868B] mt-0.5 list-disc pl-5">
+                        {l.produtos_extras.map((pe, i) => <li key={i}>{pe}</li>)}
+                      </ul>
+                    )}
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
@@ -1023,25 +1041,51 @@ export default function GerarLinkPage() {
                 </div>
               </div>
             )}
-            {produtos.map((prod, idx) => (
-              <div key={idx} className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={prod}
-                    onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
-                    placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
-                    className={inputCls}
-                  />
+            {produtos.map((prod, idx) => {
+              const coresIdx = idx === 0 ? [] : coresParaProduto(prod); // idx 0 já tem picker acima
+              const corIdxSel = idx === 0 ? "" : (coresExtras[idx - 1] || "");
+              return (
+              <div key={idx} className="space-y-2">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={prod}
+                      onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
+                      placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
+                      className={inputCls}
+                    />
+                  </div>
+                  <button
+                    onClick={() => { setPickerIdx(pickerIdx === idx ? null : idx); setCatSel(""); }}
+                    className={`shrink-0 px-2 py-2 text-xs rounded-lg border transition-colors ${pickerIdx === idx ? "bg-[#E8740E] text-white border-[#E8740E]" : "text-[#E8740E] border-[#E8740E]/40 hover:bg-[#FFF5EB]"}`}
+                    title="Selecionar do estoque"
+                  >📋</button>
+                  {idx > 0 && <button onClick={() => {
+                    setProdutos(produtos.filter((_, i) => i !== idx));
+                    setCoresExtras(coresExtras.filter((_, i) => i !== (idx - 1)));
+                    if (pickerIdx === idx) setPickerIdx(null);
+                  }} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
                 </div>
-                <button
-                  onClick={() => { setPickerIdx(pickerIdx === idx ? null : idx); setCatSel(""); }}
-                  className={`shrink-0 px-2 py-2 text-xs rounded-lg border transition-colors ${pickerIdx === idx ? "bg-[#E8740E] text-white border-[#E8740E]" : "text-[#E8740E] border-[#E8740E]/40 hover:bg-[#FFF5EB]"}`}
-                  title="Selecionar do estoque"
-                >📋</button>
-                {idx > 0 && <button onClick={() => { setProdutos(produtos.filter((_, i) => i !== idx)); if (pickerIdx === idx) setPickerIdx(null); }} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
+                {idx > 0 && prod && coresIdx.length > 0 && (
+                  <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                    <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor do produto {idx + 1}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {coresIdx.map(cor => (
+                        <button key={cor} onClick={() => {
+                          const next = [...coresExtras];
+                          while (next.length < idx) next.push("");
+                          next[idx - 1] = next[idx - 1] === cor ? "" : cor;
+                          setCoresExtras(next);
+                        }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corIdxSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                        >{corParaPT(cor)}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+            );})}
             {/* Picker inline para o slot selecionado */}
             {pickerIdx !== null && (
               <div className={`space-y-2 p-3 rounded-xl border ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF5EB]/60"}`}>
