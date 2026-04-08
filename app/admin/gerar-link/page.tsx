@@ -294,7 +294,15 @@ export default function GerarLinkPage() {
       params.set("arquivado", histArquivado);
       const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
       const j = await res.json();
-      setHistLinks(j.data || []);
+      const rows = (j.data || []).map((r: LinkCompra & { produtos_extras: unknown }) => {
+        let pe: string[] | null = null;
+        if (Array.isArray(r.produtos_extras)) pe = r.produtos_extras as string[];
+        else if (typeof r.produtos_extras === "string") {
+          try { const parsed = JSON.parse(r.produtos_extras); pe = Array.isArray(parsed) ? parsed : null; } catch { pe = null; }
+        }
+        return { ...r, produtos_extras: pe };
+      });
+      setHistLinks(rows);
     } catch { /* ignore */ }
     setHistLoading(false);
   }
