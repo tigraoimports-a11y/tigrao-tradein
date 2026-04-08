@@ -91,7 +91,14 @@ export function formatProdutoDisplay(p: {
     if (ssd) parts.push(ssd);
     if (cor) parts.push(cor);
   } else if (baseCat === "MAC_MINI") {
-    parts.push("Mac Mini");
+    // Extrai chip (M1/M2/M3/M4 + opcional PRO/MAX) do nome/observação
+    const chipM = up.match(/M(\d+)\s*(PRO\s*MAX|PRO|MAX)?/);
+    let chip = "";
+    if (chipM) {
+      const variant = chipM[2] ? " " + chipM[2].replace(/\s+/g, " ").replace(/PRO MAX/i, "Pro Max").replace(/PRO/i, "Pro").replace(/MAX/i, "Max") : "";
+      chip = ` M${chipM[1]}${variant}`;
+    }
+    parts.push("Mac Mini" + chip);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
     if (cor) parts.push(cor);
