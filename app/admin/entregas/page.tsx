@@ -356,6 +356,44 @@ export default function EntregasPage() {
     if (password) fetchEntregas();
   }, [password, fetchEntregas]);
 
+  // Prefill via query params (vindo de /admin/simulacoes, etc)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qp = new URLSearchParams(window.location.search);
+    if (!qp.toString()) return;
+    const clienteNome = qp.get("cliente_nome") || "";
+    const clienteTel = qp.get("cliente_telefone") || "";
+    const endereco = qp.get("endereco") || "";
+    const bairro = qp.get("bairro") || "";
+    const produto = qp.get("produto") || "";
+    const cor = qp.get("cor") || "";
+    const valor = qp.get("valor") || "";
+    const trocaProd = qp.get("troca_produto") || "";
+    const trocaVal = qp.get("troca_valor") || "";
+    const diferencaPix = qp.get("diferenca_pix") || "";
+    const obs = diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "";
+
+    setForm(f => ({
+      ...f,
+      cliente: clienteNome || f.cliente,
+      telefone: clienteTel || f.telefone,
+      endereco: endereco || f.endereco,
+      bairro: bairro || f.bairro,
+      valor: valor ? String(Math.round(parseFloat(valor))) : f.valor,
+      observacao: obs || f.observacao,
+    }));
+    if (produto) {
+      setProdutos([cor ? `${produto} ${cor}`.trim() : produto]);
+      setProdutoManual(true);
+    }
+    if (trocaProd) {
+      setTrocaAtiva(true);
+      setTrocaProduto(trocaProd);
+      if (trocaVal) setTrocaValor(String(Math.round(parseFloat(trocaVal))));
+    }
+    if (clienteNome || produto) setShowForm(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSubmit = async () => {
     if (!form.cliente || !form.data_entrega) {
       setMsg("Preencha cliente e data da entrega");

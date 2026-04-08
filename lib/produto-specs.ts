@@ -210,9 +210,17 @@ export const MAC_MINI_STORAGES = ["256GB", "512GB", "1TB", "2TB"];
 
 export const IPAD_MODELOS = [
   { value: "IPAD", label: "iPad" },
-  { value: "MINI", label: "iPad Mini" },
-  { value: "AIR", label: "iPad Air" },
-  { value: "PRO", label: "iPad Pro" },
+  { value: "MINI 6", label: "iPad Mini 6" },
+  { value: "MINI 7", label: "iPad Mini 7" },
+  { value: "AIR 4", label: "iPad Air 4" },
+  { value: "AIR 5", label: "iPad Air 5" },
+  { value: "AIR M2", label: "iPad Air M2" },
+  { value: "AIR M3", label: "iPad Air M3" },
+  { value: "AIR M4", label: "iPad Air M4" },
+  { value: "PRO 11", label: "iPad Pro 11\"" },
+  { value: "PRO 12.9", label: "iPad Pro 12.9\"" },
+  { value: "PRO M4 11", label: "iPad Pro M4 11\"" },
+  { value: "PRO M4 13", label: "iPad Pro M4 13\"" },
 ];
 export const IPAD_CHIPS = ["A15", "A16", "M1", "M2", "M3", "M4", "M5"];
 export const IPAD_TELAS = ['8.3"', '10.9"', '11"', '13"'];
@@ -246,7 +254,7 @@ export const DEFAULT_SPEC: ProdutoSpec = {
   ip_modelo: "16", ip_linha: "", ip_storage: "128GB", ip_origem: "",
   mb_modelo: "AIR", mb_tela: '13"', mb_chip: "M4", mb_nucleos: "", mb_ram: "16GB", mb_storage: "256GB",
   mm_chip: "M4", mm_nucleos: "10C CPU/10C GPU", mm_ram: "16GB", mm_storage: "256GB",
-  ipad_modelo: "AIR", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
+  ipad_modelo: "AIR M4", ipad_chip: "", ipad_tela: '11"', ipad_storage: "128GB", ipad_conn: "WIFI",
   aw_modelo: "SERIES 10", aw_tamanho: "42mm", aw_conn: "GPS", aw_pulseira: "", aw_band: "",
   air_modelo: "AIRPODS 4",
 };
@@ -337,7 +345,10 @@ export function buildProdutoName(cat: string, spec: ProdutoSpec, cor?: string): 
     }
     case "IPADS": {
       const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
-      const chip = spec.ipad_chip ? ` ${spec.ipad_chip}` : "";
+      // Não duplicar chip se ipad_modelo já contém ele (ex: "AIR M4", "PRO M4 11")
+      const modeloUpper = modelo.toUpperCase();
+      const chipUpper = (spec.ipad_chip || "").toUpperCase();
+      const chip = chipUpper && !modeloUpper.includes(chipUpper) ? ` ${chipUpper}` : "";
       const tela = spec.ipad_tela ? ` ${spec.ipad_tela}` : "";
       const storage = spec.ipad_storage ? ` ${spec.ipad_storage}` : "";
       const conn = spec.ipad_conn === "WIFI+CELL" ? " WI-FI+CELLULAR" : spec.ipad_conn === "WIFI" ? " WI-FI" : "";

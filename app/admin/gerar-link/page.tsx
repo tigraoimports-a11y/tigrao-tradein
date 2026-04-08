@@ -517,6 +517,29 @@ export default function GerarLinkPage() {
     setAba("novo");
   }
 
+  // Prefill via query params (vindo de /admin/simulacoes, etc)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qp = new URLSearchParams(window.location.search);
+    if (!qp.toString()) return;
+    const produtoQp = qp.get("produto");
+    if (produtoQp) setProdutos([produtoQp]);
+    const precoQp = qp.get("preco");
+    if (precoQp) {
+      const n = Math.round(parseFloat(precoQp));
+      if (!isNaN(n) && n > 0) setPreco(n.toLocaleString("pt-BR"));
+    }
+    const corQp = qp.get("cor");
+    if (corQp) setCorSel(corQp.toUpperCase());
+    const trocaProd = qp.get("troca_produto");
+    if (trocaProd) setTrocaProduto(trocaProd);
+    const trocaVal = qp.get("troca_valor");
+    if (trocaVal) {
+      const n = Math.round(parseFloat(trocaVal));
+      if (!isNaN(n) && n > 0) setTrocaValor(n.toLocaleString("pt-BR"));
+    }
+  }, []);
+
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
     if (!digits) return "";
