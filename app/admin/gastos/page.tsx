@@ -1127,34 +1127,51 @@ export default function GastosPage() {
               <button onClick={() => shiftMes(1)} className={`px-2 py-1 rounded-lg text-sm font-bold ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`} title="Próximo mês">›</button>
               {filtroMes && <button onClick={() => setFiltroMes("")} className="text-[10px] text-[#E8740E] underline ml-1">Todos</button>}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+            {/* Filtro de categorias — chip com 3 estados: neutro, incluir, excluir */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
                 Todas
               </button>
-              {categoriasUsadas.map(c => (
-                <button key={c} onClick={() => { setCategoriasExcluidas(new Set()); setFiltroCategoria(filtroCategoria === c ? "" : c); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filtroCategoria === c ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
-                  {c}
-                </button>
-              ))}
+              {categoriasUsadas.map(c => {
+                const isIncluded = filtroCategoria === c;
+                const isExcluded = categoriasExcluidas.has(c);
+                // Click cycles: neutro → incluir (só essa) → excluir (esconder) → neutro
+                const cycleFilter = () => {
+                  if (isIncluded) {
+                    // incluir → excluir
+                    setFiltroCategoria("");
+                    setCategoriasExcluidas(new Set([c]));
+                  } else if (isExcluded) {
+                    // excluir → neutro
+                    const novo = new Set(categoriasExcluidas);
+                    novo.delete(c);
+                    setCategoriasExcluidas(novo);
+                  } else {
+                    // neutro → incluir
+                    setCategoriasExcluidas(new Set());
+                    setFiltroCategoria(c);
+                  }
+                };
+                let cls = dm ? "bg-[#2C2C2E] text-[#98989D] border border-[#3A3A3C]" : "bg-white border border-[#D2D2D7] text-[#86868B]";
+                let icon = "";
+                if (isIncluded) { cls = "bg-[#E8740E] text-white border border-[#E8740E]"; icon = "✓ "; }
+                else if (isExcluded) { cls = "bg-red-100 text-red-700 border border-red-300 line-through"; icon = "✕ "; }
+                return (
+                  <button key={c} onClick={cycleFilter}
+                    title="Clique: só essa · 2x: esconder · 3x: limpar"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:border-[#E8740E] ${cls}`}>
+                    {icon}{c}
+                  </button>
+                );
+              })}
+              {(filtroCategoria || categoriasExcluidas.size > 0) && (
+                <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }}
+                  className="text-[10px] text-[#E8740E] underline ml-1">Limpar filtros</button>
+              )}
             </div>
-            {/* Checkbox: excluir categorias */}
-            {!filtroCategoria && (
-              <div className={`w-full border rounded-xl p-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
-                <p className="text-[10px] text-[#86868B] uppercase tracking-wider font-semibold mb-2">Excluir categorias:</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {categoriasUsadas.map(c => (
-                    <label key={c} className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={categoriasExcluidas.has(c)} onChange={() => toggleCategoria(c)}
-                        className="w-3.5 h-3.5 rounded accent-[#E8740E]" />
-                      <span className={`text-xs ${categoriasExcluidas.has(c) ? "line-through text-[#86868B]" : dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{c}</span>
-                    </label>
-                  ))}
-                  {categoriasExcluidas.size > 0 && (
-                    <button onClick={() => setCategoriasExcluidas(new Set())} className="text-[10px] text-[#E8740E] underline ml-2">Limpar</button>
-                  )}
-                </div>
-              </div>
-            )}
+            <p className="text-[10px] text-[#86868B] -mt-1">Clique 1x pra ver só essa · 2x pra esconder · 3x pra limpar</p>
           </div>
 
           {/* Gastos agrupados por data */}
