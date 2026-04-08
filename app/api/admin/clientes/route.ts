@@ -210,7 +210,38 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // =========== TABS: clientes / lojistas / notas ===========
+  // =========== TABS: clientes / lojistas — via RPC (SQL group by) ===========
+  // Evita baixar todas as vendas pro Node — Postgres agrega e retorna só o resumo.
+  if (tab === "clientes" || tab === "lojistas") {
+    const { data: resumo, error: rpcErr } = await supabase.rpc("clientes_resumo", {
+      p_is_lojista: tab === "lojistas",
+      p_search: search || null,
+    });
+    if (rpcErr) {
+      // Fallback pro caminho antigo caso a migration da RPC ainda não tenha rodado
+      console.error("[clientes] RPC clientes_resumo falhou, usando fallback:", rpcErr.message);
+    } else {
+      const clientes = (resumo || []).map((r: Record<string, unknown>) => ({
+        nome: r.nome, cpf: r.cpf, cnpj: r.cnpj, email: r.email,
+        bairro: r.bairro, cidade: r.cidade, uf: r.uf,
+        total_compras: Number(r.total_compras || 0),
+        total_gasto: Number(r.total_gasto || 0),
+        ultima_compra: r.ultima_compra,
+        ultimo_produto: r.ultimo_produto,
+        cliente_desde: r.cliente_desde,
+        is_lojista: r.is_lojista,
+        vendas: [],
+      }));
+      return NextResponse.json({
+        clientes,
+        total: clientes.length,
+        total_gasto: clientes.reduce((s, c) => s + c.total_gasto, 0),
+        total_compras: clientes.reduce((s, c) => s + c.total_compras, 0),
+      });
+    }
+  }
+
+  // ─── Fallback (notas + caso RPC não esteja disponível) ───
   // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui registros com NULL
   let query = supabase
     .from("vendas")
