@@ -406,8 +406,25 @@ export default function EntregasPage() {
     const valor = qp.get("valor") || "";
     const trocaProd = qp.get("troca_produto") || "";
     const trocaVal = qp.get("troca_valor") || "";
+    const trocaCorQp = qp.get("troca_cor") || "";
+    const trocaBatQp = qp.get("troca_bateria") || "";
+    const trocaMarcas = qp.get("troca_marcas_uso") || "";
+    const trocaPecas = qp.get("troca_pecas_trocadas") || "";
+    const trocaCaixa = qp.get("troca_caixa_original") || "";
+    const trocaObsQp = qp.get("troca_observacao") || "";
     const diferencaPix = qp.get("diferenca_pix") || "";
     const obs = diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "";
+    // Monta observação consolidada da troca caso o param explícito não venha
+    const trocaObsParts: string[] = [];
+    if (trocaObsQp) trocaObsParts.push(trocaObsQp);
+    else {
+      if (trocaMarcas === "nao") trocaObsParts.push("Sem marcas de uso");
+      else if (trocaMarcas) trocaObsParts.push(`Marcas: ${trocaMarcas}`);
+      if (trocaPecas) trocaObsParts.push(trocaPecas);
+      if (trocaCaixa === "sim") trocaObsParts.push("Com caixa original");
+      else if (trocaCaixa === "nao") trocaObsParts.push("Sem caixa original");
+    }
+    const trocaObsFinal = trocaObsParts.join(" | ");
 
     setForm(f => ({
       ...f,
@@ -426,6 +443,9 @@ export default function EntregasPage() {
       setTrocaAtiva(true);
       setTrocaProduto(trocaProd);
       if (trocaVal) setTrocaValor(String(Math.round(parseFloat(trocaVal))));
+      if (trocaCorQp) setTrocaCor(trocaCorQp);
+      if (trocaBatQp) setTrocaBateria(trocaBatQp);
+      if (trocaObsFinal) setTrocaObs(trocaObsFinal);
     }
     if (clienteNome || produto) setShowForm(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

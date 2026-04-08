@@ -431,17 +431,17 @@ function extractCorEN(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
-/** Extrai tamanho (42MM, 46MM etc) e pulseira (SPORT BAND S/M etc) de um nome de Apple Watch */
+/** Extrai tamanho (42MM, 46MM etc) e tipo da pulseira (MILANÊS, ESPORTIVA, etc) de um nome de Apple Watch */
 function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: string | null } {
   if (!nome) return { tamanho: null, pulseira: null };
   const upper = nome.toUpperCase();
   const tamMatch = upper.match(/\b(\d{2}MM)\b/);
   const tamanho = tamMatch ? tamMatch[1] : null;
   // Pulseira: se tem "PULSEIRA ..." no nome, pega tudo após (mais confiável)
-  let pulseira: string | null = null;
+  let pulseiraRaw: string | null = null;
   const pulseiraExplicita = upper.match(/PULSEIRA\s+(.+?)$/);
   if (pulseiraExplicita) {
-    pulseira = pulseiraExplicita[1]
+    pulseiraRaw = pulseiraExplicita[1]
       .replace(/\s*GPS\s*\+\s*CELLULAR\b/g, "")
       .replace(/\s*GPS\s*\+\s*CEL\b/g, "")
       .replace(/\s+/g, " ")
@@ -449,7 +449,28 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
   } else {
     // Fallback: pattern conhecido sem label PULSEIRA
     const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
-    pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
+    pulseiraRaw = pulseiraMatch ? pulseiraMatch[1].trim() : null;
+  }
+  // Normalizar: extrair só o tipo (ignorando cor / tamanhos / palavra "estilo")
+  // Regras testadas em ordem; primeira que casar vence.
+  let pulseira: string | null = pulseiraRaw;
+  if (pulseiraRaw) {
+    const p = pulseiraRaw;
+    const tipoMatchers: { re: RegExp; label: string }[] = [
+      { re: /MILAN[ÊE]S|MILANESE/, label: "MILANÊS" },
+      { re: /SOLO\s*LOOP\s*TRAN[ÇC]AD[AO]|BRAIDED\s*SOLO/, label: "TRANÇA" },
+      { re: /SOLO\s*LOOP|SOLO/, label: "SOLO LOOP" },
+      { re: /OCEAN/, label: "OCEAN" },
+      { re: /ALPIN(?:E|ISTA)|TRAIL/, label: "ALPINISTA" },
+      { re: /NIKE/, label: "NIKE" },
+      { re: /HERM[ÉE]S|HERMES/, label: "HERMÈS" },
+      { re: /LINK\s*BRACELET|ELOS|LINK/, label: "LINK" },
+      { re: /COURO|LEATHER/, label: "COURO" },
+      { re: /ESPORTIVA|SPORT\s*BAND|SPORT/, label: "ESPORTIVA" },
+    ];
+    for (const { re, label } of tipoMatchers) {
+      if (re.test(p)) { pulseira = label; break; }
+    }
   }
   return { tamanho, pulseira };
 }
@@ -1732,7 +1753,7 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Categorias que NÃO precisam de IMEI (só serial)
-  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPAD", "APPLE_WATCH"];
   // Categorias que NÃO precisam de serial (completamente opcional)
   const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
 

@@ -34,6 +34,62 @@ interface SimulacaoRow {
 const fmt = (v: number) =>
   `R$ ${v.toLocaleString("pt-BR")}`;
 
+/** Extrai campos estruturados das linhas de condição salvas com a simulação. */
+function parseCondicao(linhas: string[] | null | undefined): {
+  bateria: string;
+  marcasUso: string;
+  pecasTrocadas: string;
+  caixaOriginal: string;
+  outras: string[];
+} {
+  const out = { bateria: "", marcasUso: "", pecasTrocadas: "", caixaOriginal: "", outras: [] as string[] };
+  if (!linhas || linhas.length === 0) return out;
+  const marcasParts: string[] = [];
+  for (const raw of linhas) {
+    const l = raw.trim();
+    if (!l) continue;
+    const lower = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    // Bateria: "Saude bateria 88%" ou "Ciclos de bateria: 250"
+    const batMatch = l.match(/(?:saude\s*bateria|saúde\s*bateria)\s*(\d{1,3})\s*%?/i) || l.match(/ciclos?\s*de\s*bateria[:\s]*(\d+)/i);
+    if (batMatch && !out.bateria) { out.bateria = batMatch[1]; continue; }
+    // Caixa
+    if (/caixa/.test(lower)) {
+      if (/sem\s+caixa/.test(lower)) out.caixaOriginal = "nao";
+      else if (/tem\s+a?\s*caixa|com\s+caixa/.test(lower)) out.caixaOriginal = "sim";
+      continue;
+    }
+    // Peças trocadas
+    if (/pec[ao]\s+trocad|peca\s+trocada|peças\s+trocad|pe[çc]as?\s+trocad/i.test(l)) {
+      out.pecasTrocadas = l;
+      continue;
+    }
+    // Marcas de uso (positivas e negativas)
+    if (/sem\s+marcas?\s+de\s+uso/.test(lower)) { out.marcasUso = "nao"; continue; }
+    if (/marcas?\s+de\s+uso/.test(lower) || /arranh/.test(lower) || /descascad/.test(lower)) {
+      marcasParts.push(l);
+      continue;
+    }
+    out.outras.push(l);
+  }
+  if (marcasParts.length > 0 && out.marcasUso !== "nao") {
+    out.marcasUso = marcasParts.join("; ");
+  }
+  return out;
+}
+
+/** Concatena tudo num bloco de observação livre legível. */
+function buildTrocaObs(linhas: string[] | null | undefined): string {
+  const p = parseCondicao(linhas);
+  const parts: string[] = [];
+  if (p.marcasUso === "nao") parts.push("Sem marcas de uso");
+  else if (p.marcasUso) parts.push(`Marcas: ${p.marcasUso}`);
+  if (p.pecasTrocadas) parts.push(p.pecasTrocadas);
+  if (p.caixaOriginal === "sim") parts.push("Com caixa original");
+  else if (p.caixaOriginal === "nao") parts.push("Sem caixa original");
+  for (const o of p.outras) parts.push(o);
+  return parts.join(" | ");
+}
+
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", {
@@ -850,6 +906,8 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => {
+                    const cond = parseCondicao(modalRow.condicao_linhas);
+                    const obs = buildTrocaObs(modalRow.condicao_linhas);
                     const params = new URLSearchParams({
                       produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
                       preco: String(modalRow.preco_novo || ""),
@@ -857,6 +915,12 @@ export default function AdminPage() {
                       cliente_whatsapp: modalRow.whatsapp || "",
                       troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
                       troca_valor: String(modalRow.avaliacao_usado || ""),
+                      troca_cor: modalRow.cor_usado || "",
+                      troca_bateria: cond.bateria,
+                      troca_marcas_uso: cond.marcasUso,
+                      troca_pecas_trocadas: cond.pecasTrocadas,
+                      troca_caixa_original: cond.caixaOriginal,
+                      troca_observacao: obs,
                     });
                     window.open(`/admin/gerar-link?${params.toString()}`, "_blank");
                   }}
@@ -866,6 +930,8 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => {
+                    const cond = parseCondicao(modalRow.condicao_linhas);
+                    const obs = buildTrocaObs(modalRow.condicao_linhas);
                     const params = new URLSearchParams({
                       cliente_nome: modalRow.nome || "",
                       cliente_telefone: modalRow.whatsapp || "",
@@ -873,6 +939,12 @@ export default function AdminPage() {
                       valor: String(modalRow.preco_novo || ""),
                       troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
                       troca_valor: String(modalRow.avaliacao_usado || ""),
+                      troca_cor: modalRow.cor_usado || "",
+                      troca_bateria: cond.bateria,
+                      troca_marcas_uso: cond.marcasUso,
+                      troca_pecas_trocadas: cond.pecasTrocadas,
+                      troca_caixa_original: cond.caixaOriginal,
+                      troca_observacao: obs,
                       diferenca_pix: String(modalRow.diferenca || ""),
                     });
                     window.open(`/admin/entregas?${params.toString()}`, "_blank");

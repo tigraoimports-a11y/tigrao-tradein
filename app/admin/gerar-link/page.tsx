@@ -532,7 +532,29 @@ export default function GerarLinkPage() {
     const corQp = qp.get("cor");
     if (corQp) setCorSel(corQp.toUpperCase());
     const trocaProd = qp.get("troca_produto");
-    if (trocaProd) setTrocaProduto(trocaProd);
+    if (trocaProd) {
+      // Enriquece o nome do produto da troca com cor / bateria / obs vindas da simulação,
+      // já que o form de gerar-link não tem campos separados pra esses dados.
+      const corQ = qp.get("troca_cor") || "";
+      const batQ = qp.get("troca_bateria") || "";
+      const marcasQ = qp.get("troca_marcas_uso") || "";
+      const pecasQ = qp.get("troca_pecas_trocadas") || "";
+      const caixaQ = qp.get("troca_caixa_original") || "";
+      const obsQ = qp.get("troca_observacao") || "";
+      const extras: string[] = [];
+      if (corQ) extras.push(`Cor: ${corQ}`);
+      if (batQ) extras.push(`Bateria: ${batQ}%`);
+      if (obsQ) extras.push(obsQ);
+      else {
+        if (marcasQ === "nao") extras.push("Sem marcas de uso");
+        else if (marcasQ) extras.push(`Marcas: ${marcasQ}`);
+        if (pecasQ) extras.push(pecasQ);
+        if (caixaQ === "sim") extras.push("Com caixa original");
+        else if (caixaQ === "nao") extras.push("Sem caixa original");
+      }
+      setTrocaProduto(extras.length ? `${trocaProd} — ${extras.join(" — ")}` : trocaProd);
+      setTemTroca(true);
+    }
     const trocaVal = qp.get("troca_valor");
     if (trocaVal) {
       const n = Math.round(parseFloat(trocaVal));
