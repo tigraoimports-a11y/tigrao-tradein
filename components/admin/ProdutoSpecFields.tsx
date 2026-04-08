@@ -80,9 +80,12 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
   if (categoria === "IPHONES") {
     s.ip_modelo = nome.replace(/^iPhone\s+/i, "").toUpperCase();
   } else if (categoria === "IPADS") {
-    if (/mini/i.test(nome)) s.ipad_modelo = "MINI";
-    else if (/air/i.test(nome)) s.ipad_modelo = "AIR";
-    else if (/pro/i.test(nome)) s.ipad_modelo = "PRO";
+    // Extrai geração (ex: "iPad Air 5º" → "5", "iPad Pro 2ª" → "2")
+    const geracaoMatch = nome.match(/(\d+)\s*[ºª°]?/);
+    const geracao = geracaoMatch ? ` ${geracaoMatch[1]}` : "";
+    if (/mini/i.test(nome)) s.ipad_modelo = `MINI${geracao}`.trim();
+    else if (/air/i.test(nome)) s.ipad_modelo = `AIR${geracao}`.trim();
+    else if (/pro/i.test(nome)) s.ipad_modelo = `PRO${geracao}`.trim();
     else s.ipad_modelo = "IPAD";
     const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?|A\d+)\b/i);
     s.ipad_chip = chip ? chip[1].toUpperCase() : "";

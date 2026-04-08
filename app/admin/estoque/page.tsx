@@ -2889,7 +2889,19 @@ export default function EstoquePage() {
                 const ipadKnown = [...ipadMods, "__custom__"];
                 return (
                   <div><p className={labelCls}>Modelo</p><select value={ipadMods.includes(spec.ipad_modelo) ? spec.ipad_modelo : "__custom__"} onChange={(e) => setS("ipad_modelo", e.target.value === "__custom__" ? "" : e.target.value)} className={inputCls}>
-                    {ipadMods.map((m) => <option key={m} value={m}>{m === "IPAD" ? "iPad" : m === "MINI" ? "iPad Mini" : m === "AIR" ? "iPad Air" : m === "PRO" ? "iPad Pro" : `iPad ${m}`}</option>)}
+                    {ipadMods.map((m) => {
+                      const u = m.toUpperCase();
+                      let label: string;
+                      if (u === "IPAD") label = "iPad";
+                      else if (u === "MINI") label = "iPad Mini";
+                      else if (u === "AIR") label = "iPad Air";
+                      else if (u === "PRO") label = "iPad Pro";
+                      else if (/^MINI\s*\d+/.test(u)) label = `iPad Mini ${u.replace(/^MINI\s*/, "")}`;
+                      else if (/^AIR\s*\d+/.test(u)) label = `iPad Air ${u.replace(/^AIR\s*/, "")}`;
+                      else if (/^PRO\s*\d+/.test(u)) label = `iPad Pro ${u.replace(/^PRO\s*/, "")}`;
+                      else label = `iPad ${m}`;
+                      return <option key={m} value={m}>{label}</option>;
+                    })}
                     <option value="__custom__">Outro (digitar)</option>
                   </select>
                   {!ipadKnown.includes(spec.ipad_modelo) || spec.ipad_modelo === "" ? (
