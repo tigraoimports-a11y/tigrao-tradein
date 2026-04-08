@@ -738,22 +738,24 @@ export default function ProdutoSpecFields({
       {/* iPad specs */}
       {row.categoria === "IPADS" && (
         <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>Modelo</p>
-            <select value={row.spec.ipad_modelo} onChange={(e) => setSpec("ipad_modelo", e.target.value)} className={inputCls}>
-              <option value="IPAD">iPad</option>
-              <option value="MINI 6">iPad Mini 6</option>
-              <option value="MINI 7">iPad Mini 7</option>
-              <option value="AIR 4">iPad Air 4</option>
-              <option value="AIR 5">iPad Air 5</option>
-              <option value="AIR 6">iPad Air 6</option>
-              <option value="AIR 7">iPad Air 7</option>
-              <option value="PRO 11">iPad Pro 11"</option>
-              <option value="PRO 12.9">iPad Pro 12.9"</option>
-              <option value="PRO M4 11">iPad Pro M4 11"</option>
-              <option value="PRO M4 13">iPad Pro M4 13"</option>
-            </select>
-          </div>
+          {!row.catalogo_modelo_id && (
+            <div>
+              <p className={labelCls}>Modelo</p>
+              <select value={row.spec.ipad_modelo} onChange={(e) => setSpec("ipad_modelo", e.target.value)} className={inputCls}>
+                <option value="IPAD">iPad</option>
+                <option value="MINI 6">iPad Mini 6</option>
+                <option value="MINI 7">iPad Mini 7</option>
+                <option value="AIR 4">iPad Air 4</option>
+                <option value="AIR 5">iPad Air 5</option>
+                <option value="AIR 6">iPad Air 6</option>
+                <option value="AIR 7">iPad Air 7</option>
+                <option value="PRO 11">iPad Pro 11"</option>
+                <option value="PRO 12.9">iPad Pro 12.9"</option>
+                <option value="PRO M4 11">iPad Pro M4 11"</option>
+                <option value="PRO M4 13">iPad Pro M4 13"</option>
+              </select>
+            </div>
+          )}
           <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.ipad_tela} onChange={(e) => setSpec("ipad_tela", e.target.value)} className={inputCls}>
