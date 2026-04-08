@@ -3600,18 +3600,20 @@ export default function VendasPage() {
                         const temTrocaV = (v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null") || !!v.troca_produto || !!(v as unknown as Record<string, string>).troca_produto2;
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+                        const valorTrocaV2 = parseFloat(String((v as unknown as Record<string, string>).produto_na_troca2 || 0)) || 0;
+                        const valorTrocaTotal = valorTrocaV + valorTrocaV2;
                         const isExpanded = expandedId === v.id;
                         const grupoItens = v.grupo_id ? grupoMap.get(v.grupo_id) : null;
                         const isGrupo = grupoItens && grupoItens.length > 1;
                         const isFirstInGrupo = isGrupo && grupoItens[0].id === v.id;
 
                         const pagParts: string[] = [];
-                        if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
+                        if (valorTrocaTotal > 0) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
                         if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaV - entradaVal - compVal));
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - compVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
@@ -3624,9 +3626,9 @@ export default function VendasPage() {
                         };
                         if (v.forma === "CARTAO" && v.qnt_parcelas) {
                           pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
+                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaTotal) {
                           pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
-                        } else if (v.forma && v.forma !== "CARTAO" && (resto > 0 || (!temEntrada && !valorTrocaV))) {
+                        } else if (v.forma && v.forma !== "CARTAO" && (resto > 0 || (!temEntrada && !valorTrocaTotal))) {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
                           pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
