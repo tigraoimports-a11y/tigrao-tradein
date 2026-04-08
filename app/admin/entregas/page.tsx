@@ -115,6 +115,8 @@ export default function EntregasPage() {
   const [serialBusca, setSerialBusca] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
+  const [corSel, setCorSel] = useState("");
+  const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   const [desconto, setDesconto] = useState("");
   const [trocaAtiva, setTrocaAtiva] = useState(false);
   const [trocaValor, setTrocaValor] = useState("");
@@ -132,24 +134,56 @@ export default function EntregasPage() {
       .catch(() => {});
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Categorias dinâmicas do estoque
-  const categorias = useMemo(() => {
-    const cats = new Map<string, string>();
-    estoque.forEach(p => {
-      const key = p.tipo === "SEMINOVO" ? `${p.categoria}_SEMI` : p.categoria;
-      const label = p.tipo === "SEMINOVO" ? `${p.categoria} (Seminovo)` : p.categoria;
-      if (!cats.has(key)) cats.set(key, label);
-    });
-    return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [estoque]);
+  // Fetch preços de venda (mesmo picker do gerar-link)
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/precos", { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data && Array.isArray(j.data)) {
+          setPrecosVenda(j.data.filter((p: { status?: string; preco_pix: number }) => p.status !== "esgotado" && p.preco_pix > 0).map((p: { modelo: string; armazenamento: string; preco_pix: number; categoria: string }) => ({
+            modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.preco_pix, categoria: p.categoria || "OUTROS"
+          })));
+        }
+      })
+      .catch(() => {});
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Produtos filtrados por categoria selecionada
-  const produtosFiltrados = useMemo(() => {
+  // Categorias dos preços com labels amigáveis
+  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
+  const categoriaPrecos = useMemo(() => {
+    const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
+    return cats;
+  }, [precosVenda]);
+
+  // Produtos filtrados por categoria
+  const produtosFiltradosPreco = useMemo(() => {
     if (!catSel) return [];
-    const isSemi = catSel.endsWith("_SEMI");
-    const baseCat = isSemi ? catSel.replace("_SEMI", "") : catSel;
-    return estoque.filter(p => p.categoria === baseCat && (isSemi ? p.tipo === "SEMINOVO" : p.tipo !== "SEMINOVO"));
-  }, [estoque, catSel]);
+    return precosVenda
+      .filter(p => p.categoria === catSel)
+      .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [precosVenda, catSel]);
+
+  // Cores reais do estoque para o produto selecionado
+  const coresDisponiveis = useMemo(() => {
+    if (!produtos[0]) return [];
+    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
+    const cores = new Set<string>();
+    for (const item of estoque) {
+      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+        continue;
+      }
+      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
+      if (matchCount >= Math.min(3, keywords.length - 1)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+      }
+    }
+    return [...cores].sort();
+  }, [produtos, estoque]);
 
   // Valor base e final
   const valorBase = parseFloat(form.valor) || 0;
@@ -187,7 +221,9 @@ export default function EntregasPage() {
     setSaving(true);
     setMsg("");
 
-    const produtosStr = produtos.filter(Boolean).join(" | ");
+    const produtosFilled = produtos.filter(Boolean);
+    if (corSel && produtosFilled[0]) produtosFilled[0] = `${produtosFilled[0]} ${corSel}`;
+    const produtosStr = produtosFilled.join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
     const res = await fetch("/api/admin/entregas", {
@@ -216,7 +252,7 @@ export default function EntregasPage() {
       setMsg(isEdit ? "Entrega atualizada!" : "Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
-      setCatSel(""); setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setCatSel(""); setEstoqueId(""); setCorSel(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
       setShowForm(false);
       fetchEntregas();
@@ -580,60 +616,45 @@ export default function EntregasPage() {
                   <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
                 </div>
               ) : (
-                /* Modo simplificado — modelo + preço (sem cor/serial/origem) */
+                /* Picker igual ao gerar-link — categoria + lista de preços + cor */
                 <div className="space-y-3">
-                  <div>
-                    <p className={labelCls}>Categoria</p>
-                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); setProdutos([""]); set("valor", ""); }} className={inputCls}>
-                      <option value="">-- Selecionar --</option>
-                      {categorias.filter(([k]) => !k.endsWith("_SEMI")).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                    </select>
-                  </div>
-
-                  {catSel && (() => {
-                    // Agrupar por modelo base (sem cor, sem origem) e pegar preço médio
-                    const stripDetails = (nome: string) => nome
-                      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
-                      .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                      .replace(/-\s*E-?SIM/gi, "")
-                      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|MIDNIGHT|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
-                      .replace(/\s*-\s*$/, "")
-                      .replace(/\s{2,}/g, " ").trim();
-                    const byModel: Record<string, { totalQnt: number; avgCost: number; items: EstoqueItem[] }> = {};
-                    produtosFiltrados.forEach(p => {
-                      const model = stripDetails(p.produto);
-                      if (!byModel[model]) byModel[model] = { totalQnt: 0, avgCost: 0, items: [] };
-                      byModel[model].totalQnt += p.qnt;
-                      byModel[model].items.push(p);
-                    });
-                    // Calcular preço médio por modelo
-                    Object.values(byModel).forEach(g => {
-                      const totalVal = g.items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                      g.avgCost = g.totalQnt > 0 ? Math.round(totalVal / g.totalQnt) : 0;
-                    });
-                    const modelEntries = Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
-                    return (
-                      <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                        {modelEntries.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto disponível</p>}
-                        {modelEntries.map(([model, { totalQnt, avgCost }]) => {
-                          const sel = produtos[0] === model;
-                          return (
-                            <button key={model} onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); return; }
-                              setProdutos([model]);
-                              set("valor", String(avgCost));
+                  <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); set("valor", ""); setCorSel(""); }} className={inputCls}>
+                    <option value="">-- Categoria --</option>
+                    {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                  </select>
+                  {catSel && (
+                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                      {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                      {produtosFiltradosPreco.map((m) => {
+                        const sel = produtos[0] === m.nome;
+                        return (
+                          <div key={m.nome}>
+                            <button onClick={() => {
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              setProdutos([m.nome]);
+                              set("valor", String(m.preco));
+                              setCorSel("");
                             }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                              <div>
-                                <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{model}</p>
-                                <p className="text-[10px] text-[#86868B]">{totalQnt} un. disponíveis</p>
-                              </div>
-                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {avgCost.toLocaleString("pt-BR")}</p>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
+                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                             </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                            {sel && coresDisponiveis.length > 0 && (
+                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
+                                <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {coresDisponiveis.map(cor => (
+                                    <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                    >{cor}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
