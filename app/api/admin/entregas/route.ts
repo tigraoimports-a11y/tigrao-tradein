@@ -15,27 +15,91 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   const searchClientes = searchParams.get("search_clientes")?.trim() || "";
 
-  // Autocomplete de clientes cadastrados (baseado em entregas anteriores)
+  // Autocomplete de clientes — busca em entregas E vendas, retorna última compra
   if (searchClientes) {
     const like = `%${searchClientes}%`;
-    const { data, error } = await supabase
-      .from("entregas")
-      .select("cliente, telefone, endereco, bairro, regiao")
-      .or(`cliente.ilike.${like},telefone.ilike.${like}`)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Dedup por cliente+telefone (pega o mais recente de cada)
-    const seen = new Set<string>();
-    const unique: Array<{ cliente: string; telefone: string | null; endereco: string | null; bairro: string | null; regiao: string | null }> = [];
-    for (const r of data || []) {
-      const key = `${(r.cliente || "").toLowerCase().trim()}|${(r.telefone || "").replace(/\D/g, "")}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      unique.push(r);
-      if (unique.length >= 20) break;
+    // Busca em entregas (por nome/telefone)
+    const { data: entregasMatch, error: errEntregas } = await supabase
+      .from("entregas")
+      .select("cliente, telefone, endereco, bairro, regiao, data_entrega, produto")
+      .or(`cliente.ilike.${like},telefone.ilike.${like}`)
+      .order("data_entrega", { ascending: false })
+      .limit(200);
+    if (errEntregas) return NextResponse.json({ error: errEntregas.message }, { status: 500 });
+
+    // Busca em vendas (por nome/telefone — vendas tem 'cliente' e recebimento no formato string)
+    const { data: vendasMatch, error: errVendas } = await supabase
+      .from("vendas")
+      .select("cliente, recebimento, endereco, bairro, produto, data, preco_vendido")
+      .or(`cliente.ilike.${like},recebimento.ilike.${like}`)
+      .order("data", { ascending: false })
+      .limit(200);
+    if (errVendas) return NextResponse.json({ error: errVendas.message }, { status: 500 });
+
+    type ClienteSug = {
+      cliente: string;
+      telefone: string | null;
+      endereco: string | null;
+      bairro: string | null;
+      regiao: string | null;
+      ultima_compra: { produto: string | null; data: string | null; valor: number | null } | null;
+    };
+
+    // Normaliza chave por nome+telefone (só dígitos)
+    const keyFor = (nome: string | null, tel: string | null) =>
+      `${(nome || "").toLowerCase().trim()}|${(tel || "").replace(/\D/g, "")}`;
+
+    // Mescla as duas fontes, priorizando a ordenação mais recente de cada
+    const acc = new Map<string, ClienteSug>();
+
+    // Primeiro entregas (tem endereco/bairro/regiao bons)
+    for (const r of entregasMatch || []) {
+      const key = keyFor(r.cliente, r.telefone);
+      if (!key || key === "|") continue;
+      if (!acc.has(key)) {
+        acc.set(key, {
+          cliente: r.cliente,
+          telefone: r.telefone,
+          endereco: r.endereco,
+          bairro: r.bairro,
+          regiao: r.regiao,
+          ultima_compra: null,
+        });
+      }
     }
+
+    // Depois vendas — preenche dados faltantes e popula ultima_compra
+    for (const v of vendasMatch || []) {
+      const key = keyFor(v.cliente, v.recebimento);
+      if (!key || key === "|") continue;
+      let sug = acc.get(key);
+      if (!sug) {
+        sug = {
+          cliente: v.cliente,
+          telefone: v.recebimento,
+          endereco: v.endereco,
+          bairro: v.bairro,
+          regiao: null,
+          ultima_compra: null,
+        };
+        acc.set(key, sug);
+      } else {
+        // completa dados que estavam faltando
+        if (!sug.endereco && v.endereco) sug.endereco = v.endereco;
+        if (!sug.bairro && v.bairro) sug.bairro = v.bairro;
+      }
+      // Última compra = primeira venda retornada (já ordenada desc por data)
+      if (!sug.ultima_compra && v.produto) {
+        sug.ultima_compra = {
+          produto: v.produto,
+          data: v.data || null,
+          valor: v.preco_vendido != null ? Number(v.preco_vendido) : null,
+        };
+      }
+    }
+
+    const unique = Array.from(acc.values()).slice(0, 20);
     return NextResponse.json({ clientes: unique });
   }
 

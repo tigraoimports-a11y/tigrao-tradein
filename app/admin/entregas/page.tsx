@@ -76,15 +76,28 @@ export default function EntregasPage() {
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
+  // Visualização: "dia" (default) mostra um único dia com divisão por motoboy;
+  // "semana" mostra o calendário semanal completo (visão geral).
+  const [viewMode, setViewMode] = useState<"dia" | "semana">("dia");
+  // Data que estamos visualizando no modo "dia" — começa em hoje.
+  const [viewDate, setViewDate] = useState<string>(() => hojeBR());
   const [filtroBia, setFiltroBia] = useState<"todas" | "finalizada" | "pendentes_final" | "comprovante" | "sem_comprovante">("todas");
   const [showForm, setShowForm] = useState(false);
   const [modoSimples, setModoSimples] = useState(false);
   const [rastreio, setRastreio] = useState("");
 
-  // Autocomplete de clientes cadastrados (baseado em entregas anteriores)
-  type ClienteSug = { cliente: string; telefone: string | null; endereco: string | null; bairro: string | null; regiao: string | null };
+  // Autocomplete de clientes — busca em entregas + vendas, retorna última compra
+  type ClienteSug = {
+    cliente: string;
+    telefone: string | null;
+    endereco: string | null;
+    bairro: string | null;
+    regiao: string | null;
+    ultima_compra: { produto: string | null; data: string | null; valor: number | null } | null;
+  };
   const [clienteSugs, setClienteSugs] = useState<ClienteSug[]>([]);
   const [showSugs, setShowSugs] = useState(false);
+  const [clienteUltimaCompra, setClienteUltimaCompra] = useState<ClienteSug["ultima_compra"]>(null);
 
   // Seleção em massa para finalizar várias entregas
   const [modoSelecao, setModoSelecao] = useState(false);
@@ -215,7 +228,10 @@ export default function EntregasPage() {
   const fetchEntregas = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to });
+      // No modo "dia", busca apenas essa data; no modo "semana", busca a semana inteira.
+      const params = viewMode === "dia"
+        ? new URLSearchParams({ from: viewDate, to: viewDate })
+        : new URLSearchParams({ from, to });
       const res = await fetch(`/api/admin/entregas?${params}`, {
         headers: apiHeaders(),
       });
@@ -225,7 +241,7 @@ export default function EntregasPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, from, to]);
+  }, [password, from, to, viewMode, viewDate]);
 
   useEffect(() => {
     if (password) fetchEntregas();
@@ -273,6 +289,7 @@ export default function EntregasPage() {
     if (json.ok) {
       setMsg(isEdit ? "Entrega atualizada!" : "Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
+      setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
       setCatSel(""); setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
@@ -675,7 +692,7 @@ export default function EntregasPage() {
                   className={inputCls}
                 />
                 {showSugs && clienteSugs.length > 0 && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg max-h-[280px] overflow-y-auto">
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg max-h-[320px] overflow-y-auto">
                     {clienteSugs.map((s, i) => (
                       <button
                         key={i}
@@ -686,6 +703,7 @@ export default function EntregasPage() {
                           if (s.endereco) set("endereco", s.endereco);
                           if (s.bairro) set("bairro", s.bairro);
                           if (s.regiao) set("regiao", s.regiao);
+                          setClienteUltimaCompra(s.ultima_compra);
                           setShowSugs(false);
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-[#FFF5EB] border-b border-[#F5F5F7] last:border-b-0"
@@ -694,9 +712,23 @@ export default function EntregasPage() {
                         <p className="text-[10px] text-[#86868B]">
                           {s.telefone || "—"}{s.bairro ? ` · ${s.bairro}` : ""}{s.endereco ? ` · ${s.endereco.slice(0, 40)}${s.endereco.length > 40 ? "..." : ""}` : ""}
                         </p>
+                        {s.ultima_compra?.produto && (
+                          <p className="text-[10px] text-[#E8740E] font-semibold mt-0.5">
+                            🛒 {s.ultima_compra.produto.slice(0, 48)}{s.ultima_compra.produto.length > 48 ? "..." : ""}
+                            {s.ultima_compra.data ? ` · ${formatDateBR(s.ultima_compra.data)}` : ""}
+                            {s.ultima_compra.valor ? ` · R$ ${s.ultima_compra.valor.toLocaleString("pt-BR")}` : ""}
+                          </p>
+                        )}
                       </button>
                     ))}
                   </div>
+                )}
+                {clienteUltimaCompra?.produto && (
+                  <p className="text-[10px] text-[#E8740E] font-semibold mt-1">
+                    🛒 Última compra: {clienteUltimaCompra.produto}
+                    {clienteUltimaCompra.data ? ` · ${formatDateBR(clienteUltimaCompra.data)}` : ""}
+                    {clienteUltimaCompra.valor ? ` · R$ ${clienteUltimaCompra.valor.toLocaleString("pt-BR")}` : ""}
+                  </p>
                 )}
               </div>
             </div>
@@ -1014,8 +1046,41 @@ export default function EntregasPage() {
               </select>
             </div>
             <div>
-              <p className={labelCls}>Entregador</p>
-              <input value={form.entregador} onChange={(e) => set("entregador", e.target.value)} placeholder="Nome (opcional)" className={inputCls} />
+              <p className={labelCls}>Motoboy / Entregador</p>
+              <select
+                value={
+                  form.entregador === "IGOR" || form.entregador === "LEANDRO" ||
+                  form.entregador === "RETIRADA" || form.entregador === "CORREIOS" ||
+                  form.entregador === "" ? form.entregador : "OUTRO"
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "OUTRO") {
+                    // mantém o texto livre caso já exista, senão limpa para o usuário digitar
+                    if (["IGOR","LEANDRO","RETIRADA","CORREIOS",""].includes(form.entregador)) {
+                      set("entregador", " ");
+                    }
+                  } else {
+                    set("entregador", v);
+                  }
+                }}
+                className={inputCls}
+              >
+                <option value="">-- Selecionar --</option>
+                <option value="IGOR">🛵 Igor</option>
+                <option value="LEANDRO">🛵 Leandro</option>
+                <option value="RETIRADA">🏬 Retirada em loja</option>
+                <option value="CORREIOS">📦 Correios</option>
+                <option value="OUTRO">✏️ Outro (digitar)</option>
+              </select>
+              {!["IGOR","LEANDRO","RETIRADA","CORREIOS",""].includes(form.entregador) && (
+                <input
+                  value={form.entregador}
+                  onChange={(e) => set("entregador", e.target.value)}
+                  placeholder="Nome do entregador"
+                  className={`${inputCls} mt-1`}
+                />
+              )}
             </div>
             <div className="col-span-2 md:col-span-3">
               <p className={labelCls}>Observacao</p>
@@ -1140,10 +1205,210 @@ export default function EntregasPage() {
         </div>
       )}
 
+      {/* Navegação de modo (Dia / Semana) */}
+      {!loading && (
+        <div className="bg-white border border-[#D2D2D7] rounded-xl p-3 flex flex-wrap items-center gap-2">
+          {/* Toggle modo */}
+          <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-1">
+            <button
+              onClick={() => { setViewMode("dia"); setViewDate(hojeBR()); }}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition ${viewMode === "dia" ? "bg-[#E8740E] text-white" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              📅 Dia
+            </button>
+            <button
+              onClick={() => setViewMode("semana")}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition ${viewMode === "semana" ? "bg-[#E8740E] text-white" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              🗓️ Semana
+            </button>
+          </div>
+
+          {viewMode === "dia" && (
+            <>
+              <div className="flex items-center gap-1 ml-2">
+                <button
+                  onClick={() => {
+                    const d = new Date(viewDate + "T12:00:00");
+                    d.setDate(d.getDate() - 1);
+                    setViewDate(d.toISOString().split("T")[0]);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs font-bold bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"
+                >
+                  ← Ontem
+                </button>
+                <button
+                  onClick={() => setViewDate(hojeBR())}
+                  className={`px-3 py-1 rounded-md text-xs font-bold ${viewDate === hojeBR() ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"}`}
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={() => {
+                    const d = new Date(viewDate + "T12:00:00");
+                    d.setDate(d.getDate() + 1);
+                    setViewDate(d.toISOString().split("T")[0]);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs font-bold bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"
+                >
+                  Amanhã →
+                </button>
+              </div>
+              <input
+                type="date"
+                value={viewDate}
+                onChange={(e) => setViewDate(e.target.value)}
+                className="ml-2 px-2 py-1 rounded-md text-xs border border-[#D2D2D7] bg-white"
+              />
+              <span className="ml-auto text-xs text-[#86868B]">
+                {(() => {
+                  const d = new Date(viewDate + "T12:00:00");
+                  const weekday = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d.getDay()];
+                  return `${weekday}, ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                })()}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* VIEW: DIA (com swimlanes por motoboy) */}
+      {!loading && viewMode === "dia" && (() => {
+        const filtered = entregas.filter((e) => e.data_entrega === viewDate).filter((e) => {
+          if (filtroBia === "finalizada") return e.finalizada === true;
+          if (filtroBia === "pendentes_final") return e.finalizada !== true;
+          if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+          if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+          return true;
+        });
+        filtered.sort((a, b) => (a.horario || "ZZZ").localeCompare(b.horario || "ZZZ"));
+
+        const isFutureOrPast = viewDate !== hojeBR();
+
+        // Agrupa por motoboy
+        const aguardando = filtered.filter((e) => !e.entregador || e.entregador.trim() === "");
+        const igor = filtered.filter((e) => (e.entregador || "").toUpperCase() === "IGOR");
+        const leandro = filtered.filter((e) => (e.entregador || "").toUpperCase() === "LEANDRO");
+        const outras = filtered.filter((e) => {
+          const ent = (e.entregador || "").toUpperCase();
+          return ent && ent !== "IGOR" && ent !== "LEANDRO";
+        });
+
+        const renderCard = (e: Entrega) => {
+          const sc = STATUS_CONFIG[e.status];
+          const isSel = entregasSelecionadas.has(e.id);
+          return (
+            <button
+              key={e.id}
+              onClick={() => {
+                if (modoSelecao) {
+                  const next = new Set(entregasSelecionadas);
+                  if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                  setEntregasSelecionadas(next);
+                } else {
+                  setSelectedEntrega(e);
+                }
+              }}
+              className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span>{sc.icon}</span>
+                  {e.horario && <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  {e.finalizada && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-600">✅</span>}
+                  {e.comprovante_lancado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600">🧾</span>}
+                </div>
+              </div>
+              <p className={`text-sm font-semibold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</p>
+              {e.bairro && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.bairro}</p>}
+              {e.produto && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>🍎 {e.produto}</p>}
+            </button>
+          );
+        };
+
+        const renderColumn = (titulo: string, emoji: string, lista: Entrega[], cor: string) => (
+          <div className={`bg-white border rounded-xl overflow-hidden ${cor}`}>
+            <div className={`px-3 py-2 text-center border-b ${cor}`}>
+              <p className="text-xs font-bold uppercase tracking-wide">
+                {emoji} {titulo} <span className="text-[10px] opacity-70">({lista.length})</span>
+              </p>
+            </div>
+            <div className="p-2 space-y-2 min-h-[120px]">
+              {lista.length === 0 ? (
+                <p className="text-[11px] text-[#B0B0B0] text-center py-6">Sem entregas</p>
+              ) : (
+                lista.map(renderCard)
+              )}
+            </div>
+          </div>
+        );
+
+        // Se for dia futuro/passado: lista simples (sem divisão de motoboy)
+        if (isFutureOrPast) {
+          return (
+            <div className="bg-white border border-[#D2D2D7] rounded-xl overflow-hidden">
+              <div className="px-4 py-2 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                <p className="text-xs font-bold text-[#86868B] uppercase">
+                  {filtered.length} entrega{filtered.length !== 1 ? "s" : ""} agendada{filtered.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="p-3 space-y-2">
+                {filtered.length === 0 ? (
+                  <p className="text-sm text-[#B0B0B0] text-center py-8">Nenhuma entrega nessa data</p>
+                ) : (
+                  filtered.map(renderCard)
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Hoje: aguardando (topo) + Igor/Leandro (swimlanes) + outras (baixo)
+        return (
+          <div className="space-y-3">
+            {aguardando.length > 0 && (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-yellow-100 border-b-2 border-yellow-300">
+                  <p className="text-xs font-bold text-yellow-800 uppercase">
+                    ⏳ Aguardando motoboy ({aguardando.length})
+                  </p>
+                </div>
+                <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {aguardando.map(renderCard)}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {renderColumn("Motoboy Igor", "🛵", igor, "border-blue-300")}
+              {renderColumn("Motoboy Leandro", "🛵", leandro, "border-purple-300")}
+            </div>
+            {outras.length > 0 && (
+              <div className="bg-white border border-[#D2D2D7] rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                  <p className="text-xs font-bold text-[#86868B] uppercase">
+                    📦 Outras ({outras.length}) — Retirada / Correios / Externo
+                  </p>
+                </div>
+                <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {outras.map(renderCard)}
+                </div>
+              </div>
+            )}
+            {filtered.length === 0 && (
+              <div className="bg-white border border-[#D2D2D7] rounded-xl p-8 text-center">
+                <p className="text-sm text-[#86868B]">Nenhuma entrega agendada para hoje</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Calendario semanal */}
       {loading ? (
         <div className="p-8 text-center text-[#86868B]">Carregando...</div>
-      ) : (
+      ) : viewMode === "semana" ? (
         <>
           {/* Desktop: grid de 6 colunas */}
           <div className="hidden md:grid grid-cols-6 gap-2">
@@ -1281,7 +1546,7 @@ export default function EntregasPage() {
             })}
           </div>
         </>
-      )}
+      ) : null}
 
       {/* Resumo da semana */}
       {!loading && (
