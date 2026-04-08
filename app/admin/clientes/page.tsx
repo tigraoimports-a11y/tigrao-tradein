@@ -233,6 +233,16 @@ export default function ClientesPage() {
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error || "Erro"); return; }
+      // Debug: valida que só 1 linha ficou no banco pra essa chave
+      try {
+        const check = await fetch(`/api/admin/lojistas-credito?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+        const cj = await check.json();
+        const total = cj.lojistas?.length ?? 0;
+        console.log(`[DEBUG credito] Após salvar, DB tem ${total} lojistas com saldo>0:`, cj.lojistas);
+        if (total > 1) {
+          alert(`ATENÇÃO: Após salvar, ${total} lojistas estão com saldo. Esperado: 1. Abra o console pra ver detalhes.`);
+        }
+      } catch { /* ignore */ }
       await fetchSaldosLojistas();
       await openCreditoModal(creditoModal.cliente); // refresh modal data
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
@@ -319,8 +329,33 @@ export default function ClientesPage() {
     } catch { /* ignore */ }
   };
 
+  // Merge de seguranca: se 2+ lojistas caem no mesmo nome normalizado, unifica aqui no front
+  const clientesMerged = (() => {
+    if (tab !== "lojistas") return clientes;
+    const stripSufix = (n: string) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toUpperCase()
+      .replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\b.*$/i, "").trim();
+    const map = new Map<string, Cliente>();
+    for (const c of clientes) {
+      const k = stripSufix(c.nome);
+      const existing = map.get(k);
+      if (!existing) { map.set(k, { ...c }); continue; }
+      // merge: soma compras, gasto, mantem nome mais curto (sem sufixo)
+      existing.total_compras += c.total_compras;
+      existing.total_gasto += c.total_gasto;
+      if (c.ultima_compra > existing.ultima_compra) {
+        existing.ultima_compra = c.ultima_compra;
+        existing.ultimo_produto = c.ultimo_produto;
+      }
+      if (c.cliente_desde < existing.cliente_desde) existing.cliente_desde = c.cliente_desde;
+      // prefere o nome sem sufixo ATACADO
+      if (c.nome.length < existing.nome.length) existing.nome = c.nome;
+    }
+    return Array.from(map.values());
+  })();
+
   // Sort clientes
-  const sorted = [...clientes].sort((a, b) => {
+  const sorted = [...clientesMerged].sort((a, b) => {
     switch (sortBy) {
       case "gasto": return b.total_gasto - a.total_gasto;
       case "compras": return b.total_compras - a.total_compras;
