@@ -3060,19 +3060,63 @@ export default function EstoquePage() {
                     </div>
                     <button onClick={() => setShowReposicaoConfig(false)} className={`text-[18px] ${textSecondary} hover:text-red-500`}>✕</button>
                   </div>
-                  <div className="overflow-y-auto p-4 space-y-1">
-                    {Object.entries(catalogoCoresMap)
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([nome]) => {
-                        const oculto = reposicaoOcultos.has(nome);
+                  <div className="overflow-y-auto p-4 space-y-3">
+                    {(() => {
+                      // Agrupa modelos por categoria
+                      const grupos: Record<string, string[]> = {};
+                      for (const nome of Object.keys(catalogoCoresMap)) {
+                        const cat = catalogoCatByModel[nome] || "OUTROS";
+                        if (!grupos[cat]) grupos[cat] = [];
+                        grupos[cat].push(nome);
+                      }
+                      const catOrderCfg = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"];
+                      const cats = Object.keys(grupos).sort((a, b) => {
+                        const ia = catOrderCfg.indexOf(a), ib = catOrderCfg.indexOf(b);
+                        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                      });
+                      return cats.map(cat => {
+                        const modelos = grupos[cat].sort((a, b) => a.localeCompare(b));
+                        const totalOcultos = modelos.filter(m => reposicaoOcultos.has(m)).length;
+                        const totalVisiveis = modelos.length - totalOcultos;
                         return (
-                          <label key={nome} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]"}`}>
-                            <input type="checkbox" checked={!oculto} onChange={() => toggleReposicaoOculto(nome)} className="w-4 h-4 accent-[#E8740E]" />
-                            <span className={`text-[13px] ${oculto ? textMuted : textPrimary} ${oculto ? "line-through" : ""}`}>{nome}</span>
-                            <span className={`ml-auto text-[10px] ${textMuted}`}>{catalogoCatByModel[nome] || ""}</span>
-                          </label>
+                          <details key={cat} open className={`rounded-xl border ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+                            <summary className={`px-3 py-2 cursor-pointer select-none flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"} rounded-t-xl`}>
+                              <span className={`text-[12px] font-bold uppercase tracking-wider ${textPrimary}`}>{dynamicCatLabels[cat] || cat}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] ${textMuted}`}>{totalVisiveis}/{modelos.length}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    const todosOcultos = totalOcultos === modelos.length;
+                                    const next = new Set(reposicaoOcultos);
+                                    for (const m of modelos) {
+                                      if (todosOcultos) next.delete(m); else next.add(m);
+                                    }
+                                    setReposicaoOcultos(next);
+                                    localStorage.setItem("tigrao_reposicao_ocultos", JSON.stringify([...next]));
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full border ${dm ? "border-[#3A3A3C] hover:bg-[#1C1C1E]" : "border-[#D2D2D7] hover:bg-white"}`}
+                                >
+                                  {totalOcultos === modelos.length ? "Marcar todos" : "Desmarcar todos"}
+                                </button>
+                              </div>
+                            </summary>
+                            <div className="p-2 space-y-0.5">
+                              {modelos.map(nome => {
+                                const oculto = reposicaoOcultos.has(nome);
+                                return (
+                                  <label key={nome} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]"}`}>
+                                    <input type="checkbox" checked={!oculto} onChange={() => toggleReposicaoOculto(nome)} className="w-4 h-4 accent-[#E8740E]" />
+                                    <span className={`text-[13px] ${oculto ? textMuted : textPrimary} ${oculto ? "line-through" : ""}`}>{nome}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </details>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                 </div>
               </div>
