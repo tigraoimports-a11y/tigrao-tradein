@@ -73,10 +73,10 @@ function formatProdutoDisplay(p: {
   const parts: string[] = [];
 
   if (baseCat === "IPHONES") {
-    // Modelo: iPhone N [Pro Max|Pro|Plus|Air]
-    const m = up.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/);
+    // Modelo: iPhone N[e] [Pro Max|Pro|Plus|Air]
+    const m = up.match(/IPHONE\s*(\d+E?)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/);
     const modelo = m
-      ? `iPhone ${m[1]}${m[2] ? " " + m[2].replace(/\s+/g, " ").replace(/\bPRO MAX\b/, "Pro Max").replace(/\bPRO\b/, "Pro").replace(/\bPLUS\b/, "Plus").replace(/\bAIR\b/, "Air") : ""}`
+      ? `iPhone ${m[1].replace(/E$/, "e")}${m[2] ? " " + m[2].replace(/\s+/g, " ").replace(/\bPRO MAX\b/, "Pro Max").replace(/\bPRO\b/, "Pro").replace(/\bPLUS\b/, "Plus").replace(/\bAIR\b/, "Air") : ""}`
       : nomeRaw;
     parts.push(modelo);
     if (storage) parts.push(storage);
@@ -5623,11 +5623,9 @@ export default function EstoquePage() {
                   if (isSeminovo) {
                     push("Caixa", comCaixa ? "Com Caixa" : "Sem Caixa");
                     push("Cabo", comCabo ? "Com Cabo" : "Sem Cabo");
-                    push("Fonte", comFonte ? "Com Fonte" : "Sem Fonte");
                   } else {
                     push("Caixa", comCaixa ? "Sim" : null);
                     push("Cabo", comCabo ? "Sim" : null);
-                    push("Fonte", comFonte ? "Sim" : null);
                   }
                   push("Grade", grade);
                 } else if (baseCat === "IPADS") {
