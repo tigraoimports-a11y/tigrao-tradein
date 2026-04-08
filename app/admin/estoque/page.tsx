@@ -118,6 +118,12 @@ function formatProdutoDisplay(p: {
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
   } else if (baseCat === "APPLE_WATCH") {
+    // Para watches, a "cor" às vezes foi salva como "PRETA ESTILO MILANÊS" (cor + pulseira).
+    // Remove palavras de pulseira da cor pra não duplicar com a seção Especificações.
+    const corLimpa = cor
+      .replace(/\b(ESTILO\s+)?(MILAN[ÊE]S|MILANESE|SOLO\s*LOOP(?:\s*TRAN[ÇC]AD[AO])?|BRAIDED\s*SOLO|TRAN[ÇC]A|OCEAN|ALPIN(?:E|ISTA)|TRAIL|NIKE|HERM[ÉE]S|HERMES|LINK(?:\s*BRACELET)?|ELOS|COURO|LEATHER|ESPORTIVA|SPORT\s*BAND|SPORT|LOOP|BAND|PULSEIRA)\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
     // \bSE\b com lookahead — NÃO pode casar dentro de "SERIES". Aceita "SE", "SE 2", "SE3".
@@ -132,7 +138,7 @@ function formatProdutoDisplay(p: {
     if (ultra) { /* omit connectivity */ }
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
-    if (cor) parts.push(cor);
+    if (corLimpa) parts.push(corLimpa);
   } else {
     // Fallback: usa o nome limpo
     return cleanProdutoDisplay(nomeRaw);
@@ -473,6 +479,34 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
     }
   }
   return { tamanho, pulseira };
+}
+
+/** Normaliza um texto livre de pulseira para um label curto (MILANÊS, ESPORTIVA, etc). */
+function normalizePulseiraLabel(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const p = raw.toUpperCase();
+  const tipoMatchers: { re: RegExp; label: string }[] = [
+    { re: /MILAN[ÊE]S|MILANESE/, label: "MILANÊS" },
+    { re: /SOLO\s*LOOP\s*TRAN[ÇC]AD[AO]|BRAIDED\s*SOLO|TRAN[ÇC]A/, label: "TRANÇA" },
+    { re: /SOLO\s*LOOP|SOLO/, label: "SOLO LOOP" },
+    { re: /OCEAN/, label: "OCEAN" },
+    { re: /ALPIN(?:E|ISTA)|TRAIL/, label: "ALPINISTA" },
+    { re: /NIKE/, label: "NIKE" },
+    { re: /HERM[ÉE]S|HERMES/, label: "HERMÈS" },
+    { re: /LINK\s*BRACELET|ELOS|LINK/, label: "LINK" },
+    { re: /COURO|LEATHER/, label: "COURO" },
+    { re: /ESPORTIVA|SPORT\s*BAND|SPORT/, label: "ESPORTIVA" },
+  ];
+  for (const { re, label } of tipoMatchers) if (re.test(p)) return label;
+  return null;
+}
+
+/** Extrai pulseira de um item de estoque olhando nome + observação ([BAND:...]). */
+function extractItemPulseira(it: { produto?: string | null; observacao?: string | null }): string | null {
+  const bandTag = it.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
+  const fromTag = normalizePulseiraLabel(bandTag);
+  if (fromTag) return fromTag;
+  return extractWatchBadges(it.produto || "").pulseira;
 }
 
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
@@ -4524,7 +4558,7 @@ export default function EstoquePage() {
                                       // Pulseira: extrair de cada item e pegar a mais comum (groupKey não tem pulseira)
                                       const counts: Record<string, number> = {};
                                       for (const it of prodItems) {
-                                        const pb = extractWatchBadges(it.produto).pulseira;
+                                        const pb = extractItemPulseira(it);
                                         if (pb) counts[pb] = (counts[pb] || 0) + (it.qnt || 1);
                                       }
                                       const pulseira = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
@@ -5454,19 +5488,15 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
                       )}
-                      {/* Apple Watch: tamanho + pulseira info */}
+                      {/* Apple Watch: só tamanho aqui — pulseira aparece na seção "Especificações" pra evitar duplicação */}
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho } = extractWatchBadges(p.produto);
-                        const pulseiraTam = p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1];
-                        const bandModel = p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
-                        return (<>
-                          {tamanho && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span></div>}
-                          {pulseiraTam && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira</p>
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{pulseiraTam}</span></div>}
-                          {bandModel && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira</p>
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{bandModel}</span></div>}
-                        </>);
+                        if (!tamanho) return null;
+                        return (
+                          <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span>
+                          </div>
+                        );
                       })()}
                       {/* Ciclos badge */}
                       {(() => {
