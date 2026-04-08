@@ -78,30 +78,41 @@ export default function GerarLinkPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoqueItems]);
 
-  // Cores reais do estoque para o produto selecionado
+  // Cores do catálogo por modelo (catalogo_modelo_configs)
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
+      .catch(() => {});
+  }, []);
+
+  // Cores disponíveis para o produto selecionado — fonte ÚNICA = catalogo_modelo_configs.
+  // Sem fallback pro estoque (estoque pode ter lixo de cor errada).
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    // Extrair palavras-chave do produto selecionado pra matching flexível
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoqueItems) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      // Match direto
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
-      }
-      // Match flexível: primeira keyword (família do produto) obrigatória + mínimo de matches
-      const firstKeyword = keywords[0];
-      if (firstKeyword && !prodEstoque.includes(firstKeyword)) continue;
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-      }
+    const stripStorage = (s: string) => s.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
+    const norm = (s: string) => stripStorage(s).toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const prodSel = norm(produtos[0]);
+
+    // Match exato com o nome do modelo no catálogo
+    let raw: string[] = [];
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      if (norm(nome) === prodSel) { raw = cores; break; }
     }
-    return [...cores].sort();
-  }, [produtos, estoqueItems]);
+
+    // Dedup por tradução PT
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const pt = corParaPT(c);
+      const key = pt.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
+  }, [produtos, catalogoCores]);
 
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
@@ -124,7 +135,7 @@ export default function GerarLinkPage() {
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
 
   // Dados do cliente (pré-preenchimento via cola de texto)
-  const [incluirDadosCliente, setIncluirDadosCliente] = useState(false);
+  const [incluirDadosCliente, setIncluirDadosCliente] = useState(true);
   const [dadosClienteTexto, setDadosClienteTexto] = useState("");
   const [cliNome, setCliNome] = useState("");
   const [cliCpf, setCliCpf] = useState("");

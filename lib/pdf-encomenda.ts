@@ -37,39 +37,54 @@ export interface ContratoEncomendaData {
 }
 
 function valorPorExtenso(valor: number): string {
-  // Extenso simples para valores comuns — suficiente para contratos
   const units = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove",
     "dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
   const tens = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
   const hundreds = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos",
     "seiscentos", "setecentos", "oitocentos", "novecentos"];
 
-  if (valor === 0) return "zero";
-  if (valor === 100) return "cem";
-  if (valor === 1000) return "mil";
+  // Converte um número de 0..999 em extenso
+  function ate999(n: number): string {
+    if (n === 0) return "";
+    if (n === 100) return "cem";
+    const parts: string[] = [];
+    const c = Math.floor(n / 100);
+    const resto = n % 100;
+    if (c > 0) parts.push(hundreds[c]);
+    if (resto > 0 && resto < 20) {
+      parts.push(units[resto]);
+    } else if (resto >= 20) {
+      const d = Math.floor(resto / 10);
+      const u = resto % 10;
+      if (u > 0) parts.push(`${tens[d]} e ${units[u]}`);
+      else parts.push(tens[d]);
+    }
+    return parts.join(" e ");
+  }
 
   const v = Math.round(valor);
-  const parts: string[] = [];
+  if (v === 0) return "zero";
 
-  const milhar = Math.floor(v / 1000);
-  const resto = v % 1000;
-  const centena = Math.floor(resto / 100);
-  const dezena = Math.floor((resto % 100) / 10);
-  const unidade = resto % 10;
+  const milhoes = Math.floor(v / 1_000_000);
+  const apos_milhoes = v % 1_000_000;
+  const milhar = Math.floor(apos_milhoes / 1000);
+  const resto = apos_milhoes % 1000;
 
+  const out: string[] = [];
+  if (milhoes > 0) {
+    out.push(milhoes === 1 ? "um milhão" : `${ate999(milhoes)} milhões`);
+  }
   if (milhar > 0) {
-    if (milhar === 1) parts.push("mil");
-    else parts.push(`${units[milhar]} mil`);
+    out.push(milhar === 1 ? "mil" : `${ate999(milhar)} mil`);
   }
-  if (centena > 0) parts.push(hundreds[centena]);
-  if (resto % 100 >= 20) {
-    parts.push(tens[dezena]);
-    if (unidade > 0) parts.push(units[unidade]);
-  } else if (resto % 100 > 0) {
-    parts.push(units[resto % 100]);
+  if (resto > 0) {
+    out.push(ate999(resto));
   }
-
-  return parts.join(" e ");
+  // Junta com " e " apenas quando faz sentido; senão vírgula
+  if (out.length === 0) return "zero";
+  if (out.length === 1) return out[0];
+  // Regra simples: junta tudo com " e "
+  return out.join(" e ");
 }
 
 function fmtBRL(v: number): string {
@@ -233,7 +248,7 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
       doc.moveDown(0.4);
       nextClausula++;
 
-      const restante = dados.valorNovo - dados.valorUsado;
+      const restante = Math.max(0, dados.valorNovo - dados.valorUsado);
       doc.font("Helvetica").text(`${clausulaNum}.${nextClausula}. Considerando a troca, o valor remanescente da negociação corresponde a:`);
       doc.moveDown(0.3);
       doc.font("Helvetica-Bold").fillColor("#1a6e1a").text(`${fmtBRLExtenso(restante)}.`);

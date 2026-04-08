@@ -396,8 +396,12 @@ export async function PATCH(req: NextRequest) {
       };
       const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
       if (cat === "IPHONES") {
-        const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
-        if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}${getMem()}`;
+        const match = p.match(/IPHONE\s*(\d+)(E)?\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
+        if (match) {
+          const num = match[1] + (match[2] ? "e" : "");
+          const variant = match[3] ? " " + match[3].trim() : "";
+          return `iPhone ${num}${variant}${getMem()}`;
+        }
       }
       if (cat === "IPADS") {
         const mem = getMem(); const size = getSize();
