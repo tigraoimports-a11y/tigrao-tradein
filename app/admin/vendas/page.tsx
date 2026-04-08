@@ -2662,6 +2662,23 @@ export default function VendasPage() {
               )}
             </div>
 
+            {/* Destaque do valor na forma principal quando é PIX ou ESPECIE
+                 (nesses casos não existe campo próprio — o valor sai do Preço Vendido Líquido
+                 menos as entradas mistas). Deixa explícito pra vendedora não ficar perdida. */}
+            {(form.forma === "ESPECIE" || form.forma === "PIX") && preco > 0 && (
+              <div className="mt-3 rounded-xl border-2 border-[#E8740E]/40 bg-[#FFF7ED] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#E8740E]">
+                    {form.forma === "ESPECIE" ? "💵 Valor em Espécie (Dinheiro)" : "💸 Valor em PIX"}
+                  </p>
+                  <p className="text-xl font-bold text-[#1D1D1F]">R$ {fmt(Math.max(0, valorCartao))}</p>
+                </div>
+                <p className="text-[10px] text-[#86868B] max-w-[280px] text-right">
+                  Calculado do Preço Vendido Líquido menos entradas mistas e troca. Pra mudar, ajuste o &quot;Preço Vendido Líquido&quot; acima.
+                </p>
+              </div>
+            )}
+
             {/* Pagamento misto — combinações extras */}
             {form.forma && form.forma !== "FIADO" && (
             <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
@@ -2926,6 +2943,21 @@ export default function VendasPage() {
                   </>
                 )}
               </div>
+
+              {/* Destaque do valor na forma principal quando é PIX ou ESPECIE — modo carrinho */}
+              {(form.forma === "ESPECIE" || form.forma === "PIX") && preco > 0 && (
+                <div className="mt-3 rounded-xl border-2 border-[#E8740E]/40 bg-[#FFF7ED] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#E8740E]">
+                      {form.forma === "ESPECIE" ? "💵 Valor em Espécie (Dinheiro)" : "💸 Valor em PIX"}
+                    </p>
+                    <p className="text-xl font-bold text-[#1D1D1F]">R$ {fmt(Math.max(0, valorCartao))}</p>
+                  </div>
+                  <p className="text-[10px] text-[#86868B] max-w-[280px] text-right">
+                    Calculado do Preço Vendido Líquido menos entradas mistas e troca.
+                  </p>
+                </div>
+              )}
 
               {/* Pagamento misto — cart mode */}
               {form.forma && form.forma !== "FIADO" && (
