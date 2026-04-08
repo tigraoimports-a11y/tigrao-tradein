@@ -517,6 +517,29 @@ export default function GerarLinkPage() {
     setAba("novo");
   }
 
+  // Prefill via query params (vindo de /admin/simulacoes, etc)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qp = new URLSearchParams(window.location.search);
+    if (!qp.toString()) return;
+    const produtoQp = qp.get("produto");
+    if (produtoQp) setProdutos([produtoQp]);
+    const precoQp = qp.get("preco");
+    if (precoQp) {
+      const n = Math.round(parseFloat(precoQp));
+      if (!isNaN(n) && n > 0) setPreco(n.toLocaleString("pt-BR"));
+    }
+    const corQp = qp.get("cor");
+    if (corQp) setCorSel(corQp.toUpperCase());
+    const trocaProd = qp.get("troca_produto");
+    if (trocaProd) setTrocaProduto(trocaProd);
+    const trocaVal = qp.get("troca_valor");
+    if (trocaVal) {
+      const n = Math.round(parseFloat(trocaVal));
+      if (!isNaN(n) && n > 0) setTrocaValor(n.toLocaleString("pt-BR"));
+    }
+  }, []);
+
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
     if (!digits) return "";
@@ -605,7 +628,7 @@ export default function GerarLinkPage() {
   const numParcelas = parseInt(parcelas) || 0;
   const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
   const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
-  const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
+  const valorParcela = numParcelas > 0 ? valorComTaxa / numParcelas : 0;
   const valorTotal = entradaNum + valorComTaxa;
 
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
@@ -1751,7 +1774,7 @@ export default function GerarLinkPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Parcelamento</span>
-                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </>
               )}

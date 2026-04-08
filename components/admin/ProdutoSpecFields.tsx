@@ -80,15 +80,34 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
   if (categoria === "IPHONES") {
     s.ip_modelo = nome.replace(/^iPhone\s+/i, "").toUpperCase();
   } else if (categoria === "IPADS") {
-    // Extrai geração (ex: "iPad Air 5º" → "5", "iPad Pro 2ª" → "2")
-    const geracaoMatch = nome.match(/(\d+)\s*[ºª°]?/);
-    const geracao = geracaoMatch ? ` ${geracaoMatch[1]}` : "";
-    if (/mini/i.test(nome)) s.ipad_modelo = `MINI${geracao}`.trim();
-    else if (/air/i.test(nome)) s.ipad_modelo = `AIR${geracao}`.trim();
-    else if (/pro/i.test(nome)) s.ipad_modelo = `PRO${geracao}`.trim();
+    const n = nome.toLowerCase();
+    // Mini
+    if (/mini/.test(n)) {
+      if (/mini\s*7/.test(n)) s.ipad_modelo = "MINI 7";
+      else if (/mini\s*6/.test(n)) s.ipad_modelo = "MINI 6";
+      else s.ipad_modelo = "MINI 6";
+    }
+    // Pro — checar M4 primeiro
+    else if (/pro/.test(n)) {
+      const is13 = /13|12\.9/.test(n);
+      if (/m4/.test(n)) s.ipad_modelo = is13 ? "PRO M4 13" : "PRO M4 11";
+      else s.ipad_modelo = is13 ? "PRO 12.9" : "PRO 11";
+    }
+    // Air
+    else if (/air/.test(n)) {
+      if (/m4/.test(n)) s.ipad_modelo = "AIR M4";
+      else if (/m3/.test(n)) s.ipad_modelo = "AIR M3";
+      else if (/m2/.test(n)) s.ipad_modelo = "AIR M2";
+      else if (/\b5\b/.test(n)) s.ipad_modelo = "AIR 5";
+      else if (/\b4\b/.test(n)) s.ipad_modelo = "AIR 4";
+      else s.ipad_modelo = "AIR M4";
+    }
     else s.ipad_modelo = "IPAD";
+    // Chip separado — só preenche se NÃO estiver já embutido no ipad_modelo
+    const modeloStr = (s.ipad_modelo || "").toUpperCase();
     const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?|A\d+)\b/i);
-    s.ipad_chip = chip ? chip[1].toUpperCase() : "";
+    const chipStr = chip ? chip[1].toUpperCase() : "";
+    s.ipad_chip = chipStr && !modeloStr.includes(chipStr) ? chipStr : "";
   } else if (categoria === "MACBOOK") {
     if (/air/i.test(nome)) s.mb_modelo = "AIR";
     else if (/neo/i.test(nome)) s.mb_modelo = "NEO";

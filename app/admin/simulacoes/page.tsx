@@ -821,7 +821,7 @@ export default function AdminPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => {
                     const num = modalRow.whatsapp.replace(/\D/g, "");
@@ -829,7 +829,7 @@ export default function AdminPage() {
                     const msg = `Ola ${modalRow.nome}! Vi que voce fez uma simulacao de troca no nosso site. O ${modalRow.modelo_novo} ${modalRow.storage_novo} esta disponivel! Seu ${modalRow.modelo_usado} foi avaliado em ${fmt(modalRow.avaliacao_usado)}. Gostaria de continuar?`;
                     window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors text-center"
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors text-center"
                 >
                   Chamar no WhatsApp
                 </button>
@@ -844,9 +844,42 @@ export default function AdminPage() {
                     });
                     window.open(`/troca?${params.toString()}`, "_blank");
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
                 >
                   Recuperar Carrinho
+                </button>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
+                      preco: String(modalRow.preco_novo || ""),
+                      cliente_nome: modalRow.nome || "",
+                      cliente_whatsapp: modalRow.whatsapp || "",
+                      troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
+                      troca_valor: String(modalRow.avaliacao_usado || ""),
+                    });
+                    window.open(`/admin/gerar-link?${params.toString()}`, "_blank");
+                  }}
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#0071E3] hover:bg-[#0062C4] text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Gerar Link
+                </button>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      cliente_nome: modalRow.nome || "",
+                      cliente_telefone: modalRow.whatsapp || "",
+                      produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
+                      valor: String(modalRow.preco_novo || ""),
+                      troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
+                      troca_valor: String(modalRow.avaliacao_usado || ""),
+                      diferenca_pix: String(modalRow.diferenca || ""),
+                    });
+                    window.open(`/admin/entregas?${params.toString()}`, "_blank");
+                  }}
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Agendar Entrega
                 </button>
               </div>
             </div>

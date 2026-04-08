@@ -85,8 +85,15 @@ function formatProdutoDisplay(p: {
     const chipM = up.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/);
     const chip = chipM ? " " + chipM[1].replace(/\s+/g, " ").toUpperCase() : "";
     let modelo = "iPad";
-    if (/MINI/.test(up)) modelo = "iPad Mini";
+    // Captura geração depois de MINI/AIR/PRO (ex: "IPAD AIR 5", "IPAD MINI 7", "IPAD PRO 6")
+    const mMini = up.match(/IPAD\s+MINI\s+(\d+)\b/);
+    const mAir = up.match(/IPAD\s+AIR\s+(\d+)\b/);
+    const mPro = up.match(/IPAD\s+PRO\s+(\d+)\b/);
+    if (mMini) modelo = `iPad Mini ${mMini[1]}`;
+    else if (/MINI/.test(up)) modelo = "iPad Mini";
+    else if (mAir) modelo = `iPad Air ${mAir[1]}`;
     else if (/AIR/.test(up)) modelo = "iPad Air";
+    else if (mPro) modelo = `iPad Pro ${mPro[1]}`;
     else if (/PRO/.test(up)) modelo = "iPad Pro";
     parts.push(modelo + chip);
     if (tela) parts.push(tela);
@@ -113,15 +120,16 @@ function formatProdutoDisplay(p: {
   } else if (baseCat === "APPLE_WATCH") {
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
-    const se = up.match(/\bSE\s*(\d+)?/);
+    // \bSE\b com lookahead — NÃO pode casar dentro de "SERIES". Aceita "SE", "SE 2", "SE3".
+    const se = up.match(/\bSE(?!R)\s*(\d+)?\b/);
     const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
     else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
-    // Ultra é sempre cellular; os outros respeitam detecção
-    if (ultra) parts.push("GPS + Cellular");
+    // Ultra é sempre cellular — redundante mostrar "GPS + Cellular" no nome
+    if (ultra) { /* omit connectivity */ }
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
     if (cor) parts.push(cor);
@@ -738,12 +746,12 @@ function getModeloBase(produto: string, categoria: string): string {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3)
-    const seMatch = p.match(/SE\s*(\d+)/);
+    // SE com geração (SE 2, SE 3) — \bSE(?!R) evita casar "SERIES"
+    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
     if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
+    if (/\bSE(?!R)/.test(p)) return `Apple Watch SE${sz}${conn}`;
     // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
+    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
