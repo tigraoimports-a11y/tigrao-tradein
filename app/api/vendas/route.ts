@@ -498,6 +498,7 @@ export async function PATCH(req: NextRequest) {
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
+  delete fields.usar_credito_loja; // virtual — só usado no POST
 
   // Todos os campos de troca existem na tabela vendas após migration 20260406_vendas_troca_serial_imei
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
