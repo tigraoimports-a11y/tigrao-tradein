@@ -4520,7 +4520,14 @@ export default function EstoquePage() {
                                     })()}
                                     {/* Apple Watch badges: tamanho + pulseira */}
                                     {prodItems[0]?.categoria === "APPLE_WATCH" && (() => {
-                                      const { tamanho, pulseira } = extractWatchBadges(prodNome);
+                                      const { tamanho } = extractWatchBadges(prodNome);
+                                      // Pulseira: extrair de cada item e pegar a mais comum (groupKey não tem pulseira)
+                                      const counts: Record<string, number> = {};
+                                      for (const it of prodItems) {
+                                        const pb = extractWatchBadges(it.produto).pulseira;
+                                        if (pb) counts[pb] = (counts[pb] || 0) + (it.qnt || 1);
+                                      }
+                                      const pulseira = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
                                       if (!tamanho && !pulseira) return null;
                                       return (
                                         <div className="flex gap-1 mt-0.5">
@@ -5102,12 +5109,11 @@ export default function EstoquePage() {
                         })()}
                       </p>
                       {p.categoria === "APPLE_WATCH" && (() => {
-                        const { tamanho, pulseira } = extractWatchBadges(p.produto);
-                        if (!tamanho && !pulseira) return null;
+                        const { tamanho } = extractWatchBadges(p.produto);
+                        if (!tamanho) return null;
                         return (
                           <div className="flex gap-1.5 mt-1">
-                            {tamanho && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
-                            {pulseira && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span>}
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>
                           </div>
                         );
                       })()}
