@@ -12,7 +12,7 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
 
 /**
  * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
@@ -118,12 +118,6 @@ function formatProdutoDisplay(p: {
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
   } else if (baseCat === "APPLE_WATCH") {
-    // Para watches, a "cor" às vezes foi salva como "PRETA ESTILO MILANÊS" (cor + pulseira).
-    // Remove palavras de pulseira da cor pra não duplicar com a seção Especificações.
-    const corLimpa = cor
-      .replace(/\b(ESTILO\s+)?(MILAN[ÊE]S|MILANESE|SOLO\s*LOOP(?:\s*TRAN[ÇC]AD[AO])?|BRAIDED\s*SOLO|TRAN[ÇC]A|OCEAN|ALPIN(?:E|ISTA)|TRAIL|NIKE|HERM[ÉE]S|HERMES|LINK(?:\s*BRACELET)?|ELOS|COURO|LEATHER|ESPORTIVA|SPORT\s*BAND|SPORT|LOOP|BAND|PULSEIRA)\b/gi, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
     // \bSE\b com lookahead — NÃO pode casar dentro de "SERIES". Aceita "SE", "SE 2", "SE3".
@@ -134,11 +128,11 @@ function formatProdutoDisplay(p: {
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
-    // Ultra é sempre cellular — redundante mostrar "GPS + Cellular" no nome
-    if (ultra) { /* omit connectivity */ }
+    // Ultra é sempre cellular; os outros respeitam detecção
+    if (ultra) parts.push("GPS + Cellular");
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
-    if (corLimpa) parts.push(corLimpa);
+    if (cor) parts.push(cor);
   } else {
     // Fallback: usa o nome limpo
     return cleanProdutoDisplay(nomeRaw);
@@ -437,17 +431,17 @@ function extractCorEN(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
-/** Extrai tamanho (42MM, 46MM etc) e tipo da pulseira (MILANÊS, ESPORTIVA, etc) de um nome de Apple Watch */
+/** Extrai tamanho (42MM, 46MM etc) e pulseira (SPORT BAND S/M etc) de um nome de Apple Watch */
 function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: string | null } {
   if (!nome) return { tamanho: null, pulseira: null };
   const upper = nome.toUpperCase();
   const tamMatch = upper.match(/\b(\d{2}MM)\b/);
   const tamanho = tamMatch ? tamMatch[1] : null;
   // Pulseira: se tem "PULSEIRA ..." no nome, pega tudo após (mais confiável)
-  let pulseiraRaw: string | null = null;
+  let pulseira: string | null = null;
   const pulseiraExplicita = upper.match(/PULSEIRA\s+(.+?)$/);
   if (pulseiraExplicita) {
-    pulseiraRaw = pulseiraExplicita[1]
+    pulseira = pulseiraExplicita[1]
       .replace(/\s*GPS\s*\+\s*CELLULAR\b/g, "")
       .replace(/\s*GPS\s*\+\s*CEL\b/g, "")
       .replace(/\s+/g, " ")
@@ -455,58 +449,9 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
   } else {
     // Fallback: pattern conhecido sem label PULSEIRA
     const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
-    pulseiraRaw = pulseiraMatch ? pulseiraMatch[1].trim() : null;
-  }
-  // Normalizar: extrair só o tipo (ignorando cor / tamanhos / palavra "estilo")
-  // Regras testadas em ordem; primeira que casar vence.
-  let pulseira: string | null = pulseiraRaw;
-  if (pulseiraRaw) {
-    const p = pulseiraRaw;
-    const tipoMatchers: { re: RegExp; label: string }[] = [
-      { re: /MILAN[ÊE]S|MILANESE/, label: "MILANÊS" },
-      { re: /SOLO\s*LOOP\s*TRAN[ÇC]AD[AO]|BRAIDED\s*SOLO/, label: "TRANÇA" },
-      { re: /SOLO\s*LOOP|SOLO/, label: "SOLO LOOP" },
-      { re: /OCEAN/, label: "OCEAN" },
-      { re: /ALPIN(?:E|ISTA)|TRAIL/, label: "ALPINISTA" },
-      { re: /NIKE/, label: "NIKE" },
-      { re: /HERM[ÉE]S|HERMES/, label: "HERMÈS" },
-      { re: /LINK\s*BRACELET|ELOS|LINK/, label: "LINK" },
-      { re: /COURO|LEATHER/, label: "COURO" },
-      { re: /ESPORTIVA|SPORT\s*BAND|SPORT/, label: "ESPORTIVA" },
-    ];
-    for (const { re, label } of tipoMatchers) {
-      if (re.test(p)) { pulseira = label; break; }
-    }
+    pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
   }
   return { tamanho, pulseira };
-}
-
-/** Normaliza um texto livre de pulseira para um label curto (MILANÊS, ESPORTIVA, etc). */
-function normalizePulseiraLabel(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const p = raw.toUpperCase();
-  const tipoMatchers: { re: RegExp; label: string }[] = [
-    { re: /MILAN[ÊE]S|MILANESE/, label: "MILANÊS" },
-    { re: /SOLO\s*LOOP\s*TRAN[ÇC]AD[AO]|BRAIDED\s*SOLO|TRAN[ÇC]A/, label: "TRANÇA" },
-    { re: /SOLO\s*LOOP|SOLO/, label: "SOLO LOOP" },
-    { re: /OCEAN/, label: "OCEAN" },
-    { re: /ALPIN(?:E|ISTA)|TRAIL/, label: "ALPINISTA" },
-    { re: /NIKE/, label: "NIKE" },
-    { re: /HERM[ÉE]S|HERMES/, label: "HERMÈS" },
-    { re: /LINK\s*BRACELET|ELOS|LINK/, label: "LINK" },
-    { re: /COURO|LEATHER/, label: "COURO" },
-    { re: /ESPORTIVA|SPORT\s*BAND|SPORT/, label: "ESPORTIVA" },
-  ];
-  for (const { re, label } of tipoMatchers) if (re.test(p)) return label;
-  return null;
-}
-
-/** Extrai pulseira de um item de estoque olhando nome + observação ([BAND:...]). */
-function extractItemPulseira(it: { produto?: string | null; observacao?: string | null }): string | null {
-  const bandTag = it.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
-  const fromTag = normalizePulseiraLabel(bandTag);
-  if (fromTag) return fromTag;
-  return extractWatchBadges(it.produto || "").pulseira;
 }
 
 function displayNomeProduto(nome: string, cor: string | null | undefined, categoria?: string | null): string {
@@ -801,12 +746,12 @@ function getModeloBase(produto: string, categoria: string): string {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3) — \bSE(?!R) evita casar "SERIES"
-    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
+    // SE com geração (SE 2, SE 3)
+    const seMatch = p.match(/SE\s*(\d+)/);
     if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (/\bSE(?!R)/.test(p)) return `Apple Watch SE${sz}${conn}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
     // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
+    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
@@ -1787,7 +1732,7 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Categorias que NÃO precisam de IMEI (só serial)
-  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPADS", "APPLE_WATCH"];
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
   // Categorias que NÃO precisam de serial (completamente opcional)
   const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
 
@@ -1799,7 +1744,7 @@ export default function EstoquePage() {
     if (precisaSerial && !item.serial_no) {
       return `Preencha o número de série de "${item.produto}" antes de mover para estoque.`;
     }
-    if (!CATS_SEM_IMEI.includes(getBaseCat(item.categoria)) && !item.imei) {
+    if (!CATS_SEM_IMEI.includes(item.categoria) && !item.imei) {
       return `Preencha o IMEI de "${item.produto}" antes de mover para estoque.`;
     }
     if (!item.fornecedor || item.fornecedor.trim() === "") {
@@ -1860,7 +1805,8 @@ export default function EstoquePage() {
           <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         </div>
         <div style="padding:0 1.5mm 0.5mm;text-align:center">
-          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
+          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}</div>
+          ${cor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${formatCorEtiquetaPTEN(cor)}</div>` : ""}
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
@@ -1907,7 +1853,7 @@ export default function EstoquePage() {
     const serial = p.serial_no || "";
     const imei = p.imei || "";
     const qrData = serial || imei || p.id;
-    const cor = p.cor ? ` ${p.cor}` : "";
+    const corLine = p.cor ? formatCorEtiquetaPTEN(p.cor) : "";
     const obs = p.observacao || "";
     const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     const grade = gradeMatch || null;
@@ -1936,7 +1882,8 @@ export default function EstoquePage() {
       <div class="label">
         <canvas id="qr0" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         <div class="info">
-          <div class="produto">${p.produto}${cor}</div>
+          <div class="produto">${p.produto}</div>
+          ${corLine ? `<div class="badges" style="font-weight:bold;color:#000">${corLine}</div>` : ""}
           <div class="badges">${[
             p.bateria ? `🔋 ${p.bateria}%` : "",
             grade ? `Grade ${grade}` : "",
@@ -4554,14 +4501,7 @@ export default function EstoquePage() {
                                     })()}
                                     {/* Apple Watch badges: tamanho + pulseira */}
                                     {prodItems[0]?.categoria === "APPLE_WATCH" && (() => {
-                                      const { tamanho } = extractWatchBadges(prodNome);
-                                      // Pulseira: extrair de cada item e pegar a mais comum (groupKey não tem pulseira)
-                                      const counts: Record<string, number> = {};
-                                      for (const it of prodItems) {
-                                        const pb = extractItemPulseira(it);
-                                        if (pb) counts[pb] = (counts[pb] || 0) + (it.qnt || 1);
-                                      }
-                                      const pulseira = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+                                      const { tamanho, pulseira } = extractWatchBadges(prodNome);
                                       if (!tamanho && !pulseira) return null;
                                       return (
                                         <div className="flex gap-1 mt-0.5">
@@ -4859,7 +4799,7 @@ export default function EstoquePage() {
                                               const labels = Array.from({ length: qnt }, () => `
                                                 <div class="label">
                                                   <div class="produto">${p.produto}</div>
-                                                  ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+                                                  ${p.cor ? `<div class="cor">${formatCorEtiquetaPTEN(p.cor)}</div>` : ""}
                                                   <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
                                                   ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
                                                   ${p.data_compra ? `<div class="data">${fmtDate(p.data_compra)}</div>` : ""}
@@ -5143,11 +5083,12 @@ export default function EstoquePage() {
                         })()}
                       </p>
                       {p.categoria === "APPLE_WATCH" && (() => {
-                        const { tamanho } = extractWatchBadges(p.produto);
-                        if (!tamanho) return null;
+                        const { tamanho, pulseira } = extractWatchBadges(p.produto);
+                        if (!tamanho && !pulseira) return null;
                         return (
                           <div className="flex gap-1.5 mt-1">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>
+                            {tamanho && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
+                            {pulseira && <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span>}
                           </div>
                         );
                       })()}
@@ -5446,33 +5387,7 @@ export default function EstoquePage() {
                           )}
                         </div>
                       )}
-                      <div>
-                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p>
-                        {canEdit ? (
-                          <select
-                            value={p.tipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : isLac ? "NOVO" : "SEMINOVO"}
-                            onChange={async (e) => {
-                              const novo = e.target.value as "NOVO" | "SEMINOVO" | "NAO_ATIVADO";
-                              try {
-                                await apiPatch(p.id, { tipo: novo });
-                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: novo } : x));
-                                setDetailProduct({ ...p, tipo: novo });
-                                showSaved("tipo");
-                                setMsg(`Condição alterada para ${novo === "NOVO" ? "Lacrado" : novo === "NAO_ATIVADO" ? "Não Ativado" : "Usado"}`);
-                              } catch (err) {
-                                setMsg("❌ " + String(err instanceof Error ? err.message : err));
-                              }
-                            }}
-                            className={`mt-0.5 text-[11px] font-semibold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
-                          >
-                            <option value="NOVO">🔵 Lacrado</option>
-                            <option value="NAO_ATIVADO">🟣 Não Ativado</option>
-                            <option value="SEMINOVO">🟡 Usado</option>
-                          </select>
-                        ) : (
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span>
-                        )}
-                      </div>
+                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
                       {/* Caixa badge */}
                       {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
@@ -5488,15 +5403,19 @@ export default function EstoquePage() {
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Carregador</p>
                         <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 bg-green-100 text-green-700">🔋 Com Carregador</span></div>
                       )}
-                      {/* Apple Watch: só tamanho aqui — pulseira aparece na seção "Especificações" pra evitar duplicação */}
+                      {/* Apple Watch: tamanho + pulseira info */}
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho } = extractWatchBadges(p.produto);
-                        if (!tamanho) return null;
-                        return (
-                          <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span>
-                          </div>
-                        );
+                        const pulseiraTam = p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1];
+                        const bandModel = p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
+                        return (<>
+                          {tamanho && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span></div>}
+                          {pulseiraTam && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho Pulseira</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{pulseiraTam}</span></div>}
+                          {bandModel && <div className="col-span-2"><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Modelo Pulseira</p>
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{bandModel}</span></div>}
+                        </>);
                       })()}
                       {/* Ciclos badge */}
                       {(() => {
