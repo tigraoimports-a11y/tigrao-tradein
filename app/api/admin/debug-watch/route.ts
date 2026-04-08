@@ -35,16 +35,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!auth(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
-  if (body?.action !== "rename") return NextResponse.json({ error: "action inválida" }, { status: 400 });
+  if (body?.action !== "rename" && body?.action !== "cleanup") return NextResponse.json({ error: "action inválida" }, { status: 400 });
 
   const { supabase } = await import("@/lib/supabase");
 
-  // Busca todas as linhas de APPLE_WATCH com SE 42/46mm
   const { data, error } = await supabase
     .from("estoque")
     .select("id, produto")
     .eq("categoria", "APPLE_WATCH")
-    .or("produto.ilike.%apple watch se%42%mm%,produto.ilike.%apple watch se%46%mm%");
+    .limit(1000);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -52,7 +51,16 @@ export async function POST(request: Request) {
   const updates: { id: string; produto_antigo: string; produto_novo: string }[] = [];
 
   for (const r of rows) {
-    const novo = (r.produto || "").replace(/apple\s*watch\s*se/gi, "Apple Watch Series 11");
+    let novo = (r.produto || "")
+      // Limpa corrupção: "Series 11RIES 11" → "Series 11" (repete até sumir)
+      .replace(/series\s*11ries\s*11/gi, "Series 11")
+      .replace(/series\s*11ries\s*11/gi, "Series 11")
+      .replace(/series\s*11ries\s*11/gi, "Series 11");
+    // Renomeia SE 42/46mm → Series 11 usando word boundary pra não pegar "SE" dentro de "SERIES"
+    if (/\bse\b\s*4[26]\s*mm/i.test(novo)) {
+      novo = novo.replace(/\bapple\s*watch\s+se\b/gi, "Apple Watch Series 11");
+    }
+    novo = novo.replace(/\s+/g, " ").trim();
     if (novo !== r.produto) {
       const { error: upErr } = await supabase.from("estoque").update({ produto: novo }).eq("id", r.id);
       if (!upErr) updates.push({ id: r.id, produto_antigo: r.produto, produto_novo: novo });
