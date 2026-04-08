@@ -87,38 +87,18 @@ export default function GerarLinkPage() {
       .catch(() => {});
   }, []);
 
-  // Cores disponíveis para o produto selecionado — vem do catálogo (match exato),
-  // traduzidas pra PT e deduplicadas. Se não achar no catálogo, cai pro estoque.
+  // Cores disponíveis para o produto selecionado — fonte ÚNICA = catalogo_modelo_configs.
+  // Sem fallback pro estoque (estoque pode ter lixo de cor errada).
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    // Remove storage (128GB/1TB) e cor residual pra casar com nome do catálogo
     const stripStorage = (s: string) => s.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
     const norm = (s: string) => stripStorage(s).toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
     const prodSel = norm(produtos[0]);
 
-    // 1) Tenta catálogo com match exato do nome do modelo
+    // Match exato com o nome do modelo no catálogo
     let raw: string[] = [];
     for (const [nome, cores] of Object.entries(catalogoCores)) {
       if (norm(nome) === prodSel) { raw = cores; break; }
-    }
-    // 2) Fallback: estoque — match pelo início do nome (sem storage/cor)
-    if (raw.length === 0) {
-      const set = new Set<string>();
-      for (const item of estoqueItems) {
-        const prodEst = norm(item.produto);
-        // Match exato OU o nome do estoque começa com o modelo selecionado
-        // seguido imediatamente do fim ou de uma cor (não de outro modelo)
-        if (prodEst === prodSel) {
-          if (item.cor) set.add(item.cor);
-        } else if (prodEst.startsWith(prodSel + " ")) {
-          // Evita sangria: "iPhone 13" não deve casar com "iPhone 13 pro/plus/mini"
-          const rest = prodEst.slice(prodSel.length + 1);
-          if (!/^(pro|plus|mini|air|max|e\b)/i.test(rest)) {
-            if (item.cor) set.add(item.cor);
-          }
-        }
-      }
-      raw = [...set];
     }
 
     // Dedup por tradução PT
@@ -129,10 +109,10 @@ export default function GerarLinkPage() {
       const key = pt.toLowerCase().trim();
       if (!key || seen.has(key)) continue;
       seen.add(key);
-      out.push(c); // guarda o valor original; a UI já aplica corParaPT ao exibir
+      out.push(c);
     }
     return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
-  }, [produtos, estoqueItems, catalogoCores]);
+  }, [produtos, catalogoCores]);
 
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
@@ -155,7 +135,7 @@ export default function GerarLinkPage() {
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
 
   // Dados do cliente (pré-preenchimento via cola de texto)
-  const [incluirDadosCliente, setIncluirDadosCliente] = useState(false);
+  const [incluirDadosCliente, setIncluirDadosCliente] = useState(true);
   const [dadosClienteTexto, setDadosClienteTexto] = useState("");
   const [cliNome, setCliNome] = useState("");
   const [cliCpf, setCliCpf] = useState("");

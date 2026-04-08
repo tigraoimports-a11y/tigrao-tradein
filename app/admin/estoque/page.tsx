@@ -796,6 +796,14 @@ export default function EstoquePage() {
   const [reservaSaving, setReservaSaving] = useState(false);
   // Configs do catálogo para o modelo do produto no detalhe (cores por modelo específico)
   const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
+  // Mapa completo modelo → [cores EN] do catálogo (usado na reposição)
+  const [catalogoCoresMap, setCatalogoCoresMap] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCoresMap(j.modelos); })
+      .catch(() => {});
+  }, []);
   const [savedField, setSavedField] = useState<string | null>(null);
   const showSaved = (field: string) => { setSavedField(field); setTimeout(() => setSavedField(null), 1800); };
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
@@ -2909,6 +2917,40 @@ export default function EstoquePage() {
           }
         }
 
+        // Enriquecer com cores do catálogo que ainda não estão no estoque.
+        // Match: strip storage do base → procura no catalogoCoresMap por match exato (case-insensitive).
+        const stripStorageBase = (b: string) => b.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
+        const normCmp = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+        for (const [, models] of Object.entries(byCatModel)) {
+          for (const [base, cores] of Object.entries(models)) {
+            const baseSemStorage = normCmp(stripStorageBase(base));
+            let catCores: string[] | null = null;
+            for (const [nomeCat, lista] of Object.entries(catalogoCoresMap)) {
+              if (normCmp(nomeCat) === baseSemStorage) { catCores = lista; break; }
+            }
+            if (!catCores || catCores.length === 0) continue;
+            // Precisa de um estoque_minimo representativo pra esse modelo
+            const minGrupo = Math.max(0, ...cores.map(c => c.min || 0));
+            for (const corEN of catCores) {
+              const corPTnew = COR_PT[corEN.toUpperCase()] || "";
+              const jaExiste = cores.some(c =>
+                c.corEN.toUpperCase() === corEN.toUpperCase() ||
+                (corPTnew && c.corPT && c.corPT.toLowerCase() === corPTnew.toLowerCase())
+              );
+              if (jaExiste) continue;
+              cores.push({
+                totalQnt: 0,
+                min: minGrupo,
+                corEN,
+                corPT: corPTnew,
+                corDisplay: corPTnew || corEN,
+                jaCaminho: false,
+                falta: 0,
+              });
+            }
+          }
+        }
+
         // Calcular falta e filtrar apenas quem está abaixo do mínimo (ou esgotado)
         const byCatModelFiltered: Record<string, Record<string, RepoGroup[]>> = {};
         for (const [cat, models] of Object.entries(byCatModel)) {
@@ -2999,7 +3041,7 @@ export default function EstoquePage() {
                               }`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
-                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1.5 font-normal text-[11px] ${textMuted}`}>{c.corEN.toUpperCase()}</span>}</span>
+                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : (c.corEN || "—")}</span>
                                   {c.jaCaminho && (
                                     <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
                                   )}

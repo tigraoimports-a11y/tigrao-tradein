@@ -46,3 +46,9 @@ CREATE INDEX IF NOT EXISTS idx_link_compras_arquivado ON link_compras(arquivado)
 ALTER TABLE link_compras ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS link_compras_all ON link_compras;
 CREATE POLICY link_compras_all ON link_compras FOR ALL USING (true) WITH CHECK (true);
+
+-- Garantir privilégios para service_role, authenticated e anon
+-- (sem isso, mesmo com RLS liberada, o INSERT falha com "permission denied for table")
+GRANT ALL ON link_compras TO service_role;
+GRANT ALL ON link_compras TO authenticated;
+GRANT ALL ON link_compras TO anon;
