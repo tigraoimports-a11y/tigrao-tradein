@@ -23,8 +23,8 @@ export default function DebugWatchPage() {
     try {
       const r = await fetch("/api/admin/debug-watch", {
         method: "POST",
-        headers: { ...apiHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rename" }),
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cleanup" }),
       });
       const j = await r.json();
       alert(JSON.stringify(j, null, 2));
