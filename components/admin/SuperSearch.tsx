@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SearchResult = Record<string, any>;
@@ -233,6 +234,37 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
     custo_unitario: item.custo ? String(item.custo) : "",
   });
 
+  // Parse tags estruturadas da observacao (seminovos)
+  const obs: string = item.observacao || "";
+  const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
+  const ciclosMatch = obs.match(/\[CICLOS:(\d+)\]/);
+  const hasCaixa = /\[COM_CAIXA\]/.test(obs);
+  const hasCabo = /\[COM_CABO\]/.test(obs);
+  const hasFonte = /\[COM_FONTE\]/.test(obs);
+  const hasPulseira = /\[COM_PULSEIRA\]/.test(obs);
+  const pulseiraTamMatch = obs.match(/\[PULSEIRA_TAM:([^\]]+)\]/);
+  const bandModelMatch = obs.match(/\[BAND:([^\]]+)\]/);
+  const watchTamanhoMatch = (item.produto || "").match(/\b(38|40|41|42|44|45|46|49)\s*MM\b/i);
+  const obsLimpa = obs.replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(?:A\+|AB|A|B)|CICLOS:\d+)\]/g, "").trim();
+  const isSeminovo = item.tipo_produto === "SEMINOVO" || !!gradeMatch || !!ciclosMatch || hasCaixa || hasCabo || hasFonte || hasPulseira;
+  // Campos visíveis por categoria (conforme spec de seminovos)
+  const catUpper = String(item.categoria || "").toUpperCase();
+  const isIphone = catUpper.includes("IPHONE");
+  const isIpad = catUpper.includes("IPAD");
+  const isMac = catUpper.includes("MAC");
+  const isWatch = catUpper.includes("WATCH");
+  // Origem: apenas iPhone
+  const showOrigem = isSeminovo && isIphone && !!item.origem;
+  const showCiclos = isMac && !!ciclosMatch; // Ciclos: apenas MacBook (opcional)
+  const showFonte = (isIpad || isMac) && hasFonte;
+  const showCabo = !isWatch && hasCabo;
+  const showPulseira = isWatch && hasPulseira;
+  const showCaixa = hasCaixa;
+  const showWatchTamanho = isWatch && !!watchTamanhoMatch;
+  const showPulseiraTam = isWatch && !!pulseiraTamMatch;
+  const showBandModel = isWatch && !!bandModelMatch;
+  const hasSpecs = isSeminovo || !!item.origem || !!item.garantia || !!gradeMatch || showWatchTamanho || showPulseiraTam || showBandModel;
+
   const statusColor = (s: string) => {
     if (s === "EM ESTOQUE") return "text-green-600";
     if (s === "A CAMINHO") return "text-yellow-600";
@@ -263,6 +295,64 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
             <h3 className={`text-sm font-bold ${textPrimary}`}>Detalhes do Item</h3>
           </div>
           <div className="flex items-center gap-2">
+            {isEstoque && (item.serial_no || item.imei) && !editing && (
+              <button
+                onClick={() => {
+                  const codigo = item.serial_no || item.imei || "";
+                  if (!codigo) return;
+                  const win = window.open("", "_blank", "width=300,height=300");
+                  if (!win) return;
+                  const produtoNome = item.produto || "";
+                  const cor = item.cor ? corParaPT(item.cor) : "";
+                  const serial = item.serial_no || "";
+                  const imei = item.imei || "";
+                  win.document.write(`<!DOCTYPE html><html><head>
+<title>Etiqueta ${codigo}</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{margin:0;padding:0;width:100%}
+body{font-family:Arial,Helvetica,sans-serif}
+.wrap{text-align:center;padding:3mm 5mm 2mm 5mm}
+.produto{font-size:11pt;font-weight:bold;line-height:1.2}
+.cor{font-size:8pt;color:#333;margin-top:1mm}
+.extra{font-size:6pt;color:#444;margin-top:1mm}
+.qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+.cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
+@page{size:62mm 45mm;margin:0}
+</style></head><body>
+<div class="wrap">
+<div class="produto">${produtoNome}</div>
+${cor ? `<div class="cor">${cor}</div>` : ""}
+${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+<div class="qr"><canvas id="qr"></canvas></div>
+<div class="cod">${codigo}</div>
+</div>
+<script>
+var qr = qrcode(0, 'M');
+qr.addData('${codigo}');
+qr.make();
+var canvas = document.getElementById('qr');
+var size = 150;
+canvas.width = size; canvas.height = size;
+canvas.style.width = '10mm'; canvas.style.height = '10mm';
+var ctx = canvas.getContext('2d');
+var cells = qr.getModuleCount();
+var cellSize = size / cells;
+ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+ctx.fillStyle = '#000';
+for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+  if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
+window.onload=function(){window.print();window.close();};
+<\/script></body></html>`);
+                  win.document.close();
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
+              >
+                🏷️ Etiqueta
+              </button>
+            )}
             {isEstoque && item.status !== "VENDIDO" && (
               <button
                 onClick={() => setEditing(!editing)}
@@ -306,7 +396,7 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
               <div>
                 <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Cor</p>
                 {editing ? <input value={editFields.cor} onChange={(e) => setEditFields(f => ({ ...f, cor: e.target.value }))} className={inputCls} />
-                  : <p className={`text-sm ${textPrimary}`}>{item.cor}</p>}
+                  : <p className={`text-sm ${textPrimary}`}>{corParaPT(item.cor)}</p>}
               </div>
             )}
             {item.categoria && (
@@ -360,6 +450,107 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
           </div>
         </div>
 
+        {/* Origem por Troca */}
+        {item.troca_info && (
+          <div className={`mx-4 mt-3 p-4 rounded-xl border ${dm ? "bg-[#3A2A1C] border-[#E8740E]/40" : "bg-[#FFF3E8] border-[#E8740E]/40"}`}>
+            <p className={`text-xs font-bold ${textPrimary} mb-2 flex items-center gap-2`}>
+              <span>🔄</span> Veio de uma Troca
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Operação</p>
+                <p className={`text-sm font-mono ${textPrimary}`}>{item.troca_info.codigo}</p>
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Motivo</p>
+                <p className={`text-sm ${textPrimary}`}>{item.troca_info.motivo}</p>
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Data</p>
+                <p className={`text-sm ${textPrimary}`}>{(() => { const [y,m,d] = (item.troca_info.data || "").split("-"); return y ? `${d}/${m}/${y}` : "—"; })()}</p>
+              </div>
+              {item.troca_info.fornecedor && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Contato</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.troca_info.fornecedor}</p>
+                </div>
+              )}
+              <div className="col-span-2">
+                <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Produto que saiu</p>
+                <p className={`text-sm ${textPrimary}`}>{item.troca_info.produto_saida_nome}{item.troca_info.produto_saida_cor ? ` · ${corParaPT(item.troca_info.produto_saida_cor)}` : ""}</p>
+                {(item.troca_info.produto_saida_serial || item.troca_info.produto_saida_imei) && (
+                  <p className={`text-xs font-mono ${textSecondary}`}>{item.troca_info.produto_saida_serial ? `SN ${item.troca_info.produto_saida_serial}` : ""}{item.troca_info.produto_saida_imei ? `  ·  IMEI ${item.troca_info.produto_saida_imei}` : ""}</p>
+                )}
+              </div>
+              {item.troca_info.observacao && (
+                <div className="col-span-2">
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Observação</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.troca_info.observacao}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Especificações (seminovos) */}
+        {hasSpecs && (
+          <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
+            <p className={`text-xs font-bold ${textPrimary} mb-3`}>Especificações</p>
+            <div className="grid grid-cols-2 gap-3">
+              {gradeMatch && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Grade</p>
+                  <p className={`text-sm font-bold ${textPrimary}`}>{gradeMatch[1]}</p>
+                </div>
+              )}
+              {showOrigem && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Origem</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.origem}</p>
+                </div>
+              )}
+              {showCiclos && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Ciclos</p>
+                  <p className={`text-sm ${textPrimary}`}>{ciclosMatch![1]}</p>
+                </div>
+              )}
+              {item.garantia && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Garantia</p>
+                  <p className={`text-sm ${textPrimary}`}>{item.garantia}</p>
+                </div>
+              )}
+              {showWatchTamanho && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Tamanho</p>
+                  <p className={`text-sm ${textPrimary}`}>⌚ {watchTamanhoMatch![0].toUpperCase()}</p>
+                </div>
+              )}
+              {showPulseiraTam && (
+                <div>
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Tamanho Pulseira</p>
+                  <p className={`text-sm ${textPrimary}`}>{pulseiraTamMatch![1]}</p>
+                </div>
+              )}
+              {showBandModel && (
+                <div className="col-span-2">
+                  <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Modelo Pulseira</p>
+                  <p className={`text-sm ${textPrimary}`}>{bandModelMatch![1]}</p>
+                </div>
+              )}
+            </div>
+            {(showCaixa || showCabo || showFonte || showPulseira) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {showCaixa && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">📦 Com Caixa</span>}
+                {showCabo && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">🔌 Com Cabo</span>}
+                {showFonte && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">🔋 Com Carregador</span>}
+                {showPulseira && <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">⌚ Com Pulseira</span>}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Datas e Fornecedor */}
         <div className={`mx-4 mt-3 p-4 rounded-xl border ${bgSection}`}>
           <div className="grid grid-cols-2 gap-3">
@@ -399,10 +590,10 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
               </div>
             )}
           </div>
-          {item.observacao && !editing && (
+          {obsLimpa && !editing && (
             <div className="mt-3">
               <p className={`text-[10px] uppercase tracking-wider ${textSecondary}`}>Observacao</p>
-              <p className={`text-sm ${textPrimary}`}>{item.observacao}</p>
+              <p className={`text-sm ${textPrimary}`}>{obsLimpa}</p>
             </div>
           )}
           {editing && (
@@ -428,6 +619,69 @@ function DetailModal({ item, onClose, onSave, dm }: { item: SearchResult; onClos
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               Ver operação
+            </button>
+          </div>
+        )}
+
+        {/* Botão imprimir etiqueta — quando tem serial ou imei */}
+        {!editing && (item.serial_no || item.imei) && (
+          <div className="mx-4 mt-2 mb-1">
+            <button
+              onClick={() => {
+                const codigo = item.serial_no || item.imei || "";
+                if (!codigo) return;
+                const win = window.open("", "_blank", "width=300,height=300");
+                if (!win) return;
+                const produtoNome = item.produto || "";
+                const cor = item.cor || "";
+                const serial = item.serial_no || "";
+                const imei = item.imei || "";
+                win.document.write(`<!DOCTYPE html><html><head>
+<title>Etiqueta ${codigo}</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{margin:0;padding:0;width:100%}
+body{font-family:Arial,Helvetica,sans-serif}
+.wrap{text-align:center;padding:3mm 5mm 2mm 5mm}
+.produto{font-size:11pt;font-weight:bold;line-height:1.2}
+.cor{font-size:8pt;color:#333;margin-top:1mm}
+.extra{font-size:6pt;color:#444;margin-top:1mm}
+.qr{margin:2mm auto 1mm;display:flex;justify-content:center}
+.cod{font-size:7pt;color:#333;font-weight:bold;margin-top:1mm;margin-bottom:2mm}
+@page{size:62mm 45mm;margin:0}
+</style></head><body>
+<div class="wrap">
+<div class="produto">${produtoNome}</div>
+${cor ? `<div class="cor">${cor}</div>` : ""}
+${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
+${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
+<div class="qr"><canvas id="qr"></canvas></div>
+<div class="cod">${codigo}</div>
+</div>
+<script>
+var qr = qrcode(0, 'M');
+qr.addData('${codigo}');
+qr.make();
+var canvas = document.getElementById('qr');
+var size = 150;
+canvas.width = size; canvas.height = size;
+canvas.style.width = '10mm'; canvas.style.height = '10mm';
+var ctx = canvas.getContext('2d');
+var cells = qr.getModuleCount();
+var cellSize = size / cells;
+ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+ctx.fillStyle = '#000';
+for(var r=0;r<cells;r++) for(var c=0;c<cells;c++)
+  if(qr.isDark(r,c)) ctx.fillRect(c*cellSize,r*cellSize,cellSize+0.5,cellSize+0.5);
+window.onload=function(){window.print();window.close();};
+<\/script></body></html>`);
+                win.document.close();
+              }}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:bg-[#3A3A3C]" : "bg-white text-[#1D1D1F] border border-[#D2D2D7] hover:bg-[#F5F5F7]"}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Imprimir Etiqueta
             </button>
           </div>
         )}

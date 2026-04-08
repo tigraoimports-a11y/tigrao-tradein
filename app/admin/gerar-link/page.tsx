@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
+import { corParaPT, corParaEN } from "@/lib/cor-pt";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -11,6 +12,7 @@ export default function GerarLinkPage() {
   const [preco, setPreco] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
+  const [pickerIdx, setPickerIdx] = useState<number | null>(null);
 
   // Fetch preços de venda (tabela precos com categoria)
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
@@ -44,9 +46,10 @@ export default function GerarLinkPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel]);
   const [corSel, setCorSel] = useState("");
+  const [coresExtras, setCoresExtras] = useState<string[]>([]); // cor por índice extra (produto 2, 3, ...)
 
-  // Fetch estoque para obter cores reais disponíveis
-  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number }[]>([]);
+  // Fetch estoque para obter cores reais disponíveis + seminovos
+  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
   useEffect(() => {
     if (!adminPw) return;
     fetch("/api/estoque", { headers: adminHeaders() })
@@ -56,8 +59,8 @@ export default function GerarLinkPage() {
           setEstoqueItems(
             j.data
               .filter((p: { status?: string; qnt?: number }) => p.status === "EM ESTOQUE" && (p.qnt || 0) > 0)
-              .map((p: { produto: string; cor: string | null; qnt: number }) => ({
-                produto: p.produto, cor: p.cor, qnt: p.qnt
+              .map((p: { produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
+                produto: p.produto, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
               }))
           );
         }
@@ -65,30 +68,86 @@ export default function GerarLinkPage() {
       .catch(() => {});
   }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cores reais do estoque para o produto selecionado
-  const coresDisponiveis = useMemo(() => {
-    if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    // Extrair palavras-chave do produto selecionado pra matching flexível
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoqueItems) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      // Match direto
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
+  // Seminovos disponíveis em tempo real
+  const seminovosDisponiveis = useMemo(() => {
+    return estoqueItems
+      .filter(p => p.tipo === "SEMINOVO")
+      .map(p => ({
+        nome: p.cor ? `${p.produto} ${p.cor}` : p.produto,
+        preco: p.preco_sugerido || 0,
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [estoqueItems]);
+
+  // Cores do catálogo por modelo (catalogo_modelo_configs)
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
+      .catch(() => {});
+  }, []);
+
+  // Cores disponíveis pra QUALQUER nome de produto — fonte: catalogo_modelo_configs.
+  const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
+    if (!nomeProduto) return [];
+    // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
+    const normGen = (s: string) => s
+      .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/\bGENERATION\b/gi, "GEN")
+      .replace(/\bGERAÇÃO\b/gi, "GEN");
+    const stripNoise = (s: string) => normGen(s)
+      .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+      .replace(/\b\d+\s*MM\b/gi, "")
+      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+      .replace(/[""\(\)\+\-]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
+    const expandSynonyms = (toks: string[]): string[] => {
+      const set = new Set(toks);
+      // iPad chip ↔ geração (iPad A16 = iPad 11, A15 = 10, A14 = 9/10)
+      if (set.has("ipad")) {
+        if (set.has("a16")) set.add("11");
+        if (set.has("11")) set.add("a16");
+        if (set.has("a14")) set.add("10");
+        if (set.has("10")) set.add("a14");
       }
-      // Match flexível: pelo menos 3 keywords em comum (modelo + tamanho/storage)
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
+      return [...set];
+    };
+    const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
+    const prodTokens = new Set(tokens(nomeProduto));
+
+    // Match por tokens: todos os tokens do catálogo devem existir no produto.
+    // Escolhe o match com mais tokens (mais específico).
+    let raw: string[] = [];
+    let bestCount = 0;
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      const catTokens = tokens(nome);
+      if (catTokens.length === 0) continue;
+      const allMatch = catTokens.every(t => prodTokens.has(t));
+      if (allMatch && catTokens.length > bestCount) {
+        raw = cores;
+        bestCount = catTokens.length;
       }
     }
-    return [...cores].sort();
-  }, [produtos, estoqueItems]);
 
-  const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
+    // Dedup por tradução PT
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const pt = corParaPT(c);
+      const key = pt.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
+  }, [catalogoCores]);
+
+  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
+
+  const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
   const [entradaPix, setEntradaPix] = useState("");
@@ -97,11 +156,366 @@ export default function GerarLinkPage() {
   const [horario, setHorario] = useState("");
   const [dataEntrega, setDataEntrega] = useState("");
   const [desconto, setDesconto] = useState("");
+  const [temTroca, setTemTroca] = useState(false);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
+  const [temSegundaTroca, setTemSegundaTroca] = useState(false);
+  const [trocaProduto2, setTrocaProduto2] = useState("");
+  const [trocaValor2, setTrocaValor2] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
+  const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
+
+  // Dados do cliente (pré-preenchimento via cola de texto)
+  const [incluirDadosCliente, setIncluirDadosCliente] = useState(true);
+  const [dadosClienteTexto, setDadosClienteTexto] = useState("");
+  const [cliNome, setCliNome] = useState("");
+  const [cliCpf, setCliCpf] = useState("");
+  const [cliEmail, setCliEmail] = useState("");
+  const [cliTelefone, setCliTelefone] = useState("");
+  const [cliCep, setCliCep] = useState("");
+  const [cliEndereco, setCliEndereco] = useState("");
+  const [cliNumero, setCliNumero] = useState("");
+  const [cliComplemento, setCliComplemento] = useState("");
+  const [cliBairro, setCliBairro] = useState("");
+  const [parseMsg, setParseMsg] = useState("");
+  const [simulacaoId, setSimulacaoId] = useState<string | null>(null);
+
+  // Autocomplete de clientes cadastrados — dispara por nome OU CPF
+  type CliSug = { nome: string; telefone: string | null; cpf: string | null; email: string | null; endereco: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+  const [cliSugs, setCliSugs] = useState<CliSug[]>([]);
+  const [showCliSugs, setShowCliSugs] = useState(false);
+  const [cliSugSource, setCliSugSource] = useState<"nome" | "cpf">("nome");
+  useEffect(() => {
+    const q = cliNome.trim();
+    if (q.length < 2) { if (cliSugSource === "nome") setCliSugs([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: adminHeaders() });
+        const j = await res.json();
+        if (Array.isArray(j?.clientes)) { setCliSugs(j.clientes); setCliSugSource("nome"); }
+      } catch {}
+    }, 250);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliNome]);
+  useEffect(() => {
+    const q = cliCpf.replace(/\D/g, "");
+    if (q.length < 3) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: adminHeaders() });
+        const j = await res.json();
+        if (Array.isArray(j?.clientes) && j.clientes.length > 0) {
+          setCliSugs(j.clientes); setCliSugSource("cpf"); setShowCliSugs(true);
+        }
+      } catch {}
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliCpf]);
+  const aplicarCliente = (c: CliSug) => {
+    setCliNome(c.nome || "");
+    if (c.telefone) setCliTelefone(c.telefone);
+    if (c.cpf) setCliCpf(c.cpf);
+    if (c.email) setCliEmail(c.email);
+    if (c.endereco) setCliEndereco(c.endereco);
+    if (c.bairro) setCliBairro(c.bairro);
+    setIncluirDadosCliente(true);
+    setShowCliSugs(false);
+  };
+
+  // Prefill via query string (vindo de /admin/simulacoes)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("sim_id")) setSimulacaoId(q.get("sim_id"));
+    if (q.get("prod")) {
+      setProdutoManual(true);
+      setProdutos([q.get("prod") || ""]);
+    }
+    if (q.get("preco")) setPreco(Number(q.get("preco")).toLocaleString("pt-BR"));
+    if (q.get("tp")) { setTemTroca(true); setTrocaProduto(q.get("tp") || ""); }
+    if (q.get("tv")) setTrocaValor(Number(q.get("tv")).toLocaleString("pt-BR"));
+    if (q.get("cn") || q.get("cte")) {
+      setIncluirDadosCliente(true);
+      if (q.get("cn")) setCliNome(q.get("cn") || "");
+      if (q.get("cte")) setCliTelefone(q.get("cte") || "");
+    }
+    if (q.get("sv")) setVendedorNome(q.get("sv") || "");
+  }, []);
+
+  // === Histórico de Links ===
+  type LinkCompra = {
+    id: string;
+    short_code: string;
+    url_curta: string | null;
+    tipo: "COMPRA" | "TROCA";
+    cliente_nome: string | null;
+    cliente_telefone: string | null;
+    cliente_cpf: string | null;
+    cliente_email: string | null;
+    produto: string;
+    produtos_extras: string[] | null;
+    cor: string | null;
+    valor: number;
+    forma_pagamento: string | null;
+    parcelas: string | null;
+    entrada: number;
+    troca_produto: string | null;
+    troca_valor: number;
+    troca_produto2: string | null;
+    troca_valor2: number;
+    vendedor: string | null;
+    operador: string | null;
+    status: string | null;
+    cliente_dados_preenchidos: Record<string, unknown> | null;
+    cliente_preencheu_em: string | null;
+    entrega_id: string | null;
+    observacao: string | null;
+    arquivado: boolean;
+    created_at: string;
+  };
+  const [aba, setAba] = useState<"novo" | "historico">("novo");
+  const [histLinks, setHistLinks] = useState<LinkCompra[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histBusca, setHistBusca] = useState("");
+  const [histTipo, setHistTipo] = useState<"" | "COMPRA" | "TROCA">("");
+  const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
+
+  async function fetchHistorico() {
+    if (!adminPw) return;
+    setHistLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (histBusca.trim()) params.set("q", histBusca.trim());
+      if (histTipo) params.set("tipo", histTipo);
+      params.set("arquivado", histArquivado);
+      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
+      const j = await res.json();
+      const rows = (j.data || []).map((r: LinkCompra & { produtos_extras: unknown }) => {
+        let pe: string[] | null = null;
+        if (Array.isArray(r.produtos_extras)) pe = r.produtos_extras as string[];
+        else if (typeof r.produtos_extras === "string") {
+          try { const parsed = JSON.parse(r.produtos_extras); pe = Array.isArray(parsed) ? parsed : null; } catch { pe = null; }
+        }
+        return { ...r, produtos_extras: pe };
+      });
+      setHistLinks(rows);
+    } catch { /* ignore */ }
+    setHistLoading(false);
+  }
+
+  useEffect(() => {
+    if (aba === "historico") fetchHistorico();
+  }, [aba, histBusca, histTipo, histArquivado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function arquivarLink(id: string, arquivado: boolean) {
+    await fetch("/api/admin/link-compras", {
+      method: "PATCH",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id, arquivado }),
+    });
+    fetchHistorico();
+  }
+
+  async function excluirLink(id: string) {
+    if (!confirm("Excluir este link do histórico definitivamente? Essa ação não pode ser desfeita.")) return;
+    const res = await fetch("/api/admin/link-compras", {
+      method: "DELETE",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert("Erro ao excluir: " + (j.error || res.status));
+      return;
+    }
+    fetchHistorico();
+  }
+
+  async function copiarLinkHist(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch { /* ignore */ }
+  }
+
+  // === Editar link existente ===
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
+  const [editDados, setEditDados] = useState<Record<string, string>>({});
+  const [editLink, setEditLink] = useState<Record<string, string>>({});
+  const [savingDados, setSavingDados] = useState(false);
+
+  useEffect(() => {
+    if (viewDataLink) {
+      const src = (viewDataLink.cliente_dados_preenchidos || {}) as Record<string, unknown>;
+      const obj: Record<string, string> = {};
+      for (const [k, v] of Object.entries(src)) obj[k] = v == null ? "" : String(v);
+      setEditDados(obj);
+      setEditLink({
+        produto: viewDataLink.produto || "",
+        cor: viewDataLink.cor || "",
+        valor: viewDataLink.valor != null ? String(viewDataLink.valor) : "",
+        forma_pagamento: viewDataLink.forma_pagamento || "",
+        parcelas: viewDataLink.parcelas != null ? String(viewDataLink.parcelas) : "",
+        entrada: viewDataLink.entrada != null ? String(viewDataLink.entrada) : "",
+        vendedor: viewDataLink.vendedor || "",
+        cliente_nome: viewDataLink.cliente_nome || "",
+        cliente_telefone: viewDataLink.cliente_telefone || "",
+        cliente_cpf: viewDataLink.cliente_cpf || "",
+        cliente_email: viewDataLink.cliente_email || "",
+        troca_produto: viewDataLink.troca_produto || "",
+        troca_valor: viewDataLink.troca_valor != null ? String(viewDataLink.troca_valor) : "",
+        troca_produto2: viewDataLink.troca_produto2 || "",
+        troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
+        observacao: viewDataLink.observacao || "",
+      });
+    } else {
+      setEditDados({});
+      setEditLink({});
+    }
+  }, [viewDataLink]);
+
+  async function salvarDadosCliente() {
+    if (!viewDataLink) return;
+    setSavingDados(true);
+    try {
+      const dadosPayload: Record<string, unknown> = { ...editDados };
+      if (editDados.endereco || editDados.numero || editDados.complemento) {
+        dadosPayload.endereco_completo = `${editDados.endereco || ""}${editDados.numero ? `, ${editDados.numero}` : ""}${editDados.complemento ? ` - ${editDados.complemento}` : ""}`.trim();
+      }
+      const body: Record<string, unknown> = {
+        id: viewDataLink.id,
+        cliente_dados_preenchidos: dadosPayload,
+        produto: editLink.produto || null,
+        cor: editLink.cor || null,
+        valor: Number(editLink.valor) || 0,
+        forma_pagamento: editLink.forma_pagamento || null,
+        parcelas: editLink.parcelas ? Number(editLink.parcelas) : null,
+        entrada: Number(editLink.entrada) || 0,
+        vendedor: editLink.vendedor || null,
+        cliente_nome: editLink.cliente_nome || null,
+        cliente_telefone: editLink.cliente_telefone || null,
+        cliente_cpf: editLink.cliente_cpf || null,
+        cliente_email: editLink.cliente_email || null,
+        troca_produto: editLink.troca_produto || null,
+        troca_valor: Number(editLink.troca_valor) || 0,
+        troca_produto2: editLink.troca_produto2 || null,
+        troca_valor2: Number(editLink.troca_valor2) || 0,
+        observacao: editLink.observacao || null,
+      };
+      const res = await fetch("/api/admin/link-compras", {
+        method: "PATCH",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert("Erro ao salvar: " + (j.error || res.status));
+      } else {
+        setViewDataLink(null);
+        fetchHistorico();
+      }
+    } finally {
+      setSavingDados(false);
+    }
+  }
+  const [encaminharLink, setEncaminharLink] = useState<LinkCompra | null>(null);
+  const [encaminharData, setEncaminharData] = useState("");
+  const [encaminharHorario, setEncaminharHorario] = useState("");
+  const [encaminharObs, setEncaminharObs] = useState("");
+
+  function editarLink(l: LinkCompra) {
+    reutilizarLink(l);
+    setEditingLinkId(l.id);
+    setPasteMsg(`✏️ Editando link ${l.short_code}. Ao clicar em "Gerar Link" as alterações serão salvas.`);
+  }
+
+  async function salvarEdicaoLink() {
+    if (!editingLinkId) return false;
+    const prodsFilled = produtos.filter(Boolean);
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
+    try {
+      const res = await fetch("/api/admin/link-compras", {
+        method: "PATCH",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          id: editingLinkId,
+          produto: nomeProdutoFinal,
+          produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => {
+            const c = coresExtras[i]; return c ? `${nome} ${corParaPT(c)}` : nome;
+          }) : null,
+          cor: corENCanon || null,
+          valor: Number(rawPreco) || 0,
+          forma_pagamento: forma || null,
+          parcelas: parcelas || null,
+          entrada: Number(rawEntrada) || 0,
+          troca_produto: trocaProduto || null,
+          troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+          troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
+          troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
+          vendedor: vendedorNome || null,
+          cliente_nome: cliNome.trim() || null,
+          cliente_telefone: cliTelefone.trim() || null,
+          cliente_cpf: cliCpf.trim() || null,
+          cliente_email: cliEmail.trim() || null,
+        }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setPasteMsg(`❌ Erro ao salvar: ${j.error || res.status}`); return false; }
+      setPasteMsg(`✅ Link ${editingLinkId.slice(0, 6)} atualizado.`);
+      setEditingLinkId(null);
+      return true;
+    } catch (e) {
+      setPasteMsg(`❌ Erro: ${String(e)}`);
+      return false;
+    }
+  }
+
+  async function encaminharParaEntrega() {
+    if (!encaminharLink || !encaminharData) return;
+    try {
+      const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+        method: "POST",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          link_id: encaminharLink.id,
+          data_entrega: encaminharData,
+          horario: encaminharHorario || null,
+          observacao: encaminharObs || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) { alert("Erro: " + (j.error || res.status)); return; }
+      setEncaminharLink(null);
+      setEncaminharData(""); setEncaminharHorario(""); setEncaminharObs("");
+      fetchHistorico();
+      alert("✅ Entrega criada com sucesso!");
+    } catch (e) { alert("Erro: " + String(e)); }
+  }
+
+  function reutilizarLink(l: LinkCompra) {
+    setProdutos([l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim()]);
+    if (l.cor) setCorSel(l.cor);
+    if (l.valor) setPreco(Number(l.valor).toLocaleString("pt-BR"));
+    if (l.forma_pagamento) setForma(l.forma_pagamento);
+    if (l.vendedor) setVendedorNome(l.vendedor);
+    if (l.cliente_nome || l.cliente_telefone || l.cliente_cpf) {
+      setIncluirDadosCliente(true);
+      if (l.cliente_nome) setCliNome(l.cliente_nome);
+      if (l.cliente_telefone) setCliTelefone(l.cliente_telefone);
+      if (l.cliente_cpf) setCliCpf(l.cliente_cpf);
+    }
+    if (l.troca_produto) {
+      setTemTroca(true);
+      setTrocaProduto(l.troca_produto);
+      if (l.troca_valor) setTrocaValor(Number(l.troca_valor).toLocaleString("pt-BR"));
+    }
+    setAba("novo");
+  }
 
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -109,9 +523,67 @@ export default function GerarLinkPage() {
     return Number(digits).toLocaleString("pt-BR");
   };
 
+  // Parser de bloco de texto colado pelo vendedor (formato WhatsApp antigo)
+  function parseDadosCliente(text: string) {
+    const out: { nome?: string; cpf?: string; email?: string; telefone?: string; cep?: string; endereco?: string; numero?: string; complemento?: string; bairro?: string } = {};
+    if (!text.trim()) return out;
+    // Limpa emojis/asteriscos/markdown
+    const clean = text.replace(/[✅☑️✔️]/g, "").replace(/\*/g, "").replace(/_/g, "");
+    const lines = clean.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/^([^:]{2,30}):\s*(.+)$/);
+      if (!m) continue;
+      const label = m[1].toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const value = m[2].trim();
+      if (/nome/.test(label)) out.nome = value;
+      else if (/cpf/.test(label)) out.cpf = value;
+      else if (/e[-\s]?mail|email/.test(label)) out.email = value;
+      else if (/telefone|celular|whats|fone|tel\b/.test(label)) out.telefone = value;
+      else if (/cep/.test(label)) out.cep = value;
+      else if (/endereco|rua|logradouro/.test(label)) {
+        const parts = value.split(",").map((p) => p.trim());
+        out.endereco = parts[0];
+        if (parts[1]) out.numero = parts[1].replace(/^n[oº°]?\.?\s*/i, "");
+        if (parts[2]) out.complemento = parts.slice(2).join(", ");
+      } else if (/numero|número/.test(label)) out.numero = value.replace(/^n[oº°]?\.?\s*/i, "");
+      else if (/complemento/.test(label)) out.complemento = value;
+      else if (/bairro/.test(label)) {
+        // "São Francisco - Niterói - RJ" — pega só a 1ª parte
+        const parts = value.split(/\s*-\s*/).map((p) => p.trim());
+        out.bairro = parts[0];
+      }
+    }
+    return out;
+  }
+
+  function aplicarParse() {
+    const d = parseDadosCliente(dadosClienteTexto);
+    const encontrados: string[] = [];
+    if (d.nome) { setCliNome(d.nome); encontrados.push("Nome"); }
+    if (d.cpf) { setCliCpf(d.cpf); encontrados.push("CPF"); }
+    if (d.email) { setCliEmail(d.email); encontrados.push("E-mail"); }
+    if (d.telefone) { setCliTelefone(d.telefone); encontrados.push("Telefone"); }
+    if (d.cep) { setCliCep(d.cep); encontrados.push("CEP"); }
+    if (d.endereco) { setCliEndereco(d.endereco); encontrados.push("Endereço"); }
+    if (d.numero) { setCliNumero(d.numero); encontrados.push("Número"); }
+    if (d.complemento) { setCliComplemento(d.complemento); encontrados.push("Complemento"); }
+    if (d.bairro) { setCliBairro(d.bairro); encontrados.push("Bairro"); }
+    if (encontrados.length === 0) setParseMsg("❌ Não consegui identificar nenhum dado. Verifique o formato.");
+    else setParseMsg(`✅ ${encontrados.length} campo(s) extraído(s): ${encontrados.join(", ")}`);
+    setTimeout(() => setParseMsg(""), 5000);
+  }
+
+  function limparDadosCliente() {
+    setDadosClienteTexto("");
+    setCliNome(""); setCliCpf(""); setCliEmail(""); setCliTelefone("");
+    setCliCep(""); setCliEndereco(""); setCliNumero(""); setCliComplemento(""); setCliBairro("");
+    setParseMsg("");
+  }
+
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
   const rawTrocaVal = trocaValor.replace(/\./g, "").replace(",", ".");
+  const rawTrocaVal2 = trocaValor2.replace(/\./g, "").replace(",", ".");
 
   // Taxas de parcelamento (mesma tabela do sistema)
   const TAXAS: Record<number, number> = {
@@ -125,11 +597,13 @@ export default function GerarLinkPage() {
   const precoBase = parseFloat(rawPreco) || 0;
   const descontoNum = parseFloat(desconto.replace(/\./g, "").replace(",", ".")) || 0;
   const trocaNum = parseFloat(rawTrocaVal) || 0;
+  const trocaNum2 = parseFloat(rawTrocaVal2) || 0;
+  const trocaTotal = trocaNum + trocaNum2;
   const entradaNum = parseFloat(rawEntrada) || 0;
-  const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaNum);
+  const valorSemTaxa = Math.max(0, precoBase - descontoNum - trocaTotal);
   const valorParcelar = Math.max(0, valorSemTaxa - entradaNum);
   const numParcelas = parseInt(parcelas) || 0;
-  const taxa = (forma === "Cartao Credito" && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
+  const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
   const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
   const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
   const valorTotal = entradaNum + valorComTaxa;
@@ -137,18 +611,43 @@ export default function GerarLinkPage() {
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
   async function gerarLink() {
+    // Snapshot local — evita race com re-renders/setState que possam limpar produtos[0]
     const prodsFilled = produtos.filter(Boolean);
-    if (prodsFilled.length === 0) return;
+    if (prodsFilled.length === 0) {
+      setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
+      return;
+    }
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
+    if (!nomeProdutoFinal || !nomeProdutoFinal.trim()) {
+      setPasteMsg("⚠️ Nome do produto vazio — selecione novamente.");
+      return;
+    }
+
+    // Modo edição: salva por cima e não cria short_code novo
+    if (editingLinkId) {
+      const ok = await salvarEdicaoLink();
+      if (ok) { setAba("historico"); fetchHistorico(); }
+      return;
+    }
 
     const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+    // Helper: aplica cor extra no nome (PT simples)
+    const aplicarCorExtra = (nome: string, idx: number): string => {
+      const cor = coresExtras[idx - 1];
+      if (!cor) return nome;
+      return `${nome} ${corParaPT(cor)}`;
+    };
+
     // Montar dados com keys curtas
     const shortData: Record<string, string> = {};
     // Incluir cor no nome do produto se selecionada
-    shortData.p = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
+    shortData.p = nomeProdutoFinal;
     for (let i = 1; i < prodsFilled.length; i++) {
-      shortData[`p${i + 1}`] = prodsFilled[i];
+      shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
     }
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
@@ -164,6 +663,23 @@ export default function GerarLinkPage() {
     if (trocaProduto) shortData.tp = trocaProduto;
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
+    if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
+    const rawTroca2Data = trocaValor2.replace(/\./g, "").replace(",", ".");
+    if (temSegundaTroca && rawTroca2Data && rawTroca2Data !== "0") shortData.tv2 = rawTroca2Data;
+    if (pagamentoPago) shortData.pp = pagamentoPago;
+
+    // Dados do cliente pré-preenchidos (quando o vendedor incluir)
+    if (incluirDadosCliente) {
+      if (cliNome.trim()) shortData.cn = cliNome.trim();
+      if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
+      if (cliEmail.trim()) shortData.cem = cliEmail.trim();
+      if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
+      if (cliCep.trim()) shortData.ccep = cliCep.trim();
+      if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
+      if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
+      if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
+      if (cliBairro.trim()) shortData.cba = cliBairro.trim();
+    }
 
     // Salvar no banco e gerar código curto de 6 chars
     try {
@@ -174,8 +690,46 @@ export default function GerarLinkPage() {
       });
       const json = await res.json();
       if (json.code) {
-        setGeneratedLink(`${baseUrl}/c/${json.code}`);
+        const urlCurta = `${baseUrl}/c/${json.code}`;
+        setGeneratedLink(urlCurta);
         setCopied(false);
+
+        // Salvar no histórico persistente de links de compra
+        try {
+          const resHist = await fetch("/api/admin/link-compras", {
+            method: "POST",
+            headers: adminHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              short_code: json.code,
+              url_curta: urlCurta,
+              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              cliente_nome: cliNome.trim() || null,
+              cliente_telefone: cliTelefone.trim() || null,
+              cliente_cpf: cliCpf.trim() || null,
+              cliente_email: cliEmail.trim() || null,
+              produto: nomeProdutoFinal,
+              produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
+              cor: corENCanon || null,
+              valor: Number(rawPreco) || 0,
+              forma_pagamento: forma || null,
+              parcelas: parcelas || null,
+              entrada: Number(rawEntrada) || 0,
+              troca_produto: trocaProduto || null,
+              troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+              troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
+              troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
+              vendedor: vendedorNome || null,
+              simulacao_id: simulacaoId,
+            }),
+          });
+          if (!resHist.ok) {
+            const err = await resHist.json().catch(() => ({ error: `HTTP ${resHist.status}` }));
+            setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${err.error || resHist.status}`);
+          }
+        } catch (e) {
+          setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${String(e)}`);
+        }
+
         return;
       }
     } catch { /* fallback below */ }
@@ -283,7 +837,7 @@ export default function GerarLinkPage() {
             if (valMatch) { setTrocaValor(formatPreco(valMatch[1].replace(/\./g, ""))); }
             // Produto na troca: texto antes do valor
             const prodTroca = val.replace(/R?\$?\s*[\d.,]+/g, "").replace(/[-–]/g, "").trim();
-            if (prodTroca) setTrocaProduto(prodTroca);
+            if (prodTroca) { setTrocaProduto(prodTroca); setTemTroca(true); }
             filled++;
           }
         } else if (low.includes("valor") || low.includes("preco") || low.includes("preço")) {
@@ -312,16 +866,344 @@ export default function GerarLinkPage() {
   const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
   const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
 
-  const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito";
+  const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Link de Pagamento";
   const showEntradaPix = forma === "Cartao Credito";
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
+      {/* Modal: Ver dados preenchidos pelo cliente */}
+      {viewDataLink && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setViewDataLink(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between bg-gradient-to-r from-[#FFF8F2] to-white">
+              <div>
+                <h3 className="text-base font-bold text-[#1D1D1F]">✏️ Editar link</h3>
+                <p className="text-[11px] text-[#86868B] mt-0.5">
+                  Link <span className="font-mono font-semibold">{viewDataLink.short_code}</span>
+                  {viewDataLink.cliente_preencheu_em && <> · {new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR")}</>}
+                </p>
+              </div>
+              <button onClick={() => setViewDataLink(null)} className="text-xl text-[#86868B] hover:text-red-500 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>
+            </div>
+            <>
+              <div className="overflow-y-auto p-5 space-y-5">
+                {(() => {
+                  const FD = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
+                    <div className={full ? "col-span-2" : ""}>
+                      <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
+                      <input
+                        type={type}
+                        value={editDados[k] || ""}
+                        onChange={(e) => setEditDados({ ...editDados, [k]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                      />
+                    </div>
+                  );
+                  const FL = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
+                    <div className={full ? "col-span-2" : ""}>
+                      <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
+                      <input
+                        type={type}
+                        value={editLink[k] || ""}
+                        onChange={(e) => setEditLink({ ...editLink, [k]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                      />
+                    </div>
+                  );
+                  const temDados = !!viewDataLink.cliente_dados_preenchidos;
+                  return (
+                    <>
+                      {/* Link — Pedido */}
+                      <section>
+                        <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <FL label="Produto" k="produto" full />
+                          <FL label="Cor" k="cor" />
+                          <FL label="Valor (R$)" k="valor" type="number" />
+                          <FL label="Forma de pagamento" k="forma_pagamento" />
+                          <FL label="Parcelas" k="parcelas" type="number" />
+                          <FL label="Entrada (R$)" k="entrada" type="number" full />
+                          <FL label="Vendedor" k="vendedor" full />
+                          <FL label="Observação" k="observacao" full />
+                        </div>
+                      </section>
+
+                      {/* Link — Cliente */}
+                      <section>
+                        <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">👤 Cliente (link)</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <FL label="Nome" k="cliente_nome" full />
+                          <FL label="Telefone" k="cliente_telefone" />
+                          <FL label="CPF" k="cliente_cpf" />
+                          <FL label="Email" k="cliente_email" type="email" full />
+                        </div>
+                      </section>
+
+                      {/* Troca */}
+                      {(editLink.troca_produto || editLink.troca_produto2 || viewDataLink.tipo === "TROCA") && (
+                        <section>
+                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🔄 Troca</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <FL label="Produto troca 1" k="troca_produto" full />
+                            <FL label="Valor troca 1 (R$)" k="troca_valor" type="number" full />
+                            <FL label="Produto troca 2" k="troca_produto2" full />
+                            <FL label="Valor troca 2 (R$)" k="troca_valor2" type="number" full />
+                          </div>
+                        </section>
+                      )}
+
+                      {/* Dados preenchidos pelo cliente */}
+                      <div className="border-t border-dashed border-[#D2D2D7] pt-4">
+                        <div className="mb-3">
+                          <h4 className="text-xs font-bold text-[#1D1D1F] uppercase tracking-wide">📋 Dados preenchidos pelo cliente</h4>
+                          {viewDataLink.cliente_preencheu_em && (
+                            <p className="text-[10px] text-[#86868B] mt-0.5">em {new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR")}</p>
+                          )}
+                        </div>
+                        {!temDados ? (
+                          <p className="text-xs text-[#86868B] italic">Cliente ainda não preencheu.</p>
+                        ) : (
+                          <>
+                            <section className="mb-4">
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pessoa</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="Nome" k="nome" full />
+                                <FD label="Tipo" k="pessoa" />
+                                <FD label={editDados.pessoa === "PJ" ? "CNPJ" : "CPF"} k={editDados.pessoa === "PJ" ? "cnpj" : "cpf"} />
+                                <FD label="Telefone" k="telefone" />
+                                <FD label="Email" k="email" type="email" full />
+                                <FD label="Instagram" k="instagram" full />
+                              </div>
+                            </section>
+                            <section className="mb-4">
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Endereço</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="CEP" k="cep" />
+                                <FD label="Bairro" k="bairro" />
+                                <FD label="Rua" k="endereco" full />
+                                <FD label="Número" k="numero" />
+                                <FD label="Complemento" k="complemento" />
+                              </div>
+                            </section>
+                            <section>
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Entrega</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="Local" k="local" />
+                                <FD label="Origem" k="origem" />
+                                <FD label="Data entrega" k="data_entrega" type="date" />
+                                <FD label="Horário" k="horario" type="time" />
+                              </div>
+                            </section>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-end gap-2">
+                <button onClick={() => setViewDataLink(null)} className="px-4 py-2 text-sm font-semibold text-[#86868B] hover:text-[#1D1D1F]">Cancelar</button>
+                <button
+                  onClick={salvarDadosCliente}
+                  disabled={savingDados}
+                  className="px-4 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D4640A] disabled:opacity-50"
+                >
+                  {savingDados ? "Salvando…" : "💾 Salvar alterações"}
+                </button>
+              </div>
+            </>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Encaminhar pra entrega */}
+      {encaminharLink && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setEncaminharLink(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#1D1D1F]">Encaminhar para entrega</h3>
+              <button onClick={() => setEncaminharLink(null)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#86868B]">Uma entrega será criada em /admin/entregas com os dados preenchidos pelo cliente.</p>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Data da entrega *</label>
+                <input type="date" value={encaminharData} onChange={(e) => setEncaminharData(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Horário (opcional)</label>
+                <input type="time" value={encaminharHorario} onChange={(e) => setEncaminharHorario(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#86868B] font-semibold">Observação (opcional)</label>
+                <textarea value={encaminharObs} onChange={(e) => setEncaminharObs(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm mt-1" />
+              </div>
+              <button onClick={encaminharParaEntrega} disabled={!encaminharData} className="w-full py-2.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50">
+                Criar entrega
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-xl font-bold text-[#1D1D1F]">Gerar Link de Compra</h1>
       <p className="text-sm text-[#86868B]">
         Gere um link pre-preenchido para enviar ao cliente. Ele completa os dados pessoais e envia direto pro WhatsApp da Bianca.
       </p>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[#E5E5EA]">
+        <button
+          onClick={() => setAba("novo")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "novo" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          ✨ Novo Link
+        </button>
+        <button
+          onClick={() => setAba("historico")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "historico" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          📚 Histórico
+        </button>
+      </div>
+
+      {aba === "historico" && (
+        <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={histBusca}
+              onChange={(e) => setHistBusca(e.target.value)}
+              placeholder="🔎 Buscar nome, telefone, CPF, produto, código..."
+              className={`${inputCls} flex-1 min-w-[200px]`}
+            />
+            <select value={histTipo} onChange={(e) => setHistTipo(e.target.value as "" | "COMPRA" | "TROCA")} className={inputCls} style={{ maxWidth: 160 }}>
+              <option value="">Todos tipos</option>
+              <option value="COMPRA">🛒 Só compra</option>
+              <option value="TROCA">🔄 Com troca</option>
+            </select>
+            <select value={histArquivado} onChange={(e) => setHistArquivado(e.target.value as "0" | "1")} className={inputCls} style={{ maxWidth: 160 }}>
+              <option value="0">Ativos</option>
+              <option value="1">Arquivados</option>
+            </select>
+          </div>
+
+          {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
+          {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
+
+          <div className="space-y-2">
+            {histLinks.map((l) => (
+              <div key={l.id} className={`border rounded-xl p-3 ${l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30" : "border-[#E5E5EA] bg-[#F9F9FB]"}`}>
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${l.tipo === "TROCA" ? "bg-purple-200 text-purple-800" : "bg-orange-200 text-orange-800"}`}>
+                        {l.tipo === "TROCA" ? "🔄 COMPRA + TROCA" : "🛒 SÓ COMPRA"}
+                      </span>
+                      <span className="text-[10px] text-[#86868B]">
+                        {new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {l.entrega_id ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-200 text-green-800">✅ Entrega criada</span>
+                      ) : l.cliente_preencheu_em ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-200 text-blue-800">📝 Preenchido</span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-200 text-gray-700">⏳ Aguardando</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[#86868B] mt-0.5">
+                      {l.operador ? <>Criado por <strong>{l.operador}</strong></> : null}
+                      {l.operador && l.vendedor ? " · " : null}
+                      {l.vendedor ? <>Vendedora <strong>{l.vendedor}</strong></> : null}
+                    </p>
+                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{(() => {
+                      const cor = l.cor || "";
+                      if (!cor) return l.produto;
+                      const corPT = corParaPT(cor);
+                      const corEN = corParaEN(cor) || cor;
+                      // Strip qualquer sufixo de cor (EN ou PT) do produto pra não duplicar
+                      let base = l.produto;
+                      for (const s of [cor, corPT, corEN]) {
+                        if (!s) continue;
+                        const re = new RegExp(`\\s+${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+                        base = base.replace(re, "").trim();
+                      }
+                      return `${base} ${corPT} — ${corEN}`;
+                    })()}</p>
+                    {l.produtos_extras && l.produtos_extras.length > 0 && (
+                      <ul className="text-xs text-[#86868B] mt-0.5 list-disc pl-5">
+                        {l.produtos_extras.map((pe, i) => <li key={i}>{pe}</li>)}
+                      </ul>
+                    )}
+                    {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
+                    {(l.cliente_nome || l.cliente_telefone) && (
+                      <p className="text-xs text-[#86868B] mt-1">
+                        👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}
+                      </p>
+                    )}
+                    {l.tipo === "TROCA" && l.troca_produto && (
+                      <p className="text-xs text-purple-700 mt-1">🔄 Troca: {l.troca_produto}{l.troca_valor ? ` — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}` : ""}</p>
+                    )}
+                    <p className="text-[10px] text-[#86868B] font-mono mt-1">{l.url_curta || `/c/${l.short_code}`}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <button
+                    onClick={() => copiarLinkHist(l.url_curta || `${typeof window !== "undefined" ? window.location.origin : ""}/c/${l.short_code}`)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
+                  >
+                    📋 Copiar
+                  </button>
+                  <button
+                    onClick={() => reutilizarLink(l)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
+                  >
+                    ♻️ Reutilizar
+                  </button>
+                  <button
+                    onClick={() => editarLink(l)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-blue-400 hover:text-blue-600 font-medium"
+                  >
+                    ✏️ Editar
+                  </button>
+                  {l.cliente_preencheu_em && (
+                    <button
+                      onClick={() => setViewDataLink(l)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 font-medium"
+                    >
+                      👁 Dados cliente
+                    </button>
+                  )}
+                  {l.cliente_preencheu_em && !l.entrega_id && (
+                    <button
+                      onClick={() => { setEncaminharLink(l); setEncaminharData(new Date().toISOString().slice(0, 10)); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-green-500 text-white hover:bg-green-600 font-medium"
+                    >
+                      → Encaminhar entrega
+                    </button>
+                  )}
+                  <button
+                    onClick={() => arquivarLink(l.id, !l.arquivado)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-amber-400 hover:text-amber-600 font-medium"
+                  >
+                    {l.arquivado ? "↩️ Desarquivar" : "📦 Arquivar"}
+                  </button>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => excluirLink(l.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-red-300 text-red-500 hover:bg-red-50 font-medium"
+                    >
+                      🗑️ Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {aba === "novo" && (
+      <>
       <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
         {/* Botão colar resumo */}
         <div className="flex items-center justify-between">
@@ -343,70 +1225,166 @@ export default function GerarLinkPage() {
         {/* Produto — seleção do estoque ou manual */}
         <div className="flex items-center justify-between">
           <label className={labelCls}>Produto *</label>
-          <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) setCatSel(""); }} className="text-xs text-[#E8740E] font-medium hover:underline">
+          <button onClick={() => { setProdutoManual(!produtoManual); setCatSel(""); setPickerIdx(null); }} className="text-xs text-[#E8740E] font-medium hover:underline">
             {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
           </button>
         </div>
 
         {produtoManual ? (
           <>
-            {produtos.map((prod, idx) => (
-              <div key={idx} className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={prod}
-                    onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
-                    placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
-                    className={inputCls}
-                  />
+            {produtos[0] && coresDisponiveis.length > 0 && (
+              <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor do produto 1:</p>
+                <div className="flex flex-wrap gap-2">
+                  {coresDisponiveis.map(cor => (
+                    <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                    >{corParaPT(cor)}</button>
+                  ))}
                 </div>
-                {idx > 0 && <button onClick={() => setProdutos(produtos.filter((_, i) => i !== idx))} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
               </div>
-            ))}
+            )}
+            {produtos.map((prod, idx) => {
+              const coresIdx = idx === 0 ? [] : coresParaProduto(prod); // idx 0 já tem picker acima
+              const corIdxSel = idx === 0 ? "" : (coresExtras[idx - 1] || "");
+              return (
+              <div key={idx} className="space-y-2">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={prod}
+                      onChange={(e) => { const np = [...produtos]; np[idx] = e.target.value; setProdutos(np); }}
+                      placeholder={idx === 0 ? "Ex: iPhone 17 Pro Max 256GB Silver" : `Produto ${idx + 1}...`}
+                      className={inputCls}
+                    />
+                  </div>
+                  <button
+                    onClick={() => { setPickerIdx(pickerIdx === idx ? null : idx); setCatSel(""); }}
+                    className={`shrink-0 px-2 py-2 text-xs rounded-lg border transition-colors ${pickerIdx === idx ? "bg-[#E8740E] text-white border-[#E8740E]" : "text-[#E8740E] border-[#E8740E]/40 hover:bg-[#FFF5EB]"}`}
+                    title="Selecionar do estoque"
+                  >📋</button>
+                  {idx > 0 && <button onClick={() => {
+                    setProdutos(produtos.filter((_, i) => i !== idx));
+                    setCoresExtras(coresExtras.filter((_, i) => i !== (idx - 1)));
+                    if (pickerIdx === idx) setPickerIdx(null);
+                  }} className="px-2 py-2.5 text-red-400 hover:text-red-600 text-lg">✕</button>}
+                </div>
+                {idx > 0 && prod && coresIdx.length > 0 && (
+                  <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                    <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor do produto {idx + 1}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {coresIdx.map(cor => (
+                        <button key={cor} onClick={() => {
+                          const next = [...coresExtras];
+                          while (next.length < idx) next.push("");
+                          next[idx - 1] = next[idx - 1] === cor ? "" : cor;
+                          setCoresExtras(next);
+                        }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corIdxSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                        >{corParaPT(cor)}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );})}
+            {/* Picker inline para o slot selecionado */}
+            {pickerIdx !== null && (
+              <div className={`space-y-2 p-3 rounded-xl border ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF5EB]/60"}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#E8740E]">Produto {pickerIdx + 1} — selecionar do estoque:</p>
+                  <button onClick={() => { setPickerIdx(null); setCatSel(""); }} className="text-xs text-[#86868B] hover:text-red-500">✕</button>
+                </div>
+                <select value={catSel} onChange={(e) => setCatSel(e.target.value)} className={inputCls}>
+                  <option value="">-- Categoria --</option>
+                  {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                  <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
+                </select>
+                {catSel && (
+                  <div className={`max-h-[250px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
+                    {(() => {
+                      const lista = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
+                      if (lista.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                      return lista.map((m) => {
+                        const sel = produtos[pickerIdx!] === m.nome;
+                        return (
+                          <button key={m.nome} onClick={() => {
+                            const np = [...produtos];
+                            np[pickerIdx!] = sel ? "" : m.nome;
+                            setProdutos(np);
+                            if (pickerIdx === 0) { setPreco(sel ? "" : (m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "")); setCorSel(""); }
+                            if (!sel) { setPickerIdx(null); setCatSel(""); }
+                          }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                            <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                            <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
             <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); }} className={inputCls}>
               <option value="">-- Categoria --</option>
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+              <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
             </select>
             {catSel && (
               <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
-                {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                {produtosFiltradosPreco.map((m) => {
-                  const sel = produtos[0] === m.nome;
-                  return (
-                    <div key={m.nome}>
-                      <button onClick={() => {
-                        if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
-                        setProdutos([m.nome]);
-                        setPreco(m.preco.toLocaleString("pt-BR"));
-                        setCorSel("");
-                      }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                        <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                        <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
-                      </button>
-                      {sel && coresDisponiveis.length > 0 && (
-                        <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
-                          <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {coresDisponiveis.map(cor => (
-                              <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                              >{cor}</button>
-                            ))}
+                {(() => {
+                  const listaBase = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
+                  if (listaBase.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                  // Se há produto selecionado, mostra só ele (colapsa a lista)
+                  const lista = produtos[0] ? listaBase.filter(m => m.nome === produtos[0]) : listaBase;
+                  return lista.map((m) => {
+                    const sel = produtos[0] === m.nome;
+                    return (
+                      <div key={m.nome}>
+                        <button onClick={() => {
+                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
+                          setProdutos([m.nome]);
+                          setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
+                          setCorSel("");
+                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}{sel && corSel ? ` ${corParaPT(corSel)}` : ""}</p>
+                          <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
+                        </button>
+                        {sel && catSel !== "SEMINOVOS" && (
+                          <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
+                            <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
+                            {coresDisponiveis.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {coresDisponiveis.map(cor => (
+                                  <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                  >{corParaPT(cor)}</button>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className={`text-xs italic ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Nenhuma cor cadastrada para este modelo no catálogo.</p>
+                            )}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
         )}
-        <button onClick={() => { setProdutos([...produtos, ""]); if (!produtoManual) setProdutoManual(true); }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+        <button onClick={() => {
+          const newIdx = produtos.length;
+          setProdutos([...produtos, ""]);
+          setProdutoManual(true);
+          setPickerIdx(newIdx);
+          setCatSel("");
+        }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
         <div>
           <label className={labelCls}>Preco Base (R$)</label>
@@ -433,37 +1411,207 @@ export default function GerarLinkPage() {
         </div>
 
         {/* Troca / Trade-in */}
-        <div className={`p-3 rounded-xl border ${trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
-          <p className="text-sm font-semibold text-[#1D1D1F] mb-3">Produto na troca (opcional)</p>
-          <div className="space-y-3">
-            <div>
-              <label className={labelCls}>Detalhes do produto na troca</label>
-              <textarea
-                value={trocaProduto}
-                onChange={(e) => setTrocaProduto(e.target.value)}
-                placeholder="Ex: iPhone 16 Plus 128GB, 100% bateria, sem marcas, com caixa e cabo, garantia Apple até Out/2026"
-                rows={3}
-                className={inputCls + " resize-none"}
-              />
+        <div className={`p-3 rounded-xl border ${temTroca && trocaProduto ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={temTroca}
+              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); } }}
+              className="w-4 h-4 rounded accent-[#E8740E]"
+            />
+            <span className="text-sm font-semibold text-[#1D1D1F]">Produto na troca</span>
+          </label>
+          {temTroca && (
+            <div className="space-y-3 mt-3">
+              <div>
+                <label className={labelCls}>{temSegundaTroca ? "Detalhes do 1º produto na troca" : "Detalhes do produto na troca"}</label>
+                <textarea
+                  value={trocaProduto}
+                  onChange={(e) => setTrocaProduto(e.target.value)}
+                  placeholder="Ex: iPhone 16 Plus 128GB, 100% bateria, sem marcas, com caixa e cabo, garantia Apple até Out/2026"
+                  rows={3}
+                  className={inputCls + " resize-none"}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Valor de Avaliacao do {temSegundaTroca ? "1º " : ""}Usado (R$)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={trocaValor}
+                  onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
+                  placeholder="Ex: 4.500"
+                  className={inputCls}
+                />
+              </div>
+
+              {!temSegundaTroca && (
+                <button
+                  type="button"
+                  onClick={() => setTemSegundaTroca(true)}
+                  className="text-xs text-[#E8740E] hover:underline font-semibold"
+                >
+                  ➕ Adicionar 2º produto na troca
+                </button>
+              )}
+
+              {temSegundaTroca && (
+                <div className="space-y-3 pt-3 border-t border-dashed border-[#E8740E]/40">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[#E8740E]">2º Produto na troca</span>
+                    <button
+                      type="button"
+                      onClick={() => { setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); }}
+                      className="text-xs text-[#86868B] hover:text-red-500"
+                    >
+                      ✕ Remover
+                    </button>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Detalhes do 2º produto na troca</label>
+                    <textarea
+                      value={trocaProduto2}
+                      onChange={(e) => setTrocaProduto2(e.target.value)}
+                      placeholder="Ex: Apple Watch Series 9 45mm, bateria 98%, com caixa"
+                      rows={3}
+                      className={inputCls + " resize-none"}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Valor de Avaliacao do 2º Usado (R$)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={trocaValor2}
+                      onChange={(e) => setTrocaValor2(formatPreco(e.target.value))}
+                      placeholder="Ex: 1.800"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <label className={labelCls}>Valor de Avaliacao do Usado (R$)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={trocaValor}
-                onChange={(e) => setTrocaValor(formatPreco(e.target.value))}
-                placeholder="Ex: 4.500"
-                className={inputCls}
-              />
+          )}
+        </div>
+
+        {/* Dados do cliente — pré-preenchimento opcional */}
+        <div className={`p-3 rounded-xl border ${incluirDadosCliente ? "border-[#E8740E] bg-[#FFF8F0]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={incluirDadosCliente}
+              onChange={(e) => { setIncluirDadosCliente(e.target.checked); if (!e.target.checked) limparDadosCliente(); }}
+              className="w-4 h-4 rounded accent-[#E8740E]"
+            />
+            <span className="text-sm font-semibold text-[#1D1D1F]">Deseja incluir dados do cliente?</span>
+          </label>
+          {incluirDadosCliente && (
+            <div className="space-y-3 mt-3">
+              <div>
+                <label className={labelCls}>Colar dados do cliente (formato WhatsApp)</label>
+                <textarea
+                  value={dadosClienteTexto}
+                  onChange={(e) => setDadosClienteTexto(e.target.value)}
+                  placeholder={"Cole o bloco do formulário antigo. Exemplo:\n\n✅ Nome completo: João da Silva\n✅ CPF: 000.000.000-00\n✅ E-mail: joao@email.com\n✅ Telefone: 21 99999-9999\n✅ CEP: 00000-000\n✅ Endereço: Rua Exemplo, 100\n✅ Bairro: Centro"}
+                  rows={6}
+                  className={inputCls + " resize-none font-mono text-xs"}
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={aplicarParse}
+                    disabled={!dadosClienteTexto.trim()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] disabled:opacity-40 transition-colors"
+                  >
+                    🧠 Extrair dados do texto
+                  </button>
+                  {(cliNome || cliCpf || cliEmail) && (
+                    <button
+                      type="button"
+                      onClick={limparDadosCliente}
+                      className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50"
+                    >
+                      🗑️ Limpar
+                    </button>
+                  )}
+                  {parseMsg && <span className="text-[11px] text-[#6E6E73]">{parseMsg}</span>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 relative">
+                  <label className={labelCls}>Nome completo</label>
+                  <input
+                    type="text"
+                    value={cliNome}
+                    onChange={(e) => { setCliNome(e.target.value); setShowCliSugs(true); }}
+                    onFocus={() => setShowCliSugs(true)}
+                    onBlur={() => setTimeout(() => setShowCliSugs(false), 200)}
+                    placeholder="Digite 2+ letras para buscar cliente cadastrado…"
+                    className={inputCls}
+                  />
+                  {showCliSugs && cliSugs.length > 0 && (
+                    <div className={`absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border shadow-lg ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+                      {cliSugs.map((c, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); aplicarCliente(c); }}
+                          className={`w-full text-left px-3 py-2 text-sm ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"} border-b ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"} last:border-0`}
+                        >
+                          <div className="font-semibold">{c.nome}</div>
+                          <div className="text-[11px] text-[#8E8E93] flex gap-2 flex-wrap">
+                            {c.telefone && <span>📞 {c.telefone}</span>}
+                            {c.cpf && <span>CPF {c.cpf}</span>}
+                            {c.email && <span>✉️ {c.email}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={labelCls}>CPF</label>
+                  <input type="text" value={cliCpf} onChange={(e) => setCliCpf(e.target.value)} placeholder="000.000.000-00" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Telefone</label>
+                  <input type="text" value={cliTelefone} onChange={(e) => setCliTelefone(e.target.value)} placeholder="(21) 99999-9999" className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>E-mail</label>
+                  <input type="email" value={cliEmail} onChange={(e) => setCliEmail(e.target.value)} placeholder="cliente@email.com" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>CEP</label>
+                  <input type="text" value={cliCep} onChange={(e) => setCliCep(e.target.value)} placeholder="00000-000" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Bairro</label>
+                  <input type="text" value={cliBairro} onChange={(e) => setCliBairro(e.target.value)} placeholder="Bairro" className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Endereço (rua)</label>
+                  <input type="text" value={cliEndereco} onChange={(e) => setCliEndereco(e.target.value)} placeholder="Rua exemplo" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Número</label>
+                  <input type="text" value={cliNumero} onChange={(e) => setCliNumero(e.target.value)} placeholder="100" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Complemento</label>
+                  <input type="text" value={cliComplemento} onChange={(e) => setCliComplemento(e.target.value)} placeholder="Apto, bloco..." className={inputCls} />
+                </div>
+              </div>
+              <p className="text-[10px] text-[#86868B]">Esses dados vão pré-preenchidos quando o cliente abrir o link — ele só precisa conferir e confirmar.</p>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className={showParcelas ? "" : "col-span-2"}>
             <label className={labelCls}>Forma de Pagamento</label>
-            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!["Cartao Credito", "Cartao Debito"].includes(e.target.value)) { setParcelas(""); setEntradaPix(""); } }} className={inputCls}>
+            <select value={forma} onChange={(e) => { setForma(e.target.value); if (!["Cartao Credito", "Cartao Debito", "Link de Pagamento"].includes(e.target.value)) { setParcelas(""); setEntradaPix(""); } }} className={inputCls}>
               <option value="">-- Opcional --</option>
               <option value="Pix">Pix</option>
               <option value="Cartao Credito">Cartao Credito</option>
@@ -474,10 +1622,10 @@ export default function GerarLinkPage() {
           </div>
           {showParcelas && (
             <div>
-              <label className={labelCls}>Parcelas</label>
+              <label className={labelCls}>Parcelas {forma === "Link de Pagamento" && <span className="text-xs text-[#86868B]">(máx. 12x)</span>}</label>
               <select value={parcelas} onChange={(e) => setParcelas(e.target.value)} className={inputCls}>
                 <option value="">--</option>
-                {Array.from({ length: 21 }, (_, i) => i + 1).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                {Array.from({ length: forma === "Link de Pagamento" ? 12 : 21 }, (_, i) => i + 1).map(n => <option key={n} value={String(n)}>{n}x</option>)}
               </select>
             </div>
           )}
@@ -569,11 +1717,17 @@ export default function GerarLinkPage() {
               )}
               {trocaNum > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-green-500">Troca (avaliação)</span>
+                  <span className="text-green-500">{trocaNum2 > 0 ? "1ª Troca (avaliação)" : "Troca (avaliação)"}</span>
                   <span className="font-semibold text-green-500">- R$ {trocaNum.toLocaleString("pt-BR")}</span>
                 </div>
               )}
-              {trocaNum > 0 && (
+              {trocaNum2 > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-green-500">2ª Troca (avaliação)</span>
+                  <span className="font-semibold text-green-500">- R$ {trocaNum2.toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+              {trocaTotal > 0 && (
                 <div className="flex justify-between">
                   <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Subtotal</span>
                   <span className={`font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>R$ {valorSemTaxa.toLocaleString("pt-BR")}</span>
@@ -592,7 +1746,7 @@ export default function GerarLinkPage() {
                     <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorParcelar.toLocaleString("pt-BR")}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-red-400">Taxa cartão ({taxa}%)</span>
+                    <span className="text-red-400">Taxa {forma === "Link de Pagamento" ? "link" : "cartão"} ({taxa}%)</span>
                     <span className="font-semibold text-red-400">+ R$ {(valorComTaxa - valorParcelar).toLocaleString("pt-BR")}</span>
                   </div>
                   <div className="flex justify-between">
@@ -608,6 +1762,24 @@ export default function GerarLinkPage() {
             </div>
           </div>
         )}
+
+        {/* Pedido já pago */}
+        <div>
+          <label className={labelCls}>Pagamento já efetuado? <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>(opcional)</span></label>
+          <div className="flex gap-2 mt-1">
+            {([["", "Não"], ["link", "Pago via Link"], ["pix", "Pago via PIX"]] as const).map(([val, label]) => (
+              <button key={val} onClick={() => setPagamentoPago(val)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition ${pagamentoPago === val ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#1C1C1E] text-[#98989D] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#86868B] border-[#D2D2D7] hover:border-[#E8740E]")}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {pagamentoPago && (
+            <p className={`text-xs mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+              No formulário o campo pagamento virá preenchido como "pedido pago no Instagram via {pagamentoPago === "link" ? "link" : "PIX"}"
+            </p>
+          )}
+        </div>
 
         <button
           onClick={gerarLink}
@@ -651,6 +1823,8 @@ export default function GerarLinkPage() {
             WhatsApp: {vendedorNome === "Andre" ? "Andre" : "Bianca"}
           </p>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -107,6 +107,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
+  const [usedColor, setUsedColor] = useState("");
   const [condition, setCondition] = useState<AnyConditionData>({
     screenScratch: "none", sideScratch: "none", peeling: "none",
     battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false,
@@ -117,6 +118,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   const [deviceType2, setDeviceType2] = useState<DeviceType>("iphone");
   const [usedModel2, setUsedModel2] = useState("");
   const [usedStorage2, setUsedStorage2] = useState("");
+  const [usedColor2, setUsedColor2] = useState("");
   const [condition2, setCondition2] = useState<AnyConditionData>({
     screenScratch: "none", sideScratch: "none", peeling: "none",
     battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false,
@@ -181,15 +183,15 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   }, [temaParam]);
 
   function handleStep1Complete(data: {
-    usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
+    usedModel: string; usedStorage: string; usedColor?: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
   }) {
     trackComplete(1);
     fbq("track", "ViewContent", { content_name: `${data.usedModel} ${data.usedStorage}`, content_category: "trade-in-usado" });
     if (step === 1) {
-      setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
+      setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage); setUsedColor(data.usedColor || "");
       setCondition(data.condition); setTradeInValue(data.tradeInValue); setStep(1.5);
     } else {
-      setDeviceType2(data.deviceType); setUsedModel2(data.usedModel); setUsedStorage2(data.usedStorage);
+      setDeviceType2(data.deviceType); setUsedModel2(data.usedModel); setUsedStorage2(data.usedStorage); setUsedColor2(data.usedColor || "");
       setCondition2(data.condition); setTradeInValue2(data.tradeInValue); setHasSecondDevice(true); setStep(2);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -396,8 +398,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 2 && (
-            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig}
-              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined}
+            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig}
+              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
             />
@@ -413,10 +415,10 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           {step === 4 && (
             <StepQuote
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
-              usedModel={usedModel} usedStorage={usedStorage} condition={condition} deviceType={deviceType}
+              usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
               tradeInValue={totalTradeInValue}
               allProducts={products}
-              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined}
+              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}

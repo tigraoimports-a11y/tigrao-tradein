@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 // Taxas para orçamento cliente (embutir no preço parcelado)
 const TAXAS_PARCELA: Record<number, number> = {
@@ -181,7 +182,7 @@ export default function OrcamentoPage() {
   // Extrair info relevante do obs: garantia apple
   const cleanSemiDetails = (item: SeminovoEstoque): string => {
     const parts: string[] = [];
-    if (item.cor) parts.push(item.cor);
+    if (item.cor) parts.push(corParaPT(item.cor));
     if (item.bateria) parts.push(`🔋${item.bateria}%`);
     // Extrair garantia do obs
     if (item.observacao) {
@@ -460,7 +461,7 @@ export default function OrcamentoPage() {
                   <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecionado</p>
                   <p className={`text-sm font-bold mt-0.5 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{cleanSemiNome(semiSel.produto)}</p>
                   <div className="flex flex-wrap gap-3 mt-1 text-xs">
-                    {semiSel.cor && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor: {semiSel.cor}</span>}
+                    {semiSel.cor && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Cor: {corParaPT(semiSel.cor)}</span>}
                     {semiSel.bateria && <span className="text-green-500">🔋 {semiSel.bateria}%</span>}
                     {cleanSemiDetails(semiSel) && <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>{cleanSemiDetails(semiSel)}</span>}
                     <span className="text-[#E8740E] font-semibold">Custo: R$ {semiSel.custo_unitario?.toLocaleString("pt-BR")}</span>

@@ -166,6 +166,9 @@ export async function POST(req: NextRequest) {
     .delete()
     .eq("id", produto_saida_id);
 
+  // Vincular o produto novo à troca (para exibir origem na busca/SuperSearch)
+  await supabase.from("estoque").update({ troca_id: troca.id }).eq("id", novoProd.id);
+
   if (errDel) {
     // Rollback parcial
     await supabase.from("trocas").delete().eq("id", troca.id);

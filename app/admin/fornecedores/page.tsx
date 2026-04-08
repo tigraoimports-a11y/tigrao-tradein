@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Fornecedor {
@@ -28,6 +29,7 @@ export default function FornecedoresPage() {
   }, [password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   const handleSubmit = async () => {
     if (!form.nome.trim()) { setMsg("Nome obrigatorio"); return; }

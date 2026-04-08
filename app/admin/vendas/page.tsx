@@ -8,6 +8,7 @@ import { useTabParam } from "@/lib/useTabParam";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
+import { corParaPT } from "@/lib/cor-pt";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 
@@ -44,6 +45,34 @@ export default function VendasPage() {
   const [duplicadoInfo, setDuplicadoInfo] = useState<{ data: string; cliente: string } | null>(null);
   const [showClienteSuggestions, setShowClienteSuggestions] = useState(false);
 
+  // Card title overrides (sincronizado com a página de Estoque)
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/estoque-settings?key=card_title_overrides", { headers: { "x-admin-password": password }, cache: "no-store" })
+      .then(r => r.json())
+      .then(j => {
+        if (j.value && typeof j.value === "object") {
+          setCardTitleOverrides(prev => ({ ...(j.value as Record<string, string>), ...prev }));
+          try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(j.value)); } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [password]);
+  const applyCardTitleOverride = (modelo: string): string => {
+    if (cardTitleOverrides[modelo]) return cardTitleOverrides[modelo].toUpperCase();
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return modelo;
+  };
+
   // Client history state
   const [clienteHistorico, setClienteHistorico] = useState<{
     nome: string;
@@ -70,6 +99,8 @@ export default function VendasPage() {
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
+  // Pode ver histórico e vendas pendentes (André, Nicolas e admins)
+  const podeVerHistorico = isAdmin || (user?.permissoes?.includes("vendas_ver") ?? false);
 
   const [msg, setMsg] = useState("");
   const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; cnpj: string; email: string; endereco: string; pessoa: string; origem: string; tipo: string } | null>(null);
@@ -93,6 +124,8 @@ export default function VendasPage() {
     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
     serial_no: "", imei: "",
     cep: "", bairro: "", cidade: "", uf: "",
+    // Atacado: frete/entrega cobrado a parte
+    frete_valor: "", frete_recebido: false as boolean,
   });
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -287,12 +320,22 @@ export default function VendasPage() {
   const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
   const [trocaRow2, setTrocaRow2] = useState<ProdutoRowState>(() => createEmptyProdutoRow());
 
-  // Sync trocaRow → form.troca_produto / troca_cor / troca_categoria
+  // Sync trocaRow → form (apenas produto/cor/categoria; serial/imei/grade/caixa têm inputs próprios no form)
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto: trocaRow.produto, troca_cor: trocaRow.cor, troca_categoria: trocaRow.categoria }));
+    setForm(f => ({
+      ...f,
+      troca_produto: trocaRow.produto || f.troca_produto,
+      troca_cor: trocaRow.cor || f.troca_cor,
+      troca_categoria: trocaRow.categoria || f.troca_categoria,
+    }));
   }, [trocaRow.produto, trocaRow.cor, trocaRow.categoria]);
   useEffect(() => {
-    setForm(f => ({ ...f, troca_produto2: trocaRow2.produto, troca_cor2: trocaRow2.cor, troca_categoria2: trocaRow2.categoria }));
+    setForm(f => ({
+      ...f,
+      troca_produto2: trocaRow2.produto || f.troca_produto2,
+      troca_cor2: trocaRow2.cor || f.troca_cor2,
+      troca_categoria2: trocaRow2.categoria || f.troca_categoria2,
+    }));
   }, [trocaRow2.produto, trocaRow2.cor, trocaRow2.categoria]);
 
   // Fornecedores
@@ -531,10 +574,11 @@ export default function VendasPage() {
 
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
-    if (isAdmin) { setVendasUnlocked(true); return; }
+    const temPermissaoVendas = user?.permissoes?.some(p => p === "vendas_ver" || p === "vendas_registrar");
+    if (isAdmin || temPermissaoVendas) { setVendasUnlocked(true); return; }
     const unlocked = sessionStorage.getItem("vendas_unlocked");
     if (unlocked === "true") setVendasUnlocked(true);
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   // Keep offline queue count in sync
   useEffect(() => {
@@ -589,6 +633,36 @@ export default function VendasPage() {
 
     syncQueue();
   }, [isOnline, password, fetchVendas, fetchEstoque]);
+
+  // Recalcular preco_vendido automaticamente quando 2o cartão (ou qualquer parte do pagamento) mudar
+  // IMPORTANTE: precisa estar ANTES do early return abaixo (regras dos hooks)
+  useEffect(() => {
+    const compAltVal = parseFloat(form.comp_alt) || 0;
+    if (compAltVal <= 0) return;
+    const compVal = parseFloat(form.valor_comprovante_input) || 0;
+    const pix = parseFloat(form.entrada_pix) || 0;
+    const esp = parseFloat(form.entrada_especie) || 0;
+    const trc1 = parseFloat(form.produto_na_troca) || 0;
+    const trc2 = parseFloat(form.produto_na_troca2) || 0;
+    const trc = trc1 + trc2;
+    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+    const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
+    let liqPrinc = 0;
+    if (compVal > 0) {
+      const tx = (form.forma === "CARTAO" || form.forma === "LINK")
+        ? getTaxa(form.forma === "LINK" ? "MERCADO_PAGO" : (form.banco || "ITAU"), form.bandeira || null, parseInt(form.qnt_parcelas) || 0, "CARTAO")
+        : form.forma === "DEBITO" ? 0.75 : 0;
+      liqPrinc = tx > 0 ? calcularLiquido(compVal, tx) : compVal;
+    }
+    const newVendido = String(Math.round(liqPrinc + liqAlt + pix + esp + trc));
+    if (produtosCarrinho.length === 0) {
+      setForm(f => f.preco_vendido === newVendido ? f : { ...f, preco_vendido: newVendido });
+    } else if (produtosCarrinho.length === 1) {
+      setProdutosCarrinho(prev => prev.length === 1 && prev[0].preco_vendido !== newVendido
+        ? [{ ...prev[0], preco_vendido: newVendido }]
+        : prev);
+    }
+  }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
 
   if (!vendasUnlocked) {
     return (
@@ -685,6 +759,10 @@ export default function VendasPage() {
     const curForma = form.forma;
     const pix = parseFloat(overrides.pix ?? form.entrada_pix) || 0;
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
+    // Segundo cartão (comp_alt) — sempre incluído quando preenchido
+    const compAltVal = parseFloat(form.comp_alt) || 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+    const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
     const trcForm2 = parseFloat(overrides.troca2 ?? form.produto_na_troca2) || 0;
@@ -693,13 +771,16 @@ export default function VendasPage() {
 
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      result = String(Math.round(compVal + esp + trc));
+      result = String(Math.round(compVal + esp + trc + liqAlt));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      result = String(Math.round(liqCartao + pix + esp + trc));
+      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt));
     } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
-      const total = pix + esp + trc + compVal;
+      const total = pix + esp + trc + compVal + liqAlt;
       if (total > 0) result = String(Math.round(total));
+    } else if (liqAlt > 0) {
+      // Apenas 2o cartão preenchido
+      result = String(Math.round(pix + esp + trc + liqAlt));
     }
 
     // Se tem carrinho com 2+ produtos, distribuir automaticamente
@@ -738,7 +819,8 @@ export default function VendasPage() {
   };
 
   // Resumo financeiro
-  const temTroca = valorTroca > 0;
+  // temTroca: mostra o form de troca se tem valor > 0 OU se já preencheu produto da troca OU se é UPGRADE
+  const temTroca = valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto || form.tipo === "UPGRADE";
   const temEntradaPix = entradaPix > 0;
   const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO";
@@ -762,7 +844,8 @@ export default function VendasPage() {
     const pValorTroca1 = parseFloat(prodFields.produto_na_troca) || 0;
     const pValorTroca2 = parseFloat(prodFields.produto_na_troca2) || 0;
     const pValorTroca = pValorTroca1 + pValorTroca2;
-    const pTemTroca = pValorTroca > 0;
+    // pTemTroca: considera valor OU produto preenchido (vendas pendentes sem valor ainda)
+    const pTemTroca = pValorTroca > 0 || !!prodFields.troca_produto || !!prodFields.troca_produto2;
     const gTemEntradaPix = gEntradaPix > 0;
 
     const gTaxa = gForma === "CARTAO"
@@ -802,7 +885,7 @@ export default function VendasPage() {
       qnt_parcelas: gParcelas || null,
       bandeira: gBandeira || null,
       valor_comprovante: gValorComprovanteInput || null,
-      produto_na_troca: pTemTroca ? String(pValorTroca) : null,
+      produto_na_troca: pValorTroca1 > 0 ? String(pValorTroca1) : (prodFields.troca_produto ? "0" : null),
       entrada_pix: gEntradaPix,
       banco_pix: gTemEntradaPix ? (gBancoPix || "ITAU") : null,
       entrada_especie: gEntradaEspecie,
@@ -839,13 +922,32 @@ export default function VendasPage() {
       troca_cor: prodFields.troca_cor || null,
       troca_bateria: prodFields.troca_bateria || null,
       troca_obs: prodFields.troca_obs || null,
+      troca_categoria: (prodFields.troca_categoria as string) || null,
+      troca_serial: prodFields.troca_serial || null,
+      troca_imei: prodFields.troca_imei || null,
+      troca_grade: prodFields.troca_grade || null,
+      troca_caixa: prodFields.troca_caixa || null,
+      troca_cabo: prodFields.troca_cabo || null,
+      troca_fonte: prodFields.troca_fonte || null,
+      troca_pulseira: prodFields.troca_pulseira || null,
+      troca_ciclos: prodFields.troca_ciclos || null,
+      troca_garantia: prodFields.troca_garantia || null,
       troca_produto2: prodFields.troca_produto2 || null,
       troca_cor2: prodFields.troca_cor2 || null,
       troca_bateria2: prodFields.troca_bateria2 || null,
       troca_obs2: prodFields.troca_obs2 || null,
-      produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : null,
+      troca_categoria2: (prodFields.troca_categoria2 as string) || null,
+      troca_serial2: prodFields.troca_serial2 || null,
+      troca_imei2: prodFields.troca_imei2 || null,
+      troca_pulseira2: prodFields.troca_pulseira2 || null,
+      troca_ciclos2: prodFields.troca_ciclos2 || null,
+      troca_garantia2: prodFields.troca_garantia2 || null,
+      produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
       status_pagamento: "AGUARDANDO",
       vendedor: user?.nome || null,
+      // Entrega atacado (cobrada à parte)
+      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
+      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
     };
 
     if (prodFields._estoqueId) {
@@ -855,7 +957,7 @@ export default function VendasPage() {
     // Helper: build observacao with tags from checkboxes
     const buildSeminovoObs = (obs: string, grade: string, caixa: string, cabo: string, fonte: string, pulseira: string, ciclos: string) => {
       let result = obs || "";
-      if (grade) result += ` [GRADE_${grade === "A+" ? "APLUS" : grade}]`;
+      if (grade) result += ` [GRADE_${grade}]`;
       if (caixa === "SIM") result += " [COM_CAIXA]";
       if (cabo === "SIM") result += " [COM_CABO]";
       if (fonte === "SIM") result += " [COM_FONTE]";
@@ -864,7 +966,7 @@ export default function VendasPage() {
       return result.trim() || null;
     };
 
-    if (pTemTroca && prodFields.troca_produto) {
+    if (prodFields.troca_produto || pValorTroca1 > 0) {
       payload._seminovo = {
         produto: prodFields.troca_produto,
         valor: pValorTroca1,
@@ -878,7 +980,7 @@ export default function VendasPage() {
       };
     }
 
-    if (pValorTroca2 > 0 && prodFields.troca_produto2) {
+    if (prodFields.troca_produto2 || pValorTroca2 > 0) {
       payload._seminovo2 = {
         produto: prodFields.troca_produto2,
         valor: pValorTroca2,
@@ -907,29 +1009,31 @@ export default function VendasPage() {
     _estoqueId: estoqueId,
     _catSel: catSel,
     _produtoManual: produtoManual,
-    produto_na_troca: form.produto_na_troca,
-    troca_produto: form.troca_produto,
-    troca_cor: form.troca_cor,
-    troca_categoria: form.troca_categoria,
+    // Lê direto de trocaRow/trocaRow2 (fonte de verdade do ProdutoSpecFields),
+    // com fallback para form.* quando preenchido fora do componente
+    produto_na_troca: form.produto_na_troca || trocaRow.custo_unitario || "",
+    troca_produto: trocaRow.produto || form.troca_produto,
+    troca_cor: trocaRow.cor || form.troca_cor,
+    troca_categoria: trocaRow.categoria || form.troca_categoria,
     troca_bateria: form.troca_bateria,
     troca_obs: form.troca_obs,
-    troca_grade: form.troca_grade,
-    troca_caixa: form.troca_caixa,
+    troca_grade: trocaRow.grade || form.troca_grade,
+    troca_caixa: trocaRow.caixa ? "SIM" : form.troca_caixa,
     troca_cabo: form.troca_cabo,
     troca_fonte: form.troca_fonte,
     troca_pulseira: form.troca_pulseira,
     troca_ciclos: form.troca_ciclos,
-    troca_serial: form.troca_serial,
-    troca_imei: form.troca_imei,
+    troca_serial: trocaRow.serial_no || form.troca_serial,
+    troca_imei: trocaRow.imei || form.troca_imei,
     troca_garantia: form.troca_garantia,
-    produto_na_troca2: form.produto_na_troca2,
-    troca_produto2: form.troca_produto2,
-    troca_cor2: form.troca_cor2,
-    troca_categoria2: form.troca_categoria2,
+    produto_na_troca2: form.produto_na_troca2 || trocaRow2.custo_unitario || "",
+    troca_produto2: trocaRow2.produto || form.troca_produto2,
+    troca_cor2: trocaRow2.cor || form.troca_cor2,
+    troca_categoria2: trocaRow2.categoria || form.troca_categoria2,
     troca_bateria2: form.troca_bateria2,
     troca_obs2: form.troca_obs2,
-    troca_serial2: form.troca_serial2,
-    troca_imei2: form.troca_imei2,
+    troca_serial2: trocaRow2.serial_no || form.troca_serial2,
+    troca_imei2: trocaRow2.imei || form.troca_imei2,
     troca_garantia2: form.troca_garantia2,
     troca_pulseira2: form.troca_pulseira2,
     troca_ciclos2: form.troca_ciclos2,
@@ -1007,24 +1111,21 @@ export default function VendasPage() {
       return;
     }
 
-    // Collect all products: cart items + current form (if has product and not already in cart)
+    // Collect all products: cart items + current form
+    // Permite venda pendente sem produto da compra definido ainda (só troca/cliente/pagamento)
     const allProducts: ProdutoCarrinho[] = [...produtosCarrinho];
-    if (form.produto && produtosCarrinho.length === 0) {
-      // Modo simples: só 1 produto no form
+    const hasFormContent = !!(form.produto || form.troca_produto || trocaRow.produto || parseFloat(form.produto_na_troca) > 0);
+    if (hasFormContent && produtosCarrinho.length === 0) {
       allProducts.push(getCurrentProductFields());
-    } else if (form.produto && produtosCarrinho.length > 0) {
-      // Modo carrinho: form.produto pode ter valor residual da edição
-      // Só adiciona se o usuário clicou em "Adicionar ao Carrinho" (nesse caso já estaria no carrinho)
-      // Não duplicar — ignorar form.produto quando já tem itens no carrinho
     }
 
     if (allProducts.length === 0) {
-      setMsg("Adicione pelo menos um produto");
+      setMsg("Preencha ao menos o produto da compra, da troca ou adicione ao carrinho");
       return;
     }
 
-    // Validação: comprovante obrigatório para vendas no CARTÃO
-    if ((form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
+    // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico)
+    if (podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
       setMsg("⚠️ Preencha o VALOR DO COMPROVANTE para vendas no cartão/débito");
       return;
     }
@@ -1047,6 +1148,29 @@ export default function VendasPage() {
     const payloads: Record<string, unknown>[] = [];
     for (const prod of allProducts) {
       payloads.push(buildPayload(prod));
+    }
+    // Single-product: se tem segundo cartão, SEMPRE recalcular preco_vendido como
+    // líquido(cartão principal) + líquido(2o cartão) + pix + espécie + troca
+    if (payloads.length === 1) {
+      const gCompAlt = parseFloat(form.comp_alt) || 0;
+      if (gCompAlt > 0) {
+        const gCompPrinc = Number(payloads[0].valor_comprovante || 0);
+        const gEntradaPix = parseFloat(form.entrada_pix) || 0;
+        const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
+        const gTroca = parseFloat(String(payloads[0].produto_na_troca || "0")) || 0;
+        const gForma = String(payloads[0].forma || form.forma);
+        const gBanco = gForma === "LINK" ? "MERCADO_PAGO" : String(payloads[0].banco || form.banco);
+        const gParcelas = parseInt(form.qnt_parcelas) || 0;
+        const gBandeira = form.bandeira || null;
+        const gTaxa = (gForma === "CARTAO" || gForma === "LINK")
+          ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
+          : gForma === "DEBITO" ? 0.75
+          : 0;
+        const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
+        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+        const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
+        payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
+      }
     }
     if (payloads.length > 1) {
       const comprovanteTotal = Number(payloads[0]?.valor_comprovante || 0);
@@ -1278,6 +1402,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
+        frete_valor: "", frete_recebido: false,
       });
       setCatSel("");
       setEstoqueId("");
@@ -1542,6 +1667,8 @@ export default function VendasPage() {
       bairro: "",
       cidade: "",
       uf: "",
+      frete_valor: "",
+      frete_recebido: false,
     });
     setCatSel("");
     setEstoqueId("");
@@ -1604,11 +1731,11 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]" },
-            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500" },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500" },
-            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600" },
-          ] as const).map((t) => (
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", restrito: false },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", restrito: true },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", restrito: false },
+            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", restrito: true },
+          ] as const).filter(t => !t.restrito || podeVerHistorico).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
@@ -1753,6 +1880,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
@@ -1881,6 +2009,37 @@ export default function VendasPage() {
           {form.tipo === "ATACADO" ? (
             <div className="grid grid-cols-1 gap-4">
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
+
+              {/* Entrega cobrada à parte */}
+              <div className="p-3 rounded-xl border border-[#E0E0E5] bg-[#FAFAFA]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Entrega (cobrada à parte)</span>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
+                    <input
+                      type="checkbox"
+                      checked={!!form.frete_recebido}
+                      onChange={(e) => set("frete_recebido", e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#E8740E]"
+                    />
+                    Já recebido
+                  </label>
+                </div>
+                <div>
+                  <p className={labelCls}>Valor do frete (R$)</p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.frete_valor}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : "");
+                    }}
+                    placeholder="Ex: 150 — deixe vazio se não há entrega"
+                    className={inputCls}
+                  />
+                  <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -2181,7 +2340,7 @@ export default function VendasPage() {
                           <div key={modeloBase} className={`border-b last:border-0 ${dm ? "border-[#3A3A3C]" : "border-[#F5F5F7]"}`}>
                             {/* Header: modelo + memória */}
                             <div className={`px-4 py-2.5 flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{modeloBase}</span>
+                              <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{applyCardTitleOverride(modeloBase)}</span>
                               <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{totalQnt} un.</span>
                             </div>
                             {/* Cores como chips */}
@@ -2199,7 +2358,7 @@ export default function VendasPage() {
                                     >
                                       <span className="flex items-center gap-2">
                                         <span className="text-[10px] text-[#86868B]">{isCorExpanded ? "▼" : "▶"}</span>
-                                        <span className="font-semibold">{cor}</span>
+                                        <span className="font-semibold">{corParaPT(cor)}</span>
                                       </span>
                                       <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#C7C7CC]"}`}>{corQnt} un.</span>
                                     </button>
@@ -2299,6 +2458,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -2337,14 +2497,21 @@ export default function VendasPage() {
 
           {/* Row 3: Valores */}
           <div className="grid grid-cols-2 gap-4">
-            <div><p className={labelCls}>Custo (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.custo)} onChange={(e) => setMoney("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
             <div><p className={labelCls}>Preco Vendido Liquido (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.preco_vendido)} onChange={(e) => setMoney("preco_vendido", e.target.value)} placeholder="Valor que voce recebe" className={inputCls} /></div>
+            <div><p className={labelCls}>Custo (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.custo)} onChange={(e) => setMoney("custo", e.target.value)} placeholder="Quanto voce pagou" className={inputCls} /></div>
           </div>
 
-          {/* FORMA DE PAGAMENTO — inline only for single product (no cart) */}
+          {/* FORMA DE PAGAMENTO */}
           {produtosCarrinho.length === 0 && (
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-            <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-bold text-[#1D1D1F]">Como o cliente pagou?</p>
+              {!podeVerHistorico && (
+                <span className="text-xs bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-lg">
+                  Deixe em branco → André ou Nicolas completam depois
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Forma principal</p><select value={form.forma} onChange={(e) => set("forma", e.target.value)} className={selectCls}>
@@ -2444,15 +2611,22 @@ export default function VendasPage() {
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
                       <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
                         <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
-                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
+                        {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
+                          const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
+                          const compAltDisp = parseFloat(form.comp_alt) || 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+                          const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
+                          return (
                           <>
-                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa))}</strong></span>
+                            <span>Liquido cartao: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(liqPrincDisp)}</strong></span>
+                            {liqAltDisp > 0 && <span>+ 2o cartao: <strong>{fmt(liqAltDisp)}</strong></span>}
                             {entradaPix > 0 && <span>+ PIX: <strong>{fmt(entradaPix)}</strong></span>}
                             {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                             {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
-                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa) + entradaPix + entradaEspecie + valorTroca))}</strong></span>
+                            <span>= Vendido: <strong className="text-green-600">{fmt(Math.round(liqPrincDisp + liqAltDisp + entradaPix + entradaEspecie + valorTroca))}</strong></span>
                           </>
-                        )}
+                          );
+                        })()}
                       </div>
                     </>
                   )}
@@ -2493,6 +2667,23 @@ export default function VendasPage() {
                 </>
               )}
             </div>
+
+            {/* Destaque do valor na forma principal quando é PIX ou ESPECIE
+                 (nesses casos não existe campo próprio — o valor sai do Preço Vendido Líquido
+                 menos as entradas mistas). Deixa explícito pra vendedora não ficar perdida. */}
+            {(form.forma === "ESPECIE" || form.forma === "PIX") && preco > 0 && (
+              <div className="mt-3 rounded-xl border-2 border-[#E8740E]/40 bg-[#FFF7ED] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#E8740E]">
+                    {form.forma === "ESPECIE" ? "💵 Valor em Espécie (Dinheiro)" : "💸 Valor em PIX"}
+                  </p>
+                  <p className="text-xl font-bold text-[#1D1D1F]">R$ {fmt(Math.max(0, valorCartao))}</p>
+                </div>
+                <p className="text-[10px] text-[#86868B] max-w-[280px] text-right">
+                  Calculado do Preço Vendido Líquido menos entradas mistas e troca. Pra mudar, ajuste o &quot;Preço Vendido Líquido&quot; acima.
+                </p>
+              </div>
+            )}
 
             {/* Pagamento misto — combinações extras */}
             {form.forma && form.forma !== "FIADO" && (
@@ -2759,6 +2950,21 @@ export default function VendasPage() {
                 )}
               </div>
 
+              {/* Destaque do valor na forma principal quando é PIX ou ESPECIE — modo carrinho */}
+              {(form.forma === "ESPECIE" || form.forma === "PIX") && preco > 0 && (
+                <div className="mt-3 rounded-xl border-2 border-[#E8740E]/40 bg-[#FFF7ED] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#E8740E]">
+                      {form.forma === "ESPECIE" ? "💵 Valor em Espécie (Dinheiro)" : "💸 Valor em PIX"}
+                    </p>
+                    <p className="text-xl font-bold text-[#1D1D1F]">R$ {fmt(Math.max(0, valorCartao))}</p>
+                  </div>
+                  <p className="text-[10px] text-[#86868B] max-w-[280px] text-right">
+                    Calculado do Preço Vendido Líquido menos entradas mistas e troca.
+                  </p>
+                </div>
+              )}
+
               {/* Pagamento misto — cart mode */}
               {form.forma && form.forma !== "FIADO" && (
               <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
@@ -2855,7 +3061,7 @@ export default function VendasPage() {
           </div>
           )}
 
-          {/* PRODUTO NA TROCA — sempre junto ao produto atual (antes do botão Adicionar) */}
+          {/* PRODUTO NA TROCA */}
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
             <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -2882,7 +3088,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>Bateria (%)</p><input type="number" value={form.troca_bateria} onChange={(e) => set("troca_bateria", e.target.value)} placeholder="Ex: 87" className={inputCls} /></div>
                   <div><p className={labelCls}>Garantia</p><input value={form.troca_garantia || ""} onChange={(e) => set("troca_garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
                   <div><p className={labelCls}>Grade</p><select value={form.troca_grade} onChange={(e) => set("troca_grade", e.target.value)} className={selectCls}>
-                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
+                    <option value="">Selecionar</option><option value="A+">A+ (Impecável)</option><option value="A">A (Ótimo)</option><option value="AB">AB (Muito bom)</option><option value="B">B (Bom)</option><option value="C">C (Marcas visíveis)</option>
                   </select></div>
                   {(() => {
                     const tCat = form.troca_categoria || "";
@@ -3014,10 +3220,11 @@ export default function VendasPage() {
             const gTrocaProds = allProds.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0), 0);
             const gTroca = gTrocaProds || valorTroca;
             const somaFormas = gComprovante + gCompAltConf + gPix + gEspecie + gTroca;
-            // Only check conferencia if at least one payment field is filled
-            const temConferencia = somaFormas > 0 && totalVendido > 0;
-            const diffConferencia = Math.abs(somaFormas - totalVendido);
-            const confOk = diffConferencia <= Math.max(totalVendido * 0.02, 50); // 2% tolerance or R$50
+            // Conferencia: somaFormas (gross) deve ser >= receitaReal (líquido). Comparar com receitaReal.
+            const temConferencia = somaFormas > 0 && receitaReal > 0;
+            const diffConferencia = Math.abs(somaFormas - receitaReal);
+            // Tolerância maior para acomodar taxas de cartão (até 25% do gross)
+            const confOk = diffConferencia <= Math.max(somaFormas * 0.25, 50);
 
             return (
               <div className="p-4 bg-gradient-to-r from-[#1E1208] to-[#2A1A0F] rounded-xl text-white">
@@ -3061,7 +3268,7 @@ export default function VendasPage() {
                 )}
                 {temConferencia && (
                   <div className={`mt-2 pt-2 border-t border-white/10 text-xs text-center ${confOk ? "text-green-400" : "text-yellow-400"}`}>
-                    {confOk ? "Conferencia OK" : `Conferencia: soma formas (${fmt(somaFormas)}) != total vendido (${fmt(totalVendido)}) — diferenca: ${fmt(diffConferencia)}`}
+                    {confOk ? "Conferencia OK" : `Conferencia: soma formas (${fmt(somaFormas)}) vs receita liquida (${fmt(receitaReal)}) — diferenca: ${fmt(diffConferencia)}`}
                   </div>
                 )}
               </div>
@@ -3163,24 +3370,33 @@ export default function VendasPage() {
                       {tab === "andamento" && (
                         <button
                           disabled={finalizandoLote}
-                          onClick={async () => {
-                            if (!confirm(`Finalizar ${selecionadas.size} venda(s) selecionada(s)?`)) return;
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ids = Array.from(selecionadas);
+                            if (ids.length === 0) return;
+                            if (!confirm(`Finalizar ${ids.length} venda(s) selecionada(s)?`)) return;
                             setFinalizandoLote(true);
-                            let ok = 0;
-                            for (const id of selecionadas) {
+                            let ok = 0, fail = 0;
+                            const erros: string[] = [];
+                            for (const id of ids) {
                               try {
-                                await fetch("/api/vendas", {
+                                const res = await fetch("/api/vendas", {
                                   method: "PATCH",
-                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                   body: JSON.stringify({ id, status_pagamento: "FINALIZADO" }),
                                 });
-                                ok++;
-                              } catch {}
+                                if (res.ok) ok++;
+                                else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                              } catch (err) {
+                                fail++;
+                                erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                              }
                             }
-                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
+                            if (erros.length) console.error("[Finalizar Lote] erros:", erros);
+                            setVendas(prev => prev.map(v => ids.includes(v.id) ? { ...v, status_pagamento: "FINALIZADO" } : v));
                             setSelecionadas(new Set());
                             setFinalizandoLote(false);
-                            setMsg(`${ok} venda(s) finalizada(s) com sucesso!`);
+                            setMsg(fail > 0 ? `${ok} finalizada(s), ${fail} falha(s) — veja console` : `${ok} venda(s) finalizada(s)!`);
                           }}
                           className="px-4 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors"
                         >
@@ -3190,24 +3406,33 @@ export default function VendasPage() {
                       {/* Cancelar/Excluir selecionadas — disponível em todas as tabs */}
                       <button
                         disabled={finalizandoLote}
-                        onClick={async () => {
-                          if (!confirm(`⚠️ EXCLUIR ${selecionadas.size} venda(s) selecionada(s)?\n\nIsso vai remover permanentemente do sistema e devolver produtos ao estoque.`)) return;
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const ids = Array.from(selecionadas);
+                          if (ids.length === 0) return;
+                          if (!confirm(`⚠️ EXCLUIR ${ids.length} venda(s) selecionada(s)?\n\nIsso vai remover permanentemente do sistema e devolver produtos ao estoque.`)) return;
                           setFinalizandoLote(true);
-                          let ok = 0;
-                          for (const id of selecionadas) {
+                          let ok = 0, fail = 0;
+                          const erros: string[] = [];
+                          for (const id of ids) {
                             try {
                               const res = await fetch("/api/vendas", {
                                 method: "DELETE",
-                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                 body: JSON.stringify({ id }),
                               });
                               if (res.ok) ok++;
-                            } catch {}
+                              else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                            } catch (err) {
+                              fail++;
+                              erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                            }
                           }
-                          setVendas(prev => prev.filter(v => !selecionadas.has(v.id)));
+                          if (erros.length) console.error("[Excluir Lote] erros:", erros);
+                          setVendas(prev => prev.filter(v => !ids.includes(v.id)));
                           setSelecionadas(new Set());
                           setFinalizandoLote(false);
-                          setMsg(`${ok} venda(s) excluída(s) com sucesso!`);
+                          setMsg(fail > 0 ? `${ok} excluída(s), ${fail} falha(s) — veja console` : `${ok} venda(s) excluída(s)!`);
                         }}
                         className="px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
                       >
@@ -3216,24 +3441,33 @@ export default function VendasPage() {
                       {(tab === "finalizadas" || tab === "hoje") && (
                         <button
                           disabled={finalizandoLote}
-                          onClick={async () => {
-                            if (!confirm(`Mover ${selecionadas.size} venda(s) para Pendentes?`)) return;
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const ids = Array.from(selecionadas);
+                            if (ids.length === 0) return;
+                            if (!confirm(`Mover ${ids.length} venda(s) para Pendentes?`)) return;
                             setFinalizandoLote(true);
-                            let ok = 0;
-                            for (const id of selecionadas) {
+                            let ok = 0, fail = 0;
+                            const erros: string[] = [];
+                            for (const id of ids) {
                               try {
-                                await fetch("/api/vendas", {
+                                const res = await fetch("/api/vendas", {
                                   method: "PATCH",
-                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": user?.nome || "admin" },
+                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
                                   body: JSON.stringify({ id, status_pagamento: "AGUARDANDO" }),
                                 });
-                                ok++;
-                              } catch {}
+                                if (res.ok) ok++;
+                                else { fail++; const t = await res.text().catch(() => ""); erros.push(`${id}: HTTP ${res.status} ${t.slice(0, 100)}`); }
+                              } catch (err) {
+                                fail++;
+                                erros.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+                              }
                             }
-                            setVendas(prev => prev.map(v => selecionadas.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+                            if (erros.length) console.error("[Mover Lote] erros:", erros);
+                            setVendas(prev => prev.map(v => ids.includes(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
                             setSelecionadas(new Set());
                             setFinalizandoLote(false);
-                            setMsg(`${ok} venda(s) movida(s) para Pendentes!`);
+                            setMsg(fail > 0 ? `${ok} movida(s), ${fail} falha(s) — veja console` : `${ok} venda(s) movida(s) para Pendentes!`);
                           }}
                           className="px-4 py-1.5 rounded-lg bg-yellow-500 text-white font-semibold hover:bg-yellow-600 transition-colors"
                         >
@@ -3308,7 +3542,7 @@ export default function VendasPage() {
                             </thead>
                             <tbody>
                               {vendasDoDia.map((v) => {
-                        const temTrocaV = v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null";
+                        const temTrocaV = (v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null") || !!v.troca_produto || !!(v as unknown as Record<string, string>).troca_produto2;
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
                         const isExpanded = expandedId === v.id;
@@ -3439,6 +3673,11 @@ export default function VendasPage() {
                                                   entrada_pix: parseFloat(ef.entrada_pix) || 0,
                                                   banco_pix: ef.banco_pix || null,
                                                   produto_na_troca: (parseFloat(ef.produto_na_troca) || 0) > 0 ? ef.produto_na_troca : null,
+                                                  troca_produto: ef.troca_produto || null,
+                                                  troca_cor: ef.troca_cor || null,
+                                                  troca_bateria: ef.troca_bateria ? parseInt(ef.troca_bateria) : null,
+                                                  troca_obs: ef.troca_obs || null,
+                                                  troca_serial: ef.troca_serial || null,
                                                   valor_comprovante: parseFloat(ef.valor_comprovante) || null,
                                                   banco_alt: ef.banco_alt || null,
                                                   parc_alt: parseInt(ef.parc_alt) || null,
@@ -3571,6 +3810,34 @@ export default function VendasPage() {
                                             <input type="number" value={ef.produto_na_troca} onChange={e => setEf("produto_na_troca", e.target.value)} className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
                                           </label>
                                         </div>
+                                        {/* Detalhes do produto na troca — mostra se tem valor OU nome OU se é upgrade */}
+                                        {((parseFloat(ef.produto_na_troca) || 0) > 0 || !!ef.troca_produto || v.tipo === "UPGRADE") && (
+                                          <div className={`mt-3 p-3 rounded-lg border ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8E8ED] bg-[#F9F9FB]"}`}>
+                                            <p className="text-[10px] font-bold text-[#86868B] uppercase mb-2">🔄 Produto na Troca</p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Produto</span>
+                                                <input type="text" value={ef.troca_produto} onChange={e => setEf("troca_produto", e.target.value)} placeholder="Ex: iPhone 13 Pro" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Cor</span>
+                                                <input type="text" value={ef.troca_cor} onChange={e => setEf("troca_cor", e.target.value)} placeholder="Ex: Preto" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Bateria %</span>
+                                                <input type="number" value={ef.troca_bateria} onChange={e => setEf("troca_bateria", e.target.value)} placeholder="Ex: 85" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Serial</span>
+                                                <input type="text" value={ef.troca_serial} onChange={e => setEf("troca_serial", e.target.value)} placeholder="Serial / IMEI" className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                              <label className="space-y-1 col-span-2" onClick={e => e.stopPropagation()}>
+                                                <span className="text-[10px] font-bold text-[#86868B] uppercase">Observações</span>
+                                                <input type="text" value={ef.troca_obs} onChange={e => setEf("troca_obs", e.target.value)} placeholder="Arranhões, detalhes da condição..." className={`w-full px-2 py-1.5 border rounded-lg text-xs ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`} />
+                                              </label>
+                                            </div>
+                                          </div>
+                                        )}
                                         {/* 2o Cartao — edição */}
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
                                           <label className="space-y-1" onClick={e => e.stopPropagation()}>
@@ -3655,60 +3922,6 @@ export default function VendasPage() {
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
                                         <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDuplicar(v);
-                                          }}
-                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
-                                        >
-                                          📋 Duplicar
-                                        </button>
-                                        {v.produto_na_troca && parseFloat(v.produto_na_troca) > 0 && (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                              const hoje = new Date().toLocaleDateString("pt-BR");
-                                              const vx = v as unknown as Record<string, unknown>;
-                                              const res = await fetch("/api/admin/contrato", {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({
-                                                  clienteNome: v.cliente,
-                                                  clienteTelefone: "—",
-                                                  aparelhoModelo: (vx.troca_produto as string) || "Aparelho na troca",
-                                                  aparelhoStorage: "",
-                                                  aparelhoIMEI: v.imei || undefined,
-                                                  condicao: "Conforme avaliação presencial",
-                                                  valorAvaliado: parseFloat(v.produto_na_troca || "0"),
-                                                  novoModelo: v.produto,
-                                                  novoStorage: "",
-                                                  novoCor: "—",
-                                                  novoPreco: v.preco_vendido,
-                                                  diferenca: v.preco_vendido - parseFloat(v.produto_na_troca || "0"),
-                                                  formaPagamento: v.forma + (v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""),
-                                                  data: hoje,
-                                                  validade: "24 horas",
-                                                }),
-                                              });
-                                              if (!res.ok) throw new Error("Erro");
-                                              const blob = await res.blob();
-                                              const url = URL.createObjectURL(blob);
-                                              const a = document.createElement("a");
-                                              a.href = url;
-                                              a.download = `contrato_${v.cliente.replace(/\s+/g, "_").toLowerCase()}.pdf`;
-                                              document.body.appendChild(a);
-                                              a.click();
-                                              document.body.removeChild(a);
-                                              URL.revokeObjectURL(url);
-                                            } catch { alert("Erro ao gerar contrato"); }
-                                          }}
-                                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
-                                        >
-                                          📄 Contrato
-                                        </button>
-                                        )}
-                                        <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             // Detectar se faz parte de um grupo
@@ -3716,7 +3929,9 @@ export default function VendasPage() {
                                             const primaryVenda = grupoVendas[0]; // dados do cliente/pagamento vêm da primeira
                                             // Buscar dados do seminovo na troca (PENDENCIA/SEMINOVO) se a venda tem produto_na_troca (só para venda simples)
                                             let trocaProd = "", trocaCor = "", trocaBat = "", trocaObs = "", trocaGrade = "", trocaCaixa = "", trocaCabo = "", trocaFonte = "";
-                                            if (grupoVendas.length === 1 && primaryVenda.produto_na_troca && parseFloat(String(primaryVenda.produto_na_troca)) > 0) {
+                                            let trocaSerial = "", trocaImei = "", trocaCategoria = "", trocaValorPend = 0;
+                                            const hasTrocaPend = primaryVenda.produto_na_troca || primaryVenda.troca_produto;
+                                            if (grupoVendas.length === 1 && hasTrocaPend) {
                                               try {
                                                 const res = await fetch("/api/estoque", {
                                                   headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -3725,17 +3940,30 @@ export default function VendasPage() {
                                                   const estoqueData = await res.json();
                                                   const allItems = estoqueData.data || estoqueData || [];
                                                   const firstName = v.cliente.toUpperCase().split(" ")[0];
-                                                  const trocaVal = parseFloat(String(primaryVenda.produto_na_troca));
-                                                  const pendencia = allItems.find((p: { custo_unitario: number; cliente: string | null; tipo: string; produto: string; cor: string | null; bateria: number | null; observacao: string | null }) =>
+                                                  const trocaVal = parseFloat(String(primaryVenda.produto_na_troca || "0"));
+                                                  const pendencia = allItems.find((p: { custo_unitario: number; cliente: string | null; tipo: string; produto: string; cor: string | null; bateria: number | null; observacao: string | null; serial_no?: string | null; imei?: string | null; categoria?: string | null }) =>
                                                     (p.tipo === "PENDENCIA" || p.tipo === "SEMINOVO") &&
                                                     (p.cliente || "").toUpperCase().includes(firstName) &&
-                                                    Math.abs(Number(p.custo_unitario) - trocaVal) < 50
+                                                    (trocaVal === 0 || Math.abs(Number(p.custo_unitario) - trocaVal) < 50)
                                                   );
                                                   if (pendencia) {
                                                     trocaProd = pendencia.produto || "";
                                                     trocaCor = pendencia.cor || "";
                                                     trocaBat = String(pendencia.bateria || "");
                                                     trocaObs = pendencia.observacao || "";
+                                                    trocaSerial = (pendencia.serial_no as string) || "";
+                                                    trocaImei = (pendencia.imei as string) || "";
+                                                    trocaCategoria = (pendencia.categoria as string) || "";
+                                                    trocaValorPend = Number(pendencia.custo_unitario) || 0;
+                                                    // Extrair tags da observacao
+                                                    const obsRaw = pendencia.observacao || "";
+                                                    const gradeMatch = obsRaw.match(/\[GRADE_(A\+|A|B|C)\]/);
+                                                    if (gradeMatch) trocaGrade = gradeMatch[1];
+                                                    if (/\[COM_CAIXA\]/.test(obsRaw)) trocaCaixa = "SIM";
+                                                    if (/\[COM_CABO\]/.test(obsRaw)) trocaCabo = "SIM";
+                                                    if (/\[COM_FONTE\]/.test(obsRaw)) trocaFonte = "SIM";
+                                                    // Obs limpo (sem tags)
+                                                    trocaObs = obsRaw.replace(/\[GRADE_[^\]]+\]|\[COM_[^\]]+\]|\[CICLOS:[^\]]+\]/g, "").trim();
                                                   }
                                                   // Fallback: usar dados salvos na própria venda se estoque não retornou
                                                   if (!trocaProd) trocaProd = primaryVenda.troca_produto || "";
@@ -3772,7 +4000,7 @@ export default function VendasPage() {
                                               qnt_parcelas: String(primaryVenda.qnt_parcelas || ""),
                                               bandeira: primaryVenda.bandeira || "",
                                               local: primaryVenda.local || "",
-                                              produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || ""),
+                                              produto_na_troca: grupoVendas.length > 1 ? "" : String(primaryVenda.produto_na_troca || trocaValorPend || ""),
                                               entrada_pix: String(primaryVenda.entrada_pix || ""),
                                               banco_pix: primaryVenda.banco_pix || "ITAU",
                                               entrada_especie: String(primaryVenda.entrada_especie || ""),
@@ -3788,32 +4016,69 @@ export default function VendasPage() {
                                               banco_sinal: primaryVenda.banco_sinal || "",
                                               troca_produto: grupoVendas.length > 1 ? "" : trocaProd,
                                               troca_cor: grupoVendas.length > 1 ? "" : trocaCor,
-                                              troca_categoria: "",
+                                              troca_categoria: grupoVendas.length > 1 ? "" : (trocaCategoria || (primaryVenda as unknown as Record<string, string>).troca_categoria || ""),
                                               troca_bateria: grupoVendas.length > 1 ? "" : trocaBat,
                                               troca_obs: grupoVendas.length > 1 ? "" : trocaObs,
-                                              troca_grade: grupoVendas.length > 1 ? "" : trocaGrade,
-                                              troca_caixa: grupoVendas.length > 1 ? "" : trocaCaixa,
-                                              troca_cabo: grupoVendas.length > 1 ? "" : trocaCabo,
-                                              troca_fonte: grupoVendas.length > 1 ? "" : trocaFonte,
-                                              troca_pulseira: "",
-                                              troca_ciclos: "",
-                                              troca_garantia: "",
-                                              troca_serial: "", troca_imei: "",
+                                              troca_grade: grupoVendas.length > 1 ? "" : (trocaGrade || (primaryVenda as unknown as Record<string, string>).troca_grade || ""),
+                                              troca_caixa: grupoVendas.length > 1 ? "" : (trocaCaixa || (primaryVenda as unknown as Record<string, string>).troca_caixa || ""),
+                                              troca_cabo: grupoVendas.length > 1 ? "" : (trocaCabo || (primaryVenda as unknown as Record<string, string>).troca_cabo || ""),
+                                              troca_fonte: grupoVendas.length > 1 ? "" : (trocaFonte || (primaryVenda as unknown as Record<string, string>).troca_fonte || ""),
+                                              troca_pulseira: grupoVendas.length > 1 ? "" : ((primaryVenda as unknown as Record<string, string>).troca_pulseira || ""),
+                                              troca_ciclos: grupoVendas.length > 1 ? "" : ((primaryVenda as unknown as Record<string, string>).troca_ciclos || ""),
+                                              troca_garantia: grupoVendas.length > 1 ? "" : ((primaryVenda as unknown as Record<string, string>).troca_garantia || ""),
+                                              troca_serial: grupoVendas.length > 1 ? "" : (trocaSerial || (primaryVenda as unknown as Record<string, string>).troca_serial || ""),
+                                              troca_imei: grupoVendas.length > 1 ? "" : (trocaImei || (primaryVenda as unknown as Record<string, string>).troca_imei || ""),
                                               produto_na_troca2: String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || ""),
                                               troca_produto2: (primaryVenda as unknown as Record<string, string>).troca_produto2 || "",
                                               troca_cor2: (primaryVenda as unknown as Record<string, string>).troca_cor2 || "",
-                                              troca_categoria2: "",
+                                              troca_categoria2: (primaryVenda as unknown as Record<string, string>).troca_categoria2 || "",
                                               troca_bateria2: (primaryVenda as unknown as Record<string, string>).troca_bateria2 || "",
                                               troca_obs2: (primaryVenda as unknown as Record<string, string>).troca_obs2 || "",
-                                              troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+                                              troca_serial2: (primaryVenda as unknown as Record<string, string>).troca_serial2 || "",
+                                              troca_imei2: (primaryVenda as unknown as Record<string, string>).troca_imei2 || "",
+                                              troca_garantia2: (primaryVenda as unknown as Record<string, string>).troca_garantia2 || "",
+                                              troca_pulseira2: (primaryVenda as unknown as Record<string, string>).troca_pulseira2 || "",
+                                              troca_ciclos2: (primaryVenda as unknown as Record<string, string>).troca_ciclos2 || "",
                                               serial_no: grupoVendas.length > 1 ? "" : (v.serial_no || ""),
                                               imei: grupoVendas.length > 1 ? "" : (v.imei || ""),
                                               cep: primaryVenda.cep || "",
                                               bairro: primaryVenda.bairro || "",
                                               cidade: primaryVenda.cidade || "",
                                               uf: primaryVenda.uf || "",
+                                              frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
+                                              frete_recebido: !!primaryVenda.frete_recebido,
                                             });
                                             setProdutoManual(true);
+
+                                            // Popular trocaRow/trocaRow2 para o ProdutoSpecFields mostrar os dados
+                                            if (grupoVendas.length === 1) {
+                                              const trocaCat = (primaryVenda as unknown as Record<string, string>).troca_categoria || "";
+                                              const trocaCat2 = (primaryVenda as unknown as Record<string, string>).troca_categoria2 || "";
+                                              const pv = primaryVenda as unknown as Record<string, string>;
+                                              setTrocaRow({
+                                                ...createEmptyProdutoRow(),
+                                                produto: trocaProd || "",
+                                                cor: trocaCor || "",
+                                                categoria: trocaCategoria || trocaCat || "",
+                                                serial_no: trocaSerial || "",
+                                                imei: trocaImei || "",
+                                                grade: trocaGrade || "",
+                                                caixa: trocaCaixa === "SIM",
+                                                custo_unitario: String(primaryVenda.produto_na_troca || trocaValorPend || ""),
+                                              });
+                                              setTrocaRow2({
+                                                ...createEmptyProdutoRow(),
+                                                produto: pv.troca_produto2 || "",
+                                                cor: pv.troca_cor2 || "",
+                                                categoria: trocaCat2 || "",
+                                                serial_no: pv.troca_serial2 || "",
+                                                imei: pv.troca_imei2 || "",
+                                                custo_unitario: String((primaryVenda as unknown as Record<string, unknown>).produto_na_troca2 || ""),
+                                              });
+                                            } else {
+                                              setTrocaRow(createEmptyProdutoRow());
+                                              setTrocaRow2(createEmptyProdutoRow());
+                                            }
 
                                             // Se grupo: carregar outros produtos no carrinho
                                             if (grupoVendas.length > 1) {
@@ -4094,43 +4359,17 @@ export default function VendasPage() {
                                         </p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                          <p>
+                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                                              {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
+                                            </span>
+                                          </p>
+                                        )}
                                         {(v as unknown as Record<string, string>).notas && <p><strong>Notas:</strong> {(v as unknown as Record<string, string>).notas}</p>}
                                       </div>
                                     </div>
-
-                                    {/* Split de Pagamento Visual */}
-                                    {(() => {
-                                      const pixVal = v.entrada_pix || 0;
-                                      const especieVal = v.entrada_especie || 0;
-                                      const trocaVal = v.produto_na_troca ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
-                                      const totalVenda = v.preco_vendido || 0;
-                                      // Cartao = total minus other payment methods
-                                      const cartaoVal = Math.max(0, totalVenda - pixVal - especieVal - trocaVal);
-                                      const parts = [
-                                        { label: "PIX", value: pixVal, color: "bg-green-500", textColor: "text-green-600" },
-                                        { label: "Cartao", value: cartaoVal, color: "bg-blue-500", textColor: "text-blue-600" },
-                                        { label: "Especie", value: especieVal, color: "bg-[#E8740E]", textColor: "text-[#E8740E]" },
-                                        { label: "Troca", value: trocaVal, color: "bg-purple-500", textColor: "text-purple-600" },
-                                      ].filter(p => p.value > 0);
-                                      if (parts.length < 2) return null;
-                                      return (
-                                        <div className="md:col-span-3 space-y-2">
-                                          <h4 className="text-xs font-bold text-[#86868B] uppercase">Composicao do Pagamento</h4>
-                                          <div className="h-4 rounded-full overflow-hidden flex" style={{ backgroundColor: dm ? "#3A3A3C" : "#E8E8ED" }}>
-                                            {parts.map((p, i) => (
-                                              <div key={i} className={`h-full ${p.color} flex items-center justify-center text-[10px] font-bold text-white`} style={{ width: `${(p.value / totalVenda) * 100}%` }}>
-                                                {Math.round((p.value / totalVenda) * 100)}%
-                                              </div>
-                                            ))}
-                                          </div>
-                                          <div className="flex flex-wrap gap-3 text-xs">
-                                            {parts.map((p, i) => (
-                                              <span key={i} className={p.textColor}>● {p.label}: <strong>R$ {p.value.toLocaleString("pt-BR")}</strong> ({Math.round((p.value / totalVenda) * 100)}%)</span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
 
                                     {/* Reajustes existentes */}
                                     {Array.isArray(v.reajustes) && v.reajustes.length > 0 && (
@@ -4233,6 +4472,8 @@ export default function VendasPage() {
                                       const tCor = vx.troca_cor ? String(vx.troca_cor) : "";
                                       const tBat = vx.troca_bateria ? String(vx.troca_bateria) : "";
                                       const tObs = vx.troca_obs ? String(vx.troca_obs) : "";
+                                      const tSerial = vx.troca_serial ? String(vx.troca_serial) : "";
+                                      const tImei = vx.troca_imei ? String(vx.troca_imei) : "";
                                       const tValor = vx.produto_na_troca ? Number(vx.produto_na_troca) : 0;
                                       if (!tProd && !tValor) return null;
                                       return (
@@ -4240,8 +4481,10 @@ export default function VendasPage() {
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 Produto na Troca</h4>
                                           <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                             {tProd && <p><strong>Modelo:</strong> {tProd}</p>}
-                                            {tCor && <p><strong>Cor:</strong> {tCor}</p>}
+                                            {tCor && <p><strong>Cor:</strong> {corParaPT(tCor)}</p>}
                                             {tBat && <p><strong>Bateria:</strong> {tBat}%</p>}
+                                            {tSerial && <p><strong>Serial:</strong> {tSerial}</p>}
+                                            {tImei && <p><strong>IMEI:</strong> {tImei}</p>}
                                             {tValor > 0 && <p><strong>Valor da troca:</strong> R$ {tValor.toLocaleString("pt-BR")}</p>}
                                             {tObs && <p><strong>Obs:</strong> {tObs}</p>}
                                           </div>
@@ -4256,6 +4499,8 @@ export default function VendasPage() {
                                       const t2Cor = vx.troca_cor2 ? String(vx.troca_cor2) : "";
                                       const t2Bat = vx.troca_bateria2 ? String(vx.troca_bateria2) : "";
                                       const t2Obs = vx.troca_obs2 ? String(vx.troca_obs2) : "";
+                                      const t2Serial = vx.troca_serial2 ? String(vx.troca_serial2) : "";
+                                      const t2Imei = vx.troca_imei2 ? String(vx.troca_imei2) : "";
                                       const t2Valor = vx.produto_na_troca2 ? Number(vx.produto_na_troca2) : 0;
                                       if (!t2Prod && !t2Valor) return null;
                                       return (
@@ -4263,73 +4508,16 @@ export default function VendasPage() {
                                           <h4 className="text-xs font-bold text-[#86868B] uppercase">🔄 2º Produto na Troca</h4>
                                           <div className="text-xs space-y-1 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                             {t2Prod && <p><strong>Modelo:</strong> {t2Prod}</p>}
-                                            {t2Cor && <p><strong>Cor:</strong> {t2Cor}</p>}
+                                            {t2Cor && <p><strong>Cor:</strong> {corParaPT(t2Cor)}</p>}
                                             {t2Bat && <p><strong>Bateria:</strong> {t2Bat}%</p>}
+                                            {t2Serial && <p><strong>Serial:</strong> {t2Serial}</p>}
+                                            {t2Imei && <p><strong>IMEI:</strong> {t2Imei}</p>}
                                             {t2Valor > 0 && <p><strong>Valor da troca:</strong> R$ {t2Valor.toLocaleString("pt-BR")}</p>}
                                             {t2Obs && <p><strong>Obs:</strong> {t2Obs}</p>}
                                           </div>
                                         </div>
                                       );
                                     })()}
-
-                                    {/* Comprovante */}
-                                    <div className="space-y-2">
-                                      <h4 className="text-xs font-bold text-[#86868B] uppercase">Comprovante</h4>
-                                      {v.comprovante_url ? (
-                                        <div>
-                                          <a href={v.comprovante_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">📎 Ver comprovante</a>
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, comprovante_url: null }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: "" } : r));
-                                            }}
-                                            className="ml-2 text-[10px] text-red-400 hover:text-red-600"
-                                          >remover</button>
-                                        </div>
-                                      ) : (
-                                        <div className="space-y-2">
-                                          <input
-                                            type="file"
-                                            accept="image/*"
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={async (e) => {
-                                              e.stopPropagation();
-                                              const file = e.target.files?.[0];
-                                              if (!file) return;
-                                              setUploadingId(v.id);
-                                              const formData = new FormData();
-                                              formData.append("file", file);
-                                              formData.append("venda_id", v.id);
-                                              try {
-                                                const res = await fetch("/api/vendas/comprovante", {
-                                                  method: "POST",
-                                                  headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                  body: formData,
-                                                });
-                                                const json = await res.json();
-                                                if (json.url) {
-                                                  setVendas(prev => prev.map(r => r.id === v.id ? { ...r, comprovante_url: json.url } : r));
-                                                  setMsg("Comprovante salvo!");
-                                                } else {
-                                                  setMsg("Erro ao salvar comprovante");
-                                                }
-                                              } catch {
-                                                setMsg("Erro ao enviar arquivo");
-                                              }
-                                              setUploadingId(null);
-                                            }}
-                                            className="text-xs"
-                                          />
-                                          {uploadingId === v.id && <p className="text-[10px] text-[#86868B]">Enviando...</p>}
-                                          <p className="text-[10px] text-[#86868B]">Envie PNG/JPG do comprovante</p>
-                                        </div>
-                                      )}
-                                    </div>
 
                                     {/* NF: botão inline na fileira de STATUS acima */}
                                   </div>)}
@@ -4434,6 +4622,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -4467,6 +4656,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
+                    frete_valor: "", frete_recebido: false,
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);

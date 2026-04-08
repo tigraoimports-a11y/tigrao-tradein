@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -209,7 +210,7 @@ export default function BuscaSerialPage() {
                           </span>
                         )}
                         {mainItem.cor && (
-                          <span className={`text-xs ${textSecondary}`}>{mainItem.cor}</span>
+                          <span className={`text-xs ${textSecondary}`}>{corParaPT(mainItem.cor)}</span>
                         )}
                       </div>
                     </div>

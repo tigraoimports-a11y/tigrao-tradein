@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 const fmt = (v: number) => `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 
@@ -70,7 +71,7 @@ export default function RastreioPage() {
           date: e.data_entrada || "—",
           type: e.tipo === "SEMINOVO" ? "troca" : "entrada",
           title: `Entrada no estoque`,
-          detail: e.produto + (e.cor ? ` ${e.cor}` : ""),
+          detail: e.produto + (e.cor ? ` ${corParaPT(e.cor)}` : ""),
           extra: {
             "Fornecedor": e.fornecedor || "—",
             "Custo": fmt(e.custo_unitario || 0),

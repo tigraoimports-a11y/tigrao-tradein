@@ -4,13 +4,151 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, editCategoriaEstoque, EMOJI_OPTIONS } from "@/lib/categorias";
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
+import { corParaPT } from "@/lib/cor-pt";
+
+/**
+ * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
+ * montando do zero a partir dos campos parseados, ignorando o que está cru no nome.
+ *
+ * - iPhone: Modelo - Armazenamento - Cor
+ * - iPad: Modelo - Tamanho - Armazenamento - Cor - Conectividade
+ * - MacBook: Modelo - Tamanho - RAM - SSD - Cor
+ * - Mac Mini: Modelo - RAM - SSD
+ * - Apple Watch: Modelo - Tamanho - Conectividade - Cor
+ */
+function formatProdutoDisplay(p: {
+  produto?: string | null;
+  categoria?: string | null;
+  cor?: string | null;
+  observacao?: string | null;
+}): string {
+  const nomeRaw = String(p.produto || "");
+  const obs = String(p.observacao || "");
+  const src = `${nomeRaw} ${obs}`;
+  const up = src.toUpperCase();
+  const baseCat = getBaseCat(p.categoria || "IPHONES");
+  const corRaw = (p.cor || "").trim();
+  const cor = corRaw ? corParaPT(corRaw) : "";
+
+  // Maior valor GB/TB = armazenamento (storage)
+  const memMatches = [...up.matchAll(/(\d+)\s*(GB|TB)/g)];
+  const mems = memMatches.map(m => ({
+    raw: `${m[1]}${m[2]}`,
+    gb: m[2] === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]),
+  }));
+  const sorted = [...mems].sort((a, b) => b.gb - a.gb);
+  const storage = sorted[0]?.raw || "";
+  // RAM: vem de tag [RAM:X] ou, se não, o menor valor GB/TB quando há 2+
+  const ramTag = obs.match(/\[RAM:([^\]]+)\]/);
+  let ram = ramTag ? ramTag[1].trim().toUpperCase() : "";
+  if (!ram && sorted.length >= 2) {
+    ram = sorted[sorted.length - 1].raw;
+  }
+  // SSD: tag [SSD:X] ou storage principal
+  const ssdTag = obs.match(/\[SSD:([^\]]+)\]/);
+  const ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+
+  // Tela (polegadas)
+  const telaTag = obs.match(/\[TELA:([^\]]+)\]/);
+  const telaNome = up.match(/\b(11|13|14|15|16)["”]/);
+  const tela = telaTag ? telaTag[1].trim().replace(/"?$/, '"') : (telaNome ? `${telaNome[1]}"` : "");
+
+  // Tamanho mm (watch)
+  const mmMatch = up.match(/(\d{2})\s*MM/);
+  const tamMm = mmMatch ? `${mmMatch[1]}mm` : "";
+
+  // Conectividade
+  const hasCell = /\+\s*CEL|CELLULAR|\+CELL|GPS\s*\+\s*CEL|\bCEL\b/.test(up);
+  const hasGps = /\bGPS\b/.test(up);
+  const hasWifi = /WI-?FI|WIFI/.test(up);
+
+  const parts: string[] = [];
+
+  if (baseCat === "IPHONES") {
+    // Modelo: iPhone N[e] [Pro Max|Pro|Plus|Air]
+    const m = up.match(/IPHONE\s*(\d+E?)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/);
+    const modelo = m
+      ? `iPhone ${m[1].replace(/E$/, "e")}${m[2] ? " " + m[2].replace(/\s+/g, " ").replace(/\bPRO MAX\b/, "Pro Max").replace(/\bPRO\b/, "Pro").replace(/\bPLUS\b/, "Plus").replace(/\bAIR\b/, "Air") : ""}`
+      : nomeRaw;
+    parts.push(modelo);
+    if (storage) parts.push(storage);
+    if (cor) parts.push(cor);
+  } else if (baseCat === "IPADS") {
+    const chipM = up.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/);
+    const chip = chipM ? " " + chipM[1].replace(/\s+/g, " ").toUpperCase() : "";
+    let modelo = "iPad";
+    if (/MINI/.test(up)) modelo = "iPad Mini";
+    else if (/AIR/.test(up)) modelo = "iPad Air";
+    else if (/PRO/.test(up)) modelo = "iPad Pro";
+    parts.push(modelo + chip);
+    if (tela) parts.push(tela);
+    if (storage) parts.push(storage);
+    if (cor) parts.push(cor);
+    if (hasCell) parts.push("Wi-Fi + Cellular");
+    else if (hasWifi) parts.push("Wi-Fi");
+  } else if (baseCat === "MACBOOK") {
+    // Chip NÃO entra no nome de preview — só no modal de detalhes.
+    let modelo = "MacBook";
+    if (/NEO/.test(up)) modelo = "MacBook Neo";
+    else if (/AIR/.test(up)) modelo = "MacBook Air";
+    else if (/PRO/.test(up)) modelo = "MacBook Pro";
+    parts.push(modelo);
+    if (tela) parts.push(tela);
+    if (ram) parts.push(ram);
+    if (ssd) parts.push(ssd);
+    if (cor) parts.push(cor);
+  } else if (baseCat === "MAC_MINI") {
+    // Chip NÃO entra no nome de preview — só no modal de detalhes.
+    parts.push("Mac Mini");
+    if (ram) parts.push(ram);
+    if (ssd) parts.push(ssd);
+  } else if (baseCat === "APPLE_WATCH") {
+    let modelo = "Apple Watch";
+    const ultra = up.match(/ULTRA\s*(\d+)?/);
+    const se = up.match(/\bSE\s*(\d+)?/);
+    const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
+    if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
+    else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
+    else if (series) modelo = `Apple Watch Series ${series[1]}`;
+    parts.push(modelo);
+    if (tamMm) parts.push(tamMm);
+    // Ultra é sempre cellular; os outros respeitam detecção
+    if (ultra) parts.push("GPS + Cellular");
+    else if (hasCell) parts.push("GPS + Cellular");
+    else if (hasGps) parts.push("GPS");
+    if (cor) parts.push(cor);
+  } else {
+    // Fallback: usa o nome limpo
+    return cleanProdutoDisplay(nomeRaw);
+  }
+
+  return parts.filter(Boolean).join(" ");
+}
+
+/** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
+function cleanProdutoDisplay(nome: string | null | undefined): string {
+  if (!nome) return "";
+  let s = String(nome);
+  // Remove parêntese com código de origem, ex: "(IN)", "(LL)"
+  s = s.replace(/\s*\((LL|JPA|HN|IN|BR|BZ|CH|ZA|KH|TH|SG)\)\s*/gi, " ");
+  // Remove " - CHIP FÍSICO...", "+ E-SIM", etc
+  s = s.replace(/\s*[-–]\s*CHIP\s*F[IÍ]SICO[^[]*$/i, "");
+  s = s.replace(/\s*\+?\s*E[-\s]?SIM\b.*$/i, "");
+  s = s.replace(/\s*CHIP\s*F[IÍ]SICO\b.*$/i, "");
+  // Remove códigos de origem isolados precedidos por espaço, ex: " HN", " LL"
+  s = s.replace(/\s+(LL|JPA|HN|IN|BR|BZ|CH|ZA|KH|TH|SG)\b.*$/i, "");
+  // Remove tags [...] residuais
+  s = s.replace(/\[[^\]]*\]/g, "");
+  return s.replace(/\s+/g, " ").trim();
+}
 
 /* ── OCR: colar imagem → texto no campo serial ── */
 let tesseractWorker: import("tesseract.js").Worker | null = null;
@@ -91,6 +229,7 @@ const COR_PT: Record<string, string> = {
   "PURPLE": "Roxo",
   "PINK": "Rosa",
   "GOLD": "Dourado",
+  "LIGHT GOLD": "Dourado",
   "TITANIUM": "Titânio",
   "DESERT TITANIUM": "Titânio Deserto",
   "BLACK TITANIUM": "Titânio Preto",
@@ -398,6 +537,21 @@ function corSoPT(cor: string | null | undefined, nome?: string | null): string |
   return null;
 }
 
+/** Retorna a cor em EN canônico (ex: "Lavender", "Teal", "Ultramarine") a partir de p.cor (que pode estar em PT ou EN). */
+function corEnOriginal(cor: string | null | undefined): string | null {
+  if (!cor) return null;
+  const clean = stripCode(cor).trim();
+  if (!clean || clean === "—") return null;
+  const upper = clean.toUpperCase();
+  // Já em EN?
+  if (COR_PT[upper]) return clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  // PT → EN
+  const en = PT_TO_EN[upper];
+  if (en) return en;
+  // Fallback: devolve formatado
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
 /** Retorna "Silver · Prata" se houver tradução diferente, senão só o original */
 function corBilingual(cor: string | null | undefined): string {
   if (!cor) return "—";
@@ -436,6 +590,10 @@ interface ProdutoEstoque {
   pedido_fornecedor_id: string | null;
   origem: string | null;
   garantia: string | null;
+  reserva_cliente: string | null;
+  reserva_data: string | null;
+  reserva_para: string | null;
+  reserva_operador: string | null;
 }
 
 interface ImeiSearchResult {
@@ -502,7 +660,16 @@ const STATUS_COLORS: Record<string, string> = {
 /** Extrai o "modelo base" de um produto para agrupar em cards */
 function getModeloBase(produto: string, categoria: string): string {
   const p = produto.toUpperCase().trim();
-  const baseCat = getBaseCat(categoria);
+  // Inferir categoria quando vier vazia/inválida baseado no nome do produto
+  let baseCat = getBaseCat(categoria || "");
+  if (!baseCat || !["IPHONES","IPADS","MACBOOK","MAC_MINI","APPLE_WATCH","AIRPODS","ACESSORIOS"].includes(baseCat)) {
+    if (/\bIPHONE\b/.test(p)) baseCat = "IPHONES";
+    else if (/\bIPAD\b/.test(p)) baseCat = "IPADS";
+    else if (/\bMACBOOK\b/.test(p)) baseCat = "MACBOOK";
+    else if (/\bMAC\s*MINI\b/.test(p)) baseCat = "MAC_MINI";
+    else if (/\bWATCH\b/.test(p)) baseCat = "APPLE_WATCH";
+    else if (/\bAIRPODS?\b/.test(p)) baseCat = "AIRPODS";
+  }
 
   // Helpers — pega o MAIOR valor de GB/TB (armazenamento, não RAM)
   const getMem = () => {
@@ -516,8 +683,13 @@ function getModeloBase(produto: string, categoria: string): string {
   const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
 
   if (baseCat === "IPHONES") {
-    const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
-    if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}${getMem()}`;
+    // Captura "16", "16e", "16 Pro", "16 Pro Max", "16 Plus", "16 Air"
+    const match = p.match(/IPHONE\s*(\d+)(E)?\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
+    if (match) {
+      const num = match[1] + (match[2] ? "e" : "");
+      const variant = match[3] ? " " + match[3].trim() : "";
+      return `iPhone ${num}${variant}${getMem()}`;
+    }
     return produto;
   }
   if (baseCat === "IPADS") {
@@ -531,16 +703,21 @@ function getModeloBase(produto: string, categoria: string): string {
     return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
-    const mem = getMem();
+    // MacBook: agrupar por RAM + SSD (dois GB/TB distintos)
+    const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
+    const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+    const sorted = [...vals].sort((a, b) => a.gb - b.gb);
+    const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
+    const ssd = sorted.length >= 1 ? ` ${sorted[sorted.length - 1].raw}` : "";
+    const memPair = `${ram}${ssd}`;
     const size = getSize();
     // Extrair chip (M4, M5, M4 Pro, M5 Pro)
     const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
     const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${mem}`;
-    if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
-    if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
-    if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
-    return `MacBook${chip}${mem}`;
+    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
+    if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
+    if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
+    return `MacBook${chip}${memPair}`;
   }
   if (baseCat === "MAC_MINI") {
     const mem = getMem();
@@ -549,10 +726,13 @@ function getModeloBase(produto: string, categoria: string): string {
     return `Mac Mini${chip}${mem}`;
   }
   if (baseCat === "APPLE_WATCH") {
-    // Watch: agrupar por modelo + geração + tamanho
+    // Watch: agrupar por modelo + geração + tamanho + conectividade
+    // GPS e GPS+CELL são modelos diferentes, não compartilham card/balanço
     const sizeW = p.match(/(\d{2})\s*MM/i);
     const sz = sizeW ? ` ${sizeW[1]}mm` : "";
-    // Ultra com geração (Ultra 2, Ultra 3)
+    const isCell = /\+\s*CEL|GPS\s*\+\s*CEL|CELL|CELULAR/.test(p);
+    const conn = isCell ? " GPS+CEL" : " GPS";
+    // Ultra com geração (Ultra 2, Ultra 3) — Ultra é sempre GPS+CEL, não sufixa
     const ultraMatch = p.match(/ULTRA\s*(\d+)?/);
     if (ultraMatch) {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
@@ -560,12 +740,12 @@ function getModeloBase(produto: string, categoria: string): string {
     }
     // SE com geração (SE 2, SE 3)
     const seMatch = p.match(/SE\s*(\d+)/);
-    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}`;
+    if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
     // Series com número
     const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
-    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}`;
-    return `Apple Watch${sz}`;
+    if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
+    return `Apple Watch${sz}${conn}`;
   }
   if (baseCat === "AIRPODS") {
     // AirPods com geração
@@ -613,8 +793,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [loading, setLoading] = useState(true);
-  const ESTOQUE_TABS = ["estoque", "naoativados", "seminovos", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
-  const [tab, setTab] = useTabParam<"estoque" | "naoativados" | "seminovos" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
+  const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
+  const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
@@ -639,8 +819,37 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  // Modal de reservar produto
+  const [reservaTarget, setReservaTarget] = useState<ProdutoEstoque | null>(null);
+  const [reservaForm, setReservaForm] = useState({ cliente: "", data: "", para: "", operador: "" });
+  const [reservaSaving, setReservaSaving] = useState(false);
   // Configs do catálogo para o modelo do produto no detalhe (cores por modelo específico)
   const [detailModelConfigs, setDetailModelConfigs] = useState<Record<string, string[]>>({});
+  // Mapa completo modelo → [cores EN] do catálogo (usado na reposição)
+  const [catalogoCoresMap, setCatalogoCoresMap] = useState<Record<string, string[]>>({});
+  const [catalogoCatByModel, setCatalogoCatByModel] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => {
+        if (j?.modelos) setCatalogoCoresMap(j.modelos);
+        if (j?.categorias) setCatalogoCatByModel(j.categorias);
+      })
+      .catch(() => {});
+  }, []);
+  // Modelos ocultos da reposição (controle do usuário, localStorage)
+  const [reposicaoOcultos, setReposicaoOcultos] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("tigrao_reposicao_ocultos") || "[]")); } catch { return new Set(); }
+  });
+  const toggleReposicaoOculto = (nomeModelo: string) => {
+    setReposicaoOcultos(prev => {
+      const next = new Set(prev);
+      if (next.has(nomeModelo)) next.delete(nomeModelo); else next.add(nomeModelo);
+      localStorage.setItem("tigrao_reposicao_ocultos", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const [showReposicaoConfig, setShowReposicaoConfig] = useState(false);
   const [savedField, setSavedField] = useState<string | null>(null);
   const showSaved = (field: string) => { setSavedField(field); setTimeout(() => setSavedField(null), 1800); };
   const [editingDetailSerial, setEditingDetailSerial] = useState(false);
@@ -785,33 +994,108 @@ export default function EstoquePage() {
     setEditCatLabel("");
   }
 
-  // Override de títulos de cards (modelo agrupador)
-  const [cardTitleOverrides, setCardTitleOverrides] = useState(() => {
-    if (typeof window === "undefined") return {} as Record<string, string>;
-    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>; } catch { return {} as Record<string, string>; }
+  // Override de títulos de cards (modelo agrupador) — persiste no banco pra sincronizar entre usuários
+  const [cardTitleOverrides, setCardTitleOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}"); } catch { return {}; }
   });
+  useEffect(() => {
+    if (!password) return;
+    let cancelled = false;
+    const fetchOverrides = async (migrate = false) => {
+      try {
+        const r = await fetch("/api/admin/estoque-settings?key=card_title_overrides", {
+          headers: { "x-admin-password": password },
+          cache: "no-store",
+        });
+        const j = await r.json();
+        if (cancelled) return;
+        if (j.value && typeof j.value === "object" && Object.keys(j.value).length > 0) {
+          // Merge remoto com local (local tem prioridade se ainda não sincronizado)
+          setCardTitleOverrides(prev => {
+            const merged = { ...(j.value as Record<string, string>), ...prev };
+            try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+        } else if (migrate) {
+          // Migrar do localStorage se existir (só na 1ª carga)
+          try {
+            const local = JSON.parse(localStorage.getItem("tigrao_card_title_overrides") || "{}") as Record<string, string>;
+            if (Object.keys(local).length > 0) {
+              setCardTitleOverrides(local);
+              fetch("/api/admin/estoque-settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "x-admin-password": password },
+                body: JSON.stringify({ key: "card_title_overrides", value: local }),
+              }).catch(() => {});
+            }
+          } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+    };
+    fetchOverrides(true);
+    // Polling a cada 60s + refetch ao voltar de aba oculta (evita disparos em cada foco de janela)
+    const interval = setInterval(() => fetchOverrides(false), 60000);
+    let wasHidden = false;
+    const onVisibility = () => {
+      if (document.hidden) { wasHidden = true; return; }
+      if (wasHidden) { wasHidden = false; fetchOverrides(false); }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editingCardTitle, setEditingCardTitle] = useState("");
   const [editCardTitleValue, setEditCardTitleValue] = useState("");
   function saveCardTitleOverride(originalTitle: string, newTitle: string) {
     const updated = { ...cardTitleOverrides, [originalTitle]: newTitle.trim() };
     if (!newTitle.trim() || newTitle.trim() === originalTitle) delete updated[originalTitle];
     setCardTitleOverrides(updated);
-    localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated));
+    // Persiste no localStorage como fallback imediato
+    try { localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(updated)); } catch {}
+    // Salva no banco (sincroniza entre usuários)
+    fetch("/api/admin/estoque-settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ key: "card_title_overrides", value: updated }),
+    })
+      .then(async r => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          console.error("[card_title_overrides] save failed", j);
+          alert(`Erro ao salvar nome do card no banco: ${j.error || r.statusText}. O nome ficou salvo localmente neste navegador.`);
+        }
+      })
+      .catch(err => {
+        console.error("[card_title_overrides] save error", err);
+        alert(`Erro de rede ao salvar nome do card. Ficou salvo localmente. Detalhe: ${err?.message || err}`);
+      });
     setEditingCardTitle("");
     setEditCardTitleValue("");
   }
   function getCardTitle(modelo: string): string {
+    const upModelo = modelo.toUpperCase();
+    // 1. Match exato
     const override = cardTitleOverrides[modelo];
     if (override) {
-      const upModelo = modelo.toUpperCase();
       const upOverride = override.toUpperCase();
-      // Se o modelo real é SERIES 11 mas override diz "SE 42"/"SE 46", ignora override (corrupto)
+      // Guarda: se modelo é SERIES 11 mas override diz "SE 42"/"SE 46", ignora (corrupto)
       if (/SERIES\s*11|S\s*11|\bS11\b/.test(upModelo) && /\bSE\b/.test(upOverride)) {
         return upModelo;
       }
       return upOverride;
     }
-    return modelo.toUpperCase();
+    // 2. Fallback: chave antiga sem sufixo " GPS+CEL" ou " GPS" (Apple Watch agrupava sem connectivity antes)
+    const semConn = modelo.replace(/\s+GPS\+CEL$/, "").replace(/\s+GPS$/, "");
+    if (semConn !== modelo && cardTitleOverrides[semConn]) {
+      const base = cardTitleOverrides[semConn];
+      const suffix = modelo.endsWith(" GPS+CEL") ? " GPS+CEL" : modelo.endsWith(" GPS") ? " GPS" : "";
+      return (base + suffix).toUpperCase();
+    }
+    return upModelo;
   }
 
   // Limpa overrides de cardTitle corrompidos (SE 42/SE 46 aplicado a Series 11)
@@ -1021,13 +1305,49 @@ export default function EstoquePage() {
 
   // ── Catálogo dinâmico de modelos ──────────────────────────────────────────
   const [catalogoModelos, setCatalogoModelos] = useState<{id: string; categoria_key: string; nome: string; ordem: number; ativo: boolean}[]>([]);
+  // Mapa modelo_id -> array de cores válidas (em inglês canônico)
+  const [coresPorModelo, setCoresPorModelo] = useState<Record<string, string[]>>({});
   useEffect(() => {
     if (!password) return;
     fetch("/api/admin/catalogo", { headers: { "x-admin-password": password } })
       .then(r => r.json())
       .then(json => { if (Array.isArray(json.modelos)) setCatalogoModelos(json.modelos); })
       .catch(() => {});
+    fetch("/api/admin/catalogo?all_configs=1", { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(json => {
+        if (!Array.isArray(json.configs)) return;
+        const byModel: Record<string, string[]> = {};
+        for (const c of json.configs as { modelo_id: string; tipo_chave: string; valor: string }[]) {
+          if (c.tipo_chave !== "cores") continue;
+          if (!byModel[c.modelo_id]) byModel[c.modelo_id] = [];
+          byModel[c.modelo_id].push(c.valor);
+        }
+        setCoresPorModelo(byModel);
+      })
+      .catch(() => {});
   }, [password]);
+
+  // Dado um nome de produto, devolve as cores válidas do catálogo (em EN canônico)
+  const getCoresValidasParaProduto = useCallback((produtoNome: string, categoriaEstoque: string): string[] => {
+    if (!produtoNome || !catalogoModelos.length) return [];
+    const CAT_CATALOG: Record<string, string[]> = {
+      IPHONES: ["IPHONES"], MACBOOK: ["MACBOOK_AIR", "MACBOOK_PRO", "MACBOOK_NEO"],
+      MAC_MINI: ["MAC_MINI"], IPADS: ["IPADS"], APPLE_WATCH: ["APPLE_WATCH"],
+      AIRPODS: ["AIRPODS"], ACESSORIOS: ["ACESSORIOS"],
+    };
+    const keys = CAT_CATALOG[categoriaEstoque] || [];
+    if (!keys.length) return [];
+    const catModelos = catalogoModelos.filter(m => keys.includes(m.categoria_key) && m.ativo !== false);
+    const prodNorm = normalizeModelName(produtoNome);
+    const match = catModelos
+      .map(m => ({ m, norm: normalizeModelName(m.nome) }))
+      .filter(({ norm }) => modelMatchesProduct(norm, prodNorm))
+      .sort((a, b) => b.norm.length - a.norm.length)[0];
+    if (!match) return [];
+    return coresPorModelo[match.m.id] || [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogoModelos, coresPorModelo]);
   function getCatModelos(catKey: string, fallback: string[]): string[] {
     const db = catalogoModelos.filter(m => m.categoria_key === catKey && m.ativo !== false).sort((a, b) => a.ordem - b.ordem).map(m => m.nome);
     return db.length > 0 ? db : fallback;
@@ -1128,8 +1448,8 @@ export default function EstoquePage() {
     switch (getBaseCat(effectiveCat)) {
       case "IPHONES": {
         const linha = spec.ip_linha ? ` ${spec.ip_linha}` : "";
-        const origem = spec.ip_origem ? ` ${spec.ip_origem.split(" ")[0]}` : "";
-        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}${origem}`.toUpperCase();
+        // Origem (LL/J/HN/...) NÃO entra no nome — é gravada no campo `origem` da row.
+        return `IPHONE ${spec.ip_modelo}${linha} ${spec.ip_storage}${c}`.toUpperCase();
       }
       case "MAC_MINI":
         const mmNucleos = spec.mm_nucleos ? ` (${spec.mm_nucleos})` : "";
@@ -1137,8 +1457,8 @@ export default function EstoquePage() {
       case "MACBOOK": {
         const tipo = spec.mb_modelo === "AIR" ? "MACBOOK AIR" : spec.mb_modelo === "NEO" ? "MACBOOK NEO" : "MACBOOK PRO";
         const tela = spec.mb_modelo === "NEO" ? spec.mb_tela || '13"' : spec.mb_tela;
-        const nucleos = spec.mb_nucleos ? ` (${spec.mb_nucleos})` : "";
-        return `${tipo} ${spec.mb_chip}${nucleos} ${tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
+        // Núcleos NÃO entra no nome — fica apenas como spec visível nos detalhes.
+        return `${tipo} ${spec.mb_chip} ${tela} ${spec.mb_ram} ${spec.mb_storage}${c}`.toUpperCase();
       }
       case "IPADS": {
         const modelo = spec.ipad_modelo === "IPAD" ? "IPAD" : `IPAD ${spec.ipad_modelo}`;
@@ -1240,6 +1560,8 @@ export default function EstoquePage() {
   }, [password]);
 
   useEffect(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
+  // intervalMs=0 → desativa polling automático; só re-puxa quando a aba ganha foco
+  useAutoRefetch(useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]), !!password, 0);
 
   // Reset estados de edição quando abre novo produto no modal
   useEffect(() => {
@@ -1524,8 +1846,8 @@ export default function EstoquePage() {
     const qrData = serial || imei || p.id;
     const cor = p.cor ? ` ${p.cor}` : "";
     const obs = p.observacao || "";
-    const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-    const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+    const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+    const grade = gradeMatch || null;
     const hasCaixa = obs.includes("[COM_CAIXA]");
     const hasCabo = obs.includes("[COM_CABO]");
     const win = window.open("", "_blank", "width=600,height=400");
@@ -1661,7 +1983,11 @@ export default function EstoquePage() {
       "JET","SLATE","OCEAN","PRETA","MILANES","MILANESE","LAKE",
     ]);
     const words = produto.split(/\s+/);
-    const storageIdx = words.findIndex(w => /^\d+(GB|TB)$/i.test(w));
+    // Para MacBook/iPad/Mac Mini a RAM também é "XXGB" — usar o ÚLTIMO match (SSD real)
+    let storageIdx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (/^\d+(GB|TB)$/i.test(words[i])) storageIdx = i;
+    }
     // Watches/AirPods: sem storage, agrupar por modelo+tamanho
     if (storageIdx === -1) {
       const sizeIdx = words.findIndex(w => /^\d+MM$/i.test(w));
@@ -1699,18 +2025,32 @@ export default function EstoquePage() {
     if (!obs) return null;
     return obs
       .replace(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA)\]/g, "")
-      .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+      .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
       .replace(/\[CICLOS:\d+\]/g, "")
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
+      .replace(/\[RESP:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
   /** Extrai todas as tags [...] da observação */
   const extractTags = (obs: string | null): string => {
     if (!obs) return "";
-    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(APLUS|AB|A|B)|CICLOS:\d+)\]/g);
+    const tags = obs.match(/\[(NAO_ATIVADO|SEMINOVO|COM_CAIXA|COM_CABO|COM_FONTE|COM_PULSEIRA|EX_PENDENCIA|GRADE_(A\+|AB|A|B)|CICLOS:\d+|RESP:[^\]]+)\]/g);
     return tags ? tags.join(" ") : "";
+  };
+  /** Extrai [RESP:xxx] da observação */
+  const getResp = (obs: string | null): string => {
+    if (!obs) return "";
+    const m = obs.match(/\[RESP:([^\]]+)\]/);
+    return m ? m[1] : "";
+  };
+  /** Substitui/remove tag [RESP:xxx] numa observação */
+  const setResp = (obs: string | null, resp: string): string | null => {
+    const base = (obs || "").replace(/\[RESP:[^\]]+\]/g, "").trim();
+    const trimmed = resp.trim();
+    const val = trimmed ? `[RESP:${trimmed}] ${base}`.trim() : base;
+    return val || null;
   };
 
   const handleSubmitMulti = async () => {
@@ -1911,14 +2251,18 @@ export default function EstoquePage() {
     setImportingInitial(false);
   };
 
-  // Filtrar por tipo
-  const novos = estoque.filter((p) => (p.tipo || "NOVO") === "NOVO");
-  const naoAtivados = estoque.filter((p) => p.tipo === "NAO_ATIVADO");
-  const seminovos = estoque.filter((p) => p.tipo === "SEMINOVO" && p.status !== "ESGOTADO");
-  const atacado = estoque.filter((p) => p.tipo === "ATACADO");
+  // Reservados: produtos movidos para a aba Reservas (ficam escondidos das outras listas)
+  const isReservado = (p: ProdutoEstoque) => !!p.reserva_cliente;
+  const reservados = estoque.filter(isReservado);
+
+  // Filtrar por tipo (sempre excluindo reservados)
+  const novos = estoque.filter((p) => !isReservado(p) && (p.tipo || "NOVO") === "NOVO");
+  // Seminovos agora engloba SEMINOVO + NAO_ATIVADO (aba "Não Ativados" foi removida)
+  const seminovos = estoque.filter((p) => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO");
+  const atacado = estoque.filter((p) => !isReservado(p) && p.tipo === "ATACADO");
   const emEstoque = novos; // Aba Estoque = só lacrados (NOVO)
-  const pendencias = estoque.filter((p) => p.tipo === "PENDENCIA");
-  const aCaminho = estoque.filter((p) => p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
+  const pendencias = estoque.filter((p) => !isReservado(p) && p.tipo === "PENDENCIA");
+  const aCaminho = estoque.filter((p) => !isReservado(p) && p.tipo === "A_CAMINHO" && p.status === "A CAMINHO");
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque
   // Produtos que tinham pedido (A_CAMINHO) mas já foram movidos para estoque — identificados por terem data_compra
   const pedidosRecebidos = estoque.filter((p) => p.tipo !== "A_CAMINHO" && !!p.pedido_fornecedor_id && !["PENDENCIA", "SEMINOVO"].includes(p.tipo));
@@ -1955,8 +2299,8 @@ export default function EstoquePage() {
     [...aCaminho, ...pedidosRecebidos];
 
   const currentList =
-    tab === "naoativados" ? naoAtivados :
     tab === "seminovos" ? seminovos :
+    tab === "reservas" ? reservados :
     tab === "acaminho" ? acaminhoList :
     tab === "atacado" ? atacado :
     tab === "pendencias" ? pendencias :
@@ -1983,7 +2327,7 @@ export default function EstoquePage() {
         if (f === "SEM_CAIXA" && obs.includes("[COM_CAIXA]")) return false;
         if (f === "COM_CABO" && !obs.includes("[COM_CABO]")) return false;
         if (f === "COM_GARANTIA" && !p.garantia) return false;
-        if (f === "GRADE_A+" && !obs.includes("[GRADE_APLUS]")) return false;
+        if (f === "GRADE_A+" && !obs.includes("[GRADE_A+]")) return false;
         if (f === "GRADE_A" && !obs.includes("[GRADE_A]")) return false;
         if (f === "GRADE_AB" && !obs.includes("[GRADE_AB]")) return false;
         if (f === "GRADE_B" && !obs.includes("[GRADE_B]")) return false;
@@ -2035,7 +2379,7 @@ export default function EstoquePage() {
 
       {/* Modal Etiqueta Obrigatória */}
       {etiquetaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => {}}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => {}}>
           <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#E5E5EA]"} rounded-2xl border shadow-2xl w-full max-w-lg mx-4 overflow-hidden`} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
@@ -2349,8 +2693,8 @@ export default function EstoquePage() {
         <div className={`inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto max-w-full ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
           {([
             { key: "estoque", label: "Lacrados", count: emEstoque.length },
-            { key: "naoativados", label: "Não Ativados", count: naoAtivados.length },
             { key: "seminovos", label: "Seminovos", count: seminovos.length },
+            { key: "reservas", label: "Reservas", count: reservados.length },
             { key: "atacado", label: "Atacado", count: atacado.length },
             { key: "acaminho", label: "Produtos a Caminho", count: aCaminho.length },
             { key: "pendencias", label: "Pendências", count: pendencias.length },
@@ -2378,6 +2722,25 @@ export default function EstoquePage() {
           <button onClick={() => setTab("historico" as typeof tab)} className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${tab === "historico" ? "bg-[#E8740E] text-white" : `${bgCard} border ${borderCard} ${textSecondary} hover:border-[#E8740E]`}`}>
             Historico
           </button>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                if (!confirm("Recalcular balanço de TODOS os produtos em estoque?\n\nAgrupa por categoria + modelo (ignora cor) e aplica média ponderada do custo de compra.")) return;
+                setMsg("⏳ Recalculando balanços...");
+                try {
+                  const r = await fetch("/api/admin/recalc-balancos", { method: "POST", headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } });
+                  const j = await r.json();
+                  if (!r.ok) { setMsg(`❌ ${j.error || "Erro ao recalcular"}`); return; }
+                  setMsg(`✅ ${j.updated} produto(s) atualizados em ${j.groups} grupo(s)`);
+                  fetchEstoque();
+                } catch (e) { setMsg(`❌ ${e instanceof Error ? e.message : "Erro"}`); }
+              }}
+              title="Recalcula custo_unitario (balanço) de todos os produtos em estoque, agrupando por categoria+modelo (ignora cor) — média ponderada do custo_compra"
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${bgCard} border ${borderCard} ${textSecondary} hover:border-blue-500 hover:text-blue-500`}
+            >
+              🔄 Recalc Balanços
+            </button>
+          )}
           {isAdmin && !["novo", "scan", "historico", "etiquetas"].includes(tab) && (
             <button
               onClick={() => { setSelectMode(!selectMode); if (selectMode) setSelectedIds(new Set()); }}
@@ -2595,44 +2958,131 @@ export default function EstoquePage() {
 
         const catOrder = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
 
-        // Agrupar novos por modelo_base+cor → {totalQnt, min, jaCaminho, corDisplay}
+        // === Lógica: estoque como fonte da estrutura (preserva variantes por categoria
+        // via getModeloBase: iPad storage/conect, MacBook ram/ssd/cor, Watch tamanho/conect/cor, Mac Mini ram/ssd).
+        // Catálogo é usado apenas para FILTRAR cores fantasmas (que não estão cadastradas).
         type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
+        // Normalização em tokens (igual gerar-link): geração 2ND/2º→2, remove GB/TB/MM/GPS/etc
+        const normGen = (s: string) => s
+          .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+          .replace(/(\d+)\s*[º°]/g, "$1")
+          .replace(/\bGENERATION\b/gi, "GEN")
+          .replace(/\bGERAÇÃO\b/gi, "GEN");
+        const stripRepoNoise = (s: string) => normGen(s)
+          .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+          .replace(/\b\d+\s*MM\b/gi, "")
+          .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+          .replace(/[""\(\)\+\-]/g, " ")
+          .replace(/\s+/g, " ").trim();
+        const STOP_REPO = new Set(["de","the","with","com","e","a","o","gen"]);
+        const expandSynonymsRepo = (toks: string[]): string[] => {
+          const set = new Set(toks);
+          if (set.has("ipad")) {
+            if (set.has("a16")) set.add("11");
+            if (set.has("11")) set.add("a16");
+            if (set.has("a14")) set.add("10");
+            if (set.has("10")) set.add("a14");
+          }
+          return [...set];
+        };
+        const tokenize = (s: string) => expandSynonymsRepo(stripRepoNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP_REPO.has(t)));
+
+        // Index catálogo: nomeCat original → { tokens, cores normalizadas }
+        type CatEntry = { nomeCat: string; tokens: string[]; cores: Set<string> };
+        const catEntries: CatEntry[] = [];
+        for (const [nomeCat, coresCat] of Object.entries(catalogoCoresMap)) {
+          if (!coresCat) continue;
+          const set = new Set<string>();
+          for (const c of coresCat) {
+            set.add(c.toLowerCase());
+            const pt = COR_PT[c.toUpperCase()];
+            if (pt) set.add(pt.toLowerCase());
+          }
+          catEntries.push({ nomeCat, tokens: tokenize(nomeCat), cores: set });
+        }
+
+        // Acha melhor entry do catálogo por tokens: todos tokens do catálogo devem estar no produto.
+        const findCatEntry = (baseModelo: string): CatEntry | null => {
+          const baseTokens = new Set(tokenize(baseModelo));
+          let best: CatEntry | null = null;
+          let bestCount = 0;
+          for (const e of catEntries) {
+            if (e.tokens.length === 0) continue;
+            if (e.tokens.every(t => baseTokens.has(t)) && e.tokens.length > bestCount) {
+              best = e;
+              bestCount = e.tokens.length;
+            }
+          }
+          return best;
+        };
+
+        // Agrupar estoque por categoria → modelo base (preservando variantes)
+        type Acc = { totalQnt: number; min: number; jaCaminho: boolean };
+        const acc = new Map<string, Map<string, Map<string, Acc>>>(); // cat → base → corNorm → dados
+        const corDisplayMap = new Map<string, string>(); // corNorm → display original
+        const corENMap = new Map<string, string>(); // corNorm → EN
+
         for (const p of novos) {
-          const cat = p.categoria || "OUTROS";
-          // Usar getModeloBase (mesma função do Lacrados) para consistência de agrupamento
           const base = getModeloBase(p.produto, p.categoria).toUpperCase();
-          // Usar p.cor como chave primária (mesma cor para BLUE e BLUE WI-FI)
-          const cor = p.cor || extractCor(stripOrigemRepo(p.produto), null);
-          const corKey = (cor || "—").toUpperCase();
-          // Bilíngue: EN (PT) — mesmo padrão do resto do sistema
-          const corUpper = (cor || "").toUpperCase().trim();
-          const ptFromEN = COR_PT[corUpper]; // se cor é EN → pega PT
-          const enFromPT = PT_TO_EN[corUpper]; // se cor é PT → pega EN
-          let corEN = cor || "—";
-          let corPT = "";
-          if (ptFromEN) { corEN = cor!; corPT = ptFromEN; }
-          else if (enFromPT) { corEN = enFromPT; corPT = cor!; }
-          const corDisplay = corPT && corPT.toLowerCase() !== corEN.toLowerCase()
-            ? `${corEN.toUpperCase()} (${corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase()})`
-            : (cor || "—");
+          const cat = p.categoria || "OUTROS";
+          const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
+          if (!corRaw) continue;
+          const corUpper = corRaw.toUpperCase();
+          const enFromPT = PT_TO_EN[corUpper];
+          const corEN = enFromPT || corUpper;
+          const corNorm = corEN.toLowerCase();
 
-          if (!byCatModel[cat]) byCatModel[cat] = {};
-          if (!byCatModel[cat][base]) byCatModel[cat][base] = [];
+          if (!acc.has(cat)) acc.set(cat, new Map());
+          const catMap = acc.get(cat)!;
+          if (!catMap.has(base)) catMap.set(base, new Map());
+          const baseMap = catMap.get(base)!;
+          const cur = baseMap.get(corNorm) || { totalQnt: 0, min: 0, jaCaminho: false };
+          cur.totalQnt += p.qnt;
+          if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
+            cur.min = Math.max(cur.min, p.estoque_minimo);
+          }
+          baseMap.set(corNorm, cur);
+          if (!corDisplayMap.has(corNorm)) {
+            // Usa corParaPT que simplifica (Mist Blue → Azul, Sage → Verde, Starlight → Estelar, etc)
+            const simples = corParaPT(corEN) || corParaPT(corRaw) || corRaw;
+            corDisplayMap.set(corNorm, simples);
+            corENMap.set(corNorm, corEN);
+          }
+        }
 
-          const existing = byCatModel[cat][base].find(c => c.corEN.toUpperCase() === corEN.toUpperCase() || (c.corDisplay || "—").toUpperCase() === corKey);
-          if (existing) {
-            existing.totalQnt += p.qnt;
-            if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) existing.min = p.estoque_minimo;
-          } else {
-            byCatModel[cat][base].push({
-              totalQnt: p.qnt,
-              min: (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) ? p.estoque_minimo : 0,
-              corEN, corPT, corDisplay,
-              jaCaminho: produtosACaminho.has(p.produto.toUpperCase()),
-              falta: 0,
-            });
+        // Converter + filtrar cores que não estão no catálogo + aplicar hide via modal
+        for (const [cat, catMap] of acc.entries()) {
+          for (const [base, baseMap] of catMap.entries()) {
+            const catEntry = findCatEntry(base);
+            // Hide via modal: usuário oculta pelo nome do catálogo
+            if (catEntry && reposicaoOcultos.has(catEntry.nomeCat)) continue;
+            const catCores = catEntry?.cores || null;
+            const grupo: RepoGroup[] = [];
+            for (const [corNorm, dados] of baseMap.entries()) {
+              // Se tem catálogo, filtra. Se não tem, mostra tudo.
+              if (catCores && catCores.size > 0) {
+                const corEN = corENMap.get(corNorm) || corNorm;
+                const hasIt = catCores.has(corNorm) || catCores.has(corEN.toLowerCase());
+                if (!hasIt) continue;
+              }
+              const corEN = corENMap.get(corNorm) || corNorm.toUpperCase();
+              const corPT = COR_PT[corEN.toUpperCase()] || "";
+              grupo.push({
+                totalQnt: dados.totalQnt,
+                min: dados.min,
+                corEN,
+                corPT,
+                corDisplay: corDisplayMap.get(corNorm) || corEN,
+                jaCaminho: dados.jaCaminho,
+                falta: 0,
+              });
+            }
+            if (grupo.length > 0) {
+              if (!byCatModel[cat]) byCatModel[cat] = {};
+              byCatModel[cat][base] = grupo;
+            }
           }
         }
 
@@ -2687,14 +3137,93 @@ export default function EstoquePage() {
                     {totalFalta > 0 ? `${totalFalta} unidades precisam ser compradas` : "Estoque OK!"}
                   </p>
                 </div>
-                {totalFalta > 0 && (
-                  <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
-                    📋 Copiar Lista
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowReposicaoConfig(true)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:bg-[#F2F2F7]"}`}
+                    title="Controlar quais modelos aparecem na reposição">
+                    ⚙️ Modelos
                   </button>
-                )}
+                  {totalFalta > 0 && (
+                    <button onClick={() => { navigator.clipboard.writeText(buildCopyText()); setMsg("Lista copiada!"); }}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors">
+                      📋 Copiar Lista
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
+
+            {showReposicaoConfig && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowReposicaoConfig(false)}>
+                <div className={`${bgCard} border ${borderCard} rounded-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+                  <div className={`px-5 py-4 border-b ${borderCard} flex items-center justify-between`}>
+                    <div>
+                      <h3 className={`text-[15px] font-bold ${textPrimary}`}>Modelos na Reposição</h3>
+                      <p className={`text-[11px] ${textMuted} mt-0.5`}>Desmarque modelos que você não quer ver na lista de reposição.</p>
+                    </div>
+                    <button onClick={() => setShowReposicaoConfig(false)} className={`text-[18px] ${textSecondary} hover:text-red-500`}>✕</button>
+                  </div>
+                  <div className="overflow-y-auto p-4 space-y-3">
+                    {(() => {
+                      // Agrupa modelos por categoria
+                      const grupos: Record<string, string[]> = {};
+                      for (const nome of Object.keys(catalogoCoresMap)) {
+                        const cat = catalogoCatByModel[nome] || "OUTROS";
+                        if (!grupos[cat]) grupos[cat] = [];
+                        grupos[cat].push(nome);
+                      }
+                      const catOrderCfg = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"];
+                      const cats = Object.keys(grupos).sort((a, b) => {
+                        const ia = catOrderCfg.indexOf(a), ib = catOrderCfg.indexOf(b);
+                        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                      });
+                      return cats.map(cat => {
+                        const modelos = grupos[cat].sort((a, b) => a.localeCompare(b));
+                        const totalOcultos = modelos.filter(m => reposicaoOcultos.has(m)).length;
+                        const totalVisiveis = modelos.length - totalOcultos;
+                        return (
+                          <details key={cat} open className={`rounded-xl border ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+                            <summary className={`px-3 py-2 cursor-pointer select-none flex items-center justify-between ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"} rounded-t-xl`}>
+                              <span className={`text-[12px] font-bold uppercase tracking-wider ${textPrimary}`}>{dynamicCatLabels[cat] || cat}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] ${textMuted}`}>{totalVisiveis}/{modelos.length}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    const todosOcultos = totalOcultos === modelos.length;
+                                    const next = new Set(reposicaoOcultos);
+                                    for (const m of modelos) {
+                                      if (todosOcultos) next.delete(m); else next.add(m);
+                                    }
+                                    setReposicaoOcultos(next);
+                                    localStorage.setItem("tigrao_reposicao_ocultos", JSON.stringify([...next]));
+                                  }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full border ${dm ? "border-[#3A3A3C] hover:bg-[#1C1C1E]" : "border-[#D2D2D7] hover:bg-white"}`}
+                                >
+                                  {totalOcultos === modelos.length ? "Marcar todos" : "Desmarcar todos"}
+                                </button>
+                              </div>
+                            </summary>
+                            <div className="p-2 space-y-0.5">
+                              {modelos.map(nome => {
+                                const oculto = reposicaoOcultos.has(nome);
+                                return (
+                                  <label key={nome} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]"}`}>
+                                    <input type="checkbox" checked={!oculto} onChange={() => toggleReposicaoOculto(nome)} className="w-4 h-4 accent-[#E8740E]" />
+                                    <span className={`text-[13px] ${oculto ? textMuted : textPrimary} ${oculto ? "line-through" : ""}`}>{nome}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {sortedCats.length === 0 ? (
               <div className={`${bgCard} border ${borderCard} rounded-2xl p-8 text-center`}>
@@ -2726,7 +3255,7 @@ export default function EstoquePage() {
                               }`}>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
-                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corEN.toUpperCase()}{c.corPT && c.corPT.toLowerCase() !== c.corEN.toLowerCase() && <span className={`ml-1 font-normal opacity-60 text-[11px]`}>({c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()})</span>}</span>
+                                  <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : (c.corEN || "—")}</span>
                                   {c.jaCaminho && (
                                     <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
                                   )}
@@ -3152,10 +3681,10 @@ export default function EstoquePage() {
             <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 p-4 ${bgSection} rounded-xl`}>
               <div><p className={labelCls}>Bateria %</p><input type="number" value={form.bateria} onChange={(e) => set("bateria", e.target.value)} placeholder="Ex: 92" className={inputCls} /></div>
               <div><p className={labelCls}>Garantia</p><input value={form.garantia} onChange={(e) => set("garantia", e.target.value)} placeholder="DD/MM/AAAA ou MM/AAAA" className={inputCls} /></div>
-              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] === "APLUS" ? "A+" : form.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
+              <div><p className={labelCls}>Grade</p><select value={form.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1] || ""} onChange={(e) => {
                 const obs = form.observacao || "";
-                const cleaned = obs.replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "").trim();
-                const tag = e.target.value ? `[GRADE_${e.target.value === "A+" ? "APLUS" : e.target.value}]` : "";
+                const cleaned = obs.replace(/\[GRADE_(A\+|AB|A|B)\]/g, "").trim();
+                const tag = e.target.value ? `[GRADE_${e.target.value}]` : "";
                 set("observacao", tag ? `${cleaned} ${tag}`.trim() : cleaned || "");
               }} className={inputCls}>
                 <option value="">— Sem grade —</option>
@@ -3324,7 +3853,10 @@ export default function EstoquePage() {
                                       <input type="checkbox" checked={allSelected} onChange={() => setSelectedACaminho(prev => { const n = new Set(prev); if (allSelected) group.forEach(p => n.delete(p.id)); else group.forEach(p => n.add(p.id)); return n; })} className="accent-[#E8740E]" />
                                     </td>
                                     <td className={`px-4 py-3 text-sm font-semibold ${textPrimary}`}>
-                                      <span>{baseModel}</span>
+                                      <span>{isSingleUnit ? group[0].produto : baseModel}</span>
+                                      {isSingleUnit && group[0].cor && !group[0].produto.toUpperCase().includes((group[0].cor || "").toUpperCase()) && (
+                                        <span className={`ml-2 text-[11px] font-normal ${textSecondary}`}>{group[0].cor}</span>
+                                      )}
                                       {!isSingleUnit && (
                                         <span className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F5] text-[#86868B]"}`}>
                                           {group.length} variantes
@@ -3364,16 +3896,9 @@ export default function EstoquePage() {
                                           <span className={`mr-1 ${dm ? "text-[#6E6E73]" : "text-[#C0C0C5]"}`}>└</span>
                                           {(() => {
                                             if (!p.cor) return p.produto;
-                                            const upper = p.cor.toUpperCase().trim();
-                                            const ptFromEN = COR_PT[upper];
-                                            if (ptFromEN && ptFromEN.toLowerCase() !== p.cor.toLowerCase()) {
-                                              return <>{p.cor} <span className={`text-[11px] font-normal ${textSecondary}`}>{ptFromEN}</span></>;
-                                            }
-                                            const enFromPT = PT_TO_EN[upper];
-                                            if (enFromPT) {
-                                              return <>{enFromPT} <span className={`text-[11px] font-normal ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
-                                            }
-                                            return p.cor;
+                                            const pt = corParaPT(p.cor);
+                                            const en = corEnOriginal(p.cor);
+                                            return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[11px] font-normal ${textSecondary}`}>{en}</span>}</>;
                                           })()}
                                           {(p.serial_no || p.imei) && (
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
@@ -3590,13 +4115,21 @@ export default function EstoquePage() {
                   {tab === "pendencias" ? (() => {
                     const [dateStr, cliente] = cat.split("|||");
                     const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
+                    const resps = Array.from(new Set(
+                      Object.values(modelos).flat().map(p => getResp(p.observacao)).filter(Boolean)
+                    ));
                     return (
-                      <span className="flex items-center gap-3">
+                      <span className="flex items-center gap-3 flex-wrap">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
                         <span className="flex items-center gap-1.5">
                           <span className={`text-sm ${textSecondary}`}>👤</span>
                           {cliente}
                         </span>
+                        {resps.length > 0 && (
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-blue-900/30 text-blue-300" : "bg-blue-50 text-blue-700"}`}>
+                            📦 {resps.join(", ")}
+                          </span>
+                        )}
                       </span>
                     );
                   })() : (dynamicCatLabels[cat] || cat)}
@@ -3622,10 +4155,23 @@ export default function EstoquePage() {
                     .replace(/\s*[-–]\s*$/, "")
                     .trim();
                   const byProduto: Record<string, ProdutoEstoque[]> = {};
+                  // Normaliza cor: traduz PT→EN e remove código de origem (LL/BR/etc)
+                  const canonicalCor = (cor: string | null | undefined, categoria: string | null | undefined): string => {
+                    if (!cor) return "";
+                    const isIphone = (categoria || "").toUpperCase() === "IPHONES" || !categoria;
+                    const c = isIphone ? stripCode(cor) : cor;
+                    const upper = c.toUpperCase().trim();
+                    return (PT_TO_EN[upper] || upper).toUpperCase();
+                  };
                   items.forEach((p) => {
                     // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
                     if (tab === "seminovos" && p.qnt === 0) return;
-                    const groupKey = stripOrigem(p.produto).toUpperCase();
+                    // Agrupar por modelo base (sem cor) + cor canônica (PT→EN)
+                    // Isso evita duplicação quando o produto foi cadastrado com cor diferente
+                    // (ex: "IPHONE 17 PRO 256GB COSMIC ORANGE" vs "IPHONE 17 PRO 256GB LARANJA")
+                    const baseModelo = getModeloBase(p.produto, p.categoria).toUpperCase();
+                    const corCanon = canonicalCor(p.cor, p.categoria);
+                    const groupKey = `${baseModelo}|||${corCanon}`;
                     if (!byProduto[groupKey]) byProduto[groupKey] = [];
                     byProduto[groupKey].push(p);
                   });
@@ -3742,15 +4288,31 @@ export default function EstoquePage() {
                       <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
                         {(() => {
                           // Agrupar por cor pra mostrar resumo no header (em português)
-                          const colorSummary: Record<string, number> = {};
+                          // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
+                          const colorSummary: Record<string, { label: string; qnt: number }> = {};
                           items.forEach(p => {
-                            const c = traduzirCor(p.cor);
-                            colorSummary[c] = (colorSummary[c] || 0) + p.qnt;
+                            if (!p.cor || !p.cor.trim() || p.cor.trim() === "—") return;
+                            const label = corParaPT(p.cor);
+                            if (!label || label === "—") return;
+                            const key = label.toUpperCase().trim();
+                            if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
+                            colorSummary[key].qnt += p.qnt;
                           });
+                          // Apenas para LACRADOS (tipo NOVO) — injeta cores do catálogo que zeraram como 0x
+                          const isLacrado = (items[0]?.tipo || "NOVO") === "NOVO" && items[0]?.categoria !== "SEMINOVOS";
+                          if (isLacrado) {
+                            const coresValidas = getCoresValidasParaProduto(items[0]?.produto || "", items[0]?.categoria || "");
+                            coresValidas.forEach(corEN => {
+                              const label = corParaPT(corEN);
+                              if (!label || label === "—") return;
+                              const key = label.toUpperCase().trim();
+                              if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
+                            });
+                          }
                           return (
-                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer max-w-[300px] overflow-hidden max-h-[1.4em]`}>
-                              {Object.entries(colorSummary).sort(([a],[b]) => a.localeCompare(b)).map(([c, n], i) => (
-                                <span key={c} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{n}x {c}</span>
+                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer`}>
+                              {Object.values(colorSummary).sort((a,b) => a.label.localeCompare(b.label)).map((c, i) => (
+                                <span key={c.label} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{c.qnt}x {c.label}</span>
                               ))}
                             </span>
                           );
@@ -3916,62 +4478,12 @@ export default function EstoquePage() {
                                         </div>
                                       ) : (
                                         <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {displayNomeProduto(prodNome, prodItems[0]?.cor, prodItems[0]?.categoria)}
-                                          {/* Badge de núcleos para MacBooks */}
-                                          {(getBaseCat(prodItems[0]?.categoria) === "MACBOOK" || getBaseCat(prodItems[0]?.categoria) === "MAC_MINI") && (() => {
-                                            const nome = (prodItems[0]?.produto || prodNome || "").toUpperCase();
-                                            const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
-                                            if (!nucleosMatch) return null;
-                                            return <span className="px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-bold text-white/70 tracking-wide">{nucleosMatch[1]}</span>;
-                                          })()}
+                                          {formatProdutoDisplay(prodItems[0] || { produto: prodNome })}
                                           {(() => {
-                                            const ptLabel = corSoPT(prodItems[0]?.cor, prodItems[0]?.produto);
-                                            const corKey = prodItems[0]?.cor || extractCorEN(prodItems[0]?.produto) || "";
-                                            const editKey = `${prodItems[0]?.id}_corpt`;
-                                            if (editingCorPT[editKey] !== undefined) {
-                                              const savePT = (corEN: string, newPT: string) => {
-                                                if (newPT) {
-                                                  saveCustomCorPT(corEN, newPT);
-                                                  setEstoque(prev => [...prev]); // force re-render
-                                                }
-                                              };
-                                              return (
-                                                <span className="inline-flex items-center gap-0.5 ml-1" onClick={(e) => e.stopPropagation()}>
-                                                  <input
-                                                    value={editingCorPT[editKey]}
-                                                    onChange={(e) => setEditingCorPT(prev => ({ ...prev, [editKey]: e.target.value }))}
-                                                    onKeyDown={(e) => {
-                                                      if (e.key === "Enter") {
-                                                        savePT(corKey, editingCorPT[editKey]?.trim() || "");
-                                                        setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                      }
-                                                      if (e.key === "Escape") setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                    }}
-                                                    className={`w-24 px-1 py-0.5 rounded border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
-                                                    autoFocus
-                                                    placeholder="Cor em PT..."
-                                                  />
-                                                  <button onClick={() => {
-                                                    savePT(corKey, editingCorPT[editKey]?.trim() || "");
-                                                    setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; });
-                                                  }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                  <button onClick={() => setEditingCorPT(prev => { const n = { ...prev }; delete n[editKey]; return n; })} className="text-[10px] text-[#86868B]">✕</button>
-                                                </span>
-                                              );
-                                            }
-                                            return ptLabel ? (
-                                              <span
-                                                className="text-[11px] font-normal opacity-60 ml-1 cursor-pointer hover:opacity-100 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: ptLabel || "" })); }}
-                                                title="Clique para editar a cor em PT"
-                                              >{ptLabel}</span>
-                                            ) : corKey ? (
-                                              <span
-                                                className="text-[10px] font-normal opacity-40 ml-1 cursor-pointer hover:opacity-80 hover:text-[#E8740E]"
-                                                onClick={(e) => { e.stopPropagation(); setEditingCorPT(prev => ({ ...prev, [editKey]: "" })); }}
-                                                title="Adicionar nome em PT"
-                                              >+PT</span>
-                                            ) : null;
+                                            const en = corEnOriginal(prodItems[0]?.cor);
+                                            const pt = prodItems[0]?.cor ? corParaPT(prodItems[0].cor) : "";
+                                            if (!en || (pt && en.toLowerCase() === pt.toLowerCase())) return null;
+                                            return <span className="text-[11px] font-normal opacity-60 ml-1">{en}</span>;
                                           })()}
                                           {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
                                         </span>
@@ -4018,14 +4530,9 @@ export default function EstoquePage() {
                                         <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
                                           {(() => {
                                             if (!p.cor) return "—";
-                                            const upper = p.cor.toUpperCase().trim();
-                                            const en = PT_TO_EN[upper];
-                                            const ptFromMap = COR_PT[upper];
-                                            const ptCustom = CUSTOM_COR_PT[upper];
-                                            if (ptCustom) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptCustom}</span></>;
-                                            if (en) return <>{en.charAt(0).toUpperCase() + en.slice(1).toLowerCase()}<span className={`ml-1 text-[12px] ${textSecondary}`}>{p.cor.charAt(0).toUpperCase() + p.cor.slice(1).toLowerCase()}</span></>;
-                                            if (ptFromMap && ptFromMap.toLowerCase() !== p.cor.toLowerCase()) return <>{p.cor}<span className={`ml-1 text-[12px] ${textSecondary}`}>{ptFromMap}</span></>;
-                                            return p.cor;
+                                            const pt = corParaPT(p.cor);
+                                            const en = corEnOriginal(p.cor);
+                                            return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[12px] ${textSecondary}`}>{en}</span>}</>;
                                           })()}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right`}>
@@ -4118,8 +4625,8 @@ export default function EstoquePage() {
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
-                                              const gradeMatch = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
-                                              const grade = gradeMatch === "APLUS" ? "A+" : gradeMatch || null;
+                                              const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+                                              const grade = gradeMatch || null;
                                               const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
                                               const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
                                               const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
@@ -4523,7 +5030,17 @@ export default function EstoquePage() {
             <div className={`w-full max-w-lg mx-4 ${mBg} rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
-                <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                <div className="flex items-center gap-2">
+                  {(p.serial_no || p.imei) && (
+                    <button
+                      onClick={() => handlePrintEtiquetaDirect([p])}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
+                    >
+                      🏷️ Etiqueta
+                    </button>
+                  )}
+                  <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
+                </div>
               </div>
               {/* Produto — editável para pendências */}
               <div className={`mx-4 mt-4 p-4 rounded-xl border ${mSec}`}>
@@ -4547,14 +5064,13 @@ export default function EstoquePage() {
                       />
                     ) : (<>
                       <p className={`text-[16px] font-bold ${mP} mt-0.5`}>
-                        {displayNomeProduto(p.produto, p.cor, p.categoria)}
-                        {/* Badge de núcleos para MacBooks e Mac Mini */}
-                        {(getBaseCat(p.categoria) === "MACBOOK" || getBaseCat(p.categoria) === "MAC_MINI") && (() => {
-                          const nucleosMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
-                          if (!nucleosMatch) return null;
-                          return <span className={`ml-2 px-2 py-0.5 rounded-md text-[11px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#A1A1A6]" : "bg-[#F2F2F7] text-[#86868B]"}`}>{nucleosMatch[1]}</span>;
+                        {formatProdutoDisplay(p)}
+                        {(() => {
+                          const en = corEnOriginal(p.cor);
+                          const pt = p.cor ? corParaPT(p.cor) : "";
+                          if (!en || (pt && en.toLowerCase() === pt.toLowerCase())) return null;
+                          return <span className={`ml-2 text-[13px] font-normal ${mS}`}>{en}</span>;
                         })()}
-                        {corSoPT(p.cor, p.produto) && <span className={`ml-2 text-[13px] font-normal ${mS}`}>{corSoPT(p.cor, p.produto)}</span>}
                       </p>
                       {p.categoria === "APPLE_WATCH" && (() => {
                         const { tamanho, pulseira } = extractWatchBadges(p.produto);
@@ -4576,7 +5092,31 @@ export default function EstoquePage() {
                     <button
                       onClick={() => {
                         if (!recatMode) {
-                          setRecatRow({ ...createEmptyProdutoRow(), categoria: p.categoria || "IPHONES" });
+                          // Pre-popular spec a partir do nome atual (modelo/storage/ram/chip/nucleos)
+                          const base = createEmptyProdutoRow();
+                          const baseCat = getBaseCat(p.categoria || "IPHONES");
+                          const nome = (p.produto || "").toUpperCase();
+                          const spec = { ...base.spec };
+                          const storageMatch = nome.match(/(\d+(?:GB|TB))/);
+                          const ramMatch = nome.match(/(\d+GB)\s+\d+(?:GB|TB)/); // RAM antes do storage
+                          const nucleosMatch = nome.match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                          const telaMatch = nome.match(/(\d{2}")/);
+                          if (baseCat === "IPHONES") {
+                            if (storageMatch) spec.ip_storage = storageMatch[1];
+                            const modMatch = nome.match(/IPHONE\s+([0-9A-Z\s]+?)(?:\s+\d+(?:GB|TB)|$)/);
+                            if (modMatch) spec.ip_modelo = modMatch[1].trim();
+                          } else if (baseCat === "MACBOOK") {
+                            if (nome.includes("AIR")) spec.mb_modelo = "AIR";
+                            else if (nome.includes("NEO")) spec.mb_modelo = "NEO";
+                            else if (nome.includes("PRO")) spec.mb_modelo = "PRO";
+                            const chipMatch = nome.match(/\b(M[1-9](?:\s+PRO|\s+MAX)?)\b/);
+                            if (chipMatch) spec.mb_chip = chipMatch[1];
+                            if (telaMatch) spec.mb_tela = telaMatch[1];
+                            if (ramMatch) spec.mb_ram = ramMatch[1];
+                            if (storageMatch) spec.mb_storage = storageMatch[1];
+                            if (nucleosMatch) spec.mb_nucleos = nucleosMatch[1];
+                          }
+                          setRecatRow({ ...base, categoria: baseCat || p.categoria || "IPHONES", spec, cor: p.cor || "" });
                           setRecatMode(true);
                         } else {
                           setRecatMode(false);
@@ -4667,6 +5207,12 @@ export default function EstoquePage() {
                       >
                         <option value="">— Sem origem —</option>
                         {IPHONE_ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
+                        {/* Fallback: se o valor salvo no banco não bate com nenhum option canônico
+                            (ex: formatação antiga / vinda de outro fluxo), renderiza ele mesmo
+                            como uma opção extra para o select conseguir exibi-lo. */}
+                        {p.origem && !IPHONE_ORIGENS.includes(p.origem) && (
+                          <option value={p.origem}>{p.origem}</option>
+                        )}
                       </select>
                     ) : (
                       <p className={`text-[13px] ${mP} mt-0.5`}>{p.origem}</p>
@@ -4870,8 +5416,8 @@ export default function EstoquePage() {
                       })()}
                       {/* Grade badge — detecta tag [GRADE_X] ou texto livre */}
                       {(() => {
-                        const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                        const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                        const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                        const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                         const g = tagKey ? GRADE_TAG[tagKey]
                           : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase();
                         if (!g) return null;
@@ -4947,7 +5493,94 @@ export default function EstoquePage() {
                       <p className={`text-[13px] ${mP} mt-0.5`}>{corBilingual(p.cor)}</p>
                     ) : null}
                   </div>
-                  {(p.imei || isAdmin || canEditImei) && (
+                  {canEdit && getBaseCat(p.categoria || "") === "MACBOOK" && (() => {
+                    // Núcleos NÃO vive no nome — guardado como tag [NUCLEOS:...] na observacao
+                    const cleanNome = (p.produto || "").replace(/\s*\([^)]*CPU\/[^)]*GPU\)\s*/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
+                    const storages: string[] = [];
+                    cleanNome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    const curRam = storages[storages.length - 2] || "";
+                    const curSsd = storages[storages.length - 1] || "";
+                    const telaMatch = cleanNome.match(/(\d{2}")/);
+                    const curTela = telaMatch ? telaMatch[1] : "";
+                    const obsRaw = p.observacao || "";
+                    const nucTagMatch = obsRaw.match(/\[NUCLEOS:([^\]]+)\]/i);
+                    // Fallback: se ainda tem no nome antigo, ler de lá
+                    const nucNomeMatch = (p.produto || "").match(/\((\d+C?\s*CPU\/\d+C?\s*GPU)\)/i);
+                    const curNucleos = nucTagMatch ? nucTagMatch[1].trim() : (nucNomeMatch ? nucNomeMatch[1] : "");
+                    const stripNucFromName = (s: string) => s.replace(/\s*\([^)]*CPU\/[^)]*GPU\)\s*/gi, " ").replace(/\s+/g, " ").trim();
+                    const updateMacbookField = async (field: "ram" | "ssd" | "tela" | "nucleos", val: string) => {
+                      let novo = stripNucFromName(p.produto || "");
+                      let novaObs = obsRaw;
+                      if (field === "ram") {
+                        if (curRam) novo = novo.replace(new RegExp(`\\b${curRam}\\b(?=\\s+\\d+(?:GB|TB)\\b)`), val || curRam);
+                      } else if (field === "ssd") {
+                        if (curSsd) novo = novo.replace(new RegExp(`\\b${curSsd}\\b(?!.*\\b\\d+(?:GB|TB)\\b)`), val || curSsd);
+                      } else if (field === "tela") {
+                        if (curTela) novo = novo.replace(new RegExp(`${curTela.replace('"','\\"')}`), val || curTela);
+                        else if (val) {
+                          // insere tela após o chip (M1/M2/.../Mx)
+                          novo = novo.replace(/(\bM[1-9](?:\s+PRO|\s+MAX)?\b)/i, `$1 ${val}`);
+                        }
+                      } else if (field === "nucleos") {
+                        // Remove tag antiga e insere nova (se val)
+                        novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                        if (val) novaObs = (novaObs + ` [NUCLEOS:${val}]`).trim();
+                      }
+                      novo = novo.trim();
+                      const updates: Record<string, unknown> = { produto: novo };
+                      if (field === "nucleos" || novaObs !== obsRaw) updates.observacao = novaObs || null;
+                      await apiPatch(p.id, updates);
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo, observacao: (updates.observacao as string | null) ?? x.observacao } : x));
+                      setDetailProduct({ ...p, produto: novo, observacao: (updates.observacao as string | null) ?? p.observacao });
+                      showSaved(field);
+                    };
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    // Sincroniza com o catálogo
+                    const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
+                    const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
+                    const telaList = (detailModelConfigs.telas?.length ? detailModelConfigs.telas : ['13"', '14"', '15"', '16"']);
+                    const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
+                    const nucleosList = nucleosCatalog.length > 0
+                      ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
+                      : MACBOOK_NUCLEOS;
+                    return (
+                      <>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Núcleos {saved("nucleos")}</p>
+                          <select value={curNucleos} onChange={(e) => updateMacbookField("nucleos", e.target.value)} className={selCls}>
+                            <option value="">— Não informar —</option>
+                            {curNucleos && !nucleosList.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {nucleosList.map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tela {saved("tela")}</p>
+                          <select value={curTela} onChange={(e) => updateMacbookField("tela", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curTela && !telaList.includes(curTela) && <option value={curTela}>{curTela}</option>}
+                            {telaList.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
+                          <select value={curRam} onChange={(e) => updateMacbookField("ram", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curRam && !ramList.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {ramList.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
+                          <select value={curSsd} onChange={(e) => updateMacbookField("ssd", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curSsd && !ssdList.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {ssdList.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {(p.imei || isAdmin || canEditImei) && !CATS_SEM_IMEI.includes(getBaseCat(p.categoria || "")) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI {saved("imei")}</p>
                       {canEditImei ? (
@@ -5039,8 +5672,8 @@ export default function EstoquePage() {
                   )}
                   {/* Grade + Caixa + Cabo + Carregador */}
                   {!isLac && (canEdit || isAdmin) && (() => {
-                    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-                    const tagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+                    const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+                    const tagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
                     const currentGrade = tagKey ? GRADE_TAG[tagKey]
                       : p.observacao?.match(/\bGRADE\s*(A\+|AB|A|B)\b/i)?.[1]?.toUpperCase() || "";
                     const hasCaixa = p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "");
@@ -5088,10 +5721,10 @@ export default function EstoquePage() {
                             const newGrade = e.target.value;
                             const obs = getLatestObs();
                             const cleaned = obs
-                              .replace(/\[GRADE_(APLUS|AB|A|B)\]/g, "")
+                              .replace(/\[GRADE_(A\+|AB|A|B)\]/g, "")
                               .replace(/\bGRADE\s*(A\+|AB|A|B)\b/gi, "")
                               .trim();
-                            const gradeTag = newGrade ? `[GRADE_${newGrade === "A+" ? "APLUS" : newGrade}]` : "";
+                            const gradeTag = newGrade ? `[GRADE_${newGrade}]` : "";
                             const finalObs = gradeTag ? `${cleaned} ${gradeTag}`.trim() : (cleaned || null);
                             await apiPatch(p.id, { observacao: finalObs });
                             setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
@@ -5205,6 +5838,178 @@ export default function EstoquePage() {
                   </div>
                 );
               })()}
+              {/* Especificações */}
+              {(() => {
+                const obs = p.observacao || "";
+                const nome = p.produto || "";
+                const baseCat = getBaseCat(p.categoria || "IPHONES");
+                const isSeminovo = p.categoria === "SEMINOVOS" || p.tipo === "SEMINOVO";
+                const tag = (re: RegExp) => { const m = obs.match(re); return m ? m[1] : null; };
+                const has = (re: RegExp) => re.test(obs);
+                // Armazenamento (maior valor GB/TB do nome)
+                const upNome = nome.toUpperCase();
+                const memAll = [...upNome.matchAll(/(\d+)\s*(GB|TB)/g)].map(m => ({ raw: `${m[1]}${m[2]}`, gb: m[2] === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+                const armazenamento = memAll.length ? memAll.sort((a, b) => b.gb - a.gb)[0].raw : null;
+                const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
+                const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
+                const ciclos = tag(/\[CICLOS:(\d+)\]/);
+                const ram = tag(/\[RAM:([^\]]+)\]/);
+                const ssd = tag(/\[SSD:([^\]]+)\]/);
+                let cpu = tag(/\[CPU:([^\]]+)\]/);
+                let gpu = tag(/\[GPU:([^\]]+)\]/);
+                // Fallback: extrai do nome ex "(10C CPU/8C GPU)"
+                if (!cpu || !gpu) {
+                  const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
+                  if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
+                }
+                const tela = tag(/\[TELA:([^\]]+)\]/);
+                const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
+                const band = tag(/\[BAND:([^\]]+)\]/);
+                const comCaixa = has(/\[COM_CAIXA\]/);
+                const comCabo = has(/\[COM_CABO\]/);
+                const comFonte = has(/\[COM_FONTE\]/);
+                // Inferências do nome
+                const telaNome = nome.match(/\b(11|13|14|15|16)["”]/);
+                const isCellular = /CELLULAR|CEL\b|\+CEL/i.test(nome);
+                const isWifi = /WI-?FI|WIFI/i.test(nome) && !isCellular;
+                const isGps = /\bGPS\b/i.test(nome);
+                const tamMm = nome.match(/(\d{2})\s?MM/i);
+                const origemM = nome.match(/\b(LL|JPA|HN|IN|BR)\b\s*$/i);
+                const origem = origemM ? origemM[1].toUpperCase() : null;
+                const bateriaM = nome.match(/(\d{2,3})\s?%/);
+                const bateria = bateriaM ? bateriaM[1] + "%" : null;
+                const telaFinal = tela || (telaNome ? telaNome[1] + '"' : null);
+
+                const rows: Array<[string, string]> = [];
+                const push = (l: string, v: string | null | undefined) => { if (v) rows.push([l, v]); };
+
+                if (baseCat === "IPHONES") {
+                  push("Armazenamento", armazenamento);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
+                  push("Origem", origem);
+                  push("Bateria", bateria);
+                  if (isSeminovo) {
+                    push("Caixa", comCaixa ? "Com Caixa" : "Sem Caixa");
+                    push("Cabo", comCabo ? "Com Cabo" : "Sem Cabo");
+                  } else {
+                    push("Caixa", comCaixa ? "Sim" : null);
+                    push("Cabo", comCabo ? "Sim" : null);
+                  }
+                  push("Grade", grade);
+                } else if (baseCat === "IPADS") {
+                  push("Tamanho", telaFinal);
+                  push("Armazenamento", armazenamento);
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
+                  push("Conectividade", isCellular ? "Wi-Fi + Cellular" : (isWifi ? "Wi-Fi" : null));
+                  push("Bateria", bateria);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Fonte", comFonte ? "Sim" : null);
+                  push("Grade", grade);
+                } else if (baseCat === "MACBOOK") {
+                  push("Tamanho", telaFinal);
+                  push("RAM", ram);
+                  push("SSD", ssd);
+                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
+                  push("Ciclos de bateria", ciclos);
+                  push("Grade", grade);
+                } else if (baseCat === "MAC_MINI") {
+                  push("RAM", ram);
+                  push("SSD", ssd);
+                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
+                } else if (baseCat === "APPLE_WATCH") {
+                  push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
+                  push("Conectividade", isCellular ? "GPS + Cellular" : (isGps ? "GPS" : null));
+                  push("Cor", p.cor ? corParaPT(p.cor) : null);
+                  push("Modelo da pulseira", band);
+                  push("Tamanho da pulseira", pulseiraTam);
+                  push("Caixa", comCaixa ? "Sim" : null);
+                  push("Cabo", comCabo ? "Sim" : null);
+                  push("Carregador", has(/\[CARREGADOR\]/) ? "Sim" : null);
+                  push("Grade", grade);
+                } else {
+                  // Outros: tudo que não foi parseado em tags conhecidas
+                  const limpo = obs.replace(/\[[^\]]*\]/g, "").trim();
+                  if (limpo) push("Observação", limpo);
+                }
+                if (rows.length === 0 && !(canEdit && isAdmin)) return null;
+                // Helper para reescrever tag no observacao
+                const setTag = async (tagName: string, value: string | null) => {
+                  let newObs = (p.observacao || "").replace(new RegExp(`\\[${tagName}:[^\\]]*\\]`, "g"), "").trim();
+                  if (value && value.trim()) newObs = `${newObs} [${tagName}:${value.trim()}]`.trim();
+                  await apiPatch(p.id, { observacao: newObs });
+                  setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                  setDetailProduct({ ...p, observacao: newObs });
+                  showSaved("spec");
+                };
+                const editableTags: { label: string; tag: string; current: string }[] = [];
+                if (baseCat === "MACBOOK" || baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
+                if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
+                  editableTags.push({ label: "RAM", tag: "RAM", current: ram || "" });
+                  editableTags.push({ label: "SSD", tag: "SSD", current: ssd || "" });
+                  editableTags.push({ label: "CPU (núcleos)", tag: "CPU", current: cpu || "" });
+                  editableTags.push({ label: "GPU (núcleos)", tag: "GPU", current: gpu || "" });
+                  editableTags.push({ label: "Ciclos de bateria", tag: "CICLOS", current: ciclos || "" });
+                }
+                if (baseCat === "APPLE_WATCH") {
+                  editableTags.push({ label: "Modelo da pulseira", tag: "BAND", current: band || "" });
+                  editableTags.push({ label: "Tamanho da pulseira", tag: "PULSEIRA_TAM", current: pulseiraTam || "" });
+                }
+                return (
+                  <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
+                    <p className={`text-xs font-bold ${mP} mb-3`}>Especificações</p>
+                    {rows.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {rows.map(([label, value]) => {
+                          // Cor: mostrar PT principal + EN canônico em cinza
+                          if (label === "Cor" && p.cor) {
+                            const en = corEnOriginal(p.cor);
+                            const pt = corParaPT(p.cor);
+                            return (
+                              <div key={label}>
+                                <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                                <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>
+                                  {pt}
+                                  {en && en.toLowerCase() !== pt.toLowerCase() && (
+                                    <span className={`ml-1.5 text-[11px] font-normal ${mS}`}>{en}</span>
+                                  )}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={label}>
+                              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                              <p className={`text-[13px] font-bold mt-0.5 ${mP}`}>{value}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {canEdit && isAdmin && editableTags.length > 0 && (
+                      <>
+                        <p className={`text-[10px] uppercase tracking-wider mt-4 mb-2 ${mS}`}>Editar (admin)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {editableTags.map(({ label, tag, current }) => (
+                            <div key={tag}>
+                              <p className={`text-[10px] uppercase tracking-wider ${mS}`}>{label}</p>
+                              <input
+                                defaultValue={current}
+                                placeholder="—"
+                                onBlur={(e) => { const v = e.target.value.trim(); if (v !== current) setTag(tag, v || null); }}
+                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                className={`w-full text-[13px] font-bold mt-0.5 px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
               {/* Financeiro */}
               <div className={`mx-4 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Informacoes Financeiras</p>
@@ -5228,7 +6033,33 @@ export default function EstoquePage() {
                       />
                     </div>
                   )}
-                  <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p><p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p></div>
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Preco de Compra</p>
+                    {canEdit && isAdmin ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[13px] ${mS}`}>R$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          defaultValue={p.custo_unitario ? String(p.custo_unitario) : ""}
+                          placeholder="0"
+                          onBlur={async (e) => {
+                            const val = e.target.value.replace(/\D/g, "");
+                            const num = val ? parseInt(val) : null;
+                            if (num !== p.custo_unitario) {
+                              await apiPatch(p.id, { custo_unitario: num });
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, custo_unitario: num ?? 0 } : x));
+                              setDetailProduct({ ...p, custo_unitario: num ?? 0 });
+                              showSaved("custo");
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className={`flex-1 text-[14px] font-bold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
+                    ) : (
+                      <p className={`text-[14px] font-bold ${mP} mt-0.5`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</p>
+                    )}
+                  </div>
                   <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Categoria</p><p className={`text-[13px] ${mP} mt-0.5`}>{p.categoria}</p></div>
                 </div>
                 {/* Estoque mínimo — para lacrados, editável pelo admin */}
@@ -5347,6 +6178,36 @@ export default function EstoquePage() {
                     ) : <p className={`text-[13px] ${mP} mt-0.5`}>Não informado</p>}
                   </div>
                 </div>
+                {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (
+                  <div className="mt-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Responsável pela pendência {saved("resp")}</p>
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        id={`resp-${p.id}`}
+                        key={`resp-${p.id}`}
+                        defaultValue={getResp(p.observacao)}
+                        placeholder="Ex: Bia, Entregador João…"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={async () => {
+                          const el = document.getElementById(`resp-${p.id}`) as HTMLInputElement;
+                          const novo = setResp(p.observacao, el?.value || "");
+                          if (novo !== (p.observacao || null)) {
+                            await apiPatch(p.id, { observacao: novo });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: novo } : x));
+                            setDetailProduct(prev => prev ? { ...prev, observacao: novo } : null);
+                            showSaved("resp");
+                          }
+                        }}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                        title="Salvar responsável"
+                      >✓</button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3">
                   <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Observacao {saved("obs")}</p>
                   {(canEdit || isAdmin) ? (() => {
@@ -5428,11 +6289,11 @@ export default function EstoquePage() {
                         <button
                           onClick={() => {
                             if (p.tipo === "PENDENCIA") {
-                              const erro = validarSeminovoParaEstoque(p);
-                              if (erro) { setMsg(erro); return; }
+                              handleMoverParaEstoque(p);
+                            } else {
+                              setMoveConfirmData(hojeBR());
+                              setMoveConfirmId(p.id);
                             }
-                            setMoveConfirmData(hojeBR());
-                            setMoveConfirmId(p.id);
                           }}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-500 text-white text-xs font-semibold hover:bg-green-600 transition-colors"
                         >
@@ -5442,7 +6303,7 @@ export default function EstoquePage() {
                       )
                     )}
                     {/* Mover para Pendências — quando item está EM ESTOQUE e admin quer reclassificar como usado */}
-                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && p.tipo !== "SEMINOVO" && (
+                    {isAdmin && p.status === "EM ESTOQUE" && p.tipo !== "PENDENCIA" && (
                       <button
                         onClick={async () => {
                           if (!confirm("Mover para Pendências (seminovo/usado)?")) return;
@@ -5513,6 +6374,37 @@ export default function EstoquePage() {
                         Voltar ao Estoque
                       </button>
                     )}
+                    {/* Reservar / Liberar reserva */}
+                    {isAdmin && !p.reserva_cliente && p.status === "EM ESTOQUE" && (
+                      <button
+                        onClick={() => {
+                          const hoje = new Date().toISOString().slice(0, 10);
+                          setReservaForm({ cliente: "", data: hoje, para: hoje, operador: userName || "" });
+                          setReservaTarget(p);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-purple-900/30 text-purple-300 hover:bg-purple-800" : "bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Reservar
+                      </button>
+                    )}
+                    {isAdmin && p.reserva_cliente && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Liberar reserva de ${p.reserva_cliente}?`)) return;
+                          try {
+                            await apiPatch(p.id, { reserva_cliente: null, reserva_data: null, reserva_para: null, reserva_operador: null });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, reserva_cliente: null, reserva_data: null, reserva_para: null, reserva_operador: null } : x));
+                            setDetailProduct(null);
+                            setMsg(`Reserva liberada: ${p.produto}`);
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-orange-900/30 text-orange-300 hover:bg-orange-800" : "bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        Liberar Reserva
+                      </button>
+                    )}
                     <button
                       onClick={() => { setDetailProduct(null); const params = new URLSearchParams({ tab: "nova", produto: p.produto, custo: String(p.custo_unitario || 0), categoria: p.categoria || "", estoque_id: p.id }); if (p.serial_no) params.set("serial", p.serial_no); if (p.cor) params.set("cor", p.cor); if (p.fornecedor) params.set("fornecedor", p.fornecedor); window.location.href = `/admin/vendas?${params.toString()}`; }}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8740E] text-white text-xs font-semibold hover:bg-[#F5A623] transition-colors"
@@ -5552,6 +6444,103 @@ export default function EstoquePage() {
 
       {/* Modal Ver Entrada — produtos que entraram juntos */}
       {entradaView && <EntradaModal entradaView={entradaView} setEntradaView={setEntradaView} setDetailProduct={setDetailProduct} setMsg={setMsg} password={password} userName={userName} dm={dm} fetchEstoque={fetchEstoque} />}
+
+      {/* Modal Reservar Produto */}
+      {reservaTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !reservaSaving && setReservaTarget(null)}>
+          <div className={`w-full max-w-md rounded-2xl p-6 ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-base font-bold ${textPrimary}`}>Reservar Produto</h3>
+              <button onClick={() => !reservaSaving && setReservaTarget(null)} className={`${textMuted} hover:${textPrimary}`}>✕</button>
+            </div>
+            <div className={`mb-4 px-3 py-2 rounded-lg ${dm ? "bg-[#2C2C2E]" : "bg-[#F2F2F7]"}`}>
+              <p className={`text-sm font-semibold ${textPrimary}`}>{reservaTarget.produto}</p>
+              <p className={`text-[11px] ${textMuted}`}>{reservaTarget.cor || ""}{reservaTarget.serial_no ? ` — SN: ${reservaTarget.serial_no}` : ""}</p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Cliente *</label>
+                <input
+                  type="text"
+                  value={reservaForm.cliente}
+                  onChange={(e) => setReservaForm(f => ({ ...f, cliente: e.target.value }))}
+                  placeholder="Nome do cliente"
+                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Data da Reserva *</label>
+                  <input
+                    type="date"
+                    value={reservaForm.data}
+                    onChange={(e) => setReservaForm(f => ({ ...f, data: e.target.value }))}
+                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Para Qual Dia *</label>
+                  <input
+                    type="date"
+                    value={reservaForm.para}
+                    onChange={(e) => setReservaForm(f => ({ ...f, para: e.target.value }))}
+                    className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={`block text-[11px] uppercase tracking-wider mb-1 ${textMuted}`}>Operador *</label>
+                <input
+                  type="text"
+                  value={reservaForm.operador}
+                  onChange={(e) => setReservaForm(f => ({ ...f, operador: e.target.value }))}
+                  placeholder="Quem fez a reserva"
+                  className={`w-full text-[13px] px-3 py-2 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => !reservaSaving && setReservaTarget(null)}
+                disabled={reservaSaving}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-[13px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-[#F2F2F7] text-[#1D1D1F]"}`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!reservaForm.cliente.trim() || !reservaForm.data || !reservaForm.para || !reservaForm.operador.trim()) {
+                    setMsg("❌ Preencha todos os campos da reserva");
+                    return;
+                  }
+                  setReservaSaving(true);
+                  try {
+                    const patch = {
+                      reserva_cliente: reservaForm.cliente.trim(),
+                      reserva_data: reservaForm.data,
+                      reserva_para: reservaForm.para,
+                      reserva_operador: reservaForm.operador.trim(),
+                    };
+                    await apiPatch(reservaTarget.id, patch);
+                    setEstoque(prev => prev.map(x => x.id === reservaTarget.id ? { ...x, ...patch } : x));
+                    setMsg(`✅ Reservado para ${patch.reserva_cliente}`);
+                    setReservaTarget(null);
+                    setDetailProduct(null);
+                  } catch (err) {
+                    setMsg("❌ " + String(err instanceof Error ? err.message : err));
+                  } finally {
+                    setReservaSaving(false);
+                  }
+                }}
+                disabled={reservaSaving}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#E8740E] text-white text-[13px] font-semibold hover:bg-[#F5A623] disabled:opacity-50"
+              >
+                {reservaSaving ? "Salvando..." : "Confirmar Reserva"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

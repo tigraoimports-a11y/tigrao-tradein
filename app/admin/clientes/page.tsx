@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useSearchParams } from "next/navigation";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface VendaResumo {
   id: string;
@@ -64,6 +66,70 @@ const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
+
+interface Estorno {
+  id: string;
+  data: string;
+  hora: string | null;
+  valor: number;
+  banco: string;
+  descricao: string | null;
+  observacao: string | null;
+  venda_id: string | null;
+  contato_tipo: string | null;
+}
+
+function EstornosSection({ contatoNome, apiHeaders, dm }: { contatoNome: string; apiHeaders: () => HeadersInit; dm: boolean }) {
+  const [estornos, setEstornos] = useState<Estorno[]>([]);
+  const [loading, setLoading] = useState(false);
+  const mSec = dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#E8E8ED]";
+  const mP = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+  const mS = dm ? "text-[#98989D]" : "text-[#86868B]";
+
+  useEffect(() => {
+    if (!contatoNome) return;
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/gastos?categoria=ESTORNO&contato_nome=${encodeURIComponent(contatoNome)}`, { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setEstornos(j.data || []); })
+      .catch(() => { if (!cancelled) setEstornos([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [contatoNome, apiHeaders]);
+
+  if (!loading && estornos.length === 0) return null;
+
+  const total = estornos.reduce((s, e) => s + Number(e.valor || 0), 0);
+
+  return (
+    <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className={`text-xs font-bold ${mP}`}>↩️ Estornos ({estornos.length})</p>
+        <span className="text-sm font-bold text-red-500">{fmt(total)}</span>
+      </div>
+      {loading ? (
+        <p className={`text-xs text-center py-2 ${mS}`}>Carregando…</p>
+      ) : (
+        <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
+          {estornos.map(e => (
+            <div key={e.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E]" : "bg-white"}`}>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <span className={`shrink-0 ${mS}`}>{fmtDate(e.data)}</span>
+                <span className={`font-medium truncate ${mP}`}>{e.descricao || e.observacao || "—"}</span>
+                {e.venda_id && <span className="text-purple-500 font-mono shrink-0 text-[10px]">venda {e.venda_id.slice(0, 8)}…</span>}
+              </div>
+              <div className="flex items-center gap-3 shrink-0 ml-2">
+                <span className={mS}>{e.banco?.replace("_", " ")}</span>
+                <span className="font-bold text-red-500 w-20 text-right">{fmt(Number(e.valor))}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ClientesPage() {
   const { password, darkMode: dm, apiHeaders } = useAdmin();
@@ -129,6 +195,7 @@ export default function ClientesPage() {
   }, [password, tab, debouncedSearch, apiHeaders]);
 
   useEffect(() => { fetchClientes(); }, [fetchClientes]);
+  useAutoRefetch(fetchClientes);
 
   const handleCadastrarForn = async () => {
     if (!fornForm.nome.trim()) { setFornMsg("Nome obrigatório"); return; }
@@ -508,7 +575,7 @@ export default function ClientesPage() {
                                         <div key={i} className="flex items-center justify-between text-[11px] py-1">
                                           <div className="flex items-center gap-2 flex-1 min-w-0">
                                             <span className={`font-medium truncate ${mP}`}>{c.produto}</span>
-                                            {c.cor && <span className={`shrink-0 ${mS}`}>{c.cor}</span>}
+                                            {c.cor && <span className={`shrink-0 ${mS}`}>{corParaPT(c.cor)}</span>}
                                             {c.serial_no
                                               ? <span className="text-purple-500 font-mono shrink-0">SN: {c.serial_no}</span>
                                               : <span className="text-amber-600 shrink-0">⚠ sem SN</span>}
@@ -530,6 +597,8 @@ export default function ClientesPage() {
                     })()}
                   </div>
                 </div>
+
+                <EstornosSection contatoNome={f.nome} apiHeaders={apiHeaders} dm={dm} />
               </div>
             </div>
           );
@@ -877,6 +946,8 @@ export default function ClientesPage() {
                   </div>
                 )}
               </div>
+
+              <EstornosSection contatoNome={c.nome} apiHeaders={apiHeaders} dm={dm} />
 
               <div className="mx-5 mt-4 mb-5">
                 <button onClick={() => { setDetailClient(null); setEditing(false); }} className={`w-full py-3 rounded-xl text-sm font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E8E8ED]"} transition-colors`}>

@@ -218,6 +218,7 @@ export default function ProdutoSpecFields({
   const [clienteSuggestions, setClienteSuggestions] = useState<string[]>([]);
   const [clienteLoading, setClienteLoading] = useState(false);
   const [showClienteSugg, setShowClienteSugg] = useState(false);
+  const [linhaFiltro, setLinhaFiltro] = useState<string>("");
   const clienteDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch all catalog models once
@@ -347,7 +348,9 @@ export default function ProdutoSpecFields({
       catalogo_modelo_nome: modelo.nome,
       spec: newSpec,
       cor: "",
-      produto: buildProdutoName(row.categoria, newSpec, ""),
+      produto: STRUCTURED_CATS.includes(row.categoria)
+        ? buildProdutoName(row.categoria, newSpec, "")
+        : (modelo.nome || "").toUpperCase(),
     };
     onChange(updated);
   };
@@ -408,8 +411,40 @@ export default function ProdutoSpecFields({
             {CATEGORIAS.map((c) => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
           </select>
         </div>
+        {/* Linha (só iPhones) — filtro para reduzir lista de modelos.
+            Base é o número (ou SE), variantes "e"/"Plus"/"Pro"/"Pro Max" pertencem à mesma linha. */}
+        {row.categoria === "IPHONES" && categoryModelos.length > 0 && (() => {
+          const linhaOf = (nome: string): string | null => {
+            const m = nome.match(/iPhone\s*(SE|\d+)/i);
+            if (!m) return null;
+            return m[1].toUpperCase();
+          };
+          const linhas = Array.from(new Set(
+            categoryModelos.map((m) => linhaOf(m.nome)).filter((x): x is string => !!x)
+          )).sort((a, b) => {
+            if (a === "SE") return 1; if (b === "SE") return -1;
+            return parseInt(a) - parseInt(b);
+          });
+          return (
+            <div>
+              <p className={labelCls}>Linha</p>
+              <select value={linhaFiltro} onChange={(e) => setLinhaFiltro(e.target.value)} className={inputCls}>
+                <option value="">— Todas —</option>
+                {linhas.map((l) => <option key={l} value={l}>{l === "SE" ? "iPhone SE" : `iPhone ${l}`}</option>)}
+              </select>
+            </div>
+          );
+        })()}
         {/* Modelo — vem logo após categoria */}
-        {categoryModelos.length > 0 && (
+        {categoryModelos.length > 0 && (() => {
+          const linhaOf = (nome: string): string | null => {
+            const m = nome.match(/iPhone\s*(SE|\d+)/i);
+            return m ? m[1].toUpperCase() : null;
+          };
+          const modelosFiltrados = row.categoria === "IPHONES" && linhaFiltro
+            ? categoryModelos.filter((m) => linhaOf(m.nome) === linhaFiltro)
+            : categoryModelos;
+          return (
           <div>
             <p className={labelCls}>
               Modelo
@@ -424,10 +459,11 @@ export default function ProdutoSpecFields({
               className={inputCls}
             >
               <option value="">— Selecionar modelo —</option>
-              {categoryModelos.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              {modelosFiltrados.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
             </select>
           </div>
-        )}
+          );
+        })()}
         {!compactMode && <div>
           <p className={labelCls}>Condição</p>
           <select value={row.condicao || "NOVO"} onChange={(e) => set("condicao", e.target.value)} className={inputCls}>
@@ -608,18 +644,16 @@ export default function ProdutoSpecFields({
               </div>
             </>
           )}
-          {mbNucleosOptions.length > 0 && (
-            <div>
-              <p className={labelCls}>Núcleos</p>
-              <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
-                <option value="">— Selecionar —</option>
-                {mbNucleosOptions.map((n) => {
-                  const clean = n.replace(/^\(|\)$/g, "").trim();
-                  return <option key={clean} value={clean}>{clean}</option>;
-                })}
-              </select>
-            </div>
-          )}
+          <div>
+            <p className={labelCls}>Núcleos (CPU/GPU)</p>
+            <select value={row.spec.mb_nucleos} onChange={(e) => setSpec("mb_nucleos", e.target.value)} className={inputCls}>
+              <option value="">— Não informar —</option>
+              {(mbNucleosOptions.length > 0
+                ? mbNucleosOptions.map((n) => n.replace(/^\(|\)$/g, "").trim())
+                : MACBOOK_NUCLEOS
+              ).map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
           <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.mb_tela} onChange={(e) => setSpec("mb_tela", e.target.value)} className={inputCls}>

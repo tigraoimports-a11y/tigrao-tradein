@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import type { SaldoBancario } from "@/lib/admin-types";
 
@@ -70,6 +71,7 @@ export default function SaldosPage() {
   }, [password]);
 
   useEffect(() => { fetchSaldos(); }, [fetchSaldos]);
+  useAutoRefetch(fetchSaldos);
   useEffect(() => { fetchSaldoData(dataAtual); }, [dataAtual, fetchSaldoData]);
 
   const handleSalvar = async () => {
@@ -113,16 +115,61 @@ export default function SaldosPage() {
   };
 
   const [depositando, setDepositando] = useState(false);
+  const [depModal, setDepModal] = useState(false);
+  const [depValor, setDepValor] = useState("");
+  const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
+  const [depData, setDepData] = useState("");
+  // Histórico de depósitos em espécie
+  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string };
+  const [depHistModal, setDepHistModal] = useState(false);
+  const [depHist, setDepHist] = useState<DepHist[]>([]);
+  const [depHistLoading, setDepHistLoading] = useState(false);
+  const fetchDepHist = async () => {
+    setDepHistLoading(true);
+    try {
+      const res = await fetch(`/api/gastos?is_dep_esp=1&limit=100`, { headers: { "x-admin-password": password } });
+      const j = await res.json();
+      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string }) => g.is_dep_esp || g.categoria === "TRANSFERENCIA");
+      setDepHist(rows);
+    } catch { /* ignore */ }
+    setDepHistLoading(false);
+  };
+
+  // Valor disponível = fechamento noite da espécie (nunca a base manual)
+  const especieDisponivel = Number(saldoHoje?.esp_especie ?? 0);
+
+  const abrirDeposito = () => {
+    if (!especieDisponivel || especieDisponivel <= 0) {
+      setMsg("Nenhum valor em espécie disponível nesta data");
+      return;
+    }
+    setDepValor(toDisplayBR(String(especieDisponivel)));
+    setDepBanco("ITAU");
+    setDepData(dataAtual);
+    setMsg("");
+    setDepModal(true);
+  };
 
   const handleDepositar = async () => {
-    const espVal = parseFloat(fromDisplayBR(esp));
-    if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
-    if (!confirm(`Depositar R$ ${toDisplayBR(String(espVal))} de Especie no Itau?`)) return;
+    const espVal = especieDisponivel;
+    const valorDep = parseFloat(fromDisplayBR(depValor));
+    if (!valorDep || valorDep <= 0) { setMsg("Valor inválido"); return; }
+    if (valorDep > espVal + 0.01) {
+      setMsg(`Valor maior que o disponível (R$ ${toDisplayBR(String(espVal))})`);
+      return;
+    }
+    const bancoLabelMap: Record<string, string> = {
+      ITAU: "Itaú",
+      INFINITE: "Infinite",
+      MERCADO_PAGO: "Mercado Pago",
+    };
+    const bancoSel = { key: depBanco, label: bancoLabelMap[depBanco] };
+    const dataDep = depData || dataAtual; // usa data escolhida no modal
 
     setDepositando(true);
     setMsg("");
+    setDepModal(false);
     try {
-      // Cria gasto com is_dep_esp=true (banco = destino do depósito)
       const res = await fetch("/api/gastos", {
         method: "POST",
         headers: {
@@ -131,29 +178,44 @@ export default function SaldosPage() {
           "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
         },
         body: JSON.stringify({
-          data: dataAtual,
+          data: dataDep,
           tipo: "SAIDA",
           categoria: "TRANSFERENCIA",
-          descricao: `Depósito espécie → Itaú`,
-          banco: "ITAU",
-          valor: espVal,
+          descricao: `Depósito espécie → ${bancoSel.label}`,
+          banco: bancoSel.key,
+          valor: valorDep,
           is_dep_esp: true,
         }),
       });
       const json = await res.json();
-      if (json.ok || json.data) {
-        setMsg(`R$ ${toDisplayBR(String(espVal))} depositado de Espécie no Itaú com sucesso!`);
-        // Recalcular saldos
+      if (!(json.ok || json.data)) {
+        setMsg("Erro ao depositar: " + (json.error || "desconhecido"));
+        setDepositando(false);
+        return;
+      }
+
+      // Cascade rebalance: recalcula saldos da data do depósito em diante
+      // (todas as datas registradas >= dataDep no histórico)
+      const datasAfetadas = saldos
+        .map((s) => s.data)
+        .filter((d) => d >= dataDep)
+        .sort();
+      if (!datasAfetadas.includes(dataDep)) datasAfetadas.unshift(dataDep);
+      for (const d of datasAfetadas) {
         await fetch("/api/saldos", {
           method: "PUT",
-          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-          body: JSON.stringify({ data: dataAtual }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-password": password,
+            "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
+          },
+          body: JSON.stringify({ data: d }),
         });
-        fetchSaldos();
-        fetchSaldoData(dataAtual);
-      } else {
-        setMsg("Erro ao depositar: " + (json.error || "desconhecido"));
       }
+
+      setMsg(`✓ R$ ${toDisplayBR(String(valorDep))} depositado no ${bancoSel.label}`);
+      fetchSaldos();
+      fetchSaldoData(dataAtual);
     } catch {
       setMsg("Erro de conexão ao depositar");
     }
@@ -164,10 +226,53 @@ export default function SaldosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <h2 className="text-lg font-bold text-[#1D1D1F]">Saldos Bancarios</h2>
         <input type="date" value={dataAtual} onChange={(e) => setDataAtual(e.target.value)} className="px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm" />
+        <button onClick={() => { setDepHistModal(true); fetchDepHist(); }}
+          className="ml-auto px-3 py-2 rounded-xl border border-[#D2D2D7] text-sm font-semibold hover:bg-[#F5F5F7]">
+          📋 Histórico de depósitos
+        </button>
       </div>
+
+      {depHistModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDepHistModal(false)}>
+          <div className={`w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
+            <div className={`px-5 py-4 border-b flex items-center justify-between ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+              <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
+              <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            </div>
+            <div className="overflow-y-auto">
+              {depHistLoading ? (
+                <p className="p-8 text-center text-sm text-[#86868B]">Carregando...</p>
+              ) : depHist.length === 0 ? (
+                <p className="p-8 text-center text-sm text-[#86868B]">Nenhum depósito encontrado.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"} sticky top-0`}>
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Data</th>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Banco</th>
+                      <th className="px-4 py-2 text-right text-xs uppercase text-[#86868B]">Valor</th>
+                      <th className="px-4 py-2 text-left text-xs uppercase text-[#86868B]">Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depHist.map((d) => (
+                      <tr key={d.id} className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
+                        <td className="px-4 py-2 font-medium">{d.data}</td>
+                        <td className="px-4 py-2">{d.banco}</td>
+                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">R$ {fmt(Number(d.valor))}</td>
+                        <td className="px-4 py-2 text-xs text-[#86868B]">{d.descricao}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -201,9 +306,9 @@ export default function SaldosPage() {
                   <p className="text-lg font-bold" style={{ color: bank.color }}>{fmt(Number(bank.esp))}</p>
                 </div>
               )}
-              {bank.label === "Especie" && parseFloat(fromDisplayBR(esp)) > 0 && (
-                <button onClick={handleDepositar} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
-                  {depositando ? "Depositando..." : `Depositar ${esp} no Itau`}
+              {bank.label === "Especie" && especieDisponivel > 0 && (
+                <button onClick={abrirDeposito} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
+                  {depositando ? "Depositando..." : `Depositar espécie no banco…`}
                 </button>
               )}
             </div>
@@ -256,6 +361,103 @@ export default function SaldosPage() {
           </table>
         </div>
       </div>
+
+      {depModal && (() => {
+        const valorNum = parseFloat(fromDisplayBR(depValor)) || 0;
+        const excedeu = valorNum > especieDisponivel + 0.01;
+        const bancos = [
+          { key: "ITAU" as const, label: "Itaú", color: "#F47920" },
+          { key: "INFINITE" as const, label: "Infinite", color: "#1D1D1F" },
+          { key: "MERCADO_PAGO" as const, label: "Mercado Pago", color: "#00B1EA" },
+        ];
+        const setPct = (p: number) => setDepValor(toDisplayBR(String(Math.round(especieDisponivel * p * 100) / 100)));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !depositando && setDepModal(false)}>
+            <div className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E8E8ED]"}`} onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="px-6 pt-6 pb-5 bg-gradient-to-br from-[#2ECC71]/10 to-[#E8740E]/10 border-b border-[#2ECC71]/20">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-[11px] uppercase tracking-wider font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Depósito de espécie</p>
+                    <h3 className={`text-xl font-bold mt-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Transferir para banco</h3>
+                    <div className="mt-2 flex items-center gap-2">
+                      <label className={`text-[10px] uppercase tracking-wider font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data do depósito:</label>
+                      <input type="date" value={depData} onChange={(e) => setDepData(e.target.value)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                    </div>
+                  </div>
+                  <button onClick={() => !depositando && setDepModal(false)} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${dm ? "hover:bg-[#2C2C2E] text-[#98989D]" : "hover:bg-[#F5F5F7] text-[#86868B]"}`}>×</button>
+                </div>
+                <div className={`mt-4 p-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-white/70"}`}>
+                  <p className={`text-[10px] uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Disponível em espécie</p>
+                  <p className="text-2xl font-bold text-[#2ECC71] mt-0.5">R$ {toDisplayBR(String(especieDisponivel))}</p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-5">
+                {/* Banco destino */}
+                <div>
+                  <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco destino</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {bancos.map((b) => (
+                      <button key={b.key} type="button" onClick={() => setDepBanco(b.key)}
+                        className={`p-3 rounded-xl border-2 font-semibold text-xs transition-all ${depBanco === b.key ? "border-[#E8740E] bg-[#E8740E]/10" : dm ? "border-[#3A3A3C] bg-[#2C2C2E] hover:border-[#5A5A5C]" : "border-[#E8E8ED] bg-white hover:border-[#D2D2D7]"}`}>
+                        <div className="w-2.5 h-2.5 rounded-full mx-auto mb-1.5" style={{ backgroundColor: b.color }} />
+                        <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{b.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Valor */}
+                <div>
+                  <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor a depositar</label>
+                  <div className={`flex items-center gap-2 rounded-xl border-2 px-4 py-3 ${excedeu ? "border-red-500" : dm ? "border-[#3A3A3C] bg-[#2C2C2E] focus-within:border-[#E8740E]" : "border-[#E8E8ED] bg-[#F5F5F7] focus-within:border-[#E8740E]"}`}>
+                    <span className={`text-lg font-bold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>R$</span>
+                    <input type="text" inputMode="decimal" value={depValor} autoFocus
+                      onChange={(e) => setDepValor(e.target.value.replace(/[^\d.,-]/g, ""))}
+                      onBlur={() => setDepValor(toDisplayBR(fromDisplayBR(depValor)))}
+                      className={`flex-1 bg-transparent text-2xl font-bold outline-none ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`} />
+                  </div>
+                  {excedeu && <p className="text-xs text-red-500 mt-1.5 font-medium">Valor maior que o disponível</p>}
+                  {/* Atalhos de percentual */}
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {[{l:"25%",v:0.25},{l:"50%",v:0.5},{l:"75%",v:0.75},{l:"100%",v:1}].map((p) => (
+                      <button key={p.l} type="button" onClick={() => setPct(p.v)}
+                        className={`py-1.5 rounded-lg text-xs font-semibold border transition-colors ${dm ? "border-[#3A3A3C] bg-[#2C2C2E] text-[#F5F5F7] hover:border-[#E8740E]" : "border-[#E8E8ED] bg-white text-[#1D1D1F] hover:border-[#E8740E]"}`}>
+                        {p.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resumo */}
+                {valorNum > 0 && !excedeu && (
+                  <div className={`p-3 rounded-xl text-xs ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                    Restará em espécie após depósito:
+                    <span className={`font-bold ml-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                      R$ {toDisplayBR(String(Math.max(0, especieDisponivel - valorNum)))}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={`flex gap-2 p-4 border-t ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E8E8ED] bg-[#FAFAFA]"}`}>
+                <button onClick={() => setDepModal(false)} disabled={depositando}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold text-sm border ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:bg-white"} disabled:opacity-50`}>
+                  Cancelar
+                </button>
+                <button onClick={handleDepositar} disabled={depositando || excedeu || valorNum <= 0}
+                  className="flex-[2] px-4 py-3 rounded-xl bg-gradient-to-r from-[#E8740E] to-[#F5A623] text-white font-semibold text-sm hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {depositando ? "Depositando..." : `Depositar R$ ${toDisplayBR(String(valorNum))}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

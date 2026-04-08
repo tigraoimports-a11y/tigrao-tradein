@@ -2,12 +2,15 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { CATEGORIAS_GASTO } from "@/lib/admin-types";
 import { useTabParam } from "@/lib/useTabParam";
 import type { Gasto, Banco } from "@/lib/admin-types";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import { STRUCTURED_CATS, buildProdutoName, IPHONE_ORIGENS, DEFAULT_SPEC, type ProdutoSpec } from "@/lib/produto-specs";
+import { corParaPT, corParaEN, normalizarCoresNoTexto } from "@/lib/cor-pt";
+import { formatProdutoDisplay } from "@/lib/produto-display";
 
 /** Converte string BR (ex: "12.250,89" ou "128,89") para número */
 const parseBR = (v: string): number => {
@@ -109,9 +112,10 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
     else if (categoria === "MAC_MINI") spec.mm_storage = storageMatch[1];
   }
   if (categoria === "IPHONES") {
-    const numMatch = n.match(/IPHONE\s*(\d+(?:\s+AIR)?)/);
-    spec.ip_modelo = numMatch ? numMatch[1].trim() : "17";
-    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : /IPHONE\s+\d+\s+E(\s|$)/.test(n) ? "E" : "";
+    // Captura número + opcional E (ex.: 16E) ou número + AIR (ex.: 17 AIR)
+    const numMatch = n.match(/IPHONE\s*(\d+E?|\d+\s+AIR)/);
+    spec.ip_modelo = numMatch ? numMatch[1].trim().toUpperCase() : "17";
+    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : "";
     const ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP","ZA","IN"];
     const originMatch = n.match(new RegExp("\\b(" + ORIGIN_CODES.join("|") + ")\\b"));
     if (originMatch) {
@@ -152,8 +156,8 @@ function produtoToRowState(p: any, fornecedoresList: { id: string; nome: string 
     spec.ip_origem = fullOrigem;
   }
   const caixaInicial = !!(p.observacao && p.observacao.includes("[COM_CAIXA]"));
-  const GRADE_TAG_MAP: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-  const gradeTagKey = p.observacao?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+  const GRADE_TAG_MAP: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+  const gradeTagKey = p.observacao?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
   const gradeInicial = gradeTagKey ? GRADE_TAG_MAP[gradeTagKey] : "";
   const fornNome = p.fornecedor || "";
   const isFornCadastrado = fornecedoresList.some(f => f.nome === fornNome);
@@ -212,20 +216,20 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   };
   const getOrigemFromObs = (obs: string | null): string => {
     if (!obs) return "";
-    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_(APLUS|AB|A|B)\])?\s*/, "");
+    return obs.replace(/^\[(NAO_ATIVADO|SEMINOVO)\](\[COM_CAIXA\])?(\[GRADE_(A\+|AB|A|B)\])?\s*/, "");
   };
   const getCaixaFromObs = (obs: string | null): boolean => {
     return !!(obs && obs.includes("[COM_CAIXA]"));
   };
   const getGradeFromObs = (obs: string | null): string => {
-    const GRADE_TAG: Record<string, string> = { APLUS: "A+", A: "A", AB: "AB", B: "B" };
-    const key = obs?.match(/\[GRADE_(APLUS|AB|A|B)\]/)?.[1];
+    const GRADE_TAG: Record<string, string> = { "A+": "A+", A: "A", AB: "AB", B: "B" };
+    const key = obs?.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     return key ? GRADE_TAG[key] : "";
   };
   const buildObs = (condicao: string, origem: string, caixa?: boolean, grade?: string): string | null => {
     const prefix = condicao && condicao !== "NOVO" ? `[${condicao}]` : "";
     const caixaTag = caixa ? "[COM_CAIXA]" : "";
-    const gradeKey = grade ? (grade === "A+" ? "APLUS" : grade) : "";
+    const gradeKey = grade ? (grade) : "";
     const gradeTag = gradeKey ? `[GRADE_${gradeKey}]` : "";
     const tags = `${prefix}${caixaTag}${gradeTag}`;
     const combined = tags ? (origem ? `${tags} ${origem}` : tags) : origem;
@@ -275,18 +279,20 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
         ? buildProdutoName(editRowState.categoria, editRowState.spec, editRowState.cor)
         : editRowState.produto;
 
-      // Atualizar origem no nome do produto automaticamente (quando mudar a origem)
+      // Origem agora é campo próprio (estoque.origem), não vai mais no nome nem na obs.
       const originalObs = original?.observacao || null;
-      const origemOriginal = getOrigemFromObs(originalObs);
-      // Origem vem do spec.ip_origem dentro do ProdutoSpecFields
       const origemNova = editRowState.spec.ip_origem || "";
-      let nomeFinal = newProduto.toUpperCase();
-      if (origemNova !== origemOriginal.split(" ")[0]) {
-        // Remover origem antiga e inserir nova no nome
-        nomeFinal = nomeFinal.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "").trim();
-        if (origemNova) nomeFinal = `${nomeFinal} ${origemNova}`;
-      }
+      // Limpar qualquer resíduo de origem que ainda esteja no nome (para rows antigas)
+      const nomeFinal = newProduto
+        .toUpperCase()
+        .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?(\s*-\s*[A-Z\s+]+)?$/i, "")
+        .trim();
       if (nomeFinal !== (original?.produto || "")) updates.produto = nomeFinal;
+      // Persistir origem no campo próprio (apenas iPhones)
+      if (editRowState.categoria === "IPHONES") {
+        const origemAtual = original?.origem || "";
+        if (origemNova !== origemAtual) updates.origem = origemNova || null;
+      }
       if (editRowState.cor !== (original?.cor || "")) updates.cor = editRowState.cor || null;
       if (editRowState.categoria !== (original?.categoria || "")) updates.categoria = editRowState.categoria;
       if (editRowState.serial_no !== (original?.serial_no || "")) updates.serial_no = editRowState.serial_no.toUpperCase() || null;
@@ -298,8 +304,8 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
       const novoFornecedor = editRowState.cliente?.trim() || editRowState.fornecedor || null;
       if (novoFornecedor !== (original?.fornecedor || null)) updates.fornecedor = novoFornecedor;
 
-      // Observacao: condição + caixa + grade + origem (usa origemNova do spec)
-      const newObs = buildObs(editRowState.condicao || "NOVO", origemNova, editRowState.caixa, editRowState.grade);
+      // Observacao: condição + caixa + grade (origem agora vai no campo próprio)
+      const newObs = buildObs(editRowState.condicao || "NOVO", "", editRowState.caixa, editRowState.grade);
       if (newObs !== originalObs) updates.observacao = newObs;
 
       // Tipo: SEMPRE atualizado conforme condição para produtos já em estoque
@@ -466,7 +472,14 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                       return null;
                     })()}
                     <span className={`font-medium truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                      {p.produto}{p.cor ? ` — ${p.cor}` : ""}{(() => {
+                      {formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: p.cor, observacao: p.observacao })}
+                      {(() => {
+                        const en = p.cor ? corParaEN(p.cor) : null;
+                        const pt = p.cor ? corParaPT(p.cor) : "";
+                        if (!en || !pt || en.toLowerCase() === pt.toLowerCase()) return null;
+                        return <span className={`ml-1 text-[11px] font-normal ${dm ? "text-[#8E8E93]" : "text-[#86868B]"}`}>{en}</span>;
+                      })()}
+                      {(() => {
                         const origem = getOrigemFromObs(p.observacao);
                         if (!origem) return "";
                         const code = origem.split(" ")[0];
@@ -520,7 +533,15 @@ export default function GastosPage() {
     descricao: "",
     observacao: "",
     is_dep_esp: false,
+    // Estorno
+    contato_tipo: "cliente" as "cliente" | "fornecedor" | "atacado",
+    contato_nome: "",
+    venda_id: "",
   });
+  const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
+  const [atacados, setAtacados] = useState<{ id: string; nome: string }[]>([]);
+  const [vendasDoContato, setVendasDoContato] = useState<{ id: string; data: string; produto: string; preco_vendido: number }[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
   const [bancoValores, setBancoValores] = useState<BancoValores>(emptyBancoValores());
 
   // Produtos do pedido fornecedor
@@ -567,7 +588,7 @@ export default function GastosPage() {
     setLoading(false);
   }, [password]);
 
-  // Buscar fornecedores
+  // Buscar fornecedores e clientes
   useEffect(() => {
     (async () => {
       try {
@@ -577,10 +598,25 @@ export default function GastosPage() {
           setFornecedores(json.data ?? []);
         }
       } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/admin/clientes?tab=clientes", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setClientes(json.clientes ?? json.data ?? []);
+        }
+      } catch { /* ignore */ }
+      try {
+        const res = await fetch("/api/admin/clientes?tab=lojistas", { headers: { "x-admin-password": password } });
+        if (res.ok) {
+          const json = await res.json();
+          setAtacados(json.clientes ?? json.data ?? []);
+        }
+      } catch { /* ignore */ }
     })();
   }, [password]);
 
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
+  useAutoRefetch(fetchGastos);
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
@@ -589,6 +625,26 @@ export default function GastosPage() {
   const totalProdutos = pedidoProdutos.reduce((s, p) => s + (parseFloat(p.custo_unitario) || 0) * (parseInt(p.qnt) || 0), 0);
 
   const isFornecedor = form.categoria === "FORNECEDOR";
+  const isEstorno = form.categoria === "ESTORNO";
+  const isReembolso = form.categoria === "REEMBOLSO";
+
+  // Carrega vendas do contato selecionado para popular o dropdown de venda relacionada
+  useEffect(() => {
+    if (!isEstorno || !form.contato_nome.trim()) {
+      setVendasDoContato([]);
+      return;
+    }
+    const nome = form.contato_nome.trim().toUpperCase();
+    const param = form.contato_tipo === "cliente" ? "cliente" : "fornecedor";
+    let cancelled = false;
+    setLoadingVendas(true);
+    fetch(`/api/vendas?${param}=${encodeURIComponent(nome)}&limit=100`, { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setVendasDoContato(j.data || []); })
+      .catch(() => { if (!cancelled) setVendasDoContato([]); })
+      .finally(() => { if (!cancelled) setLoadingVendas(false); });
+    return () => { cancelled = true; };
+  }, [isEstorno, form.contato_nome, form.contato_tipo, password]);
 
   const handleSubmit = async () => {
     const filled = BANCOS.filter((b) => parseBR(bancoValores[b]) > 0);
@@ -603,14 +659,26 @@ export default function GastosPage() {
     setSaving(true);
     setMsg("");
 
+    if (isEstorno) {
+      const nome = form.contato_nome.trim().toUpperCase();
+      if (!nome) {
+        setMsg("Informe o contato (cliente, fornecedor ou atacado) do estorno");
+        setSaving(false);
+        return;
+      }
+    }
+
     const base = {
       data: form.data,
       hora: form.horario || null,
-      tipo: "SAIDA",
+      tipo: isReembolso ? "ENTRADA" : "SAIDA",
       categoria: form.categoria,
       descricao: form.descricao || null,
       observacao: form.observacao || null,
       is_dep_esp: form.is_dep_esp,
+      contato_nome: isEstorno ? form.contato_nome.trim().toUpperCase() : null,
+      contato_tipo: isEstorno ? form.contato_tipo : null,
+      venda_id: isEstorno && form.venda_id.trim() ? form.venda_id.trim() : null,
     };
 
     // Montar gastos (single ou multi-banco)
@@ -638,7 +706,7 @@ export default function GastosPage() {
         const _cond = p.condicao || "NOVO";
         const _prefix = _cond !== "NOVO" ? `[${_cond}]` : "";
         const _caixaTag = p.caixa ? "[COM_CAIXA]" : "";
-        const _gradeKey = p.grade ? (p.grade === "A+" ? "APLUS" : p.grade) : "";
+        const _gradeKey = p.grade ? (p.grade) : "";
         const _gradeTag = _gradeKey ? `[GRADE_${_gradeKey}]` : "";
         const _tags = `${_prefix}${_caixaTag}${_gradeTag}`;
         const obsCondicao = _tags || null;
@@ -656,6 +724,8 @@ export default function GastosPage() {
           serial_no: p.serial_no || null,
           observacao: obsCondicao,
           condicao: p.condicao || "NOVO",
+          // Origem do iPhone (LL/J/HN/...) vai para o campo próprio na row, não no nome nem na obs.
+          origem: p.categoria === "IPHONES" ? (p.spec.ip_origem || null) : null,
         };
       });
       payload = { gastos: gastoItems, produtos };
@@ -674,7 +744,7 @@ export default function GastosPage() {
         ? ` + ${pedidoProdutos.length} produto(s) adicionados como A Caminho`
         : "";
       setMsg(`Gasto registrado!${prodMsg}`);
-      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5) }));
+      setForm((f) => ({ ...f, descricao: "", observacao: "", is_dep_esp: false, horario: new Date().toTimeString().slice(0, 5), contato_nome: "", venda_id: "" }));
       setBancoValores(emptyBancoValores());
       setPedidoProdutos([]);
       fetchGastos();
@@ -821,7 +891,8 @@ export default function GastosPage() {
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
-  const totalSaida = gastos.filter(g => !g.is_dep_esp).reduce((s, g) => s + Number(g.valor), 0);
+  const totalSaida = gastos.filter(g => !g.is_dep_esp && g.tipo !== "ENTRADA").reduce((s, g) => s + Number(g.valor), 0);
+  void totalSaida;
 
   const bancoInputGrid = (valores: BancoValores, onChange: (b: Banco, v: string) => void, cls: string) => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -846,7 +917,7 @@ export default function GastosPage() {
 
       {tab === "novo" ? (
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-6`}>
-          <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Registrar Saída</h2>
+          <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{isReembolso ? "Registrar Entrada (Reembolso)" : "Registrar Saída"}</h2>
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -863,17 +934,101 @@ export default function GastosPage() {
             <div><p className={labelCls}>Observacao</p><input value={form.observacao} onChange={(e) => set("observacao", e.target.value.toUpperCase())} className={`${inputCls} uppercase`} /></div>
           </div>
 
+          {/* Bloco de Estorno — vínculo com contato */}
+          {isEstorno && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-red-500/40 bg-red-500/5" : "border-red-400/30 bg-red-50"} space-y-3`}>
+              <div>
+                <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>↩️ Estorno — vincular ao contato</p>
+                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  A venda original permanece. Este registro contabiliza a saída de caixa do valor estornado.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <p className={labelCls}>Tipo</p>
+                  <select
+                    value={form.contato_tipo}
+                    onChange={(e) => set("contato_tipo", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="cliente">Cliente</option>
+                    <option value="fornecedor">Fornecedor</option>
+                    <option value="atacado">Atacado</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <p className={labelCls}>Nome do contato</p>
+                  <input
+                    list="estorno-contatos"
+                    value={form.contato_nome}
+                    onChange={(e) => set("contato_nome", e.target.value.toUpperCase())}
+                    placeholder="Comece a digitar para buscar"
+                    className={`${inputCls} uppercase`}
+                  />
+                  <datalist id="estorno-contatos">
+                    {(form.contato_tipo === "fornecedor" ? fornecedores : form.contato_tipo === "atacado" ? atacados : clientes).map((c) => (
+                      <option key={c.id} value={c.nome} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <p className={labelCls}>Venda relacionada (opcional)</p>
+                {!form.contato_nome.trim() ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Selecione um contato primeiro</p>
+                ) : loadingVendas ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Carregando vendas…</p>
+                ) : vendasDoContato.length === 0 ? (
+                  <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Nenhuma venda encontrada para este contato</p>
+                ) : (
+                  <select
+                    value={form.venda_id}
+                    onChange={(e) => set("venda_id", e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">— Sem venda específica —</option>
+                    {vendasDoContato.map((v) => {
+                      const [y, m, d] = (v.data || "").split("-");
+                      const dataFmt = y ? `${d}/${m}/${y}` : "—";
+                      const valor = `R$ ${Math.round(v.preco_vendido || 0).toLocaleString("pt-BR")}`;
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {dataFmt} · {v.produto} · {valor}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Bloco Reembolso — entrada de caixa */}
+          {isReembolso && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-green-500/40 bg-green-500/5" : "border-green-400/30 bg-green-50"} space-y-1`}>
+              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💰 Reembolso — entrada de caixa</p>
+              <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                Esse valor <strong>entra</strong> no banco selecionado (Itaú, Infinite ou Mercado Pago).
+                É somado ao saldo do dia, não conta como gasto.
+              </p>
+            </div>
+          )}
+
           {/* Distribuição por banco */}
           <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
             <div className="flex items-center justify-between mb-3">
-              <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
+              <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                {isReembolso ? "Valor recebido por banco" : "Valor por banco"}
+              </p>
               {totalForm > 0 && (
-                <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalForm)}</span>
+                <span className={`text-sm font-bold ${isReembolso ? "text-green-600" : "text-[#E8740E]"}`}>Total: {fmt(totalForm)}</span>
               )}
             </div>
             {bancoInputGrid(bancoValores, setBanco, inputCls)}
             <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-              Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
+              {isReembolso
+                ? "Selecione o(s) banco(s) onde o reembolso entrou (Itaú, Infinite, Mercado Pago ou Espécie)."
+                : "Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados."}
             </p>
           </div>
 

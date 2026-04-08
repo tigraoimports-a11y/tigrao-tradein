@@ -8,8 +8,14 @@ const KEY_MAP: Record<string, string> = {
   p: "produto", v: "preco", w: "whatsapp", f: "forma",
   x: "parcelas", e: "entrada_pix", l: "local", s: "vendedor",
   sh: "shopping", h: "horario", dt: "data_entrega",
-  tp: "troca_produto", tv: "troca_valor",
+  tp: "troca_produto", tv: "troca_valor", tc: "troca_cor",
+  tp2: "troca_produto2", tv2: "troca_valor2", tc2: "troca_cor2",
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
+  pp: "pagamento_pago",
+  short: "short",
+  // Dados do cliente pré-preenchidos pelo vendedor no gerar-link
+  cn: "nome", ccpf: "cpf", cem: "email", cte: "telefone",
+  ccep: "cep", cen: "endereco", cnu: "numero", cco: "complemento", cba: "bairro",
 };
 
 async function resolveData(d: string): Promise<Record<string, string>> {
@@ -88,6 +94,8 @@ export async function generateMetadata({ params }: { params: Promise<{ d: string
 export default async function ShortLinkPage({ params }: { params: Promise<{ d: string }> }) {
   const { d } = await params;
   const data = await resolveData(d);
+  // Anexa o short_code pra que /compra possa enviar o preenchimento de volta
+  if (d.length <= 8 && /^[A-Za-z0-9]+$/.test(d)) data.short = d;
   const redirectUrl = buildRedirectUrl(data);
 
   return (

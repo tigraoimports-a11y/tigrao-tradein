@@ -2,6 +2,67 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { corParaPT, corParaEN, setCorPTOverride } from "@/lib/cor-pt";
+
+// Traduz valores de specs em inglês pra português no display (não altera o banco).
+// A chave continua sendo a string original, então selecionar/comparar funciona igual.
+const COR_PT: Record<string, string> = {
+  "alpine green": "Verde Alpino",
+  "black": "Preto",
+  "black titanium": "Titânio Preto",
+  "blue": "Azul",
+  "blue titanium": "Titânio Azul",
+  "blush": "Rosa Claro",
+  "citrus": "Amarelo Cítrico",
+  "cloud white": "Branco Nuvem",
+  "cosmic orange": "Laranja Cósmico",
+  "deep blue": "Azul Profundo",
+  "deep purple": "Roxo Profundo",
+  "desert titanium": "Titânio Deserto",
+  "gold": "Dourado",
+  "graphite": "Grafite",
+  "green": "Verde",
+  "indigo": "Índigo",
+  "lavender": "Lavanda",
+  "light gold": "Dourado Claro",
+  "midnight": "Meia-Noite",
+  "midnight green": "Verde Meia-Noite",
+  "orange": "Laranja",
+  "mist blue": "Azul Névoa",
+  "natural titanium": "Titânio Natural",
+  "pacific blue": "Azul Pacífico",
+  "pink": "Rosa",
+  "purple": "Roxo",
+  "red": "Vermelho",
+  "sage": "Sálvia",
+  "sierra blue": "Azul Serra",
+  "silver": "Prata",
+  "sky blue": "Azul Céu",
+  "space black": "Preto Espacial",
+  "space gray": "Cinza Espacial",
+  "starlight": "Estelar",
+  "teal": "Verde Água",
+  "ultramarine": "Azul Ultramarino",
+  "white": "Branco",
+  "white titanium": "Titânio Branco",
+  "yellow": "Amarelo",
+};
+
+function traduzirValor(valor: string, tipoChave?: string): string {
+  const pt = COR_PT[valor.toLowerCase().trim()];
+  return pt || valor;
+}
+
+/** Para tipos de cor: retorna { en, pt } — PT é principal, EN canônico secundário */
+function corEnPt(valor: string): { en: string; pt: string } {
+  const en = corParaEN(valor) || valor;
+  const pt = corParaPT(valor);
+  return { en, pt: pt === "—" ? valor : pt };
+}
+
+function isCorTipo(chave?: string): boolean {
+  return chave === "cores" || chave === "cores_aw";
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +118,7 @@ interface CatalogoData {
   categoriaSpecs: CategoriaSpec[];
 }
 
-type TabKey = "categorias" | "modelos" | "especificacoes";
+type TabKey = "categorias" | "modelos" | "especificacoes" | "cores";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -153,6 +214,9 @@ export default function CatalogoPage() {
           <button className={tabCls("especificacoes")} onClick={() => setTab("especificacoes")}>
             Especificações
           </button>
+          <button className={tabCls("cores")} onClick={() => setTab("cores")}>
+            🎨 Cores
+          </button>
         </div>
 
         {/* Tab content */}
@@ -164,6 +228,9 @@ export default function CatalogoPage() {
         )}
         {tab === "especificacoes" && (
           <EspecificacoesTab data={data} setData={setData} headers={headers} reload={load} />
+        )}
+        {tab === "cores" && (
+          <CoresGlobalTab data={data} headers={headers} reload={load} />
         )}
       </div>
     </div>
@@ -512,6 +579,7 @@ const PAGE_SIZE = 15;
 
 function ModelosTab({ data, headers, reload }: TabProps) {
   const [search, setSearch] = useState("");
+  const [filtroCat, setFiltroCat] = useState<string>("");
   const [page, setPage] = useState(1);
   const [selectedModelo, setSelectedModelo] = useState<Modelo | null>(null);
   const [configs, setConfigs] = useState<Set<string>>(new Set());
@@ -530,6 +598,7 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   }
 
   const filteredModelos = data.modelos
+    .filter((m) => !filtroCat || m.categoria_key === filtroCat)
     .filter(
       (m) =>
         m.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -596,9 +665,12 @@ function ModelosTab({ data, headers, reload }: TabProps) {
   function toggleConfig(tipoChave: string, valor: string) {
     const key = `${tipoChave}:${valor}`;
     setConfigs((prev) => {
-      if (prev.has(key)) return prev; // Não permite desmarcar — dados fixos
       const next = new Set(prev);
-      next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   }
@@ -692,7 +764,25 @@ function ModelosTab({ data, headers, reload }: TabProps) {
           </form>
         )}
 
-        <div className="p-3 border-b border-[#F5F5F7]">
+        <div className="p-3 border-b border-[#F5F5F7] space-y-2">
+          <select
+            value={filtroCat}
+            onChange={(e) => { setFiltroCat(e.target.value); setPage(1); }}
+            className={`${inputCls} w-full`}
+          >
+            <option value="">Todas as categorias ({data.modelos.length})</option>
+            {data.categorias
+              .slice()
+              .sort((a, b) => a.ordem - b.ordem)
+              .map((c) => {
+                const count = data.modelos.filter((m) => m.categoria_key === c.key).length;
+                return (
+                  <option key={c.key} value={c.key}>
+                    {c.emoji} {c.nome} ({count})
+                  </option>
+                );
+              })}
+          </select>
           <input
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
@@ -839,7 +929,9 @@ function ModelosTab({ data, headers, reload }: TabProps) {
                               >
                                 {checked && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
-                              <span className="text-sm text-[#1D1D1F]">{v.valor}</span>
+                              <span className="text-sm text-[#1D1D1F]">
+                                {isCorTipo(cs.tipo_chave) ? (() => { const { en, pt } = corEnPt(v.valor); return <>{pt}<span className="ml-1 text-xs text-[#86868B]">{en}</span></>; })() : traduzirValor(v.valor, cs.tipo_chave)}
+                              </span>
                             </label>
                           );
                         })}
@@ -857,6 +949,296 @@ function ModelosTab({ data, headers, reload }: TabProps) {
 }
 
 // ─── Especificacoes Tab ───────────────────────────────────────────────────────
+
+// ─── Cores Global Tab ─────────────────────────────────────────────────────────
+// UI dedicada para gerenciar Cores e Cores AW.
+// Permite editar tanto o nome em INGLÊS (canônico, salvo no banco em
+// catalogo_spec_valores) quanto o nome em PORTUGUÊS (override via
+// setCorPTOverride → localStorage). Add / Edit / Remove inline.
+function CoresGlobalTab({
+  data,
+  headers,
+  reload,
+}: {
+  data: CatalogoData;
+  headers: () => Record<string, string>;
+  reload: () => void;
+}) {
+  type Grupo = { chave: "cores" | "cores_aw"; titulo: string; subtitulo: string };
+  const grupos: Grupo[] = [
+    { chave: "cores", titulo: "Cores (geral)", subtitulo: "iPhone, iPad, MacBook, Mac Mini, AirPods…" },
+    { chave: "cores_aw", titulo: "Cores AW", subtitulo: "Apple Watch (cores específicas)" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#FFF5EB] border border-[#E8740E]/20 rounded-xl p-4 text-sm text-[#1D1D1F]">
+        <strong className="text-[#E8740E]">Como funciona:</strong> O nome em <em>inglês</em> é o
+        canônico salvo no banco — usado em todo o sistema para identificar a cor. O nome em{" "}
+        <em>português</em> é apenas o rótulo de exibição (override local). Edite os dois lados livremente;
+        a sincronização acontece automaticamente em todas as telas (estoque, gastos, vendas, etc.).
+      </div>
+
+      {grupos.map((g) => (
+        <CoresGrupo key={g.chave} grupo={g} data={data} headers={headers} reload={reload} />
+      ))}
+    </div>
+  );
+}
+
+function CoresGrupo({
+  grupo,
+  data,
+  headers,
+  reload,
+}: {
+  grupo: { chave: "cores" | "cores_aw"; titulo: string; subtitulo: string };
+  data: CatalogoData;
+  headers: () => Record<string, string>;
+  reload: () => void;
+}) {
+  const valores = data.specValores
+    .filter((v) => v.tipo_chave === grupo.chave)
+    .sort((a, b) => a.ordem - b.ordem);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEN, setEditEN] = useState("");
+  const [editPT, setEditPT] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newEN, setNewEN] = useState("");
+  const [newPT, setNewPT] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const inputCls =
+    "border border-[#E8E8ED] rounded-lg px-2.5 py-1.5 text-sm text-[#1D1D1F] bg-white focus:outline-none focus:ring-2 focus:ring-[#E8740E]/40";
+
+  function startEdit(v: SpecValor) {
+    const en = corParaEN(v.valor) || v.valor;
+    const pt = corParaPT(v.valor);
+    setEditingId(v.id);
+    setEditEN(en);
+    setEditPT(pt === "—" ? "" : pt);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditEN("");
+    setEditPT("");
+  }
+
+  async function saveEdit(v: SpecValor) {
+    const en = editEN.trim();
+    const pt = editPT.trim();
+    if (!en) return alert("O nome em inglês é obrigatório.");
+    setBusy(v.id);
+    try {
+      // 1) Renomeia EN canônico no banco se mudou
+      if (en !== v.valor) {
+        const res = await fetch(BASE, {
+          method: "PATCH",
+          headers: headers(),
+          body: JSON.stringify({ resource: "spec_valores", id: v.id, valor: en }),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+      }
+      // 2) Atualiza override em PT
+      setCorPTOverride(en, pt);
+      cancelEdit();
+      reload();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function addCor(e: React.FormEvent) {
+    e.preventDefault();
+    const en = newEN.trim();
+    const pt = newPT.trim();
+    if (!en) return;
+    setBusy("__add__");
+    try {
+      const ordem = valores.length > 0 ? Math.max(...valores.map((v) => v.ordem)) + 1 : 1;
+      const res = await fetch(BASE, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          resource: "spec_valores",
+          tipo_chave: grupo.chave,
+          valor: en,
+          ordem,
+        }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      if (pt) setCorPTOverride(en, pt);
+      setNewEN("");
+      setNewPT("");
+      setAdding(false);
+      reload();
+    } catch (err) {
+      alert(String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeCor(v: SpecValor) {
+    if (!confirm(`Remover a cor "${corParaPT(v.valor)} (${v.valor})"?`)) return;
+    setBusy(v.id);
+    try {
+      const res = await fetch(BASE, {
+        method: "DELETE",
+        headers: headers(),
+        body: JSON.stringify({ resource: "spec_valores", id: v.id }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      reload();
+    } catch (err) {
+      alert(String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-[#F5F5F7] flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-[#1D1D1F]">{grupo.titulo}</h2>
+          <p className="text-xs text-[#86868B] mt-0.5">{grupo.subtitulo} · {valores.length} cores</p>
+        </div>
+        <button
+          onClick={() => setAdding((a) => !a)}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+        >
+          {adding ? "Cancelar" : "+ Nova cor"}
+        </button>
+      </div>
+
+      {adding && (
+        <form
+          onSubmit={addCor}
+          className="p-4 bg-[#FFF5EB] border-b border-[#E8740E]/20 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end"
+        >
+          <div>
+            <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+              Nome em INGLÊS (canônico)
+            </label>
+            <input
+              value={newEN}
+              onChange={(e) => setNewEN(e.target.value)}
+              placeholder="ex: Sky Blue"
+              className={`${inputCls} w-full`}
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+              Nome em PORTUGUÊS (exibição)
+            </label>
+            <input
+              value={newPT}
+              onChange={(e) => setNewPT(e.target.value)}
+              placeholder="ex: Azul"
+              className={`${inputCls} w-full`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busy === "__add__" || !newEN.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#E8740E] text-white disabled:opacity-50"
+          >
+            Salvar
+          </button>
+        </form>
+      )}
+
+      {valores.length === 0 ? (
+        <div className="p-6 text-center text-[#86868B] text-sm">
+          Nenhuma cor cadastrada ainda. Clique em <strong>+ Nova cor</strong>.
+        </div>
+      ) : (
+        <div className="divide-y divide-[#F5F5F7]">
+          {valores.map((v) => {
+            const isEditing = editingId === v.id;
+            const en = corParaEN(v.valor) || v.valor;
+            const pt = corParaPT(v.valor);
+            const ptDisp = pt === "—" ? "" : pt;
+            return (
+              <div key={v.id} className="px-4 py-3">
+                {isEditing ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+                        Inglês (canônico)
+                      </label>
+                      <input
+                        value={editEN}
+                        onChange={(e) => setEditEN(e.target.value)}
+                        className={`${inputCls} w-full`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#6E6E73] mb-1">
+                        Português (exibição)
+                      </label>
+                      <input
+                        value={editPT}
+                        onChange={(e) => setEditPT(e.target.value)}
+                        className={`${inputCls} w-full`}
+                      />
+                    </div>
+                    <button
+                      onClick={() => saveEdit(v)}
+                      disabled={busy === v.id}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#E8740E] text-white disabled:opacity-50"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#F5F5F7] text-[#1D1D1F]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-[#1D1D1F] truncate">
+                        {ptDisp || <span className="text-[#86868B] italic">sem PT</span>}
+                      </div>
+                      <div className="text-xs text-[#86868B] truncate font-mono">{en}</div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => startEdit(v)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+                      >
+                        ✎ Editar
+                      </button>
+                      <button
+                        onClick={() => removeCor(v)}
+                        disabled={busy === v.id}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        🗑️ Remover
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EspecificacoesTab({ data, headers, reload }: TabProps) {
   const [selectedTipo, setSelectedTipo] = useState<SpecTipo | null>(null);
@@ -1022,7 +1404,7 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
           )}
 
           <div className="divide-y divide-[#F5F5F7]">
-            {data.specTipos.map((tipo) => (
+            {data.specTipos.filter((t) => !isCorTipo(t.chave)).map((tipo) => (
               <div
                 key={tipo.id}
                 className={`flex items-center justify-between px-4 py-3 transition-colors ${
@@ -1090,7 +1472,24 @@ function EspecificacoesTab({ data, headers, reload }: TabProps) {
                     key={v.id}
                     className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#F5F5F7] text-sm text-[#1D1D1F] border border-[#E8E8ED]"
                   >
-                    <span>{v.valor}</span>
+                    <span>
+                      {isCorTipo(selectedTipo.chave) ? (() => {
+                        const { en, pt } = corEnPt(v.valor);
+                        return (
+                          <>
+                            <span
+                              className="cursor-pointer hover:text-[#E8740E]"
+                              title="Clique para editar o nome em português"
+                              onClick={() => {
+                                const novoPT = prompt(`Nome em português para "${en}":`, pt);
+                                if (novoPT !== null) { setCorPTOverride(en, novoPT.trim()); reload(); }
+                              }}
+                            >{pt}</span>
+                            <span className="ml-1 text-xs text-[#86868B]">{en}</span>
+                          </>
+                        );
+                      })() : traduzirValor(v.valor, selectedTipo.chave)}
+                    </span>
                     <button
                       onClick={() => handleDeleteValor(v.id)}
                       disabled={saving === v.id}

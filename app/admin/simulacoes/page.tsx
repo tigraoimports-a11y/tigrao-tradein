@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
+import { corParaPT } from "@/lib/cor-pt";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
 
@@ -18,6 +19,8 @@ interface SimulacaoRow {
   preco_novo: number;
   modelo_usado: string;
   storage_usado: string;
+  cor_usado?: string | null;
+  cor_usado2?: string | null;
   avaliacao_usado: number;
   diferenca: number;
   status: "GOSTEI" | "SAIR";
@@ -572,6 +575,24 @@ export default function AdminPage() {
                           >
                             WhatsApp
                           </button>
+                          <button
+                            onClick={() => {
+                              const qs = new URLSearchParams({
+                                sim_id: row.id,
+                                prod: `${row.modelo_novo} ${row.storage_novo}`.trim(),
+                                preco: String(row.preco_novo || 0),
+                                tp: `${row.modelo_usado} ${row.storage_usado}`.trim(),
+                                tv: String(row.avaliacao_usado || 0),
+                                cn: row.nome || "",
+                                cte: row.whatsapp || "",
+                                ...(row.vendedor ? { sv: row.vendedor } : {}),
+                              }).toString();
+                              window.location.href = `/admin/gerar-link?${qs}`;
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#E8740E] hover:bg-[#D06A0D] text-white text-xs font-semibold transition-colors"
+                          >
+                            💳 Link
+                          </button>
                           {row.contatado && (
                             <span className="text-[10px] text-green-600 font-medium">Contatado</span>
                           )}
@@ -773,7 +794,7 @@ export default function AdminPage() {
               {/* Used device */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca</h3>
-                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}</p>
+                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
                 {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
                   <div className="text-xs text-[#6E6E73] space-y-0.5">
                     {modalRow.condicao_linhas.map((linha, i) => (

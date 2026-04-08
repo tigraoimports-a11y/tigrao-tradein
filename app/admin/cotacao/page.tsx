@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface Lista { id: string; nome: string; status: string; data: string; created_at: string; }
@@ -35,6 +36,7 @@ export default function CotacaoPage() {
   }, [password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   const apiPost = async (body: Record<string, unknown>) => {
     const res = await fetch("/api/cotacao", {

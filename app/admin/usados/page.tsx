@@ -2,6 +2,7 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import { useEffect, useState, useCallback } from "react";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import { useAdmin } from "@/components/admin/AdminShell";
 
 interface ValorUsado {
@@ -144,6 +145,7 @@ export function UsadosContent() {
   }, [password]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useAutoRefetch(fetchData);
 
   const apiPost = async (body: Record<string, unknown>) => {
     return fetch("/api/admin/usados", {

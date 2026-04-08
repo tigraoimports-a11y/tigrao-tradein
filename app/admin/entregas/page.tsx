@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
+import ProdutoPicker from "./ProdutoPicker";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -28,6 +29,8 @@ interface Entrega {
   valor: number | null;
   vendedor: string | null;
   regiao: string | null;
+  finalizada?: boolean | null;
+  comprovante_lancado?: boolean | null;
 }
 
 type EntregaStatus = Entrega["status"];
@@ -89,7 +92,32 @@ export default function EntregasPage() {
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
+  // Visualização: "dia" (default) mostra um único dia com divisão por motoboy;
+  // "semana" mostra o calendário semanal completo (visão geral).
+  const [viewMode, setViewMode] = useState<"dia" | "semana">("dia");
+  // Data que estamos visualizando no modo "dia" — começa em hoje.
+  const [viewDate, setViewDate] = useState<string>(() => hojeBR());
+  const [filtroBia, setFiltroBia] = useState<"todas" | "finalizada" | "pendentes_final" | "comprovante" | "sem_comprovante">("todas");
   const [showForm, setShowForm] = useState(false);
+  const [modoSimples, setModoSimples] = useState(false);
+  const [rastreio, setRastreio] = useState("");
+
+  // Autocomplete de clientes — busca em entregas + vendas, retorna última compra
+  type ClienteSug = {
+    cliente: string;
+    telefone: string | null;
+    endereco: string | null;
+    bairro: string | null;
+    regiao: string | null;
+    ultima_compra: { produto: string | null; data: string | null; valor: number | null } | null;
+  };
+  const [clienteSugs, setClienteSugs] = useState<ClienteSug[]>([]);
+  const [showSugs, setShowSugs] = useState(false);
+  const [clienteUltimaCompra, setClienteUltimaCompra] = useState<ClienteSug["ultima_compra"]>(null);
+
+  // Seleção em massa para finalizar várias entregas
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [entregasSelecionadas, setEntregasSelecionadas] = useState<Set<string>>(new Set());
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -120,20 +148,29 @@ export default function EntregasPage() {
     vendedor: "",
     regiao: "",
     local_entrega: "",
+    shopping_nome: "",
   };
   const [form, setForm] = useState(emptyForm);
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
 
-  // Estoque picker states
+  // Estoque picker states — linha 1 do produto
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
+  const [cor1, setCor1] = useState(""); // cor do produto 1
+  const [preco1, setPreco1] = useState(0); // preço do produto 1 (tabela ou custo)
   const [serialBusca, setSerialBusca] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [corSel, setCorSel] = useState("");
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
+  // Linha 2 do produto (opcional — aparece ao clicar "+ Adicionar 2º produto")
+  const [showProduto2, setShowProduto2] = useState(false);
+  const [catSel2, setCatSel2] = useState("");
+  const [modelo2, setModelo2] = useState("");
+  const [cor2, setCor2] = useState("");
+  const [preco2, setPreco2] = useState(0);
   const [desconto, setDesconto] = useState("");
   const [trocaAtiva, setTrocaAtiva] = useState(false);
   const [trocaValor, setTrocaValor] = useState("");
@@ -142,12 +179,18 @@ export default function EntregasPage() {
   const [trocaBateria, setTrocaBateria] = useState("");
   const [trocaObs, setTrocaObs] = useState("");
 
-  // Fetch estoque
+  const [precos, setPrecos] = useState<{ modelo: string; armazenamento: string; preco_pix: number }[]>([]);
+
+  // Fetch estoque + preços
   useEffect(() => {
     if (!password) return;
     fetch("/api/estoque", { headers: apiHeaders() })
       .then(r => r.json())
       .then(j => setEstoque(j.data?.filter((p: EstoqueItem) => p.qnt > 0 && p.status === "EM ESTOQUE") || []))
+      .catch(() => {});
+    fetch("/api/admin/precos", { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => setPrecos(j.data ?? []))
       .catch(() => {});
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -165,6 +208,36 @@ export default function EntregasPage() {
       })
       .catch(() => {});
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lookup de preço de venda por modelo + armazenamento (normalizado)
+  const precosMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const p of precos) {
+      const key = `${(p.modelo || "").toUpperCase()} ${(p.armazenamento || "").toUpperCase()}`.replace(/\s+/g, " ").trim();
+      m[key] = Number(p.preco_pix) || 0;
+    }
+    return m;
+  }, [precos]);
+  const lookupPrecoVenda = (modelStr: string): number => {
+    const norm = modelStr.toUpperCase().replace(/\s+/g, " ").trim();
+    if (precosMap[norm]) return precosMap[norm];
+    // Tentar encontrar por substring (caso a chave do estoque tenha sufixo extra)
+    for (const [k, v] of Object.entries(precosMap)) {
+      if (norm.includes(k) || k.includes(norm)) return v;
+    }
+    return 0;
+  };
+
+  // Categorias dinâmicas do estoque
+  const categorias = useMemo(() => {
+    const cats = new Map<string, string>();
+    estoque.forEach(p => {
+      const key = p.tipo === "SEMINOVO" ? `${p.categoria}_SEMI` : p.categoria;
+      const label = p.tipo === "SEMINOVO" ? `${p.categoria} (Seminovo)` : p.categoria;
+      if (!cats.has(key)) cats.set(key, label);
+    });
+    return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [estoque]);
 
   // Categorias dos preços com labels amigáveis
   const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
@@ -203,18 +276,43 @@ export default function EntregasPage() {
   }, [produtos, estoque]);
 
   // Valor base e final
-  const valorBase = parseFloat(form.valor) || 0;
+  // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
+  const somaProdutos = preco1 + preco2;
+  const valorBase = somaProdutos > 0 ? somaProdutos : (parseFloat(form.valor) || 0);
   const descontoNum = parseFloat(desconto) || 0;
   const trocaNum = parseFloat(trocaValor) || 0;
   const valorFinal = Math.max(0, valorBase - descontoNum);
   const valorAPagar = Math.max(0, valorFinal - trocaNum);
+
+  // Sincroniza form.valor com a soma dos produtos selecionados (catálogo)
+  useEffect(() => {
+    if (somaProdutos > 0) {
+      setForm(f => f.valor === String(somaProdutos) ? f : { ...f, valor: String(somaProdutos) });
+    }
+  }, [somaProdutos]);
+
+  // Cálculo de parcelas com taxa embutida (mesma tabela do /gerar-link e Nova Venda)
+  const TAXAS_PARCELAS: Record<number, number> = {
+    1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+    7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+    13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+    19: 20, 20: 21, 21: 22,
+  };
+  const isCartaoCredito = form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Link de Pagamento";
+  const nParcelas = parseInt(form.parcelas) || 0;
+  const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
+  const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorAPagar * (1 + taxaAtual / 100)) : valorAPagar;
+  const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const fetchEntregas = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ from, to });
+      // No modo "dia", busca apenas essa data; no modo "semana", busca a semana inteira.
+      const params = viewMode === "dia"
+        ? new URLSearchParams({ from: viewDate, to: viewDate })
+        : new URLSearchParams({ from, to });
       const res = await fetch(`/api/admin/entregas?${params}`, {
         headers: apiHeaders(),
       });
@@ -224,7 +322,7 @@ export default function EntregasPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password, from, to]);
+  }, [password, from, to, viewMode, viewDate]);
 
   useEffect(() => {
     if (password) fetchEntregas();
@@ -240,6 +338,10 @@ export default function EntregasPage() {
 
     const produtosFilled = produtos.filter(Boolean);
     if (corSel && produtosFilled[0]) produtosFilled[0] = `${produtosFilled[0]} ${corSel}`;
+    // Se tiver Produto 2 selecionado, adiciona ao final
+    if (showProduto2 && modelo2) {
+      produtosFilled.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
+    }
     const produtosStr = produtosFilled.join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
@@ -276,7 +378,11 @@ export default function EntregasPage() {
         bairro: form.bairro || null,
         horario: form.horario || null,
         entregador: form.entregador || null,
-        observacao: obsExtras.length ? obsExtras.join(" | ") : null,
+        observacao: (() => {
+          const parts = [...obsExtras];
+          if (modoSimples && rastreio) parts.push(`Rastreio: ${rastreio}`);
+          return parts.length ? parts.join(" | ") : null;
+        })(),
         produto: produtosStr || null,
         tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
@@ -290,9 +396,14 @@ export default function EntregasPage() {
     if (json.ok) {
       setMsg(isEdit ? "Entrega atualizada!" : "Entrega agendada!");
       setForm({ ...emptyForm, data_entrega: hojeBR() });
+      setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
-      setCatSel(""); setEstoqueId(""); setCorSel(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setCatSel(""); setEstoqueId(""); setCorSel(""); setCor1(""); setPreco1(0);
+      setShowProduto2(false); setCatSel2(""); setModelo2(""); setCor2(""); setPreco2(0);
+      setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
+      setRastreio("");
+      setModoSimples(false);
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -321,19 +432,37 @@ export default function EntregasPage() {
     }
   };
 
+  // Quick patch — usado pela edição inline de horário/data no modal de detalhes.
+  // Liberado pra qualquer usuário que tenha acesso à página de entregas (não exige admin).
+  const quickPatchEntrega = async (id: string, patch: Partial<Entrega>) => {
+    const res = await fetch("/api/admin/entregas", {
+      method: "PATCH",
+      headers: apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id, ...patch }),
+    });
+    if (res.ok) {
+      setEntregas((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+      setSelectedEntrega((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+    }
+  };
+
   const buildWhatsAppText = () => {
     const prods = produtos.filter(Boolean);
     const produtoText = prods.length > 1
       ? prods.map((p, i) => `${i + 1}. ${p}`).join("\n   ")
       : prods[0] || "—";
 
-    // Pagamento principal
+    // Pagamento principal — quando é cartão crédito/link com parcelas, mostra breakdown calculado
     let pagText = `${form.forma_pagamento || "—"}`;
-    if (form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") {
+    if (form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") {
       if (form.parcelas) pagText += ` ${form.parcelas}x`;
       if (form.maquina) pagText += ` (${form.maquina})`;
     }
-    pagText += ` R$${form.valor || "0"}`;
+    if (isCartaoCredito && nParcelas > 0 && valorAPagar > 0) {
+      pagText += ` — ${nParcelas}x de R$${valorParcela.toLocaleString("pt-BR")} (total c/ taxa R$${totalComTaxa.toLocaleString("pt-BR")} | base R$${valorAPagar.toLocaleString("pt-BR")} + ${taxaAtual}%)`;
+    } else {
+      pagText += ` R$${form.valor || "0"}`;
+    }
 
     // Pagamento alternativo
     let pagAlt = "";
@@ -407,12 +536,26 @@ export default function EntregasPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-[#1D1D1F]">Agenda de Entregas</h1>
-        <button
-          onClick={() => { setShowForm(!showForm); setMsg(""); }}
-          className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
-        >
-          {showForm ? "Fechar" : "+ Nova Entrega"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowForm(!showForm || modoSimples); setModoSimples(false); setMsg(""); }}
+            className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
+          >
+            {showForm && !modoSimples ? "Fechar" : "+ Nova Entrega"}
+          </button>
+          <button
+            onClick={() => {
+              const willOpen = !(showForm && modoSimples);
+              setShowForm(willOpen);
+              setModoSimples(willOpen);
+              if (willOpen && !form.tipo) set("tipo", "CORREIOS");
+              setMsg("");
+            }}
+            className="px-4 py-2 rounded-xl border-2 border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
+          >
+            {showForm && modoSimples ? "Fechar" : "📮 Entrega Simplificada"}
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -426,13 +569,36 @@ export default function EntregasPage() {
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? "✏️ Editar Entrega" : "Agendar Nova Entrega"}</h2>
+              <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? "✏️ Editar Entrega" : modoSimples ? "📮 Nova Entrega Simplificada (Correios / externa)" : "Agendar Nova Entrega"}</h2>
               {editingEntregaId && <button onClick={() => { setEditingEntregaId(null); setForm({ ...emptyForm, data_entrega: hojeBR() }); setProdutos([""]); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setDesconto(""); }} className="text-xs text-red-500 hover:underline">Cancelar edição</button>}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Limpar todos os dados do formulário?")) return;
+                  setEditingEntregaId(null);
+                  setForm({ ...emptyForm, data_entrega: hojeBR() });
+                  setProdutos([""]);
+                  setTrocaAtiva(false);
+                  setTrocaValor("");
+                  setTrocaProduto("");
+                  setDesconto("");
+                  setMsg("");
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50"
+              >
+                🗑️ Limpar formulário
+              </button>
             </div>
             <button
               onClick={async () => {
                 try {
-                  const text = await navigator.clipboard.readText();
+                  let text = "";
+                  try {
+                    text = await navigator.clipboard.readText();
+                  } catch {
+                    const manual = window.prompt("Cole aqui os dados do cliente (Ctrl+V / Cmd+V):", "");
+                    text = manual || "";
+                  }
                   if (!text || text.length < 10) { setMsg("Nada no clipboard. Copie a mensagem do WhatsApp primeiro."); return; }
                   const lines = text.split("\n").map(l => l.trim());
                   const extract = (line: string) => line.replace(/^[✅⚠️📌🤔🔄💰📋🏷️🎯]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();
@@ -561,6 +727,9 @@ export default function EntregasPage() {
                         currentTroca += lineClean + "\n";
                         trocas.push(currentTroca.trim());
                         currentTroca = "";
+                      } else if (low.match(/caixa original\s*[:：]/)) {
+                        const val = extr(lineClean).toLowerCase();
+                        currentTroca += `Caixa original: ${val.includes("sim") ? "Sim" : "Nao"}\n`;
                       } else if (low.includes("seu aparelho")) {
                         // skip header
                       } else if (currentTroca || low.length > 3) {
@@ -616,7 +785,70 @@ export default function EntregasPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
               <p className={labelCls}>Cliente</p>
-              <input value={form.cliente} onChange={(e) => set("cliente", e.target.value)} placeholder="Nome do cliente" className={inputCls} />
+              <div className="relative">
+                <input
+                  value={form.cliente}
+                  onChange={async (e) => {
+                    const v = e.target.value;
+                    set("cliente", v);
+                    if (v.trim().length >= 2) {
+                      try {
+                        const res = await fetch(`/api/admin/entregas?search_clientes=${encodeURIComponent(v.trim())}`, { headers: apiHeaders() });
+                        const j = await res.json();
+                        setClienteSugs(j.clientes || []);
+                        setShowSugs(true);
+                      } catch { /* ignore */ }
+                    } else {
+                      setClienteSugs([]);
+                      setShowSugs(false);
+                    }
+                  }}
+                  onFocus={() => { if (clienteSugs.length > 0) setShowSugs(true); }}
+                  onBlur={() => setTimeout(() => setShowSugs(false), 200)}
+                  placeholder="Nome do cliente (digite 2+ letras p/ buscar)"
+                  className={inputCls}
+                />
+                {showSugs && clienteSugs.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#D2D2D7] rounded-xl shadow-lg max-h-[320px] overflow-y-auto">
+                    {clienteSugs.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          set("cliente", s.cliente);
+                          if (s.telefone) set("telefone", s.telefone);
+                          // NÃO auto-preenche endereco — endereço de entrega pode ser
+                          // diferente do residencial (shopping, escritório, outra casa, etc).
+                          // bairro também fica em branco por padrão pelo mesmo motivo.
+                          if (s.regiao) set("regiao", s.regiao);
+                          setClienteUltimaCompra(s.ultima_compra);
+                          setShowSugs(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-[#FFF5EB] border-b border-[#F5F5F7] last:border-b-0"
+                      >
+                        <p className="text-sm font-semibold text-[#1D1D1F]">{s.cliente}</p>
+                        <p className="text-[10px] text-[#86868B]">
+                          {s.telefone || "—"}{s.bairro ? ` · ${s.bairro}` : ""}{s.endereco ? ` · ${s.endereco.slice(0, 40)}${s.endereco.length > 40 ? "..." : ""}` : ""}
+                        </p>
+                        {s.ultima_compra?.produto && (
+                          <p className="text-[10px] text-[#E8740E] font-semibold mt-0.5">
+                            🛒 {s.ultima_compra.produto.slice(0, 48)}{s.ultima_compra.produto.length > 48 ? "..." : ""}
+                            {s.ultima_compra.data ? ` · ${formatDateBR(s.ultima_compra.data)}` : ""}
+                            {s.ultima_compra.valor ? ` · R$ ${s.ultima_compra.valor.toLocaleString("pt-BR")}` : ""}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {clienteUltimaCompra?.produto && (
+                  <p className="text-[10px] text-[#E8740E] font-semibold mt-1">
+                    🛒 Última compra: {clienteUltimaCompra.produto}
+                    {clienteUltimaCompra.data ? ` · ${formatDateBR(clienteUltimaCompra.data)}` : ""}
+                    {clienteUltimaCompra.valor ? ` · R$ ${clienteUltimaCompra.valor.toLocaleString("pt-BR")}` : ""}
+                  </p>
+                )}
+              </div>
             </div>
             <div>
               <p className={labelCls}>Telefone</p>
@@ -644,7 +876,12 @@ export default function EntregasPage() {
             </div>
             <div>
               <p className={labelCls}>Local de Entrega</p>
-              <select value={form.local_entrega} onChange={(e) => set("local_entrega", e.target.value)} className={inputCls}>
+              <select value={form.local_entrega} onChange={(e) => {
+                const v = e.target.value;
+                set("local_entrega", v);
+                // Se mudar de SHOPPING pra outro, limpa o nome do shopping
+                if (v !== "SHOPPING") set("shopping_nome", "");
+              }} className={inputCls}>
                 <option value="">-- Selecionar --</option>
                 <option value="RETIRADA">Retirada em Loja</option>
                 <option value="RESIDÊNCIA">Residência</option>
@@ -658,6 +895,22 @@ export default function EntregasPage() {
                 <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder={form.local_entrega === "SHOPPING" ? "Ex: Carioca Shopping - Loja 234" : "Ex: Bloco A, Apto 301, Portaria 24h"} className={inputCls} />
               </div>
             )}
+            {modoSimples && (
+              <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
+                <p className={labelCls}>Produto (texto livre)</p>
+                <input value={produtos[0] || ""} onChange={(e) => setProdutos([e.target.value])} placeholder="Ex: iPhone 15 128GB Preto" className={inputCls} />
+                <p className={labelCls}>Transportadora / Tipo</p>
+                <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)} className={inputCls}>
+                  <option value="CORREIOS">Correios</option>
+                  <option value="TRANSPORTADORA">Transportadora</option>
+                  <option value="MOTOBOY">Motoboy externo</option>
+                  <option value="OUTRO">Outro</option>
+                </select>
+                <p className={labelCls}>Código de rastreio (opcional)</p>
+                <input value={rastreio} onChange={(e) => setRastreio(e.target.value)} placeholder="Ex: BR123456789BR" className={inputCls} />
+              </div>
+            )}
+            {!modoSimples && (<>
             {/* Produto — seleção do estoque ou manual */}
             <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
               <div className="flex items-center justify-between">
@@ -718,6 +971,54 @@ export default function EntregasPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                  {/* Produto 2 — opcional (add-on do origin/main) */}
+                  {!showProduto2 && produtos[0] && (
+                    <button
+                      type="button"
+                      onClick={() => setShowProduto2(true)}
+                      className="w-full mt-2 px-4 py-2 rounded-xl border-2 border-dashed border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
+                    >
+                      + Adicionar 2º produto
+                    </button>
+                  )}
+                  {showProduto2 && (
+                    <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowProduto2(false);
+                            setCatSel2("");
+                            setModelo2("");
+                            setCor2("");
+                            setPreco2(0);
+                          }}
+                          className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                        >
+                          ✕ Remover
+                        </button>
+                      </div>
+                      <ProdutoPicker
+                        titulo="Produto 2"
+                        categorias={categorias}
+                        estoque={estoque}
+                        catSel={catSel2}
+                        setCatSel={(v) => { setCatSel2(v); setCor2(""); setPreco2(0); setModelo2(""); }}
+                        modeloSel={modelo2}
+                        setModeloSel={(m, preco) => {
+                          setModelo2(m);
+                          setPreco2(preco);
+                          setCor2("");
+                        }}
+                        corSel={cor2}
+                        setCorSel={setCor2}
+                        lookupPrecoVenda={lookupPrecoVenda}
+                        inputCls={inputCls}
+                        labelCls={labelCls}
+                      />
                     </div>
                   )}
                 </div>
@@ -797,15 +1098,22 @@ export default function EntregasPage() {
               </select>
             </div>
             <div>
-              <p className={labelCls}>Valor Base (R$)</p>
+              <p className={labelCls}>
+                Valor Base (R$){" "}
+                {valorBase > 0 ? (
+                  <span title="Valor base preenchido" className="ml-1 inline-flex items-center text-green-600">✅</span>
+                ) : (
+                  <span title="Valor base ausente — preencha ou aguarde auto-preenchimento" className="ml-1 inline-flex items-center text-amber-500">⚠️</span>
+                )}
+              </p>
               <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
             </div>
-            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && (<>
+            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") && (<>
               <div>
-                <p className={labelCls}>Parcelas</p>
+                <p className={labelCls}>Parcelas {form.forma_pagamento === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
                 <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
                   <option value="">—</option>
-                  {[1,2,3,4,5,6,7,8,9,10,11,12,18,21].map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                  {(form.forma_pagamento === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
                 </select>
               </div>
               <div>
@@ -816,6 +1124,17 @@ export default function EntregasPage() {
                   <option value="INFINITE">Infinite</option>
                 </select>
               </div>
+              {/* Breakdown automático da parcela com taxa embutida */}
+              {isCartaoCredito && nParcelas > 0 && valorAPagar > 0 && (
+                <div className="col-span-2 md:col-span-3 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorAPagar.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorAPagar).toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#86868B]">Total c/ taxa: <b className="text-[#1D1D1F]">R$ {totalComTaxa.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                  </div>
+                </div>
+              )}
             </>)}
             {/* Pagamento alternativo */}
             {showPagAlt ? (
@@ -836,6 +1155,25 @@ export default function EntregasPage() {
                     <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
                   </div>
                 </div>
+                {/* Simulação automática: soma pagamentos vs valor a pagar */}
+                {(() => {
+                  const v1 = parseFloat(form.valor) || 0;
+                  const v2 = parseFloat(form.valor_2) || 0;
+                  if (!v2 || valorAPagar <= 0) return null;
+                  const soma = v1 + v2;
+                  const diff = soma - valorAPagar;
+                  const ok = Math.abs(diff) < 1;
+                  return (
+                    <div className={`mt-2 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                      <span>{ok ? "✅" : "⚠️"}</span>
+                      <span>
+                        Soma {form.forma_pagamento || "1"} (R$ {v1.toLocaleString("pt-BR")}) + {form.forma_pagamento_2} (R$ {v2.toLocaleString("pt-BR")}) = <b>R$ {soma.toLocaleString("pt-BR")}</b>
+                        {" · "}A pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
+                        {!ok && <> {" · "}Divergência: <b>R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="col-span-2 md:col-span-3">
@@ -850,6 +1188,7 @@ export default function EntregasPage() {
                 <option value="Bianca">Bianca</option>
               </select>
             </div>
+            </>)}
             <div>
               <p className={labelCls}>Data da Entrega</p>
               <input type="date" value={form.data_entrega} onChange={(e) => set("data_entrega", e.target.value)} className={inputCls} />
@@ -876,8 +1215,41 @@ export default function EntregasPage() {
               </select>
             </div>
             <div>
-              <p className={labelCls}>Entregador</p>
-              <input value={form.entregador} onChange={(e) => set("entregador", e.target.value)} placeholder="Nome (opcional)" className={inputCls} />
+              <p className={labelCls}>Motoboy / Entregador</p>
+              <select
+                value={
+                  form.entregador === "IGOR" || form.entregador === "LEANDRO" ||
+                  form.entregador === "RETIRADA" || form.entregador === "CORREIOS" ||
+                  form.entregador === "" ? form.entregador : "OUTRO"
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "OUTRO") {
+                    // mantém o texto livre caso já exista, senão limpa para o usuário digitar
+                    if (["IGOR","LEANDRO","RETIRADA","CORREIOS",""].includes(form.entregador)) {
+                      set("entregador", " ");
+                    }
+                  } else {
+                    set("entregador", v);
+                  }
+                }}
+                className={inputCls}
+              >
+                <option value="">-- Selecionar --</option>
+                <option value="IGOR">🛵 Igor</option>
+                <option value="LEANDRO">🛵 Leandro</option>
+                <option value="RETIRADA">🏬 Retirada em loja</option>
+                <option value="CORREIOS">📦 Correios</option>
+                <option value="OUTRO">✏️ Outro (digitar)</option>
+              </select>
+              {!["IGOR","LEANDRO","RETIRADA","CORREIOS",""].includes(form.entregador) && (
+                <input
+                  value={form.entregador}
+                  onChange={(e) => set("entregador", e.target.value)}
+                  placeholder="Nome do entregador"
+                  className={`${inputCls} mt-1`}
+                />
+              )}
             </div>
             <div className="col-span-2 md:col-span-3">
               <p className={labelCls}>Observacao</p>
@@ -929,17 +1301,296 @@ export default function EntregasPage() {
         </button>
       </div>
 
+      {/* Filtros Bia */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">Filtro:</span>
+        {([
+          { key: "todas", label: "Todas" },
+          { key: "pendentes_final", label: "⏳ Pendentes de finalizar" },
+          { key: "finalizada", label: "✅ Finalizadas" },
+          { key: "sem_comprovante", label: "📄 Sem comprovante" },
+          { key: "comprovante", label: "🧾 Com comprovante" },
+        ] as const).map((f) => (
+          <button key={f.key} onClick={() => setFiltroBia(f.key)}
+            className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${filtroBia === f.key ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5EA]"}`}>
+            {f.label}
+          </button>
+        ))}
+        <button
+          onClick={() => { setModoSelecao(!modoSelecao); setEntregasSelecionadas(new Set()); }}
+          className={`ml-auto px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${modoSelecao ? "bg-blue-500 text-white" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-blue-400"}`}
+        >
+          {modoSelecao ? "✖️ Sair da seleção" : "☑️ Selecionar várias"}
+        </button>
+      </div>
+
+      {modoSelecao && entregasSelecionadas.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
+          <span className="text-sm font-semibold text-blue-700">{entregasSelecionadas.size} selecionada{entregasSelecionadas.size > 1 ? "s" : ""}</span>
+          <button
+            onClick={async () => {
+              if (!confirm(`Finalizar ${entregasSelecionadas.size} entregas?`)) return;
+              const ids = Array.from(entregasSelecionadas);
+              for (const id of ids) {
+                await fetch("/api/admin/entregas", {
+                  method: "PATCH",
+                  headers: apiHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify({ id, finalizada: true, status: "ENTREGUE" }),
+                });
+              }
+              setEntregasSelecionadas(new Set());
+              setModoSelecao(false);
+              fetchEntregas();
+            }}
+            className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
+          >
+            ✅ Finalizar selecionadas
+          </button>
+          <button
+            onClick={async () => {
+              if (!confirm(`Marcar comprovante lançado em ${entregasSelecionadas.size} entregas?`)) return;
+              const ids = Array.from(entregasSelecionadas);
+              for (const id of ids) {
+                await fetch("/api/admin/entregas", {
+                  method: "PATCH",
+                  headers: apiHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify({ id, comprovante_lancado: true }),
+                });
+              }
+              setEntregasSelecionadas(new Set());
+              setModoSelecao(false);
+              fetchEntregas();
+            }}
+            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
+          >
+            🧾 Marcar comprovante
+          </button>
+          <button
+            onClick={() => setEntregasSelecionadas(new Set())}
+            className="ml-auto text-xs text-blue-700 hover:underline"
+          >
+            Limpar seleção
+          </button>
+        </div>
+      )}
+
+      {/* Navegação de modo (Dia / Semana) */}
+      {!loading && (
+        <div className="bg-white border border-[#D2D2D7] rounded-xl p-3 flex flex-wrap items-center gap-2">
+          {/* Toggle modo */}
+          <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-1">
+            <button
+              onClick={() => { setViewMode("dia"); setViewDate(hojeBR()); }}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition ${viewMode === "dia" ? "bg-[#E8740E] text-white" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              📅 Dia
+            </button>
+            <button
+              onClick={() => setViewMode("semana")}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition ${viewMode === "semana" ? "bg-[#E8740E] text-white" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+            >
+              🗓️ Semana
+            </button>
+          </div>
+
+          {viewMode === "dia" && (
+            <>
+              <div className="flex items-center gap-1 ml-2">
+                <button
+                  onClick={() => {
+                    const d = new Date(viewDate + "T12:00:00");
+                    d.setDate(d.getDate() - 1);
+                    setViewDate(d.toISOString().split("T")[0]);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs font-bold bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"
+                >
+                  ← Ontem
+                </button>
+                <button
+                  onClick={() => setViewDate(hojeBR())}
+                  className={`px-3 py-1 rounded-md text-xs font-bold ${viewDate === hojeBR() ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"}`}
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={() => {
+                    const d = new Date(viewDate + "T12:00:00");
+                    d.setDate(d.getDate() + 1);
+                    setViewDate(d.toISOString().split("T")[0]);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs font-bold bg-[#F5F5F7] hover:bg-[#E5E5EA] text-[#1D1D1F]"
+                >
+                  Amanhã →
+                </button>
+              </div>
+              <input
+                type="date"
+                value={viewDate}
+                onChange={(e) => setViewDate(e.target.value)}
+                className="ml-2 px-2 py-1 rounded-md text-xs border border-[#D2D2D7] bg-white"
+              />
+              <span className="ml-auto text-xs text-[#86868B]">
+                {(() => {
+                  const d = new Date(viewDate + "T12:00:00");
+                  const weekday = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d.getDay()];
+                  return `${weekday}, ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                })()}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* VIEW: DIA (com swimlanes por motoboy) */}
+      {!loading && viewMode === "dia" && (() => {
+        const filtered = entregas.filter((e) => e.data_entrega === viewDate).filter((e) => {
+          if (filtroBia === "finalizada") return e.finalizada === true;
+          if (filtroBia === "pendentes_final") return e.finalizada !== true;
+          if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+          if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+          return true;
+        });
+        filtered.sort((a, b) => (a.horario || "ZZZ").localeCompare(b.horario || "ZZZ"));
+
+        const isFutureOrPast = viewDate !== hojeBR();
+
+        // Agrupa por motoboy
+        const aguardando = filtered.filter((e) => !e.entregador || e.entregador.trim() === "");
+        const igor = filtered.filter((e) => (e.entregador || "").toUpperCase() === "IGOR");
+        const leandro = filtered.filter((e) => (e.entregador || "").toUpperCase() === "LEANDRO");
+        const outras = filtered.filter((e) => {
+          const ent = (e.entregador || "").toUpperCase();
+          return ent && ent !== "IGOR" && ent !== "LEANDRO";
+        });
+
+        const renderCard = (e: Entrega) => {
+          const sc = STATUS_CONFIG[e.status];
+          const isSel = entregasSelecionadas.has(e.id);
+          return (
+            <button
+              key={e.id}
+              onClick={() => {
+                if (modoSelecao) {
+                  const next = new Set(entregasSelecionadas);
+                  if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                  setEntregasSelecionadas(next);
+                } else {
+                  setSelectedEntrega(e);
+                }
+              }}
+              className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span>{sc.icon}</span>
+                  {e.horario && <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  {e.finalizada && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-600">✅</span>}
+                  {e.comprovante_lancado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600">🧾</span>}
+                </div>
+              </div>
+              <p className={`text-sm font-semibold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</p>
+              {e.bairro && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.bairro}</p>}
+              {e.produto && <p className={`text-[11px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>🍎 {e.produto}</p>}
+            </button>
+          );
+        };
+
+        const renderColumn = (titulo: string, emoji: string, lista: Entrega[], cor: string) => (
+          <div className={`bg-white border rounded-xl overflow-hidden ${cor}`}>
+            <div className={`px-3 py-2 text-center border-b ${cor}`}>
+              <p className="text-xs font-bold uppercase tracking-wide">
+                {emoji} {titulo} <span className="text-[10px] opacity-70">({lista.length})</span>
+              </p>
+            </div>
+            <div className="p-2 space-y-2 min-h-[120px]">
+              {lista.length === 0 ? (
+                <p className="text-[11px] text-[#B0B0B0] text-center py-6">Sem entregas</p>
+              ) : (
+                lista.map(renderCard)
+              )}
+            </div>
+          </div>
+        );
+
+        // Se for dia futuro/passado: lista simples (sem divisão de motoboy)
+        if (isFutureOrPast) {
+          return (
+            <div className="bg-white border border-[#D2D2D7] rounded-xl overflow-hidden">
+              <div className="px-4 py-2 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                <p className="text-xs font-bold text-[#86868B] uppercase">
+                  {filtered.length} entrega{filtered.length !== 1 ? "s" : ""} agendada{filtered.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="p-3 space-y-2">
+                {filtered.length === 0 ? (
+                  <p className="text-sm text-[#B0B0B0] text-center py-8">Nenhuma entrega nessa data</p>
+                ) : (
+                  filtered.map(renderCard)
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Hoje: aguardando (topo) + Igor/Leandro (swimlanes) + outras (baixo)
+        return (
+          <div className="space-y-3">
+            {aguardando.length > 0 && (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-yellow-100 border-b-2 border-yellow-300">
+                  <p className="text-xs font-bold text-yellow-800 uppercase">
+                    ⏳ Aguardando motoboy ({aguardando.length})
+                  </p>
+                </div>
+                <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {aguardando.map(renderCard)}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {renderColumn("Motoboy Igor", "🛵", igor, "border-blue-300")}
+              {renderColumn("Motoboy Leandro", "🛵", leandro, "border-purple-300")}
+            </div>
+            {outras.length > 0 && (
+              <div className="bg-white border border-[#D2D2D7] rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-[#F5F5F7] border-b border-[#D2D2D7]">
+                  <p className="text-xs font-bold text-[#86868B] uppercase">
+                    📦 Outras ({outras.length}) — Retirada / Correios / Externo
+                  </p>
+                </div>
+                <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {outras.map(renderCard)}
+                </div>
+              </div>
+            )}
+            {filtered.length === 0 && (
+              <div className="bg-white border border-[#D2D2D7] rounded-xl p-8 text-center">
+                <p className="text-sm text-[#86868B]">Nenhuma entrega agendada para hoje</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Calendario semanal */}
       {loading ? (
         <div className="p-8 text-center text-[#86868B]">Carregando...</div>
-      ) : (
+      ) : viewMode === "semana" ? (
         <>
           {/* Desktop: grid de 6 colunas */}
           <div className="hidden md:grid grid-cols-6 gap-2">
             {days.map((day, idx) => {
               const dateStr = formatDate(day);
               const isToday = dateStr === today;
-              const dayEntregas = entregas.filter((e) => e.data_entrega === dateStr);
+              const dayEntregas = entregas.filter((e) => e.data_entrega === dateStr).filter((e) => {
+                if (filtroBia === "finalizada") return e.finalizada === true;
+                if (filtroBia === "pendentes_final") return e.finalizada !== true;
+                if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+                if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+                return true;
+              });
               // Sort by horario
               dayEntregas.sort((a, b) => (a.horario || "ZZZ").localeCompare(b.horario || "ZZZ"));
 
@@ -961,11 +1612,20 @@ export default function EntregasPage() {
                     )}
                     {dayEntregas.map((e) => {
                       const sc = STATUS_CONFIG[e.status];
+                      const isSel = entregasSelecionadas.has(e.id);
                       return (
                         <button
                           key={e.id}
-                          onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
+                          onClick={() => {
+                            if (modoSelecao) {
+                              const next = new Set(entregasSelecionadas);
+                              if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                              setEntregasSelecionadas(next);
+                            } else {
+                              setSelectedEntrega(e);
+                            }
+                          }}
+                          className={`w-full text-left p-2 rounded-lg border transition-all hover:shadow-sm ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
                         >
                           <div className="flex items-center gap-1 mb-0.5">
                             <span className="text-[10px]">{sc.icon}</span>
@@ -973,6 +1633,10 @@ export default function EntregasPage() {
                           </div>
                           <p className={`text-xs font-semibold truncate ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</p>
                           {e.bairro && <p className={`text-[10px] truncate ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{e.bairro}</p>}
+                          <div className="flex items-center gap-1 mt-1">
+                            {e.finalizada && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-green-500/20 text-green-600">✅</span>}
+                            {e.comprovante_lancado && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-blue-500/20 text-blue-600">🧾</span>}
+                          </div>
                         </button>
                       );
                     })}
@@ -987,7 +1651,13 @@ export default function EntregasPage() {
             {days.map((day, idx) => {
               const dateStr = formatDate(day);
               const isToday = dateStr === today;
-              const dayEntregas = entregas.filter((e) => e.data_entrega === dateStr);
+              const dayEntregas = entregas.filter((e) => e.data_entrega === dateStr).filter((e) => {
+                if (filtroBia === "finalizada") return e.finalizada === true;
+                if (filtroBia === "pendentes_final") return e.finalizada !== true;
+                if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+                if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+                return true;
+              });
               dayEntregas.sort((a, b) => (a.horario || "ZZZ").localeCompare(b.horario || "ZZZ"));
 
               if (dayEntregas.length === 0 && !isToday) return null;
@@ -1008,11 +1678,20 @@ export default function EntregasPage() {
                     )}
                     {dayEntregas.map((e) => {
                       const sc = STATUS_CONFIG[e.status];
+                      const isSel = entregasSelecionadas.has(e.id);
                       return (
                         <button
                           key={e.id}
-                          onClick={() => setSelectedEntrega(e)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all ${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}
+                          onClick={() => {
+                            if (modoSelecao) {
+                              const next = new Set(entregasSelecionadas);
+                              if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                              setEntregasSelecionadas(next);
+                            } else {
+                              setSelectedEntrega(e);
+                            }
+                          }}
+                          className={`w-full text-left p-3 rounded-lg border transition-all ${isSel ? "ring-2 ring-blue-500 border-blue-500" : `${dm ? sc.borderDark : sc.border} ${dm ? sc.bgDark : sc.bg}`}`}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
@@ -1024,6 +1703,8 @@ export default function EntregasPage() {
                           <div className="flex items-center gap-2 text-[11px] text-[#86868B]">
                             {e.bairro && <span>{e.bairro}</span>}
                             {e.entregador && <span>- {e.entregador}</span>}
+                            {e.finalizada && <span className="text-green-600 font-bold">✅</span>}
+                            {e.comprovante_lancado && <span className="text-blue-600 font-bold">🧾</span>}
                           </div>
                         </button>
                       );
@@ -1034,7 +1715,7 @@ export default function EntregasPage() {
             })}
           </div>
         </>
-      )}
+      ) : null}
 
       {/* Resumo da semana */}
       {!loading && (
@@ -1071,10 +1752,53 @@ export default function EntregasPage() {
                     <span className="text-xl">{sc.icon}</span>
                     <div>
                       <h3 className={`text-base font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.cliente}</h3>
-                      <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{formatDateBR(e.data_entrega)} {e.horario ? `- ${e.horario}` : ""}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <input
+                          type="date"
+                          defaultValue={e.data_entrega}
+                          onBlur={(ev) => {
+                            const v = ev.target.value;
+                            if (v && v !== e.data_entrega) quickPatchEntrega(e.id, { data_entrega: v });
+                          }}
+                          className={`text-[11px] px-1.5 py-0.5 rounded border bg-transparent ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                        <input
+                          type="time"
+                          defaultValue={e.horario || ""}
+                          onBlur={(ev) => {
+                            const v = ev.target.value;
+                            if (v !== (e.horario || "")) quickPatchEntrega(e.id, { horario: v || null });
+                          }}
+                          className={`text-[11px] px-1.5 py-0.5 rounded border bg-transparent ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                        />
+                      </div>
                     </div>
                   </div>
                   <button onClick={() => setSelectedEntrega(null)} className={`text-lg ${dm ? "text-[#98989D] hover:text-[#F5F5F7]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}>X</button>
+                </div>
+              </div>
+
+              {/* Flags da Bia */}
+              <div className={`px-5 py-3 border-b ${dm ? "border-[#3A3A3C] bg-[#1A1A1C]" : "border-[#E5E5EA] bg-[#FAFAFB]"}`}>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={e.finalizada === true}
+                      onChange={(ev) => quickPatchEntrega(e.id, { finalizada: ev.target.checked })}
+                      className="w-4 h-4 accent-green-600 cursor-pointer"
+                    />
+                    <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✅ Finalizada</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={e.comprovante_lancado === true}
+                      onChange={(ev) => quickPatchEntrega(e.id, { comprovante_lancado: ev.target.checked })}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    />
+                    <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>🧾 Comprovante lançado</span>
+                  </label>
                 </div>
               </div>
 
@@ -1137,6 +1861,53 @@ export default function EntregasPage() {
                     <span className="text-[#1D1D1F]">{e.observacao}</span>
                   </div>
                 )}
+
+                {/* Atribuir Motoboy */}
+                <div className="pt-2">
+                  <p className="text-xs font-bold text-[#86868B] uppercase mb-2">🛵 Atribuir Motoboy</p>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { value: "IGOR", label: "Igor", emoji: "🛵", color: "blue" },
+                      { value: "LEANDRO", label: "Leandro", emoji: "🛵", color: "purple" },
+                      { value: "RETIRADA", label: "Retirada", emoji: "🏬", color: "gray" },
+                      { value: "CORREIOS", label: "Correios", emoji: "📦", color: "gray" },
+                    ] as const).map((opt) => {
+                      const isActive = (e.entregador || "").toUpperCase() === opt.value;
+                      const activeStyle = opt.color === "blue"
+                        ? "bg-blue-100 text-blue-700 border-2 border-blue-400"
+                        : opt.color === "purple"
+                          ? "bg-purple-100 text-purple-700 border-2 border-purple-400"
+                          : "bg-gray-100 text-gray-700 border-2 border-gray-400";
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => quickPatchEntrega(e.id, { entregador: opt.value })}
+                          className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                            isActive
+                              ? activeStyle
+                              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"
+                          }`}
+                        >
+                          {opt.emoji} {opt.label}
+                        </button>
+                      );
+                    })}
+                    {e.entregador && !["IGOR","LEANDRO","RETIRADA","CORREIOS"].includes((e.entregador || "").toUpperCase()) && (
+                      <span className="px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                        ✏️ {e.entregador}
+                      </span>
+                    )}
+                    {e.entregador && (
+                      <button
+                        onClick={() => quickPatchEntrega(e.id, { entregador: null })}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50"
+                        title="Remover motoboy"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 {/* Status badge */}
                 <div className="pt-2">
@@ -1220,6 +1991,7 @@ export default function EntregasPage() {
                         vendedor: e.vendedor || "",
                         regiao: e.regiao || "",
                         local_entrega: "",
+                        shopping_nome: "",
                       });
                       if (e.produto) setProdutos(e.produto.split(" | ").filter(Boolean));
                       if (e.detalhes_upgrade) {

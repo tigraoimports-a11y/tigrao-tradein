@@ -13,6 +13,7 @@ import {
   type ProdutoSpec,
   DEFAULT_SPEC,
 } from "@/lib/produto-specs";
+import { corParaPT } from "@/lib/cor-pt";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ export default function TrocasPage() {
                       >
                         <div className={`font-medium ${txtP}`}>{item.produto}</div>
                         <div className={`text-xs ${txtS}`}>
-                          {item.cor && <span>{item.cor} · </span>}
+                          {item.cor && <span>{corParaPT(item.cor)} · </span>}
                           {item.serial_no && <span>SN: {item.serial_no} · </span>}
                           {item.imei && <span>IMEI: {item.imei} · </span>}
                           <span>{fmt(item.custo_unitario)}</span>
@@ -343,7 +344,7 @@ export default function TrocasPage() {
                   <div>
                     <p className={`font-semibold text-sm ${txtP}`}>{produtoSaida.produto}</p>
                     <p className={`text-xs ${txtS} mt-1`}>
-                      {produtoSaida.cor && <span>{produtoSaida.cor} · </span>}
+                      {produtoSaida.cor && <span>{corParaPT(produtoSaida.cor)} · </span>}
                       {produtoSaida.serial_no && <span>SN: {produtoSaida.serial_no} · </span>}
                       {produtoSaida.imei && <span>IMEI: {produtoSaida.imei} · </span>}
                       <span>{fmt(produtoSaida.custo_unitario)}</span>
@@ -507,18 +508,34 @@ export default function TrocasPage() {
                       </div>
 
                       {/* Saída → Entrada */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-red-500 text-xs font-medium">SAIU</span>
-                          <span className={`text-sm ${txtP}`}>{t.produto_saida_nome}</span>
-                          {t.produto_saida_cor && <span className={`text-xs ${txtS}`}>{t.produto_saida_cor}</span>}
-                          <span className={`text-xs ${txtS}`}>{fmt(t.produto_saida_custo)}</span>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-red-500 text-xs font-medium">SAIU</span>
+                            <span className={`text-sm ${txtP}`}>{t.produto_saida_nome}</span>
+                            {t.produto_saida_cor && <span className={`text-xs ${txtS}`}>{corParaPT(t.produto_saida_cor)}</span>}
+                            <span className={`text-xs ${txtS}`}>{fmt(t.produto_saida_custo)}</span>
+                          </div>
+                          {(t.produto_saida_serial || t.produto_saida_imei) && (
+                            <div className="flex items-center gap-3 mt-0.5 ml-10">
+                              {t.produto_saida_serial && <span className="text-[11px] font-mono text-purple-500"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>SN</span>{t.produto_saida_serial}</span>}
+                              {t.produto_saida_imei && <span className="text-[11px] font-mono text-[#0071E3]"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>IMEI</span>{t.produto_saida_imei}</span>}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-500 text-xs font-medium">ENTROU</span>
-                          <span className={`text-sm ${txtP}`}>{t.produto_entrada_nome}</span>
-                          {t.produto_entrada_cor && <span className={`text-xs ${txtS}`}>{t.produto_entrada_cor}</span>}
-                          <span className={`text-xs ${txtS}`}>{fmt(t.produto_entrada_custo)}</span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-green-500 text-xs font-medium">ENTROU</span>
+                            <span className={`text-sm ${txtP}`}>{t.produto_entrada_nome}</span>
+                            {t.produto_entrada_cor && <span className={`text-xs ${txtS}`}>{corParaPT(t.produto_entrada_cor)}</span>}
+                            <span className={`text-xs ${txtS}`}>{fmt(t.produto_entrada_custo)}</span>
+                          </div>
+                          {(t.produto_entrada_serial || t.produto_entrada_imei) && (
+                            <div className="flex items-center gap-3 mt-0.5 ml-14">
+                              {t.produto_entrada_serial && <span className="text-[11px] font-mono text-purple-500"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>SN</span>{t.produto_entrada_serial}</span>}
+                              {t.produto_entrada_imei && <span className="text-[11px] font-mono text-[#0071E3]"><span className={`text-[9px] font-sans font-bold ${txtS} mr-1`}>IMEI</span>{t.produto_entrada_imei}</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
 

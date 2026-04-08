@@ -20,6 +20,7 @@ import {
   DEFAULT_SPEC, buildProdutoName,
   type ProdutoSpec,
 } from "@/lib/produto-specs";
+import { corParaPT } from "@/lib/cor-pt";
 
 // Formata cor para etiqueta: "PRETO - BLACK" (PT - EN)
 // - Deduplica casos como "BLACK Black" → "Black"
@@ -716,7 +717,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                     <p className={labelCls}>Cor</p>
                     <select value={cor} onChange={(e) => setCor(e.target.value)} className={inputCls}>
                       <option value="">Selecione a cor...</option>
-                      {coresUnicas.map((c) => <option key={c} value={c}>{c}</option>)}
+                      {coresUnicas.map((c) => <option key={c} value={c}>{corParaPT(c)}</option>)}
                     </select>
                   </div>
                 )}
@@ -725,7 +726,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                 {produtoEstoque && (
                   <div className="px-4 py-3 bg-gray-900 rounded-xl">
                     <p className="text-xs text-gray-400">Produto na etiqueta:</p>
-                    <p className="text-white font-bold">{produtoEstoque}{cor ? ` — ${cor}` : ""}</p>
+                    <p className="text-white font-bold">{produtoEstoque}{cor ? ` — ${corParaPT(cor)}` : ""}</p>
                   </div>
                 )}
               </>
@@ -1223,7 +1224,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             <div className="p-6 space-y-4">
               <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                 <p className="font-bold text-gray-900 text-lg">{modalScan.produto}</p>
-                {modalScan.cor && <p className="text-sm text-gray-600">Cor: {modalScan.cor}</p>}
+                {modalScan.cor && <p className="text-sm text-gray-600">Cor: {corParaPT(modalScan.cor)}</p>}
                 {modalScan.armazenamento && <p className="text-sm text-gray-600">Armazenamento: {modalScan.armazenamento}</p>}
                 {modalScan.fornecedor && <p className="text-sm text-gray-600">Fornecedor: {modalScan.fornecedor}</p>}
                 {/* Custo salvo internamente, não exibido na tela */}
