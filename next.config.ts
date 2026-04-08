@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/admin/migrations": ["./supabase/migrations/**/*.sql"],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },
