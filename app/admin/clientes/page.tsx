@@ -171,11 +171,14 @@ export default function ClientesPage() {
   const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
   const [savingCredito, setSavingCredito] = useState(false);
 
+  const normalizeNome = (n: string | null | undefined) =>
+    (n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+
   const lojistaKey = (c: { cpf: string | null; cnpj: string | null; nome: string }) => {
     const d = (s: string | null | undefined) => (s || "").replace(/\D/g, "");
     if (d(c.cpf)) return `cpf:${d(c.cpf)}`;
     if (d(c.cnpj)) return `cnpj:${d(c.cnpj)}`;
-    return `nome:${c.nome.trim().toUpperCase()}`;
+    return `nome:${normalizeNome(c.nome)}`;
   };
 
   const fetchSaldosLojistas = useCallback(async () => {
@@ -184,14 +187,12 @@ export default function ClientesPage() {
       const res = await fetch(`/api/admin/lojistas-credito`, { headers: apiHeaders() });
       if (res.ok) {
         const json = await res.json();
+        // STRICT: indexa APENAS pelo cliente_key canônico. Nada de fallback por nome/cpf/cnpj soltos
+        // (isso antes causava colisões se rows antigas tivessem cliente_key vazio/genérico).
         const map: Record<string, number> = {};
-        // Indexa por cliente_key E por nome upper — garante que a UI acha o saldo por qualquer chave
         for (const l of json.lojistas || []) {
-          const saldo = Number(l.saldo || 0);
-          if (l.cliente_key) map[l.cliente_key] = saldo;
-          if (l.nome) map[`nome:${String(l.nome).trim().toUpperCase()}`] = saldo;
-          if (l.cpf) map[`cpf:${String(l.cpf).replace(/\D/g, "")}`] = saldo;
-          if (l.cnpj) map[`cnpj:${String(l.cnpj).replace(/\D/g, "")}`] = saldo;
+          if (!l.cliente_key) continue;
+          map[l.cliente_key] = Number(l.saldo || 0);
         }
         setSaldosLojistas(map);
       }
@@ -897,6 +898,25 @@ export default function ClientesPage() {
                   className="w-full py-2.5 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
                   {savingCredito ? "Salvando..." : "Salvar movimentação"}
                 </button>
+                {creditoModal.saldo > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!creditoModal) return;
+                      if (!confirm(`Apagar o saldo de crédito de ${creditoModal.cliente.nome}? (R$ ${creditoModal.saldo.toLocaleString("pt-BR")})`)) return;
+                      const params = new URLSearchParams();
+                      if (creditoModal.cliente.cpf) params.set("cpf", creditoModal.cliente.cpf);
+                      if (creditoModal.cliente.cnpj) params.set("cnpj", creditoModal.cliente.cnpj);
+                      if (!creditoModal.cliente.cpf && !creditoModal.cliente.cnpj) params.set("nome", creditoModal.cliente.nome);
+                      const res = await fetch(`/api/admin/lojistas-credito?${params}`, { method: "DELETE", headers: apiHeaders() });
+                      const j = await res.json();
+                      if (!res.ok) { alert(j.error || "Erro"); return; }
+                      await fetchSaldosLojistas();
+                      setCreditoModal(null);
+                    }}
+                    className="w-full py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700">
+                    Apagar saldo deste lojista
+                  </button>
+                )}
               </div>
               <div>
                 <p className={`text-[10px] uppercase tracking-wider font-bold ${mS} mb-2`}>Extrato ({creditoModal.log.length})</p>

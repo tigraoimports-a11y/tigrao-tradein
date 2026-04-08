@@ -52,6 +52,28 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ lojista, saldo: Number(lojista.saldo || 0), log: log || [] });
 }
 
+// ── DELETE: zera saldo e apaga linha de um lojista específico (ou ?all=1 pra limpar tudo) ──
+export async function DELETE(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const usuario = getUsuario(req);
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("all") === "1") {
+    const { error } = await supabase.from("lojistas_credito").delete().gt("saldo", -1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await logActivity(usuario, "Crédito lojistas BULK reset", "Zerou todos os saldos", "clientes");
+    return NextResponse.json({ ok: true, bulk: true });
+  }
+  const cpf = searchParams.get("cpf");
+  const cnpj = searchParams.get("cnpj");
+  const nome = searchParams.get("nome");
+  if (!cpf && !cnpj && !nome) return NextResponse.json({ error: "cpf, cnpj ou nome obrigatório" }, { status: 400 });
+  const key = buildClienteKey({ cpf, cnpj, nome });
+  const { error } = await supabase.from("lojistas_credito").delete().eq("cliente_key", key);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await logActivity(usuario, "Crédito lojista apagado", `${nome || cpf || cnpj}`, "clientes");
+  return NextResponse.json({ ok: true });
+}
+
 // ── POST: movimentar manualmente (AJUSTE / CREDITO / DEBITO) ──
 export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
