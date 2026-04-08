@@ -327,7 +327,10 @@ export async function GET(req: NextRequest) {
     const cnpj = (v.cnpj || "").trim();
 
     let key: string;
-    if (cpf) {
+    if (isAtacado) {
+      // Lojistas: SEMPRE agrupa por nome normalizado, ignora cpf/cnpj inconsistentes
+      key = `nome:${normalizeLojistaNome(nome)}`;
+    } else if (cpf) {
       if (cpfToKey.has(cpf)) { key = cpfToKey.get(cpf)!; }
       else { key = `cpf:${cpf}`; cpfToKey.set(cpf, key); }
     } else if (cnpj) {

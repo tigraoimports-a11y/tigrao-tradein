@@ -1,5 +1,5 @@
--- RPC que retorna clientes/lojistas já agrupados via SQL (elimina scan + group em JS).
--- Usa chave cpf (se houver) ou nome uppercase como identificador.
+-- Ajusta clientes_resumo: lojistas ATACADO agrupam SEMPRE por nome normalizado
+-- (ignora cpf/cnpj que frequentemente estão inconsistentes entre vendas do mesmo lojista).
 
 create or replace function clientes_resumo(
   p_is_lojista boolean,
@@ -38,8 +38,6 @@ as $$
   keyed as (
     select
       case
-        -- Lojistas ATACADO: SEMPRE agrupa por nome normalizado (ignora cnpj/cpf que frequentemente
-        -- tão vazios ou inconsistentes) — unifica "021 TECH" e "021 TECH ATACADO".
         when (tipo = 'ATACADO' or origem = 'ATACADO') then
           'nome:' || regexp_replace(upper(trim(cliente)), '\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\b.*$', '', 'i')
         when coalesce(cpf, '') <> '' then 'cpf:' || cpf
@@ -76,5 +74,3 @@ as $$
   where is_lojista = p_is_lojista
   order by total_gasto desc;
 $$;
-
-grant execute on function clientes_resumo(boolean, text) to service_role, authenticated, anon;

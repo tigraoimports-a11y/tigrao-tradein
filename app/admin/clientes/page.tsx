@@ -746,6 +746,23 @@ export default function ClientesPage() {
         </div>
       </div>
 
+      {tab === "lojistas" && (
+        <div className="flex justify-end">
+          <button
+            onClick={async () => {
+              if (!confirm("Zerar os saldos de crédito de TODOS os lojistas? Isso apaga o histórico e zera a tabela lojistas_credito. Não pode ser desfeito.")) return;
+              const res = await fetch(`/api/admin/lojistas-credito?all=1`, { method: "DELETE", headers: apiHeaders() });
+              const j = await res.json();
+              if (!res.ok) { alert(j.error || "Erro"); return; }
+              await fetchSaldosLojistas();
+              alert("Todos os saldos foram zerados.");
+            }}
+            className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700">
+            Zerar todos os saldos de crédito
+          </button>
+        </div>
+      )}
+
       {/* Sort */}
       <div className="flex items-center gap-2">
         <span className={`text-xs ${mS}`}>Ordenar:</span>
