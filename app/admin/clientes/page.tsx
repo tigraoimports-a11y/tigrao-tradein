@@ -164,36 +164,32 @@ export default function ClientesPage() {
   const [fornMsg, setFornMsg] = useState("");
   const [savingForn, setSavingForn] = useState(false);
 
-  // Crédito de lojistas
-  const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({});
+  // Crédito de lojistas — usa a tabela `lojistas` nova (UUID auto)
+  const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({}); // indexa por nome upper → saldo
   type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string };
-  const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; saldo: number; log: CreditoLog[] }>(null);
+  const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; lojista_id: string; saldo: number; log: CreditoLog[] }>(null);
   const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
   const [savingCredito, setSavingCredito] = useState(false);
 
   const normalizeNome = (n: string | null | undefined) =>
     (n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 
-  const lojistaKey = (c: { cpf: string | null; cnpj: string | null; nome: string }) => {
-    const d = (s: string | null | undefined) => (s || "").replace(/\D/g, "");
-    if (d(c.cpf)) return `cpf:${d(c.cpf)}`;
-    if (d(c.cnpj)) return `cnpj:${d(c.cnpj)}`;
-    return `nome:${normalizeNome(c.nome)}`;
-  };
+  // Lookup do saldo no mapa por nome normalizado (mesma chave usada em fetchSaldosLojistas)
+  const lojistaKey = (c: { cpf: string | null; cnpj: string | null; nome: string }) => normalizeNome(c.nome);
 
   const fetchSaldosLojistas = useCallback(async () => {
     if (!password) return;
     try {
-      const res = await fetch(`/api/admin/lojistas-credito?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      // Nova tabela `lojistas` — cada row tem id UUID + saldo_credito. Indexa por nome upper.
+      const res = await fetch(`/api/admin/lojistas?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
-        console.log("[lojistas-credito] API retornou", json._count, "rows:", json.lojistas?.map((l: { cliente_key: string; saldo: number }) => ({ key: l.cliente_key, saldo: l.saldo })));
-        // STRICT: indexa APENAS pelo cliente_key canônico. Nada de fallback por nome/cpf/cnpj soltos
-        // (isso antes causava colisões se rows antigas tivessem cliente_key vazio/genérico).
         const map: Record<string, number> = {};
         for (const l of json.lojistas || []) {
-          if (!l.cliente_key) continue;
-          map[l.cliente_key] = Number(l.saldo || 0);
+          const nomeKey = normalizeNome(l.nome);
+          if (nomeKey && Number(l.saldo_credito || 0) > 0) {
+            map[nomeKey] = Number(l.saldo_credito || 0);
+          }
         }
         setSaldosLojistas(map);
       }
@@ -204,13 +200,32 @@ export default function ClientesPage() {
 
   const openCreditoModal = async (c: Cliente) => {
     try {
-      const params = new URLSearchParams();
-      if (c.cpf) params.set("cpf", c.cpf);
-      if (c.cnpj) params.set("cnpj", c.cnpj);
-      if (!c.cpf && !c.cnpj) params.set("nome", c.nome);
-      const res = await fetch(`/api/admin/lojistas-credito?${params}`, { headers: apiHeaders() });
-      const json = await res.json();
-      setCreditoModal({ cliente: c, saldo: Number(json.saldo || 0), log: json.log || [] });
+      // 1) Busca lojistas existentes pra encontrar um que bate pelo nome
+      const list = await fetch(`/api/admin/lojistas?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      const lj = await list.json();
+      const alvo = (lj.lojistas || []).find((l: { id: string; nome: string }) => normalizeNome(l.nome) === normalizeNome(c.nome));
+      let lojistaId: string;
+      let saldo = 0;
+      let log: CreditoLog[] = [];
+      if (alvo) {
+        lojistaId = alvo.id;
+        // Busca saldo + log
+        const det = await fetch(`/api/admin/lojistas?id=${lojistaId}&_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+        const dj = await det.json();
+        saldo = Number(dj.lojista?.saldo_credito || 0);
+        log = dj.log || [];
+      } else {
+        // Auto-cria com UUID novo
+        const create = await fetch(`/api/admin/lojistas`, {
+          method: "POST",
+          headers: { ...apiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ nome: c.nome, cpf: c.cpf, cnpj: c.cnpj }),
+        });
+        const cj = await create.json();
+        if (!create.ok) { alert(cj.error || "Erro ao cadastrar lojista"); return; }
+        lojistaId = cj.lojista.id;
+      }
+      setCreditoModal({ cliente: c, lojista_id: lojistaId, saldo, log });
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
     } catch (err) { console.error(err); }
   };
@@ -221,11 +236,12 @@ export default function ClientesPage() {
     if (!valor || valor <= 0) { alert("Valor inválido"); return; }
     setSavingCredito(true);
     try {
-      const res = await fetch("/api/admin/lojistas-credito", {
+      const res = await fetch("/api/admin/lojistas", {
         method: "POST",
         headers: { ...apiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          cliente: { nome: creditoModal.cliente.nome, cpf: creditoModal.cliente.cpf, cnpj: creditoModal.cliente.cnpj },
+          action: "mover_saldo",
+          lojista_id: creditoModal.lojista_id,
           tipo: creditoForm.tipo,
           valor,
           motivo: creditoForm.motivo || null,
@@ -233,18 +249,11 @@ export default function ClientesPage() {
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error || "Erro"); return; }
-      // Debug: valida que só 1 linha ficou no banco pra essa chave
-      try {
-        const check = await fetch(`/api/admin/lojistas-credito?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
-        const cj = await check.json();
-        const total = cj.lojistas?.length ?? 0;
-        console.log(`[DEBUG credito] Após salvar, DB tem ${total} lojistas com saldo>0:`, cj.lojistas);
-        if (total > 1) {
-          alert(`ATENÇÃO: Após salvar, ${total} lojistas estão com saldo. Esperado: 1. Abra o console pra ver detalhes.`);
-        }
-      } catch { /* ignore */ }
       await fetchSaldosLojistas();
-      await openCreditoModal(creditoModal.cliente); // refresh modal data
+      // Refresh modal com dados novos
+      const det = await fetch(`/api/admin/lojistas?id=${creditoModal.lojista_id}&_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      const dj = await det.json();
+      setCreditoModal(m => m ? { ...m, saldo: Number(dj.lojista?.saldo_credito || 0), log: dj.log || [] } : null);
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
     } finally { setSavingCredito(false); }
   };
@@ -786,8 +795,14 @@ export default function ClientesPage() {
         <div className="flex justify-end">
           <button
             onClick={async () => {
-              if (!confirm("Zerar os saldos de crédito de TODOS os lojistas? Isso apaga o histórico e zera a tabela lojistas_credito. Não pode ser desfeito.")) return;
-              const res = await fetch(`/api/admin/lojistas-credito?all=1`, { method: "DELETE", headers: apiHeaders() });
+              if (!confirm("Zerar os saldos de crédito de TODOS os lojistas? Isso apaga todos os cadastros da tabela lojistas. Não pode ser desfeito.")) return;
+              // Busca lista, deleta cada um
+              const lj = await fetch(`/api/admin/lojistas`, { headers: apiHeaders() });
+              const ljJson = await lj.json();
+              for (const l of ljJson.lojistas || []) {
+                await fetch(`/api/admin/lojistas?id=${l.id}`, { method: "DELETE", headers: apiHeaders() });
+              }
+              const res = new Response(JSON.stringify({ ok: true }));
               const j = await res.json();
               if (!res.ok) { alert(j.error || "Erro"); return; }
               await fetchSaldosLojistas();
@@ -964,12 +979,8 @@ export default function ClientesPage() {
                   <button
                     onClick={async () => {
                       if (!creditoModal) return;
-                      if (!confirm(`Apagar o saldo de crédito de ${creditoModal.cliente.nome}? (R$ ${creditoModal.saldo.toLocaleString("pt-BR")})`)) return;
-                      const params = new URLSearchParams();
-                      if (creditoModal.cliente.cpf) params.set("cpf", creditoModal.cliente.cpf);
-                      if (creditoModal.cliente.cnpj) params.set("cnpj", creditoModal.cliente.cnpj);
-                      if (!creditoModal.cliente.cpf && !creditoModal.cliente.cnpj) params.set("nome", creditoModal.cliente.nome);
-                      const res = await fetch(`/api/admin/lojistas-credito?${params}`, { method: "DELETE", headers: apiHeaders() });
+                      if (!confirm(`Apagar o cadastro de lojista de ${creditoModal.cliente.nome}? (saldo R$ ${creditoModal.saldo.toLocaleString("pt-BR")})`)) return;
+                      const res = await fetch(`/api/admin/lojistas?id=${creditoModal.lojista_id}`, { method: "DELETE", headers: apiHeaders() });
                       const j = await res.json();
                       if (!res.ok) { alert(j.error || "Erro"); return; }
                       await fetchSaldosLojistas();
