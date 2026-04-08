@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
+import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -268,11 +269,37 @@ export default function EntregasPage() {
   }, [estoque]);
 
   // Categorias dos preços com labels amigáveis
-  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
+  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros", SEMINOVOS: "📱 Seminovos" };
+  const temSeminovos = useMemo(() => estoque.some(p => p.tipo === "SEMINOVO" && p.qnt > 0), [estoque]);
   const categoriaPrecos = useMemo(() => {
     const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
+    if (temSeminovos) cats.push("SEMINOVOS");
     return cats;
-  }, [precosVenda]);
+  }, [precosVenda, temSeminovos]);
+
+  // Lista de seminovos agrupados por modelo base (mesmo padrão do Estoque)
+  const seminovosList = useMemo(() => {
+    type Item = { nome: string; key: string; items: EstoqueItem[] };
+    const groups = new Map<string, Item>();
+    for (const p of estoque) {
+      if (p.tipo !== "SEMINOVO" || p.qnt <= 0) continue;
+      const baseKey = getModeloBase(p.produto, p.categoria);
+      const nome = formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: null, observacao: null });
+      if (!groups.has(baseKey)) groups.set(baseKey, { nome, key: baseKey, items: [] });
+      groups.get(baseKey)!.items.push(p);
+    }
+    return [...groups.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [estoque]);
+
+  // Cores disponíveis para o seminovo selecionado (agrupa por cor)
+  const seminovoCores = useMemo(() => {
+    if (catSel !== "SEMINOVOS" || !produtos[0]) return [];
+    const grupo = seminovosList.find(g => g.nome === produtos[0]);
+    if (!grupo) return [];
+    const set = new Set<string>();
+    for (const it of grupo.items) if (it.cor) set.add(it.cor.toUpperCase());
+    return [...set].sort();
+  }, [catSel, produtos, seminovosList]);
 
   // Produtos filtrados por categoria
   const produtosFiltradosPreco = useMemo(() => {
@@ -1068,7 +1095,7 @@ export default function EntregasPage() {
                     <option value="">-- Categoria --</option>
                     {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
                   </select>
-                  {catSel && (
+                  {catSel && catSel !== "SEMINOVOS" && (
                     <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
                       {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                       {produtosFiltradosPreco.map((m) => {
@@ -1093,6 +1120,47 @@ export default function EntregasPage() {
                                       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
                                     >{cor}</button>
                                   ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {catSel === "SEMINOVOS" && (
+                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                      {seminovosList.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum seminovo em estoque</p>}
+                      {seminovosList.map((g) => {
+                        const sel = produtos[0] === g.nome;
+                        const qtdTotal = g.items.reduce((s, i) => s + i.qnt, 0);
+                        return (
+                          <div key={g.key}>
+                            <button type="button" onClick={() => {
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              setProdutos([g.nome]);
+                              set("valor", "");
+                              setCorSel("");
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{g.nome}</p>
+                              <p className={`text-xs font-medium ${sel ? "text-[#E8740E]" : "text-[#86868B]"}`}>{qtdTotal} un.</p>
+                            </button>
+                            {sel && (
+                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA] space-y-2">
+                                {seminovoCores.length > 0 && (<>
+                                  <p className="text-xs font-medium text-[#86868B]">Selecione a cor:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {seminovoCores.map(cor => (
+                                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                      >{cor}</button>
+                                    ))}
+                                  </div>
+                                </>)}
+                                <div>
+                                  <p className={labelCls}>Valor de venda R$</p>
+                                  <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
+                                  <p className="text-[11px] text-[#86868B] italic mt-1">Seminovo não tem preço fixo — digite o valor acordado com o cliente.</p>
                                 </div>
                               </div>
                             )}

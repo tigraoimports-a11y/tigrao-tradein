@@ -3546,12 +3546,28 @@ export default function VendasPage() {
                         const pagParts: string[] = [];
                         if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
                         if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
+                        const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
+                        const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaV - entradaVal - compVal));
+                        const formaLabel = (f: string | null | undefined) => {
+                          if (!f) return "";
+                          if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
+                          if (f === "PIX") return "💸 PIX";
+                          if (f === "LINK") return "Link MP";
+                          if (f === "CARTAO") return "Cartão";
+                          if (f === "DEBITO") return "Débito";
+                          if (f === "FIADO") return "Fiado";
+                          return f;
+                        };
                         if (v.forma === "CARTAO" && v.qnt_parcelas) {
                           pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
                         } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
                           pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
-                        } else if (!temEntrada && !valorTrocaV) {
-                          pagParts.push(`${v.forma} ${v.banco}`);
+                        } else if (v.forma && v.forma !== "CARTAO" && (resto > 0 || (!temEntrada && !valorTrocaV))) {
+                          const lbl = formaLabel(v.forma);
+                          const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
+                          pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
                         }
                         if (v.banco_alt) {
                           pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);
@@ -4226,14 +4242,24 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                              const isLojista = v.tipo === "ATACADO" || v.origem === "ATACADO";
+                                              let devolverComoCredito = false;
+                                              if (isLojista) {
+                                                const r = confirm(`Cancelar venda de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${Number(v.preco_vendido || 0).toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
+                                                if (r) devolverComoCredito = true;
+                                                else {
+                                                  if (!confirm(`Cancelar SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                }
+                                              } else {
+                                                if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                              }
                                               await fetch("/api/vendas", {
                                                 method: "DELETE",
                                                 headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id }),
+                                                body: JSON.stringify({ id: v.id, devolver_como_credito: devolverComoCredito }),
                                               });
                                               setVendas(prev => prev.filter(r => r.id !== v.id));
-                                              setMsg("Venda cancelada!");
+                                              setMsg(devolverComoCredito ? "Venda cancelada! Valor creditado ao lojista." : "Venda cancelada!");
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
                                           >

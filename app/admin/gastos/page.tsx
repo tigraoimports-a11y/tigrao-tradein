@@ -561,13 +561,30 @@ export default function GastosPage() {
   const grupos = useMemo(() => agruparGastos(gastos), [gastos]);
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [categoriasExcluidas, setCategoriasExcluidas] = useState<Set<string>>(new Set());
+  // Filtro de mês (YYYY-MM). Default = mês atual.
+  const [filtroMes, setFiltroMes] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const toggleCategoria = (cat: string) => setCategoriasExcluidas(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
   const gruposFiltrados = useMemo(() => {
     let result = grupos;
+    if (filtroMes) result = result.filter(g => (g.data || "").startsWith(filtroMes));
     if (filtroCategoria) result = result.filter(g => g.categoria === filtroCategoria);
     if (categoriasExcluidas.size > 0) result = result.filter(g => !categoriasExcluidas.has(g.categoria));
     return result;
-  }, [grupos, filtroCategoria, categoriasExcluidas]);
+  }, [grupos, filtroMes, filtroCategoria, categoriasExcluidas]);
+  const shiftMes = (delta: number) => setFiltroMes(prev => {
+    const [y, m] = prev.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const mesLabel = useMemo(() => {
+    if (!filtroMes) return "Todos";
+    const [y, m] = filtroMes.split("-").map(Number);
+    const nomes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    return `${nomes[m - 1]} ${y}`;
+  }, [filtroMes]);
   const categoriasUsadas = useMemo(() => [...new Set(grupos.map(g => g.categoria))].sort(), [grupos]);
   // Agrupar por data
   const gruposPorData = useMemo(() => {
@@ -1096,6 +1113,19 @@ export default function GastosPage() {
               <p className="text-xs text-[#86868B]">Total Saidas</p>
               <p className="text-xl font-bold text-red-500">{fmt(gruposFiltrados.filter(g => !g.is_dep_esp).reduce((s, g) => s + g.totalValor, 0))}</p>
               <p className="text-[10px] text-[#86868B]">{gruposFiltrados.filter(g => !g.is_dep_esp).length} registros</p>
+            </div>
+            {/* Filtro de mês */}
+            <div className={`flex items-center gap-1 border rounded-xl px-2 py-1.5 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+              <button onClick={() => shiftMes(-1)} className={`px-2 py-1 rounded-lg text-sm font-bold ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`} title="Mês anterior">‹</button>
+              <input
+                type="month"
+                value={filtroMes}
+                onChange={(e) => setFiltroMes(e.target.value)}
+                className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 outline-none ${dm ? "bg-[#1C1C1E] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"}`}
+              />
+              <span className={`text-xs font-bold px-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{mesLabel}</span>
+              <button onClick={() => shiftMes(1)} className={`px-2 py-1 rounded-lg text-sm font-bold ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`} title="Próximo mês">›</button>
+              {filtroMes && <button onClick={() => setFiltroMes("")} className="text-[10px] text-[#E8740E] underline ml-1">Todos</button>}
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
