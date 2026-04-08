@@ -72,6 +72,21 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
+function formatPagamentoDisplay(formaPagamento: string | null, valor: number | null): string {
+  if (!formaPagamento) return "—";
+  const valorStr = valor != null ? `R$ ${Number(valor).toLocaleString("pt-BR")}` : "";
+  // Já vem formatado (ex: "10x no Cartão (ITAU)"), só anexa valor
+  const fp = formaPagamento.trim();
+  // Casos comuns normalizados
+  if (/^pix/i.test(fp) && !/\bR\$/.test(fp)) {
+    return `${fp} ${valorStr}`.trim();
+  }
+  if (/cart[aã]o/i.test(fp) || /\d+x/i.test(fp)) {
+    return valor != null ? `${fp} — Total ${valorStr}` : fp;
+  }
+  return `${fp}${valorStr ? " " + valorStr : ""}`;
+}
+
 export default function EntregasPage() {
   const { password, apiHeaders, darkMode: dm } = useAdmin();
   const [entregas, setEntregas] = useState<Entrega[]>([]);
@@ -115,7 +130,9 @@ export default function EntregasPage() {
   const emptyForm = {
     cliente: "",
     telefone: "",
-    endereco: "",
+    endereco: "",              // endereço cadastro do cliente
+    endereco_entrega: "",      // onde vai ser entregue (default = endereco)
+    local_detalhes: "",        // complemento/loja do local (shopping/residencia/outro)
     bairro: "",
     data_entrega: hojeBR(),
     horario: "",
@@ -146,6 +163,8 @@ export default function EntregasPage() {
   const [serialBusca, setSerialBusca] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
+  const [corSel, setCorSel] = useState("");
+  const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   // Linha 2 do produto (opcional — aparece ao clicar "+ Adicionar 2º produto")
   const [showProduto2, setShowProduto2] = useState(false);
   const [catSel2, setCatSel2] = useState("");
@@ -172,6 +191,21 @@ export default function EntregasPage() {
     fetch("/api/admin/precos", { headers: apiHeaders() })
       .then(r => r.json())
       .then(j => setPrecos(j.data ?? []))
+      .catch(() => {});
+  }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch preços de venda (mesmo picker do gerar-link)
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/precos", { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(j => {
+        if (j.data && Array.isArray(j.data)) {
+          setPrecosVenda(j.data.filter((p: { status?: string; preco_pix: number }) => p.status !== "esgotado" && p.preco_pix > 0).map((p: { modelo: string; armazenamento: string; preco_pix: number; categoria: string }) => ({
+            modelo: p.modelo, armazenamento: p.armazenamento, preco_pix: p.preco_pix, categoria: p.categoria || "OUTROS"
+          })));
+        }
+      })
       .catch(() => {});
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -205,13 +239,41 @@ export default function EntregasPage() {
     return [...cats.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [estoque]);
 
-  // Produtos filtrados por categoria selecionada
-  const produtosFiltrados = useMemo(() => {
+  // Categorias dos preços com labels amigáveis
+  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
+  const categoriaPrecos = useMemo(() => {
+    const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
+    return cats;
+  }, [precosVenda]);
+
+  // Produtos filtrados por categoria
+  const produtosFiltradosPreco = useMemo(() => {
     if (!catSel) return [];
-    const isSemi = catSel.endsWith("_SEMI");
-    const baseCat = isSemi ? catSel.replace("_SEMI", "") : catSel;
-    return estoque.filter(p => p.categoria === baseCat && (isSemi ? p.tipo === "SEMINOVO" : p.tipo !== "SEMINOVO"));
-  }, [estoque, catSel]);
+    return precosVenda
+      .filter(p => p.categoria === catSel)
+      .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [precosVenda, catSel]);
+
+  // Cores reais do estoque para o produto selecionado
+  const coresDisponiveis = useMemo(() => {
+    if (!produtos[0]) return [];
+    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
+    const cores = new Set<string>();
+    for (const item of estoque) {
+      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+        continue;
+      }
+      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
+      if (matchCount >= Math.min(3, keywords.length - 1)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+      }
+    }
+    return [...cores].sort();
+  }, [produtos, estoque]);
 
   // Valor base e final
   // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
@@ -274,50 +336,57 @@ export default function EntregasPage() {
     setSaving(true);
     setMsg("");
 
-    // Monta string de produtos: "MODELO COR" pra cada produto selecionado
-    const produtoNomes: string[] = [];
-    if (produtos[0]) {
-      produtoNomes.push(cor1 ? `${produtos[0]} ${cor1}` : produtos[0]);
-    }
+    const produtosFilled = produtos.filter(Boolean);
+    if (corSel && produtosFilled[0]) produtosFilled[0] = `${produtosFilled[0]} ${corSel}`;
+    // Se tiver Produto 2 selecionado, adiciona ao final
     if (showProduto2 && modelo2) {
-      produtoNomes.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
+      produtosFilled.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
     }
-    // Se modo manual, usa o array produtos como antes
-    const produtosStr = produtoManual
-      ? produtos.filter(Boolean).join(" | ")
-      : produtoNomes.join(" | ") || produtos.filter(Boolean).join(" | ");
+    const produtosStr = produtosFilled.join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
+    // Endereço de entrega final: local_detalhes (shopping/loja) tem prioridade, senão endereco_entrega, senão endereco cadastro
+    const enderecoEntregaFinal = form.local_detalhes?.trim()
+      ? form.local_detalhes.trim()
+      : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
+    // Forma de pagamento detalhada
+    let formaPagDetalhada = form.forma_pagamento || "";
+    if ((form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && form.parcelas) {
+      formaPagDetalhada = `${form.parcelas}x no Cartão${form.maquina ? ` (${form.maquina})` : ""}`;
+    } else if (form.forma_pagamento === "Pix" && form.maquina) {
+      formaPagDetalhada = `PIX (${form.maquina})`;
+    }
+    if (form.forma_pagamento_2 && form.valor_2) {
+      formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+    }
+    // Observação com endereço de cadastro do cliente (se diferente do de entrega)
+    const obsExtras: string[] = [];
+    if (form.observacao) obsExtras.push(form.observacao);
+    if (descontoNum > 0) obsExtras.push(`Desconto: R$ ${descontoNum}`);
+    if (form.endereco && form.endereco.trim() !== enderecoEntregaFinal.trim()) {
+      obsExtras.push(`Endereço cadastro: ${form.endereco}`);
+    }
     const res = await fetch("/api/admin/entregas", {
       method: isEdit ? "PATCH" : "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         ...(isEdit ? { id: editingEntregaId } : {}),
-        ...form,
+        cliente: form.cliente,
+        data_entrega: form.data_entrega,
         telefone: form.telefone || null,
-        // Se local = SHOPPING, embute o nome do shopping no endereço pra ficar claro
-        endereco: (() => {
-          if (form.local_entrega === "SHOPPING" && form.shopping_nome) {
-            return form.endereco
-              ? `${form.shopping_nome} — ${form.endereco}`
-              : form.shopping_nome;
-          }
-          return form.endereco || null;
-        })(),
+        endereco: enderecoEntregaFinal || null,
         bairro: form.bairro || null,
         horario: form.horario || null,
         entregador: form.entregador || null,
         observacao: (() => {
-          const parts: string[] = [];
-          if (form.observacao) parts.push(form.observacao);
-          if (descontoNum > 0) parts.push(`Desconto: R$ ${descontoNum}`);
+          const parts = [...obsExtras];
           if (modoSimples && rastreio) parts.push(`Rastreio: ${rastreio}`);
           return parts.length ? parts.join(" | ") : null;
         })(),
         produto: produtosStr || null,
         tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
-        forma_pagamento: form.forma_pagamento || null,
+        forma_pagamento: formaPagDetalhada || null,
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
@@ -329,9 +398,9 @@ export default function EntregasPage() {
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
-      setCatSel(""); setCor1(""); setPreco1(0);
+      setCatSel(""); setEstoqueId(""); setCorSel(""); setCor1(""); setPreco1(0);
       setShowProduto2(false); setCatSel2(""); setModelo2(""); setCor2(""); setPreco2(0);
-      setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
       setRastreio("");
       setModoSimples(false);
@@ -344,14 +413,22 @@ export default function EntregasPage() {
   };
 
   const handleStatusChange = async (entrega: Entrega, newStatus: EntregaStatus) => {
-    const res = await fetch("/api/admin/entregas", {
-      method: "PATCH",
-      headers: apiHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ id: entrega.id, status: newStatus }),
-    });
-    if (res.ok) {
-      setEntregas((prev) => prev.map((e) => (e.id === entrega.id ? { ...e, status: newStatus } : e)));
-      setSelectedEntrega(null);
+    try {
+      const res = await fetch("/api/admin/entregas", {
+        method: "PATCH",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ id: entrega.id, status: newStatus }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok !== false) {
+        setEntregas((prev) => prev.map((e) => (e.id === entrega.id ? { ...e, status: newStatus } : e)));
+        setSelectedEntrega(null);
+        setMsg(`Status atualizado: ${newStatus}`);
+      } else {
+        setMsg(`Erro ao atualizar: ${json.error || res.statusText}`);
+      }
+    } catch (err) {
+      setMsg(`Erro de rede: ${err instanceof Error ? err.message : "desconhecido"}`);
     }
   };
 
@@ -781,9 +858,21 @@ export default function EntregasPage() {
               <p className={labelCls}>Bairro</p>
               <input value={form.bairro} onChange={(e) => set("bairro", e.target.value)} placeholder="Ex: Barra da Tijuca" className={inputCls} />
             </div>
-            <div className="col-span-2 md:col-span-3">
-              <p className={labelCls}>Endereço da Entrega</p>
-              <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Onde vai ser entregue (pode ser diferente do residencial)" className={inputCls} />
+            <div className="col-span-2 md:col-span-3 p-3 rounded-xl border border-[#E5E5EA] bg-[#FAFAFA] space-y-3">
+              <p className="text-xs font-bold text-[#86868B] uppercase tracking-wider">Endereços</p>
+              <div>
+                <p className={labelCls}>Endereço do cliente (cadastro)</p>
+                <input value={form.endereco} onChange={(e) => {
+                  const v = e.target.value;
+                  set("endereco", v);
+                  // se o campo de entrega ainda não foi editado, espelha
+                  if (!form.endereco_entrega || form.endereco_entrega === form.endereco) set("endereco_entrega", v);
+                }} placeholder="Endereço cadastrado do cliente" className={inputCls} />
+              </div>
+              <div>
+                <p className={labelCls}>Endereço de entrega</p>
+                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder="Onde será entregue (default = cadastro)" className={inputCls} />
+              </div>
             </div>
             <div>
               <p className={labelCls}>Local de Entrega</p>
@@ -800,30 +889,10 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
-            {form.local_entrega === "SHOPPING" && (
-              <div className="col-span-2 md:col-span-2">
-                <p className={labelCls}>🏬 Qual shopping?</p>
-                <input
-                  value={form.shopping_nome}
-                  onChange={(e) => set("shopping_nome", e.target.value)}
-                  placeholder="Ex: Barra Shopping, Village Mall, Norte Shopping"
-                  list="shopping-sugestoes"
-                  className={inputCls}
-                />
-                <datalist id="shopping-sugestoes">
-                  <option value="Barra Shopping" />
-                  <option value="Village Mall" />
-                  <option value="New York City Center" />
-                  <option value="Shopping Metropolitano" />
-                  <option value="Bossa Nova Mall" />
-                  <option value="Downtown" />
-                  <option value="Norte Shopping" />
-                  <option value="Shopping Rio Sul" />
-                  <option value="Botafogo Praia Shopping" />
-                  <option value="Shopping Leblon" />
-                  <option value="Shopping Nova América" />
-                  <option value="Via Parque Shopping" />
-                </datalist>
+            {(form.local_entrega === "SHOPPING" || form.local_entrega === "RESIDÊNCIA" || form.local_entrega === "OUTRO") && (
+              <div className="col-span-2">
+                <p className={labelCls}>{form.local_entrega === "SHOPPING" ? "Shopping (nome + loja)" : form.local_entrega === "RESIDÊNCIA" ? "Detalhes residência" : "Detalhes"}</p>
+                <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder={form.local_entrega === "SHOPPING" ? "Ex: Carioca Shopping - Loja 234" : "Ex: Bloco A, Apto 301, Portaria 24h"} className={inputCls} />
               </div>
             )}
             {modoSimples && (
@@ -865,74 +934,93 @@ export default function EntregasPage() {
                   <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
                 </div>
               ) : (
-                /* Modo simplificado — modelo + cor (seleção do catálogo com preço automático) */
-                <ProdutoPicker
-                  titulo="Produto 1"
-                  categorias={categorias}
-                  estoque={estoque}
-                  catSel={catSel}
-                  setCatSel={(v) => { setCatSel(v); setCor1(""); setPreco1(0); setProdutos([""]); }}
-                  modeloSel={produtos[0] || ""}
-                  setModeloSel={(m, preco) => {
-                    setProdutos([m]);
-                    setPreco1(preco);
-                    setCor1("");
-                  }}
-                  corSel={cor1}
-                  setCorSel={setCor1}
-                  lookupPrecoVenda={lookupPrecoVenda}
-                  inputCls={inputCls}
-                  labelCls={labelCls}
-                />
-              )}
-
-              {/* Produto 2 — opcional */}
-              {!produtoManual && !showProduto2 && produtos[0] && (
-                <button
-                  type="button"
-                  onClick={() => setShowProduto2(true)}
-                  className="w-full mt-2 px-4 py-2 rounded-xl border-2 border-dashed border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
-                >
-                  + Adicionar 2º produto
-                </button>
-              )}
-
-              {!produtoManual && showProduto2 && (
-                <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
+                /* Picker igual ao gerar-link — categoria + lista de preços + cor */
+                <div className="space-y-3">
+                  <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); set("valor", ""); setCorSel(""); }} className={inputCls}>
+                    <option value="">-- Categoria --</option>
+                    {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                  </select>
+                  {catSel && (
+                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                      {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                      {produtosFiltradosPreco.map((m) => {
+                        const sel = produtos[0] === m.nome;
+                        return (
+                          <div key={m.nome}>
+                            <button onClick={() => {
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              setProdutos([m.nome]);
+                              set("valor", String(m.preco));
+                              setCorSel("");
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
+                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                            </button>
+                            {sel && coresDisponiveis.length > 0 && (
+                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
+                                <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {coresDisponiveis.map(cor => (
+                                    <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                    >{cor}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Produto 2 — opcional (add-on do origin/main) */}
+                  {!showProduto2 && produtos[0] && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowProduto2(false);
-                        setCatSel2("");
-                        setModelo2("");
-                        setCor2("");
-                        setPreco2(0);
-                      }}
-                      className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                      onClick={() => setShowProduto2(true)}
+                      className="w-full mt-2 px-4 py-2 rounded-xl border-2 border-dashed border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
                     >
-                      ✕ Remover
+                      + Adicionar 2º produto
                     </button>
-                  </div>
-                  <ProdutoPicker
-                    titulo="Produto 2"
-                    categorias={categorias}
-                    estoque={estoque}
-                    catSel={catSel2}
-                    setCatSel={(v) => { setCatSel2(v); setCor2(""); setPreco2(0); setModelo2(""); }}
-                    modeloSel={modelo2}
-                    setModeloSel={(m, preco) => {
-                      setModelo2(m);
-                      setPreco2(preco);
-                      setCor2("");
-                    }}
-                    corSel={cor2}
-                    setCorSel={setCor2}
-                    lookupPrecoVenda={lookupPrecoVenda}
-                    inputCls={inputCls}
-                    labelCls={labelCls}
-                  />
+                  )}
+                  {showProduto2 && (
+                    <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowProduto2(false);
+                            setCatSel2("");
+                            setModelo2("");
+                            setCor2("");
+                            setPreco2(0);
+                          }}
+                          className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                        >
+                          ✕ Remover
+                        </button>
+                      </div>
+                      <ProdutoPicker
+                        titulo="Produto 2"
+                        categorias={categorias}
+                        estoque={estoque}
+                        catSel={catSel2}
+                        setCatSel={(v) => { setCatSel2(v); setCor2(""); setPreco2(0); setModelo2(""); }}
+                        modeloSel={modelo2}
+                        setModeloSel={(m, preco) => {
+                          setModelo2(m);
+                          setPreco2(preco);
+                          setCor2("");
+                        }}
+                        corSel={cor2}
+                        setCorSel={setCor2}
+                        lookupPrecoVenda={lookupPrecoVenda}
+                        inputCls={inputCls}
+                        labelCls={labelCls}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1756,8 +1844,9 @@ export default function EntregasPage() {
                 {e.forma_pagamento && (
                   <div className="text-sm">
                     <span className="text-[#86868B]">Pagamento: </span>
-                    <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
-                    {e.valor != null && <span className="text-[#1D1D1F]"> R${e.valor}</span>}
+                    <span className="text-[#1D1D1F] font-medium">
+                      {formatPagamentoDisplay(e.forma_pagamento, e.valor)}
+                    </span>
                   </div>
                 )}
                 {e.vendedor && (
@@ -1860,7 +1949,7 @@ export default function EntregasPage() {
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
                         `‼️ *TIPO:* ${tipoLabel}`,
                         ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
-                        `💵 *PAGAMENTO:* ${e.forma_pagamento || ""} R$${Number(e.valor || 0).toLocaleString("pt-BR")}`,
+                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor)}`,
                         `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
                         e.observacao ? `OBS: ${e.observacao}` : "",
@@ -1885,6 +1974,8 @@ export default function EntregasPage() {
                         cliente: e.cliente || "",
                         telefone: e.telefone || "",
                         endereco: e.endereco || "",
+                        endereco_entrega: e.endereco || "",
+                        local_detalhes: "",
                         bairro: e.bairro || "",
                         data_entrega: e.data_entrega || hojeBR(),
                         horario: e.horario || "",
