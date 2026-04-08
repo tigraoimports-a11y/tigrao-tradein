@@ -2080,8 +2080,8 @@ export default function VendasPage() {
                 </div>
               </div>
 
-              {/* Crédito de Lojista — aparece quando há saldo */}
-              {creditoLojistaSaldo > 0 && (
+              {/* Crédito de Lojista — aparece sempre em ATACADO, mesmo sem saldo (facilita cadastrar/ver) */}
+              {form.tipo === "ATACADO" && form.cliente && (
                 <div className="p-3 rounded-xl border border-blue-200 bg-blue-50">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-700">💳 Crédito do Lojista</span>
