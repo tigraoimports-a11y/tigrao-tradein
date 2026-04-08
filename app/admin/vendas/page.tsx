@@ -9,6 +9,7 @@ import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import { addToQueue, getQueue, removeFromQueue, getQueueCount } from "@/lib/offline-queue";
 import type { Venda } from "@/lib/admin-types";
 import { corParaPT } from "@/lib/cor-pt";
+import { getModeloBase } from "@/lib/produto-display";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 
@@ -2300,20 +2301,12 @@ export default function VendasPage() {
                     return after.split(/\s+(LL|BE|BR|BZ|CH|ZD|ZP|HN|J|N|VC|AA|E|LZ|QL)\s*/i)[0]?.trim() || null;
                   };
 
-                  // Extrair modelo base (sem cor) pra agrupar cores num card só
-                  const extractModeloBase = (nome: string) => {
-                    // Apple Watch: "WATCH ULTRA 3 49MM" ou "WATCH S10 42MM"
-                    const watchMatch = nome.match(/^(.*?(?:WATCH|APPLE\s*WATCH)\s*(?:ULTRA\s*\d*|SE\s*\d*|S\d+|SERIES\s*\d+)(?:\s*\d+MM)?)/i);
-                    if (watchMatch) return watchMatch[1].trim();
-                    // MacBook: incluir storage no key pra separar 512GB de 1TB
-                    // Captura até o segundo tamanho (RAM + STORAGE): "MACBOOK PRO M5 14 16GB 512GB"
-                    if (/MACBOOK|MAC\s*MINI/i.test(nome)) {
-                      const mbMatch = nome.match(/^(.+?\d+\s*(?:GB|TB)\s+\d+\s*(?:GB|TB))/i);
-                      if (mbMatch) return mbMatch[1].replace(/\s+/g, " ").trim();
-                    }
-                    // Acessórios sem memória: retorna o nome todo (já stripped)
-                    const memMatch = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
-                    return memMatch ? memMatch[1].trim() : nome;
+                  // Extrair modelo base (sem cor) pra agrupar cores num card só.
+                  // Usa getModeloBase do lib/produto-display (mesma lógica do estoque):
+                  // Watch inclui tamanho + conectividade (GPS/GPS+CEL) e corrige SE→Series 11 em 46/49mm;
+                  // MacBook inclui RAM+SSD; iPhone/iPad incluem storage.
+                  const extractModeloBase = (nome: string, categoria: string) => {
+                    return getModeloBase(nome, categoria);
                   };
 
                   // Reagrupar: modelo base → cores → itens
@@ -2321,7 +2314,7 @@ export default function VendasPage() {
                   for (const key of grupoKeys) {
                     const itens = grupos[key];
                     for (const p of itens) {
-                      const base = extractModeloBase(stripOrigemVendas(p.produto));
+                      const base = extractModeloBase(stripOrigemVendas(p.produto), p.categoria || "");
                       const cor = p.cor || extractCor(p.produto) || "—";
                       if (!porModelo[base]) porModelo[base] = {};
                       if (!porModelo[base][cor]) porModelo[base][cor] = [];
