@@ -625,6 +625,7 @@ export default function GastosPage() {
 
   const isFornecedor = form.categoria === "FORNECEDOR";
   const isEstorno = form.categoria === "ESTORNO";
+  const isReembolso = form.categoria === "REEMBOLSO";
 
   // Carrega vendas do contato selecionado para popular o dropdown de venda relacionada
   useEffect(() => {
@@ -669,7 +670,7 @@ export default function GastosPage() {
     const base = {
       data: form.data,
       hora: form.horario || null,
-      tipo: "SAIDA",
+      tipo: isReembolso ? "ENTRADA" : "SAIDA",
       categoria: form.categoria,
       descricao: form.descricao || null,
       observacao: form.observacao || null,
@@ -889,7 +890,8 @@ export default function GastosPage() {
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
-  const totalSaida = gastos.filter(g => !g.is_dep_esp).reduce((s, g) => s + Number(g.valor), 0);
+  const totalSaida = gastos.filter(g => !g.is_dep_esp && g.tipo !== "ENTRADA").reduce((s, g) => s + Number(g.valor), 0);
+  void totalSaida;
 
   const bancoInputGrid = (valores: BancoValores, onChange: (b: Banco, v: string) => void, cls: string) => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -914,7 +916,7 @@ export default function GastosPage() {
 
       {tab === "novo" ? (
         <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl p-6 shadow-sm space-y-6`}>
-          <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Registrar Saída</h2>
+          <h2 className={`text-lg font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{isReembolso ? "Registrar Entrada (Reembolso)" : "Registrar Saída"}</h2>
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -1000,17 +1002,32 @@ export default function GastosPage() {
             </div>
           )}
 
+          {/* Bloco Reembolso — entrada de caixa */}
+          {isReembolso && (
+            <div className={`p-4 rounded-xl border-2 border-dashed ${dm ? "border-green-500/40 bg-green-500/5" : "border-green-400/30 bg-green-50"} space-y-1`}>
+              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💰 Reembolso — entrada de caixa</p>
+              <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                Esse valor <strong>entra</strong> no banco selecionado (Itaú, Infinite ou Mercado Pago).
+                É somado ao saldo do dia, não conta como gasto.
+              </p>
+            </div>
+          )}
+
           {/* Distribuição por banco */}
           <div className={`p-4 rounded-xl border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E8E8ED]"}`}>
             <div className="flex items-center justify-between mb-3">
-              <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor por banco</p>
+              <p className={`text-xs font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                {isReembolso ? "Valor recebido por banco" : "Valor por banco"}
+              </p>
               {totalForm > 0 && (
-                <span className="text-sm font-bold text-[#E8740E]">Total: {fmt(totalForm)}</span>
+                <span className={`text-sm font-bold ${isReembolso ? "text-green-600" : "text-[#E8740E]"}`}>Total: {fmt(totalForm)}</span>
               )}
             </div>
             {bancoInputGrid(bancoValores, setBanco, inputCls)}
             <p className={`text-xs mt-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
-              Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados.
+              {isReembolso
+                ? "Selecione o(s) banco(s) onde o reembolso entrou (Itaú, Infinite, Mercado Pago ou Espécie)."
+                : "Preencha o valor em cada banco utilizado. Deixe em branco os que não foram usados."}
             </p>
           </div>
 

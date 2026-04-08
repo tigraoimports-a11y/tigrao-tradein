@@ -7,6 +7,16 @@ import {
   calculateTradeInValue, getDiscountsForModel, formatBRL,
   type DeviceType, type ConditionData, type AnyConditionData, type ModelDiscounts, type WarrantyBonuses,
 } from "@/lib/calculations";
+import { COR_EN_TO_PT_SIMPLES } from "@/lib/cor-pt";
+
+const COR_MAP_LOWER: Record<string, string> = Object.fromEntries(
+  Object.entries(COR_EN_TO_PT_SIMPLES).map(([k, v]) => [k.toLowerCase().trim(), v])
+);
+function corParaPT(en: string): string {
+  if (!en) return "";
+  const key = en.toLowerCase().trim();
+  return COR_MAP_LOWER[key] || COR_EN_TO_PT_SIMPLES[en] || en;
+}
 
 interface StepUsedDeviceProps {
   usedValues: UsedDeviceValue[];
@@ -58,6 +68,25 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   const [warrantyMonth, setWarrantyMonth] = useState<number|null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean|null>(null);
+
+  // Cores cadastradas por modelo de iPhone (buscadas do catálogo)
+  const [catalogCores, setCatalogCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/cores-iphone")
+      .then((r) => r.json())
+      .then((j) => { if (j?.modelos) setCatalogCores(j.modelos); })
+      .catch(() => {});
+  }, []);
+  // Encontra as cores do modelo selecionado (match por normalização)
+  const coresDoModelo = useMemo(() => {
+    if (!model) return [];
+    const norm = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
+    const nm = norm(model);
+    for (const [k, v] of Object.entries(catalogCores)) {
+      if (norm(k) === nm || nm.includes(norm(k)) || norm(k).includes(nm)) return v;
+    }
+    return [];
+  }, [model, catalogCores]);
 
   const filtered = useMemo(() => usedValues.filter((v) => v.modelo.startsWith("iPhone")), [usedValues]);
   const allModels = useMemo(() => getUniqueUsedModels(filtered), [filtered]);
@@ -138,8 +167,8 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
   return (
     <div className="space-y-8">
       {topAlert && (
-        <div className="sticky top-2 z-50 mx-auto max-w-md rounded-xl px-4 py-3 text-center text-[14px] font-semibold shadow-lg"
-          style={{ backgroundColor: "var(--ti-error-light)", color: "var(--ti-error)", border: "1px solid var(--ti-error)" }}>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100%-2rem)] max-w-md rounded-xl px-4 py-3 text-center text-[14px] font-semibold shadow-2xl animate-fadeIn"
+          style={{ backgroundColor: "var(--ti-error-light)", color: "var(--ti-error)", border: "2px solid var(--ti-error)" }}>
           {topAlert}
         </div>
       )}
@@ -183,21 +212,55 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
 
       {model && storage && !isExcluded && (
         <Section title="Qual a cor do seu aparelho?">
-          <input
-            ref={colorInputRef}
-            type="text"
-            value={color}
-            onChange={(e) => { setColor(e.target.value); if (e.target.value.trim()) setColorError(false); }}
-            onBlur={() => { if (color.trim()) tq("color"); }}
-            placeholder="Ex: Preto, Titânio Natural, Azul..."
-            maxLength={40}
-            className="w-full px-4 py-3 rounded-xl text-[16px] font-medium focus:outline-none transition-colors"
-            style={{ backgroundColor: "var(--ti-input-bg)", border: colorError ? "2px solid var(--ti-error)" : "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
-          />
-          {colorError && (
-            <p className="text-[12px] mt-1.5 font-semibold" style={{ color: "var(--ti-error)" }}>Por favor, informe a cor do aparelho.</p>
+          {coresDoModelo.length > 0 ? (
+            <>
+              <div ref={colorInputRef as unknown as React.RefObject<HTMLDivElement>} className="grid grid-cols-2 gap-2">
+                {(() => {
+                  // Deduplica cores EN que mapeiam para a mesma cor PT
+                  const seen = new Set<string>();
+                  const unique: { en: string; pt: string }[] = [];
+                  for (const c of coresDoModelo) {
+                    const pt = corParaPT(c);
+                    if (seen.has(pt)) continue;
+                    seen.add(pt);
+                    unique.push({ en: c, pt });
+                  }
+                  return unique.map(({ en, pt }) => (
+                    <Btn
+                      key={en}
+                      sel={color.toUpperCase() === pt.toUpperCase() || color.toUpperCase() === en.toUpperCase()}
+                      onClick={() => { setColor(pt); setColorError(false); tq("color"); }}
+                      className="text-left"
+                    >
+                      {pt}
+                    </Btn>
+                  ));
+                })()}
+              </div>
+              {colorError && (
+                <p className="text-[12px] mt-2 font-semibold" style={{ color: "var(--ti-error)" }}>Por favor, selecione a cor do aparelho.</p>
+              )}
+              <p className="text-[11px] mt-2" style={{ color: "var(--ti-muted)" }}>Selecione a cor do seu iPhone.</p>
+            </>
+          ) : (
+            <>
+              <input
+                ref={colorInputRef}
+                type="text"
+                value={color}
+                onChange={(e) => { setColor(e.target.value); if (e.target.value.trim()) setColorError(false); }}
+                onBlur={() => { if (color.trim()) tq("color"); }}
+                placeholder="Ex: Preto, Titânio Natural, Azul..."
+                maxLength={40}
+                className="w-full px-4 py-3 rounded-xl text-[16px] font-medium focus:outline-none transition-colors"
+                style={{ backgroundColor: "var(--ti-input-bg)", border: colorError ? "2px solid var(--ti-error)" : "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
+              />
+              {colorError && (
+                <p className="text-[12px] mt-1.5 font-semibold" style={{ color: "var(--ti-error)" }}>Por favor, informe a cor do aparelho.</p>
+              )}
+              <p className="text-[11px] mt-1.5" style={{ color: "var(--ti-muted)" }}>Informe a cor exata como aparece no seu iPhone.</p>
+            </>
           )}
-          <p className="text-[11px] mt-1.5" style={{ color: "var(--ti-muted)" }}>Informe a cor exata como aparece no seu iPhone.</p>
         </Section>
       )}
 

@@ -136,6 +136,122 @@ export default function GerarLinkPage() {
   const [cliComplemento, setCliComplemento] = useState("");
   const [cliBairro, setCliBairro] = useState("");
   const [parseMsg, setParseMsg] = useState("");
+  const [simulacaoId, setSimulacaoId] = useState<string | null>(null);
+
+  // Prefill via query string (vindo de /admin/simulacoes)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("sim_id")) setSimulacaoId(q.get("sim_id"));
+    if (q.get("prod")) {
+      setProdutoManual(true);
+      setProdutos([q.get("prod") || ""]);
+    }
+    if (q.get("preco")) setPreco(Number(q.get("preco")).toLocaleString("pt-BR"));
+    if (q.get("tp")) { setTemTroca(true); setTrocaProduto(q.get("tp") || ""); }
+    if (q.get("tv")) setTrocaValor(Number(q.get("tv")).toLocaleString("pt-BR"));
+    if (q.get("cn") || q.get("cte")) {
+      setIncluirDadosCliente(true);
+      if (q.get("cn")) setCliNome(q.get("cn") || "");
+      if (q.get("cte")) setCliTelefone(q.get("cte") || "");
+    }
+    if (q.get("sv")) setVendedorNome(q.get("sv") || "");
+  }, []);
+
+  // === Histórico de Links ===
+  type LinkCompra = {
+    id: string;
+    short_code: string;
+    url_curta: string | null;
+    tipo: "COMPRA" | "TROCA";
+    cliente_nome: string | null;
+    cliente_telefone: string | null;
+    cliente_cpf: string | null;
+    produto: string;
+    cor: string | null;
+    valor: number;
+    forma_pagamento: string | null;
+    troca_produto: string | null;
+    troca_valor: number;
+    vendedor: string | null;
+    arquivado: boolean;
+    created_at: string;
+  };
+  const [aba, setAba] = useState<"novo" | "historico">("novo");
+  const [histLinks, setHistLinks] = useState<LinkCompra[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histBusca, setHistBusca] = useState("");
+  const [histTipo, setHistTipo] = useState<"" | "COMPRA" | "TROCA">("");
+  const [histArquivado, setHistArquivado] = useState<"0" | "1">("0");
+
+  async function fetchHistorico() {
+    if (!adminPw) return;
+    setHistLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (histBusca.trim()) params.set("q", histBusca.trim());
+      if (histTipo) params.set("tipo", histTipo);
+      params.set("arquivado", histArquivado);
+      const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
+      const j = await res.json();
+      setHistLinks(j.data || []);
+    } catch { /* ignore */ }
+    setHistLoading(false);
+  }
+
+  useEffect(() => {
+    if (aba === "historico") fetchHistorico();
+  }, [aba, histBusca, histTipo, histArquivado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function arquivarLink(id: string, arquivado: boolean) {
+    await fetch("/api/admin/link-compras", {
+      method: "PATCH",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id, arquivado }),
+    });
+    fetchHistorico();
+  }
+
+  async function excluirLink(id: string) {
+    if (!confirm("Excluir este link do histórico definitivamente? Essa ação não pode ser desfeita.")) return;
+    const res = await fetch("/api/admin/link-compras", {
+      method: "DELETE",
+      headers: adminHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert("Erro ao excluir: " + (j.error || res.status));
+      return;
+    }
+    fetchHistorico();
+  }
+
+  async function copiarLinkHist(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch { /* ignore */ }
+  }
+
+  function reutilizarLink(l: LinkCompra) {
+    setProdutos([l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim()]);
+    if (l.cor) setCorSel(l.cor);
+    if (l.valor) setPreco(Number(l.valor).toLocaleString("pt-BR"));
+    if (l.forma_pagamento) setForma(l.forma_pagamento);
+    if (l.vendedor) setVendedorNome(l.vendedor);
+    if (l.cliente_nome || l.cliente_telefone || l.cliente_cpf) {
+      setIncluirDadosCliente(true);
+      if (l.cliente_nome) setCliNome(l.cliente_nome);
+      if (l.cliente_telefone) setCliTelefone(l.cliente_telefone);
+      if (l.cliente_cpf) setCliCpf(l.cliente_cpf);
+    }
+    if (l.troca_produto) {
+      setTemTroca(true);
+      setTrocaProduto(l.troca_produto);
+      if (l.troca_valor) setTrocaValor(Number(l.troca_valor).toLocaleString("pt-BR"));
+    }
+    setAba("novo");
+  }
 
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -285,8 +401,46 @@ export default function GerarLinkPage() {
       });
       const json = await res.json();
       if (json.code) {
-        setGeneratedLink(`${baseUrl}/c/${json.code}`);
+        const urlCurta = `${baseUrl}/c/${json.code}`;
+        setGeneratedLink(urlCurta);
         setCopied(false);
+
+        // Salvar no histórico persistente de links de compra
+        try {
+          const resHist = await fetch("/api/admin/link-compras", {
+            method: "POST",
+            headers: adminHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              short_code: json.code,
+              url_curta: urlCurta,
+              tipo: trocaProduto ? "TROCA" : "COMPRA",
+              cliente_nome: cliNome.trim() || null,
+              cliente_telefone: cliTelefone.trim() || null,
+              cliente_cpf: cliCpf.trim() || null,
+              cliente_email: cliEmail.trim() || null,
+              produto: corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0],
+              produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1) : null,
+              cor: corSel || null,
+              valor: Number(rawPreco) || 0,
+              forma_pagamento: forma || null,
+              parcelas: parcelas || null,
+              entrada: Number(rawEntrada) || 0,
+              troca_produto: trocaProduto || null,
+              troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+              troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
+              troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
+              vendedor: vendedorNome || null,
+              simulacao_id: simulacaoId,
+            }),
+          });
+          if (!resHist.ok) {
+            const err = await resHist.json().catch(() => ({ error: `HTTP ${resHist.status}` }));
+            setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${err.error || resHist.status}`);
+          }
+        } catch (e) {
+          setPasteMsg(`⚠️ Link gerado mas falhou ao salvar no histórico: ${String(e)}`);
+        }
+
         return;
       }
     } catch { /* fallback below */ }
@@ -433,6 +587,108 @@ export default function GerarLinkPage() {
         Gere um link pre-preenchido para enviar ao cliente. Ele completa os dados pessoais e envia direto pro WhatsApp da Bianca.
       </p>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[#E5E5EA]">
+        <button
+          onClick={() => setAba("novo")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "novo" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          ✨ Novo Link
+        </button>
+        <button
+          onClick={() => setAba("historico")}
+          className={`px-4 py-2 text-sm font-semibold transition-colors ${aba === "historico" ? "text-[#E8740E] border-b-2 border-[#E8740E]" : "text-[#86868B] hover:text-[#1D1D1F]"}`}
+        >
+          📚 Histórico
+        </button>
+      </div>
+
+      {aba === "historico" && (
+        <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={histBusca}
+              onChange={(e) => setHistBusca(e.target.value)}
+              placeholder="🔎 Buscar nome, telefone, CPF, produto, código..."
+              className={`${inputCls} flex-1 min-w-[200px]`}
+            />
+            <select value={histTipo} onChange={(e) => setHistTipo(e.target.value as "" | "COMPRA" | "TROCA")} className={inputCls} style={{ maxWidth: 160 }}>
+              <option value="">Todos tipos</option>
+              <option value="COMPRA">🛒 Só compra</option>
+              <option value="TROCA">🔄 Com troca</option>
+            </select>
+            <select value={histArquivado} onChange={(e) => setHistArquivado(e.target.value as "0" | "1")} className={inputCls} style={{ maxWidth: 160 }}>
+              <option value="0">Ativos</option>
+              <option value="1">Arquivados</option>
+            </select>
+          </div>
+
+          {histLoading && <p className="text-xs text-[#86868B] text-center py-4">Carregando...</p>}
+          {!histLoading && histLinks.length === 0 && <p className="text-xs text-[#86868B] text-center py-6">Nenhum link encontrado.</p>}
+
+          <div className="space-y-2">
+            {histLinks.map((l) => (
+              <div key={l.id} className={`border rounded-xl p-3 ${l.tipo === "TROCA" ? "border-purple-200 bg-purple-50/30" : "border-[#E5E5EA] bg-[#F9F9FB]"}`}>
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${l.tipo === "TROCA" ? "bg-purple-200 text-purple-800" : "bg-orange-200 text-orange-800"}`}>
+                        {l.tipo === "TROCA" ? "🔄 COMPRA + TROCA" : "🛒 SÓ COMPRA"}
+                      </span>
+                      <span className="text-[10px] text-[#86868B]">
+                        {new Date(l.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {l.vendedor && <span className="text-[10px] text-[#86868B]">· {l.vendedor}</span>}
+                    </div>
+                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{l.produto}{l.cor ? ` — ${l.cor}` : ""}</p>
+                    {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
+                    {(l.cliente_nome || l.cliente_telefone) && (
+                      <p className="text-xs text-[#86868B] mt-1">
+                        👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}
+                      </p>
+                    )}
+                    {l.tipo === "TROCA" && l.troca_produto && (
+                      <p className="text-xs text-purple-700 mt-1">🔄 Troca: {l.troca_produto}{l.troca_valor ? ` — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}` : ""}</p>
+                    )}
+                    <p className="text-[10px] text-[#86868B] font-mono mt-1">{l.url_curta || `/c/${l.short_code}`}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <button
+                    onClick={() => copiarLinkHist(l.url_curta || `${typeof window !== "undefined" ? window.location.origin : ""}/c/${l.short_code}`)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
+                  >
+                    📋 Copiar
+                  </button>
+                  <button
+                    onClick={() => reutilizarLink(l)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-[#E8740E] hover:text-[#E8740E] font-medium"
+                  >
+                    ♻️ Reutilizar
+                  </button>
+                  <button
+                    onClick={() => arquivarLink(l.id, !l.arquivado)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#D2D2D7] hover:border-amber-400 hover:text-amber-600 font-medium"
+                  >
+                    {l.arquivado ? "↩️ Desarquivar" : "📦 Arquivar"}
+                  </button>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => excluirLink(l.id)}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-white border border-red-300 text-red-500 hover:bg-red-50 font-medium"
+                    >
+                      🗑️ Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {aba === "novo" && (
+      <>
       <div className="bg-white border border-[#D2D2D7] rounded-xl p-4 shadow-sm space-y-4">
         {/* Botão colar resumo */}
         <div className="flex items-center justify-between">
@@ -981,6 +1237,8 @@ export default function GerarLinkPage() {
             WhatsApp: {vendedorNome === "Andre" ? "Andre" : "Bianca"}
           </p>
         </div>
+      )}
+      </>
       )}
     </div>
   );

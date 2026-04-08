@@ -13,6 +13,31 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const searchClientes = searchParams.get("search_clientes")?.trim() || "";
+
+  // Autocomplete de clientes cadastrados (baseado em entregas anteriores)
+  if (searchClientes) {
+    const like = `%${searchClientes}%`;
+    const { data, error } = await supabase
+      .from("entregas")
+      .select("cliente, telefone, endereco, bairro, regiao")
+      .or(`cliente.ilike.${like},telefone.ilike.${like}`)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Dedup por cliente+telefone (pega o mais recente de cada)
+    const seen = new Set<string>();
+    const unique: Array<{ cliente: string; telefone: string | null; endereco: string | null; bairro: string | null; regiao: string | null }> = [];
+    for (const r of data || []) {
+      const key = `${(r.cliente || "").toLowerCase().trim()}|${(r.telefone || "").replace(/\D/g, "")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(r);
+      if (unique.length >= 20) break;
+    }
+    return NextResponse.json({ clientes: unique });
+  }
 
   let query = supabase
     .from("entregas")

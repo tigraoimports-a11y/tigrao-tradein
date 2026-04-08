@@ -575,6 +575,24 @@ export default function AdminPage() {
                           >
                             WhatsApp
                           </button>
+                          <button
+                            onClick={() => {
+                              const qs = new URLSearchParams({
+                                sim_id: row.id,
+                                prod: `${row.modelo_novo} ${row.storage_novo}`.trim(),
+                                preco: String(row.preco_novo || 0),
+                                tp: `${row.modelo_usado} ${row.storage_usado}`.trim(),
+                                tv: String(row.avaliacao_usado || 0),
+                                cn: row.nome || "",
+                                cte: row.whatsapp || "",
+                                ...(row.vendedor ? { sv: row.vendedor } : {}),
+                              }).toString();
+                              window.location.href = `/admin/gerar-link?${qs}`;
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#E8740E] hover:bg-[#D06A0D] text-white text-xs font-semibold transition-colors"
+                          >
+                            💳 Link
+                          </button>
                           {row.contatado && (
                             <span className="text-[10px] text-green-600 font-medium">Contatado</span>
                           )}
