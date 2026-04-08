@@ -1,13 +1,14 @@
 // lib/produto-specs.ts
 // Campos estruturados por categoria — compartilhado entre Estoque e Etiquetas
 
-export const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
+export const CATEGORIAS = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "MAC_STUDIO", "APPLE_WATCH", "AIRPODS", "ACESSORIOS", "OUTROS"] as const;
 
 export const CAT_LABELS: Record<string, string> = {
   IPHONES: "iPhones",
   IPADS: "iPads",
   MACBOOK: "MacBooks",
   MAC_MINI: "Mac Mini",
+  MAC_STUDIO: "Mac Studio",
   APPLE_WATCH: "Apple Watch",
   AIRPODS: "AirPods",
   ACESSORIOS: "Acessorios",

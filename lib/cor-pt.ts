@@ -100,6 +100,39 @@ export function corParaPT(corEN: string | null | undefined): string {
   return trimmed;
 }
 
+/**
+ * Formata cor para etiqueta no padrão "PT - EN" (ex: "TITÂNIO PRETO - BLACK TITANIUM").
+ * - Deduplica palavras repetidas ("BLACK TITANIUM BLACK TITANIUM" → "BLACK TITANIUM")
+ * - Usa corParaPT/corParaEN para gerar o par PT-EN consistente
+ * - Se não conseguir mapear, retorna a cor deduplicada em maiúsculas
+ */
+export function formatCorEtiquetaPTEN(cor: string | null | undefined): string {
+  if (!cor) return "";
+  const trimmed = cor.trim();
+  if (!trimmed || trimmed === "—") return "";
+  // Dedup word-level (ex: "BLACK TITANIUM BLACK TITANIUM" → "BLACK TITANIUM")
+  const parts = trimmed.split(/\s+/);
+  const unique: string[] = [];
+  for (const p of parts) {
+    if (!unique.some(u => u.toUpperCase() === p.toUpperCase())) unique.push(p);
+  }
+  // Dedup repetição exata de bloco inteiro (ex: "Black Titanium Black Titanium")
+  const half = Math.floor(unique.length / 2);
+  let cleanParts = unique;
+  if (unique.length > 1 && unique.length % 2 === 0) {
+    const a = unique.slice(0, half).map(s => s.toUpperCase()).join(" ");
+    const b = unique.slice(half).map(s => s.toUpperCase()).join(" ");
+    if (a === b) cleanParts = unique.slice(0, half);
+  }
+  const clean = cleanParts.join(" ");
+  const pt = corParaPT(clean);
+  const en = corParaEN(clean);
+  if (pt && en && pt !== "—") {
+    return `${pt.toUpperCase()} - ${en.toUpperCase()}`;
+  }
+  return clean.toUpperCase();
+}
+
 /** Substitui qualquer cor em inglês conhecida dentro de um texto pela versão PT simplificada. */
 export function normalizarCoresNoTexto(texto: string): string {
   if (!texto) return texto;

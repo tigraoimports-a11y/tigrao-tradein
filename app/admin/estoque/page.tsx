@@ -12,7 +12,7 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
 
 /**
  * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
@@ -128,8 +128,8 @@ function formatProdutoDisplay(p: {
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
-    // Ultra é sempre cellular — redundante mostrar "GPS + Cellular" no nome
-    if (ultra) { /* omit connectivity */ }
+    // Ultra é sempre cellular; os outros respeitam detecção
+    if (ultra) parts.push("GPS + Cellular");
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
     if (cor) parts.push(cor);
@@ -431,17 +431,17 @@ function extractCorEN(nome: string): string | null {
  * - Substitui cor em português pelo equivalente em inglês (ex: AZUL PROFUNDO → DEEP BLUE)
  * - Quando cor=null, tenta encontrar cor PT no próprio nome do produto
  */
-/** Extrai tamanho (42MM, 46MM etc) e tipo da pulseira (MILANÊS, ESPORTIVA, etc) de um nome de Apple Watch */
+/** Extrai tamanho (42MM, 46MM etc) e pulseira (SPORT BAND S/M etc) de um nome de Apple Watch */
 function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: string | null } {
   if (!nome) return { tamanho: null, pulseira: null };
   const upper = nome.toUpperCase();
   const tamMatch = upper.match(/\b(\d{2}MM)\b/);
   const tamanho = tamMatch ? tamMatch[1] : null;
   // Pulseira: se tem "PULSEIRA ..." no nome, pega tudo após (mais confiável)
-  let pulseiraRaw: string | null = null;
+  let pulseira: string | null = null;
   const pulseiraExplicita = upper.match(/PULSEIRA\s+(.+?)$/);
   if (pulseiraExplicita) {
-    pulseiraRaw = pulseiraExplicita[1]
+    pulseira = pulseiraExplicita[1]
       .replace(/\s*GPS\s*\+\s*CELLULAR\b/g, "")
       .replace(/\s*GPS\s*\+\s*CEL\b/g, "")
       .replace(/\s+/g, " ")
@@ -449,28 +449,7 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
   } else {
     // Fallback: pattern conhecido sem label PULSEIRA
     const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
-    pulseiraRaw = pulseiraMatch ? pulseiraMatch[1].trim() : null;
-  }
-  // Normalizar: extrair só o tipo (ignorando cor / tamanhos / palavra "estilo")
-  // Regras testadas em ordem; primeira que casar vence.
-  let pulseira: string | null = pulseiraRaw;
-  if (pulseiraRaw) {
-    const p = pulseiraRaw;
-    const tipoMatchers: { re: RegExp; label: string }[] = [
-      { re: /MILAN[ÊE]S|MILANESE/, label: "MILANÊS" },
-      { re: /SOLO\s*LOOP\s*TRAN[ÇC]AD[AO]|BRAIDED\s*SOLO/, label: "TRANÇA" },
-      { re: /SOLO\s*LOOP|SOLO/, label: "SOLO LOOP" },
-      { re: /OCEAN/, label: "OCEAN" },
-      { re: /ALPIN(?:E|ISTA)|TRAIL/, label: "ALPINISTA" },
-      { re: /NIKE/, label: "NIKE" },
-      { re: /HERM[ÉE]S|HERMES/, label: "HERMÈS" },
-      { re: /LINK\s*BRACELET|ELOS|LINK/, label: "LINK" },
-      { re: /COURO|LEATHER/, label: "COURO" },
-      { re: /ESPORTIVA|SPORT\s*BAND|SPORT/, label: "ESPORTIVA" },
-    ];
-    for (const { re, label } of tipoMatchers) {
-      if (re.test(p)) { pulseira = label; break; }
-    }
+    pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
   }
   return { tamanho, pulseira };
 }
@@ -767,12 +746,12 @@ function getModeloBase(produto: string, categoria: string): string {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3) — \bSE(?!R) evita casar "SERIES"
-    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
+    // SE com geração (SE 2, SE 3)
+    const seMatch = p.match(/SE\s*(\d+)/);
     if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (/\bSE(?!R)/.test(p)) return `Apple Watch SE${sz}${conn}`;
+    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
     // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
+    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
@@ -1753,7 +1732,7 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Categorias que NÃO precisam de IMEI (só serial)
-  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPAD", "APPLE_WATCH"];
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
   // Categorias que NÃO precisam de serial (completamente opcional)
   const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
 
@@ -1826,9 +1805,11 @@ export default function EstoquePage() {
           <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         </div>
         <div style="padding:0 1.5mm 0.5mm;text-align:center">
-          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
+          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}</div>
+          ${cor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${formatCorEtiquetaPTEN(cor)}</div>` : ""}
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
+          ${(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && p.bateria ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.25;margin-top:0.2mm;color:#000">🔋 Bateria: ${p.bateria}%</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
           ${p.custo_unitario ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.3mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
@@ -1873,7 +1854,7 @@ export default function EstoquePage() {
     const serial = p.serial_no || "";
     const imei = p.imei || "";
     const qrData = serial || imei || p.id;
-    const cor = p.cor ? ` ${p.cor}` : "";
+    const corLine = p.cor ? formatCorEtiquetaPTEN(p.cor) : "";
     const obs = p.observacao || "";
     const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     const grade = gradeMatch || null;
@@ -1902,7 +1883,8 @@ export default function EstoquePage() {
       <div class="label">
         <canvas id="qr0" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         <div class="info">
-          <div class="produto">${p.produto}${cor}</div>
+          <div class="produto">${p.produto}</div>
+          ${corLine ? `<div class="badges" style="font-weight:bold;color:#000">${corLine}</div>` : ""}
           <div class="badges">${[
             p.bateria ? `🔋 ${p.bateria}%` : "",
             grade ? `Grade ${grade}` : "",
@@ -2059,6 +2041,7 @@ export default function EstoquePage() {
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
       .replace(/\[RESP:[^\]]+\]/g, "")
+      .replace(/\[COM_QUEM:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
@@ -4636,21 +4619,24 @@ export default function EstoquePage() {
                                               if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
                                               return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">Lacrado</span>;
                                             })()}
-                                            {/* Bateria (só seminovo/pendência) */}
-                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
+                                            {/* Bateria (só seminovo/pendência) — admin pode editar em qualquer aba */}
+                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (() => {
+                                              const bateriaEditable = isEditableItemTab || isAdmin;
+                                              if (bateriaEditable && isEditingField(p.id, "bateria")) return (
                                                 <div className="flex items-center gap-0.5">
                                                   <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : isEditableItemTab ? (
+                                              );
+                                              if (bateriaEditable) return (
                                                 <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
-                                              ) : p.bateria ? (
+                                              );
+                                              return p.bateria ? (
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
-                                              ) : null
-                                            )}
+                                              ) : null;
+                                            })()}
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
@@ -4672,6 +4658,33 @@ export default function EstoquePage() {
                                                 {ciclos && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
                                                 {p.garantia && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
                                               </>);
+                                            })()}
+                                            {/* Com quem está (pendência) — editável texto livre via tag [COM_QUEM:...] */}
+                                            {isPendenciasTab && (() => {
+                                              const comQuemAtual = p.observacao?.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
+                                              if (isEditingField(p.id, "com_quem")) return (
+                                                <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                                  <input value={getEditVal(p.id, "com_quem") || ""} onChange={(e) => startEditField(p.id, "com_quem", e.target.value)}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const val = (getEditVal(p.id, "com_quem") || "").trim();
+                                                        const obsBase = (p.observacao || "").replace(/\[COM_QUEM:[^\]]+\]/g, "").trim();
+                                                        const newObs = val ? `${obsBase} [COM_QUEM:${val}]`.trim() : (obsBase || null);
+                                                        await apiPatch(p.id, { observacao: newObs });
+                                                        setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                                                        cancelEditField(p.id, "com_quem");
+                                                      }
+                                                      if (e.key === "Escape") cancelEditField(p.id, "com_quem");
+                                                    }}
+                                                    className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Ex: Técnico João" />
+                                                </div>
+                                              );
+                                              return (
+                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "com_quem", comQuemAtual); }}
+                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${comQuemAtual ? "bg-blue-50 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {comQuemAtual ? `👤 ${comQuemAtual}` : "+ Com quem"}
+                                                </button>
+                                              );
                                             })()}
                                             {/* Origem/Obs */}
                                             {isEditableItemTab && isEditingField(p.id, "observacao") ? (
@@ -4818,7 +4831,7 @@ export default function EstoquePage() {
                                               const labels = Array.from({ length: qnt }, () => `
                                                 <div class="label">
                                                   <div class="produto">${p.produto}</div>
-                                                  ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+                                                  ${p.cor ? `<div class="cor">${formatCorEtiquetaPTEN(p.cor)}</div>` : ""}
                                                   <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
                                                   ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
                                                   ${p.data_compra ? `<div class="data">${fmtDate(p.data_compra)}</div>` : ""}

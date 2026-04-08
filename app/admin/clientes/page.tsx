@@ -164,6 +164,72 @@ export default function ClientesPage() {
   const [fornMsg, setFornMsg] = useState("");
   const [savingForn, setSavingForn] = useState(false);
 
+  // Crédito de lojistas
+  const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({});
+  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string };
+  const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; saldo: number; log: CreditoLog[] }>(null);
+  const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
+  const [savingCredito, setSavingCredito] = useState(false);
+
+  const lojistaKey = (c: { cpf: string | null; cnpj: string | null; nome: string }) => {
+    const d = (s: string | null | undefined) => (s || "").replace(/\D/g, "");
+    if (d(c.cpf)) return `cpf:${d(c.cpf)}`;
+    if (d(c.cnpj)) return `cnpj:${d(c.cnpj)}`;
+    return `nome:${c.nome.trim().toUpperCase()}`;
+  };
+
+  const fetchSaldosLojistas = useCallback(async () => {
+    if (!password) return;
+    try {
+      const res = await fetch(`/api/admin/lojistas-credito`, { headers: apiHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        const map: Record<string, number> = {};
+        for (const l of json.lojistas || []) map[l.cliente_key] = Number(l.saldo || 0);
+        setSaldosLojistas(map);
+      }
+    } catch (err) { console.error(err); }
+  }, [password, apiHeaders]);
+
+  useEffect(() => { if (tab === "lojistas") fetchSaldosLojistas(); }, [tab, fetchSaldosLojistas]);
+
+  const openCreditoModal = async (c: Cliente) => {
+    try {
+      const params = new URLSearchParams();
+      if (c.cpf) params.set("cpf", c.cpf);
+      if (c.cnpj) params.set("cnpj", c.cnpj);
+      if (!c.cpf && !c.cnpj) params.set("nome", c.nome);
+      const res = await fetch(`/api/admin/lojistas-credito?${params}`, { headers: apiHeaders() });
+      const json = await res.json();
+      setCreditoModal({ cliente: c, saldo: Number(json.saldo || 0), log: json.log || [] });
+      setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
+    } catch (err) { console.error(err); }
+  };
+
+  const salvarCredito = async () => {
+    if (!creditoModal) return;
+    const valor = parseFloat(creditoForm.valor);
+    if (!valor || valor <= 0) { alert("Valor inválido"); return; }
+    setSavingCredito(true);
+    try {
+      const res = await fetch("/api/admin/lojistas-credito", {
+        method: "POST",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente: { nome: creditoModal.cliente.nome, cpf: creditoModal.cliente.cpf, cnpj: creditoModal.cliente.cnpj },
+          tipo: creditoForm.tipo,
+          valor,
+          motivo: creditoForm.motivo || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || "Erro"); return; }
+      await fetchSaldosLojistas();
+      await openCreditoModal(creditoModal.cliente); // refresh modal data
+      setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
+    } finally { setSavingCredito(false); }
+  };
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -688,19 +754,20 @@ export default function ClientesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
-                {["Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", "Ultima Compra", "Cliente Desde", "Local"].map((h) => (
-                  <th key={h} className={thCls}>{h}</th>
+                {["Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", ...(tab === "lojistas" ? ["Saldo Crédito", ""] : []), "Ultima Compra", "Cliente Desde", "Local"].map((h, i) => (
+                  <th key={`${h}-${i}`} className={thCls}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
+              {(() => { const colSpan = tab === "lojistas" ? 9 : 7; return loading ? (
+                <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>
+                <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>
                   {search ? `Nenhum resultado para "${search}"` : "Nenhum cliente encontrado"}
                 </td></tr>
-              ) : sorted.map((c) => (
+              ) : null; })()}
+              {!loading && sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
                     onClick={() => setDetailClient(c)}
@@ -720,6 +787,17 @@ export default function ClientesPage() {
                       <span className="px-2 py-1 rounded-lg bg-[#E8740E]/10 text-[#E8740E] text-xs font-bold">{c.total_compras}</span>
                     </td>
                     <td className="px-4 py-3 font-bold text-green-600">{fmt(c.total_gasto)}</td>
+                    {tab === "lojistas" && (<>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const s = saldosLojistas[lojistaKey(c)] || 0;
+                          return <span className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${s > 0 ? "bg-blue-100 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#86868B]" : "bg-[#F5F5F7] text-[#86868B]"}`}`}>{fmt(s)}</span>;
+                        })()}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => openCreditoModal(c)} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D]">Gerenciar crédito</button>
+                      </td>
+                    </>)}
                     <td className="px-4 py-3">
                       <p className={`text-xs ${mP}`}>{fmtDate(c.ultima_compra)}</p>
                       <p className={`text-xs truncate max-w-[150px] ${mM}`}>{c.ultimo_produto}</p>
@@ -733,7 +811,7 @@ export default function ClientesPage() {
                   {/* Expanded: lista de compras */}
                   {expandedId === c.nome && (
                     <tr>
-                      <td colSpan={7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
+                      <td colSpan={tab === "lojistas" ? 9 : 7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
                         <div className="space-y-3">
                           <div className="flex flex-wrap gap-4 text-xs">
                             {c.cpf && <span className={mS}>CPF: <strong className={mP}>{c.cpf}</strong></span>}
@@ -778,6 +856,68 @@ export default function ClientesPage() {
         </p>
       )}
       </>)}
+
+      {/* Modal de Crédito do Lojista */}
+      {creditoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setCreditoModal(null)}>
+          <div className={`w-full max-w-lg rounded-2xl shadow-2xl ${dm ? "bg-[#1C1C1E]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+              <div>
+                <p className={`text-xs uppercase tracking-wider ${mS}`}>Crédito do lojista</p>
+                <h3 className={`text-base font-bold ${mP}`}>{creditoModal.cliente.nome}</h3>
+              </div>
+              <button onClick={() => setCreditoModal(null)} className={`text-2xl ${mS} hover:text-red-500`}>×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className={`p-4 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`text-xs uppercase tracking-wider ${mS}`}>Saldo disponível</p>
+                <p className="text-3xl font-bold text-blue-600 mt-1">{fmt(creditoModal.saldo)}</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {(["CREDITO", "DEBITO", "AJUSTE"] as const).map(t => (
+                    <button key={t} onClick={() => setCreditoForm(f => ({ ...f, tipo: t }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold ${creditoForm.tipo === t ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}`}>
+                      {t === "CREDITO" ? "+ Adicionar" : t === "DEBITO" ? "− Debitar" : "= Ajustar"}
+                    </button>
+                  ))}
+                </div>
+                <input type="number" value={creditoForm.valor} onChange={(e) => setCreditoForm(f => ({ ...f, valor: e.target.value }))}
+                  placeholder="Valor R$" className={`w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                <input type="text" value={creditoForm.motivo} onChange={(e) => setCreditoForm(f => ({ ...f, motivo: e.target.value }))}
+                  placeholder="Motivo (opcional)" className={`w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                <button onClick={salvarCredito} disabled={savingCredito}
+                  className="w-full py-2.5 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
+                  {savingCredito ? "Salvando..." : "Salvar movimentação"}
+                </button>
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider font-bold ${mS} mb-2`}>Extrato ({creditoModal.log.length})</p>
+                <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                  {creditoModal.log.length === 0 && <p className={`text-xs text-center ${mM} py-4`}>Sem movimentações</p>}
+                  {creditoModal.log.map(l => (
+                    <div key={l.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold ${mP}`}>
+                          <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
+                            {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
+                          </span>
+                          <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                        </p>
+                        {l.motivo && <p className={`text-[10px] truncate ${mM}`}>{l.motivo}</p>}
+                      </div>
+                      <div className={`text-[10px] ${mM} text-right shrink-0`}>
+                        <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
+                        <p>{l.usuario}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Detalhes do Cliente */}
       {detailClient && (() => {

@@ -187,6 +187,10 @@ export async function POST(req: NextRequest) {
   // forma pode ser null (pagamento a definir depois)
   if (!body.forma) body.forma = null;
 
+  // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
+  const usarCreditoLoja = Number(body.usar_credito_loja || 0);
+  delete body.usar_credito_loja;
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
@@ -194,6 +198,24 @@ export async function POST(req: NextRequest) {
     ...(serialFromEstoque ? { serial_no: serialFromEstoque } : {}),
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Abater crédito do lojista (se solicitado)
+  if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO") && body.cliente) {
+    try {
+      const { moverCredito } = await import("@/app/api/admin/lojistas-credito/route");
+      await moverCredito({
+        cliente: { nome: body.cliente, cpf: body.cpf, cnpj: body.cnpj },
+        tipo: "DEBITO",
+        valor: usarCreditoLoja,
+        venda_id: data?.id,
+        motivo: `Venda ${data?.id?.slice(0, 8)}`,
+        usuario,
+      });
+      await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+    } catch (e) {
+      console.error("[Vendas] Erro ao debitar crédito lojista:", e);
+    }
+  }
 
   // Se não tem estoque_id mas tem serial, buscar automaticamente no estoque
   // (sem .single() — evita erro silencioso quando há 0 ou N matches)
@@ -286,11 +308,11 @@ export async function POST(req: NextRequest) {
   const sem1 = seminovoData && (seminovoData.produto || (seminovoData.valor || 0) > 0)
     ? seminovoData
     : hasTroca1Info
-      ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
+      ? { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: data?.troca_serial || null, imei: data?.troca_imei || null, grade: data?.troca_grade || null, caixa: data?.troca_caixa || null, cabo: data?.troca_cabo || null, fonte: data?.troca_fonte || null, categoria: data?.troca_categoria || null, garantia: data?.troca_garantia || null }
       : null;
 
   if (hasTroca1Info) {
-    const sem1Final = sem1 || { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null, categoria: null, origem: null, garantia: null };
+    const sem1Final = sem1 || { produto: data?.troca_produto || null, valor: pTrocaValor1, cor: data?.troca_cor || null, bateria: data?.troca_bateria ? parseInt(data.troca_bateria) : null, observacao: data?.troca_obs || null, serial_no: data?.troca_serial || null, imei: data?.troca_imei || null, grade: data?.troca_grade || null, caixa: data?.troca_caixa || null, cabo: data?.troca_cabo || null, fonte: data?.troca_fonte || null, categoria: data?.troca_categoria || null, origem: null, garantia: data?.troca_garantia || null };
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto1 = sem1Final.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata em caso de venda cancelada e relançada)
@@ -334,11 +356,11 @@ export async function POST(req: NextRequest) {
   const sem2 = seminovoData2 && (seminovoData2.produto || (seminovoData2.valor || 0) > 0)
     ? seminovoData2
     : hasTroca2Info
-      ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null }
+      ? { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: data?.troca_serial2 || null, imei: data?.troca_imei2 || null, grade: data?.troca_grade2 || null, caixa: data?.troca_caixa2 || null, cabo: data?.troca_cabo2 || null, fonte: data?.troca_fonte2 || null, categoria: data?.troca_categoria2 || null, garantia: data?.troca_garantia2 || null }
       : null;
 
   if (hasTroca2Info) {
-    const sem2Final = sem2 || { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: null, imei: null, grade: null, caixa: null, cabo: null, fonte: null, categoria: null, origem: null, garantia: null };
+    const sem2Final = sem2 || { produto: data?.troca_produto2 || null, valor: pTrocaValor2, cor: data?.troca_cor2 || null, bateria: data?.troca_bateria2 ? parseInt(data.troca_bateria2) : null, observacao: data?.troca_obs2 || null, serial_no: data?.troca_serial2 || null, imei: data?.troca_imei2 || null, grade: data?.troca_grade2 || null, caixa: data?.troca_caixa2 || null, cabo: data?.troca_cabo2 || null, fonte: data?.troca_fonte2 || null, categoria: data?.troca_categoria2 || null, origem: null, garantia: data?.troca_garantia2 || null };
     const nomeCliente2 = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto2 = sem2Final.produto || "PRODUTO DA TROCA 2 — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata)
@@ -595,6 +617,14 @@ export async function PATCH(req: NextRequest) {
           // INSERT — não existia pendência, criar agora
           const valor1 = parseTrocaValor(venda.produto_na_troca);
           const nome1 = venda.troca_produto || "PRODUTO DA TROCA — IDENTIFICAR";
+          const obs1Parts: string[] = [];
+          if (venda.troca_obs) obs1Parts.push(String(venda.troca_obs));
+          if (venda.troca_grade) obs1Parts.push(`[GRADE_${venda.troca_grade}]`);
+          if (venda.troca_caixa === "SIM") obs1Parts.push("[COM_CAIXA]");
+          if (venda.troca_cabo === "SIM") obs1Parts.push("[COM_CABO]");
+          if (venda.troca_fonte === "SIM") obs1Parts.push("[COM_FONTE]");
+          if (venda.troca_pulseira === "SIM") obs1Parts.push("[COM_PULSEIRA]");
+          if (venda.troca_ciclos) obs1Parts.push(`[CICLOS:${venda.troca_ciclos}]`);
           const { error: errNew1 } = await supabase.from("estoque").insert({
             produto: nome1,
             categoria: venda.troca_categoria || detectCategoriaSeminovo(venda.troca_produto),
@@ -604,7 +634,10 @@ export async function PATCH(req: NextRequest) {
             tipo: "PENDENCIA",
             cor: venda.troca_cor ? String(venda.troca_cor).toUpperCase() : null,
             bateria: (() => { const b = parseInt(String(venda.troca_bateria || "")); return Number.isFinite(b) ? b : null; })(),
-            observacao: venda.troca_obs || null,
+            observacao: obs1Parts.length ? obs1Parts.join(" ").trim() : null,
+            serial_no: venda.troca_serial ? String(venda.troca_serial).toUpperCase() : null,
+            imei: venda.troca_imei ? String(venda.troca_imei).toUpperCase() : null,
+            garantia: venda.troca_garantia || null,
             cliente: nomeCliente,
             fornecedor: nomeCliente,
             data_compra: venda.data,
@@ -640,6 +673,14 @@ export async function PATCH(req: NextRequest) {
         } else {
           const valor2 = parseTrocaValor(venda.produto_na_troca2);
           const nome2 = venda.troca_produto2 || "PRODUTO DA TROCA 2 — IDENTIFICAR";
+          const obs2Parts: string[] = [];
+          if (venda.troca_obs2) obs2Parts.push(String(venda.troca_obs2));
+          if (venda.troca_grade2) obs2Parts.push(`[GRADE_${venda.troca_grade2}]`);
+          if (venda.troca_caixa2 === "SIM") obs2Parts.push("[COM_CAIXA]");
+          if (venda.troca_cabo2 === "SIM") obs2Parts.push("[COM_CABO]");
+          if (venda.troca_fonte2 === "SIM") obs2Parts.push("[COM_FONTE]");
+          if (venda.troca_pulseira2 === "SIM") obs2Parts.push("[COM_PULSEIRA]");
+          if (venda.troca_ciclos2) obs2Parts.push(`[CICLOS:${venda.troca_ciclos2}]`);
           const { error: errNew2 } = await supabase.from("estoque").insert({
             produto: nome2,
             categoria: venda.troca_categoria2 || detectCategoriaSeminovo(venda.troca_produto2),
@@ -649,7 +690,10 @@ export async function PATCH(req: NextRequest) {
             tipo: "PENDENCIA",
             cor: venda.troca_cor2 ? String(venda.troca_cor2).toUpperCase() : null,
             bateria: (() => { const b = parseInt(String(venda.troca_bateria2 || "")); return Number.isFinite(b) ? b : null; })(),
-            observacao: venda.troca_obs2 || null,
+            observacao: obs2Parts.length ? obs2Parts.join(" ").trim() : null,
+            serial_no: venda.troca_serial2 ? String(venda.troca_serial2).toUpperCase() : null,
+            imei: venda.troca_imei2 ? String(venda.troca_imei2).toUpperCase() : null,
+            garantia: venda.troca_garantia2 || null,
             cliente: nomeCliente,
             fornecedor: nomeCliente,
             data_compra: venda.data,
@@ -672,11 +716,33 @@ export async function DELETE(req: NextRequest) {
   if (!hasPermission(role, "vendas.create", permissoes)) return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
   const usuario = getUsuario(req);
 
-  const { id } = await req.json();
+  const body = await req.json();
+  const { id, devolver_como_credito } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // Buscar venda antes de deletar (para limpar seminovo se houver)
   const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
+
+  // Se lojista pediu pra manter como crédito, creditar antes de apagar
+  if (devolver_como_credito && venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO") && venda.cliente) {
+    const valorCredito = Number(venda.preco_vendido || 0);
+    if (valorCredito > 0) {
+      try {
+        const { moverCredito } = await import("@/app/api/admin/lojistas-credito/route");
+        await moverCredito({
+          cliente: { nome: venda.cliente, cpf: venda.cpf, cnpj: venda.cnpj },
+          tipo: "CREDITO",
+          valor: valorCredito,
+          venda_id: id,
+          motivo: `Cancelamento venda ${String(id).slice(0, 8)} → crédito`,
+          usuario,
+        });
+        await logActivity(usuario, "Venda cancelada → crédito lojista", `${venda.cliente}: +R$${valorCredito}`, "vendas", id);
+      } catch (e) {
+        console.error("[Vendas] Erro ao creditar lojista:", e);
+      }
+    }
+  }
 
   // Apagar entrega vinculada (se existir)
   await supabase.from("entregas").delete().eq("venda_id", id);

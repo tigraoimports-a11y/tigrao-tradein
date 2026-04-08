@@ -26,22 +26,43 @@ export async function GET(request: Request) {
   if (autocomplete) {
     if (!q || q.length < 2) return NextResponse.json({ clientes: [] });
     const like = `%${q}%`;
+    // Para CPF/telefone: stored pode estar com ou sem pontuação.
+    // Ex.: usuário digita "12345", DB tem "123.456.789-00".
+    // Padrão "%1%2%3%4%5%" casa ambos os formatos.
+    const qDigits = q.replace(/\D/g, "");
+    const digitsLike = qDigits.length >= 3 ? `%${qDigits.split("").join("%")}%` : null;
+    const cpfOrNome = (nomeCol: string, cpfCol: string, emailCol?: string) => {
+      const parts = [`${nomeCol}.ilike.${like}`, `${cpfCol}.ilike.${like}`];
+      if (digitsLike) parts.push(`${cpfCol}.ilike.${digitsLike}`);
+      if (emailCol) parts.push(`${emailCol}.ilike.${like}`);
+      return parts.join(",");
+    };
+    const telOrNome = (nomeCol: string, telCol: string) => {
+      const parts = [`${nomeCol}.ilike.${like}`, `${telCol}.ilike.${like}`];
+      if (digitsLike) parts.push(`${telCol}.ilike.${digitsLike}`);
+      return parts.join(",");
+    };
 
     // 1) vendas: nome, cpf, email, endereço
     const [vRes, lRes, eRes] = await Promise.all([
       supabase.from("vendas")
         .select("cliente, cpf, cnpj, email, endereco, bairro, cidade, uf, data")
-        .or(`cliente.ilike.${like},cpf.ilike.${like},email.ilike.${like}`)
+        .or(cpfOrNome("cliente", "cpf", "email"))
         .order("data", { ascending: false })
         .limit(100),
       supabase.from("link_compras")
         .select("cliente_nome, cliente_telefone, cliente_cpf, cliente_email, created_at")
-        .or(`cliente_nome.ilike.${like},cliente_telefone.ilike.${like},cliente_cpf.ilike.${like}`)
+        .or([
+          `cliente_nome.ilike.${like}`,
+          `cliente_telefone.ilike.${like}`,
+          `cliente_cpf.ilike.${like}`,
+          ...(digitsLike ? [`cliente_telefone.ilike.${digitsLike}`, `cliente_cpf.ilike.${digitsLike}`] : []),
+        ].join(","))
         .order("created_at", { ascending: false })
         .limit(100),
       supabase.from("entregas")
         .select("cliente, telefone, endereco, bairro, created_at")
-        .or(`cliente.ilike.${like},telefone.ilike.${like}`)
+        .or(telOrNome("cliente", "telefone"))
         .order("created_at", { ascending: false })
         .limit(100),
     ]);
