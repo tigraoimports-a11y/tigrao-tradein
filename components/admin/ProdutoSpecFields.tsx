@@ -16,6 +16,10 @@ import {
   MAC_MINI_NUCLEOS,
   MAC_MINI_RAMS,
   MAC_MINI_STORAGES,
+  MAC_STUDIO_CHIPS,
+  MAC_STUDIO_NUCLEOS,
+  MAC_STUDIO_RAMS,
+  MAC_STUDIO_STORAGES,
   CORES_POR_CATEGORIA,
   COR_OBRIGATORIA,
   getIphoneCores,
@@ -315,6 +319,8 @@ export default function ProdutoSpecFields({
   const ssdOptionsFinal = cfgOr("ssd", MACBOOK_STORAGES);
   const macMiniRamOptions = cfgOr("ram", MAC_MINI_RAMS);
   const macMiniSsdOptions = cfgOr("ssd", MAC_MINI_STORAGES);
+  const macStudioRamOptions = cfgOr("ram", MAC_STUDIO_RAMS);
+  const macStudioSsdOptions = cfgOr("ssd", MAC_STUDIO_STORAGES);
   // Núcleos: usa chip_air ou chip_pro_max do catálogo (configurado por modelo)
   // Se tem modelo do catálogo selecionado, mostra APENAS o que está configurado
   // Se não tem modelo do catálogo, usa fallback hardcoded
@@ -327,6 +333,9 @@ export default function ProdutoSpecFields({
   const mmNucleosOptions = hasCatalogModel
     ? macNucleosCatalog
     : MAC_MINI_NUCLEOS.map(n => `(${n})`);
+  const msNucleosOptions = hasCatalogModel
+    ? macNucleosCatalog
+    : MAC_STUDIO_NUCLEOS.map(n => `(${n})`);
   const awTamanhoOptions = cfgOr("tamanho_aw", WATCH_TAMANHOS_FULL);
   const awConnOptions = cfgOr("conectividade_aw", ["GPS", "GPS + CEL"]);
   const awBandOptions = cfgOr("pulseiras", WATCH_BAND_MODELS);
@@ -730,6 +739,44 @@ export default function ProdutoSpecFields({
             <p className={labelCls}>Armazenamento</p>
             <select value={row.spec.mm_storage} onChange={(e) => setSpec("mm_storage", e.target.value)} className={inputCls}>
               {macMiniSsdOptions?.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Mac Studio specs */}
+      {row.categoria === "MAC_STUDIO" && (
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 p-3 ${bgSection} rounded-lg`}>
+          {!categoryModelos.length && (
+            <div>
+              <p className={labelCls}>Chip</p>
+              <select value={row.spec.ms_chip} onChange={(e) => setSpec("ms_chip", e.target.value)} className={inputCls}>
+                {MAC_STUDIO_CHIPS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {msNucleosOptions.length > 0 && (
+            <div>
+              <p className={labelCls}>Núcleos</p>
+              <select value={row.spec.ms_nucleos} onChange={(e) => setSpec("ms_nucleos", e.target.value)} className={inputCls}>
+                <option value="">— Selecionar —</option>
+                {msNucleosOptions.map((n) => {
+                  const clean = n.replace(/^\(|\)$/g, "").trim();
+                  return <option key={clean} value={clean}>{clean}</option>;
+                })}
+              </select>
+            </div>
+          )}
+          <div>
+            <p className={labelCls}>RAM</p>
+            <select value={row.spec.ms_ram} onChange={(e) => setSpec("ms_ram", e.target.value)} className={inputCls}>
+              {macStudioRamOptions?.map((r) => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Armazenamento</p>
+            <select value={row.spec.ms_storage} onChange={(e) => setSpec("ms_storage", e.target.value)} className={inputCls}>
+              {macStudioSsdOptions?.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
         </div>
