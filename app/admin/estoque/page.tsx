@@ -441,6 +441,19 @@ function displayNomeProduto(nome: string, cor: string | null | undefined, catego
   if (categoria && (getBaseCat(categoria) === "MACBOOK" || getBaseCat(categoria) === "MAC_MINI")) {
     display = display.replace(/\s*\(\d+C?\s*CPU\/\d+C?\s*GPU\)/gi, "").replace(/\s+/g, " ").trim();
   }
+  // Apple Watch: remover "PULSEIRA ..." do nome (aparece como badge) e, para Ultra, remover "GPS + Cellular"
+  if (categoria && getBaseCat(categoria) === "APPLE_WATCH") {
+    // Remove sufixo "PULSEIRA XYZ..." (até fim da string, já que vem por último)
+    display = display.replace(/\s*PULSEIRA\s+.*$/i, "").trim();
+    if (/ULTRA/i.test(display)) {
+      display = display
+        .replace(/\s*GPS\s*\+\s*CELLULAR\b/gi, "")
+        .replace(/\s*GPS\s*\+\s*CEL\b/gi, "")
+        .replace(/\s+CELLULAR\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+  }
   if (!cor) {
     // Sem campo cor: tenta encontrar e traduzir cor PT embutida no nome
     const upper = display.toUpperCase();
