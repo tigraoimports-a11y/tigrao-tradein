@@ -159,6 +159,8 @@ export default function EntregasPage() {
   const [trocaCor, setTrocaCor] = useState("");
   const [trocaBateria, setTrocaBateria] = useState("");
   const [trocaObs, setTrocaObs] = useState("");
+  // Override manual do valor do pagamento 1 (quando vazio, assume valor a pagar - pagamento 2)
+  const [valorPag1Override, setValorPag1Override] = useState("");
 
   const [precos, setPrecos] = useState<{ modelo: string; armazenamento: string; preco_pix: number }[]>([]);
 
@@ -256,6 +258,12 @@ export default function EntregasPage() {
     }
   }, [somaProdutos]);
 
+  // Valor do pagamento 1 = o que sobra depois do pagamento 2 (ou override manual)
+  const valorPag2 = parseFloat(form.valor_2) || 0;
+  const valorPag1 = valorPag1Override
+    ? parseFloat(valorPag1Override) || 0
+    : Math.max(0, valorAPagar - valorPag2);
+
   // Cálculo de parcelas com taxa embutida (mesma tabela do /gerar-link e Nova Venda)
   const TAXAS_PARCELAS: Record<number, number> = {
     1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
@@ -266,7 +274,8 @@ export default function EntregasPage() {
   const isCartaoCredito = form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Link de Pagamento";
   const nParcelas = parseInt(form.parcelas) || 0;
   const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
-  const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorAPagar * (1 + taxaAtual / 100)) : valorAPagar;
+  // Taxa aplicada sobre o valor do PAGAMENTO 1 (não o total a pagar) — importante quando há split
+  const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorPag1 * (1 + taxaAtual / 100)) : valorPag1;
   const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
@@ -358,6 +367,7 @@ export default function EntregasPage() {
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
       setCatSel(""); setCor1(""); setPreco1(0);
       setShowProduto2(false); setCatSel2(""); setModelo2(""); setCor2(""); setPreco2(0);
+      setValorPag1Override("");
       setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
       setRastreio("");
@@ -1023,66 +1033,128 @@ export default function EntregasPage() {
                 )}
               </div>
             )}
-            <div>
-              <p className={labelCls}>Forma de Pagamento</p>
-              <select value={form.forma_pagamento} onChange={(e) => set("forma_pagamento", e.target.value)} className={inputCls}>
-                <option value="">-- Selecionar --</option>
-                <option value="Pix">Pix</option>
-                <option value="Cartao Credito">Cartão Crédito</option>
-                <option value="Cartao Debito">Cartão Débito</option>
-                <option value="Especie">Espécie</option>
-                <option value="Link de Pagamento">Link de Pagamento</option>
-                <option value="Transferencia">Transferência</option>
-                <option value="Definir depois">Definir depois</option>
-              </select>
+            {/* Valor a pagar (CONGELADO — base - desconto - troca) */}
+            <div className="col-span-2 md:col-span-3 rounded-xl border-2 border-[#E8740E] bg-[#FFF7ED] px-4 py-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#E8740E]">💰 Valor a Pagar (congelado)</p>
+                  <p className="text-2xl font-bold text-[#1D1D1F]">R$ {valorAPagar.toLocaleString("pt-BR")}</p>
+                  {(descontoNum > 0 || trocaNum > 0) && (
+                    <p className="text-[10px] text-[#86868B] mt-1">
+                      Base R$ {valorBase.toLocaleString("pt-BR")}
+                      {descontoNum > 0 && <> − Desc R$ {descontoNum.toLocaleString("pt-BR")}</>}
+                      {trocaNum > 0 && <> − Troca R$ {trocaNum.toLocaleString("pt-BR")}</>}
+                    </p>
+                  )}
+                </div>
+                <p className="text-[10px] text-[#86868B] max-w-[260px] text-right">
+                  Esse é o valor que o cliente vai pagar. Abaixo, divida em Pagamento 1 e Pagamento 2.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className={labelCls}>
-                Valor Base (R$){" "}
-                {valorBase > 0 ? (
-                  <span title="Valor base preenchido" className="ml-1 inline-flex items-center text-green-600">✅</span>
-                ) : (
-                  <span title="Valor base ausente — preencha ou aguarde auto-preenchimento" className="ml-1 inline-flex items-center text-amber-500">⚠️</span>
+
+            {/* PAGAMENTO 1 */}
+            <div className="col-span-2 md:col-span-3 rounded-xl border border-[#D2D2D7] bg-white px-4 py-3 space-y-3">
+              <p className="text-sm font-bold text-[#1D1D1F]">💳 Pagamento 1</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <p className={labelCls}>Forma</p>
+                  <select value={form.forma_pagamento} onChange={(e) => set("forma_pagamento", e.target.value)} className={inputCls}>
+                    <option value="">-- Selecionar --</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Cartao Credito">Cartão Crédito</option>
+                    <option value="Cartao Debito">Cartão Débito</option>
+                    <option value="Especie">Espécie</option>
+                    <option value="Link de Pagamento">Link de Pagamento</option>
+                    <option value="Transferencia">Transferência</option>
+                    <option value="Definir depois">Definir depois</option>
+                  </select>
+                </div>
+                <div>
+                  <p className={labelCls}>Valor R$</p>
+                  <input
+                    type="number"
+                    value={valorPag1Override || (valorPag1 > 0 ? String(valorPag1) : "")}
+                    onChange={(e) => setValorPag1Override(e.target.value)}
+                    placeholder={valorAPagar > 0 ? String(valorAPagar) : "0"}
+                    className={inputCls}
+                  />
+                  {valorPag1Override && (
+                    <button
+                      type="button"
+                      onClick={() => setValorPag1Override("")}
+                      className="text-[10px] text-[#E8740E] hover:underline mt-1"
+                    >
+                      ↺ Voltar pro automático
+                    </button>
+                  )}
+                </div>
+                {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") && (
+                  <>
+                    <div>
+                      <p className={labelCls}>Parcelas {form.forma_pagamento === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
+                      <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        {(form.forma_pagamento === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className={labelCls}>Máquina</p>
+                      <select value={form.maquina} onChange={(e) => set("maquina", e.target.value)} className={inputCls}>
+                        <option value="">-- Selecionar --</option>
+                        <option value="ITAU">Itaú</option>
+                        <option value="INFINITE">Infinite</option>
+                      </select>
+                    </div>
+                  </>
                 )}
-              </p>
-              <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
-            </div>
-            {(form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito" || form.forma_pagamento === "Link de Pagamento") && (<>
-              <div>
-                <p className={labelCls}>Parcelas {form.forma_pagamento === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
-                <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
-                  <option value="">—</option>
-                  {(form.forma_pagamento === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
-                </select>
               </div>
-              <div>
-                <p className={labelCls}>Máquina</p>
-                <select value={form.maquina} onChange={(e) => set("maquina", e.target.value)} className={inputCls}>
-                  <option value="">-- Selecionar --</option>
-                  <option value="ITAU">Itaú</option>
-                  <option value="INFINITE">Infinite</option>
-                </select>
-              </div>
-              {/* Breakdown automático da parcela com taxa embutida */}
-              {isCartaoCredito && nParcelas > 0 && valorAPagar > 0 && (
-                <div className="col-span-2 md:col-span-3 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2.5 text-xs">
+              {/* Breakdown automático da parcela — aplica ao valor do pagamento 1 */}
+              {isCartaoCredito && nParcelas > 0 && valorPag1 > 0 && (
+                <div className="bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2.5 text-xs">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorAPagar.toLocaleString("pt-BR")}</b></span>
-                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorAPagar).toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorPag1.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorPag1).toLocaleString("pt-BR")}</b></span>
                     <span className="text-[#86868B]">Total c/ taxa: <b className="text-[#1D1D1F]">R$ {totalComTaxa.toLocaleString("pt-BR")}</b></span>
                     <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
                   </div>
                 </div>
               )}
-            </>)}
-            {/* Pagamento alternativo */}
-            {showPagAlt ? (
-              <div className="col-span-2 md:col-span-3 border-t border-[#E5E5EA] pt-3 mt-1">
-                <p className="text-xs font-semibold text-[#86868B] mb-2">Pagamento alternativo</p>
+            </div>
+
+            {/* PAGAMENTO 2 (opcional) */}
+            {!showPagAlt && (
+              <div className="col-span-2 md:col-span-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPagAlt(true)}
+                  className="w-full px-4 py-2 rounded-xl border-2 border-dashed border-[#86868B] text-[#86868B] text-sm font-semibold hover:border-[#E8740E] hover:text-[#E8740E] transition-colors"
+                >
+                  + Adicionar Pagamento 2 (dividir pagamento)
+                </button>
+              </div>
+            )}
+            {showPagAlt && (
+              <div className="col-span-2 md:col-span-3 rounded-xl border border-[#D2D2D7] bg-white px-4 py-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-[#1D1D1F]">💵 Pagamento 2</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPagAlt(false);
+                      set("forma_pagamento_2", "");
+                      set("valor_2", "");
+                    }}
+                    className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                  >
+                    ✕ Remover
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
+                    <p className={labelCls}>Forma</p>
                     <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
-                      <option value="">— 2ª forma —</option>
+                      <option value="">-- Selecionar --</option>
                       <option value="Pix">Pix</option>
                       <option value="Cartao Credito">Cartão Crédito</option>
                       <option value="Especie">Espécie</option>
@@ -1091,34 +1163,31 @@ export default function EntregasPage() {
                     </select>
                   </div>
                   <div>
-                    <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="Valor R$" className={inputCls} />
+                    <p className={labelCls}>Valor R$</p>
+                    <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="0" className={inputCls} />
                   </div>
                 </div>
-                {/* Simulação automática: soma pagamentos vs valor a pagar */}
-                {(() => {
-                  const v1 = parseFloat(form.valor) || 0;
-                  const v2 = parseFloat(form.valor_2) || 0;
-                  if (!v2 || valorAPagar <= 0) return null;
-                  const soma = v1 + v2;
-                  const diff = soma - valorAPagar;
-                  const ok = Math.abs(diff) < 1;
-                  return (
-                    <div className={`mt-2 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-                      <span>{ok ? "✅" : "⚠️"}</span>
-                      <span>
-                        Soma {form.forma_pagamento || "1"} (R$ {v1.toLocaleString("pt-BR")}) + {form.forma_pagamento_2} (R$ {v2.toLocaleString("pt-BR")}) = <b>R$ {soma.toLocaleString("pt-BR")}</b>
-                        {" · "}A pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
-                        {!ok && <> {" · "}Divergência: <b>R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div className="col-span-2 md:col-span-3">
-                <button onClick={() => setShowPagAlt(true)} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar pagamento alternativo</button>
               </div>
             )}
+
+            {/* Validador da soma dos pagamentos */}
+            {(valorPag1 > 0 || valorPag2 > 0) && valorAPagar > 0 && (() => {
+              const soma = valorPag1 + valorPag2;
+              const diff = soma - valorAPagar;
+              const ok = Math.abs(diff) < 1;
+              return (
+                <div className={`col-span-2 md:col-span-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-amber-50 border border-amber-200 text-amber-700"}`}>
+                  <span>{ok ? "✅" : "⚠️"}</span>
+                  <span>
+                    Pagamento 1: <b>R$ {valorPag1.toLocaleString("pt-BR")}</b>
+                    {valorPag2 > 0 && <> + Pagamento 2: <b>R$ {valorPag2.toLocaleString("pt-BR")}</b></>}
+                    {" = "}<b>R$ {soma.toLocaleString("pt-BR")}</b>
+                    {" · "}Valor a pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
+                    {!ok && <> · <b>Divergência R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
+                  </span>
+                </div>
+              );
+            })()}
             <div>
               <p className={labelCls}>Vendedor</p>
               <select value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} className={inputCls}>
