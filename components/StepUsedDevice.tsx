@@ -9,9 +9,13 @@ import {
 } from "@/lib/calculations";
 import { COR_EN_TO_PT_SIMPLES } from "@/lib/cor-pt";
 
+const COR_MAP_LOWER: Record<string, string> = Object.fromEntries(
+  Object.entries(COR_EN_TO_PT_SIMPLES).map(([k, v]) => [k.toLowerCase().trim(), v])
+);
 function corParaPT(en: string): string {
   if (!en) return "";
-  return COR_EN_TO_PT_SIMPLES[en] || en;
+  const key = en.toLowerCase().trim();
+  return COR_MAP_LOWER[key] || COR_EN_TO_PT_SIMPLES[en] || en;
 }
 
 interface StepUsedDeviceProps {
