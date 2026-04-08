@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, corParaEN } from "@/lib/cor-pt";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -104,7 +104,18 @@ export default function GerarLinkPage() {
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
-    const tokens = (s: string) => stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t));
+    const expandSynonyms = (toks: string[]): string[] => {
+      const set = new Set(toks);
+      // iPad chip ↔ geração (iPad A16 = iPad 11, A15 = 10, A14 = 9/10)
+      if (set.has("ipad")) {
+        if (set.has("a16")) set.add("11");
+        if (set.has("11")) set.add("a16");
+        if (set.has("a14")) set.add("10");
+        if (set.has("10")) set.add("a14");
+      }
+      return [...set];
+    };
+    const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
     const prodTokens = new Set(tokens(produtos[0]));
 
     // Match por tokens: todos os tokens do catálogo devem existir no produto.
@@ -335,7 +346,9 @@ export default function GerarLinkPage() {
   async function salvarEdicaoLink() {
     if (!editingLinkId) return false;
     const prodsFilled = produtos.filter(Boolean);
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : (prodsFilled[0] || "");
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
     try {
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -343,7 +356,7 @@ export default function GerarLinkPage() {
         body: JSON.stringify({
           id: editingLinkId,
           produto: nomeProdutoFinal,
-          cor: corSel || null,
+          cor: corENCanon || null,
           valor: Number(rawPreco) || 0,
           forma_pagamento: forma || null,
           parcelas: parcelas || null,
@@ -511,7 +524,9 @@ export default function GerarLinkPage() {
       setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
       return;
     }
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
     if (!nomeProdutoFinal || !nomeProdutoFinal.trim()) {
       setPasteMsg("⚠️ Nome do produto vazio — selecione novamente.");
       return;
@@ -594,7 +609,7 @@ export default function GerarLinkPage() {
               cliente_email: cliEmail.trim() || null,
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1) : null,
-              cor: corSel || null,
+              cor: corENCanon || null,
               valor: Number(rawPreco) || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
@@ -884,7 +899,20 @@ export default function GerarLinkPage() {
                       {l.operador && l.vendedor ? " · " : null}
                       {l.vendedor ? <>Vendedora <strong>{l.vendedor}</strong></> : null}
                     </p>
-                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{l.produto}{l.cor ? ` — ${l.cor}` : ""}</p>
+                    <p className="text-sm font-semibold text-[#1D1D1F] mt-1">{(() => {
+                      const cor = l.cor || "";
+                      if (!cor) return l.produto;
+                      const corPT = corParaPT(cor);
+                      const corEN = corParaEN(cor) || cor;
+                      // Strip qualquer sufixo de cor (EN ou PT) do produto pra não duplicar
+                      let base = l.produto;
+                      for (const s of [cor, corPT, corEN]) {
+                        if (!s) continue;
+                        const re = new RegExp(`\\s+${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+                        base = base.replace(re, "").trim();
+                      }
+                      return `${base} ${corPT} — ${corEN}`;
+                    })()}</p>
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
@@ -1064,7 +1092,7 @@ export default function GerarLinkPage() {
                           setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
                           setCorSel("");
                         }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}{sel && corSel ? ` ${corParaPT(corSel)}` : ""}</p>
                           <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
                         </button>
                         {sel && catSel !== "SEMINOVOS" && (

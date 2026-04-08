@@ -284,9 +284,13 @@ export async function POST(req: NextRequest) {
       const usuario = getUsuario(req);
       const updateData: Record<string, unknown> = { status: "EM ESTOQUE", qnt: 1, updated_at: new Date().toISOString() };
       // Atualizar apenas campos fornecidos no body (mantém dados originais para os demais)
-      const allowedFields = ["produto", "cor", "categoria", "custo_unitario", "fornecedor", "data_entrada", "data_compra", "observacao", "tipo", "bateria", "preco_sugerido", "imei"];
+      const allowedFields = ["produto", "cor", "categoria", "custo_unitario", "custo_compra", "fornecedor", "data_entrada", "data_compra", "observacao", "tipo", "bateria", "preco_sugerido", "imei"];
       for (const f of allowedFields) {
         if (body[f] !== undefined && body[f] !== null && body[f] !== "") updateData[f] = body[f];
+      }
+      // Se body veio sem custo_compra mas com custo_unitario, garante custo_compra
+      if (updateData.custo_compra == null && updateData.custo_unitario != null) {
+        updateData.custo_compra = updateData.custo_unitario;
       }
       const { error: ue } = await supabase.from("estoque").update(updateData).eq("id", existingSerial.id);
       if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
