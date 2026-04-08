@@ -2146,6 +2146,12 @@ export default function VendasPage() {
                     // Apple Watch: "WATCH ULTRA 3 49MM" ou "WATCH S10 42MM"
                     const watchMatch = nome.match(/^(.*?(?:WATCH|APPLE\s*WATCH)\s*(?:ULTRA\s*\d*|SE\s*\d*|S\d+|SERIES\s*\d+)(?:\s*\d+MM)?)/i);
                     if (watchMatch) return watchMatch[1].trim();
+                    // MacBook: incluir storage no key pra separar 512GB de 1TB
+                    // Captura até o segundo tamanho (RAM + STORAGE): "MACBOOK PRO M5 14 16GB 512GB"
+                    if (/MACBOOK|MAC\s*MINI/i.test(nome)) {
+                      const mbMatch = nome.match(/^(.+?\d+\s*(?:GB|TB)\s+\d+\s*(?:GB|TB))/i);
+                      if (mbMatch) return mbMatch[1].replace(/\s+/g, " ").trim();
+                    }
                     // Acessórios sem memória: retorna o nome todo (já stripped)
                     const memMatch = nome.match(/^(.+?\d+\s*(?:GB|TB))/i);
                     return memMatch ? memMatch[1].trim() : nome;

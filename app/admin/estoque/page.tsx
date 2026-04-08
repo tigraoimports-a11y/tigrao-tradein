@@ -290,9 +290,20 @@ function extractWatchBadges(nome: string): { tamanho: string | null; pulseira: s
   const upper = nome.toUpperCase();
   const tamMatch = upper.match(/\b(\d{2}MM)\b/);
   const tamanho = tamMatch ? tamMatch[1] : null;
-  // Pulseira patterns: "SPORT BAND S/M", "BRAIDED SOLO LOOP M", "MILANESE LOOP", etc.
-  const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
-  const pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
+  // Pulseira: se tem "PULSEIRA ..." no nome, pega tudo após (mais confiável)
+  let pulseira: string | null = null;
+  const pulseiraExplicita = upper.match(/PULSEIRA\s+(.+?)$/);
+  if (pulseiraExplicita) {
+    pulseira = pulseiraExplicita[1]
+      .replace(/\s*GPS\s*\+\s*CELLULAR\b/g, "")
+      .replace(/\s*GPS\s*\+\s*CEL\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  } else {
+    // Fallback: pattern conhecido sem label PULSEIRA
+    const pulseiraMatch = upper.match(/\b((?:SPORT|BRAIDED SOLO|SOLO|MILANESE|LINK BRACELET|LEATHER|OCEAN|TRAIL|NIKE SPORT|ALPINE)\s*(?:LOOP|BAND)?(?:\s+(?:XS|S|S\/M|M|M\/L|L|XL))?)\b/);
+    pulseira = pulseiraMatch ? pulseiraMatch[1].trim() : null;
+  }
   return { tamanho, pulseira };
 }
 
@@ -790,8 +801,46 @@ export default function EstoquePage() {
     setEditCardTitleValue("");
   }
   function getCardTitle(modelo: string): string {
-    return (cardTitleOverrides[modelo] || modelo).toUpperCase();
+    const override = cardTitleOverrides[modelo];
+    if (override) {
+      const upModelo = modelo.toUpperCase();
+      const upOverride = override.toUpperCase();
+      // Se o modelo real é SERIES 11 mas override diz "SE 42"/"SE 46", ignora override (corrupto)
+      if (/SERIES\s*11|S\s*11|\bS11\b/.test(upModelo) && /\bSE\b/.test(upOverride)) {
+        return upModelo;
+      }
+      return upOverride;
+    }
+    return modelo.toUpperCase();
   }
+
+  // Limpa overrides de cardTitle corrompidos (SE 42/SE 46 aplicado a Series 11)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("tigrao_card_title_overrides");
+      if (!raw) return;
+      const obj = JSON.parse(raw) as Record<string, string>;
+      let changed = false;
+      for (const [k, v] of Object.entries(obj)) {
+        const upK = (k || "").toUpperCase();
+        const upV = (v || "").toUpperCase();
+        if (/SERIES\s*11|S\s*11|\bS11\b/.test(upK) && /\bSE\b/.test(upV)) {
+          delete obj[k];
+          changed = true;
+        }
+        // Também limpa overrides que contenham "SE 42" ou "SE 46" em modelo Apple Watch
+        if ((/WATCH/.test(upK) || /SERIES/.test(upK)) && /SE\s*4[26]/.test(upV)) {
+          delete obj[k];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem("tigrao_card_title_overrides", JSON.stringify(obj));
+        setCardTitleOverrides(obj);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // Drag-and-drop para reordenar
   const dragItemRef = useRef<string | null>(null);

@@ -69,6 +69,21 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
+function formatPagamentoDisplay(formaPagamento: string | null, valor: number | null): string {
+  if (!formaPagamento) return "—";
+  const valorStr = valor != null ? `R$ ${Number(valor).toLocaleString("pt-BR")}` : "";
+  // Já vem formatado (ex: "10x no Cartão (ITAU)"), só anexa valor
+  const fp = formaPagamento.trim();
+  // Casos comuns normalizados
+  if (/^pix/i.test(fp) && !/\bR\$/.test(fp)) {
+    return `${fp} ${valorStr}`.trim();
+  }
+  if (/cart[aã]o/i.test(fp) || /\d+x/i.test(fp)) {
+    return valor != null ? `${fp} — Total ${valorStr}` : fp;
+  }
+  return `${fp}${valorStr ? " " + valorStr : ""}`;
+}
+
 export default function EntregasPage() {
   const { password, apiHeaders, darkMode: dm } = useAdmin();
   const [entregas, setEntregas] = useState<Entrega[]>([]);
@@ -87,7 +102,9 @@ export default function EntregasPage() {
   const emptyForm = {
     cliente: "",
     telefone: "",
-    endereco: "",
+    endereco: "",              // endereço cadastro do cliente
+    endereco_entrega: "",      // onde vai ser entregue (default = endereco)
+    local_detalhes: "",        // complemento/loja do local (shopping/residencia/outro)
     bairro: "",
     data_entrega: hojeBR(),
     horario: "",
@@ -226,22 +243,44 @@ export default function EntregasPage() {
     const produtosStr = produtosFilled.join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
+    // Endereço de entrega final: local_detalhes (shopping/loja) tem prioridade, senão endereco_entrega, senão endereco cadastro
+    const enderecoEntregaFinal = form.local_detalhes?.trim()
+      ? form.local_detalhes.trim()
+      : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
+    // Forma de pagamento detalhada
+    let formaPagDetalhada = form.forma_pagamento || "";
+    if ((form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && form.parcelas) {
+      formaPagDetalhada = `${form.parcelas}x no Cartão${form.maquina ? ` (${form.maquina})` : ""}`;
+    } else if (form.forma_pagamento === "Pix" && form.maquina) {
+      formaPagDetalhada = `PIX (${form.maquina})`;
+    }
+    if (form.forma_pagamento_2 && form.valor_2) {
+      formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+    }
+    // Observação com endereço de cadastro do cliente (se diferente do de entrega)
+    const obsExtras: string[] = [];
+    if (form.observacao) obsExtras.push(form.observacao);
+    if (descontoNum > 0) obsExtras.push(`Desconto: R$ ${descontoNum}`);
+    if (form.endereco && form.endereco.trim() !== enderecoEntregaFinal.trim()) {
+      obsExtras.push(`Endereço cadastro: ${form.endereco}`);
+    }
     const res = await fetch("/api/admin/entregas", {
       method: isEdit ? "PATCH" : "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         ...(isEdit ? { id: editingEntregaId } : {}),
-        ...form,
+        cliente: form.cliente,
+        data_entrega: form.data_entrega,
         telefone: form.telefone || null,
-        endereco: form.endereco || null,
+        endereco: enderecoEntregaFinal || null,
         bairro: form.bairro || null,
         horario: form.horario || null,
         entregador: form.entregador || null,
-        observacao: form.observacao ? `${form.observacao}${descontoNum > 0 ? ` | Desconto: R$ ${descontoNum}` : ""}` : (descontoNum > 0 ? `Desconto: R$ ${descontoNum}` : null),
+        observacao: obsExtras.length ? obsExtras.join(" | ") : null,
         produto: produtosStr || null,
         tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
-        forma_pagamento: form.forma_pagamento || null,
+        forma_pagamento: formaPagDetalhada || null,
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
@@ -263,14 +302,22 @@ export default function EntregasPage() {
   };
 
   const handleStatusChange = async (entrega: Entrega, newStatus: EntregaStatus) => {
-    const res = await fetch("/api/admin/entregas", {
-      method: "PATCH",
-      headers: apiHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ id: entrega.id, status: newStatus }),
-    });
-    if (res.ok) {
-      setEntregas((prev) => prev.map((e) => (e.id === entrega.id ? { ...e, status: newStatus } : e)));
-      setSelectedEntrega(null);
+    try {
+      const res = await fetch("/api/admin/entregas", {
+        method: "PATCH",
+        headers: apiHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ id: entrega.id, status: newStatus }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok !== false) {
+        setEntregas((prev) => prev.map((e) => (e.id === entrega.id ? { ...e, status: newStatus } : e)));
+        setSelectedEntrega(null);
+        setMsg(`Status atualizado: ${newStatus}`);
+      } else {
+        setMsg(`Erro ao atualizar: ${json.error || res.statusText}`);
+      }
+    } catch (err) {
+      setMsg(`Erro de rede: ${err instanceof Error ? err.message : "desconhecido"}`);
     }
   };
 
@@ -579,9 +626,21 @@ export default function EntregasPage() {
               <p className={labelCls}>Bairro</p>
               <input value={form.bairro} onChange={(e) => set("bairro", e.target.value)} placeholder="Ex: Barra da Tijuca" className={inputCls} />
             </div>
-            <div className="col-span-2 md:col-span-3">
-              <p className={labelCls}>Endereco</p>
-              <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereco completo" className={inputCls} />
+            <div className="col-span-2 md:col-span-3 p-3 rounded-xl border border-[#E5E5EA] bg-[#FAFAFA] space-y-3">
+              <p className="text-xs font-bold text-[#86868B] uppercase tracking-wider">Endereços</p>
+              <div>
+                <p className={labelCls}>Endereço do cliente (cadastro)</p>
+                <input value={form.endereco} onChange={(e) => {
+                  const v = e.target.value;
+                  set("endereco", v);
+                  // se o campo de entrega ainda não foi editado, espelha
+                  if (!form.endereco_entrega || form.endereco_entrega === form.endereco) set("endereco_entrega", v);
+                }} placeholder="Endereço cadastrado do cliente" className={inputCls} />
+              </div>
+              <div>
+                <p className={labelCls}>Endereço de entrega</p>
+                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder="Onde será entregue (default = cadastro)" className={inputCls} />
+              </div>
             </div>
             <div>
               <p className={labelCls}>Local de Entrega</p>
@@ -593,6 +652,12 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
+            {(form.local_entrega === "SHOPPING" || form.local_entrega === "RESIDÊNCIA" || form.local_entrega === "OUTRO") && (
+              <div className="col-span-2">
+                <p className={labelCls}>{form.local_entrega === "SHOPPING" ? "Shopping (nome + loja)" : form.local_entrega === "RESIDÊNCIA" ? "Detalhes residência" : "Detalhes"}</p>
+                <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder={form.local_entrega === "SHOPPING" ? "Ex: Carioca Shopping - Loja 234" : "Ex: Bloco A, Apto 301, Portaria 24h"} className={inputCls} />
+              </div>
+            )}
             {/* Produto — seleção do estoque ou manual */}
             <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
               <div className="flex items-center justify-between">
@@ -1055,8 +1120,9 @@ export default function EntregasPage() {
                 {e.forma_pagamento && (
                   <div className="text-sm">
                     <span className="text-[#86868B]">Pagamento: </span>
-                    <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
-                    {e.valor != null && <span className="text-[#1D1D1F]"> R${e.valor}</span>}
+                    <span className="text-[#1D1D1F] font-medium">
+                      {formatPagamentoDisplay(e.forma_pagamento, e.valor)}
+                    </span>
                   </div>
                 )}
                 {e.vendedor && (
@@ -1112,7 +1178,7 @@ export default function EntregasPage() {
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
                         `‼️ *TIPO:* ${tipoLabel}`,
                         ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
-                        `💵 *PAGAMENTO:* ${e.forma_pagamento || ""} R$${Number(e.valor || 0).toLocaleString("pt-BR")}`,
+                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor)}`,
                         `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
                         e.observacao ? `OBS: ${e.observacao}` : "",
@@ -1137,6 +1203,8 @@ export default function EntregasPage() {
                         cliente: e.cliente || "",
                         telefone: e.telefone || "",
                         endereco: e.endereco || "",
+                        endereco_entrega: e.endereco || "",
+                        local_detalhes: "",
                         bairro: e.bairro || "",
                         data_entrega: e.data_entrega || hojeBR(),
                         horario: e.horario || "",
