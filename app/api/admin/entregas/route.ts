@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id, produto, tipo, detalhes_upgrade, forma_pagamento, valor, vendedor, regiao } = body;
+  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id, produto, tipo, detalhes_upgrade, forma_pagamento, valor, entrada, parcelas, valor_total, vendedor, regiao } = body;
 
   if (!cliente || !data_entrega) {
     return NextResponse.json({ error: "Cliente e data_entrega obrigatórios" }, { status: 400 });
@@ -195,6 +195,9 @@ export async function POST(req: NextRequest) {
       detalhes_upgrade: detalhes_upgrade || null,
       forma_pagamento: forma_pagamento || null,
       valor: valor != null ? valor : null,
+      entrada: entrada != null ? entrada : null,
+      parcelas: parcelas != null ? parcelas : null,
+      valor_total: valor_total != null ? valor_total : null,
       vendedor: vendedor || null,
       regiao: regiao || null,
     })

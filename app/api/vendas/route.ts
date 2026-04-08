@@ -153,10 +153,16 @@ export async function POST(req: NextRequest) {
   let imeiFromEstoque: string | null = null;
   let serialFromEstoque: string | null = null;
   if (estoqueId) {
-    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status").eq("id", estoqueId).single();
+    const { data: estoqueItem } = await supabase.from("estoque").select("imei, serial_no, qnt, status, tipo").eq("id", estoqueId).single();
     if (!estoqueItem) return NextResponse.json({ error: "Produto não encontrado no estoque" }, { status: 404 });
     if (estoqueItem.status === "ESGOTADO" || estoqueItem.qnt <= 0) {
       return NextResponse.json({ error: "Produto já foi vendido (ESGOTADO). Não é possível registrar outra venda." }, { status: 409 });
+    }
+    // Bloqueia venda de item em PENDENCIA — precisa mover pra estoque primeiro
+    if (estoqueItem.status === "PENDENTE" || estoqueItem.tipo === "PENDENCIA") {
+      return NextResponse.json({
+        error: "Item está em PENDÊNCIAS. Mova pra estoque (Recalc Balanços ou botão de confirmar recebimento) antes de vender.",
+      }, { status: 409 });
     }
     if (estoqueItem.imei && !body.imei) imeiFromEstoque = estoqueItem.imei;
     if (estoqueItem.serial_no && !body.serial_no) serialFromEstoque = estoqueItem.serial_no;
@@ -219,14 +225,14 @@ export async function POST(req: NextRequest) {
 
   // Se não tem estoque_id mas tem serial, buscar automaticamente no estoque
   // (sem .single() — evita erro silencioso quando há 0 ou N matches)
+  // Só pega itens EM ESTOQUE — itens PENDENTE precisam ser movidos antes de vender.
   if (!estoqueId && body.serial_no) {
     const serialU = String(body.serial_no).toUpperCase();
     const { data: foundBySerial } = await supabase
       .from("estoque")
       .select("id, status")
       .eq("serial_no", serialU)
-      .in("status", ["EM ESTOQUE", "PENDENTE"])
-      .order("status", { ascending: true }) // "EM ESTOQUE" antes de "PENDENTE"
+      .eq("status", "EM ESTOQUE")
       .limit(1);
     if (foundBySerial && foundBySerial.length > 0) {
       estoqueId = foundBySerial[0].id;
