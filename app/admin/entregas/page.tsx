@@ -27,6 +27,9 @@ interface Entrega {
   detalhes_upgrade: string | null;
   forma_pagamento: string | null;
   valor: number | null;
+  entrada?: number | null;
+  parcelas?: number | null;
+  valor_total?: number | null;
   vendedor: string | null;
   regiao: string | null;
   finalizada?: boolean | null;
@@ -2118,9 +2121,22 @@ export default function EntregasPage() {
                 {e.forma_pagamento && (
                   <div className="text-sm">
                     <span className="text-[#86868B]">Pagamento: </span>
-                    <span className="text-[#1D1D1F] font-medium">
-                      {formatPagamentoDisplay(e.forma_pagamento, e.valor)}
-                    </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
+                    {(() => {
+                      const total = Number(e.valor_total || e.valor || 0);
+                      const entrada = Number(e.entrada || 0);
+                      const parcelas = Number(e.parcelas || 0);
+                      const naoEntrada = Math.max(0, total - entrada);
+                      const valorParcela = parcelas > 0 ? naoEntrada / parcelas : 0;
+                      if (total <= 0) return null;
+                      return (
+                        <div className="mt-1 pl-2 text-xs text-[#86868B] space-y-0.5">
+                          <p>Total: <strong className="text-[#1D1D1F]">R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>
+                          {entrada > 0 && <p>Entrada: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
+                          {parcelas > 1 && valorParcela > 0 && <p>{parcelas}x de <strong className="text-[#1D1D1F]">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 {e.vendedor && (

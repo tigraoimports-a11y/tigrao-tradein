@@ -63,6 +63,9 @@ export async function POST(request: Request) {
       tipo: link.tipo === "TROCA" ? "TROCA" : null,
       forma_pagamento: link.forma_pagamento || null,
       valor: link.valor || null,
+      entrada: link.entrada != null ? link.entrada : null,
+      parcelas: link.parcelas != null ? Number(link.parcelas) : null,
+      valor_total: link.valor != null ? Number(link.valor) : null,
       vendedor: link.vendedor || null,
     })
     .select()
