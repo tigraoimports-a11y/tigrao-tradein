@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, corParaEN } from "@/lib/cor-pt";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -335,7 +335,9 @@ export default function GerarLinkPage() {
   async function salvarEdicaoLink() {
     if (!editingLinkId) return false;
     const prodsFilled = produtos.filter(Boolean);
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : (prodsFilled[0] || "");
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
     try {
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -343,7 +345,7 @@ export default function GerarLinkPage() {
         body: JSON.stringify({
           id: editingLinkId,
           produto: nomeProdutoFinal,
-          cor: corSel || null,
+          cor: corENCanon || null,
           valor: Number(rawPreco) || 0,
           forma_pagamento: forma || null,
           parcelas: parcelas || null,
@@ -511,7 +513,9 @@ export default function GerarLinkPage() {
       setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
       return;
     }
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corSel}` : prodsFilled[0];
+    const corPTSimples = corSel ? corParaPT(corSel) : "";
+    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
+    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
     if (!nomeProdutoFinal || !nomeProdutoFinal.trim()) {
       setPasteMsg("⚠️ Nome do produto vazio — selecione novamente.");
       return;
@@ -594,7 +598,7 @@ export default function GerarLinkPage() {
               cliente_email: cliEmail.trim() || null,
               produto: nomeProdutoFinal,
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1) : null,
-              cor: corSel || null,
+              cor: corENCanon || null,
               valor: Number(rawPreco) || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
