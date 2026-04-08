@@ -1011,6 +1011,18 @@ export default function GerarLinkPage() {
 
         {produtoManual ? (
           <>
+            {produtos[0] && coresDisponiveis.length > 0 && (
+              <div className={`px-4 py-3 rounded-xl border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Cor do produto 1:</p>
+                <div className="flex flex-wrap gap-2">
+                  {coresDisponiveis.map(cor => (
+                    <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                    >{corParaPT(cor)}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             {produtos.map((prod, idx) => (
               <div key={idx} className="flex gap-2 items-end">
                 <div className="flex-1">
