@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useAdmin } from "@/components/admin/AdminContext";
+import { useAdmin } from "@/components/admin/AdminShell";
 
 export default function DebugWatchPage() {
   const { apiHeaders, password } = useAdmin();
@@ -11,7 +11,7 @@ export default function DebugWatchPage() {
   async function load() {
     setErr("");
     try {
-      const r = await fetch("/api/admin/debug-watch", { headers: apiHeaders });
+      const r = await fetch("/api/admin/debug-watch", { headers: apiHeaders() });
       const j = await r.json();
       setData(j);
     } catch (e) { setErr(String(e)); }
@@ -43,7 +43,7 @@ export default function DebugWatchPage() {
         {running ? "Rodando..." : "▶ Rodar Rename SE → Series 11"}
       </button>
       {err && <pre style={{ color: "red" }}>{err}</pre>}
-      {data && <pre style={{ marginTop: 16, padding: 12, background: "#f0f0f0", borderRadius: 4, whiteSpace: "pre-wrap" }}>{JSON.stringify(data, null, 2)}</pre>}
+      {data != null && <pre style={{ marginTop: 16, padding: 12, background: "#f0f0f0", borderRadius: 4, whiteSpace: "pre-wrap" }}>{JSON.stringify(data, null, 2)}</pre>}
     </div>
   );
 }
