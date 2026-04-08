@@ -1692,6 +1692,53 @@ export default function EntregasPage() {
                   </div>
                 )}
 
+                {/* Atribuir Motoboy */}
+                <div className="pt-2">
+                  <p className="text-xs font-bold text-[#86868B] uppercase mb-2">🛵 Atribuir Motoboy</p>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { value: "IGOR", label: "Igor", emoji: "🛵", color: "blue" },
+                      { value: "LEANDRO", label: "Leandro", emoji: "🛵", color: "purple" },
+                      { value: "RETIRADA", label: "Retirada", emoji: "🏬", color: "gray" },
+                      { value: "CORREIOS", label: "Correios", emoji: "📦", color: "gray" },
+                    ] as const).map((opt) => {
+                      const isActive = (e.entregador || "").toUpperCase() === opt.value;
+                      const activeStyle = opt.color === "blue"
+                        ? "bg-blue-100 text-blue-700 border-2 border-blue-400"
+                        : opt.color === "purple"
+                          ? "bg-purple-100 text-purple-700 border-2 border-purple-400"
+                          : "bg-gray-100 text-gray-700 border-2 border-gray-400";
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => quickPatchEntrega(e.id, { entregador: opt.value })}
+                          className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                            isActive
+                              ? activeStyle
+                              : "bg-white border border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"
+                          }`}
+                        >
+                          {opt.emoji} {opt.label}
+                        </button>
+                      );
+                    })}
+                    {e.entregador && !["IGOR","LEANDRO","RETIRADA","CORREIOS"].includes((e.entregador || "").toUpperCase()) && (
+                      <span className="px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                        ✏️ {e.entregador}
+                      </span>
+                    )}
+                    {e.entregador && (
+                      <button
+                        onClick={() => quickPatchEntrega(e.id, { entregador: null })}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-white border border-red-200 text-red-500 hover:bg-red-50"
+                        title="Remover motoboy"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* Status badge */}
                 <div className="pt-2">
                   <p className="text-xs font-bold text-[#86868B] uppercase mb-2">Alterar Status</p>
