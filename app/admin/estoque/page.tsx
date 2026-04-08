@@ -229,7 +229,7 @@ const COR_PT: Record<string, string> = {
   "PURPLE": "Roxo",
   "PINK": "Rosa",
   "GOLD": "Dourado",
-  "LIGHT GOLD": "Dourado Claro",
+  "LIGHT GOLD": "Dourado",
   "TITANIUM": "Titânio",
   "DESERT TITANIUM": "Titânio Deserto",
   "BLACK TITANIUM": "Titânio Preto",
