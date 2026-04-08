@@ -30,3 +30,34 @@ export async function GET(request: Request) {
 
   return NextResponse.json(resumo);
 }
+
+// POST { action: "rename" } — renomeia SE 42/46mm para Series 11 direto via supabase client
+export async function POST(request: Request) {
+  if (!auth(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => ({}));
+  if (body?.action !== "rename") return NextResponse.json({ error: "action inválida" }, { status: 400 });
+
+  const { supabase } = await import("@/lib/supabase");
+
+  // Busca todas as linhas de APPLE_WATCH com SE 42/46mm
+  const { data, error } = await supabase
+    .from("estoque")
+    .select("id, produto")
+    .eq("categoria", "APPLE_WATCH")
+    .or("produto.ilike.%apple watch se%42%mm%,produto.ilike.%apple watch se%46%mm%");
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const rows = data || [];
+  const updates: { id: string; produto_antigo: string; produto_novo: string }[] = [];
+
+  for (const r of rows) {
+    const novo = (r.produto || "").replace(/apple\s*watch\s*se/gi, "Apple Watch Series 11");
+    if (novo !== r.produto) {
+      const { error: upErr } = await supabase.from("estoque").update({ produto: novo }).eq("id", r.id);
+      if (!upErr) updates.push({ id: r.id, produto_antigo: r.produto, produto_novo: novo });
+    }
+  }
+
+  return NextResponse.json({ ok: true, total_encontrados: rows.length, total_atualizados: updates.length, updates });
+}
