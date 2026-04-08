@@ -98,14 +98,16 @@ export function formatProdutoDisplay(p: {
   } else if (baseCat === "APPLE_WATCH") {
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
-    const se = up.match(/\bSE\s*(\d+)?/);
+    // \bSE(?!R) — não casar "SERIES"
+    const se = up.match(/\bSE(?!R)\s*(\d+)?\b/);
     const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
     else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
-    if (ultra) parts.push("GPS + Cellular");
+    // Ultra é sempre cellular — redundante exibir
+    if (ultra) { /* omit connectivity */ }
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
     if (cor) parts.push(cor);

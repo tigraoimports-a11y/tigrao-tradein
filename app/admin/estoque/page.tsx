@@ -128,8 +128,8 @@ function formatProdutoDisplay(p: {
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
-    // Ultra é sempre cellular; os outros respeitam detecção
-    if (ultra) parts.push("GPS + Cellular");
+    // Ultra é sempre cellular — redundante mostrar "GPS + Cellular" no nome
+    if (ultra) { /* omit connectivity */ }
     else if (hasCell) parts.push("GPS + Cellular");
     else if (hasGps) parts.push("GPS");
     if (cor) parts.push(cor);
@@ -746,12 +746,12 @@ function getModeloBase(produto: string, categoria: string): string {
       const gen = ultraMatch[1] ? ` ${ultraMatch[1]}` : "";
       return `Apple Watch Ultra${gen}${sz}`;
     }
-    // SE com geração (SE 2, SE 3)
-    const seMatch = p.match(/SE\s*(\d+)/);
+    // SE com geração (SE 2, SE 3) — \bSE(?!R) evita casar "SERIES"
+    const seMatch = p.match(/\bSE(?!R)\s*(\d+)/);
     if (seMatch) return `Apple Watch SE ${seMatch[1]}${sz}${conn}`;
-    if (p.includes("SE")) return `Apple Watch SE${sz}${conn}`;
+    if (/\bSE(?!R)/.test(p)) return `Apple Watch SE${sz}${conn}`;
     // Series com número
-    const seriesMatch = p.match(/(?:SERIES\s*|S)(\d+)/);
+    const seriesMatch = p.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (seriesMatch) return `Apple Watch Series ${seriesMatch[1]}${sz}${conn}`;
     return `Apple Watch${sz}${conn}`;
   }
