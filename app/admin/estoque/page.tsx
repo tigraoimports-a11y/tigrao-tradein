@@ -1753,7 +1753,7 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Categorias que NÃO precisam de IMEI (só serial)
-  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPAD", "APPLE_WATCH"];
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPADS", "APPLE_WATCH"];
   // Categorias que NÃO precisam de serial (completamente opcional)
   const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
 
@@ -1765,7 +1765,7 @@ export default function EstoquePage() {
     if (precisaSerial && !item.serial_no) {
       return `Preencha o número de série de "${item.produto}" antes de mover para estoque.`;
     }
-    if (!CATS_SEM_IMEI.includes(item.categoria) && !item.imei) {
+    if (!CATS_SEM_IMEI.includes(getBaseCat(item.categoria)) && !item.imei) {
       return `Preencha o IMEI de "${item.produto}" antes de mover para estoque.`;
     }
     if (!item.fornecedor || item.fornecedor.trim() === "") {
