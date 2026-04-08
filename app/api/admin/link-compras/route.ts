@@ -19,7 +19,67 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") || "").trim();
+  const autocomplete = url.searchParams.get("autocomplete") === "1";
   const tipo = url.searchParams.get("tipo") || "";
+
+  // Autocomplete de clientes cadastrados (vendas + link_compras + entregas)
+  if (autocomplete) {
+    if (!q || q.length < 2) return NextResponse.json({ clientes: [] });
+    const like = `%${q}%`;
+
+    // 1) vendas: nome, cpf, email, endereço
+    const [vRes, lRes, eRes] = await Promise.all([
+      supabase.from("vendas")
+        .select("cliente, cpf, cnpj, email, endereco, bairro, cidade, uf, data")
+        .or(`cliente.ilike.${like},cpf.ilike.${like},email.ilike.${like}`)
+        .order("data", { ascending: false })
+        .limit(100),
+      supabase.from("link_compras")
+        .select("cliente_nome, cliente_telefone, cliente_cpf, cliente_email, created_at")
+        .or(`cliente_nome.ilike.${like},cliente_telefone.ilike.${like},cliente_cpf.ilike.${like}`)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase.from("entregas")
+        .select("cliente, telefone, endereco, bairro, created_at")
+        .or(`cliente.ilike.${like},telefone.ilike.${like}`)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+
+    type Cli = { nome: string; telefone: string | null; cpf: string | null; email: string | null; endereco: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+    const map = new Map<string, Cli>();
+    const keyOf = (nome: string, cpf: string | null, tel: string | null) =>
+      `${(nome || "").toLowerCase().trim()}|${(cpf || "").replace(/\D/g, "")}|${(tel || "").replace(/\D/g, "")}`;
+    const mergeInto = (c: Cli) => {
+      const k = keyOf(c.nome, c.cpf, c.telefone);
+      const ex = map.get(k);
+      if (!ex) { map.set(k, c); return; }
+      ex.telefone = ex.telefone || c.telefone;
+      ex.cpf = ex.cpf || c.cpf;
+      ex.email = ex.email || c.email;
+      ex.endereco = ex.endereco || c.endereco;
+      ex.bairro = ex.bairro || c.bairro;
+      ex.cidade = ex.cidade || c.cidade;
+      ex.uf = ex.uf || c.uf;
+    };
+
+    for (const v of vRes.data || []) {
+      if (!v.cliente) continue;
+      mergeInto({ nome: v.cliente, telefone: null, cpf: v.cpf || null, email: v.email || null, endereco: v.endereco || null, bairro: v.bairro || null, cidade: v.cidade || null, uf: v.uf || null });
+    }
+    for (const l of lRes.data || []) {
+      if (!l.cliente_nome) continue;
+      mergeInto({ nome: l.cliente_nome, telefone: l.cliente_telefone || null, cpf: l.cliente_cpf || null, email: l.cliente_email || null, endereco: null, bairro: null, cidade: null, uf: null });
+    }
+    for (const e of eRes.data || []) {
+      if (!e.cliente) continue;
+      mergeInto({ nome: e.cliente, telefone: e.telefone || null, cpf: null, email: null, endereco: e.endereco || null, bairro: e.bairro || null, cidade: null, uf: null });
+    }
+
+    const clientes = Array.from(map.values()).slice(0, 20);
+    return NextResponse.json({ clientes });
+  }
+
   const arquivado = url.searchParams.get("arquivado") || "0";
   const from = url.searchParams.get("from") || "";
   const to = url.searchParams.get("to") || "";

@@ -41,3 +41,8 @@ CREATE INDEX IF NOT EXISTS idx_link_compras_cliente_cpf ON link_compras(cliente_
 CREATE INDEX IF NOT EXISTS idx_link_compras_short_code ON link_compras(short_code);
 CREATE INDEX IF NOT EXISTS idx_link_compras_tipo ON link_compras(tipo);
 CREATE INDEX IF NOT EXISTS idx_link_compras_arquivado ON link_compras(arquivado) WHERE arquivado = FALSE;
+
+-- RLS: libera acesso (API valida via x-admin-password antes)
+ALTER TABLE link_compras ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS link_compras_all ON link_compras;
+CREATE POLICY link_compras_all ON link_compras FOR ALL USING (true) WITH CHECK (true);

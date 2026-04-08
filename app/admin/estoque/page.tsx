@@ -659,8 +659,13 @@ function getModeloBase(produto: string, categoria: string): string {
   const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
 
   if (baseCat === "IPHONES") {
-    const match = p.match(/IPHONE\s*(\d+)\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
-    if (match) return `iPhone ${match[1]}${match[2] ? " " + match[2].trim() : ""}${getMem()}`;
+    // Captura "16", "16e", "16 Pro", "16 Pro Max", "16 Plus", "16 Air"
+    const match = p.match(/IPHONE\s*(\d+)(E)?\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
+    if (match) {
+      const num = match[1] + (match[2] ? "e" : "");
+      const variant = match[3] ? " " + match[3].trim() : "";
+      return `iPhone ${num}${variant}${getMem()}`;
+    }
     return produto;
   }
   if (baseCat === "IPADS") {

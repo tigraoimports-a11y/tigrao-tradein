@@ -138,6 +138,34 @@ export default function GerarLinkPage() {
   const [parseMsg, setParseMsg] = useState("");
   const [simulacaoId, setSimulacaoId] = useState<string | null>(null);
 
+  // Autocomplete de clientes cadastrados
+  type CliSug = { nome: string; telefone: string | null; cpf: string | null; email: string | null; endereco: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+  const [cliSugs, setCliSugs] = useState<CliSug[]>([]);
+  const [showCliSugs, setShowCliSugs] = useState(false);
+  useEffect(() => {
+    const q = cliNome.trim();
+    if (q.length < 2) { setCliSugs([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: adminHeaders() });
+        const j = await res.json();
+        if (Array.isArray(j?.clientes)) setCliSugs(j.clientes);
+      } catch {}
+    }, 250);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliNome]);
+  const aplicarCliente = (c: CliSug) => {
+    setCliNome(c.nome || "");
+    if (c.telefone) setCliTelefone(c.telefone);
+    if (c.cpf) setCliCpf(c.cpf);
+    if (c.email) setCliEmail(c.email);
+    if (c.endereco) setCliEndereco(c.endereco);
+    if (c.bairro) setCliBairro(c.bairro);
+    setIncluirDadosCliente(true);
+    setShowCliSugs(false);
+  };
+
   // Prefill via query string (vindo de /admin/simulacoes)
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -980,9 +1008,36 @@ export default function GerarLinkPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 relative">
                   <label className={labelCls}>Nome completo</label>
-                  <input type="text" value={cliNome} onChange={(e) => setCliNome(e.target.value)} placeholder="João da Silva" className={inputCls} />
+                  <input
+                    type="text"
+                    value={cliNome}
+                    onChange={(e) => { setCliNome(e.target.value); setShowCliSugs(true); }}
+                    onFocus={() => setShowCliSugs(true)}
+                    onBlur={() => setTimeout(() => setShowCliSugs(false), 200)}
+                    placeholder="Digite 2+ letras para buscar cliente cadastrado…"
+                    className={inputCls}
+                  />
+                  {showCliSugs && cliSugs.length > 0 && (
+                    <div className={`absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border shadow-lg ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+                      {cliSugs.map((c, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); aplicarCliente(c); }}
+                          className={`w-full text-left px-3 py-2 text-sm ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"} border-b ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"} last:border-0`}
+                        >
+                          <div className="font-semibold">{c.nome}</div>
+                          <div className="text-[11px] text-[#8E8E93] flex gap-2 flex-wrap">
+                            {c.telefone && <span>📞 {c.telefone}</span>}
+                            {c.cpf && <span>CPF {c.cpf}</span>}
+                            {c.email && <span>✉️ {c.email}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>CPF</label>
