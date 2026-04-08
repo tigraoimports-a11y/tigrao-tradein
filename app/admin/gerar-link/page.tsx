@@ -91,24 +91,33 @@ export default function GerarLinkPage() {
   // Sem fallback pro estoque (estoque pode ter lixo de cor errada).
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const stripNoise = (s: string) => s
+    // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
+    const normGen = (s: string) => s
+      .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/\bGENERATION\b/gi, "GEN")
+      .replace(/\bGERAÇÃO\b/gi, "GEN");
+    const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
       .replace(/\b\d+\s*MM\b/gi, "")
       .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
-      .replace(/[º°""\(\)\+]/g, " ")
+      .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
-    const norm = (s: string) => stripNoise(s).toLowerCase().replace(/\s+/g, " ").trim();
-    const prodSel = norm(produtos[0]);
+    const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
+    const tokens = (s: string) => stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t));
+    const prodTokens = new Set(tokens(produtos[0]));
 
-    // 1) Match exato; 2) catálogo contido no produto; 3) produto contido no catálogo
+    // Match por tokens: todos os tokens do catálogo devem existir no produto.
+    // Escolhe o match com mais tokens (mais específico).
     let raw: string[] = [];
-    let bestLen = 0;
+    let bestCount = 0;
     for (const [nome, cores] of Object.entries(catalogoCores)) {
-      const nCat = norm(nome);
-      if (!nCat) continue;
-      if (nCat === prodSel) { raw = cores; bestLen = 999; break; }
-      if (prodSel.includes(nCat) || nCat.includes(prodSel)) {
-        if (nCat.length > bestLen) { raw = cores; bestLen = nCat.length; }
+      const catTokens = tokens(nome);
+      if (catTokens.length === 0) continue;
+      const allMatch = catTokens.every(t => prodTokens.has(t));
+      if (allMatch && catTokens.length > bestCount) {
+        raw = cores;
+        bestCount = catTokens.length;
       }
     }
 

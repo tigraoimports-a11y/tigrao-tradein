@@ -2892,93 +2892,101 @@ export default function EstoquePage() {
 
         const catOrder = ["IPHONES", "IPADS", "MACBOOK", "MAC_MINI", "APPLE_WATCH", "AIRPODS", "ACESSORIOS"];
 
-        // === FONTE ÚNICA: catalogo_modelo_configs ===
-        // Lógica invertida: iterar catálogo como base, contar estoque por cor.
-        // Cores que não estão no catálogo NÃO aparecem (mesmo se existirem no estoque com lixo histórico).
+        // === Lógica: estoque como fonte da estrutura (preserva variantes por categoria
+        // via getModeloBase: iPad storage/conect, MacBook ram/ssd/cor, Watch tamanho/conect/cor, Mac Mini ram/ssd).
+        // Catálogo é usado apenas para FILTRAR cores fantasmas (que não estão cadastradas).
         type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
-        const stripStorageBase = (b: string) => b.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
         const normCmp = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
-        // Index por estoque: modelo_base_sem_storage → Map<corNormalizada, {qnt, min, storage}>
-        // Acumula estoque por storage tb pra podermos expandir uma linha por storage.
-        type EstIdx = { totalQnt: number; min: number; jaCaminho: boolean; storage: string };
-        const estoqueIdx = new Map<string, Map<string, EstIdx>>(); // baseSemStorage → storage → dados
-        const storagesPorModelo = new Map<string, Set<string>>(); // baseSemStorage → storages presentes
-        const minPorModelo = new Map<string, Map<string, Map<string, number>>>(); // base → storage → corNorm → min
-        const qntPorModelo = new Map<string, Map<string, Map<string, number>>>(); // base → storage → corNorm → qnt
-        const caminhoPorProduto = produtosACaminho;
+        // Index de cores válidas por modelo do catálogo (normalizado)
+        const catalogCoresNorm = new Map<string, Set<string>>(); // nomeCatNorm → Set<corNorm>
+        for (const [nomeCat, coresCat] of Object.entries(catalogoCoresMap)) {
+          if (!coresCat) continue;
+          const set = new Set<string>();
+          for (const c of coresCat) {
+            set.add(c.toLowerCase());
+            const pt = COR_PT[c.toUpperCase()];
+            if (pt) set.add(pt.toLowerCase());
+          }
+          catalogCoresNorm.set(normCmp(nomeCat), set);
+        }
 
-        const getStorage = (s: string) => { const m = s.match(/\b(\d+)\s*(GB|TB)\b/i); return m ? `${m[1]}${m[2].toUpperCase()}` : ""; };
+        // Acha melhor entry do catálogo para um modelo do estoque (match por tokens)
+        const findCatCores = (baseModelo: string): Set<string> | null => {
+          const baseNorm = normCmp(baseModelo);
+          // exato
+          if (catalogCoresNorm.has(baseNorm)) return catalogCoresNorm.get(baseNorm)!;
+          // contains — maior match primeiro
+          const candidatos = [...catalogCoresNorm.keys()]
+            .filter(k => baseNorm.includes(k) || k.includes(baseNorm))
+            .sort((a, b) => b.length - a.length);
+          return candidatos[0] ? catalogCoresNorm.get(candidatos[0])! : null;
+        };
+
+        // Agrupar estoque por categoria → modelo base (preservando variantes)
+        type Acc = { totalQnt: number; min: number; jaCaminho: boolean };
+        const acc = new Map<string, Map<string, Map<string, Acc>>>(); // cat → base → corNorm → dados
+        const corDisplayMap = new Map<string, string>(); // corNorm → display original
+        const corENMap = new Map<string, string>(); // corNorm → EN
 
         for (const p of novos) {
-          const baseFull = getModeloBase(p.produto, p.categoria).toUpperCase();
-          const storage = getStorage(baseFull) || getStorage(p.produto) || "";
-          const baseSemStorage = normCmp(stripStorageBase(baseFull));
-          const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString();
-          const corUpper = corRaw.toUpperCase().trim();
-          // Normaliza para EN (para comparar com catálogo)
+          const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+          if (reposicaoOcultos.has(base)) continue;
+          const cat = p.categoria || "OUTROS";
+          const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
+          if (!corRaw) continue;
+          const corUpper = corRaw.toUpperCase();
           const enFromPT = PT_TO_EN[corUpper];
           const corEN = enFromPT || corUpper;
           const corNorm = corEN.toLowerCase();
 
-          if (!storagesPorModelo.has(baseSemStorage)) storagesPorModelo.set(baseSemStorage, new Set());
-          storagesPorModelo.get(baseSemStorage)!.add(storage);
-
-          if (!qntPorModelo.has(baseSemStorage)) qntPorModelo.set(baseSemStorage, new Map());
-          const qntStor = qntPorModelo.get(baseSemStorage)!;
-          if (!qntStor.has(storage)) qntStor.set(storage, new Map());
-          const qntCor = qntStor.get(storage)!;
-          qntCor.set(corNorm, (qntCor.get(corNorm) || 0) + p.qnt);
-
+          if (!acc.has(cat)) acc.set(cat, new Map());
+          const catMap = acc.get(cat)!;
+          if (!catMap.has(base)) catMap.set(base, new Map());
+          const baseMap = catMap.get(base)!;
+          const cur = baseMap.get(corNorm) || { totalQnt: 0, min: 0, jaCaminho: false };
+          cur.totalQnt += p.qnt;
           if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
-            if (!minPorModelo.has(baseSemStorage)) minPorModelo.set(baseSemStorage, new Map());
-            const minStor = minPorModelo.get(baseSemStorage)!;
-            if (!minStor.has(storage)) minStor.set(storage, new Map());
-            const minCor = minStor.get(storage)!;
-            minCor.set(corNorm, Math.max(minCor.get(corNorm) || 0, p.estoque_minimo));
+            cur.min = Math.max(cur.min, p.estoque_minimo);
+          }
+          baseMap.set(corNorm, cur);
+          if (!corDisplayMap.has(corNorm)) {
+            const corPT = COR_PT[corEN.toUpperCase()] || "";
+            const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
+            corDisplayMap.set(corNorm, corPTCap || corRaw);
+            corENMap.set(corNorm, corEN);
           }
         }
-        void estoqueIdx; void caminhoPorProduto;
 
-        // Iterar catálogo e construir grupos
-        for (const [nomeCat, coresCat] of Object.entries(catalogoCoresMap)) {
-          if (reposicaoOcultos.has(nomeCat)) continue;
-          if (!coresCat || coresCat.length === 0) continue;
-          const cat = catalogoCatByModel[nomeCat] || "OUTROS";
-          const baseSemStorage = normCmp(nomeCat);
-          const storages = storagesPorModelo.get(baseSemStorage);
-          // Se o modelo ainda não tem estoque nenhum, ainda assim mostra uma linha por storage padrão do próprio nome
-          const listaStorages = storages && storages.size > 0 ? [...storages] : [""];
-
-          for (const storage of listaStorages) {
-            const baseKey = (nomeCat + (storage ? ` ${storage}` : "")).toUpperCase();
-            if (!byCatModel[cat]) byCatModel[cat] = {};
-            if (!byCatModel[cat][baseKey]) byCatModel[cat][baseKey] = [];
-            const grupoAtual = byCatModel[cat][baseKey];
-            const qntCor = qntPorModelo.get(baseSemStorage)?.get(storage);
-            const minCor = minPorModelo.get(baseSemStorage)?.get(storage);
-            const minGrupoFallback = minCor ? Math.max(0, ...minCor.values()) : 0;
-
-            for (const corEN of coresCat) {
-              const corNorm = corEN.toLowerCase();
+        // Converter + filtrar cores que não estão no catálogo
+        for (const [cat, catMap] of acc.entries()) {
+          for (const [base, baseMap] of catMap.entries()) {
+            const catCores = findCatCores(base);
+            const grupo: RepoGroup[] = [];
+            for (const [corNorm, dados] of baseMap.entries()) {
+              // Se tem catálogo, filtra. Se não tem, mostra tudo.
+              if (catCores && catCores.size > 0) {
+                const corEN = corENMap.get(corNorm) || corNorm;
+                const hasIt = catCores.has(corNorm) || catCores.has(corEN.toLowerCase());
+                if (!hasIt) continue;
+              }
+              const corEN = corENMap.get(corNorm) || corNorm.toUpperCase();
               const corPT = COR_PT[corEN.toUpperCase()] || "";
-              const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
-              const corDisplay = corPTCap || corEN;
-              const totalQnt = qntCor?.get(corNorm) || 0;
-              const min = (minCor?.get(corNorm)) || minGrupoFallback;
-              // já existe? (dedup)
-              if (grupoAtual.some(c => c.corEN.toUpperCase() === corEN.toUpperCase())) continue;
-              grupoAtual.push({
-                totalQnt,
-                min,
+              grupo.push({
+                totalQnt: dados.totalQnt,
+                min: dados.min,
                 corEN,
                 corPT,
-                corDisplay,
-                jaCaminho: false,
+                corDisplay: corDisplayMap.get(corNorm) || corEN,
+                jaCaminho: dados.jaCaminho,
                 falta: 0,
               });
+            }
+            if (grupo.length > 0) {
+              if (!byCatModel[cat]) byCatModel[cat] = {};
+              byCatModel[cat][base] = grupo;
             }
           }
         }
