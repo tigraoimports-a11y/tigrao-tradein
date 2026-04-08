@@ -3,6 +3,14 @@ import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { buildClienteKey, moverCredito } from "@/lib/lojistas-credito";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+};
+
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
   return pw === process.env.ADMIN_PASSWORD;
@@ -13,7 +21,7 @@ function getUsuario(req: NextRequest) {
 
 // ── GET: saldo + extrato de um lojista (ou lista todos) ──
 export async function GET(req: NextRequest) {
-  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCacheHeaders });
   const { searchParams } = new URL(req.url);
   const cpf = searchParams.get("cpf");
   const cnpj = searchParams.get("cnpj");
@@ -25,8 +33,8 @@ export async function GET(req: NextRequest) {
       .select("*")
       .gt("saldo", 0)
       .order("saldo", { ascending: false });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ lojistas: data || [] });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCacheHeaders });
+    return NextResponse.json({ lojistas: data || [], _count: data?.length ?? 0, _ts: Date.now() }, { headers: noCacheHeaders });
   }
   // Tenta achar por cpf, depois cnpj, depois nome (ordem de prioridade)
   const keys: string[] = [];
@@ -42,14 +50,14 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     if (data) { lojista = data; break; }
   }
-  if (!lojista) return NextResponse.json({ lojista: null, saldo: 0, log: [] });
+  if (!lojista) return NextResponse.json({ lojista: null, saldo: 0, log: [] }, { headers: noCacheHeaders });
   const { data: log } = await supabase
     .from("lojistas_credito_log")
     .select("*")
     .eq("lojista_id", lojista.id)
     .order("created_at", { ascending: false })
     .limit(100);
-  return NextResponse.json({ lojista, saldo: Number(lojista.saldo || 0), log: log || [] });
+  return NextResponse.json({ lojista, saldo: Number(lojista.saldo || 0), log: log || [] }, { headers: noCacheHeaders });
 }
 
 // ── DELETE: zera saldo e apaga linha de um lojista específico (ou ?all=1 pra limpar tudo) ──
