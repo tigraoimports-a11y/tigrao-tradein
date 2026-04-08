@@ -1753,7 +1753,7 @@ export default function EstoquePage() {
   const handleDuplicar = (p: ProdutoEstoque) => handleDuplicarProduto([p]);
 
   // Categorias que NÃO precisam de IMEI (só serial)
-  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS"];
+  const CATS_SEM_IMEI = ["MACBOOK", "MAC_MINI", "IMAC", "MAC_STUDIO", "AIRPODS", "ACESSORIOS", "OUTROS", "IPAD", "APPLE_WATCH"];
   // Categorias que NÃO precisam de serial (completamente opcional)
   const CATS_SEM_SERIAL = ["ACESSORIOS", "OUTROS"];
 
