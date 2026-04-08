@@ -82,8 +82,9 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
     if (!model) return [];
     const norm = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
     const nm = norm(model);
+    // Somente match EXATO — evita "iPhone 15" casar com "iPhone 15 Pro"
     for (const [k, v] of Object.entries(catalogCores)) {
-      if (norm(k) === nm || nm.includes(norm(k)) || norm(k).includes(nm)) return v;
+      if (norm(k) === nm) return v;
     }
     return [];
   }, [model, catalogCores]);

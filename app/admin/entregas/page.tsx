@@ -437,11 +437,34 @@ export default function EntregasPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? "✏️ Editar Entrega" : modoSimples ? "📮 Nova Entrega Simplificada (Correios / externa)" : "Agendar Nova Entrega"}</h2>
               {editingEntregaId && <button onClick={() => { setEditingEntregaId(null); setForm({ ...emptyForm, data_entrega: hojeBR() }); setProdutos([""]); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setDesconto(""); }} className="text-xs text-red-500 hover:underline">Cancelar edição</button>}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Limpar todos os dados do formulário?")) return;
+                  setEditingEntregaId(null);
+                  setForm({ ...emptyForm, data_entrega: hojeBR() });
+                  setProdutos([""]);
+                  setTrocaAtiva(false);
+                  setTrocaValor("");
+                  setTrocaProduto("");
+                  setDesconto("");
+                  setMsg("");
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50"
+              >
+                🗑️ Limpar formulário
+              </button>
             </div>
             <button
               onClick={async () => {
                 try {
-                  const text = await navigator.clipboard.readText();
+                  let text = "";
+                  try {
+                    text = await navigator.clipboard.readText();
+                  } catch {
+                    const manual = window.prompt("Cole aqui os dados do cliente (Ctrl+V / Cmd+V):", "");
+                    text = manual || "";
+                  }
                   if (!text || text.length < 10) { setMsg("Nada no clipboard. Copie a mensagem do WhatsApp primeiro."); return; }
                   const lines = text.split("\n").map(l => l.trim());
                   const extract = (line: string) => line.replace(/^[✅⚠️📌🤔🔄💰📋🏷️🎯]*\s*/g, "").replace(/^[^:：]+[:：]\s*/, "").trim();

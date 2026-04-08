@@ -126,9 +126,10 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     }
 
     function campo(label: string, valor: string) {
+      if (!valor || !String(valor).trim()) return; // não renderiza label sem valor
       doc.fontSize(10).fillColor("#222222");
       doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
-      doc.font("Helvetica").text(valor, { lineGap: 2 });
+      doc.font("Helvetica").text(String(valor), { lineGap: 2 });
       doc.moveDown(0.2);
     }
 
@@ -137,7 +138,7 @@ export async function gerarContratoEncomendaPDF(dados: ContratoEncomendaData): P
     doc.text("CONTRATO PARTICULAR DE PRESTAÇÃO", { align: "center" });
     doc.text("DE SERVIÇO DE", { align: "center" });
     doc.fontSize(12).font("Helvetica").fillColor("#444444");
-    doc.text("INTERMEDIAÇÃO DE NEGÓCIOS (ENCOMENDA COM TROCA)", { align: "center" });
+    doc.text(`INTERMEDIAÇÃO DE NEGÓCIOS (ENCOMENDA${dados.temTroca ? " COM TROCA" : ""})`, { align: "center" });
     doc.moveDown(0.5);
     linha();
 

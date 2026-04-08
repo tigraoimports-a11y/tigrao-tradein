@@ -137,7 +137,11 @@ export default function SaldosPage() {
       "3": { key: "MERCADO_PAGO", label: "Mercado Pago" },
     };
     const bancoSel = bancoMap[bancoRaw.trim()] || bancoMap["1"];
-    if (!confirm(`Depositar R$ ${toDisplayBR(String(valorDep))} de Espécie no ${bancoSel.label}?`)) return;
+    // Pergunta a data do depósito (default = dataAtual)
+    const dataRaw = window.prompt(`Data do depósito (YYYY-MM-DD):`, dataAtual);
+    if (dataRaw === null) return;
+    const dataDep = dataRaw.trim().match(/^\d{4}-\d{2}-\d{2}$/) ? dataRaw.trim() : dataAtual;
+    if (!confirm(`Depositar R$ ${toDisplayBR(String(valorDep))} de Espécie no ${bancoSel.label} em ${dataDep}?`)) return;
 
     setDepositando(true);
     setMsg("");
@@ -151,7 +155,7 @@ export default function SaldosPage() {
           "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
         },
         body: JSON.stringify({
-          data: dataAtual,
+          data: dataDep,
           tipo: "SAIDA",
           categoria: "TRANSFERENCIA",
           descricao: `Depósito espécie → ${bancoSel.label}`,
