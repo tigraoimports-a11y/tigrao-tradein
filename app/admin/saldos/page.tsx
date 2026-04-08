@@ -115,36 +115,32 @@ export default function SaldosPage() {
   };
 
   const [depositando, setDepositando] = useState(false);
+  const [depModal, setDepModal] = useState(false);
+  const [depValor, setDepValor] = useState("");
+  const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
+  const [depData, setDepData] = useState(dataAtual);
+
+  const abrirDeposito = () => {
+    const espVal = parseFloat(fromDisplayBR(esp));
+    if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
+    setDepValor(toDisplayBR(String(espVal)));
+    setDepBanco("ITAU");
+    setDepData(dataAtual);
+    setDepModal(true);
+  };
 
   const handleDepositar = async () => {
     const espVal = parseFloat(fromDisplayBR(esp));
-    if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
-    // Pergunta o valor (default = total). Aceita vírgula ou ponto.
-    const raw = window.prompt(
-      `Quanto depositar em espécie?\n\nDisponível: R$ ${toDisplayBR(String(espVal))}\n\nDigite o valor (ou ENTER para depositar tudo):`,
-      toDisplayBR(String(espVal))
-    );
-    if (raw === null) return; // cancelado
-    const valorDep = parseFloat(fromDisplayBR(raw.trim()));
+    const valorDep = parseFloat(fromDisplayBR(depValor));
     if (!valorDep || valorDep <= 0) { setMsg("Valor inválido"); return; }
     if (valorDep > espVal + 0.01) { setMsg(`Valor maior que o disponível (R$ ${toDisplayBR(String(espVal))})`); return; }
-    // Pergunta o banco destino
-    const bancoRaw = window.prompt("Depositar em qual banco?\n\n1 = Itaú\n2 = Infinite\n3 = Mercado Pago", "1");
-    if (bancoRaw === null) return;
-    const bancoMap: Record<string, { key: string; label: string }> = {
-      "1": { key: "ITAU", label: "Itaú" },
-      "2": { key: "INFINITE", label: "Infinite" },
-      "3": { key: "MERCADO_PAGO", label: "Mercado Pago" },
-    };
-    const bancoSel = bancoMap[bancoRaw.trim()] || bancoMap["1"];
-    // Pergunta a data do depósito (default = dataAtual)
-    const dataRaw = window.prompt(`Data do depósito (YYYY-MM-DD):`, dataAtual);
-    if (dataRaw === null) return;
-    const dataDep = dataRaw.trim().match(/^\d{4}-\d{2}-\d{2}$/) ? dataRaw.trim() : dataAtual;
-    if (!confirm(`Depositar R$ ${toDisplayBR(String(valorDep))} de Espécie no ${bancoSel.label} em ${dataDep}?`)) return;
+    const bancoLabelMap: Record<string, string> = { ITAU: "Itaú", INFINITE: "Infinite", MERCADO_PAGO: "Mercado Pago" };
+    const bancoSel = { key: depBanco, label: bancoLabelMap[depBanco] };
+    const dataDep = depData.match(/^\d{4}-\d{2}-\d{2}$/) ? depData : dataAtual;
 
     setDepositando(true);
     setMsg("");
+    setDepModal(false);
     try {
       // Cria gasto com is_dep_esp=true (banco = destino do depósito)
       const res = await fetch("/api/gastos", {
@@ -166,13 +162,20 @@ export default function SaldosPage() {
       });
       const json = await res.json();
       if (json.ok || json.data) {
-        setMsg(`R$ ${toDisplayBR(String(valorDep))} depositado de Espécie no ${bancoSel.label} com sucesso!`);
-        // Recalcular saldos
+        setMsg(`R$ ${toDisplayBR(String(valorDep))} depositado de Espécie no ${bancoSel.label} em ${dataDep} com sucesso!`);
+        // Recalcular saldos da data do depósito E da data atual (se diferente)
         await fetch("/api/saldos", {
           method: "PUT",
           headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-          body: JSON.stringify({ data: dataAtual }),
+          body: JSON.stringify({ data: dataDep }),
         });
+        if (dataDep !== dataAtual) {
+          await fetch("/api/saldos", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+            body: JSON.stringify({ data: dataAtual }),
+          });
+        }
         fetchSaldos();
         fetchSaldoData(dataAtual);
       } else {
@@ -226,7 +229,7 @@ export default function SaldosPage() {
                 </div>
               )}
               {bank.label === "Especie" && parseFloat(fromDisplayBR(esp)) > 0 && (
-                <button onClick={handleDepositar} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
+                <button onClick={abrirDeposito} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
                   {depositando ? "Depositando..." : `Depositar espécie no banco…`}
                 </button>
               )}
@@ -280,6 +283,44 @@ export default function SaldosPage() {
           </table>
         </div>
       </div>
+
+      {depModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDepModal(false)}>
+          <div className={`w-full max-w-md rounded-2xl p-6 shadow-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#D2D2D7]"}`} onClick={(e) => e.stopPropagation()}>
+            <h3 className={`text-lg font-bold mb-4 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Depositar espécie no banco</h3>
+            <div className="space-y-4">
+              <div>
+                <label className={`block text-xs font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Valor (R$)</label>
+                <input type="text" inputMode="decimal" value={depValor}
+                  onChange={(e) => setDepValor(e.target.value.replace(/[^\d.,-]/g, ""))}
+                  onBlur={() => setDepValor(toDisplayBR(fromDisplayBR(depValor)))}
+                  className={inputCls} />
+                <p className={`text-[11px] mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Disponível: R$ {toDisplayBR(fromDisplayBR(esp))}</p>
+              </div>
+              <div>
+                <label className={`block text-xs font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco destino</label>
+                <select value={depBanco} onChange={(e) => setDepBanco(e.target.value as "ITAU" | "INFINITE" | "MERCADO_PAGO")} className={inputCls}>
+                  <option value="ITAU">Itaú</option>
+                  <option value="INFINITE">Infinite</option>
+                  <option value="MERCADO_PAGO">Mercado Pago</option>
+                </select>
+              </div>
+              <div>
+                <label className={`block text-xs font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data do depósito</label>
+                <input type="date" value={depData} onChange={(e) => setDepData(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setDepModal(false)} className={`flex-1 px-4 py-2 rounded-xl font-semibold text-sm border ${dm ? "border-[#3A3A3C] text-[#F5F5F7] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#1D1D1F] hover:bg-[#F5F5F7]"}`}>
+                Cancelar
+              </button>
+              <button onClick={handleDepositar} disabled={depositando} className="flex-1 px-4 py-2 rounded-xl bg-[#E8740E] text-white font-semibold text-sm hover:bg-[#F5A623] transition-colors disabled:opacity-50">
+                {depositando ? "Depositando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

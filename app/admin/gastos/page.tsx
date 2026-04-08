@@ -112,9 +112,10 @@ function inferSpecFromProduto(produto: string, categoria: string): ProdutoSpec {
     else if (categoria === "MAC_MINI") spec.mm_storage = storageMatch[1];
   }
   if (categoria === "IPHONES") {
-    const numMatch = n.match(/IPHONE\s*(\d+(?:\s+AIR)?)/);
-    spec.ip_modelo = numMatch ? numMatch[1].trim() : "17";
-    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : /IPHONE\s+\d+\s+E(\s|$)/.test(n) ? "E" : "";
+    // Captura número + opcional E (ex.: 16E) ou número + AIR (ex.: 17 AIR)
+    const numMatch = n.match(/IPHONE\s*(\d+E?|\d+\s+AIR)/);
+    spec.ip_modelo = numMatch ? numMatch[1].trim().toUpperCase() : "17";
+    spec.ip_linha = n.includes(" PRO MAX") ? "PRO MAX" : n.includes(" PRO") ? "PRO" : n.includes(" PLUS") ? "PLUS" : n.includes(" AIR") ? "AIR" : "";
     const ORIGIN_CODES = ["AA","BE","BR","BZ","CH","E","HN","J","LL","LZ","N","QL","VC","ZD","ZP","ZA","IN"];
     const originMatch = n.match(new RegExp("\\b(" + ORIGIN_CODES.join("|") + ")\\b"));
     if (originMatch) {

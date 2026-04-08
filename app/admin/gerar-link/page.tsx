@@ -78,30 +78,48 @@ export default function GerarLinkPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoqueItems]);
 
-  // Cores reais do estoque para o produto selecionado
+  // Cores do catálogo por modelo (catalogo_modelo_configs)
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
+      .catch(() => {});
+  }, []);
+
+  // Cores disponíveis para o produto selecionado — vem do catálogo (match exato),
+  // traduzidas pra PT e deduplicadas. Se não achar no catálogo, cai pro estoque.
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    // Extrair palavras-chave do produto selecionado pra matching flexível
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoqueItems) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      // Match direto
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
-      }
-      // Match flexível: primeira keyword (família do produto) obrigatória + mínimo de matches
-      const firstKeyword = keywords[0];
-      if (firstKeyword && !prodEstoque.includes(firstKeyword)) continue;
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-      }
+    const norm = (s: string) => s.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const prodSel = norm(produtos[0]);
+
+    // 1) Tenta catálogo com match exato do nome do modelo
+    let raw: string[] = [];
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      if (norm(nome) === prodSel) { raw = cores; break; }
     }
-    return [...cores].sort();
-  }, [produtos, estoqueItems]);
+    // 2) Fallback: estoque com match exato (sem flexível)
+    if (raw.length === 0) {
+      const set = new Set<string>();
+      for (const item of estoqueItems) {
+        if (norm(item.produto) === prodSel && item.cor) set.add(item.cor);
+      }
+      raw = [...set];
+    }
+
+    // Dedup por tradução PT
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const pt = corParaPT(c);
+      const key = pt.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(c); // guarda o valor original; a UI já aplica corParaPT ao exibir
+    }
+    return out.sort((a, b) => corParaPT(a).localeCompare(corParaPT(b)));
+  }, [produtos, estoqueItems, catalogoCores]);
 
   const [vendedorNome, setVendedorNome] = useState(user?.nome || "");
   const [forma, setForma] = useState("");
