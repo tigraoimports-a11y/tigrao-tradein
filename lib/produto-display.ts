@@ -85,7 +85,13 @@ export function formatProdutoDisplay(p: {
     if (/NEO/.test(up)) modelo = "MacBook Neo";
     else if (/AIR/.test(up)) modelo = "MacBook Air";
     else if (/PRO/.test(up)) modelo = "MacBook Pro";
-    parts.push(modelo);
+    const chipM = up.match(/M(\d+)\s*(PRO\s*MAX|PRO|MAX)?/);
+    let chip = "";
+    if (chipM) {
+      const variant = chipM[2] ? " " + chipM[2].replace(/\s+/g, " ").replace(/PRO MAX/i, "Pro Max").replace(/PRO/i, "Pro").replace(/MAX/i, "Max") : "";
+      chip = ` M${chipM[1]}${variant}`;
+    }
+    parts.push(modelo + chip);
     if (tela) parts.push(tela);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);

@@ -244,9 +244,18 @@ export default function ClientesPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const prevTabRef = React.useRef(tab);
   const fetchClientes = useCallback(async () => {
     if (!password) return;
     setLoading(true);
+    // Só limpa state quando a tab MUDA (evita flicker a cada autorefetch de 20s)
+    if (prevTabRef.current !== tab) {
+      setClientes([]);
+      setFornecedores([]);
+      setNotas([]);
+      setTotals({ total: 0, total_gasto: 0, total_compras: 0, total_investido: 0, total_em_estoque: 0, total_produtos: 0 });
+      prevTabRef.current = tab;
+    }
     try {
       const params = new URLSearchParams({ tab });
       if (debouncedSearch) params.set("search", debouncedSearch);
