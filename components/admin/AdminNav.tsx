@@ -99,6 +99,7 @@ const NAV: NavEntry[] = [
     items: [
       { href: "/admin/ia", label: "Assistente IA", icon: "\u{1F916}", pageKey: "ia" },
       { href: "/admin/taxas", label: "Taxas Maquinas", icon: "\u{1F4B3}", pageKey: "taxas" },
+      { href: "/admin/migrations", label: "Migrations", icon: "\u{1F5C4}\uFE0F", pageKey: "migrations" },
       { href: "/admin/log", label: "Log de Atividades", icon: "\u{1F4CB}", pageKey: "log" },
       { href: "/admin/usuarios", label: "Usuarios", icon: "\u{1F465}", pageKey: "usuarios" },
       { href: "/admin/configuracoes", label: "Configuracoes", icon: "⚙️", pageKey: "configuracoes" },
