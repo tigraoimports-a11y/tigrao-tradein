@@ -91,14 +91,25 @@ export default function GerarLinkPage() {
   // Sem fallback pro estoque (estoque pode ter lixo de cor errada).
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const stripStorage = (s: string) => s.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
-    const norm = (s: string) => stripStorage(s).toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const stripNoise = (s: string) => s
+      .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+      .replace(/\b\d+\s*MM\b/gi, "")
+      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+      .replace(/[º°""\(\)\+]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const norm = (s: string) => stripNoise(s).toLowerCase().replace(/\s+/g, " ").trim();
     const prodSel = norm(produtos[0]);
 
-    // Match exato com o nome do modelo no catálogo
+    // 1) Match exato; 2) catálogo contido no produto; 3) produto contido no catálogo
     let raw: string[] = [];
+    let bestLen = 0;
     for (const [nome, cores] of Object.entries(catalogoCores)) {
-      if (norm(nome) === prodSel) { raw = cores; break; }
+      const nCat = norm(nome);
+      if (!nCat) continue;
+      if (nCat === prodSel) { raw = cores; bestLen = 999; break; }
+      if (prodSel.includes(nCat) || nCat.includes(prodSel)) {
+        if (nCat.length > bestLen) { raw = cores; bestLen = nCat.length; }
+      }
     }
 
     // Dedup por tradução PT
@@ -1030,8 +1041,10 @@ export default function GerarLinkPage() {
             {catSel && (
               <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
                 {(() => {
-                  const lista = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
-                  if (lista.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                  const listaBase = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
+                  if (listaBase.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                  // Se há produto selecionado, mostra só ele (colapsa a lista)
+                  const lista = produtos[0] ? listaBase.filter(m => m.nome === produtos[0]) : listaBase;
                   return lista.map((m) => {
                     const sel = produtos[0] === m.nome;
                     return (
