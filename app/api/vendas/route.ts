@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
   // Abater crédito do lojista (se solicitado)
   if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO") && body.cliente) {
     try {
-      const { moverCredito } = await import("@/app/api/admin/lojistas-credito/route");
+      const { moverCredito } = await import("@/lib/lojistas-credito");
       await moverCredito({
         cliente: { nome: body.cliente, cpf: body.cpf, cnpj: body.cnpj },
         tipo: "DEBITO",
@@ -728,7 +728,7 @@ export async function DELETE(req: NextRequest) {
     const valorCredito = Number(venda.preco_vendido || 0);
     if (valorCredito > 0) {
       try {
-        const { moverCredito } = await import("@/app/api/admin/lojistas-credito/route");
+        const { moverCredito } = await import("@/lib/lojistas-credito");
         await moverCredito({
           cliente: { nome: venda.cliente, cpf: venda.cpf, cnpj: venda.cnpj },
           tipo: "CREDITO",
