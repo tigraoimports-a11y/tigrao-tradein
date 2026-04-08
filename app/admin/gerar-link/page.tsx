@@ -1176,6 +1176,21 @@ export default function GerarLinkPage() {
                       </ul>
                     )}
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
+                    {(() => {
+                      const troca = Number(l.troca_valor || 0) + Number(l.troca_valor2 || 0);
+                      const entrada = Number(l.entrada || 0);
+                      const valorFinal = Math.max(0, Number(l.valor || 0) - troca - entrada);
+                      const temDetalhe = l.forma_pagamento || l.parcelas || entrada > 0 || valorFinal !== Number(l.valor || 0);
+                      if (!temDetalhe) return null;
+                      return (
+                        <div className="text-[11px] mt-1 space-y-0.5">
+                          {l.forma_pagamento && <p className="text-[#1D1D1F]">💳 <strong>{l.forma_pagamento}</strong>{l.parcelas ? ` · ${l.parcelas}` : ""}</p>}
+                          {entrada > 0 && <p className="text-[#86868B]">Entrada: R$ {entrada.toLocaleString("pt-BR")}</p>}
+                          {troca > 0 && <p className="text-[#86868B]">Troca abatida: R$ {troca.toLocaleString("pt-BR")}</p>}
+                          {valorFinal !== Number(l.valor || 0) && <p className="text-green-700 font-bold">Valor final: R$ {valorFinal.toLocaleString("pt-BR")}</p>}
+                        </div>
+                      );
+                    })()}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
                         👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}

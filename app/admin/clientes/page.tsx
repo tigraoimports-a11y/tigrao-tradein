@@ -184,9 +184,10 @@ export default function ClientesPage() {
   const fetchSaldosLojistas = useCallback(async () => {
     if (!password) return;
     try {
-      const res = await fetch(`/api/admin/lojistas-credito`, { headers: apiHeaders() });
+      const res = await fetch(`/api/admin/lojistas-credito?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
+        console.log("[lojistas-credito] API retornou", json._count, "rows:", json.lojistas?.map((l: { cliente_key: string; saldo: number }) => ({ key: l.cliente_key, saldo: l.saldo })));
         // STRICT: indexa APENAS pelo cliente_key canônico. Nada de fallback por nome/cpf/cnpj soltos
         // (isso antes causava colisões se rows antigas tivessem cliente_key vazio/genérico).
         const map: Record<string, number> = {};
