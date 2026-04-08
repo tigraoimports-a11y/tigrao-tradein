@@ -54,9 +54,14 @@ export async function moverCredito(params: {
   usuario?: string;
 }) {
   if (!params.valor || params.valor <= 0) throw new Error("valor deve ser > 0");
-  const lojista = await getOrCreateLojista(params.cliente);
-  if (!lojista?.id) throw new Error("lojista inválido (sem id) — operação abortada");
-  const saldoAntes = Number(lojista.saldo || 0);
+  const key = buildClienteKey(params.cliente);
+  // 1) Lê saldo atual (se houver)
+  const { data: existing } = await supabase
+    .from("lojistas_credito")
+    .select("id, saldo")
+    .eq("cliente_key", key)
+    .maybeSingle();
+  const saldoAntes = Number(existing?.saldo || 0);
   let saldoDepois = saldoAntes;
   if (params.tipo === "CREDITO") saldoDepois = saldoAntes + params.valor;
   else if (params.tipo === "DEBITO") saldoDepois = saldoAntes - params.valor;
@@ -64,17 +69,23 @@ export async function moverCredito(params: {
   if (params.tipo === "DEBITO" && saldoDepois < 0) {
     throw new Error(`Saldo insuficiente. Disponível: R$ ${saldoAntes}, tentativa: R$ ${params.valor}`);
   }
-  const { data: updated, error: upErr } = await supabase
+  // 2) UPSERT por cliente_key (chave unique). Afeta exatamente 1 linha pela constraint.
+  const { data: upserted, error: upErr } = await supabase
     .from("lojistas_credito")
-    .update({ saldo: saldoDepois, updated_at: new Date().toISOString(), nome: params.cliente.nome })
-    .eq("id", lojista.id)
-    .select("id");
-  if (upErr) throw new Error(upErr.message);
-  if (!updated || updated.length !== 1) {
-    throw new Error(`moverCredito: update afetou ${updated?.length ?? 0} linhas (esperado 1)`);
-  }
+    .upsert({
+      cliente_key: key,
+      nome: params.cliente.nome,
+      cpf: params.cliente.cpf || null,
+      cnpj: params.cliente.cnpj || null,
+      saldo: saldoDepois,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "cliente_key" })
+    .select("id")
+    .single();
+  if (upErr) throw new Error(`upsert falhou: ${upErr.message}`);
+  if (!upserted?.id) throw new Error("upsert nao retornou id");
   await supabase.from("lojistas_credito_log").insert({
-    lojista_id: lojista.id,
+    lojista_id: upserted.id,
     venda_id: params.venda_id || null,
     tipo: params.tipo,
     valor: params.valor,
@@ -83,5 +94,5 @@ export async function moverCredito(params: {
     motivo: params.motivo || null,
     usuario: params.usuario || "sistema",
   });
-  return { saldoAntes, saldoDepois, lojista_id: lojista.id };
+  return { saldoAntes, saldoDepois, lojista_id: upserted.id, cliente_key: key };
 }
