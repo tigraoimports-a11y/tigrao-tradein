@@ -22,6 +22,52 @@ import {
 } from "@/lib/produto-specs";
 import { corParaPT } from "@/lib/cor-pt";
 
+// Formata cor para etiqueta: "PRETO - BLACK" (PT - EN)
+// - Deduplica casos como "BLACK Black" → "Black"
+// - Procura tradução e renderiza PT maiúsculo + EN capitalizado
+const COR_PT_EN: Record<string, string> = {
+  PRETO: "Black", BRANCO: "White", AZUL: "Blue", VERDE: "Green", ROSA: "Pink",
+  ROXO: "Purple", VERMELHO: "Red", AMARELO: "Yellow", DOURADO: "Gold", LARANJA: "Orange",
+  CINZA: "Gray", PRATA: "Silver", ESTELAR: "Starlight", "MEIA-NOITE": "Midnight",
+  GRAFITE: "Graphite", TITÂNIO: "Titanium", TITANIO: "Titanium", LAVANDA: "Lavender",
+  NATURAL: "Natural", "AZUL PROFUNDO": "Deep Blue", "AZUL ESCURO": "Dark Blue",
+  "AZUL CLARO": "Light Blue", "ROSA CLARO": "Light Pink", BRONZE: "Bronze",
+  JEANS: "Denim", AREIA: "Sand", OLIVA: "Olive", CORAL: "Coral",
+};
+const COR_EN_PT: Record<string, string> = {
+  BLACK: "Preto", WHITE: "Branco", BLUE: "Azul", GREEN: "Verde", PINK: "Rosa",
+  PURPLE: "Roxo", RED: "Vermelho", YELLOW: "Amarelo", GOLD: "Dourado", ORANGE: "Laranja",
+  GRAY: "Cinza", GREY: "Cinza", SILVER: "Prata", STARLIGHT: "Estelar", MIDNIGHT: "Meia-noite",
+  GRAPHITE: "Grafite", TITANIUM: "Titânio", LAVENDER: "Lavanda", NATURAL: "Natural",
+  "DEEP BLUE": "Azul Profundo", "DARK BLUE": "Azul Escuro", "LIGHT BLUE": "Azul Claro",
+  "LIGHT PINK": "Rosa Claro", BRONZE: "Bronze", DENIM: "Jeans", SAND: "Areia",
+  OLIVE: "Oliva", CORAL: "Coral", "SPACE BLACK": "Preto Espacial", "SPACE GRAY": "Cinza Espacial",
+  "ROSE GOLD": "Ouro Rosa",
+};
+
+function formatCorEtiqueta(cor: string | null | undefined): string {
+  if (!cor) return "";
+  // Dedup: "BLACK Black" → "Black"
+  const parts = cor.trim().split(/\s+/);
+  const unique: string[] = [];
+  for (const p of parts) {
+    if (!unique.some(u => u.toUpperCase() === p.toUpperCase())) unique.push(p);
+  }
+  const clean = unique.join(" ").trim();
+  const upper = clean.toUpperCase();
+  // Se PT conhecido → "PT - EN"
+  if (COR_PT_EN[upper]) return `${upper} - ${COR_PT_EN[upper].toUpperCase()}`;
+  // Se EN conhecido → "PT - EN"
+  if (COR_EN_PT[upper]) return `${COR_EN_PT[upper].toUpperCase()} - ${upper}`;
+  // Tenta achar ambos numa string composta tipo "Preto Black"
+  for (const [pt, en] of Object.entries(COR_PT_EN)) {
+    if (upper.includes(pt) && upper.includes(en.toUpperCase())) {
+      return `${pt} - ${en.toUpperCase()}`;
+    }
+  }
+  return clean;
+}
+
 interface Etiqueta {
   id: string;
   codigo_barras: string;
@@ -266,7 +312,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       </style></head><body>
       <div class="wrap">
         <div class="produto">${etiqueta.produto}</div>
-        ${etiqueta.cor ? `<div class="cor">${corParaPT(etiqueta.cor)}</div>` : ""}
+        ${etiqueta.cor ? `<div class="cor">${formatCorEtiqueta(etiqueta.cor)}</div>` : ""}
         ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
         ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr"></canvas></div>
@@ -496,7 +542,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
       return `
       <div class="wrap" ${idx < lista.length - 1 ? 'style="page-break-after:always"' : ''}>
         <div class="produto">${et.produto}</div>
-        ${et.cor ? `<div class="cor">${corParaPT(et.cor)}</div>` : ""}
+        ${et.cor ? `<div class="cor">${formatCorEtiqueta(et.cor)}</div>` : ""}
         ${serial ? `<div class="extra">SN: ${serial}</div>` : ""}
         ${imei ? `<div class="extra">IMEI: ${imei}</div>` : ""}
         <div class="qr"><canvas id="qr-${idx}"></canvas></div>
@@ -944,7 +990,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50 flex justify-center">
               <div className="bg-white border border-gray-400 rounded p-3 shadow-sm" style={{ minWidth: 200, maxWidth: 280 }}>
                 <p className="text-sm font-bold text-gray-900 leading-tight text-center">{etiquetaGerada.produto}</p>
-                {etiquetaGerada.cor && <p className="text-xs text-gray-500 text-center">{corParaPT(etiquetaGerada.cor)}</p>}
+                {etiquetaGerada.cor && <p className="text-xs text-gray-500 text-center">{formatCorEtiqueta(etiquetaGerada.cor)}</p>}
                 {(etiquetaGerada.serial_no || etiquetaGerada.imei) && (
                   <p className="text-[10px] text-gray-400 text-center mt-1">
                     {etiquetaGerada.serial_no && `SN: ${etiquetaGerada.serial_no}`}
@@ -1120,7 +1166,7 @@ export function EtiquetasContent({ embedded = false }: { embedded?: boolean }) {
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">{et.codigo_barras}</td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{et.produto}</p>
-                            {et.cor && <p className="text-xs text-gray-400">{corParaPT(et.cor)}</p>}
+                            {et.cor && <p className="text-xs text-gray-400">{formatCorEtiqueta(et.cor)}</p>}
                           </td>
                           <td className="px-4 py-3 text-gray-600">{et.fornecedor || "—"}</td>
                           <td className="px-4 py-3">
