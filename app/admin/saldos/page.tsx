@@ -120,17 +120,19 @@ export default function SaldosPage() {
   const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
   const [depData, setDepData] = useState(dataAtual);
 
+  // Valor realmente disponível pra depositar = fechamento noite da espécie (não a base manual)
+  const especieDisponivel = Number(saldoHoje?.esp_especie ?? 0);
+
   const abrirDeposito = () => {
-    const espVal = parseFloat(fromDisplayBR(esp));
-    if (!espVal || espVal <= 0) { setMsg("Nenhum valor em especie para depositar"); return; }
-    setDepValor(toDisplayBR(String(espVal)));
+    if (!especieDisponivel || especieDisponivel <= 0) { setMsg("Nenhum valor em espécie para depositar nesta data"); return; }
+    setDepValor(toDisplayBR(String(especieDisponivel)));
     setDepBanco("ITAU");
     setDepData(dataAtual);
     setDepModal(true);
   };
 
   const handleDepositar = async () => {
-    const espVal = parseFloat(fromDisplayBR(esp));
+    const espVal = especieDisponivel;
     const valorDep = parseFloat(fromDisplayBR(depValor));
     if (!valorDep || valorDep <= 0) { setMsg("Valor inválido"); return; }
     if (valorDep > espVal + 0.01) { setMsg(`Valor maior que o disponível (R$ ${toDisplayBR(String(espVal))})`); return; }
@@ -228,7 +230,7 @@ export default function SaldosPage() {
                   <p className="text-lg font-bold" style={{ color: bank.color }}>{fmt(Number(bank.esp))}</p>
                 </div>
               )}
-              {bank.label === "Especie" && parseFloat(fromDisplayBR(esp)) > 0 && (
+              {bank.label === "Especie" && especieDisponivel > 0 && (
                 <button onClick={abrirDeposito} disabled={depositando} className="w-full mt-1 px-3 py-2 rounded-xl bg-[#F47920] text-white text-xs font-semibold hover:bg-[#E8740E] transition-colors disabled:opacity-50">
                   {depositando ? "Depositando..." : `Depositar espécie no banco…`}
                 </button>
@@ -295,7 +297,7 @@ export default function SaldosPage() {
                   onChange={(e) => setDepValor(e.target.value.replace(/[^\d.,-]/g, ""))}
                   onBlur={() => setDepValor(toDisplayBR(fromDisplayBR(depValor)))}
                   className={inputCls} />
-                <p className={`text-[11px] mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Disponível: R$ {toDisplayBR(fromDisplayBR(esp))}</p>
+                <p className={`text-[11px] mt-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Disponível: R$ {toDisplayBR(String(especieDisponivel))}</p>
               </div>
               <div>
                 <label className={`block text-xs font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Banco destino</label>
