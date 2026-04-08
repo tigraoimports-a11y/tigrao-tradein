@@ -5419,7 +5419,33 @@ export default function EstoquePage() {
                           )}
                         </div>
                       )}
-                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p>
+                        {(canEdit || isAdmin) ? (
+                          <select
+                            value={p.tipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : isLac ? "NOVO" : "SEMINOVO"}
+                            onChange={async (e) => {
+                              const novo = e.target.value as "NOVO" | "SEMINOVO" | "NAO_ATIVADO";
+                              try {
+                                await apiPatch(p.id, { tipo: novo });
+                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: novo } : x));
+                                setDetailProduct({ ...p, tipo: novo });
+                                showSaved("tipo");
+                                setMsg(`Condição alterada para ${novo === "NOVO" ? "Lacrado" : novo === "NAO_ATIVADO" ? "Não Ativado" : "Usado"}`);
+                              } catch (err) {
+                                setMsg("❌ " + String(err instanceof Error ? err.message : err));
+                              }
+                            }}
+                            className={`mt-0.5 text-[11px] font-semibold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          >
+                            <option value="NOVO">🔵 Lacrado</option>
+                            <option value="NAO_ATIVADO">🟣 Não Ativado</option>
+                            <option value="SEMINOVO">🟡 Usado</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span>
+                        )}
+                      </div>
                       {/* Caixa badge */}
                       {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
