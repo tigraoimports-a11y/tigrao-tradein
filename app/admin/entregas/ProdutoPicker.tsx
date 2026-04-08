@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo } from "react";
+import { corParaPT } from "@/lib/cor-pt";
 
 export interface EstoquePickerItem {
   id: string;
@@ -91,15 +92,20 @@ export default function ProdutoPicker({
 
   const modelEntries = Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
 
-  // Cores disponíveis para o modelo selecionado (únicas, não vazias)
+  // Cores disponíveis para o modelo selecionado (únicas, não vazias).
+  // Agrupa por label PT simplificado (ex "Mist Blue" e "Blue" viram "Azul").
+  // Retorna [{ ptLabel, qnt }] — usa ptLabel como value no select.
   const coresDoModelo = useMemo(() => {
-    if (!modeloSel || !byModel[modeloSel]) return [];
-    const cores = new Set<string>();
+    if (!modeloSel || !byModel[modeloSel]) return [] as { ptLabel: string; qnt: number }[];
+    const map = new Map<string, number>();
     byModel[modeloSel].items.forEach((p) => {
       const c = (p.cor || "").trim();
-      if (c) cores.add(c);
+      if (!c) return;
+      const pt = corParaPT(c) || c;
+      if (!pt || pt === "—") return;
+      map.set(pt, (map.get(pt) || 0) + (p.qnt || 0));
     });
-    return Array.from(cores).sort();
+    return Array.from(map.entries()).map(([ptLabel, qnt]) => ({ ptLabel, qnt })).sort((a, b) => a.ptLabel.localeCompare(b.ptLabel));
   }, [modeloSel, byModel]);
 
   return (
@@ -172,17 +178,11 @@ export default function ProdutoPicker({
           <p className={labelCls}>Cor</p>
           <select value={corSel} onChange={(e) => setCorSel(e.target.value)} className={inputCls}>
             <option value="">-- Selecionar cor --</option>
-            {coresDoModelo.map((cor) => {
-              // Conta quantas unidades dessa cor existem no modelo
-              const qnt = byModel[modeloSel].items
-                .filter((p) => (p.cor || "").trim() === cor)
-                .reduce((s, p) => s + p.qnt, 0);
-              return (
-                <option key={cor} value={cor}>
-                  {cor} ({qnt} un.)
-                </option>
-              );
-            })}
+            {coresDoModelo.map(({ ptLabel, qnt }) => (
+              <option key={ptLabel} value={ptLabel}>
+                {ptLabel} ({qnt} un.)
+              </option>
+            ))}
           </select>
         </div>
       )}
