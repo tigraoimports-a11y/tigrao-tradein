@@ -91,7 +91,9 @@ export default function GerarLinkPage() {
   // traduzidas pra PT e deduplicadas. Se não achar no catálogo, cai pro estoque.
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
-    const norm = (s: string) => s.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    // Remove storage (128GB/1TB) e cor residual pra casar com nome do catálogo
+    const stripStorage = (s: string) => s.replace(/\b\d+\s*(GB|TB)\b/gi, "").replace(/\s+/g, " ").trim();
+    const norm = (s: string) => stripStorage(s).toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
     const prodSel = norm(produtos[0]);
 
     // 1) Tenta catálogo com match exato do nome do modelo
@@ -99,11 +101,22 @@ export default function GerarLinkPage() {
     for (const [nome, cores] of Object.entries(catalogoCores)) {
       if (norm(nome) === prodSel) { raw = cores; break; }
     }
-    // 2) Fallback: estoque com match exato (sem flexível)
+    // 2) Fallback: estoque — match pelo início do nome (sem storage/cor)
     if (raw.length === 0) {
       const set = new Set<string>();
       for (const item of estoqueItems) {
-        if (norm(item.produto) === prodSel && item.cor) set.add(item.cor);
+        const prodEst = norm(item.produto);
+        // Match exato OU o nome do estoque começa com o modelo selecionado
+        // seguido imediatamente do fim ou de uma cor (não de outro modelo)
+        if (prodEst === prodSel) {
+          if (item.cor) set.add(item.cor);
+        } else if (prodEst.startsWith(prodSel + " ")) {
+          // Evita sangria: "iPhone 13" não deve casar com "iPhone 13 pro/plus/mini"
+          const rest = prodEst.slice(prodSel.length + 1);
+          if (!/^(pro|plus|mini|air|max|e\b)/i.test(rest)) {
+            if (item.cor) set.add(item.cor);
+          }
+        }
       }
       raw = [...set];
     }
