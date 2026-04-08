@@ -185,7 +185,14 @@ export default function ClientesPage() {
       if (res.ok) {
         const json = await res.json();
         const map: Record<string, number> = {};
-        for (const l of json.lojistas || []) map[l.cliente_key] = Number(l.saldo || 0);
+        // Indexa por cliente_key E por nome upper — garante que a UI acha o saldo por qualquer chave
+        for (const l of json.lojistas || []) {
+          const saldo = Number(l.saldo || 0);
+          if (l.cliente_key) map[l.cliente_key] = saldo;
+          if (l.nome) map[`nome:${String(l.nome).trim().toUpperCase()}`] = saldo;
+          if (l.cpf) map[`cpf:${String(l.cpf).replace(/\D/g, "")}`] = saldo;
+          if (l.cnpj) map[`cnpj:${String(l.cnpj).replace(/\D/g, "")}`] = saldo;
+        }
         setSaldosLojistas(map);
       }
     } catch (err) { console.error(err); }
