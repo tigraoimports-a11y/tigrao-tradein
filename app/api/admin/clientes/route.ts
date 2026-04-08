@@ -221,22 +221,34 @@ export async function GET(req: NextRequest) {
       // Fallback pro caminho antigo caso a migration da RPC ainda não tenha rodado
       console.error("[clientes] RPC clientes_resumo falhou, usando fallback:", rpcErr.message);
     } else {
-      const clientes = (resumo || []).map((r: Record<string, unknown>) => ({
-        nome: r.nome, cpf: r.cpf, cnpj: r.cnpj, email: r.email,
-        bairro: r.bairro, cidade: r.cidade, uf: r.uf,
+      type ResumoRow = {
+        nome: string; cpf: string | null; cnpj: string | null; email: string | null;
+        bairro: string | null; cidade: string | null; uf: string | null;
+        total_compras: number; total_gasto: number; ultima_compra: string;
+        ultimo_produto: string; cliente_desde: string; is_lojista: boolean;
+        vendas: never[];
+      };
+      const clientes: ResumoRow[] = (resumo || []).map((r: Record<string, unknown>) => ({
+        nome: String(r.nome || ""),
+        cpf: (r.cpf as string | null) ?? null,
+        cnpj: (r.cnpj as string | null) ?? null,
+        email: (r.email as string | null) ?? null,
+        bairro: (r.bairro as string | null) ?? null,
+        cidade: (r.cidade as string | null) ?? null,
+        uf: (r.uf as string | null) ?? null,
         total_compras: Number(r.total_compras || 0),
         total_gasto: Number(r.total_gasto || 0),
-        ultima_compra: r.ultima_compra,
-        ultimo_produto: r.ultimo_produto,
-        cliente_desde: r.cliente_desde,
-        is_lojista: r.is_lojista,
+        ultima_compra: String(r.ultima_compra || ""),
+        ultimo_produto: String(r.ultimo_produto || ""),
+        cliente_desde: String(r.cliente_desde || ""),
+        is_lojista: Boolean(r.is_lojista),
         vendas: [],
       }));
       return NextResponse.json({
         clientes,
         total: clientes.length,
-        total_gasto: clientes.reduce((s, c) => s + c.total_gasto, 0),
-        total_compras: clientes.reduce((s, c) => s + c.total_compras, 0),
+        total_gasto: clientes.reduce((s: number, c: ResumoRow) => s + c.total_gasto, 0),
+        total_compras: clientes.reduce((s: number, c: ResumoRow) => s + c.total_compras, 0),
       });
     }
   }
