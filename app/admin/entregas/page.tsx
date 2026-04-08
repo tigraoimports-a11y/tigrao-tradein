@@ -175,23 +175,50 @@ export default function EntregasPage() {
       .catch(() => {});
   }, [password]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lookup de preço de venda por modelo + armazenamento (normalizado)
-  const precosMap = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const p of precos) {
-      const key = `${(p.modelo || "").toUpperCase()} ${(p.armazenamento || "").toUpperCase()}`.replace(/\s+/g, " ").trim();
-      m[key] = Number(p.preco_pix) || 0;
-    }
-    return m;
+  // Normaliza string pra matching: remove pontuação, colchetes, pipes, "RAM",
+  // colapsa espaços, uppercase. Usado tanto pro nome do estoque quanto pro preço.
+  const normalizeForMatch = (s: string): string => {
+    return s
+      .toUpperCase()
+      // Remove parenteses e conteúdo: "(10C CPU/10C GPU)" vira " "
+      .replace(/\([^)]*\)/g, " ")
+      // Remove separadores comuns
+      .replace(/[|\\/]/g, " ")
+      // Remove aspas
+      .replace(/["']/g, " ")
+      // Remove "RAM" (opcional na nomenclatura)
+      .replace(/\bRAM\b/g, " ")
+      // Normaliza espaços
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  // Lista de preços com tokens pré-computados pra matching rápido
+  const precosTokens = useMemo(() => {
+    return precos.map((p) => {
+      const combined = `${p.modelo || ""} ${p.armazenamento || ""}`;
+      const norm = normalizeForMatch(combined);
+      const tokens = norm.split(" ").filter(Boolean);
+      return { preco: Number(p.preco_pix) || 0, tokens, norm };
+    });
   }, [precos]);
+
   const lookupPrecoVenda = (modelStr: string): number => {
-    const norm = modelStr.toUpperCase().replace(/\s+/g, " ").trim();
-    if (precosMap[norm]) return precosMap[norm];
-    // Tentar encontrar por substring (caso a chave do estoque tenha sufixo extra)
-    for (const [k, v] of Object.entries(precosMap)) {
-      if (norm.includes(k) || k.includes(norm)) return v;
+    const norm = normalizeForMatch(modelStr);
+    if (!norm) return 0;
+    const nameTokens = new Set(norm.split(" ").filter(Boolean));
+
+    // Busca o preço cujos tokens TODOS aparecem no nome do estoque.
+    // Entre os que batem, prefere o mais específico (maior número de tokens).
+    let melhor = { preco: 0, score: 0 };
+    for (const p of precosTokens) {
+      if (p.tokens.length === 0) continue;
+      const todos = p.tokens.every((t) => nameTokens.has(t));
+      if (todos && p.tokens.length > melhor.score) {
+        melhor = { preco: p.preco, score: p.tokens.length };
+      }
     }
-    return 0;
+    return melhor.preco;
   };
 
   // Categorias dinâmicas do estoque
