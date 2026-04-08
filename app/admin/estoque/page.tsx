@@ -679,16 +679,21 @@ function getModeloBase(produto: string, categoria: string): string {
     return `iPad${chip}${mem}`;
   }
   if (baseCat === "MACBOOK") {
-    const mem = getMem();
+    // MacBook: agrupar por RAM + SSD (dois GB/TB distintos)
+    const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
+    const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+    const sorted = [...vals].sort((a, b) => a.gb - b.gb);
+    const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
+    const ssd = sorted.length >= 1 ? ` ${sorted[sorted.length - 1].raw}` : "";
+    const memPair = `${ram}${ssd}`;
     const size = getSize();
     // Extrair chip (M4, M5, M4 Pro, M5 Pro)
     const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
     const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${mem}`;
-    if (p.includes("AIR")) return `MacBook Air${chip}${size}${mem}`;
-    if (p.includes("PRO") && !chipMatch?.[2]) return `MacBook Pro${chip}${size}${mem}`;
-    if (p.includes("PRO")) return `MacBook Pro${chip}${size}${mem}`;
-    return `MacBook${chip}${mem}`;
+    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
+    if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
+    if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
+    return `MacBook${chip}${memPair}`;
   }
   if (baseCat === "MAC_MINI") {
     const mem = getMem();
@@ -2979,9 +2984,9 @@ export default function EstoquePage() {
           }
           baseMap.set(corNorm, cur);
           if (!corDisplayMap.has(corNorm)) {
-            const corPT = COR_PT[corEN.toUpperCase()] || "";
-            const corPTCap = corPT ? corPT.charAt(0).toUpperCase() + corPT.slice(1).toLowerCase() : "";
-            corDisplayMap.set(corNorm, corPTCap || corRaw);
+            // Usa corParaPT que simplifica (Mist Blue → Azul, Sage → Verde, Starlight → Estelar, etc)
+            const simples = corParaPT(corEN) || corParaPT(corRaw) || corRaw;
+            corDisplayMap.set(corNorm, simples);
             corENMap.set(corNorm, corEN);
           }
         }
