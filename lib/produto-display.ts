@@ -99,11 +99,15 @@ export function formatProdutoDisplay(p: {
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
     // \bSE(?!R) — não casar "SERIES"
-    const se = up.match(/\bSE(?!R)\s*(\d+)?\b/);
+    // Além disso: Apple Watch SE só existe em 40/44mm. Se nome tem 46mm ou 49mm, "SE" é lixo → Series 11.
+    const has46or49 = /\b(46|49)\s*MM/.test(up);
+    const seRaw = up.match(/\bSE(?!R)\s*(\d+)?\b/);
+    const se = seRaw && !has46or49 ? seRaw : null;
     const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
     else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
     else if (series) modelo = `Apple Watch Series ${series[1]}`;
+    else if (has46or49 && seRaw) modelo = "Apple Watch Series 11";
     parts.push(modelo);
     if (tamMm) parts.push(tamMm);
     // Ultra é sempre cellular — redundante exibir
