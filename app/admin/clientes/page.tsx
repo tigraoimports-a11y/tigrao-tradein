@@ -233,6 +233,16 @@ export default function ClientesPage() {
       });
       const json = await res.json();
       if (!res.ok) { alert(json.error || "Erro"); return; }
+      // Debug: valida que só 1 linha ficou no banco pra essa chave
+      try {
+        const check = await fetch(`/api/admin/lojistas-credito?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+        const cj = await check.json();
+        const total = cj.lojistas?.length ?? 0;
+        console.log(`[DEBUG credito] Após salvar, DB tem ${total} lojistas com saldo>0:`, cj.lojistas);
+        if (total > 1) {
+          alert(`ATENÇÃO: Após salvar, ${total} lojistas estão com saldo. Esperado: 1. Abra o console pra ver detalhes.`);
+        }
+      } catch { /* ignore */ }
       await fetchSaldosLojistas();
       await openCreditoModal(creditoModal.cliente); // refresh modal data
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
