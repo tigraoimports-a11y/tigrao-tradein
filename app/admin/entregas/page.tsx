@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
+import ProdutoPicker from "./ProdutoPicker";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -130,18 +131,27 @@ export default function EntregasPage() {
     vendedor: "",
     regiao: "",
     local_entrega: "",
+    shopping_nome: "",
   };
   const [form, setForm] = useState(emptyForm);
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
 
-  // Estoque picker states
+  // Estoque picker states — linha 1 do produto
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
+  const [cor1, setCor1] = useState(""); // cor do produto 1
+  const [preco1, setPreco1] = useState(0); // preço do produto 1 (tabela ou custo)
   const [serialBusca, setSerialBusca] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
+  // Linha 2 do produto (opcional — aparece ao clicar "+ Adicionar 2º produto")
+  const [showProduto2, setShowProduto2] = useState(false);
+  const [catSel2, setCatSel2] = useState("");
+  const [modelo2, setModelo2] = useState("");
+  const [cor2, setCor2] = useState("");
+  const [preco2, setPreco2] = useState(0);
   const [desconto, setDesconto] = useState("");
   const [trocaAtiva, setTrocaAtiva] = useState(false);
   const [trocaValor, setTrocaValor] = useState("");
@@ -204,11 +214,20 @@ export default function EntregasPage() {
   }, [estoque, catSel]);
 
   // Valor base e final
-  const valorBase = parseFloat(form.valor) || 0;
+  // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
+  const somaProdutos = preco1 + preco2;
+  const valorBase = somaProdutos > 0 ? somaProdutos : (parseFloat(form.valor) || 0);
   const descontoNum = parseFloat(desconto) || 0;
   const trocaNum = parseFloat(trocaValor) || 0;
   const valorFinal = Math.max(0, valorBase - descontoNum);
   const valorAPagar = Math.max(0, valorFinal - trocaNum);
+
+  // Sincroniza form.valor com a soma dos produtos selecionados (catálogo)
+  useEffect(() => {
+    if (somaProdutos > 0) {
+      setForm(f => f.valor === String(somaProdutos) ? f : { ...f, valor: String(somaProdutos) });
+    }
+  }, [somaProdutos]);
 
   // Cálculo de parcelas com taxa embutida (mesma tabela do /gerar-link e Nova Venda)
   const TAXAS_PARCELAS: Record<number, number> = {
@@ -255,7 +274,18 @@ export default function EntregasPage() {
     setSaving(true);
     setMsg("");
 
-    const produtosStr = produtos.filter(Boolean).join(" | ");
+    // Monta string de produtos: "MODELO COR" pra cada produto selecionado
+    const produtoNomes: string[] = [];
+    if (produtos[0]) {
+      produtoNomes.push(cor1 ? `${produtos[0]} ${cor1}` : produtos[0]);
+    }
+    if (showProduto2 && modelo2) {
+      produtoNomes.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
+    }
+    // Se modo manual, usa o array produtos como antes
+    const produtosStr = produtoManual
+      ? produtos.filter(Boolean).join(" | ")
+      : produtoNomes.join(" | ") || produtos.filter(Boolean).join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
     const res = await fetch("/api/admin/entregas", {
@@ -265,7 +295,15 @@ export default function EntregasPage() {
         ...(isEdit ? { id: editingEntregaId } : {}),
         ...form,
         telefone: form.telefone || null,
-        endereco: form.endereco || null,
+        // Se local = SHOPPING, embute o nome do shopping no endereço pra ficar claro
+        endereco: (() => {
+          if (form.local_entrega === "SHOPPING" && form.shopping_nome) {
+            return form.endereco
+              ? `${form.shopping_nome} — ${form.endereco}`
+              : form.shopping_nome;
+          }
+          return form.endereco || null;
+        })(),
         bairro: form.bairro || null,
         horario: form.horario || null,
         entregador: form.entregador || null,
@@ -291,7 +329,9 @@ export default function EntregasPage() {
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
-      setCatSel(""); setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setCatSel(""); setCor1(""); setPreco1(0);
+      setShowProduto2(false); setCatSel2(""); setModelo2(""); setCor2(""); setPreco2(0);
+      setEstoqueId(""); setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
       setRastreio("");
       setModoSimples(false);
@@ -700,8 +740,9 @@ export default function EntregasPage() {
                         onClick={() => {
                           set("cliente", s.cliente);
                           if (s.telefone) set("telefone", s.telefone);
-                          if (s.endereco) set("endereco", s.endereco);
-                          if (s.bairro) set("bairro", s.bairro);
+                          // NÃO auto-preenche endereco — endereço de entrega pode ser
+                          // diferente do residencial (shopping, escritório, outra casa, etc).
+                          // bairro também fica em branco por padrão pelo mesmo motivo.
                           if (s.regiao) set("regiao", s.regiao);
                           setClienteUltimaCompra(s.ultima_compra);
                           setShowSugs(false);
@@ -741,12 +782,17 @@ export default function EntregasPage() {
               <input value={form.bairro} onChange={(e) => set("bairro", e.target.value)} placeholder="Ex: Barra da Tijuca" className={inputCls} />
             </div>
             <div className="col-span-2 md:col-span-3">
-              <p className={labelCls}>Endereco</p>
-              <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Endereco completo" className={inputCls} />
+              <p className={labelCls}>Endereço da Entrega</p>
+              <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} placeholder="Onde vai ser entregue (pode ser diferente do residencial)" className={inputCls} />
             </div>
             <div>
               <p className={labelCls}>Local de Entrega</p>
-              <select value={form.local_entrega} onChange={(e) => set("local_entrega", e.target.value)} className={inputCls}>
+              <select value={form.local_entrega} onChange={(e) => {
+                const v = e.target.value;
+                set("local_entrega", v);
+                // Se mudar de SHOPPING pra outro, limpa o nome do shopping
+                if (v !== "SHOPPING") set("shopping_nome", "");
+              }} className={inputCls}>
                 <option value="">-- Selecionar --</option>
                 <option value="RETIRADA">Retirada em Loja</option>
                 <option value="RESIDÊNCIA">Residência</option>
@@ -754,6 +800,32 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
+            {form.local_entrega === "SHOPPING" && (
+              <div className="col-span-2 md:col-span-2">
+                <p className={labelCls}>🏬 Qual shopping?</p>
+                <input
+                  value={form.shopping_nome}
+                  onChange={(e) => set("shopping_nome", e.target.value)}
+                  placeholder="Ex: Barra Shopping, Village Mall, Norte Shopping"
+                  list="shopping-sugestoes"
+                  className={inputCls}
+                />
+                <datalist id="shopping-sugestoes">
+                  <option value="Barra Shopping" />
+                  <option value="Village Mall" />
+                  <option value="New York City Center" />
+                  <option value="Shopping Metropolitano" />
+                  <option value="Bossa Nova Mall" />
+                  <option value="Downtown" />
+                  <option value="Norte Shopping" />
+                  <option value="Shopping Rio Sul" />
+                  <option value="Botafogo Praia Shopping" />
+                  <option value="Shopping Leblon" />
+                  <option value="Shopping Nova América" />
+                  <option value="Via Parque Shopping" />
+                </datalist>
+              </div>
+            )}
             {modoSimples && (
               <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
                 <p className={labelCls}>Produto (texto livre)</p>
@@ -793,65 +865,74 @@ export default function EntregasPage() {
                   <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
                 </div>
               ) : (
-                /* Modo simplificado — modelo + preço (sem cor/serial/origem) */
-                <div className="space-y-3">
-                  <div>
-                    <p className={labelCls}>Categoria</p>
-                    <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setEstoqueId(""); setProdutos([""]); set("valor", ""); }} className={inputCls}>
-                      <option value="">-- Selecionar --</option>
-                      {categorias.filter(([k]) => !k.endsWith("_SEMI")).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                    </select>
-                  </div>
+                /* Modo simplificado — modelo + cor (seleção do catálogo com preço automático) */
+                <ProdutoPicker
+                  titulo="Produto 1"
+                  categorias={categorias}
+                  estoque={estoque}
+                  catSel={catSel}
+                  setCatSel={(v) => { setCatSel(v); setCor1(""); setPreco1(0); setProdutos([""]); }}
+                  modeloSel={produtos[0] || ""}
+                  setModeloSel={(m, preco) => {
+                    setProdutos([m]);
+                    setPreco1(preco);
+                    setCor1("");
+                  }}
+                  corSel={cor1}
+                  setCorSel={setCor1}
+                  lookupPrecoVenda={lookupPrecoVenda}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                />
+              )}
 
-                  {catSel && (() => {
-                    // Agrupar por modelo base (sem cor, sem origem) e pegar preço médio
-                    const stripDetails = (nome: string) => nome
-                      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
-                      .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                      .replace(/-\s*E-?SIM/gi, "")
-                      .replace(/\s+(PRETO|BRANCO|PRATA|DOURADO|AZUL|VERDE|ROSA|ROXO|VERMELHO|AMARELO|ESTELAR|MEIA-NOITE|TEAL|ULTRAMARINO|LAVANDA|SAGE|MIDNIGHT|TITANIO\s*\w*|LARANJA\s*\w*|AZUL\s*\w*|PRETO\s*\w*|CINZA\s*\w*|DOURADO\s*\w*|BRANCO\s*\w*)\s*$/gi, "")
-                      .replace(/\s*-\s*$/, "")
-                      .replace(/\s{2,}/g, " ").trim();
-                    const byModel: Record<string, { totalQnt: number; avgCost: number; precoVenda: number; items: EstoqueItem[] }> = {};
-                    produtosFiltrados.forEach(p => {
-                      const model = stripDetails(p.produto);
-                      if (!byModel[model]) byModel[model] = { totalQnt: 0, avgCost: 0, precoVenda: 0, items: [] };
-                      byModel[model].totalQnt += p.qnt;
-                      byModel[model].items.push(p);
-                    });
-                    // Calcular preço médio por modelo + preço de venda (tabela global)
-                    Object.entries(byModel).forEach(([model, g]) => {
-                      const totalVal = g.items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                      g.avgCost = g.totalQnt > 0 ? Math.round(totalVal / g.totalQnt) : 0;
-                      g.precoVenda = lookupPrecoVenda(model);
-                    });
-                    const modelEntries = Object.entries(byModel).sort(([a], [b]) => a.localeCompare(b));
-                    return (
-                      <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                        {modelEntries.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto disponível</p>}
-                        {modelEntries.map(([model, { totalQnt, avgCost, precoVenda }]) => {
-                          const sel = produtos[0] === model;
-                          const precoBase = precoVenda > 0 ? precoVenda : avgCost;
-                          return (
-                            <button key={model} onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); return; }
-                              setProdutos([model]);
-                              set("valor", String(precoBase));
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                              <div>
-                                <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{model}</p>
-                                <p className="text-[10px] text-[#86868B]">{totalQnt} un. disponíveis · custo R$ {avgCost.toLocaleString("pt-BR")}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {precoBase.toLocaleString("pt-BR")}</p>
-                                <p className="text-[9px] text-[#86868B]">{precoVenda > 0 ? "tabela de venda" : "preço custo"}</p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+              {/* Produto 2 — opcional */}
+              {!produtoManual && !showProduto2 && produtos[0] && (
+                <button
+                  type="button"
+                  onClick={() => setShowProduto2(true)}
+                  className="w-full mt-2 px-4 py-2 rounded-xl border-2 border-dashed border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
+                >
+                  + Adicionar 2º produto
+                </button>
+              )}
+
+              {!produtoManual && showProduto2 && (
+                <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProduto2(false);
+                        setCatSel2("");
+                        setModelo2("");
+                        setCor2("");
+                        setPreco2(0);
+                      }}
+                      className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                    >
+                      ✕ Remover
+                    </button>
+                  </div>
+                  <ProdutoPicker
+                    titulo="Produto 2"
+                    categorias={categorias}
+                    estoque={estoque}
+                    catSel={catSel2}
+                    setCatSel={(v) => { setCatSel2(v); setCor2(""); setPreco2(0); setModelo2(""); }}
+                    modeloSel={modelo2}
+                    setModeloSel={(m, preco) => {
+                      setModelo2(m);
+                      setPreco2(preco);
+                      setCor2("");
+                    }}
+                    corSel={cor2}
+                    setCorSel={setCor2}
+                    lookupPrecoVenda={lookupPrecoVenda}
+                    inputCls={inputCls}
+                    labelCls={labelCls}
+                  />
                 </div>
               )}
             </div>
@@ -1819,6 +1900,7 @@ export default function EntregasPage() {
                         vendedor: e.vendedor || "",
                         regiao: e.regiao || "",
                         local_entrega: "",
+                        shopping_nome: "",
                       });
                       if (e.produto) setProdutos(e.produto.split(" | ").filter(Boolean));
                       if (e.detalhes_upgrade) {
