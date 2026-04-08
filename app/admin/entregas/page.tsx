@@ -4,7 +4,6 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
-import ProdutoPicker from "./ProdutoPicker";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -255,6 +254,35 @@ export default function EntregasPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel]);
 
+  // Produto 2 — mesma fonte (precosVenda) pra garantir nomes formatados igual ao produto 1
+  const produtosFiltradosPreco2 = useMemo(() => {
+    if (!catSel2) return [];
+    return precosVenda
+      .filter(p => p.categoria === catSel2)
+      .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [precosVenda, catSel2]);
+
+  // Cores reais do estoque para produto 2 (mesma lógica de coresDisponiveis)
+  const coresDisponiveis2 = useMemo(() => {
+    if (!modelo2) return [];
+    const prodSel = modelo2.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
+    const cores = new Set<string>();
+    for (const item of estoque) {
+      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+        continue;
+      }
+      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
+      if (matchCount >= Math.min(3, keywords.length - 1)) {
+        if (item.cor) cores.add(item.cor.toUpperCase());
+      }
+    }
+    return [...cores].sort();
+  }, [modelo2, estoque]);
+
   // Cores reais do estoque para o produto selecionado
   const coresDisponiveis = useMemo(() => {
     if (!produtos[0]) return [];
@@ -345,10 +373,13 @@ export default function EntregasPage() {
     const produtosStr = produtosFilled.join(" | ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
-    // Endereço de entrega final: local_detalhes (shopping/loja) tem prioridade, senão endereco_entrega, senão endereco cadastro
-    const enderecoEntregaFinal = form.local_detalhes?.trim()
-      ? form.local_detalhes.trim()
-      : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
+    // Endereço de entrega final: Shopping → shopping_nome; Outro → local_detalhes; senão endereco_entrega; fallback endereco cadastro
+    const enderecoEntregaFinal =
+      form.local_entrega === "SHOPPING" && form.shopping_nome?.trim()
+        ? form.shopping_nome.trim()
+        : form.local_entrega === "OUTRO" && form.local_detalhes?.trim()
+        ? form.local_detalhes.trim()
+        : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
     // Forma de pagamento detalhada
     let formaPagDetalhada = form.forma_pagamento || "";
     if ((form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && form.parcelas) {
@@ -753,7 +784,7 @@ export default function EntregasPage() {
                   if (r.cliente) set("cliente", r.cliente);
                   if (r.telefone) set("telefone", r.telefone);
                   if (r.bairro) set("bairro", r.bairro);
-                  if (r.endereco) set("endereco", r.endereco);
+                  if (r.endereco) { set("endereco", r.endereco); set("endereco_entrega", r.endereco); }
                   if (r.horario) set("horario", r.horario);
                   if (r.vendedor) set("vendedor", r.vendedor);
                   if (r.local_entrega) set("local_entrega", r.local_entrega);
@@ -817,9 +848,10 @@ export default function EntregasPage() {
                         onClick={() => {
                           set("cliente", s.cliente);
                           if (s.telefone) set("telefone", s.telefone);
-                          // NÃO auto-preenche endereco — endereço de entrega pode ser
-                          // diferente do residencial (shopping, escritório, outra casa, etc).
-                          // bairro também fica em branco por padrão pelo mesmo motivo.
+                          // Preenche endereco cadastro como referência (readonly).
+                          // O endereco_entrega é preenchido em branco — usuário decide.
+                          if (s.endereco) set("endereco", s.endereco);
+                          if (s.bairro) set("bairro", s.bairro);
                           if (s.regiao) set("regiao", s.regiao);
                           setClienteUltimaCompra(s.ultima_compra);
                           setShowSugs(false);
@@ -862,12 +894,7 @@ export default function EntregasPage() {
               <p className="text-xs font-bold text-[#86868B] uppercase tracking-wider">Endereços</p>
               <div>
                 <p className={labelCls}>Endereço do cliente (cadastro)</p>
-                <input value={form.endereco} onChange={(e) => {
-                  const v = e.target.value;
-                  set("endereco", v);
-                  // se o campo de entrega ainda não foi editado, espelha
-                  if (!form.endereco_entrega || form.endereco_entrega === form.endereco) set("endereco_entrega", v);
-                }} placeholder="Endereço cadastrado do cliente" className={inputCls} />
+                <input value={form.endereco} readOnly placeholder="Preenchido ao colar dados do cliente" className={`${inputCls} opacity-70 cursor-not-allowed`} />
               </div>
               <div>
                 <p className={labelCls}>Endereço de entrega</p>
@@ -879,8 +906,8 @@ export default function EntregasPage() {
               <select value={form.local_entrega} onChange={(e) => {
                 const v = e.target.value;
                 set("local_entrega", v);
-                // Se mudar de SHOPPING pra outro, limpa o nome do shopping
                 if (v !== "SHOPPING") set("shopping_nome", "");
+                if (v !== "OUTRO") set("local_detalhes", "");
               }} className={inputCls}>
                 <option value="">-- Selecionar --</option>
                 <option value="RETIRADA">Retirada em Loja</option>
@@ -889,10 +916,16 @@ export default function EntregasPage() {
                 <option value="OUTRO">Outro</option>
               </select>
             </div>
-            {(form.local_entrega === "SHOPPING" || form.local_entrega === "RESIDÊNCIA" || form.local_entrega === "OUTRO") && (
+            {form.local_entrega === "SHOPPING" && (
               <div className="col-span-2">
-                <p className={labelCls}>{form.local_entrega === "SHOPPING" ? "Shopping (nome + loja)" : form.local_entrega === "RESIDÊNCIA" ? "Detalhes residência" : "Detalhes"}</p>
-                <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder={form.local_entrega === "SHOPPING" ? "Ex: Carioca Shopping - Loja 234" : "Ex: Bloco A, Apto 301, Portaria 24h"} className={inputCls} />
+                <p className={labelCls}>Shopping (nome + loja)</p>
+                <input value={form.shopping_nome} onChange={(e) => set("shopping_nome", e.target.value)} placeholder="Ex: Carioca Shopping - Loja 234" className={inputCls} />
+              </div>
+            )}
+            {form.local_entrega === "OUTRO" && (
+              <div className="col-span-2">
+                <p className={labelCls}>Detalhes do local</p>
+                <input value={form.local_detalhes} onChange={(e) => set("local_detalhes", e.target.value)} placeholder="Ex: Escritório, recepção do prédio..." className={inputCls} />
               </div>
             )}
             {modoSimples && (
@@ -1001,24 +1034,43 @@ export default function EntregasPage() {
                           ✕ Remover
                         </button>
                       </div>
-                      <ProdutoPicker
-                        titulo="Produto 2"
-                        categorias={categorias}
-                        estoque={estoque}
-                        catSel={catSel2}
-                        setCatSel={(v) => { setCatSel2(v); setCor2(""); setPreco2(0); setModelo2(""); }}
-                        modeloSel={modelo2}
-                        setModeloSel={(m, preco) => {
-                          setModelo2(m);
-                          setPreco2(preco);
-                          setCor2("");
-                        }}
-                        corSel={cor2}
-                        setCorSel={setCor2}
-                        lookupPrecoVenda={lookupPrecoVenda}
-                        inputCls={inputCls}
-                        labelCls={labelCls}
-                      />
+                      <select value={catSel2} onChange={(e) => { setCatSel2(e.target.value); setModelo2(""); setPreco2(0); setCor2(""); }} className={inputCls}>
+                        <option value="">-- Categoria --</option>
+                        {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                      </select>
+                      {catSel2 && (
+                        <div className="max-h-[280px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                          {produtosFiltradosPreco2.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                          {produtosFiltradosPreco2.map((m) => {
+                            const sel = modelo2 === m.nome;
+                            return (
+                              <div key={m.nome}>
+                                <button type="button" onClick={() => {
+                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); return; }
+                                  setModelo2(m.nome);
+                                  setPreco2(m.preco);
+                                  setCor2("");
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                                  <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
+                                  <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                                </button>
+                                {sel && coresDisponiveis2.length > 0 && (
+                                  <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
+                                    <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {coresDisponiveis2.map(cor => (
+                                        <button key={cor} type="button" onClick={() => setCor2(cor2 === cor ? "" : cor)}
+                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${cor2 === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                        >{cor}</button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
