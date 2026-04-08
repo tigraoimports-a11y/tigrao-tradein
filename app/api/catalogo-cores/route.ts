@@ -30,16 +30,19 @@ export async function GET(req: NextRequest) {
     if (e2) return NextResponse.json({ modelos: {} });
 
     const idToNome: Record<string, string> = {};
-    for (const m of modelos) idToNome[m.id] = m.nome;
+    const idToCat: Record<string, string> = {};
+    for (const m of modelos) { idToNome[m.id] = m.nome; idToCat[m.id] = m.categoria_key || "OUTROS"; }
 
     const result: Record<string, string[]> = {};
+    const categorias: Record<string, string> = {};
     for (const c of configs ?? []) {
       const nome = idToNome[c.modelo_id];
       if (!nome) continue;
       if (!result[nome]) result[nome] = [];
       if (!result[nome].includes(c.valor)) result[nome].push(c.valor);
+      categorias[nome] = idToCat[c.modelo_id];
     }
-    return NextResponse.json({ modelos: result });
+    return NextResponse.json({ modelos: result, categorias });
   } catch (err) {
     return NextResponse.json({ modelos: {}, error: String(err) }, { status: 200 });
   }

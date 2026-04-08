@@ -66,6 +66,7 @@ function CompraForm() {
   const precoParam = searchParams.get("preco") || searchParams.get("v") || "";
   const vendedor = searchParams.get("vendedor") || "";
   const whatsapp = searchParams.get("whatsapp") || "";
+  const shortCode = searchParams.get("short") || "";
 
   // Trade-in params (vindos do StepQuote)
   const trocaProdutoParam = searchParams.get("troca_produto") || "";
@@ -457,6 +458,27 @@ function CompraForm() {
     if (pagEntrega) lines.push(pagEntrega);
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
+
+    // Se veio de um short link rastreável, devolve os dados preenchidos pro admin (fire-and-forget)
+    if (shortCode) {
+      const enderecoFullTxt = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
+      fetch(`/api/link-compras/${encodeURIComponent(shortCode)}/preenchimento`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dados: {
+            nome, cpf: pessoa === "PJ" ? "" : cpf, cnpj: pessoa === "PJ" ? cnpj : "", pessoa,
+            email, telefone, instagram,
+            cep, endereco, numero, complemento, bairro,
+            endereco_completo: enderecoFullTxt,
+            produto: produtoFinal, cor: corSel, preco: precoFinal,
+            forma_pagamento: pagStr,
+            local: localStr, horario, data_entrega: dataEntrega,
+            vendedor, origem,
+          },
+        }),
+      }).catch(() => {});
+    }
 
     const url = `https://wa.me/${whatsappFinal}?text=${encodeURIComponent(lines.join("\n"))}`;
     window.open(url, "_blank");

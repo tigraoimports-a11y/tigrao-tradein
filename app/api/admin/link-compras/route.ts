@@ -137,6 +137,7 @@ export async function POST(request: Request) {
     troca_produto2: body.troca_produto2 || null,
     troca_valor2: Number(body.troca_valor2) || 0,
     vendedor: body.vendedor || null,
+    operador: getUser(request),
     simulacao_id: body.simulacao_id || null,
     observacao: body.observacao || null,
   };
@@ -160,7 +161,14 @@ export async function PATCH(request: Request) {
   const { supabase } = await import("@/lib/supabase");
 
   const allowed: Record<string, unknown> = {};
-  for (const k of ["arquivado", "status", "observacao", "cliente_nome", "cliente_telefone", "cliente_cpf", "cliente_email"]) {
+  const editableFields = [
+    "arquivado", "status", "observacao",
+    "cliente_nome", "cliente_telefone", "cliente_cpf", "cliente_email",
+    "produto", "cor", "valor", "forma_pagamento", "parcelas", "entrada",
+    "troca_produto", "troca_valor", "troca_produto2", "troca_valor2",
+    "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
+  ];
+  for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
   }
   allowed.updated_at = new Date().toISOString();
