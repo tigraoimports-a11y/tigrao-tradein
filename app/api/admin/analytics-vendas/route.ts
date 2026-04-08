@@ -395,6 +395,72 @@ export async function GET(req: NextRequest) {
     };
 
     // ---------------------------------------------------------------
+    // 8. CORES MAIS VENDIDAS POR MODELO (current month)
+    //    Agrupa modelo base (sem cor/origem) e conta qntas de cada cor.
+    // ---------------------------------------------------------------
+    const stripDetails = (nome: string) => nome
+      .replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP|CH|AA|E|LZ|QL|N)\s*(\([^)]*\))?/gi, "")
+      .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+      .replace(/-\s*E-?SIM/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    // Lista de cores conhecidas para detectar cor no fim do nome do produto
+    const CORES_KNOWN = [
+      "PRETO", "BRANCO", "PRATA", "DOURADO", "AZUL", "VERDE", "ROSA", "ROXO",
+      "VERMELHO", "AMARELO", "ESTELAR", "MEIA-NOITE", "TEAL", "ULTRAMARINO",
+      "LAVANDA", "SAGE", "MIDNIGHT", "LARANJA", "CINZA", "NATURAL", "GRAFITE",
+      "TITANIO PRETO", "TITANIO BRANCO", "TITANIO NATURAL", "TITANIO AZUL",
+      "TITANIO DESERTO", "DEEP PURPLE", "PACIFIC BLUE", "ALPINE GREEN",
+      "SIERRA BLUE", "GRAPHITE", "JET BLACK",
+      "LARANJA CÓSMICO", "LARANJA COSMICO", "AZUL PROFUNDO", "AZUL NÉVOA",
+      "AZUL NEVOA", "AZUL CÉU", "AZUL CEU", "PRETO ESPACIAL", "CINZA ESPACIAL",
+      "DOURADO CLARO", "CLOUD WHITE", "SKY BLUE", "SALVIA", "SÁLVIA",
+      "PRETO BRILHANTE", "ÍNDIGO", "INDIGO", "BLUE TITANIUM", "BLACK TITANIUM",
+      "WHITE TITANIUM", "NATURAL TITANIUM", "DESERT TITANIUM",
+    ].sort((a, b) => b.length - a.length); // prefere match mais longo primeiro
+
+    const extractModeloCor = (nome: string): { modelo: string; cor: string } => {
+      const cleaned = stripDetails(nome);
+      const up = cleaned.toUpperCase();
+      // Tenta encontrar uma cor conhecida no fim do nome
+      for (const cor of CORES_KNOWN) {
+        const idx = up.lastIndexOf(cor);
+        if (idx >= 0 && idx + cor.length >= up.length - 3) {
+          // cor está no fim (tolerância de 3 chars para sufixos tipo "--sim")
+          const modelo = cleaned.substring(0, idx).trim().replace(/\s*-\s*$/, "").trim();
+          return { modelo, cor };
+        }
+      }
+      return { modelo: cleaned, cor: "" };
+    };
+
+    // modelo -> { totalQnt, cores: { cor -> qnt } }
+    const modeloCoresMap: Record<string, { totalQnt: number; cores: Record<string, number> }> = {};
+    for (const v of vendasMesAtual) {
+      const prod = v.produto || "";
+      if (!prod) continue;
+      const { modelo, cor } = extractModeloCor(prod);
+      if (!modelo) continue;
+      if (!modeloCoresMap[modelo]) modeloCoresMap[modelo] = { totalQnt: 0, cores: {} };
+      modeloCoresMap[modelo].totalQnt++;
+      const corKey = cor || "(sem cor)";
+      modeloCoresMap[modelo].cores[corKey] = (modeloCoresMap[modelo].cores[corKey] || 0) + 1;
+    }
+
+    // Top 15 modelos com suas cores ordenadas
+    const coresPorModelo = Object.entries(modeloCoresMap)
+      .map(([modelo, d]) => ({
+        modelo,
+        totalQnt: d.totalQnt,
+        cores: Object.entries(d.cores)
+          .map(([cor, qnt]) => ({ cor, qnt, pct: Math.round((qnt / d.totalQnt) * 100) }))
+          .sort((a, b) => b.qnt - a.qnt),
+      }))
+      .sort((a, b) => b.totalQnt - a.totalQnt)
+      .slice(0, 15);
+
+    // ---------------------------------------------------------------
     // RESPONSE
     // ---------------------------------------------------------------
     return NextResponse.json({
@@ -405,6 +471,7 @@ export async function GET(req: NextRequest) {
       origemClientes,
       vendasPorRegiao,
       projecao,
+      coresPorModelo,
     });
   } catch (err) {
     console.error("Erro analytics-vendas:", err);
