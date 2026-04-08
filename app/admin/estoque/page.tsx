@@ -5379,7 +5379,7 @@ export default function EstoquePage() {
                       )}
                       <div>
                         <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p>
-                        {canEdit ? (
+                        {(canEdit || isAdmin) ? (
                           <select
                             value={p.tipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : isLac ? "NOVO" : "SEMINOVO"}
                             onChange={async (e) => {
