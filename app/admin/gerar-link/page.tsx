@@ -273,6 +273,7 @@ export default function GerarLinkPage() {
     cliente_dados_preenchidos: Record<string, unknown> | null;
     cliente_preencheu_em: string | null;
     entrega_id: string | null;
+    observacao: string | null;
     arquivado: boolean;
     created_at: string;
   };
@@ -293,7 +294,15 @@ export default function GerarLinkPage() {
       params.set("arquivado", histArquivado);
       const res = await fetch(`/api/admin/link-compras?${params}`, { headers: adminHeaders() });
       const j = await res.json();
-      setHistLinks(j.data || []);
+      const rows = (j.data || []).map((r: LinkCompra & { produtos_extras: unknown }) => {
+        let pe: string[] | null = null;
+        if (Array.isArray(r.produtos_extras)) pe = r.produtos_extras as string[];
+        else if (typeof r.produtos_extras === "string") {
+          try { const parsed = JSON.parse(r.produtos_extras); pe = Array.isArray(parsed) ? parsed : null; } catch { pe = null; }
+        }
+        return { ...r, produtos_extras: pe };
+      });
+      setHistLinks(rows);
     } catch { /* ignore */ }
     setHistLoading(false);
   }
@@ -336,16 +345,36 @@ export default function GerarLinkPage() {
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
+  const [editLink, setEditLink] = useState<Record<string, string>>({});
   const [savingDados, setSavingDados] = useState(false);
 
   useEffect(() => {
-    if (viewDataLink?.cliente_dados_preenchidos) {
-      const src = viewDataLink.cliente_dados_preenchidos as Record<string, unknown>;
+    if (viewDataLink) {
+      const src = (viewDataLink.cliente_dados_preenchidos || {}) as Record<string, unknown>;
       const obj: Record<string, string> = {};
       for (const [k, v] of Object.entries(src)) obj[k] = v == null ? "" : String(v);
       setEditDados(obj);
+      setEditLink({
+        produto: viewDataLink.produto || "",
+        cor: viewDataLink.cor || "",
+        valor: viewDataLink.valor != null ? String(viewDataLink.valor) : "",
+        forma_pagamento: viewDataLink.forma_pagamento || "",
+        parcelas: viewDataLink.parcelas != null ? String(viewDataLink.parcelas) : "",
+        entrada: viewDataLink.entrada != null ? String(viewDataLink.entrada) : "",
+        vendedor: viewDataLink.vendedor || "",
+        cliente_nome: viewDataLink.cliente_nome || "",
+        cliente_telefone: viewDataLink.cliente_telefone || "",
+        cliente_cpf: viewDataLink.cliente_cpf || "",
+        cliente_email: viewDataLink.cliente_email || "",
+        troca_produto: viewDataLink.troca_produto || "",
+        troca_valor: viewDataLink.troca_valor != null ? String(viewDataLink.troca_valor) : "",
+        troca_produto2: viewDataLink.troca_produto2 || "",
+        troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
+        observacao: viewDataLink.observacao || "",
+      });
     } else {
       setEditDados({});
+      setEditLink({});
     }
   }, [viewDataLink]);
 
@@ -353,15 +382,34 @@ export default function GerarLinkPage() {
     if (!viewDataLink) return;
     setSavingDados(true);
     try {
-      const payload: Record<string, unknown> = { ...editDados };
-      // Recalcula endereco_completo se campos alterados
+      const dadosPayload: Record<string, unknown> = { ...editDados };
       if (editDados.endereco || editDados.numero || editDados.complemento) {
-        payload.endereco_completo = `${editDados.endereco || ""}${editDados.numero ? `, ${editDados.numero}` : ""}${editDados.complemento ? ` - ${editDados.complemento}` : ""}`.trim();
+        dadosPayload.endereco_completo = `${editDados.endereco || ""}${editDados.numero ? `, ${editDados.numero}` : ""}${editDados.complemento ? ` - ${editDados.complemento}` : ""}`.trim();
       }
+      const body: Record<string, unknown> = {
+        id: viewDataLink.id,
+        cliente_dados_preenchidos: dadosPayload,
+        produto: editLink.produto || null,
+        cor: editLink.cor || null,
+        valor: Number(editLink.valor) || 0,
+        forma_pagamento: editLink.forma_pagamento || null,
+        parcelas: editLink.parcelas ? Number(editLink.parcelas) : null,
+        entrada: Number(editLink.entrada) || 0,
+        vendedor: editLink.vendedor || null,
+        cliente_nome: editLink.cliente_nome || null,
+        cliente_telefone: editLink.cliente_telefone || null,
+        cliente_cpf: editLink.cliente_cpf || null,
+        cliente_email: editLink.cliente_email || null,
+        troca_produto: editLink.troca_produto || null,
+        troca_valor: Number(editLink.troca_valor) || 0,
+        troca_produto2: editLink.troca_produto2 || null,
+        troca_valor2: Number(editLink.troca_valor2) || 0,
+        observacao: editLink.observacao || null,
+      };
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
         headers: adminHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ id: viewDataLink.id, cliente_dados_preenchidos: payload }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -829,7 +877,7 @@ export default function GerarLinkPage() {
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between bg-gradient-to-r from-[#FFF8F2] to-white">
               <div>
-                <h3 className="text-base font-bold text-[#1D1D1F]">📋 Dados preenchidos pelo cliente</h3>
+                <h3 className="text-base font-bold text-[#1D1D1F]">✏️ Editar link</h3>
                 <p className="text-[11px] text-[#86868B] mt-0.5">
                   Link <span className="font-mono font-semibold">{viewDataLink.short_code}</span>
                   {viewDataLink.cliente_preencheu_em && <> · {new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR")}</>}
@@ -837,81 +885,133 @@ export default function GerarLinkPage() {
               </div>
               <button onClick={() => setViewDataLink(null)} className="text-xl text-[#86868B] hover:text-red-500 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50">✕</button>
             </div>
-            {viewDataLink.cliente_dados_preenchidos ? (
-              <>
-                <div className="overflow-y-auto p-5 space-y-5">
-                  {(() => {
-                    const F = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
-                      <div className={full ? "col-span-2" : ""}>
-                        <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
-                        <input
-                          type={type}
-                          value={editDados[k] || ""}
-                          onChange={(e) => setEditDados({ ...editDados, [k]: e.target.value })}
-                          className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
-                        />
+            <>
+              <div className="overflow-y-auto p-5 space-y-5">
+                {(() => {
+                  const FD = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
+                    <div className={full ? "col-span-2" : ""}>
+                      <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
+                      <input
+                        type={type}
+                        value={editDados[k] || ""}
+                        onChange={(e) => setEditDados({ ...editDados, [k]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                      />
+                    </div>
+                  );
+                  const FL = ({ label, k, type = "text", full = false }: { label: string; k: string; type?: string; full?: boolean }) => (
+                    <div className={full ? "col-span-2" : ""}>
+                      <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
+                      <input
+                        type={type}
+                        value={editLink[k] || ""}
+                        onChange={(e) => setEditLink({ ...editLink, [k]: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                      />
+                    </div>
+                  );
+                  const temDados = !!viewDataLink.cliente_dados_preenchidos;
+                  return (
+                    <>
+                      {/* Link — Pedido */}
+                      <section>
+                        <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <FL label="Produto" k="produto" full />
+                          <FL label="Cor" k="cor" />
+                          <FL label="Valor (R$)" k="valor" type="number" />
+                          <FL label="Forma de pagamento" k="forma_pagamento" />
+                          <FL label="Parcelas" k="parcelas" type="number" />
+                          <FL label="Entrada (R$)" k="entrada" type="number" full />
+                          <FL label="Vendedor" k="vendedor" full />
+                          <FL label="Observação" k="observacao" full />
+                        </div>
+                      </section>
+
+                      {/* Link — Cliente */}
+                      <section>
+                        <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">👤 Cliente (link)</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <FL label="Nome" k="cliente_nome" full />
+                          <FL label="Telefone" k="cliente_telefone" />
+                          <FL label="CPF" k="cliente_cpf" />
+                          <FL label="Email" k="cliente_email" type="email" full />
+                        </div>
+                      </section>
+
+                      {/* Troca */}
+                      {(editLink.troca_produto || editLink.troca_produto2 || viewDataLink.tipo === "TROCA") && (
+                        <section>
+                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🔄 Troca</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <FL label="Produto troca 1" k="troca_produto" full />
+                            <FL label="Valor troca 1 (R$)" k="troca_valor" type="number" full />
+                            <FL label="Produto troca 2" k="troca_produto2" full />
+                            <FL label="Valor troca 2 (R$)" k="troca_valor2" type="number" full />
+                          </div>
+                        </section>
+                      )}
+
+                      {/* Dados preenchidos pelo cliente */}
+                      <div className="border-t border-dashed border-[#D2D2D7] pt-4">
+                        <div className="mb-3">
+                          <h4 className="text-xs font-bold text-[#1D1D1F] uppercase tracking-wide">📋 Dados preenchidos pelo cliente</h4>
+                          {viewDataLink.cliente_preencheu_em && (
+                            <p className="text-[10px] text-[#86868B] mt-0.5">em {new Date(viewDataLink.cliente_preencheu_em).toLocaleString("pt-BR")}</p>
+                          )}
+                        </div>
+                        {!temDados ? (
+                          <p className="text-xs text-[#86868B] italic">Cliente ainda não preencheu.</p>
+                        ) : (
+                          <>
+                            <section className="mb-4">
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pessoa</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="Nome" k="nome" full />
+                                <FD label="Tipo" k="pessoa" />
+                                <FD label={editDados.pessoa === "PJ" ? "CNPJ" : "CPF"} k={editDados.pessoa === "PJ" ? "cnpj" : "cpf"} />
+                                <FD label="Telefone" k="telefone" />
+                                <FD label="Email" k="email" type="email" full />
+                                <FD label="Instagram" k="instagram" full />
+                              </div>
+                            </section>
+                            <section className="mb-4">
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Endereço</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="CEP" k="cep" />
+                                <FD label="Bairro" k="bairro" />
+                                <FD label="Rua" k="endereco" full />
+                                <FD label="Número" k="numero" />
+                                <FD label="Complemento" k="complemento" />
+                              </div>
+                            </section>
+                            <section>
+                              <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Entrega</h5>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FD label="Local" k="local" />
+                                <FD label="Origem" k="origem" />
+                                <FD label="Data entrega" k="data_entrega" type="date" />
+                                <FD label="Horário" k="horario" type="time" />
+                              </div>
+                            </section>
+                          </>
+                        )}
                       </div>
-                    );
-                    return (
-                      <>
-                        {/* Pessoa */}
-                        <section>
-                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">👤 Pessoa</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <F label="Nome" k="nome" full />
-                            <F label="Tipo" k="pessoa" />
-                            <F label={editDados.pessoa === "PJ" ? "CNPJ" : "CPF"} k={editDados.pessoa === "PJ" ? "cnpj" : "cpf"} />
-                            <F label="Telefone" k="telefone" />
-                            <F label="Email" k="email" type="email" full />
-                            <F label="Instagram" k="instagram" full />
-                          </div>
-                        </section>
-
-                        {/* Endereço */}
-                        <section>
-                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">📍 Endereço</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <F label="CEP" k="cep" />
-                            <F label="Bairro" k="bairro" />
-                            <F label="Rua" k="endereco" full />
-                            <F label="Número" k="numero" />
-                            <F label="Complemento" k="complemento" />
-                          </div>
-                        </section>
-
-                        {/* Pedido */}
-                        <section>
-                          <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2 flex items-center gap-1.5">🛒 Pedido</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <F label="Produto" k="produto" full />
-                            <F label="Cor" k="cor" />
-                            <F label="Preço (R$)" k="preco" />
-                            <F label="Forma de pagamento" k="forma_pagamento" full />
-                            <F label="Local" k="local" />
-                            <F label="Origem" k="origem" />
-                            <F label="Data entrega" k="data_entrega" type="date" />
-                            <F label="Horário" k="horario" type="time" />
-                            <F label="Vendedor" k="vendedor" full />
-                          </div>
-                        </section>
-                      </>
-                    );
-                  })()}
-                </div>
-                <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-end gap-2">
-                  <button onClick={() => setViewDataLink(null)} className="px-4 py-2 text-sm font-semibold text-[#86868B] hover:text-[#1D1D1F]">Cancelar</button>
-                  <button
-                    onClick={salvarDadosCliente}
-                    disabled={savingDados}
-                    className="px-4 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D4640A] disabled:opacity-50"
-                  >
-                    {savingDados ? "Salvando…" : "💾 Salvar alterações"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="p-10 text-center text-sm text-[#86868B]">Cliente ainda não preencheu.</div>
-            )}
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-end gap-2">
+                <button onClick={() => setViewDataLink(null)} className="px-4 py-2 text-sm font-semibold text-[#86868B] hover:text-[#1D1D1F]">Cancelar</button>
+                <button
+                  onClick={salvarDadosCliente}
+                  disabled={savingDados}
+                  className="px-4 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D4640A] disabled:opacity-50"
+                >
+                  {savingDados ? "Salvando…" : "💾 Salvar alterações"}
+                </button>
+              </div>
+            </>
           </div>
         </div>
       )}
