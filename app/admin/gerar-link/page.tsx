@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
+import { getModeloBase } from "@/lib/produto-display";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -49,7 +50,7 @@ export default function GerarLinkPage() {
   const [coresExtras, setCoresExtras] = useState<string[]>([]); // cor por índice extra (produto 2, 3, ...)
 
   // Fetch estoque para obter cores reais disponíveis + seminovos
-  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
+  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; categoria: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
   useEffect(() => {
     if (!adminPw) return;
     fetch("/api/estoque", { headers: adminHeaders() })
@@ -59,8 +60,8 @@ export default function GerarLinkPage() {
           setEstoqueItems(
             j.data
               .filter((p: { status?: string; qnt?: number }) => p.status === "EM ESTOQUE" && (p.qnt || 0) > 0)
-              .map((p: { produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
-                produto: p.produto, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
+              .map((p: { produto: string; categoria: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
+                produto: p.produto, categoria: p.categoria, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
               }))
           );
         }
@@ -68,14 +69,31 @@ export default function GerarLinkPage() {
       .catch(() => {});
   }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Seminovos disponíveis em tempo real
+  // Seminovos disponíveis em tempo real — agrupados por modelo base + cor
+  // (mesma lógica do /admin/estoque via getModeloBase)
   const seminovosDisponiveis = useMemo(() => {
-    return estoqueItems
-      .filter(p => p.tipo === "SEMINOVO")
-      .map(p => ({
-        nome: p.cor ? `${p.produto} ${p.cor}` : p.produto,
-        preco: p.preco_sugerido || 0,
-      }))
+    const map = new Map<string, { nome: string; preco: number; count: number }>();
+    for (const p of estoqueItems) {
+      if (p.tipo !== "SEMINOVO") continue;
+      const base = getModeloBase(p.produto, p.categoria || "SEMINOVOS");
+      const corPt = p.cor ? corParaPT(p.cor) : "";
+      const nome = corPt ? `${base} ${corPt}` : base;
+      const key = nome.toUpperCase();
+      const prev = map.get(key);
+      if (prev) {
+        // agrega preço médio ponderado (pula zeros)
+        if ((p.preco_sugerido || 0) > 0) {
+          prev.preco = prev.preco > 0
+            ? Math.round((prev.preco * prev.count + (p.preco_sugerido || 0)) / (prev.count + 1))
+            : (p.preco_sugerido || 0);
+          prev.count += 1;
+        }
+      } else {
+        map.set(key, { nome, preco: p.preco_sugerido || 0, count: (p.preco_sugerido || 0) > 0 ? 1 : 0 });
+      }
+    }
+    return Array.from(map.values())
+      .map(({ nome, preco }) => ({ nome, preco }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoqueItems]);
 
@@ -532,29 +550,7 @@ export default function GerarLinkPage() {
     const corQp = qp.get("cor");
     if (corQp) setCorSel(corQp.toUpperCase());
     const trocaProd = qp.get("troca_produto");
-    if (trocaProd) {
-      // Enriquece o nome do produto da troca com cor / bateria / obs vindas da simulação,
-      // já que o form de gerar-link não tem campos separados pra esses dados.
-      const corQ = qp.get("troca_cor") || "";
-      const batQ = qp.get("troca_bateria") || "";
-      const marcasQ = qp.get("troca_marcas_uso") || "";
-      const pecasQ = qp.get("troca_pecas_trocadas") || "";
-      const caixaQ = qp.get("troca_caixa_original") || "";
-      const obsQ = qp.get("troca_observacao") || "";
-      const extras: string[] = [];
-      if (corQ) extras.push(`Cor: ${corQ}`);
-      if (batQ) extras.push(`Bateria: ${batQ}%`);
-      if (obsQ) extras.push(obsQ);
-      else {
-        if (marcasQ === "nao") extras.push("Sem marcas de uso");
-        else if (marcasQ) extras.push(`Marcas: ${marcasQ}`);
-        if (pecasQ) extras.push(pecasQ);
-        if (caixaQ === "sim") extras.push("Com caixa original");
-        else if (caixaQ === "nao") extras.push("Sem caixa original");
-      }
-      setTrocaProduto(extras.length ? `${trocaProd} — ${extras.join(" — ")}` : trocaProd);
-      setTemTroca(true);
-    }
+    if (trocaProd) setTrocaProduto(trocaProd);
     const trocaVal = qp.get("troca_valor");
     if (trocaVal) {
       const n = Math.round(parseFloat(trocaVal));
