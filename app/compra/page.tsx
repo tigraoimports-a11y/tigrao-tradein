@@ -364,7 +364,7 @@ function CompraForm() {
     const parcelasCalc = parcelas ? (() => {
       const n = parseInt(parcelas);
       const taxa = TAXAS[n] ?? 0;
-      const total = Math.ceil(valorParcelarFinal * (1 + taxa / 100));
+      const total = valorParcelarFinal * (1 + taxa / 100);
       const vp = total / n;
       return { n, total, vp };
     })() : null;
@@ -372,19 +372,19 @@ function CompraForm() {
     // Forma de pagamento com detalhes completos
     let pagStr = formaPagamento;
     if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
-      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt(parcelasCalc.total)})`;
+      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)})`;
     } else if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
       if (entradaFinal > 0) {
-        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
+        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
       } else {
-        pagStr = `R$ ${fmt(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao`;
+        pagStr = `R$ ${fmt2(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao`;
       }
     } else if (formaPagamento === "Link de Pagamento" && parcelas) {
       pagStr = `Link de Pagamento — ${parcelas}x`;
     } else if (formaPagamento === "PIX") {
       pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {
-      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
+      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
     } else if (formaPagamento === "Debito") {
       pagStr = `Debito — R$ ${fmt(valorBaseFinal)}`;
     }
