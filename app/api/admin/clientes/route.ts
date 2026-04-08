@@ -266,19 +266,32 @@ export async function GET(req: NextRequest) {
   }>();
   const cpfToKey = new Map<string, string>();
 
+  // Normaliza nome: tira acentos, colapsa espaços, remove sufixos comuns de lojistas atacado
+  // ("ATACADO", "LOJA", "LOJAS", "STORE") pra unificar "021 TECH" e "021 TECH ATACADO".
+  const normalizeLojistaNome = (n: string) =>
+    n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toUpperCase()
+      .replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\b.*$/i, "")
+      .trim();
+
+  const cnpjToKey = new Map<string, string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const v of vendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
     const cpf = (v.cpf || "").trim();
+    const cnpj = (v.cnpj || "").trim();
 
     let key: string;
     if (cpf) {
       if (cpfToKey.has(cpf)) { key = cpfToKey.get(cpf)!; }
       else { key = `cpf:${cpf}`; cpfToKey.set(cpf, key); }
+    } else if (cnpj) {
+      if (cnpjToKey.has(cnpj)) { key = cnpjToKey.get(cnpj)!; }
+      else { key = `cnpj:${cnpj}`; cnpjToKey.set(cnpj, key); }
     } else {
-      key = `nome:${nome.toUpperCase()}`;
+      key = `nome:${normalizeLojistaNome(nome)}`;
     }
 
     if (!clienteMap.has(key)) {

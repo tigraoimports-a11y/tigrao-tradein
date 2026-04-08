@@ -247,6 +247,11 @@ export default function ClientesPage() {
   const fetchClientes = useCallback(async () => {
     if (!password) return;
     setLoading(true);
+    // Limpa state das outras tabs pra nao vazar info entre elas
+    setClientes([]);
+    setFornecedores([]);
+    setNotas([]);
+    setTotals({ total: 0, total_gasto: 0, total_compras: 0, total_investido: 0, total_em_estoque: 0, total_produtos: 0 });
     try {
       const params = new URLSearchParams({ tab });
       if (debouncedSearch) params.set("search", debouncedSearch);
