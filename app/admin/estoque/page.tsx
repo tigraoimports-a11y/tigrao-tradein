@@ -2898,10 +2898,24 @@ export default function EstoquePage() {
         type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
-        const normCmp = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+        // Normalização em tokens (igual gerar-link): geração 2ND/2º→2, remove GB/TB/MM/GPS/etc
+        const normGen = (s: string) => s
+          .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+          .replace(/(\d+)\s*[º°]/g, "$1")
+          .replace(/\bGENERATION\b/gi, "GEN")
+          .replace(/\bGERAÇÃO\b/gi, "GEN");
+        const stripRepoNoise = (s: string) => normGen(s)
+          .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+          .replace(/\b\d+\s*MM\b/gi, "")
+          .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+          .replace(/[""\(\)\+\-]/g, " ")
+          .replace(/\s+/g, " ").trim();
+        const STOP_REPO = new Set(["de","the","with","com","e","a","o","gen"]);
+        const tokenize = (s: string) => stripRepoNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP_REPO.has(t));
 
-        // Index de cores válidas por modelo do catálogo (normalizado)
-        const catalogCoresNorm = new Map<string, Set<string>>(); // nomeCatNorm → Set<corNorm>
+        // Index catálogo: nomeCat original → { tokens, cores normalizadas }
+        type CatEntry = { nomeCat: string; tokens: string[]; cores: Set<string> };
+        const catEntries: CatEntry[] = [];
         for (const [nomeCat, coresCat] of Object.entries(catalogoCoresMap)) {
           if (!coresCat) continue;
           const set = new Set<string>();
@@ -2910,19 +2924,22 @@ export default function EstoquePage() {
             const pt = COR_PT[c.toUpperCase()];
             if (pt) set.add(pt.toLowerCase());
           }
-          catalogCoresNorm.set(normCmp(nomeCat), set);
+          catEntries.push({ nomeCat, tokens: tokenize(nomeCat), cores: set });
         }
 
-        // Acha melhor entry do catálogo para um modelo do estoque (match por tokens)
-        const findCatCores = (baseModelo: string): Set<string> | null => {
-          const baseNorm = normCmp(baseModelo);
-          // exato
-          if (catalogCoresNorm.has(baseNorm)) return catalogCoresNorm.get(baseNorm)!;
-          // contains — maior match primeiro
-          const candidatos = [...catalogCoresNorm.keys()]
-            .filter(k => baseNorm.includes(k) || k.includes(baseNorm))
-            .sort((a, b) => b.length - a.length);
-          return candidatos[0] ? catalogCoresNorm.get(candidatos[0])! : null;
+        // Acha melhor entry do catálogo por tokens: todos tokens do catálogo devem estar no produto.
+        const findCatEntry = (baseModelo: string): CatEntry | null => {
+          const baseTokens = new Set(tokenize(baseModelo));
+          let best: CatEntry | null = null;
+          let bestCount = 0;
+          for (const e of catEntries) {
+            if (e.tokens.length === 0) continue;
+            if (e.tokens.every(t => baseTokens.has(t)) && e.tokens.length > bestCount) {
+              best = e;
+              bestCount = e.tokens.length;
+            }
+          }
+          return best;
         };
 
         // Agrupar estoque por categoria → modelo base (preservando variantes)
@@ -2933,7 +2950,6 @@ export default function EstoquePage() {
 
         for (const p of novos) {
           const base = getModeloBase(p.produto, p.categoria).toUpperCase();
-          if (reposicaoOcultos.has(base)) continue;
           const cat = p.categoria || "OUTROS";
           const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
           if (!corRaw) continue;
@@ -2960,10 +2976,13 @@ export default function EstoquePage() {
           }
         }
 
-        // Converter + filtrar cores que não estão no catálogo
+        // Converter + filtrar cores que não estão no catálogo + aplicar hide via modal
         for (const [cat, catMap] of acc.entries()) {
           for (const [base, baseMap] of catMap.entries()) {
-            const catCores = findCatCores(base);
+            const catEntry = findCatEntry(base);
+            // Hide via modal: usuário oculta pelo nome do catálogo
+            if (catEntry && reposicaoOcultos.has(catEntry.nomeCat)) continue;
+            const catCores = catEntry?.cores || null;
             const grupo: RepoGroup[] = [];
             for (const [corNorm, dados] of baseMap.entries()) {
               // Se tem catálogo, filtra. Se não tem, mostra tudo.
