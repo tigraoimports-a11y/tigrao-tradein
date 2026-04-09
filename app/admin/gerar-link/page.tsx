@@ -1698,6 +1698,17 @@ export default function GerarLinkPage() {
                       className={inputCls + " resize-none"}
                     />
                   </div>
+                  {trocaCondicao2 && (
+                    <div className={`p-2.5 rounded-lg text-xs ${dm ? "bg-purple-900/30 text-purple-300" : "bg-purple-50 text-purple-700"}`}>
+                      <span className="font-semibold">Condição:</span> {trocaCondicao2}
+                    </div>
+                  )}
+                  {trocaCor2 && (
+                    <div className="flex items-center gap-2">
+                      <label className={labelCls + " mb-0"}>Cor do usado:</label>
+                      <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{trocaCor2}</span>
+                    </div>
+                  )}
                   <div>
                     <label className={labelCls}>Valor de Avaliacao do 2º Usado (R$)</label>
                     <input
