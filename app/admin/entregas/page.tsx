@@ -543,6 +543,10 @@ export default function EntregasPage() {
         detalhes_upgrade: trocasStr || null,
         forma_pagamento: formaPagDetalhada || null,
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
+        // Campos estruturados pra exibicao detalhada no modal
+        entrada: form.forma_pagamento_2 && /pix/i.test(form.forma_pagamento_2) && form.valor_2 ? parseFloat(form.valor_2) : null,
+        parcelas: form.parcelas ? parseInt(form.parcelas) : null,
+        valor_total: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
       }),
