@@ -404,7 +404,7 @@ export default function EncomendasPage() {
     setSaving(true);
     setMsg("");
     const body: Record<string, unknown> = {
-      cliente: form.cliente,
+      cliente: form.cliente.toUpperCase(),
       whatsapp: form.whatsapp || null,
       cpf: form.cpf || null,
       email: form.email || null,
@@ -547,6 +547,85 @@ export default function EncomendasPage() {
   // ─── Status change ─────────────────────────────────────────────────────────
 
   const handleStatusChange = async (enc: Encomenda, newStatus: string) => {
+    // Finalizar: confirmar e criar venda
+    if (newStatus === "FINALIZADO") {
+      if (!confirm(`Finalizar encomenda de ${enc.cliente} como venda?\n\nIsso vai registrar uma venda com os dados da encomenda.`)) return;
+      try {
+        // Buscar serial do estoque vinculado (se houver)
+        let serialNo = "";
+        let imei = "";
+        let estoqueIdFinal = enc.estoque_id || null;
+        if (enc.estoque_id) {
+          const estoqueRes = await fetch(`/api/estoque`, { headers: hdrs() });
+          if (estoqueRes.ok) {
+            const estoqueJson = await estoqueRes.json();
+            const item = (estoqueJson.data ?? []).find((p: { id: string }) => p.id === enc.estoque_id);
+            if (item) { serialNo = item.serial_no || ""; imei = item.imei || ""; }
+          }
+        }
+        // Criar venda
+        const vendaBody: Record<string, unknown> = {
+          data: hojeBR(),
+          cliente: enc.cliente,
+          cpf: enc.cpf || null,
+          email: enc.email || null,
+          produto: enc.produto,
+          fornecedor: enc.fornecedor || null,
+          custo: enc.custo || 0,
+          preco_vendido: enc.valor_venda || 0,
+          forma: enc.forma_pagamento || "PIX",
+          banco: enc.banco_sinal || "ITAU",
+          recebimento: "D+0",
+          origem: "ENCOMENDA",
+          tipo: "VENDA",
+          serial_no: serialNo || null,
+          imei: imei || null,
+          _estoque_id: estoqueIdFinal,
+          // Troca
+          produto_na_troca: enc.troca_valor || 0,
+          troca_produto: enc.troca_produto || null,
+          troca_cor: enc.troca_cor || null,
+          troca_categoria: enc.troca_categoria || null,
+          troca_bateria: enc.troca_bateria || null,
+          troca_grade: enc.troca_grade || null,
+          troca_caixa: enc.troca_caixa || null,
+          troca_obs: enc.troca_obs || null,
+          // Troca 2
+          produto_na_troca2: enc.troca_valor2 || 0,
+          troca_produto2: enc.troca_produto2 || null,
+          troca_cor2: enc.troca_cor2 || null,
+          troca_categoria2: enc.troca_categoria2 || null,
+          sinal_antecipado: enc.sinal_recebido || 0,
+          banco_sinal: enc.banco_sinal || null,
+        };
+        const vendaRes = await fetch("/api/vendas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hdrs() },
+          body: JSON.stringify(vendaBody),
+        });
+        const vendaJson = await vendaRes.json();
+        if (vendaJson.id || vendaJson.data?.id) {
+          const vendaId = vendaJson.id || vendaJson.data?.id;
+          // Atualizar encomenda com venda_id e status
+          await fetch("/api/encomendas", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", ...hdrs() },
+            body: JSON.stringify({ id: enc.id, status: "FINALIZADO", venda_id: vendaId }),
+          });
+          setEncomendas(prev => prev.map(e => e.id === enc.id ? { ...e, status: "FINALIZADO", venda_id: vendaId } : e));
+          setMsg("Encomenda finalizada! Venda registrada.");
+          setTimeout(() => setMsg(""), 5000);
+          return;
+        } else {
+          alert("Erro ao criar venda: " + (vendaJson.error || "desconhecido"));
+          return;
+        }
+      } catch (err) {
+        alert("Erro: " + String(err));
+        return;
+      }
+    }
+
     await fetch("/api/encomendas", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...hdrs() },
