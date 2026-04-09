@@ -205,19 +205,43 @@ export async function POST(req: NextRequest) {
   }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Abater crédito do lojista (se solicitado)
+  // Abater crédito do lojista (se solicitado) — usa tabela `lojistas` (saldo_credito),
+  // mesma fonte de verdade da tela Clientes/Lojistas e do lookup na Nova Venda.
   if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO") && body.cliente) {
     try {
-      const { moverCredito } = await import("@/lib/lojistas-credito");
-      await moverCredito({
-        cliente: { nome: body.cliente, cpf: body.cpf, cnpj: body.cnpj },
-        tipo: "DEBITO",
-        valor: usarCreditoLoja,
-        venda_id: data?.id,
-        motivo: `Venda ${data?.id?.slice(0, 8)}`,
-        usuario,
-      });
-      await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+      // 1) Localiza o lojista por cpf/cnpj/nome
+      const normNome = String(body.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+      const cpfDig = String(body.cpf || "").replace(/\D/g, "");
+      const cnpjDig = String(body.cnpj || "").replace(/\D/g, "");
+      let lojistaId: string | null = null;
+      if (cpfDig) {
+        const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
+        if (l) lojistaId = l.id;
+      }
+      if (!lojistaId && cnpjDig) {
+        const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
+        if (l) lojistaId = l.id;
+      }
+      if (!lojistaId && normNome) {
+        const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", normNome);
+        if (ls && ls.length > 0) {
+          const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+          lojistaId = alvo.id;
+        }
+      }
+      if (lojistaId) {
+        await supabase.rpc("mover_saldo_lojista", {
+          p_lojista_id: lojistaId,
+          p_tipo: "DEBITO",
+          p_valor: usarCreditoLoja,
+          p_venda_id: data?.id || null,
+          p_motivo: `Venda ${data?.id?.slice(0, 8)}`,
+          p_usuario: usuario,
+        });
+        await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+      } else {
+        console.warn("[Vendas] Crédito solicitado mas lojista não encontrado:", body.cliente);
+      }
     } catch (e) {
       console.error("[Vendas] Erro ao debitar crédito lojista:", e);
     }
@@ -730,21 +754,46 @@ export async function DELETE(req: NextRequest) {
   // Buscar venda antes de deletar (para limpar seminovo se houver)
   const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
 
-  // Se lojista pediu pra manter como crédito, creditar antes de apagar
+  // Se lojista pediu pra manter como crédito, creditar antes de apagar (usa tabela `lojistas`)
   if (devolver_como_credito && venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO") && venda.cliente) {
     const valorCredito = Number(venda.preco_vendido || 0);
     if (valorCredito > 0) {
       try {
-        const { moverCredito } = await import("@/lib/lojistas-credito");
-        await moverCredito({
-          cliente: { nome: venda.cliente, cpf: venda.cpf, cnpj: venda.cnpj },
-          tipo: "CREDITO",
-          valor: valorCredito,
-          venda_id: id,
-          motivo: `Cancelamento venda ${String(id).slice(0, 8)} → crédito`,
-          usuario,
-        });
-        await logActivity(usuario, "Venda cancelada → crédito lojista", `${venda.cliente}: +R$${valorCredito}`, "vendas", id);
+        const normNome = String(venda.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const cpfDig = String(venda.cpf || "").replace(/\D/g, "");
+        const cnpjDig = String(venda.cnpj || "").replace(/\D/g, "");
+        let lojistaId: string | null = null;
+        if (cpfDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && cnpjDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && normNome) {
+          const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", normNome);
+          if (ls && ls.length > 0) {
+            const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+            lojistaId = alvo.id;
+          }
+        }
+        if (!lojistaId) {
+          // Auto-cria lojista antes de creditar
+          const { data: created } = await supabase.from("lojistas").insert({ nome: venda.cliente, cpf: venda.cpf || null, cnpj: venda.cnpj || null, saldo_credito: 0 }).select("id").single();
+          if (created) lojistaId = created.id;
+        }
+        if (lojistaId) {
+          await supabase.rpc("mover_saldo_lojista", {
+            p_lojista_id: lojistaId,
+            p_tipo: "CREDITO",
+            p_valor: valorCredito,
+            p_venda_id: id,
+            p_motivo: `Cancelamento venda ${String(id).slice(0, 8)} → crédito`,
+            p_usuario: usuario,
+          });
+          await logActivity(usuario, "Venda cancelada → crédito lojista", `${venda.cliente}: +R$${valorCredito}`, "vendas", id);
+        }
       } catch (e) {
         console.error("[Vendas] Erro ao creditar lojista:", e);
       }

@@ -18,6 +18,35 @@ export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCacheHeaders });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  const nome = searchParams.get("nome");
+  const cpf = searchParams.get("cpf");
+  const cnpj = searchParams.get("cnpj");
+  // Busca por nome/cpf/cnpj — retorna { lojista, saldo } (saldo = saldo_credito)
+  if (!id && (nome || cpf || cnpj)) {
+    // Prioriza cpf > cnpj > nome (ilike pra normalizar espaços/caixa)
+    const normNome = (nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    const onlyDigits = (s: string | null) => (s || "").replace(/\D/g, "");
+    const cpfDig = onlyDigits(cpf);
+    const cnpjDig = onlyDigits(cnpj);
+    let lojista: Record<string, unknown> | null = null;
+    if (cpfDig) {
+      const { data } = await supabase.from("lojistas").select("*").eq("cpf", cpfDig).maybeSingle();
+      if (data) lojista = data;
+    }
+    if (!lojista && cnpjDig) {
+      const { data } = await supabase.from("lojistas").select("*").eq("cnpj", cnpjDig).maybeSingle();
+      if (data) lojista = data;
+    }
+    if (!lojista && normNome) {
+      // Busca case/accent-insensitive: puxa todos e compara normalizado (fallback seguro)
+      const { data } = await supabase.from("lojistas").select("*").ilike("nome", normNome);
+      if (data && data.length > 0) {
+        const alvo = data.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || data[0];
+        lojista = alvo;
+      }
+    }
+    return NextResponse.json({ lojista, saldo: Number((lojista as { saldo_credito?: number } | null)?.saldo_credito || 0) }, { headers: noCacheHeaders });
+  }
   if (id) {
     const { data: lojista, error } = await supabase.from("lojistas").select("*").eq("id", id).maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCacheHeaders });

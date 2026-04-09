@@ -1114,9 +1114,9 @@ export default function EntregasPage() {
                               setProdutos([m.nome]);
                               set("valor", String(m.preco));
                               setCorSel("");
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
-                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                             </button>
                             {sel && coresDisponiveis.length > 0 && (
                               <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
@@ -1148,8 +1148,8 @@ export default function EntregasPage() {
                               setProdutos([g.nome]);
                               set("valor", "");
                               setCorSel("");
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{g.nome}</p>
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{g.nome}</p>
                               <p className={`text-xs font-medium ${sel ? "text-[#E8740E]" : "text-[#86868B]"}`}>{qtdTotal} un.</p>
                             </button>
                             {sel && (
@@ -1220,7 +1220,7 @@ export default function EntregasPage() {
                                   setModelo2(m.nome);
                                   setPreco2(m.preco);
                                   setCor2("");
-                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                                   <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
                                   <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                                 </button>
@@ -1819,9 +1819,9 @@ export default function EntregasPage() {
         return (
           <div className="space-y-3">
             {aguardando.length > 0 && (
-              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl overflow-hidden">
-                <div className="px-4 py-2 bg-yellow-100 border-b-2 border-yellow-300">
-                  <p className="text-xs font-bold text-yellow-800 uppercase">
+              <div className={`rounded-xl overflow-hidden border-2 ${dm ? "bg-yellow-900/20 border-yellow-600/60" : "bg-yellow-50 border-yellow-300"}`}>
+                <div className={`px-4 py-2 border-b-2 ${dm ? "bg-yellow-900/40 border-yellow-600/60" : "bg-yellow-100 border-yellow-300"}`}>
+                  <p className={`text-xs font-bold uppercase ${dm ? "text-yellow-200" : "text-yellow-800"}`}>
                     ⏳ Aguardando motoboy ({aguardando.length})
                   </p>
                 </div>
@@ -2145,14 +2145,21 @@ export default function EntregasPage() {
                         const m = (e.forma_pagamento || "").match(/Total\s*R?\$?\s*([\d.,]+)/i);
                         if (m) total = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
                       }
-                      const naoEntrada = Math.max(0, total - entrada);
-                      const valorParcela = parcelas > 0 ? naoEntrada / parcelas : 0;
+                      // Detecta se a forma envolve cartão de crédito / link (aplica taxa)
+                      const fp = (e.forma_pagamento || "").toLowerCase();
+                      const isCartao = fp.includes("cart") || fp.includes("link");
+                      const taxaPct = isCartao && parcelas > 0 ? (TAXAS_PARCELAS[parcelas] || 0) : 0;
+                      // Base a parcelar = total − entrada (assume que entrada NÃO passa no cartão)
+                      const baseParcelar = Math.max(0, total - entrada);
+                      const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
+                      const totalFinal = entrada + baseComTaxa;
+                      const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
                       if (total <= 0 && parcelas <= 0) return null;
                       return (
                         <div className="mt-1 pl-2 text-xs text-[#86868B] space-y-0.5">
-                          {total > 0 && <p>Total: <strong className="text-[#1D1D1F]">R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
+                          {total > 0 && <p>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {totalFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>{taxaPct > 0 && <span className="text-[10px]"> (base R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + taxa {taxaPct}%)</span>}</p>}
                           {entrada > 0 && <p>Entrada: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
-                          {parcelas > 1 && valorParcela > 0 && <p>{parcelas}x de <strong className="text-[#1D1D1F]">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>}
+                          {parcelas > 1 && valorParcela > 0 && <p>{parcelas}x de <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>}
                         </div>
                       );
                     })()}

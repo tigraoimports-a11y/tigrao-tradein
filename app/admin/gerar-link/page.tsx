@@ -972,21 +972,35 @@ export default function GerarLinkPage() {
                           const valor = Number(editLink.valor || 0);
                           const entrada = Number(editLink.entrada || 0);
                           const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
-                          const valorFinal = Math.max(0, valor - entrada - troca);
-                          const parcelas = Number(editLink.parcelas || 0);
-                          const valorParcela = parcelas > 0 ? valorFinal / parcelas : 0;
+                          const parcelasN = Number(editLink.parcelas || 0);
+                          const forma = editLink.forma_pagamento || "";
+                          const isCartao = forma === "Cartao Credito" || forma === "Link de Pagamento";
+                          // Restante após entrada e troca é o que parcela (taxa só cai sobre ele)
+                          const restante = Math.max(0, valor - entrada - troca);
+                          const taxaPct = isCartao && parcelasN > 0 ? (TAXAS[parcelasN] || 0) : 0;
+                          const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
+                          const valorFinal = entrada + restanteComTaxa;
+                          const valorParcela = parcelasN > 0 ? restanteComTaxa / parcelasN : 0;
                           if (valor <= 0) return null;
+                          const boxCls = dm ? "bg-[#14301F] border-[#1F5A38]" : "bg-green-50 border-green-200";
+                          const titleCls = dm ? "text-green-300" : "text-green-800";
+                          const mutedCls = dm ? "text-[#98989D]" : "text-[#86868B]";
+                          const valCls = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+                          const sepCls = dm ? "border-[#1F5A38]" : "border-green-300";
                           return (
-                            <div className="mt-3 p-3 rounded-xl bg-green-50 border border-green-200 text-xs space-y-1">
-                              <p className="font-bold text-green-800 uppercase tracking-wide text-[10px]">💳 Resumo do pagamento</p>
-                              <div className="flex justify-between"><span className="text-[#86868B]">Valor do produto</span><span className="font-mono text-[#1D1D1F]">R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
-                              {entrada > 0 && <div className="flex justify-between"><span className="text-[#86868B]">− Entrada</span><span className="font-mono text-[#1D1D1F]">R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
-                              {troca > 0 && <div className="flex justify-between"><span className="text-[#86868B]">− Troca abatida</span><span className="font-mono text-[#1D1D1F]">R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
-                              <div className="flex justify-between pt-1 border-t border-green-300"><span className="font-bold text-green-800">Valor final a pagar</span><span className="font-mono font-bold text-green-800">R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
-                              {parcelas > 1 && valorParcela > 0 && (
-                                <div className="flex justify-between text-[#86868B]"><span>{parcelas}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                            <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${boxCls}`}>
+                              <p className={`font-bold uppercase tracking-wide text-[10px] ${titleCls}`}>💳 Resumo do pagamento</p>
+                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {entrada > 0 && <div className="flex justify-between"><span className={mutedCls}>− Entrada</span><span className={`font-mono ${valCls}`}>R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {troca > 0 && <div className="flex justify-between"><span className={mutedCls}>− Troca abatida</span><span className={`font-mono ${valCls}`}>R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {taxaPct > 0 && (
+                                <div className="flex justify-between"><span className={mutedCls}>Taxa {parcelasN}x ({taxaPct}%)</span><span className={`font-mono ${valCls}`}>+R$ {(restanteComTaxa - restante).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
                               )}
-                              {editLink.forma_pagamento && <p className="text-[10px] text-[#86868B] pt-1">Forma: <strong className="text-[#1D1D1F]">{editLink.forma_pagamento}</strong></p>}
+                              <div className={`flex justify-between pt-1 border-t ${sepCls}`}><span className={`font-bold ${titleCls}`}>Valor final a pagar</span><span className={`font-mono font-bold ${titleCls}`}>R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {parcelasN > 1 && valorParcela > 0 && (
+                                <div className={`flex justify-between ${mutedCls}`}><span>{parcelasN}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                              )}
+                              {editLink.forma_pagamento && <p className={`text-[10px] pt-1 ${mutedCls}`}>Forma: <strong className={valCls}>{editLink.forma_pagamento}</strong></p>}
                             </div>
                           );
                         })()}
