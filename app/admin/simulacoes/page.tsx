@@ -850,10 +850,12 @@ export default function AdminPage() {
                       storage_usado: modalRow.storage_usado || "",
                       cor_usado: modalRow.cor_usado || "",
                       avaliacao_usado: String(modalRow.avaliacao_usado || 0),
+                      condicao_linhas: (modalRow.condicao_linhas || []).join("\n"),
                       modelo_usado2: modalRow.modelo_usado2 || "",
                       storage_usado2: modalRow.storage_usado2 || "",
                       cor_usado2: modalRow.cor_usado2 || "",
                       avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
+                      condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
                     });
                     setEditMode(true);
                   }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
@@ -867,6 +869,7 @@ export default function AdminPage() {
                       <input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} placeholder="Storage" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                       <input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} placeholder="Cor" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                     </div>
+                    <textarea value={editData.condicao_linhas || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas: e.target.value }))} placeholder="Condição (uma por linha: Saude bateria 89%, Sem marcas de uso, etc.)" rows={3} className="w-full px-2 py-1 text-xs rounded border border-[#D2D2D7] resize-none" />
                     <input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} placeholder="Avaliação (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                     {modalRow.modelo_usado2 && (
                       <>
@@ -876,6 +879,7 @@ export default function AdminPage() {
                           <input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} placeholder="Storage 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                           <input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} placeholder="Cor 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                         </div>
+                        <textarea value={editData.condicao_linhas2 || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas2: e.target.value }))} placeholder="Condição 2 (uma por linha)" rows={3} className="w-full px-2 py-1 text-xs rounded border border-[#D2D2D7] resize-none" />
                         <input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} placeholder="Avaliação 2 (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
                       </>
                     )}
@@ -890,10 +894,10 @@ export default function AdminPage() {
                           const res = await fetch("/api/admin/simulacoes", {
                             method: "PATCH",
                             headers: { "x-admin-password": password, "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, diferenca: dif }),
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [], modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null, diferenca: dif }),
                           });
                           if (res.ok) {
-                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [], modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
                             setEditMode(false);
                             fetchData(password);
                           } else { alert("Erro ao salvar"); }
