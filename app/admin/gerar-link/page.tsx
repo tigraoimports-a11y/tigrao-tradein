@@ -967,14 +967,23 @@ export default function GerarLinkPage() {
                           <FL label="Vendedor" k="vendedor" full />
                           <FL label="Observação" k="observacao" full />
                         </div>
-                        {/* Resumo do pagamento */}
+                        {/* Resumo do pagamento (usa tabela de taxas INSTALLMENT_RATES) */}
                         {(() => {
                           const valor = Number(editLink.valor || 0);
                           const entrada = Number(editLink.entrada || 0);
                           const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
                           const valorFinal = Math.max(0, valor - entrada - troca);
                           const parcelas = Number(editLink.parcelas || 0);
-                          const valorParcela = parcelas > 0 ? valorFinal / parcelas : 0;
+                          const isCartao = /cart[aã]o|credito|link/i.test(String(editLink.forma_pagamento || ""));
+                          // Tabela de taxas (sync com lib/calculations.ts)
+                          const RATES: Record<number, number> = {
+                            1: 1.04, 2: 1.05, 3: 1.055, 4: 1.06, 5: 1.07, 6: 1.075, 7: 1.08,
+                            8: 1.091, 9: 1.10, 10: 1.11, 11: 1.12, 12: 1.13, 13: 1.14, 14: 1.15,
+                            15: 1.16, 16: 1.17, 17: 1.18, 18: 1.19, 19: 1.20, 20: 1.21, 21: 1.22,
+                          };
+                          const coef = isCartao && parcelas >= 1 && RATES[parcelas] ? RATES[parcelas] : 1;
+                          const totalCartao = valorFinal * coef;
+                          const valorParcela = parcelas > 0 ? totalCartao / parcelas : 0;
                           if (valor <= 0) return null;
                           return (
                             <div className="mt-3 p-3 rounded-xl bg-green-50 border border-green-200 text-xs space-y-1">
@@ -982,9 +991,13 @@ export default function GerarLinkPage() {
                               <div className="flex justify-between"><span className="text-[#86868B]">Valor do produto</span><span className="font-mono text-[#1D1D1F]">R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
                               {entrada > 0 && <div className="flex justify-between"><span className="text-[#86868B]">− Entrada</span><span className="font-mono text-[#1D1D1F]">R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {troca > 0 && <div className="flex justify-between"><span className="text-[#86868B]">− Troca abatida</span><span className="font-mono text-[#1D1D1F]">R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
-                              <div className="flex justify-between pt-1 border-t border-green-300"><span className="font-bold text-green-800">Valor final a pagar</span><span className="font-mono font-bold text-green-800">R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
-                              {parcelas > 1 && valorParcela > 0 && (
-                                <div className="flex justify-between text-[#86868B]"><span>{parcelas}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                              <div className="flex justify-between pt-1 border-t border-green-300"><span className="font-bold text-green-800">Valor base a pagar</span><span className="font-mono font-bold text-green-800">R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {isCartao && parcelas >= 1 && coef > 1 && (
+                                <>
+                                  <div className="flex justify-between text-[10px] text-[#86868B]"><span>Taxa cartão ({parcelas}x)</span><span className="font-mono">+{((coef - 1) * 100).toFixed(1)}%</span></div>
+                                  <div className="flex justify-between pt-1 border-t border-green-300"><span className="font-bold text-green-800">Total no cartão</span><span className="font-mono font-bold text-green-800">R$ {totalCartao.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                                  <div className="flex justify-between text-[#1D1D1F] font-semibold"><span>{parcelas}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                                </>
                               )}
                               {editLink.forma_pagamento && <p className="text-[10px] text-[#86868B] pt-1">Forma: <strong className="text-[#1D1D1F]">{editLink.forma_pagamento}</strong></p>}
                             </div>
