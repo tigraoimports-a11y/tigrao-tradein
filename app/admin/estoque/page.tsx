@@ -3835,6 +3835,93 @@ export default function EstoquePage() {
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
                 <div className="space-y-4">
+                  {/* Resumo por origem + botão WhatsApp atacado */}
+                  {aCaminho.length > 0 && (
+                    <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border space-y-3`}>
+                      {/* Resumo por origem */}
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const origemConfig: Record<string, { emoji: string; label: string; prazo: string }> = {
+                            EUA: { emoji: "🇺🇸", label: "EUA", prazo: "25-30 dias" },
+                            PARAGUAI: { emoji: "🇵🇾", label: "Paraguai", prazo: "~15 dias" },
+                            SAO_PAULO: { emoji: "🚚", label: "São Paulo", prazo: "1 dia" },
+                            RJ: { emoji: "🏙️", label: "Rio de Janeiro", prazo: "mesmo dia" },
+                          };
+                          const byOrigem: Record<string, number> = {};
+                          let semOrigem = 0;
+                          for (const p of aCaminho) {
+                            if (p.origem_compra && origemConfig[p.origem_compra]) {
+                              byOrigem[p.origem_compra] = (byOrigem[p.origem_compra] || 0) + p.qnt;
+                            } else {
+                              semOrigem += p.qnt;
+                            }
+                          }
+                          return (
+                            <>
+                              {Object.entries(byOrigem).map(([orig, qnt]) => {
+                                const c = origemConfig[orig];
+                                return (
+                                  <span key={orig} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"} border ${dm ? "border-[#48484A]" : "border-[#D2D2D7]"}`}>
+                                    {c.emoji} {c.label}: <b>{qnt} un.</b> <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>({c.prazo})</span>
+                                  </span>
+                                );
+                              })}
+                              {semOrigem > 0 && (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} border ${dm ? "border-[#48484A]" : "border-[#E5E5EA]"}`}>
+                                  📦 Sem origem: <b>{semOrigem} un.</b>
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      {/* Botão copiar texto atacado */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
+                          <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const catEmoji: Record<string, string> = { IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
+                            const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios" };
+                            const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+                            const groups: Record<string, string[]> = {};
+                            for (const p of aCaminho) {
+                              const cat = p.categoria || "OUTROS";
+                              if (!groups[cat]) groups[cat] = [];
+                              const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
+                                .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+                                .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
+                                .replace(/\s{2,}/g, " ").trim();
+                              const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
+                              groups[cat].push(`${nome}${cor}`);
+                            }
+                            const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
+                            const sortedCatsAtacado = Object.keys(groups).sort((a, b) => {
+                              const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                            });
+                            for (const cat of sortedCatsAtacado) {
+                              const emoji = catEmoji[cat] || "📦";
+                              const label = catLabel[cat] || cat;
+                              lines.push(`${emoji} *${label}*`);
+                              const seen = new Set<string>();
+                              for (const item of groups[cat]) {
+                                if (!seen.has(item)) { seen.add(item); lines.push(item); }
+                              }
+                              lines.push("");
+                            }
+                            navigator.clipboard.writeText(lines.join("\n").trim());
+                            setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                          }}
+                          className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                        >
+                          📋 Copiar Texto Atacado
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {sortedDates.filter(date => {
                     // Ocultar pedidos onde todos os itens já foram recebidos (exceto se filtrando por recebidos)
                     if (acaminhoFilter === "recebidos") return true;
