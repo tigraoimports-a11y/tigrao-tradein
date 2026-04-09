@@ -1038,6 +1038,14 @@ export default function GerarLinkPage() {
                         <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
                         <div className="grid grid-cols-2 gap-3">
                           <FL label="Produto" k="produto" full />
+                          {editLink.produtos_extras && Array.isArray(editLink.produtos_extras) && editLink.produtos_extras.length > 0 && (
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Produtos extras</label>
+                              {editLink.produtos_extras.map((pe: string, i: number) => (
+                                <p key={i} className="text-sm px-3 py-1.5 rounded-lg border border-[#D2D2D7] mb-1">{pe}</p>
+                              ))}
+                            </div>
+                          )}
                           <FL label="Cor" k="cor" />
                           <FL label="Valor (R$)" k="valor" type="number" />
                           <FL label="Forma de pagamento" k="forma_pagamento" />
@@ -1048,7 +1056,9 @@ export default function GerarLinkPage() {
                         </div>
                         {/* Resumo do pagamento */}
                         {(() => {
-                          const valor = Number(editLink.valor || 0);
+                          const valorBruto = Number(editLink.valor || 0);
+                          const descontoLink = Number(editLink.desconto || 0);
+                          const valor = valorBruto - descontoLink;
                           const entrada = Number(editLink.entrada || 0);
                           const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
                           const parcelasN = Number(editLink.parcelas || 0);
@@ -1069,7 +1079,8 @@ export default function GerarLinkPage() {
                           return (
                             <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${boxCls}`}>
                               <p className={`font-bold uppercase tracking-wide text-[10px] ${titleCls}`}>💳 Resumo do pagamento</p>
-                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valorBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {descontoLink > 0 && <div className="flex justify-between"><span className="text-blue-500">− Desconto</span><span className="font-mono text-blue-500">R$ {descontoLink.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {entrada > 0 && <div className="flex justify-between"><span className={mutedCls}>− Entrada</span><span className={`font-mono ${valCls}`}>R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {troca > 0 && <div className="flex justify-between"><span className={mutedCls}>− Troca abatida</span><span className={`font-mono ${valCls}`}>R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {taxaPct > 0 && (
