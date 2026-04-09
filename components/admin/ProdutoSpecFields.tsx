@@ -16,6 +16,10 @@ import {
   MAC_MINI_NUCLEOS,
   MAC_MINI_RAMS,
   MAC_MINI_STORAGES,
+  MAC_STUDIO_CHIPS,
+  MAC_STUDIO_NUCLEOS,
+  MAC_STUDIO_RAMS,
+  MAC_STUDIO_STORAGES,
   CORES_POR_CATEGORIA,
   COR_OBRIGATORIA,
   getIphoneCores,
@@ -80,15 +84,34 @@ function inferSpecFromCatalogModel(nome: string, categoria: string): Partial<Pro
   if (categoria === "IPHONES") {
     s.ip_modelo = nome.replace(/^iPhone\s+/i, "").toUpperCase();
   } else if (categoria === "IPADS") {
-    // Extrai geração (ex: "iPad Air 5º" → "5", "iPad Pro 2ª" → "2")
-    const geracaoMatch = nome.match(/(\d+)\s*[ºª°]?/);
-    const geracao = geracaoMatch ? ` ${geracaoMatch[1]}` : "";
-    if (/mini/i.test(nome)) s.ipad_modelo = `MINI${geracao}`.trim();
-    else if (/air/i.test(nome)) s.ipad_modelo = `AIR${geracao}`.trim();
-    else if (/pro/i.test(nome)) s.ipad_modelo = `PRO${geracao}`.trim();
+    const n = nome.toLowerCase();
+    // Mini
+    if (/mini/.test(n)) {
+      if (/mini\s*7/.test(n)) s.ipad_modelo = "MINI 7";
+      else if (/mini\s*6/.test(n)) s.ipad_modelo = "MINI 6";
+      else s.ipad_modelo = "MINI 6";
+    }
+    // Pro — checar M4 primeiro
+    else if (/pro/.test(n)) {
+      const is13 = /13|12\.9/.test(n);
+      if (/m4/.test(n)) s.ipad_modelo = is13 ? "PRO M4 13" : "PRO M4 11";
+      else s.ipad_modelo = is13 ? "PRO 12.9" : "PRO 11";
+    }
+    // Air
+    else if (/air/.test(n)) {
+      if (/m4/.test(n)) s.ipad_modelo = "AIR M4";
+      else if (/m3/.test(n)) s.ipad_modelo = "AIR M3";
+      else if (/m2/.test(n)) s.ipad_modelo = "AIR M2";
+      else if (/\b5\b/.test(n)) s.ipad_modelo = "AIR 5";
+      else if (/\b4\b/.test(n)) s.ipad_modelo = "AIR 4";
+      else s.ipad_modelo = "AIR M4";
+    }
     else s.ipad_modelo = "IPAD";
+    // Chip separado — só preenche se NÃO estiver já embutido no ipad_modelo
+    const modeloStr = (s.ipad_modelo || "").toUpperCase();
     const chip = nome.match(/\b(M\d+(\s+(PRO|MAX))?|A\d+)\b/i);
-    s.ipad_chip = chip ? chip[1].toUpperCase() : "";
+    const chipStr = chip ? chip[1].toUpperCase() : "";
+    s.ipad_chip = chipStr && !modeloStr.includes(chipStr) ? chipStr : "";
   } else if (categoria === "MACBOOK") {
     if (/air/i.test(nome)) s.mb_modelo = "AIR";
     else if (/neo/i.test(nome)) s.mb_modelo = "NEO";
@@ -296,6 +319,8 @@ export default function ProdutoSpecFields({
   const ssdOptionsFinal = cfgOr("ssd", MACBOOK_STORAGES);
   const macMiniRamOptions = cfgOr("ram", MAC_MINI_RAMS);
   const macMiniSsdOptions = cfgOr("ssd", MAC_MINI_STORAGES);
+  const macStudioRamOptions = cfgOr("ram", MAC_STUDIO_RAMS);
+  const macStudioSsdOptions = cfgOr("ssd", MAC_STUDIO_STORAGES);
   // Núcleos: usa chip_air ou chip_pro_max do catálogo (configurado por modelo)
   // Se tem modelo do catálogo selecionado, mostra APENAS o que está configurado
   // Se não tem modelo do catálogo, usa fallback hardcoded
@@ -308,6 +333,9 @@ export default function ProdutoSpecFields({
   const mmNucleosOptions = hasCatalogModel
     ? macNucleosCatalog
     : MAC_MINI_NUCLEOS.map(n => `(${n})`);
+  const msNucleosOptions = hasCatalogModel
+    ? macNucleosCatalog
+    : MAC_STUDIO_NUCLEOS.map(n => `(${n})`);
   const awTamanhoOptions = cfgOr("tamanho_aw", WATCH_TAMANHOS_FULL);
   const awConnOptions = cfgOr("conectividade_aw", ["GPS", "GPS + CEL"]);
   const awBandOptions = cfgOr("pulseiras", WATCH_BAND_MODELS);
@@ -716,25 +744,65 @@ export default function ProdutoSpecFields({
         </div>
       )}
 
+      {/* Mac Studio specs */}
+      {row.categoria === "MAC_STUDIO" && (
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 p-3 ${bgSection} rounded-lg`}>
+          {!categoryModelos.length && (
+            <div>
+              <p className={labelCls}>Chip</p>
+              <select value={row.spec.ms_chip} onChange={(e) => setSpec("ms_chip", e.target.value)} className={inputCls}>
+                {MAC_STUDIO_CHIPS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {msNucleosOptions.length > 0 && (
+            <div>
+              <p className={labelCls}>Núcleos</p>
+              <select value={row.spec.ms_nucleos} onChange={(e) => setSpec("ms_nucleos", e.target.value)} className={inputCls}>
+                <option value="">— Selecionar —</option>
+                {msNucleosOptions.map((n) => {
+                  const clean = n.replace(/^\(|\)$/g, "").trim();
+                  return <option key={clean} value={clean}>{clean}</option>;
+                })}
+              </select>
+            </div>
+          )}
+          <div>
+            <p className={labelCls}>RAM</p>
+            <select value={row.spec.ms_ram} onChange={(e) => setSpec("ms_ram", e.target.value)} className={inputCls}>
+              {macStudioRamOptions?.map((r) => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className={labelCls}>Armazenamento</p>
+            <select value={row.spec.ms_storage} onChange={(e) => setSpec("ms_storage", e.target.value)} className={inputCls}>
+              {macStudioSsdOptions?.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* iPad specs */}
       {row.categoria === "IPADS" && (
         <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 p-3 ${bgSection} rounded-lg`}>
-          <div>
-            <p className={labelCls}>Modelo</p>
-            <select value={row.spec.ipad_modelo} onChange={(e) => setSpec("ipad_modelo", e.target.value)} className={inputCls}>
-              <option value="IPAD">iPad</option>
-              <option value="MINI 6">iPad Mini 6</option>
-              <option value="MINI 7">iPad Mini 7</option>
-              <option value="AIR 4">iPad Air 4</option>
-              <option value="AIR 5">iPad Air 5</option>
-              <option value="AIR 6">iPad Air 6</option>
-              <option value="AIR 7">iPad Air 7</option>
-              <option value="PRO 11">iPad Pro 11"</option>
-              <option value="PRO 12.9">iPad Pro 12.9"</option>
-              <option value="PRO M4 11">iPad Pro M4 11"</option>
-              <option value="PRO M4 13">iPad Pro M4 13"</option>
-            </select>
-          </div>
+          {!row.catalogo_modelo_id && (
+            <div>
+              <p className={labelCls}>Modelo</p>
+              <select value={row.spec.ipad_modelo} onChange={(e) => setSpec("ipad_modelo", e.target.value)} className={inputCls}>
+                <option value="IPAD">iPad</option>
+                <option value="MINI 6">iPad Mini 6</option>
+                <option value="MINI 7">iPad Mini 7</option>
+                <option value="AIR 4">iPad Air 4</option>
+                <option value="AIR 5">iPad Air 5</option>
+                <option value="AIR 6">iPad Air 6</option>
+                <option value="AIR 7">iPad Air 7</option>
+                <option value="PRO 11">iPad Pro 11"</option>
+                <option value="PRO 12.9">iPad Pro 12.9"</option>
+                <option value="PRO M4 11">iPad Pro M4 11"</option>
+                <option value="PRO M4 13">iPad Pro M4 13"</option>
+              </select>
+            </div>
+          )}
           <div>
             <p className={labelCls}>Tela</p>
             <select value={row.spec.ipad_tela} onChange={(e) => setSpec("ipad_tela", e.target.value)} className={inputCls}>

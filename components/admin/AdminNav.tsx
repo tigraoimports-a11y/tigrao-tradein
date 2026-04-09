@@ -62,6 +62,7 @@ const NAV: NavEntry[] = [
     label: "Operacional", icon: "\u{1F69A}",
     items: [
       { href: "/admin/entregas", label: "Entregas", icon: "\u{1F69A}", pageKey: "entregas" },
+      { href: "/admin/avisos-clientes", label: "Avisos para Clientes", icon: "\u{1F4E2}", pageKey: "avisos_clientes" },
       { href: "/admin/calculadora-taxas", label: "Calculadora Taxas", icon: "\u{1F4F1}", pageKey: "calculadora_taxas" },
       { href: "/admin/orcamento", label: "Gerador de Orcamentos", icon: "\u{1F4B0}", pageKey: "orcamento" },
       { href: "/admin/calculadora", label: "Calculadora de Encomendas", icon: "\u{1F9EE}", pageKey: "calculadora" },

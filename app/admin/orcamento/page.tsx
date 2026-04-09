@@ -303,27 +303,27 @@ export default function OrcamentoPage() {
       linhas.push(`💰 R$ ${entradaVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX de entrada`);
       if (sorted.length === 1) {
         const taxa = getTaxaOrcamento(sorted[0]);
-        const vp = Math.ceil(restante * (1 + taxa / 100) / sorted[0]);
-        linhas.push(`💳 O restante parcelado ficaria ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+        const vp = restante * (1 + taxa / 100) / sorted[0];
+        linhas.push(`💳 O restante parcelado ficaria ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} no cartão`);
       } else {
         linhas.push(`💳 O restante parcelado ficaria:`);
         for (const n of sorted) {
           const taxa = getTaxaOrcamento(n);
-          const vp = Math.ceil(restante * (1 + taxa / 100) / n);
-          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+          const vp = restante * (1 + taxa / 100) / n;
+          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
         }
       }
     } else {
       if (sorted.length === 1) {
         const taxa = getTaxaOrcamento(sorted[0]);
-        const vp = Math.ceil(precoPix * (1 + taxa / 100) / sorted[0]);
-        linhas.push(`💳 ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no cartão`);
+        const vp = precoPix * (1 + taxa / 100) / sorted[0];
+        linhas.push(`💳 ${sorted[0]}x R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} no cartão`);
       } else {
         linhas.push(`💳 Parcelado no cartão:`);
         for (const n of sorted) {
           const taxa = getTaxaOrcamento(n);
-          const vp = Math.ceil(precoPix * (1 + taxa / 100) / n);
-          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+          const vp = precoPix * (1 + taxa / 100) / n;
+          linhas.push(`     • ${n}x de R$ ${vp.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
         }
       }
       linhas.push(`💰 Ou R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} à vista no PIX`);

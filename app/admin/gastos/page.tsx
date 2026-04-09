@@ -561,13 +561,39 @@ export default function GastosPage() {
   const grupos = useMemo(() => agruparGastos(gastos), [gastos]);
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [categoriasExcluidas, setCategoriasExcluidas] = useState<Set<string>>(new Set());
+  // Filtro de mês (YYYY-MM). Default = mês atual.
+  const [filtroMes, setFiltroMes] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const toggleCategoria = (cat: string) => setCategoriasExcluidas(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
   const gruposFiltrados = useMemo(() => {
     let result = grupos;
+    if (filtroMes) result = result.filter(g => (g.data || "").startsWith(filtroMes));
     if (filtroCategoria) result = result.filter(g => g.categoria === filtroCategoria);
     if (categoriasExcluidas.size > 0) result = result.filter(g => !categoriasExcluidas.has(g.categoria));
     return result;
-  }, [grupos, filtroCategoria, categoriasExcluidas]);
+  }, [grupos, filtroMes, filtroCategoria, categoriasExcluidas]);
+  const shiftMes = (delta: number) => setFiltroMes(prev => {
+    // Se não tem filtro (Todos), começa do mês atual
+    const hoje = new Date();
+    let y: number, m: number;
+    if (prev && /^\d{4}-\d{2}$/.test(prev)) {
+      [y, m] = prev.split("-").map(Number);
+    } else {
+      y = hoje.getFullYear();
+      m = hoje.getMonth() + 1;
+    }
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const mesLabel = useMemo(() => {
+    if (!filtroMes || !/^\d{4}-\d{2}$/.test(filtroMes)) return "Todos";
+    const [y, m] = filtroMes.split("-").map(Number);
+    if (!y || !m || m < 1 || m > 12) return "Todos";
+    const nomes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    return `${nomes[m - 1]} ${y}`;
+  }, [filtroMes]);
   const categoriasUsadas = useMemo(() => [...new Set(grupos.map(g => g.categoria))].sort(), [grupos]);
   // Agrupar por data
   const gruposPorData = useMemo(() => {
@@ -1097,34 +1123,64 @@ export default function GastosPage() {
               <p className="text-xl font-bold text-red-500">{fmt(gruposFiltrados.filter(g => !g.is_dep_esp).reduce((s, g) => s + g.totalValor, 0))}</p>
               <p className="text-[10px] text-[#86868B]">{gruposFiltrados.filter(g => !g.is_dep_esp).length} registros</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
+            {/* Filtro de mês */}
+            <div className={`flex items-center gap-1 border rounded-xl px-2 py-1.5 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+              <button onClick={() => shiftMes(-1)} className={`px-2 py-1 rounded-lg text-sm font-bold ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`} title="Mês anterior">‹</button>
+              <input
+                type="month"
+                value={filtroMes}
+                onChange={(e) => setFiltroMes(e.target.value)}
+                className={`text-xs font-semibold px-2 py-1 rounded-lg border-0 outline-none ${dm ? "bg-[#1C1C1E] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"}`}
+              />
+              <span className={`text-xs font-bold px-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{mesLabel}</span>
+              <button onClick={() => shiftMes(1)} className={`px-2 py-1 rounded-lg text-sm font-bold ${dm ? "hover:bg-[#2C2C2E] text-[#F5F5F7]" : "hover:bg-[#F5F5F7] text-[#1D1D1F]"}`} title="Próximo mês">›</button>
+              {filtroMes && <button onClick={() => setFiltroMes("")} className="text-[10px] text-[#E8740E] underline ml-1">Todos</button>}
+            </div>
+            {/* Filtro de categorias — chip com 3 estados: neutro, incluir, excluir */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!filtroCategoria && categoriasExcluidas.size === 0 ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
                 Todas
               </button>
-              {categoriasUsadas.map(c => (
-                <button key={c} onClick={() => { setCategoriasExcluidas(new Set()); setFiltroCategoria(filtroCategoria === c ? "" : c); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filtroCategoria === c ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
-                  {c}
-                </button>
-              ))}
+              {categoriasUsadas.map(c => {
+                const isIncluded = filtroCategoria === c;
+                const isExcluded = categoriasExcluidas.has(c);
+                // Click cycles: neutro → incluir (só essa) → excluir (esconder) → neutro
+                const cycleFilter = () => {
+                  if (isIncluded) {
+                    // incluir → excluir
+                    setFiltroCategoria("");
+                    setCategoriasExcluidas(new Set([c]));
+                  } else if (isExcluded) {
+                    // excluir → neutro
+                    const novo = new Set(categoriasExcluidas);
+                    novo.delete(c);
+                    setCategoriasExcluidas(novo);
+                  } else {
+                    // neutro → incluir
+                    setCategoriasExcluidas(new Set());
+                    setFiltroCategoria(c);
+                  }
+                };
+                let cls = dm ? "bg-[#2C2C2E] text-[#98989D] border border-[#3A3A3C]" : "bg-white border border-[#D2D2D7] text-[#86868B]";
+                let icon = "";
+                if (isIncluded) { cls = "bg-[#E8740E] text-white border border-[#E8740E]"; icon = "✓ "; }
+                else if (isExcluded) { cls = "bg-red-100 text-red-700 border border-red-300 line-through"; icon = "✕ "; }
+                return (
+                  <button key={c} onClick={cycleFilter}
+                    title="Clique: só essa · 2x: esconder · 3x: limpar"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:border-[#E8740E] ${cls}`}>
+                    {icon}{c}
+                  </button>
+                );
+              })}
+              {(filtroCategoria || categoriasExcluidas.size > 0) && (
+                <button onClick={() => { setFiltroCategoria(""); setCategoriasExcluidas(new Set()); }}
+                  className="text-[10px] text-[#E8740E] underline ml-1">Limpar filtros</button>
+              )}
             </div>
-            {/* Checkbox: excluir categorias */}
-            {!filtroCategoria && (
-              <div className={`w-full border rounded-xl p-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
-                <p className="text-[10px] text-[#86868B] uppercase tracking-wider font-semibold mb-2">Excluir categorias:</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {categoriasUsadas.map(c => (
-                    <label key={c} className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={categoriasExcluidas.has(c)} onChange={() => toggleCategoria(c)}
-                        className="w-3.5 h-3.5 rounded accent-[#E8740E]" />
-                      <span className={`text-xs ${categoriasExcluidas.has(c) ? "line-through text-[#86868B]" : dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{c}</span>
-                    </label>
-                  ))}
-                  {categoriasExcluidas.size > 0 && (
-                    <button onClick={() => setCategoriasExcluidas(new Set())} className="text-[10px] text-[#E8740E] underline ml-2">Limpar</button>
-                  )}
-                </div>
-              </div>
-            )}
+            <p className="text-[10px] text-[#86868B] -mt-1">Clique 1x pra ver só essa · 2x pra esconder · 3x pra limpar</p>
           </div>
 
           {/* Gastos agrupados por data */}

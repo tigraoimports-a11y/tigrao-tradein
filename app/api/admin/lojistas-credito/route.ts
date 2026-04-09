@@ -1,0 +1,100 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
+import { buildClienteKey, moverCredito } from "@/lib/lojistas-credito";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  "Pragma": "no-cache",
+};
+
+function auth(req: NextRequest) {
+  const pw = req.headers.get("x-admin-password");
+  return pw === process.env.ADMIN_PASSWORD;
+}
+function getUsuario(req: NextRequest) {
+  return decodeURIComponent(req.headers.get("x-admin-user") || "sistema");
+}
+
+// ── GET: saldo + extrato de um lojista (ou lista todos) ──
+export async function GET(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCacheHeaders });
+  const { searchParams } = new URL(req.url);
+  const cpf = searchParams.get("cpf");
+  const cnpj = searchParams.get("cnpj");
+  const nome = searchParams.get("nome");
+  if (!cpf && !cnpj && !nome) {
+    // lista todos com saldo > 0
+    const { data, error } = await supabase
+      .from("lojistas_credito")
+      .select("*")
+      .gt("saldo", 0)
+      .order("saldo", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCacheHeaders });
+    return NextResponse.json({ lojistas: data || [], _count: data?.length ?? 0, _ts: Date.now() }, { headers: noCacheHeaders });
+  }
+  // Tenta achar por cpf, depois cnpj, depois nome (ordem de prioridade)
+  const keys: string[] = [];
+  if (cpf) keys.push(buildClienteKey({ cpf }));
+  if (cnpj) keys.push(buildClienteKey({ cnpj }));
+  if (nome) keys.push(buildClienteKey({ nome }));
+  let lojista: Record<string, unknown> | null = null;
+  for (const k of keys) {
+    const { data } = await supabase
+      .from("lojistas_credito")
+      .select("*")
+      .eq("cliente_key", k)
+      .maybeSingle();
+    if (data) { lojista = data; break; }
+  }
+  if (!lojista) return NextResponse.json({ lojista: null, saldo: 0, log: [] }, { headers: noCacheHeaders });
+  const { data: log } = await supabase
+    .from("lojistas_credito_log")
+    .select("*")
+    .eq("lojista_id", lojista.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  return NextResponse.json({ lojista, saldo: Number(lojista.saldo || 0), log: log || [] }, { headers: noCacheHeaders });
+}
+
+// ── DELETE: zera saldo e apaga linha de um lojista específico (ou ?all=1 pra limpar tudo) ──
+export async function DELETE(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const usuario = getUsuario(req);
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("all") === "1") {
+    const { error } = await supabase.from("lojistas_credito").delete().gt("saldo", -1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await logActivity(usuario, "Crédito lojistas BULK reset", "Zerou todos os saldos", "clientes");
+    return NextResponse.json({ ok: true, bulk: true });
+  }
+  const cpf = searchParams.get("cpf");
+  const cnpj = searchParams.get("cnpj");
+  const nome = searchParams.get("nome");
+  if (!cpf && !cnpj && !nome) return NextResponse.json({ error: "cpf, cnpj ou nome obrigatório" }, { status: 400 });
+  const key = buildClienteKey({ cpf, cnpj, nome });
+  const { error } = await supabase.from("lojistas_credito").delete().eq("cliente_key", key);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await logActivity(usuario, "Crédito lojista apagado", `${nome || cpf || cnpj}`, "clientes");
+  return NextResponse.json({ ok: true });
+}
+
+// ── POST: movimentar manualmente (AJUSTE / CREDITO / DEBITO) ──
+export async function POST(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const usuario = getUsuario(req);
+  const body = await req.json();
+  const { cliente, tipo, valor, motivo } = body;
+  if (!cliente?.nome) return NextResponse.json({ error: "cliente.nome obrigatório" }, { status: 400 });
+  if (!["CREDITO", "DEBITO", "AJUSTE"].includes(tipo)) return NextResponse.json({ error: "tipo inválido" }, { status: 400 });
+  try {
+    const res = await moverCredito({ cliente, tipo, valor: Number(valor), motivo, usuario });
+    await logActivity(usuario, `Crédito lojista (${tipo})`, `${cliente.nome}: R$${valor} — ${motivo || "sem motivo"}`, "clientes");
+    return NextResponse.json({ ok: true, ...res });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "erro" }, { status: 400 });
+  }
+}

@@ -18,24 +18,74 @@ export async function GET(req: NextRequest) {
   // Autocomplete de clientes — busca em entregas E vendas, retorna última compra
   if (searchClientes) {
     const like = `%${searchClientes}%`;
+    // CPF/telefone podem estar armazenados com ou sem pontuação.
+    // "%1%2%3%4%5%" casa tanto "123.456.789-00" quanto "12345678900".
+    const qDigits = searchClientes.replace(/\D/g, "");
+    const digitsLike = qDigits.length >= 3 ? `%${qDigits.split("").join("%")}%` : null;
 
     // Busca em entregas (por nome/telefone)
+    const entregasOr = [
+      `cliente.ilike.${like}`,
+      `telefone.ilike.${like}`,
+      ...(digitsLike ? [`telefone.ilike.${digitsLike}`] : []),
+    ].join(",");
     const { data: entregasMatch, error: errEntregas } = await supabase
       .from("entregas")
       .select("cliente, telefone, endereco, bairro, regiao, data_entrega, produto")
-      .or(`cliente.ilike.${like},telefone.ilike.${like}`)
+      .or(entregasOr)
       .order("data_entrega", { ascending: false })
       .limit(200);
     if (errEntregas) return NextResponse.json({ error: errEntregas.message }, { status: 500 });
 
-    // Busca em vendas (por nome/telefone — vendas tem 'cliente' e recebimento no formato string)
+    // Busca em vendas (por nome/recebimento/cpf — vendas tem 'cliente', 'recebimento' e 'cpf')
+    const vendasOr = [
+      `cliente.ilike.${like}`,
+      `recebimento.ilike.${like}`,
+      `cpf.ilike.${like}`,
+      ...(digitsLike ? [`recebimento.ilike.${digitsLike}`, `cpf.ilike.${digitsLike}`] : []),
+    ].join(",");
     const { data: vendasMatch, error: errVendas } = await supabase
       .from("vendas")
       .select("cliente, recebimento, endereco, bairro, produto, data, preco_vendido")
-      .or(`cliente.ilike.${like},recebimento.ilike.${like}`)
+      .or(vendasOr)
       .order("data", { ascending: false })
       .limit(200);
     if (errVendas) return NextResponse.json({ error: errVendas.message }, { status: 500 });
+
+    // Busca em link_compras por CPF/telefone — traz candidatos extras (nome+telefone)
+    // que depois serão casados contra entregas via keyFor.
+    const linkOr = [
+      `cliente_nome.ilike.${like}`,
+      `cliente_telefone.ilike.${like}`,
+      `cliente_cpf.ilike.${like}`,
+      ...(digitsLike ? [`cliente_telefone.ilike.${digitsLike}`, `cliente_cpf.ilike.${digitsLike}`] : []),
+    ].join(",");
+    const { data: linkMatch } = await supabase
+      .from("link_compras")
+      .select("cliente_nome, cliente_telefone, created_at")
+      .or(linkOr)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    // Para matches vindos apenas por CPF (vendas/link_compras) sem entrada em entregas,
+    // tentamos achar o registro de entrega correspondente por nome+telefone.
+    const extraNomes = new Set<string>();
+    for (const v of vendasMatch || []) if (v.cliente) extraNomes.add(v.cliente);
+    for (const l of linkMatch || []) if (l.cliente_nome) extraNomes.add(l.cliente_nome);
+    // Remove os que já apareceram direto em entregasMatch
+    for (const e of entregasMatch || []) if (e.cliente) extraNomes.delete(e.cliente);
+    let entregasExtras: typeof entregasMatch = [];
+    if (extraNomes.size > 0) {
+      const nomesArr = Array.from(extraNomes).slice(0, 50);
+      const { data: extras } = await supabase
+        .from("entregas")
+        .select("cliente, telefone, endereco, bairro, regiao, data_entrega, produto")
+        .in("cliente", nomesArr)
+        .order("data_entrega", { ascending: false })
+        .limit(200);
+      entregasExtras = extras || [];
+    }
+    const entregasAll = [...(entregasMatch || []), ...(entregasExtras || [])];
 
     type ClienteSug = {
       cliente: string;
@@ -54,7 +104,7 @@ export async function GET(req: NextRequest) {
     const acc = new Map<string, ClienteSug>();
 
     // Primeiro entregas (tem endereco/bairro/regiao bons)
-    for (const r of entregasMatch || []) {
+    for (const r of entregasAll) {
       const key = keyFor(r.cliente, r.telefone);
       if (!key || key === "|") continue;
       if (!acc.has(key)) {
@@ -121,7 +171,7 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id, produto, tipo, detalhes_upgrade, forma_pagamento, valor, vendedor, regiao } = body;
+  const { cliente, telefone, endereco, bairro, data_entrega, horario, status, entregador, observacao, venda_id, produto, tipo, detalhes_upgrade, forma_pagamento, valor, entrada, parcelas, valor_total, vendedor, regiao } = body;
 
   if (!cliente || !data_entrega) {
     return NextResponse.json({ error: "Cliente e data_entrega obrigatórios" }, { status: 400 });
@@ -145,6 +195,9 @@ export async function POST(req: NextRequest) {
       detalhes_upgrade: detalhes_upgrade || null,
       forma_pagamento: forma_pagamento || null,
       valor: valor != null ? valor : null,
+      entrada: entrada != null ? entrada : null,
+      parcelas: parcelas != null ? parcelas : null,
+      valor_total: valor_total != null ? valor_total : null,
       vendedor: vendedor || null,
       regiao: regiao || null,
     })

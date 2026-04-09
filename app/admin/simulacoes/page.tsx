@@ -34,6 +34,62 @@ interface SimulacaoRow {
 const fmt = (v: number) =>
   `R$ ${v.toLocaleString("pt-BR")}`;
 
+/** Extrai campos estruturados das linhas de condição salvas com a simulação. */
+function parseCondicao(linhas: string[] | null | undefined): {
+  bateria: string;
+  marcasUso: string;
+  pecasTrocadas: string;
+  caixaOriginal: string;
+  outras: string[];
+} {
+  const out = { bateria: "", marcasUso: "", pecasTrocadas: "", caixaOriginal: "", outras: [] as string[] };
+  if (!linhas || linhas.length === 0) return out;
+  const marcasParts: string[] = [];
+  for (const raw of linhas) {
+    const l = raw.trim();
+    if (!l) continue;
+    const lower = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    // Bateria: "Saude bateria 88%" ou "Ciclos de bateria: 250"
+    const batMatch = l.match(/(?:saude\s*bateria|saúde\s*bateria)\s*(\d{1,3})\s*%?/i) || l.match(/ciclos?\s*de\s*bateria[:\s]*(\d+)/i);
+    if (batMatch && !out.bateria) { out.bateria = batMatch[1]; continue; }
+    // Caixa
+    if (/caixa/.test(lower)) {
+      if (/sem\s+caixa/.test(lower)) out.caixaOriginal = "nao";
+      else if (/tem\s+a?\s*caixa|com\s+caixa/.test(lower)) out.caixaOriginal = "sim";
+      continue;
+    }
+    // Peças trocadas
+    if (/pec[ao]\s+trocad|peca\s+trocada|peças\s+trocad|pe[çc]as?\s+trocad/i.test(l)) {
+      out.pecasTrocadas = l;
+      continue;
+    }
+    // Marcas de uso (positivas e negativas)
+    if (/sem\s+marcas?\s+de\s+uso/.test(lower)) { out.marcasUso = "nao"; continue; }
+    if (/marcas?\s+de\s+uso/.test(lower) || /arranh/.test(lower) || /descascad/.test(lower)) {
+      marcasParts.push(l);
+      continue;
+    }
+    out.outras.push(l);
+  }
+  if (marcasParts.length > 0 && out.marcasUso !== "nao") {
+    out.marcasUso = marcasParts.join("; ");
+  }
+  return out;
+}
+
+/** Concatena tudo num bloco de observação livre legível. */
+function buildTrocaObs(linhas: string[] | null | undefined): string {
+  const p = parseCondicao(linhas);
+  const parts: string[] = [];
+  if (p.marcasUso === "nao") parts.push("Sem marcas de uso");
+  else if (p.marcasUso) parts.push(`Marcas: ${p.marcasUso}`);
+  if (p.pecasTrocadas) parts.push(p.pecasTrocadas);
+  if (p.caixaOriginal === "sim") parts.push("Com caixa original");
+  else if (p.caixaOriginal === "nao") parts.push("Sem caixa original");
+  for (const o of p.outras) parts.push(o);
+  return parts.join(" | ");
+}
+
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", {
@@ -575,24 +631,6 @@ export default function AdminPage() {
                           >
                             WhatsApp
                           </button>
-                          <button
-                            onClick={() => {
-                              const qs = new URLSearchParams({
-                                sim_id: row.id,
-                                prod: `${row.modelo_novo} ${row.storage_novo}`.trim(),
-                                preco: String(row.preco_novo || 0),
-                                tp: `${row.modelo_usado} ${row.storage_usado}`.trim(),
-                                tv: String(row.avaliacao_usado || 0),
-                                cn: row.nome || "",
-                                cte: row.whatsapp || "",
-                                ...(row.vendedor ? { sv: row.vendedor } : {}),
-                              }).toString();
-                              window.location.href = `/admin/gerar-link?${qs}`;
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#E8740E] hover:bg-[#D06A0D] text-white text-xs font-semibold transition-colors"
-                          >
-                            💳 Link
-                          </button>
                           {row.contatado && (
                             <span className="text-[10px] text-green-600 font-medium">Contatado</span>
                           )}
@@ -821,7 +859,7 @@ export default function AdminPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => {
                     const num = modalRow.whatsapp.replace(/\D/g, "");
@@ -829,7 +867,7 @@ export default function AdminPage() {
                     const msg = `Ola ${modalRow.nome}! Vi que voce fez uma simulacao de troca no nosso site. O ${modalRow.modelo_novo} ${modalRow.storage_novo} esta disponivel! Seu ${modalRow.modelo_usado} foi avaliado em ${fmt(modalRow.avaliacao_usado)}. Gostaria de continuar?`;
                     window.open(`https://wa.me/${full}?text=${encodeURIComponent(msg)}`, "_blank");
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors text-center"
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors text-center"
                 >
                   Chamar no WhatsApp
                 </button>
@@ -844,9 +882,58 @@ export default function AdminPage() {
                     });
                     window.open(`/troca?${params.toString()}`, "_blank");
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
                 >
                   Recuperar Carrinho
+                </button>
+                <button
+                  onClick={() => {
+                    const cond = parseCondicao(modalRow.condicao_linhas);
+                    const obs = buildTrocaObs(modalRow.condicao_linhas);
+                    const params = new URLSearchParams({
+                      produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
+                      preco: String(modalRow.preco_novo || ""),
+                      cliente_nome: modalRow.nome || "",
+                      cliente_whatsapp: modalRow.whatsapp || "",
+                      troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
+                      troca_valor: String(modalRow.avaliacao_usado || ""),
+                      troca_cor: modalRow.cor_usado || "",
+                      troca_bateria: cond.bateria,
+                      troca_marcas_uso: cond.marcasUso,
+                      troca_pecas_trocadas: cond.pecasTrocadas,
+                      troca_caixa_original: cond.caixaOriginal,
+                      troca_observacao: obs,
+                    });
+                    window.open(`/admin/gerar-link?${params.toString()}`, "_blank");
+                  }}
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#0071E3] hover:bg-[#0062C4] text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Gerar Link
+                </button>
+                <button
+                  onClick={() => {
+                    const cond = parseCondicao(modalRow.condicao_linhas);
+                    const obs = buildTrocaObs(modalRow.condicao_linhas);
+                    const params = new URLSearchParams({
+                      cliente_nome: modalRow.nome || "",
+                      cliente_telefone: modalRow.whatsapp || "",
+                      produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
+                      valor: String(modalRow.preco_novo || ""),
+                      troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
+                      troca_valor: String(modalRow.avaliacao_usado || ""),
+                      troca_cor: modalRow.cor_usado || "",
+                      troca_bateria: cond.bateria,
+                      troca_marcas_uso: cond.marcasUso,
+                      troca_pecas_trocadas: cond.pecasTrocadas,
+                      troca_caixa_original: cond.caixaOriginal,
+                      troca_observacao: obs,
+                      diferenca_pix: String(modalRow.diferenca || ""),
+                    });
+                    window.open(`/admin/entregas?${params.toString()}`, "_blank");
+                  }}
+                  className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold transition-colors text-center"
+                >
+                  Agendar Entrega
                 </button>
               </div>
             </div>

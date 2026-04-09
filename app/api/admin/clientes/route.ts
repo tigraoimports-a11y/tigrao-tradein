@@ -210,7 +210,50 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // =========== TABS: clientes / lojistas / notas ===========
+  // =========== TABS: clientes / lojistas — via RPC (SQL group by) ===========
+  // Evita baixar todas as vendas pro Node — Postgres agrega e retorna só o resumo.
+  if (tab === "clientes" || tab === "lojistas") {
+    const { data: resumo, error: rpcErr } = await supabase.rpc("clientes_resumo", {
+      p_is_lojista: tab === "lojistas",
+      p_search: search || null,
+    });
+    if (rpcErr) {
+      // Fallback pro caminho antigo caso a migration da RPC ainda não tenha rodado
+      console.error("[clientes] RPC clientes_resumo falhou, usando fallback:", rpcErr.message);
+    } else {
+      type ResumoRow = {
+        nome: string; cpf: string | null; cnpj: string | null; email: string | null;
+        bairro: string | null; cidade: string | null; uf: string | null;
+        total_compras: number; total_gasto: number; ultima_compra: string;
+        ultimo_produto: string; cliente_desde: string; is_lojista: boolean;
+        vendas: never[];
+      };
+      const clientes: ResumoRow[] = (resumo || []).map((r: Record<string, unknown>) => ({
+        nome: String(r.nome || ""),
+        cpf: (r.cpf as string | null) ?? null,
+        cnpj: (r.cnpj as string | null) ?? null,
+        email: (r.email as string | null) ?? null,
+        bairro: (r.bairro as string | null) ?? null,
+        cidade: (r.cidade as string | null) ?? null,
+        uf: (r.uf as string | null) ?? null,
+        total_compras: Number(r.total_compras || 0),
+        total_gasto: Number(r.total_gasto || 0),
+        ultima_compra: String(r.ultima_compra || ""),
+        ultimo_produto: String(r.ultimo_produto || ""),
+        cliente_desde: String(r.cliente_desde || ""),
+        is_lojista: Boolean(r.is_lojista),
+        vendas: [],
+      }));
+      return NextResponse.json({
+        clientes,
+        total: clientes.length,
+        total_gasto: clientes.reduce((s: number, c: ResumoRow) => s + c.total_gasto, 0),
+        total_compras: clientes.reduce((s: number, c: ResumoRow) => s + c.total_compras, 0),
+      });
+    }
+  }
+
+  // ─── Fallback (notas + caso RPC não esteja disponível) ───
   // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui registros com NULL
   let query = supabase
     .from("vendas")
@@ -266,19 +309,35 @@ export async function GET(req: NextRequest) {
   }>();
   const cpfToKey = new Map<string, string>();
 
+  // Normaliza nome: tira acentos, colapsa espaços, remove sufixos comuns de lojistas atacado
+  // ("ATACADO", "LOJA", "LOJAS", "STORE") pra unificar "021 TECH" e "021 TECH ATACADO".
+  const normalizeLojistaNome = (n: string) =>
+    n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toUpperCase()
+      .replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\b.*$/i, "")
+      .trim();
+
+  const cnpjToKey = new Map<string, string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const v of vendas as any[]) {
     const nome = (v.cliente || "").trim();
     if (!nome) continue;
     const isAtacado = v.tipo === "ATACADO" || v.origem === "ATACADO";
     const cpf = (v.cpf || "").trim();
+    const cnpj = (v.cnpj || "").trim();
 
     let key: string;
-    if (cpf) {
+    if (isAtacado) {
+      // Lojistas: SEMPRE agrupa por nome normalizado, ignora cpf/cnpj inconsistentes
+      key = `nome:${normalizeLojistaNome(nome)}`;
+    } else if (cpf) {
       if (cpfToKey.has(cpf)) { key = cpfToKey.get(cpf)!; }
       else { key = `cpf:${cpf}`; cpfToKey.set(cpf, key); }
+    } else if (cnpj) {
+      if (cnpjToKey.has(cnpj)) { key = cnpjToKey.get(cnpj)!; }
+      else { key = `cnpj:${cnpj}`; cnpjToKey.set(cnpj, key); }
     } else {
-      key = `nome:${nome.toUpperCase()}`;
+      key = `nome:${normalizeLojistaNome(nome)}`;
     }
 
     if (!clienteMap.has(key)) {

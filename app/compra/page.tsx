@@ -43,6 +43,10 @@ function fmt(n: number) {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function fmt2(n: number) {
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // Taxas de parcelamento (mesma tabela do orçamento admin)
 const TAXAS: Record<number, number> = {
   1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
@@ -319,7 +323,7 @@ function CompraForm() {
     return Object.entries(TAXAS).map(([n, taxa]) => {
       const num = parseInt(n);
       const total = Math.ceil(valorParcelar * (1 + taxa / 100));
-      const vp = Math.ceil(total / num);
+      const vp = total / num;
       return { parcelas: num, valorParcela: vp, total };
     });
   }, [valorParcelar]);
@@ -363,27 +367,27 @@ function CompraForm() {
     const parcelasCalc = parcelas ? (() => {
       const n = parseInt(parcelas);
       const taxa = TAXAS[n] ?? 0;
-      const total = Math.ceil(valorParcelarFinal * (1 + taxa / 100));
-      const vp = Math.ceil(total / n);
+      const total = valorParcelarFinal * (1 + taxa / 100);
+      const vp = total / n;
       return { n, total, vp };
     })() : null;
 
     // Forma de pagamento com detalhes completos
     let pagStr = formaPagamento;
     if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
-      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} (total R$ ${fmt(parcelasCalc.total)})`;
+      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)})`;
     } else if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
       if (entradaFinal > 0) {
-        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
+        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
       } else {
-        pagStr = `R$ ${fmt(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao`;
+        pagStr = `R$ ${fmt2(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao`;
       }
     } else if (formaPagamento === "Link de Pagamento" && parcelas) {
       pagStr = `Link de Pagamento — ${parcelas}x`;
     } else if (formaPagamento === "PIX") {
       pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
     } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {
-      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt(parcelasCalc.total)})`;
+      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
     } else if (formaPagamento === "Debito") {
       pagStr = `Debito — R$ ${fmt(valorBaseFinal)}`;
     }
@@ -828,7 +832,7 @@ function CompraForm() {
                   <div className="flex justify-between text-sm">
                     <span className="text-[#86868B]">Parcelado</span>
                     <span className="font-bold text-[#1D1D1F]">
-                      {parcelas}x{(() => { const p = parcOpts.find(o => o.parcelas === parseInt(parcelas)); return p ? ` de R$ ${fmt(p.valorParcela)} (total R$ ${fmt(p.total)})` : ""; })()}
+                      {parcelas}x{(() => { const p = parcOpts.find(o => o.parcelas === parseInt(parcelas)); return p ? ` de R$ ${fmt2(p.valorParcela)} (total R$ ${fmt(p.total)})` : ""; })()}
                     </span>
                   </div>
                 )}
@@ -905,7 +909,7 @@ function CompraForm() {
                     <label key={o.parcelas} className={`flex flex-col items-center py-2.5 px-2 rounded-lg border-2 cursor-pointer transition-colors ${parcelas === String(o.parcelas) ? "border-[#E8740E] bg-[#FFF5EB]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
                       <input type="radio" name="parcelas" value={o.parcelas} checked={parcelas === String(o.parcelas)} onChange={() => setParcelas(String(o.parcelas))} className="sr-only" />
                       <span className={`text-xs font-bold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{o.parcelas}x</span>
-                      <span className={`text-[11px] font-semibold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#6E6E73]"}`}>R$ {fmt(o.valorParcela)}</span>
+                      <span className={`text-[11px] font-semibold ${parcelas === String(o.parcelas) ? "text-[#E8740E]" : "text-[#6E6E73]"}`}>R$ {fmt2(o.valorParcela)}</span>
                     </label>
                   ))}
                 </div>

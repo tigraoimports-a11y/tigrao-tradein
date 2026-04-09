@@ -164,15 +164,118 @@ export default function ClientesPage() {
   const [fornMsg, setFornMsg] = useState("");
   const [savingForn, setSavingForn] = useState(false);
 
+  // Crédito de lojistas — usa a tabela `lojistas` nova (UUID auto)
+  const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({}); // indexa por nome upper → saldo
+  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string };
+  const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; lojista_id: string; saldo: number; log: CreditoLog[] }>(null);
+  const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
+  const [savingCredito, setSavingCredito] = useState(false);
+
+  const normalizeNome = (n: string | null | undefined) =>
+    (n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+
+  // Lookup do saldo no mapa por nome normalizado (mesma chave usada em fetchSaldosLojistas)
+  const lojistaKey = (c: { cpf: string | null; cnpj: string | null; nome: string }) => normalizeNome(c.nome);
+
+  const fetchSaldosLojistas = useCallback(async () => {
+    if (!password) return;
+    try {
+      // Nova tabela `lojistas` — cada row tem id UUID + saldo_credito. Indexa por nome upper.
+      const res = await fetch(`/api/admin/lojistas?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        const map: Record<string, number> = {};
+        for (const l of json.lojistas || []) {
+          const nomeKey = normalizeNome(l.nome);
+          if (nomeKey && Number(l.saldo_credito || 0) > 0) {
+            map[nomeKey] = Number(l.saldo_credito || 0);
+          }
+        }
+        setSaldosLojistas(map);
+      }
+    } catch (err) { console.error(err); }
+  }, [password, apiHeaders]);
+
+  useEffect(() => { if (tab === "lojistas") fetchSaldosLojistas(); }, [tab, fetchSaldosLojistas]);
+
+  const openCreditoModal = async (c: Cliente) => {
+    try {
+      // 1) Busca lojistas existentes pra encontrar um que bate pelo nome
+      const list = await fetch(`/api/admin/lojistas?_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      const lj = await list.json();
+      const alvo = (lj.lojistas || []).find((l: { id: string; nome: string }) => normalizeNome(l.nome) === normalizeNome(c.nome));
+      let lojistaId: string;
+      let saldo = 0;
+      let log: CreditoLog[] = [];
+      if (alvo) {
+        lojistaId = alvo.id;
+        // Busca saldo + log
+        const det = await fetch(`/api/admin/lojistas?id=${lojistaId}&_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+        const dj = await det.json();
+        saldo = Number(dj.lojista?.saldo_credito || 0);
+        log = dj.log || [];
+      } else {
+        // Auto-cria com UUID novo
+        const create = await fetch(`/api/admin/lojistas`, {
+          method: "POST",
+          headers: { ...apiHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ nome: c.nome, cpf: c.cpf, cnpj: c.cnpj }),
+        });
+        const cj = await create.json();
+        if (!create.ok) { alert(cj.error || "Erro ao cadastrar lojista"); return; }
+        lojistaId = cj.lojista.id;
+      }
+      setCreditoModal({ cliente: c, lojista_id: lojistaId, saldo, log });
+      setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
+    } catch (err) { console.error(err); }
+  };
+
+  const salvarCredito = async () => {
+    if (!creditoModal) return;
+    const valor = parseFloat(creditoForm.valor);
+    if (!valor || valor <= 0) { alert("Valor inválido"); return; }
+    setSavingCredito(true);
+    try {
+      const res = await fetch("/api/admin/lojistas", {
+        method: "POST",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mover_saldo",
+          lojista_id: creditoModal.lojista_id,
+          tipo: creditoForm.tipo,
+          valor,
+          motivo: creditoForm.motivo || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || "Erro"); return; }
+      await fetchSaldosLojistas();
+      // Refresh modal com dados novos
+      const det = await fetch(`/api/admin/lojistas?id=${creditoModal.lojista_id}&_t=${Date.now()}`, { headers: apiHeaders(), cache: "no-store" });
+      const dj = await det.json();
+      setCreditoModal(m => m ? { ...m, saldo: Number(dj.lojista?.saldo_credito || 0), log: dj.log || [] } : null);
+      setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
+    } finally { setSavingCredito(false); }
+  };
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
+  const prevTabRef = React.useRef(tab);
   const fetchClientes = useCallback(async () => {
     if (!password) return;
     setLoading(true);
+    // Só limpa state quando a tab MUDA (evita flicker a cada autorefetch de 20s)
+    if (prevTabRef.current !== tab) {
+      setClientes([]);
+      setFornecedores([]);
+      setNotas([]);
+      setTotals({ total: 0, total_gasto: 0, total_compras: 0, total_investido: 0, total_em_estoque: 0, total_produtos: 0 });
+      prevTabRef.current = tab;
+    }
     try {
       const params = new URLSearchParams({ tab });
       if (debouncedSearch) params.set("search", debouncedSearch);
@@ -235,8 +338,33 @@ export default function ClientesPage() {
     } catch { /* ignore */ }
   };
 
+  // Merge de seguranca: se 2+ lojistas caem no mesmo nome normalizado, unifica aqui no front
+  const clientesMerged = (() => {
+    if (tab !== "lojistas") return clientes;
+    const stripSufix = (n: string) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ").trim().toUpperCase()
+      .replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\b.*$/i, "").trim();
+    const map = new Map<string, Cliente>();
+    for (const c of clientes) {
+      const k = stripSufix(c.nome);
+      const existing = map.get(k);
+      if (!existing) { map.set(k, { ...c }); continue; }
+      // merge: soma compras, gasto, mantem nome mais curto (sem sufixo)
+      existing.total_compras += c.total_compras;
+      existing.total_gasto += c.total_gasto;
+      if (c.ultima_compra > existing.ultima_compra) {
+        existing.ultima_compra = c.ultima_compra;
+        existing.ultimo_produto = c.ultimo_produto;
+      }
+      if (c.cliente_desde < existing.cliente_desde) existing.cliente_desde = c.cliente_desde;
+      // prefere o nome sem sufixo ATACADO
+      if (c.nome.length < existing.nome.length) existing.nome = c.nome;
+    }
+    return Array.from(map.values());
+  })();
+
   // Sort clientes
-  const sorted = [...clientes].sort((a, b) => {
+  const sorted = [...clientesMerged].sort((a, b) => {
     switch (sortBy) {
       case "gasto": return b.total_gasto - a.total_gasto;
       case "compras": return b.total_compras - a.total_compras;
@@ -663,6 +791,29 @@ export default function ClientesPage() {
         </div>
       </div>
 
+      {tab === "lojistas" && (
+        <div className="flex justify-end">
+          <button
+            onClick={async () => {
+              if (!confirm("Zerar os saldos de crédito de TODOS os lojistas? Isso apaga todos os cadastros da tabela lojistas. Não pode ser desfeito.")) return;
+              // Busca lista, deleta cada um
+              const lj = await fetch(`/api/admin/lojistas`, { headers: apiHeaders() });
+              const ljJson = await lj.json();
+              for (const l of ljJson.lojistas || []) {
+                await fetch(`/api/admin/lojistas?id=${l.id}`, { method: "DELETE", headers: apiHeaders() });
+              }
+              const res = new Response(JSON.stringify({ ok: true }));
+              const j = await res.json();
+              if (!res.ok) { alert(j.error || "Erro"); return; }
+              await fetchSaldosLojistas();
+              alert("Todos os saldos foram zerados.");
+            }}
+            className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700">
+            Zerar todos os saldos de crédito
+          </button>
+        </div>
+      )}
+
       {/* Sort */}
       <div className="flex items-center gap-2">
         <span className={`text-xs ${mS}`}>Ordenar:</span>
@@ -688,19 +839,20 @@ export default function ClientesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
-                {["Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", "Ultima Compra", "Cliente Desde", "Local"].map((h) => (
-                  <th key={h} className={thCls}>{h}</th>
+                {["Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", ...(tab === "lojistas" ? ["Saldo Crédito", ""] : []), "Ultima Compra", "Cliente Desde", "Local"].map((h, i) => (
+                  <th key={`${h}-${i}`} className={thCls}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
+              {(() => { const colSpan = tab === "lojistas" ? 9 : 7; return loading ? (
+                <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={7} className={`px-4 py-12 text-center ${mM}`}>
+                <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>
                   {search ? `Nenhum resultado para "${search}"` : "Nenhum cliente encontrado"}
                 </td></tr>
-              ) : sorted.map((c) => (
+              ) : null; })()}
+              {!loading && sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
                     onClick={() => setDetailClient(c)}
@@ -720,6 +872,17 @@ export default function ClientesPage() {
                       <span className="px-2 py-1 rounded-lg bg-[#E8740E]/10 text-[#E8740E] text-xs font-bold">{c.total_compras}</span>
                     </td>
                     <td className="px-4 py-3 font-bold text-green-600">{fmt(c.total_gasto)}</td>
+                    {tab === "lojistas" && (<>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const s = saldosLojistas[lojistaKey(c)] || 0;
+                          return <span className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${s > 0 ? "bg-blue-100 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#86868B]" : "bg-[#F5F5F7] text-[#86868B]"}`}`}>{fmt(s)}</span>;
+                        })()}
+                      </td>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => openCreditoModal(c)} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D]">Gerenciar crédito</button>
+                      </td>
+                    </>)}
                     <td className="px-4 py-3">
                       <p className={`text-xs ${mP}`}>{fmtDate(c.ultima_compra)}</p>
                       <p className={`text-xs truncate max-w-[150px] ${mM}`}>{c.ultimo_produto}</p>
@@ -733,7 +896,7 @@ export default function ClientesPage() {
                   {/* Expanded: lista de compras */}
                   {expandedId === c.nome && (
                     <tr>
-                      <td colSpan={7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
+                      <td colSpan={tab === "lojistas" ? 9 : 7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
                         <div className="space-y-3">
                           <div className="flex flex-wrap gap-4 text-xs">
                             {c.cpf && <span className={mS}>CPF: <strong className={mP}>{c.cpf}</strong></span>}
@@ -778,6 +941,83 @@ export default function ClientesPage() {
         </p>
       )}
       </>)}
+
+      {/* Modal de Crédito do Lojista */}
+      {creditoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setCreditoModal(null)}>
+          <div className={`w-full max-w-lg rounded-2xl shadow-2xl ${dm ? "bg-[#1C1C1E]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+              <div>
+                <p className={`text-xs uppercase tracking-wider ${mS}`}>Crédito do lojista</p>
+                <h3 className={`text-base font-bold ${mP}`}>{creditoModal.cliente.nome}</h3>
+              </div>
+              <button onClick={() => setCreditoModal(null)} className={`text-2xl ${mS} hover:text-red-500`}>×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className={`p-4 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                <p className={`text-xs uppercase tracking-wider ${mS}`}>Saldo disponível</p>
+                <p className="text-3xl font-bold text-blue-600 mt-1">{fmt(creditoModal.saldo)}</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {(["CREDITO", "DEBITO", "AJUSTE"] as const).map(t => (
+                    <button key={t} onClick={() => setCreditoForm(f => ({ ...f, tipo: t }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold ${creditoForm.tipo === t ? "bg-[#E8740E] text-white" : `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}`}>
+                      {t === "CREDITO" ? "+ Adicionar" : t === "DEBITO" ? "− Debitar" : "= Ajustar"}
+                    </button>
+                  ))}
+                </div>
+                <input type="number" value={creditoForm.valor} onChange={(e) => setCreditoForm(f => ({ ...f, valor: e.target.value }))}
+                  placeholder="Valor R$" className={`w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                <input type="text" value={creditoForm.motivo} onChange={(e) => setCreditoForm(f => ({ ...f, motivo: e.target.value }))}
+                  placeholder="Motivo (opcional)" className={`w-full px-3 py-2 rounded-lg border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`} />
+                <button onClick={salvarCredito} disabled={savingCredito}
+                  className="w-full py-2.5 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
+                  {savingCredito ? "Salvando..." : "Salvar movimentação"}
+                </button>
+                {creditoModal.saldo > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!creditoModal) return;
+                      if (!confirm(`Apagar o cadastro de lojista de ${creditoModal.cliente.nome}? (saldo R$ ${creditoModal.saldo.toLocaleString("pt-BR")})`)) return;
+                      const res = await fetch(`/api/admin/lojistas?id=${creditoModal.lojista_id}`, { method: "DELETE", headers: apiHeaders() });
+                      const j = await res.json();
+                      if (!res.ok) { alert(j.error || "Erro"); return; }
+                      await fetchSaldosLojistas();
+                      setCreditoModal(null);
+                    }}
+                    className="w-full py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700">
+                    Apagar saldo deste lojista
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className={`text-[10px] uppercase tracking-wider font-bold ${mS} mb-2`}>Extrato ({creditoModal.log.length})</p>
+                <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                  {creditoModal.log.length === 0 && <p className={`text-xs text-center ${mM} py-4`}>Sem movimentações</p>}
+                  {creditoModal.log.map(l => (
+                    <div key={l.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold ${mP}`}>
+                          <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
+                            {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
+                          </span>
+                          <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                        </p>
+                        {l.motivo && <p className={`text-[10px] truncate ${mM}`}>{l.motivo}</p>}
+                      </div>
+                      <div className={`text-[10px] ${mM} text-right shrink-0`}>
+                        <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
+                        <p>{l.usuario}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Detalhes do Cliente */}
       {detailClient && (() => {

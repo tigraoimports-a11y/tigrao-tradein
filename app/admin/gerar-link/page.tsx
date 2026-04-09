@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getWhatsAppByVendedor, VENDEDORES } from "@/lib/whatsapp-config";
 import { corParaPT, corParaEN } from "@/lib/cor-pt";
+import { getModeloBase } from "@/lib/produto-display";
 
 export default function GerarLinkPage() {
   const { user, password: adminPw, apiHeaders: adminHeaders, darkMode: dm } = useAdmin();
@@ -51,7 +52,7 @@ export default function GerarLinkPage() {
   const [coresExtras, setCoresExtras] = useState<string[]>([]); // cor por índice extra (produto 2, 3, ...)
 
   // Fetch estoque para obter cores reais disponíveis + seminovos
-  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
+  const [estoqueItems, setEstoqueItems] = useState<{ produto: string; categoria: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }[]>([]);
   useEffect(() => {
     if (!adminPw) return;
     fetch("/api/estoque", { headers: adminHeaders() })
@@ -61,8 +62,8 @@ export default function GerarLinkPage() {
           setEstoqueItems(
             j.data
               .filter((p: { status?: string; qnt?: number }) => p.status === "EM ESTOQUE" && (p.qnt || 0) > 0)
-              .map((p: { produto: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
-                produto: p.produto, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
+              .map((p: { produto: string; categoria: string; cor: string | null; qnt: number; tipo?: string; preco_sugerido?: number | null }) => ({
+                produto: p.produto, categoria: p.categoria, cor: p.cor, qnt: p.qnt, tipo: p.tipo, preco_sugerido: p.preco_sugerido
               }))
           );
         }
@@ -70,14 +71,31 @@ export default function GerarLinkPage() {
       .catch(() => {});
   }, [adminPw]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Seminovos disponíveis em tempo real
+  // Seminovos disponíveis em tempo real — agrupados por modelo base + cor
+  // (mesma lógica do /admin/estoque via getModeloBase)
   const seminovosDisponiveis = useMemo(() => {
-    return estoqueItems
-      .filter(p => p.tipo === "SEMINOVO")
-      .map(p => ({
-        nome: p.cor ? `${p.produto} ${p.cor}` : p.produto,
-        preco: p.preco_sugerido || 0,
-      }))
+    const map = new Map<string, { nome: string; preco: number; count: number }>();
+    for (const p of estoqueItems) {
+      if (p.tipo !== "SEMINOVO") continue;
+      const base = getModeloBase(p.produto, p.categoria || "SEMINOVOS");
+      const corPt = p.cor ? corParaPT(p.cor) : "";
+      const nome = corPt ? `${base} ${corPt}` : base;
+      const key = nome.toUpperCase();
+      const prev = map.get(key);
+      if (prev) {
+        // agrega preço médio ponderado (pula zeros)
+        if ((p.preco_sugerido || 0) > 0) {
+          prev.preco = prev.preco > 0
+            ? Math.round((prev.preco * prev.count + (p.preco_sugerido || 0)) / (prev.count + 1))
+            : (p.preco_sugerido || 0);
+          prev.count += 1;
+        }
+      } else {
+        map.set(key, { nome, preco: p.preco_sugerido || 0, count: (p.preco_sugerido || 0) > 0 ? 1 : 0 });
+      }
+    }
+    return Array.from(map.values())
+      .map(({ nome, preco }) => ({ nome, preco }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoqueItems]);
 
@@ -519,6 +537,29 @@ export default function GerarLinkPage() {
     setAba("novo");
   }
 
+  // Prefill via query params (vindo de /admin/simulacoes, etc)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qp = new URLSearchParams(window.location.search);
+    if (!qp.toString()) return;
+    const produtoQp = qp.get("produto");
+    if (produtoQp) setProdutos([produtoQp]);
+    const precoQp = qp.get("preco");
+    if (precoQp) {
+      const n = Math.round(parseFloat(precoQp));
+      if (!isNaN(n) && n > 0) setPreco(n.toLocaleString("pt-BR"));
+    }
+    const corQp = qp.get("cor");
+    if (corQp) setCorSel(corQp.toUpperCase());
+    const trocaProd = qp.get("troca_produto");
+    if (trocaProd) setTrocaProduto(trocaProd);
+    const trocaVal = qp.get("troca_valor");
+    if (trocaVal) {
+      const n = Math.round(parseFloat(trocaVal));
+      if (!isNaN(n) && n > 0) setTrocaValor(n.toLocaleString("pt-BR"));
+    }
+  }, []);
+
   const formatPreco = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
     if (!digits) return "";
@@ -607,7 +648,7 @@ export default function GerarLinkPage() {
   const numParcelas = parseInt(parcelas) || 0;
   const taxa = ((forma === "Cartao Credito" || forma === "Link de Pagamento") && numParcelas > 0) ? (TAXAS[numParcelas] || 0) : 0;
   const valorComTaxa = taxa > 0 ? Math.ceil(valorParcelar * (1 + taxa / 100)) : valorParcelar;
-  const valorParcela = numParcelas > 0 ? Math.ceil(valorComTaxa / numParcelas) : 0;
+  const valorParcela = numParcelas > 0 ? valorComTaxa / numParcelas : 0;
   const valorTotal = entradaNum + valorComTaxa;
 
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
@@ -928,6 +969,43 @@ export default function GerarLinkPage() {
                           <FL label="Vendedor" k="vendedor" full />
                           <FL label="Observação" k="observacao" full />
                         </div>
+                        {/* Resumo do pagamento */}
+                        {(() => {
+                          const valor = Number(editLink.valor || 0);
+                          const entrada = Number(editLink.entrada || 0);
+                          const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
+                          const parcelasN = Number(editLink.parcelas || 0);
+                          const forma = editLink.forma_pagamento || "";
+                          const isCartao = forma === "Cartao Credito" || forma === "Link de Pagamento";
+                          // Restante após entrada e troca é o que parcela (taxa só cai sobre ele)
+                          const restante = Math.max(0, valor - entrada - troca);
+                          const taxaPct = isCartao && parcelasN > 0 ? (TAXAS[parcelasN] || 0) : 0;
+                          const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
+                          const valorFinal = entrada + restanteComTaxa;
+                          const valorParcela = parcelasN > 0 ? restanteComTaxa / parcelasN : 0;
+                          if (valor <= 0) return null;
+                          const boxCls = dm ? "bg-[#14301F] border-[#1F5A38]" : "bg-green-50 border-green-200";
+                          const titleCls = dm ? "text-green-300" : "text-green-800";
+                          const mutedCls = dm ? "text-[#98989D]" : "text-[#86868B]";
+                          const valCls = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+                          const sepCls = dm ? "border-[#1F5A38]" : "border-green-300";
+                          return (
+                            <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${boxCls}`}>
+                              <p className={`font-bold uppercase tracking-wide text-[10px] ${titleCls}`}>💳 Resumo do pagamento</p>
+                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {entrada > 0 && <div className="flex justify-between"><span className={mutedCls}>− Entrada</span><span className={`font-mono ${valCls}`}>R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {troca > 0 && <div className="flex justify-between"><span className={mutedCls}>− Troca abatida</span><span className={`font-mono ${valCls}`}>R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {taxaPct > 0 && (
+                                <div className="flex justify-between"><span className={mutedCls}>Taxa {parcelasN}x ({taxaPct}%)</span><span className={`font-mono ${valCls}`}>+R$ {(restanteComTaxa - restante).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              )}
+                              <div className={`flex justify-between pt-1 border-t ${sepCls}`}><span className={`font-bold ${titleCls}`}>Valor final a pagar</span><span className={`font-mono font-bold ${titleCls}`}>R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {parcelasN > 1 && valorParcela > 0 && (
+                                <div className={`flex justify-between ${mutedCls}`}><span>{parcelasN}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                              )}
+                              {editLink.forma_pagamento && <p className={`text-[10px] pt-1 ${mutedCls}`}>Forma: <strong className={valCls}>{editLink.forma_pagamento}</strong></p>}
+                            </div>
+                          );
+                        })()}
                       </section>
 
                       {/* Link — Cliente */}
@@ -996,6 +1074,17 @@ export default function GerarLinkPage() {
                                 <FD label="Horário" k="horario" type="time" />
                               </div>
                             </section>
+                            {/* Forma de pagamento escolhida pelo cliente no link */}
+                            {(editDados.forma_pagamento || editDados.preco) && (
+                              <section>
+                                <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pagamento (escolhido pelo cliente)</h5>
+                                <div className="grid grid-cols-1 gap-3">
+                                  <FD label="Forma de pagamento" k="forma_pagamento" full />
+                                  <FD label="Preço" k="preco" full />
+                                </div>
+                                <p className="text-[10px] text-[#86868B] mt-1 italic">Esse texto veio do que o cliente escolheu ao preencher (parcelas, entrada, etc).</p>
+                              </section>
+                            )}
                           </>
                         )}
                       </div>
@@ -1137,6 +1226,21 @@ export default function GerarLinkPage() {
                       </ul>
                     )}
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
+                    {(() => {
+                      const troca = Number(l.troca_valor || 0) + Number(l.troca_valor2 || 0);
+                      const entrada = Number(l.entrada || 0);
+                      const valorFinal = Math.max(0, Number(l.valor || 0) - troca - entrada);
+                      const temDetalhe = l.forma_pagamento || l.parcelas || entrada > 0 || valorFinal !== Number(l.valor || 0);
+                      if (!temDetalhe) return null;
+                      return (
+                        <div className="text-[11px] mt-1 space-y-0.5">
+                          {l.forma_pagamento && <p className="text-[#1D1D1F]">💳 <strong>{l.forma_pagamento}</strong>{l.parcelas ? ` · ${l.parcelas}` : ""}</p>}
+                          {entrada > 0 && <p className="text-[#86868B]">Entrada: R$ {entrada.toLocaleString("pt-BR")}</p>}
+                          {troca > 0 && <p className="text-[#86868B]">Troca abatida: R$ {troca.toLocaleString("pt-BR")}</p>}
+                          {valorFinal !== Number(l.valor || 0) && <p className="text-green-700 font-bold">Valor final: R$ {valorFinal.toLocaleString("pt-BR")}</p>}
+                        </div>
+                      );
+                    })()}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
                         👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}
@@ -1766,7 +1870,7 @@ export default function GerarLinkPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>Parcelamento</span>
-                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR")}</span>
+                    <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{numParcelas}x de R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </>
               )}

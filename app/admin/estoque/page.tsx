@@ -12,7 +12,7 @@ import BarcodeScanner from "@/components/BarcodeScanner";
 import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
-import { corParaPT } from "@/lib/cor-pt";
+import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
 
 /**
  * Normaliza o display de um produto seguindo a ordem rigorosa por categoria,
@@ -85,8 +85,15 @@ function formatProdutoDisplay(p: {
     const chipM = up.match(/(M\d+(?:\s*(?:PRO|MAX))?|A\d+(?:\s*PRO)?)/);
     const chip = chipM ? " " + chipM[1].replace(/\s+/g, " ").toUpperCase() : "";
     let modelo = "iPad";
-    if (/MINI/.test(up)) modelo = "iPad Mini";
+    // Captura geração depois de MINI/AIR/PRO (ex: "IPAD AIR 5", "IPAD MINI 7", "IPAD PRO 6")
+    const mMini = up.match(/IPAD\s+MINI\s+(\d+)\b/);
+    const mAir = up.match(/IPAD\s+AIR\s+(\d+)\b/);
+    const mPro = up.match(/IPAD\s+PRO\s+(\d+)\b/);
+    if (mMini) modelo = `iPad Mini ${mMini[1]}`;
+    else if (/MINI/.test(up)) modelo = "iPad Mini";
+    else if (mAir) modelo = `iPad Air ${mAir[1]}`;
     else if (/AIR/.test(up)) modelo = "iPad Air";
+    else if (mPro) modelo = `iPad Pro ${mPro[1]}`;
     else if (/PRO/.test(up)) modelo = "iPad Pro";
     parts.push(modelo + chip);
     if (tela) parts.push(tela);
@@ -113,7 +120,8 @@ function formatProdutoDisplay(p: {
   } else if (baseCat === "APPLE_WATCH") {
     let modelo = "Apple Watch";
     const ultra = up.match(/ULTRA\s*(\d+)?/);
-    const se = up.match(/\bSE\s*(\d+)?/);
+    // \bSE\b com lookahead — NÃO pode casar dentro de "SERIES". Aceita "SE", "SE 2", "SE3".
+    const se = up.match(/\bSE(?!R)\s*(\d+)?\b/);
     const series = up.match(/(?:SERIES\s*|\bS)(\d+)/);
     if (ultra) modelo = `Apple Watch Ultra${ultra[1] ? " " + ultra[1] : ""}`;
     else if (se) modelo = `Apple Watch SE${se[1] ? " " + se[1] : ""}`;
@@ -1797,9 +1805,11 @@ export default function EstoquePage() {
           <canvas id="qr-${idx}" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         </div>
         <div style="padding:0 1.5mm 0.5mm;text-align:center">
-          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}${cor ? " " + cor : ""}</div>
+          <div style="font-size:6pt;font-weight:900;line-height:1.15;word-break:break-word;color:#000">${p.produto}</div>
+          ${cor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${formatCorEtiquetaPTEN(cor)}</div>` : ""}
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
+          ${(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && p.bateria ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.25;margin-top:0.2mm;color:#000">🔋 Bateria: ${p.bateria}%</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
         </div>
       </div>`;
@@ -1843,7 +1853,7 @@ export default function EstoquePage() {
     const serial = p.serial_no || "";
     const imei = p.imei || "";
     const qrData = serial || imei || p.id;
-    const cor = p.cor ? ` ${p.cor}` : "";
+    const corLine = p.cor ? formatCorEtiquetaPTEN(p.cor) : "";
     const obs = p.observacao || "";
     const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
     const grade = gradeMatch || null;
@@ -1872,7 +1882,8 @@ export default function EstoquePage() {
       <div class="label">
         <canvas id="qr0" data-qr="${String(qrData).replace(/"/g, "&quot;")}"></canvas>
         <div class="info">
-          <div class="produto">${p.produto}${cor}</div>
+          <div class="produto">${p.produto}</div>
+          ${corLine ? `<div class="badges" style="font-weight:bold;color:#000">${corLine}</div>` : ""}
           <div class="badges">${[
             p.bateria ? `🔋 ${p.bateria}%` : "",
             grade ? `Grade ${grade}` : "",
@@ -2028,6 +2039,7 @@ export default function EstoquePage() {
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
       .replace(/\[RESP:[^\]]+\]/g, "")
+      .replace(/\[COM_QUEM:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
@@ -4629,21 +4641,24 @@ export default function EstoquePage() {
                                               if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
                                               return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">Lacrado</span>;
                                             })()}
-                                            {/* Bateria (só seminovo/pendência) */}
-                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
+                                            {/* Bateria (só seminovo/pendência) — admin pode editar em qualquer aba */}
+                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (() => {
+                                              const bateriaEditable = isEditableItemTab || isAdmin;
+                                              if (bateriaEditable && isEditingField(p.id, "bateria")) return (
                                                 <div className="flex items-center gap-0.5">
                                                   <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : isEditableItemTab ? (
+                                              );
+                                              if (bateriaEditable) return (
                                                 <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
-                                              ) : p.bateria ? (
+                                              );
+                                              return p.bateria ? (
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
-                                              ) : null
-                                            )}
+                                              ) : null;
+                                            })()}
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
@@ -4665,6 +4680,33 @@ export default function EstoquePage() {
                                                 {ciclos && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
                                                 {p.garantia && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
                                               </>);
+                                            })()}
+                                            {/* Com quem está (pendência) — editável texto livre via tag [COM_QUEM:...] */}
+                                            {isPendenciasTab && (() => {
+                                              const comQuemAtual = p.observacao?.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
+                                              if (isEditingField(p.id, "com_quem")) return (
+                                                <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                                  <input value={getEditVal(p.id, "com_quem") || ""} onChange={(e) => startEditField(p.id, "com_quem", e.target.value)}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const val = (getEditVal(p.id, "com_quem") || "").trim();
+                                                        const obsBase = (p.observacao || "").replace(/\[COM_QUEM:[^\]]+\]/g, "").trim();
+                                                        const newObs = val ? `${obsBase} [COM_QUEM:${val}]`.trim() : (obsBase || null);
+                                                        await apiPatch(p.id, { observacao: newObs });
+                                                        setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                                                        cancelEditField(p.id, "com_quem");
+                                                      }
+                                                      if (e.key === "Escape") cancelEditField(p.id, "com_quem");
+                                                    }}
+                                                    className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Ex: Técnico João" />
+                                                </div>
+                                              );
+                                              return (
+                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "com_quem", comQuemAtual); }}
+                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${comQuemAtual ? "bg-blue-50 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {comQuemAtual ? `👤 ${comQuemAtual}` : "+ Com quem"}
+                                                </button>
+                                              );
                                             })()}
                                             {/* Origem/Obs */}
                                             {isEditableItemTab && isEditingField(p.id, "observacao") ? (
@@ -4811,7 +4853,7 @@ export default function EstoquePage() {
                                               const labels = Array.from({ length: qnt }, () => `
                                                 <div class="label">
                                                   <div class="produto">${p.produto}</div>
-                                                  ${p.cor ? `<div class="cor">${p.cor}</div>` : ""}
+                                                  ${p.cor ? `<div class="cor">${formatCorEtiquetaPTEN(p.cor)}</div>` : ""}
                                                   <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
                                                   ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
                                                   ${p.data_compra ? `<div class="data">${fmtDate(p.data_compra)}</div>` : ""}
