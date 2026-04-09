@@ -518,6 +518,14 @@ export async function PATCH(req: NextRequest) {
     await logActivity(usuario, "Editou estoque", `${antes?.produto || "?"}: ${alteracoes.join(", ")}`, "estoque", id).catch(() => {});
   }
 
+  // ── Auto-update encomenda vinculada quando produto chega ──
+  if (fields.status === "EM ESTOQUE" && antes?.status === "A CAMINHO" && antes?.encomenda_id) {
+    await supabase.from("encomendas").update({
+      status: "CHEGOU",
+      updated_at: new Date().toISOString(),
+    }).eq("id", antes.encomenda_id).in("status", ["PENDENTE", "COMPRADO", "A CAMINHO"]);
+  }
+
   // ── Sincronizar com Mostruário: estoque zerou ou voltou ──
   if (fields.qnt !== undefined) {
     const newQnt = Number(fields.qnt);

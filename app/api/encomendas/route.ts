@@ -32,6 +32,18 @@ export async function PATCH(req: NextRequest) {
   const { error } = await supabase.from("encomendas").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Vincular/desvincular estoque ↔ encomenda
+  if ("estoque_id" in fields) {
+    if (fields.estoque_id) {
+      // Vincular: seta encomenda_id no item do estoque
+      await supabase.from("estoque").update({ encomenda_id: id }).eq("id", fields.estoque_id);
+    }
+    // Se desvinculando (estoque_id = null), limpar encomenda_id do estoque antigo
+    if (!fields.estoque_id) {
+      await supabase.from("estoque").update({ encomenda_id: null }).eq("encomenda_id", id);
+    }
+  }
+
   const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Atualizou encomenda", `Campos: ${Object.keys(fields).join(", ")}`, "encomendas", id).catch(() => {});
 
