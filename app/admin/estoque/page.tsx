@@ -4112,6 +4112,68 @@ export default function EstoquePage() {
             </div>
           ) : (
             <>
+            {/* Botão copiar texto WhatsApp atacado — A Caminho */}
+            {isACaminhoTab && aCaminho.length > 0 && (
+              <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border mb-3`}>
+                <div>
+                  <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
+                  <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho — gera texto agrupado por categoria</p>
+                </div>
+                <button
+                  onClick={() => {
+                    // Agrupa por categoria
+                    const catEmoji: Record<string, string> = {
+                      IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️",
+                      APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
+                    };
+                    const catLabel: Record<string, string> = {
+                      IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
+                      APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
+                    };
+                    const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+
+                    // Agrupa por categoria → lista de "modelo – cor"
+                    const groups: Record<string, string[]> = {};
+                    for (const p of aCaminho) {
+                      const cat = p.categoria || "OUTROS";
+                      if (!groups[cat]) groups[cat] = [];
+                      // Extrai nome limpo + cor
+                      const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
+                        .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+                        .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
+                        .replace(/\s{2,}/g, " ").trim();
+                      const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
+                      groups[cat].push(`${nome}${cor}`);
+                    }
+
+                    // Monta texto
+                    const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
+                    const sortedCats = Object.keys(groups).sort((a, b) => {
+                      const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                    });
+                    for (const cat of sortedCats) {
+                      const emoji = catEmoji[cat] || "📦";
+                      const label = catLabel[cat] || cat;
+                      lines.push(`${emoji} *${label}*`);
+                      // Remove duplicatas mantendo ordem
+                      const seen = new Set<string>();
+                      for (const item of groups[cat]) {
+                        if (!seen.has(item)) { seen.add(item); lines.push(item); }
+                      }
+                      lines.push("");
+                    }
+
+                    navigator.clipboard.writeText(lines.join("\n").trim());
+                    setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                >
+                  📋 Copiar Texto Atacado
+                </button>
+              </div>
+            )}
+
             {/* Barra de seleção em lote — A Caminho (admin only) */}
             {false && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
