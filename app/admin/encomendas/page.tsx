@@ -79,6 +79,11 @@ interface EstoqueItem {
   cor: string | null;
   categoria: string | null;
   status: string;
+  custo_unitario: number | null;
+  fornecedor: string | null;
+  data_compra: string | null;
+  origem_compra: string | null;
+  encomenda_id: string | null;
 }
 
 // ─── Status system ───────────────────────────────────────────────────────────
@@ -250,6 +255,17 @@ export default function EncomendasPage() {
       .catch(() => {});
   }, [password]);
 
+  // Estoque A Caminho para vincular no formulário
+  const [produtosACaminho, setProdutosACaminho] = useState<EstoqueItem[]>([]);
+  const [selectedEstoqueId, setSelectedEstoqueId] = useState("");
+  useEffect(() => {
+    if (tab !== "nova" || !password) return;
+    fetch("/api/estoque?status=A%20CAMINHO", { headers: { "x-admin-password": password } })
+      .then((r) => r.json())
+      .then((j) => setProdutosACaminho((j.data ?? []).filter((p: EstoqueItem) => !p.encomenda_id)))
+      .catch(() => {});
+  }, [tab, password]);
+
   // Headers helper
   const hdrs = useCallback(
     () => ({
@@ -311,6 +327,11 @@ export default function EncomendasPage() {
       previsao_chegada: form.previsao_chegada || null,
       observacao: form.observacao || null,
     };
+    // Vincular com produto A Caminho se selecionado
+    if (selectedEstoqueId) {
+      body.estoque_id = selectedEstoqueId;
+      body.status = "A CAMINHO";
+    }
     if (temTroca) {
       body.troca_produto = trocaRow.produto || form.troca_produto || null;
       body.troca_cor = trocaRow.cor || form.troca_cor || null;
@@ -357,6 +378,7 @@ export default function EncomendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Encomenda registrada!");
+      setSelectedEstoqueId("");
       setForm({
         cliente: "",
         whatsapp: "",
@@ -706,6 +728,37 @@ export default function EncomendasPage() {
             >
               Produto Encomendado
             </h3>
+            {/* Vincular com produto A Caminho */}
+            {produtosACaminho.length > 0 && (
+              <div className="mb-4">
+                <p className={labelCls}>Vincular a produto A Caminho</p>
+                <select
+                  value={selectedEstoqueId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedEstoqueId(id);
+                    if (id) {
+                      const item = produtosACaminho.find((p) => p.id === id);
+                      if (item) {
+                        set("produto", item.produto);
+                        set("cor", item.cor || "");
+                        set("categoria", item.categoria || "");
+                        set("custo", String(item.custo_unitario || ""));
+                        set("fornecedor", item.fornecedor || "");
+                      }
+                    }
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">-- Digitar manualmente --</option>
+                  {produtosACaminho.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.produto}{item.cor ? ` (${item.cor})` : ""} — {item.fornecedor || "sem fornecedor"}{item.custo_unitario ? ` — R$ ${Math.round(item.custo_unitario).toLocaleString("pt-BR")}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="col-span-2">
                 <p className={labelCls}>Produto *</p>

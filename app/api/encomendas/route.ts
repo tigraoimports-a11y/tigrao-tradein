@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase.from("encomendas").insert({ ...body, updated_at: new Date().toISOString() }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Vincular estoque se estoque_id foi passado
+  if (body.estoque_id && data?.id) {
+    await supabase.from("estoque").update({ encomenda_id: data.id }).eq("id", body.estoque_id);
+  }
+
   const usuario = (() => { const r = req.headers.get("x-admin-user") || "Sistema"; try { return decodeURIComponent(r); } catch { return r; } })();
   logActivity(usuario, "Criou encomenda", `Cliente: ${body.cliente || "N/A"}, Produto: ${body.produto || "N/A"}`, "encomendas", data?.id).catch(() => {});
 
