@@ -87,49 +87,54 @@ const TAXAS_PARCELAS_MODULE: Record<number, number> = {
 const fmtBRL = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
- * Formata o campo PAGAMENTO do formulário do motoboy, incluindo breakdown
- * completo: entrada + Nx com taxa + total final. Prioriza colunas estruturadas
- * (valor_total, entrada, parcelas) e cai num parse do texto quando ausentes.
+ * Formata o campo PAGAMENTO do formulário do motoboy com breakdown detalhado.
+ * Suporta 1 ou 2 cartões (parseados do texto forma_pagamento) + entrada Pix/Espécie/Transferência.
+ * Valores de total já vem com taxa embutida (valor_total salvo).
  */
 function formatPagamentoDisplay(
   formaPagamento: string | null,
   valor: number | null,
   valorTotal?: number | null,
   entradaCol?: number | null,
-  parcelasCol?: number | null,
+  _parcelasCol?: number | null,
 ): string {
   if (!formaPagamento) return "—";
   const fp = formaPagamento.trim();
-  // Resolve total/entrada/parcelas (colunas primeiro, fallback parse do texto)
-  let total = Number(valorTotal || valor || 0);
-  let entrada = Number(entradaCol || 0);
-  let parcelas = Number(parcelasCol || 0);
-  if (parcelas === 0) {
-    const m = fp.match(/(\d+)\s*x/i);
-    if (m) parcelas = parseInt(m[1]);
+  const total = Number(valorTotal || valor || 0);
+  const entrada = Number(entradaCol || 0);
+  // Label da entrada (Pix / Espécie / Transferência)
+  let labelEntrada = "Entrada";
+  if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
+  else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
+  else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+  // Extrai cartões "Nx no Cartão (MAQ)" — 1 ou 2 ocorrências
+  const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+  const cartoes: { parcelas: number; maquina: string }[] = [];
+  let m;
+  while ((m = cartaoRegex.exec(fp)) !== null) {
+    cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
   }
-  if (entrada === 0) {
-    const m = fp.match(/(?:Entrada\s*PIX|PIX|Entrada)\s*R?\$?\s*([\d.,]+)/i);
-    if (m) entrada = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
-  }
-  const isCartao = /cart[aã]o|link/i.test(fp);
-  const taxaPct = isCartao && parcelas > 0 ? (TAXAS_PARCELAS_MODULE[parcelas] || 0) : 0;
-  const baseParcelar = Math.max(0, total - entrada);
-  const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
-  const totalFinal = entrada + baseComTaxa;
-  const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
-  // Monta string detalhada para o motoboy — sem mencionar taxa, mas com total do cartão
+  const baseCartoes = Math.max(0, total - entrada);
   const linhas: string[] = [fp];
-  if (entrada > 0) linhas.push(`   • Entrada PIX: ${fmtBRL(entrada)}`);
-  if (parcelas > 1 && valorParcela > 0) {
-    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)} (total: ${fmtBRL(baseComTaxa)})`);
-  } else if (parcelas === 1 && baseComTaxa > 0) {
-    linhas.push(`   • Cartão: ${fmtBRL(baseComTaxa)}`);
+  if (entrada > 0) linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
+  if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
+    const c = cartoes[0];
+    const vParc = baseCartoes / c.parcelas;
+    if (c.parcelas > 1) {
+      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(baseCartoes)}`);
+    } else {
+      linhas.push(`   • Cartão${c.maquina ? ` (${c.maquina})` : ""}: ${fmtBRL(baseCartoes)}`);
+    }
+  } else if (cartoes.length === 2) {
+    // Sem granularidade de valores nos dois cartões — aproxima 50/50
+    const metade = baseCartoes / 2;
+    cartoes.forEach((c, i) => {
+      const vParc = c.parcelas > 0 ? metade / c.parcelas : 0;
+      linhas.push(`   • Cartão ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(metade)}`);
+    });
   } else if (entrada === 0 && valor != null) {
     linhas.push(`   • ${fmtBRL(Number(valor))}`);
   }
-  // silent dep: totalFinal não usado aqui, mas mantido no cálculo acima caso precise
-  void totalFinal;
   return linhas.join("\n");
 }
 
@@ -191,6 +196,8 @@ export default function EntregasPage() {
     maquina: "",
     forma_pagamento_2: "",
     valor_2: "",
+    parcelas_2: "",
+    maquina_2: "",
     vendedor: "",
     regiao: "",
     local_entrega: "",
@@ -467,6 +474,13 @@ export default function EntregasPage() {
   const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorPag1 * (1 + taxaAtual / 100)) : valorPag1;
   const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
 
+  // Pagamento 2 pode ser cartão também — calcula taxa/parcelas separadamente
+  const isCartao2 = form.forma_pagamento_2 === "Cartao Credito" || form.forma_pagamento_2 === "Link de Pagamento";
+  const nParcelas2 = parseInt(form.parcelas_2) || 0;
+  const taxaAtual2 = isCartao2 && nParcelas2 > 0 ? (TAXAS_PARCELAS[nParcelas2] || 0) : 0;
+  const totalComTaxa2 = taxaAtual2 > 0 ? Math.ceil(valorPag2 * (1 + taxaAtual2 / 100)) : valorPag2;
+  const valorParcela2 = nParcelas2 > 0 ? Math.ceil(totalComTaxa2 / nParcelas2) : 0;
+
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
   const fetchEntregas = useCallback(async () => {
@@ -573,16 +587,24 @@ export default function EntregasPage() {
         : form.local_entrega === "OUTRO" && form.local_detalhes?.trim()
         ? form.local_detalhes.trim()
         : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
-    // Forma de pagamento detalhada
+    // Forma de pagamento detalhada (embute parcelas/máquina de ambos os pagamentos)
     let formaPagDetalhada = form.forma_pagamento || "";
     if ((form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && form.parcelas) {
       formaPagDetalhada = `${form.parcelas}x no Cartão${form.maquina ? ` (${form.maquina})` : ""}`;
+    } else if (form.forma_pagamento === "Link de Pagamento" && form.parcelas) {
+      formaPagDetalhada = `${form.parcelas}x no Link${form.maquina ? ` (${form.maquina})` : ""}`;
     } else if (form.forma_pagamento === "Pix" && form.maquina) {
       formaPagDetalhada = `PIX (${form.maquina})`;
     }
     if (form.forma_pagamento_2 && form.valor_2) {
-      formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+      if (isCartao2 && form.parcelas_2) {
+        formaPagDetalhada += ` + ${form.parcelas_2}x no ${form.forma_pagamento_2 === "Link de Pagamento" ? "Link" : "Cartão"}${form.maquina_2 ? ` (${form.maquina_2})` : ""}`;
+      } else {
+        formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+      }
     }
+    // Total a pagar incluindo taxa dos dois cartões (se houver)
+    const valorTotalFinal = totalComTaxa + totalComTaxa2;
     // Observação com endereço de cadastro do cliente (se diferente do de entrega)
     const obsExtras: string[] = [];
     if (form.observacao) obsExtras.push(form.observacao);
@@ -612,10 +634,11 @@ export default function EntregasPage() {
         detalhes_upgrade: trocasStr || null,
         forma_pagamento: formaPagDetalhada || null,
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
-        // Campos estruturados pra exibicao detalhada no modal
-        entrada: form.forma_pagamento_2 && /pix/i.test(form.forma_pagamento_2) && form.valor_2 ? parseFloat(form.valor_2) : null,
+        // Campos estruturados pra exibicao detalhada no modal.
+        // `entrada` guarda Pix/Espécie/Transferência do pagamento 2 (não-cartão) — NÃO incluímos cartão aqui.
+        entrada: form.forma_pagamento_2 && !isCartao2 && form.valor_2 ? parseFloat(form.valor_2) : null,
         parcelas: form.parcelas ? parseInt(form.parcelas) : null,
-        valor_total: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
+        valor_total: valorTotalFinal > 0 ? valorTotalFinal : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
       }),
@@ -1495,7 +1518,7 @@ export default function EntregasPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className={labelCls}>Forma</p>
-                    <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
+                    <select value={form.forma_pagamento_2} onChange={(e) => { set("forma_pagamento_2", e.target.value); if (e.target.value !== "Cartao Credito" && e.target.value !== "Link de Pagamento") { set("parcelas_2", ""); set("maquina_2", ""); } }} className={inputCls}>
                       <option value="">-- Selecionar --</option>
                       <option value="Pix">Pix</option>
                       <option value="Cartao Credito">Cartão Crédito</option>
@@ -1508,15 +1531,43 @@ export default function EntregasPage() {
                     <p className={labelCls}>Valor R$</p>
                     <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="0" className={inputCls} />
                   </div>
+                  {isCartao2 && (<>
+                    <div>
+                      <p className={labelCls}>Parcelas {form.forma_pagamento_2 === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
+                      <select value={form.parcelas_2} onChange={(e) => set("parcelas_2", e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        {(form.forma_pagamento_2 === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className={labelCls}>Máquina</p>
+                      <select value={form.maquina_2} onChange={(e) => set("maquina_2", e.target.value)} className={inputCls}>
+                        <option value="">-- Selecionar --</option>
+                        <option value="ITAU">Itaú</option>
+                        <option value="INFINITE">Infinite</option>
+                      </select>
+                    </div>
+                    {nParcelas2 > 0 && valorPag2 > 0 && (
+                      <div className="col-span-2 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span className="text-[#86868B]">Valor a parcelar: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorPag2.toLocaleString("pt-BR")}</b></span>
+                          <span className="text-red-500">Taxa ({taxaAtual2}%): <b>+R$ {(totalComTaxa2 - valorPag2).toLocaleString("pt-BR")}</b></span>
+                          <span className="text-[#86868B]">Total c/ taxa: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {totalComTaxa2.toLocaleString("pt-BR")}</b></span>
+                          <span className="text-[#E8740E] font-bold">{nParcelas2}x de R$ {valorParcela2.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>)}
                 </div>
               </div>
             )}
 
-            {/* Validador da soma dos pagamentos */}
+            {/* Validador da soma dos pagamentos (soma valores-base, pré-taxa) */}
             {(valorPag1 > 0 || valorPag2 > 0) && valorAPagar > 0 && (() => {
               const soma = valorPag1 + valorPag2;
               const diff = soma - valorAPagar;
               const ok = Math.abs(diff) < 1;
+              const totalCliente = totalComTaxa + totalComTaxa2;
               return (
                 <div className={`col-span-2 md:col-span-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-amber-50 border border-amber-200 text-amber-700"}`}>
                   <span>{ok ? "✅" : "⚠️"}</span>
@@ -1525,6 +1576,7 @@ export default function EntregasPage() {
                     {valorPag2 > 0 && <> + Pagamento 2: <b>R$ {valorPag2.toLocaleString("pt-BR")}</b></>}
                     {" = "}<b>R$ {soma.toLocaleString("pt-BR")}</b>
                     {" · "}Valor a pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
+                    {(taxaAtual > 0 || taxaAtual2 > 0) && <> · Total cliente c/ taxa: <b>R$ {totalCliente.toLocaleString("pt-BR")}</b></>}
                     {!ok && <> · <b>Divergência R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
                   </span>
                 </div>
@@ -2240,39 +2292,53 @@ export default function EntregasPage() {
                     <span className="text-[#86868B]">Pagamento: </span>
                     <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
                     {(() => {
-                      // Prioriza colunas estruturadas; fallback pra parse do texto forma_pagamento
-                      let total = Number(e.valor_total || e.valor || 0);
-                      let entrada = Number(e.entrada || 0);
-                      let parcelas = Number(e.parcelas || 0);
-                      if (parcelas === 0) {
-                        // Tenta extrair "Nx" do texto de forma_pagamento
-                        const m = (e.forma_pagamento || "").match(/(\d+)\s*x/i);
-                        if (m) parcelas = parseInt(m[1]);
+                      // valor_total salvo já inclui taxa de ambos os cartões
+                      const total = Number(e.valor_total || e.valor || 0);
+                      const entrada = Number(e.entrada || 0);
+                      const fp = e.forma_pagamento || "";
+                      // Detecta forma da entrada (Pix/Espécie/Transferência) pelo texto
+                      let labelEntrada = "Entrada";
+                      if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
+                      else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
+                      else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+                      // Extrai cartões da string "Nx no Cartão (MAQ)" — pode ter 1 ou 2 ocorrências
+                      const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+                      const cartoes: { parcelas: number; maquina: string }[] = [];
+                      let m;
+                      while ((m = cartaoRegex.exec(fp)) !== null) {
+                        cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
                       }
-                      if (entrada === 0) {
-                        // Tenta extrair "Entrada R$X" ou "PIX R$X"
-                        const m = (e.forma_pagamento || "").match(/(?:Entrada\s*PIX|PIX|Entrada)\s*R?\$?\s*([\d.,]+)/i);
-                        if (m) entrada = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
+                      // Base a parcelar nos cartões = total − entrada
+                      const baseCartoes = Math.max(0, total - entrada);
+                      // Se há 2 cartões, precisamos saber quanto de cada. O esquema atual só guarda total —
+                      // divide igualmente quando não há info específica. Para 1 cartão, usa tudo.
+                      let linhasCartao: { label: string; valor: number; parcelas: number; valorParcela: number }[] = [];
+                      if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
+                        const c = cartoes[0];
+                        linhasCartao.push({
+                          label: `${c.parcelas}x${c.maquina ? ` no Cartão (${c.maquina})` : ""}`,
+                          valor: baseCartoes,
+                          parcelas: c.parcelas,
+                          valorParcela: baseCartoes / c.parcelas,
+                        });
+                      } else if (cartoes.length === 2) {
+                        // Sem granularidade de valores: tenta dividir 50/50 como aproximação
+                        const metade = baseCartoes / 2;
+                        linhasCartao = cartoes.map(c => ({
+                          label: `${c.parcelas}x${c.maquina ? ` no Cartão (${c.maquina})` : ""}`,
+                          valor: metade,
+                          parcelas: c.parcelas,
+                          valorParcela: c.parcelas > 0 ? metade / c.parcelas : 0,
+                        }));
                       }
-                      if (total === 0) {
-                        const m = (e.forma_pagamento || "").match(/Total\s*R?\$?\s*([\d.,]+)/i);
-                        if (m) total = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
-                      }
-                      // Detecta se a forma envolve cartão de crédito / link (aplica taxa)
-                      const fp = (e.forma_pagamento || "").toLowerCase();
-                      const isCartao = fp.includes("cart") || fp.includes("link");
-                      const taxaPct = isCartao && parcelas > 0 ? (TAXAS_PARCELAS[parcelas] || 0) : 0;
-                      // Base a parcelar = total − entrada (assume que entrada NÃO passa no cartão)
-                      const baseParcelar = Math.max(0, total - entrada);
-                      const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
-                      const totalFinal = entrada + baseComTaxa;
-                      const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
-                      if (total <= 0 && parcelas <= 0) return null;
+                      if (total <= 0 && linhasCartao.length === 0) return null;
                       return (
                         <div className="mt-1 pl-2 text-xs text-[#86868B] space-y-0.5">
-                          {total > 0 && <p>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {totalFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>{taxaPct > 0 && <span className="text-[10px]"> (base R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} + taxa {taxaPct}%)</span>}</p>}
-                          {entrada > 0 && <p>Entrada: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
-                          {parcelas > 1 && valorParcela > 0 && <p>{parcelas}x de <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>}
+                          {total > 0 && <p>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
+                          {entrada > 0 && <p>{labelEntrada}: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
+                          {linhasCartao.map((l, i) => (
+                            <p key={i}>{l.label}: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {l.valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>{linhasCartao.length > 1 && <> · total R$ {l.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>}</p>
+                          ))}
                         </div>
                       );
                     })()}
@@ -2417,6 +2483,8 @@ export default function EntregasPage() {
                         maquina: "",
                         forma_pagamento_2: "",
                         valor_2: "",
+                        parcelas_2: "",
+                        maquina_2: "",
                         vendedor: e.vendedor || "",
                         regiao: e.regiao || "",
                         local_entrega: "",
