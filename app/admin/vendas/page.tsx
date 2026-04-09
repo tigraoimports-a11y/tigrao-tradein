@@ -115,7 +115,7 @@ export default function VendasPage() {
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -128,7 +128,10 @@ export default function VendasPage() {
     cep: "", bairro: "", cidade: "", uf: "",
     // Atacado: frete/entrega cobrado a parte
     frete_valor: "", frete_recebido: false as boolean,
+    // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
+    usar_credito_loja: "",
   });
+  const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
   // Restaurar rascunho do localStorage ao montar
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -574,6 +577,39 @@ export default function VendasPage() {
     return () => { if (clienteHistoricoTimer.current) clearTimeout(clienteHistoricoTimer.current); };
   }, [form.cliente, fetchClienteHistorico]);
 
+  // Buscar saldo de crédito do lojista quando cliente/cpf/cnpj mudar (só ATACADO)
+  useEffect(() => {
+    if (form.tipo !== "ATACADO" || (!form.cliente && !form.cpf && !form.cnpj)) {
+      setCreditoLojistaSaldo(0);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (form.cpf) params.set("cpf", form.cpf);
+        if (form.cnpj) params.set("cnpj", form.cnpj);
+        if (form.cliente) params.set("nome", form.cliente);
+        // Usa a mesma tabela que a tela Clientes/Lojistas (lojistas.saldo_credito)
+        const res = await fetch(`/api/admin/lojistas?${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+        if (res.ok) {
+          const json = await res.json();
+          const saldo = Number(json.saldo || 0);
+          setCreditoLojistaSaldo(saldo);
+          // Fallback: se veio cpf/cnpj e não achou, tenta só pelo nome
+          if (saldo === 0 && form.cliente && (form.cpf || form.cnpj)) {
+            const p2 = new URLSearchParams({ nome: form.cliente });
+            const r2 = await fetch(`/api/admin/lojistas?${p2}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+            if (r2.ok) {
+              const j2 = await r2.json();
+              setCreditoLojistaSaldo(Number(j2.saldo || 0));
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.tipo, form.cliente, form.cpf, form.cnpj, password, user?.nome]);
+
   // Verificar se já desbloqueou nesta sessão
   useEffect(() => {
     const temPermissaoVendas = user?.permissoes?.some(p => p === "vendas_ver" || p === "vendas_registrar");
@@ -647,7 +683,7 @@ export default function VendasPage() {
     const trc1 = parseFloat(form.produto_na_troca) || 0;
     const trc2 = parseFloat(form.produto_na_troca2) || 0;
     const trc = trc1 + trc2;
-    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
     const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
     let liqPrinc = 0;
     if (compVal > 0) {
@@ -763,7 +799,7 @@ export default function VendasPage() {
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
     // Segundo cartão (comp_alt) — sempre incluído quando preenchido
     const compAltVal = parseFloat(form.comp_alt) || 0;
-    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
     const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
@@ -950,6 +986,8 @@ export default function VendasPage() {
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
+      // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
+      usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
     };
 
     if (prodFields._estoqueId) {
@@ -1170,7 +1208,7 @@ export default function VendasPage() {
           : gForma === "DEBITO" ? 0.75
           : 0;
         const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
-        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
         const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
         payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
@@ -1198,7 +1236,7 @@ export default function VendasPage() {
           // Cartão alternativo (2o cartão)
           const gCompAlt = parseFloat(form.comp_alt) || 0;
           const gTaxaAlt = gCompAlt > 0
-            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
             : 0;
           const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
 
@@ -1271,7 +1309,7 @@ export default function VendasPage() {
               const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
               const gTaxaAlt = gCompAlt > 0
-                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
                 : 0;
               const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
@@ -1395,7 +1433,7 @@ export default function VendasPage() {
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-        parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
         troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1405,7 +1443,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false,
+        frete_valor: "", frete_recebido: false, usar_credito_loja: "",
       });
       setCatSel("");
       setEstoqueId("");
@@ -1644,6 +1682,7 @@ export default function VendasPage() {
       valor_total_venda: "",
       banco_2nd: v.banco_2nd || "",
       banco_alt: v.banco_alt || "",
+      forma_alt: (v as unknown as Record<string, string>).forma_alt || "",
       parc_alt: String(v.parc_alt || ""),
       band_alt: v.band_alt || "",
       comp_alt: String(v.comp_alt || ""),
@@ -1671,7 +1710,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false,
+      frete_recebido: false, usar_credito_loja: "",
     });
     setCatSel("");
     setEstoqueId("");
@@ -1870,7 +1909,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1879,7 +1918,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
@@ -2039,6 +2078,41 @@ export default function VendasPage() {
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
               </div>
+
+              {/* Crédito de Lojista — aparece sempre em ATACADO, mesmo sem saldo (facilita cadastrar/ver) */}
+              {form.tipo === "ATACADO" && form.cliente && (
+                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-700">💳 Crédito do Lojista</span>
+                    <span className="text-sm font-bold text-blue-700">Saldo: R$ {creditoLojistaSaldo.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <p className={labelCls}>Usar crédito (R$)</p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.usar_credito_loja}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          const v = digits ? Math.min(parseInt(digits), creditoLojistaSaldo) : 0;
+                          set("usar_credito_loja", v ? String(v) : "");
+                        }}
+                        placeholder="0"
+                        className={inputCls}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => set("usar_credito_loja", String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo)))}
+                      className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      Usar tudo
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-blue-600 mt-1">Este valor será debitado do saldo ao finalizar a venda.</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -2439,7 +2513,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -2449,7 +2523,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -2605,7 +2679,7 @@ export default function VendasPage() {
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
                           const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
                           const compAltDisp = parseFloat(form.comp_alt) || 0;
-                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
                           const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
                           return (
                           <>
@@ -2745,25 +2819,33 @@ export default function VendasPage() {
             </div>
             )}
 
-            {/* Segundo cartao (opcional) */}
-            {form.forma === "CARTAO" && (
+            {/* Segundo cartão/link (opcional) */}
+            {(form.forma === "CARTAO" || form.forma === "LINK") && (
             <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
               <label className="flex items-center gap-2 text-sm text-[#86868B]">
                 <input type="checkbox" checked={!!form.banco_alt} onChange={(e) => {
-                  if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); }
-                  else { set("banco_alt", "ITAU"); }
+                  if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); set("forma_alt", ""); }
+                  else { set("banco_alt", form.forma === "LINK" ? "MERCADO_PAGO" : "ITAU"); set("forma_alt", form.forma); }
                 }} className="accent-[#E8740E]" />
-                <span className="font-semibold">Cliente pagou com segundo cartao?</span>
+                <span className="font-semibold">Cliente pagou com 2° {form.forma === "LINK" ? "link/cartão" : "cartão/link"}?</span>
               </label>
               {form.banco_alt && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div><p className={labelCls}>Maquina (2o cartao)</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
-                    <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                    <option value="CARTAO">Maquina Cartão</option>
+                    <option value="LINK">Link Mercado Pago</option>
                   </select></div>
+                  {(form.forma_alt || form.forma) !== "LINK" && (
+                    <div><p className={labelCls}>Maquina</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
+                      <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                    </select></div>
+                  )}
                   <div><p className={labelCls}>Parcelas</p><input type="number" value={form.parc_alt} onChange={(e) => set("parc_alt", e.target.value)} placeholder="1" className={inputCls} /></div>
-                  <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
-                    <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
-                  </select></div>
+                  {(form.forma_alt || form.forma) !== "LINK" && (
+                    <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
+                      <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+                    </select></div>
+                  )}
                   <div><p className={labelCls}>Valor no comprovante (R$)</p><input type="number" value={form.comp_alt} onChange={(e) => set("comp_alt", e.target.value)} placeholder="0" className={inputCls} /></div>
                 </div>
               )}
@@ -3023,25 +3105,33 @@ export default function VendasPage() {
               </div>
               )}
 
-              {/* Segundo cartao (opcional) — cart mode */}
-              {form.forma === "CARTAO" && (
+              {/* Segundo cartão/link (opcional) — cart mode */}
+              {(form.forma === "CARTAO" || form.forma === "LINK") && (
               <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
                   <input type="checkbox" checked={!!form.banco_alt} onChange={(e) => {
-                    if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); }
-                    else { set("banco_alt", "ITAU"); }
+                    if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); set("forma_alt", ""); }
+                    else { set("banco_alt", form.forma === "LINK" ? "MERCADO_PAGO" : "ITAU"); set("forma_alt", form.forma); }
                   }} className="accent-[#E8740E]" />
-                  <span className="font-semibold">Cliente pagou com segundo cartao?</span>
+                  <span className="font-semibold">Cliente pagou com 2° {form.forma === "LINK" ? "link/cartão" : "cartão/link"}?</span>
                 </label>
                 {form.banco_alt && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className={labelCls}>Maquina (2o cartao)</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
-                      <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                      <option value="CARTAO">Maquina Cartão</option>
+                      <option value="LINK">Link Mercado Pago</option>
                     </select></div>
+                    {(form.forma_alt || form.forma) !== "LINK" && (
+                      <div><p className={labelCls}>Maquina</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
+                        <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                      </select></div>
+                    )}
                     <div><p className={labelCls}>Parcelas</p><input type="number" value={form.parc_alt} onChange={(e) => set("parc_alt", e.target.value)} placeholder="1" className={inputCls} /></div>
-                    <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
-                      <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
-                    </select></div>
+                    {(form.forma_alt || form.forma) !== "LINK" && (
+                      <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
+                        <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+                      </select></div>
+                    )}
                     <div><p className={labelCls}>Valor no comprovante (R$)</p><input type="number" value={form.comp_alt} onChange={(e) => set("comp_alt", e.target.value)} placeholder="0" className={inputCls} /></div>
                   </div>
                 )}
@@ -3215,7 +3305,7 @@ export default function VendasPage() {
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
               const liqPrincipal = calcularLiquido(gComp, taxa);
-              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
               const liqAlt = gCompAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : gCompAlt) : 0;
               receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
             }
@@ -3555,20 +3645,38 @@ export default function VendasPage() {
                         const temTrocaV = (v.produto_na_troca && v.produto_na_troca !== "-" && v.produto_na_troca !== "null") || !!v.troca_produto || !!(v as unknown as Record<string, string>).troca_produto2;
                         const temEntrada = v.entrada_pix && v.entrada_pix > 0;
                         const valorTrocaV = temTrocaV ? parseFloat(String(v.produto_na_troca)) || 0 : 0;
+                        const valorTrocaV2 = parseFloat(String((v as unknown as Record<string, string>).produto_na_troca2 || 0)) || 0;
+                        const valorTrocaTotal = valorTrocaV + valorTrocaV2;
                         const isExpanded = expandedId === v.id;
                         const grupoItens = v.grupo_id ? grupoMap.get(v.grupo_id) : null;
                         const isGrupo = grupoItens && grupoItens.length > 1;
                         const isFirstInGrupo = isGrupo && grupoItens[0].id === v.id;
 
                         const pagParts: string[] = [];
-                        if (valorTrocaV > 0) pagParts.push(`Troca: ${fmt(valorTrocaV)}`);
+                        if (valorTrocaTotal > 0) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
                         if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
+                        const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
+                        const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - compVal));
+                        const formaLabel = (f: string | null | undefined) => {
+                          if (!f) return "";
+                          if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
+                          if (f === "PIX") return "💸 PIX";
+                          if (f === "LINK") return "Link MP";
+                          if (f === "CARTAO") return "Cartão";
+                          if (f === "DEBITO") return "Débito";
+                          if (f === "FIADO") return "Fiado";
+                          return f;
+                        };
                         if (v.forma === "CARTAO" && v.qnt_parcelas) {
                           pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaV) {
+                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaTotal) {
                           pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
-                        } else if (!temEntrada && !valorTrocaV) {
-                          pagParts.push(`${v.forma} ${v.banco}`);
+                        } else if (v.forma && v.forma !== "CARTAO" && (resto > 0 || (!temEntrada && !valorTrocaTotal))) {
+                          const lbl = formaLabel(v.forma);
+                          const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
+                          pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
                         }
                         if (v.banco_alt) {
                           pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);
@@ -4019,6 +4127,7 @@ export default function VendasPage() {
                                               valor_total_venda: "",
                                               banco_2nd: primaryVenda.banco_2nd || "",
                                               banco_alt: primaryVenda.banco_alt || "",
+                                              forma_alt: (primaryVenda as unknown as Record<string, string>).forma_alt || "",
                                               parc_alt: String(primaryVenda.parc_alt || ""),
                                               band_alt: primaryVenda.band_alt || "",
                                               comp_alt: String(primaryVenda.comp_alt || ""),
@@ -4061,6 +4170,7 @@ export default function VendasPage() {
                                               uf: primaryVenda.uf || "",
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
+                                              usar_credito_loja: "",
                                             });
                                             setProdutoManual(true);
 
@@ -4247,14 +4357,24 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                              const isLojista = v.tipo === "ATACADO" || v.origem === "ATACADO";
+                                              let devolverComoCredito = false;
+                                              if (isLojista) {
+                                                const r = confirm(`Cancelar venda de ${v.cliente}?\n\n✅ OK = Manter valor como CRÉDITO para o lojista (R$ ${Number(v.preco_vendido || 0).toLocaleString("pt-BR")})\n❌ Cancelar = apenas cancelar SEM creditar`);
+                                                if (r) devolverComoCredito = true;
+                                                else {
+                                                  if (!confirm(`Cancelar SEM creditar?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                                }
+                                              } else {
+                                                if (!confirm(`Cancelar venda de ${v.cliente}?\n\nIsso vai:\n- Marcar como cancelada\n- Remover o seminovo do estoque (se houver troca)`)) return;
+                                              }
                                               await fetch("/api/vendas", {
                                                 method: "DELETE",
                                                 headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id }),
+                                                body: JSON.stringify({ id: v.id, devolver_como_credito: devolverComoCredito }),
                                               });
                                               setVendas(prev => prev.filter(r => r.id !== v.id));
-                                              setMsg("Venda cancelada!");
+                                              setMsg(devolverComoCredito ? "Venda cancelada! Valor creditado ao lojista." : "Venda cancelada!");
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
                                           >
@@ -4626,7 +4746,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -4636,7 +4756,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);
@@ -4660,7 +4780,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -4670,7 +4790,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false,
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
                   setShowSegundaTroca(false);
                   setLastClienteData(null);

@@ -11,6 +11,8 @@ export default function GerarLinkPage() {
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
+  // Preços individuais por produto (idx → preco numérico), pra somar quando tem 2+ produtos
+  const [precosPorProduto, setPrecosPorProduto] = useState<Record<number, number>>({});
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
   const [pickerIdx, setPickerIdx] = useState<number | null>(null);
@@ -109,6 +111,10 @@ export default function GerarLinkPage() {
   // Cores disponíveis pra QUALQUER nome de produto — fonte: catalogo_modelo_configs.
   const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
     if (!nomeProduto) return [];
+    // Apple Watch Ultra: cor já faz parte do nome do produto — NÃO mostrar seletor
+    if (/Apple Watch Ultra/i.test(nomeProduto)) return [];
+    // Acessórios sem cor (Apple Pencil, cabos, etc)
+    if (/Pencil|Cable|Cabo|Carregador|Adapter|Hub|Case|Capa|Pelicula/i.test(nomeProduto)) return [];
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
@@ -164,6 +170,24 @@ export default function GerarLinkPage() {
   }, [catalogoCores]);
 
   const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
+
+  // Auto-soma preço base quando há múltiplos produtos
+  // Lookup preço de cada produto pelo nome na lista de preços
+  const lookupPreco = (nome: string): number => {
+    if (!nome) return 0;
+    const match = precosVenda.find(p => `${p.modelo} ${p.armazenamento}`.trim() === nome);
+    if (match) return match.preco_pix;
+    const semi = seminovosDisponiveis.find(s => s.nome === nome);
+    return semi?.preco || 0;
+  };
+
+  // Quando produtos mudam, recalcula preço base como soma de todos
+  useEffect(() => {
+    const prodsFilled = produtos.filter(Boolean);
+    if (prodsFilled.length <= 1) return; // 1 produto: preço já setado no select
+    const total = prodsFilled.reduce((s, p) => s + lookupPreco(p), 0);
+    if (total > 0) setPreco(total.toLocaleString("pt-BR"));
+  }, [produtos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
@@ -1010,6 +1034,43 @@ export default function GerarLinkPage() {
                           <FL label="Vendedor" k="vendedor" full />
                           <FL label="Observação" k="observacao" full />
                         </div>
+                        {/* Resumo do pagamento */}
+                        {(() => {
+                          const valor = Number(editLink.valor || 0);
+                          const entrada = Number(editLink.entrada || 0);
+                          const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
+                          const parcelasN = Number(editLink.parcelas || 0);
+                          const forma = editLink.forma_pagamento || "";
+                          const isCartao = forma === "Cartao Credito" || forma === "Link de Pagamento";
+                          // Restante após entrada e troca é o que parcela (taxa só cai sobre ele)
+                          const restante = Math.max(0, valor - entrada - troca);
+                          const taxaPct = isCartao && parcelasN > 0 ? (TAXAS[parcelasN] || 0) : 0;
+                          const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
+                          const valorFinal = entrada + restanteComTaxa;
+                          const valorParcela = parcelasN > 0 ? restanteComTaxa / parcelasN : 0;
+                          if (valor <= 0) return null;
+                          const boxCls = dm ? "bg-[#14301F] border-[#1F5A38]" : "bg-green-50 border-green-200";
+                          const titleCls = dm ? "text-green-300" : "text-green-800";
+                          const mutedCls = dm ? "text-[#98989D]" : "text-[#86868B]";
+                          const valCls = dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]";
+                          const sepCls = dm ? "border-[#1F5A38]" : "border-green-300";
+                          return (
+                            <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${boxCls}`}>
+                              <p className={`font-bold uppercase tracking-wide text-[10px] ${titleCls}`}>💳 Resumo do pagamento</p>
+                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {entrada > 0 && <div className="flex justify-between"><span className={mutedCls}>− Entrada</span><span className={`font-mono ${valCls}`}>R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {troca > 0 && <div className="flex justify-between"><span className={mutedCls}>− Troca abatida</span><span className={`font-mono ${valCls}`}>R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
+                              {taxaPct > 0 && (
+                                <div className="flex justify-between"><span className={mutedCls}>Taxa {parcelasN}x ({taxaPct}%)</span><span className={`font-mono ${valCls}`}>+R$ {(restanteComTaxa - restante).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              )}
+                              <div className={`flex justify-between pt-1 border-t ${sepCls}`}><span className={`font-bold ${titleCls}`}>Valor final a pagar</span><span className={`font-mono font-bold ${titleCls}`}>R$ {valorFinal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {parcelasN > 1 && valorParcela > 0 && (
+                                <div className={`flex justify-between ${mutedCls}`}><span>{parcelasN}x de</span><span className="font-mono">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                              )}
+                              {editLink.forma_pagamento && <p className={`text-[10px] pt-1 ${mutedCls}`}>Forma: <strong className={valCls}>{editLink.forma_pagamento}</strong></p>}
+                            </div>
+                          );
+                        })()}
                       </section>
 
                       {/* Link — Cliente */}
@@ -1078,6 +1139,17 @@ export default function GerarLinkPage() {
                                 <FD label="Horário" k="horario" type="time" />
                               </div>
                             </section>
+                            {/* Forma de pagamento escolhida pelo cliente no link */}
+                            {(editDados.forma_pagamento || editDados.preco) && (
+                              <section>
+                                <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pagamento (escolhido pelo cliente)</h5>
+                                <div className="grid grid-cols-1 gap-3">
+                                  <FD label="Forma de pagamento" k="forma_pagamento" full />
+                                  <FD label="Preço" k="preco" full />
+                                </div>
+                                <p className="text-[10px] text-[#86868B] mt-1 italic">Esse texto veio do que o cliente escolheu ao preencher (parcelas, entrada, etc).</p>
+                              </section>
+                            )}
                           </>
                         )}
                       </div>
@@ -1219,6 +1291,21 @@ export default function GerarLinkPage() {
                       </ul>
                     )}
                     {l.valor > 0 && <p className="text-xs text-[#E8740E] font-bold">R$ {Number(l.valor).toLocaleString("pt-BR")}</p>}
+                    {(() => {
+                      const troca = Number(l.troca_valor || 0) + Number(l.troca_valor2 || 0);
+                      const entrada = Number(l.entrada || 0);
+                      const valorFinal = Math.max(0, Number(l.valor || 0) - troca - entrada);
+                      const temDetalhe = l.forma_pagamento || l.parcelas || entrada > 0 || valorFinal !== Number(l.valor || 0);
+                      if (!temDetalhe) return null;
+                      return (
+                        <div className="text-[11px] mt-1 space-y-0.5">
+                          {l.forma_pagamento && <p className="text-[#1D1D1F]">💳 <strong>{l.forma_pagamento}</strong>{l.parcelas ? ` · ${l.parcelas}` : ""}</p>}
+                          {entrada > 0 && <p className="text-[#86868B]">Entrada: R$ {entrada.toLocaleString("pt-BR")}</p>}
+                          {troca > 0 && <p className="text-[#86868B]">Troca abatida: R$ {troca.toLocaleString("pt-BR")}</p>}
+                          {valorFinal !== Number(l.valor || 0) && <p className="text-green-700 font-bold">Valor final: R$ {valorFinal.toLocaleString("pt-BR")}</p>}
+                        </div>
+                      );
+                    })()}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
                         👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}
@@ -1397,10 +1484,18 @@ export default function GerarLinkPage() {
                         const sel = produtos[pickerIdx!] === m.nome;
                         return (
                           <button key={m.nome} onClick={() => {
+                            const idx = pickerIdx!;
                             const np = [...produtos];
-                            np[pickerIdx!] = sel ? "" : m.nome;
+                            np[idx] = sel ? "" : m.nome;
                             setProdutos(np);
-                            if (pickerIdx === 0) { setPreco(sel ? "" : (m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "")); setCorSel(""); }
+                            // Guarda preço individual desse produto e recalcula soma
+                            const novosPrecos = { ...precosPorProduto };
+                            if (sel) { delete novosPrecos[idx]; } else { novosPrecos[idx] = m.preco || 0; }
+                            setPrecosPorProduto(novosPrecos);
+                            // Soma de todos os produtos selecionados
+                            const soma = Object.values(novosPrecos).reduce((s, v) => s + v, 0);
+                            setPreco(soma > 0 ? soma.toLocaleString("pt-BR") : "");
+                            if (idx === 0) setCorSel("");
                             if (!sel) { setPickerIdx(null); setCatSel(""); }
                           }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                             <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
@@ -1416,7 +1511,7 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); }} className={inputCls}>
+            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); }} className={inputCls}>
               <option value="">-- Categoria --</option>
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
               <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
@@ -1433,7 +1528,7 @@ export default function GerarLinkPage() {
                     return (
                       <div key={m.nome}>
                         <button onClick={() => {
-                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
+                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); return; }
                           setProdutos([m.nome]);
                           setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
                           setCorSel("");
@@ -1441,20 +1536,16 @@ export default function GerarLinkPage() {
                           <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}{sel && corSel ? ` ${corParaPT(corSel)}` : ""}</p>
                           <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
                         </button>
-                        {sel && catSel !== "SEMINOVOS" && (
+                        {sel && catSel !== "SEMINOVOS" && coresDisponiveis.length > 0 && (
                           <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
                             <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                            {coresDisponiveis.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {coresDisponiveis.map(cor => (
-                                  <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                                  >{corParaPT(cor)}</button>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className={`text-xs italic ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Nenhuma cor cadastrada para este modelo no catálogo.</p>
-                            )}
+                            <div className="flex flex-wrap gap-2">
+                              {coresDisponiveis.map(cor => (
+                                <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                >{corParaPT(cor)}</button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1472,6 +1563,26 @@ export default function GerarLinkPage() {
           setPickerIdx(newIdx);
           setCatSel("");
         }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+
+        {/* Resumo dos produtos com preço individual */}
+        {produtos.filter(Boolean).length > 1 && (
+          <div className={`rounded-xl p-3 space-y-1.5 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no link ({produtos.filter(Boolean).length})</p>
+            {produtos.filter(Boolean).map((p, i) => {
+              const pPreco = lookupPreco(p);
+              return (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}</span>
+                  <span className="font-semibold text-green-600">{pPreco > 0 ? `R$ ${pPreco.toLocaleString("pt-BR")}` : "—"}</span>
+                </div>
+              );
+            })}
+            <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
+              <span>Total</span>
+              <span className="text-green-600">R$ {produtos.filter(Boolean).reduce((s, p) => s + lookupPreco(p), 0).toLocaleString("pt-BR")}</span>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className={labelCls}>Preco Base (R$)</label>
@@ -1772,9 +1883,14 @@ export default function GerarLinkPage() {
             <label className={labelCls}>Horario</label>
             <select value={horario} onChange={(e) => setHorario(e.target.value)} className={inputCls}>
               <option value="">-- Opcional --</option>
-              <option value="Manha">Manha</option>
-              <option value="Tarde">Tarde</option>
-              <option value="Noite">Noite</option>
+              {(() => {
+                const opts: string[] = [];
+                for (let h = 10; h <= 19; h++) {
+                  opts.push(`${String(h).padStart(2, "0")}:00`);
+                  if (h < 19) opts.push(`${String(h).padStart(2, "0")}:30`);
+                }
+                return opts.map((t) => <option key={t} value={t}>{t}</option>);
+              })()}
             </select>
           </div>
           <div>

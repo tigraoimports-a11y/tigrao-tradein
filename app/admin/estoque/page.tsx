@@ -602,6 +602,8 @@ interface ProdutoEstoque {
   reserva_data: string | null;
   reserva_para: string | null;
   reserva_operador: string | null;
+  origem_compra: string | null;
+  custo_compra: number | null;
 }
 
 interface ImeiSearchResult {
@@ -1419,6 +1421,7 @@ export default function EstoquePage() {
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
+    origem_compra: "",
   });
 
   // Campos estruturados por categoria
@@ -1799,6 +1802,8 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
+      const gradeMatch = (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/);
+      const grade = gradeMatch ? gradeMatch[1] : "";
       // Layout vertical: QR em cima, texto embaixo — para fita 29mm
       return `<div class="label">
         <div style="text-align:center;padding:0.5mm 1mm 0.3mm">
@@ -1809,8 +1814,9 @@ export default function EstoquePage() {
           ${cor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${formatCorEtiquetaPTEN(cor)}</div>` : ""}
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
+          ${(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && p.bateria ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.25;margin-top:0.2mm;color:#000">🔋 Bateria: ${p.bateria}%</div>` : ""}
+          ${grade ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.2mm;color:#000;background:#FFF3CD;padding:0.3mm 1mm;border-radius:1mm;display:inline-block">Grade ${grade}</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
-          ${p.custo_unitario ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.3mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -1894,7 +1900,6 @@ export default function EstoquePage() {
           ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
           ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
           ${p.data_compra ? `<div class="data">📅 ${p.data_compra.split("-").reverse().join("/")}</div>` : ""}
-          ${p.custo_unitario ? `<div class="custo">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
           <div class="label-troca">Produto na troca</div>
         </div>
       </div>
@@ -2040,6 +2045,7 @@ export default function EstoquePage() {
       .replace(/\[PULSEIRA_TAM:[^\]]+\]/g, "")
       .replace(/\[BAND:[^\]]+\]/g, "")
       .replace(/\[RESP:[^\]]+\]/g, "")
+      .replace(/\[COM_QUEM:[^\]]+\]/g, "")
       .replace(/\s+/g, " ")
       .trim() || null;
   };
@@ -2091,6 +2097,7 @@ export default function EstoquePage() {
           fornecedor: p.fornecedor || null,
           imei: p.imei || null,
           serial_no: p.serial_no || null,
+          origem_compra: form.origem_compra || null,
           data_entrada: hojeBR(),
           observacao: (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO")
             ? `[${p.condicao}]`
@@ -2131,7 +2138,8 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
-        garantia: form.garantia || null, data_entrada: hojeBR(),
+        garantia: form.garantia || null, origem_compra: form.origem_compra || null,
+        data_entrada: hojeBR(),
       }),
     });
     const json = await res.json();
@@ -2283,22 +2291,30 @@ export default function EstoquePage() {
   const esgotados = novos.filter((p) => p.qnt === 0);
 
   // Reposição: agrupar por modelo+cor e verificar se está abaixo do mínimo
+  // Conta itens EM ESTOQUE + A CAMINHO — se a soma cobre o mínimo, não aparece
   const reposicaoCount = (() => {
-    // Agrupar por modelo_base (getModeloBase) + p.cor — mesma lógica da aba Reposição
-    const groups: Record<string, { totalQnt: number; min: number | null }> = {};
+    const groups: Record<string, { qntEstoque: number; qntACaminho: number; min: number | null }> = {};
     for (const p of novos) {
       const base = getModeloBase(p.produto, p.categoria).toUpperCase();
       const cor = (p.cor || "").toUpperCase();
       const key = `${base}|||${cor}`;
-      if (!groups[key]) groups[key] = { totalQnt: 0, min: null };
-      groups[key].totalQnt += p.qnt;
+      if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
+      groups[key].qntEstoque += p.qnt;
       if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
         groups[key].min = p.estoque_minimo;
       }
     }
+    for (const p of aCaminho) {
+      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const cor = (p.cor || "").toUpperCase();
+      const key = `${base}|||${cor}`;
+      if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
+      groups[key].qntACaminho += p.qnt;
+    }
     let count = 0;
     for (const g of Object.values(groups)) {
-      if ((g.min && g.totalQnt < g.min) || g.totalQnt === 0) count++;
+      const total = g.qntEstoque + g.qntACaminho;
+      if ((g.min && total < g.min) || (g.qntEstoque === 0 && g.qntACaminho === 0)) count++;
     }
     return count;
   })();
@@ -2759,6 +2775,30 @@ export default function EstoquePage() {
               {selectMode ? "Cancelar" : "Selecionar"}
             </button>
           )}
+          {isAdmin && (tab === "estoque" || tab === "seminovos") && !selectMode && (
+            <button
+              onClick={() => {
+                // Filtra itens visíveis (da aba atual) que têm serial ou IMEI
+                const itensVisiveis = tab === "estoque"
+                  ? estoque.filter(p => !isReservado(p) && p.tipo === "NOVO" && p.status === "EM ESTOQUE" && p.qnt > 0)
+                  : estoque.filter(p => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO");
+                const comSerial = itensVisiveis.filter(p => p.serial_no || p.imei);
+                const semSerial = itensVisiveis.length - comSerial.length;
+                if (comSerial.length === 0) {
+                  setMsg("⚠️ Nenhum produto nessa aba tem serial/IMEI cadastrado. Cadastre primeiro antes de imprimir.");
+                  return;
+                }
+                if (semSerial > 0) {
+                  if (!confirm(`${comSerial.length} produto(s) com serial/IMEI serão impressos.\n\n⚠️ ${semSerial} produto(s) SEM serial/IMEI serão ignorados (precisa cadastrar o serial primeiro).\n\nContinuar?`)) return;
+                }
+                handlePrintEtiquetaDirect(comSerial);
+                setMsg(`🏷️ ${comSerial.length} etiqueta(s) enviada(s) pra impressão!${semSerial > 0 ? ` (${semSerial} ignorados por falta de serial)` : ""}`);
+              }}
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${bgCard} border ${borderCard} text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]`}
+            >
+              🏷️ Imprimir Todas Etiquetas
+            </button>
+          )}
           {isAdmin && tab === "seminovos" && !selectMode && (
             <button
               onClick={() => { setBalanceMode(!balanceMode); if (balanceMode) setBalanceSelected(new Set()); }}
@@ -2971,7 +3011,7 @@ export default function EstoquePage() {
         // === Lógica: estoque como fonte da estrutura (preserva variantes por categoria
         // via getModeloBase: iPad storage/conect, MacBook ram/ssd/cor, Watch tamanho/conect/cor, Mac Mini ram/ssd).
         // Catálogo é usado apenas para FILTRAR cores fantasmas (que não estão cadastradas).
-        type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
+        type RepoGroup = { qntEstoque: number; qntACaminho: number; totalDisponivel: number; min: number; corEN: string; corPT: string; corDisplay: string; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
         // Normalização em tokens (igual gerar-link): geração 2ND/2º→2, remove GB/TB/MM/GPS/etc
@@ -3029,16 +3069,18 @@ export default function EstoquePage() {
         };
 
         // Agrupar estoque por categoria → modelo base (preservando variantes)
-        type Acc = { totalQnt: number; min: number; jaCaminho: boolean };
+        // Inclui TANTO itens EM ESTOQUE quanto A CAMINHO pra calcular falta real
+        type Acc = { qntEstoque: number; qntACaminho: number; min: number };
         const acc = new Map<string, Map<string, Map<string, Acc>>>(); // cat → base → corNorm → dados
         const corDisplayMap = new Map<string, string>(); // corNorm → display original
         const corENMap = new Map<string, string>(); // corNorm → EN
 
-        for (const p of novos) {
+        // Helper pra adicionar item ao acumulador
+        const addToAcc = (p: ProdutoEstoque, isACaminho: boolean) => {
           const base = getModeloBase(p.produto, p.categoria).toUpperCase();
           const cat = p.categoria || "OUTROS";
           const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
-          if (!corRaw) continue;
+          if (!corRaw) return;
           const corUpper = corRaw.toUpperCase();
           const enFromPT = PT_TO_EN[corUpper];
           const corEN = enFromPT || corUpper;
@@ -3048,19 +3090,23 @@ export default function EstoquePage() {
           const catMap = acc.get(cat)!;
           if (!catMap.has(base)) catMap.set(base, new Map());
           const baseMap = catMap.get(base)!;
-          const cur = baseMap.get(corNorm) || { totalQnt: 0, min: 0, jaCaminho: false };
-          cur.totalQnt += p.qnt;
+          const cur = baseMap.get(corNorm) || { qntEstoque: 0, qntACaminho: 0, min: 0 };
+          if (isACaminho) { cur.qntACaminho += p.qnt; } else { cur.qntEstoque += p.qnt; }
           if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
             cur.min = Math.max(cur.min, p.estoque_minimo);
           }
           baseMap.set(corNorm, cur);
           if (!corDisplayMap.has(corNorm)) {
-            // Usa corParaPT que simplifica (Mist Blue → Azul, Sage → Verde, Starlight → Estelar, etc)
             const simples = corParaPT(corEN) || corParaPT(corRaw) || corRaw;
             corDisplayMap.set(corNorm, simples);
             corENMap.set(corNorm, corEN);
           }
-        }
+        };
+
+        // Itens em estoque
+        for (const p of novos) addToAcc(p, false);
+        // Itens a caminho (já comprados, pendentes de chegada)
+        for (const p of aCaminho) addToAcc(p, true);
 
         // Converter + filtrar cores que não estão no catálogo + aplicar hide via modal
         for (const [cat, catMap] of acc.entries()) {
@@ -3080,12 +3126,13 @@ export default function EstoquePage() {
               const corEN = corENMap.get(corNorm) || corNorm.toUpperCase();
               const corPT = COR_PT[corEN.toUpperCase()] || "";
               grupo.push({
-                totalQnt: dados.totalQnt,
+                qntEstoque: dados.qntEstoque,
+                qntACaminho: dados.qntACaminho,
+                totalDisponivel: dados.qntEstoque + dados.qntACaminho,
                 min: dados.min,
                 corEN,
                 corPT,
                 corDisplay: corDisplayMap.get(corNorm) || corEN,
-                jaCaminho: dados.jaCaminho,
                 falta: 0,
               });
             }
@@ -3101,8 +3148,10 @@ export default function EstoquePage() {
         for (const [cat, models] of Object.entries(byCatModel)) {
           for (const [base, cores] of Object.entries(models)) {
             const abaixo = cores.filter(c => {
-              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : (c.totalQnt === 0 ? 1 : 0);
-              return (c.min > 0 && c.totalQnt < c.min) || (c.totalQnt === 0);
+              // Falta = mínimo - (em estoque + a caminho)
+              // Se já tem o suficiente contando os a caminho, NÃO aparece na reposição
+              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalDisponivel) : (c.qntEstoque === 0 && c.qntACaminho === 0 ? 1 : 0);
+              return (c.min > 0 && c.totalDisponivel < c.min) || (c.qntEstoque === 0 && c.qntACaminho === 0);
             });
             if (abaixo.length > 0) {
               if (!byCatModelFiltered[cat]) byCatModelFiltered[cat] = {};
@@ -3128,7 +3177,8 @@ export default function EstoquePage() {
             for (const [base, cores] of modelos) {
               lines.push(`\n${base}`);
               for (const c of cores.sort((a, b) => b.falta - a.falta)) {
-                lines.push(`${c.totalQnt === 0 ? "🔴" : "🟡"} ${c.corDisplay}: ${c.totalQnt}/${c.min} (falta ${c.falta})${c.jaCaminho ? " ✈️ A CAMINHO" : ""}`);
+                const aCaminhoTxt = c.qntACaminho > 0 ? ` (${c.qntACaminho} a caminho)` : "";
+                lines.push(`${c.qntEstoque === 0 && c.qntACaminho === 0 ? "🔴" : "🟡"} ${c.corDisplay}: ${c.qntEstoque} em estoque${aCaminhoTxt} / mín ${c.min} → falta ${c.falta}`);
               }
             }
             lines.push("");
@@ -3259,24 +3309,26 @@ export default function EstoquePage() {
                           <div className="grid gap-1.5">
                             {cores.sort((a, b) => b.falta - a.falta).map((c, i) => (
                               <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${
-                                c.totalQnt === 0
+                                c.qntEstoque === 0 && c.qntACaminho === 0
                                   ? (dm ? "bg-red-500/10 border border-red-500/20" : "bg-red-50 border border-red-100")
                                   : (dm ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-yellow-50 border border-yellow-100")
                               }`}>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
+                                  <span className="text-[14px]">{c.qntEstoque === 0 && c.qntACaminho === 0 ? "🔴" : "🟡"}</span>
                                   <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : (c.corEN || "—")}</span>
-                                  {c.jaCaminho && (
-                                    <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
+                                  {c.qntACaminho > 0 && (
+                                    <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ {c.qntACaminho} a caminho</span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className={`text-[12px] ${textSecondary}`}>
-                                    {c.totalQnt}/{c.min}
+                                    {c.qntEstoque}{c.qntACaminho > 0 ? `+${c.qntACaminho}` : ""}/{c.min}
                                   </span>
-                                  <span className={`text-[12px] font-bold ${c.totalQnt === 0 ? "text-red-500" : "text-yellow-600"}`}>
-                                    comprar {c.falta}
-                                  </span>
+                                  {c.falta > 0 && (
+                                    <span className={`text-[12px] font-bold ${c.qntEstoque === 0 && c.qntACaminho === 0 ? "text-red-500" : "text-yellow-600"}`}>
+                                      comprar {c.falta}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -3639,6 +3691,17 @@ export default function EstoquePage() {
                 </div>
               )}
             </div>
+            {/* Origem da Compra */}
+            <div>
+              <p className={labelCls}>Origem da Compra</p>
+              <select value={form.origem_compra || ""} onChange={(e) => set("origem_compra", e.target.value)} className={inputCls}>
+                <option value="">— Selecionar —</option>
+                <option value="RJ">🏙️ Rio de Janeiro (mesmo dia)</option>
+                <option value="SAO_PAULO">🚚 São Paulo (1 dia)</option>
+                <option value="PARAGUAI">🇵🇾 Paraguai (~15 dias)</option>
+                <option value="EUA">🇺🇸 Estados Unidos (25-30 dias)</option>
+              </select>
+            </div>
           </div>
 
           {/* Cores e Quantidades */}
@@ -3760,36 +3823,173 @@ export default function EstoquePage() {
               const allItems = acaminhoFilter === "pendentes" ? filtered
                 : acaminhoFilter === "recebidos" ? recebidosFiltrados
                 : [...filtered, ...recebidosFiltrados];
-              const byDate: Record<string, typeof allItems> = {};
+              // Configuração de origens
+              const ORIGEM_CONFIG: Record<string, { emoji: string; label: string; dias: number; cor: string }> = {
+                RJ: { emoji: "🏙️", label: "RIO DE JANEIRO", dias: 0, cor: "bg-green-600" },
+                SAO_PAULO: { emoji: "🚚", label: "SÃO PAULO", dias: 1, cor: "bg-blue-600" },
+                PARAGUAI: { emoji: "🇵🇾", label: "PARAGUAI", dias: 15, cor: "bg-yellow-600" },
+                EUA: { emoji: "🇺🇸", label: "ESTADOS UNIDOS", dias: 30, cor: "bg-red-600" },
+              };
+              const ORIGEM_ORDER = ["RJ", "SAO_PAULO", "PARAGUAI", "EUA", "SEM_ORIGEM"];
+
+              // Calcula previsão de chegada
+              const calcPrevisao = (dataCompra: string | null, origem: string | null): string | null => {
+                if (!dataCompra || !origem || !ORIGEM_CONFIG[origem]) return null;
+                const d = new Date(dataCompra + "T12:00:00");
+                d.setDate(d.getDate() + ORIGEM_CONFIG[origem].dias);
+                return d.toISOString().split("T")[0];
+              };
+
+              // Agrupar por origem (em vez de por data)
+              const byOrigem: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
-                const d = p.data_compra || "Sem data";
-                if (!byDate[d]) byDate[d] = [];
-                byDate[d].push(p);
+                const orig = p.origem_compra && ORIGEM_CONFIG[p.origem_compra] ? p.origem_compra : "SEM_ORIGEM";
+                if (!byOrigem[orig]) byOrigem[orig] = [];
+                byOrigem[orig].push(p);
               });
-              const sortedDates = Object.keys(byDate).sort().reverse();
-              if (sortedDates.length === 0) return (
+              // Dentro de cada origem, ordena por data de compra (mais recente primeiro)
+              for (const items of Object.values(byOrigem)) {
+                items.sort((a, b) => (b.data_compra || "").localeCompare(a.data_compra || ""));
+              }
+              const sortedOrigens = ORIGEM_ORDER.filter(o => byOrigem[o]?.length > 0);
+
+              if (sortedOrigens.length === 0) return (
                 <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
                   <p className={textSecondary}>Nenhum produto a caminho.</p>
                 </div>
               );
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+
+              // Usa selectedACaminho do estado do componente pra edição em lote
               return (
                 <div className="space-y-4">
-                  {sortedDates.filter(date => {
-                    // Ocultar pedidos onde todos os itens já foram recebidos (exceto se filtrando por recebidos)
-                    if (acaminhoFilter === "recebidos") return true;
-                    const items = byDate[date];
-                    return acaminhoFilter === "todos" ? true : items.some(p => p.tipo === "A_CAMINHO");
-                  }).map(date => {
-                    const items = byDate[date];
+                  {/* Resumo por origem + botão WhatsApp atacado */}
+                  {aCaminho.length > 0 && (
+                    <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border space-y-3`}>
+                      {/* Resumo por origem */}
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const origemConfig: Record<string, { emoji: string; label: string; prazo: string }> = {
+                            EUA: { emoji: "🇺🇸", label: "EUA", prazo: "25-30 dias" },
+                            PARAGUAI: { emoji: "🇵🇾", label: "Paraguai", prazo: "~15 dias" },
+                            SAO_PAULO: { emoji: "🚚", label: "São Paulo", prazo: "1 dia" },
+                            RJ: { emoji: "🏙️", label: "Rio de Janeiro", prazo: "mesmo dia" },
+                          };
+                          const byOrigem: Record<string, number> = {};
+                          let semOrigem = 0;
+                          for (const p of aCaminho) {
+                            if (p.origem_compra && origemConfig[p.origem_compra]) {
+                              byOrigem[p.origem_compra] = (byOrigem[p.origem_compra] || 0) + p.qnt;
+                            } else {
+                              semOrigem += p.qnt;
+                            }
+                          }
+                          return (
+                            <>
+                              {Object.entries(byOrigem).map(([orig, qnt]) => {
+                                const c = origemConfig[orig];
+                                return (
+                                  <span key={orig} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"} border ${dm ? "border-[#48484A]" : "border-[#D2D2D7]"}`}>
+                                    {c.emoji} {c.label}: <b>{qnt} un.</b> <span className={dm ? "text-[#98989D]" : "text-[#86868B]"}>({c.prazo})</span>
+                                  </span>
+                                );
+                              })}
+                              {semOrigem > 0 && (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} border ${dm ? "border-[#48484A]" : "border-[#E5E5EA]"}`}>
+                                  📦 Sem origem: <b>{semOrigem} un.</b>
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                      {/* Botão copiar texto atacado */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
+                          <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const catEmoji: Record<string, string> = { IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
+                            const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios" };
+                            const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+                            const groups: Record<string, string[]> = {};
+                            for (const p of aCaminho) {
+                              const cat = p.categoria || "OUTROS";
+                              if (!groups[cat]) groups[cat] = [];
+                              const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
+                                .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+                                .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
+                                .replace(/\s{2,}/g, " ").trim();
+                              const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
+                              groups[cat].push(`${nome}${cor}`);
+                            }
+                            const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
+                            const sortedCatsAtacado = Object.keys(groups).sort((a, b) => {
+                              const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                            });
+                            for (const cat of sortedCatsAtacado) {
+                              const emoji = catEmoji[cat] || "📦";
+                              const label = catLabel[cat] || cat;
+                              lines.push(`${emoji} *${label}*`);
+                              const seen = new Set<string>();
+                              for (const item of groups[cat]) {
+                                if (!seen.has(item)) { seen.add(item); lines.push(item); }
+                              }
+                              lines.push("");
+                            }
+                            navigator.clipboard.writeText(lines.join("\n").trim());
+                            setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                          }}
+                          className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                        >
+                          📋 Copiar Texto Atacado
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Barra de edição em lote */}
+                  {selectedACaminho.size > 0 && (
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-blue-50 border-blue-200"} border`}>
+                      <span className={`text-sm font-semibold ${textPrimary}`}>{selectedACaminho.size} selecionado(s)</span>
+                      <span className={`text-xs ${textSecondary}`}>Definir origem:</span>
+                      {Object.entries(ORIGEM_CONFIG).map(([key, cfg]) => (
+                        <button
+                          key={key}
+                          onClick={async () => {
+                            const ids = Array.from(selectedACaminho);
+                            for (const id of ids) {
+                              await apiPatch(id, { origem_compra: key });
+                            }
+                            setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, origem_compra: key } : p));
+                            setSelectedACaminho(new Set());
+                            setMsg(`${ids.length} produto(s) → ${cfg.emoji} ${cfg.label}`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${cfg.cor} text-white hover:opacity-80 transition-opacity`}
+                        >
+                          {cfg.emoji} {cfg.label}
+                        </button>
+                      ))}
+                      <button onClick={() => setSelectedACaminho(new Set())} className={`ml-auto text-xs ${textSecondary} hover:text-red-500`}>Limpar</button>
+                    </div>
+                  )}
+
+                  {/* Cards por ORIGEM */}
+                  {sortedOrigens.map(origemKey => {
+                    const items = byOrigem[origemKey];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
-                    const dateTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    const origemTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    const cfg = ORIGEM_CONFIG[origemKey];
+                    const headerColor = cfg ? cfg.cor : "bg-gray-500";
+                    const headerLabel = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
                     return (
-                      <div key={date} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
-                        <div className={`px-4 py-2.5 flex items-center justify-between ${pendentes.length === 0 ? "bg-green-600" : "bg-[#E8740E]"}`}>
+                      <div key={origemKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                        <div className={`px-4 py-2.5 flex items-center justify-between ${headerColor}`}>
                           <span className="font-bold text-white text-[13px]">
-                            Pedido {date !== "Sem data" ? date.split("-").reverse().join("/") : "Sem data"}
+                            {headerLabel}
                           </span>
                           <div className="flex items-center gap-2">
                             {pendentes.length > 0 && (
@@ -3821,9 +4021,11 @@ export default function EstoquePage() {
                               <th className="px-2 py-2 w-8"><input type="checkbox" checked={pendentes.length > 0 && pendentes.every(p => selectedACaminho.has(p.id))} onChange={() => { if (pendentes.every(p => selectedACaminho.has(p.id))) { setSelectedACaminho(new Set()); } else { setSelectedACaminho(new Set(pendentes.map(p => p.id))); } }} className="accent-[#E8740E]" /></th>
                               <th className="px-4 py-2 text-left">Modelo</th>
                               <th className="px-4 py-2 text-center w-16">Qtd.</th>
-                              <th className="px-4 py-2 text-right w-28">Valor unit.</th>
-                              <th className="px-4 py-2 text-left w-36">Fornecedor</th>
-                              <th className="px-4 py-2 text-right w-28">Total</th>
+                              <th className="px-4 py-2 text-right w-24">Valor unit.</th>
+                              <th className="px-4 py-2 text-left w-28">Fornecedor</th>
+                              <th className="px-4 py-2 text-center w-24">Compra</th>
+                              <th className="px-4 py-2 text-center w-24">Previsão</th>
+                              <th className="px-4 py-2 text-right w-24">Total</th>
                               {isAdmin && <th className="px-2 py-2 w-20"></th>}
                             </tr>
                           </thead>
@@ -3840,7 +4042,7 @@ export default function EstoquePage() {
                                 groupMap.get(base)!.push(p);
                               });
                               return Array.from(groupMap.entries()).flatMap(([baseModel, group]) => {
-                                const groupKey = `${date}::${baseModel}`;
+                                const groupKey = `${origemKey}::${baseModel}`;
                                 const isExpanded = expandedACaminhoGroups.has(groupKey);
                                 const totalQnt = group.reduce((s, p) => s + p.qnt, 0);
                                 const totalVal = group.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
@@ -3882,6 +4084,16 @@ export default function EstoquePage() {
                                     <td className={`px-4 py-3 text-center text-sm font-bold ${textPrimary}`}>{totalQnt}</td>
                                     <td className={`px-4 py-3 text-right text-sm ${textSecondary}`}>{group[0].custo_unitario ? fmt(group[0].custo_unitario) : "—"}</td>
                                     <td className={`px-4 py-3 text-sm ${textSecondary}`}>{fornecedorUniq || "—"}</td>
+                                    <td className={`px-4 py-3 text-center text-[11px] ${textSecondary}`}>{group[0].data_compra ? group[0].data_compra.split("-").reverse().join("/") : "—"}</td>
+                                    <td className={`px-4 py-3 text-center text-[11px] font-semibold ${(() => {
+                                      const prev = calcPrevisao(group[0].data_compra, group[0].origem_compra);
+                                      if (!prev) return textSecondary;
+                                      const hoje = new Date().toISOString().split("T")[0];
+                                      return prev <= hoje ? "text-green-600" : "text-[#E8740E]";
+                                    })()}`}>{(() => {
+                                      const prev = calcPrevisao(group[0].data_compra, group[0].origem_compra);
+                                      return prev ? prev.split("-").reverse().join("/") : "—";
+                                    })()}</td>
                                     <td className={`px-4 py-3 text-right text-sm font-bold ${textPrimary}`}>{totalVal > 0 ? fmt(totalVal) : "—"}</td>
                                     {isAdmin && <td className="px-2 py-3 text-center">
                                       {!isSingleUnit ? (
@@ -3920,6 +4132,16 @@ export default function EstoquePage() {
                                         <td className={`px-4 py-2 text-center text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.qnt}</td>
                                         <td className={`px-4 py-2 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
                                         <td className={`px-4 py-2 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || "—"}</td>
+                                        <td className={`px-4 py-2 text-center text-[11px] ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.data_compra ? p.data_compra.split("-").reverse().join("/") : "—"}</td>
+                                        <td className={`px-4 py-2 text-center text-[11px] font-semibold ${(() => {
+                                          const prev = calcPrevisao(p.data_compra, p.origem_compra);
+                                          if (!prev) return textSecondary;
+                                          const hoje = new Date().toISOString().split("T")[0];
+                                          return prev <= hoje ? "text-green-600" : "text-[#E8740E]";
+                                        })()}`} onClick={() => setDetailProduct(p)}>{(() => {
+                                          const prev = calcPrevisao(p.data_compra, p.origem_compra);
+                                          return prev ? prev.split("-").reverse().join("/") : "—";
+                                        })()}</td>
                                         <td className={`px-4 py-2 text-right text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
                                         {isAdmin && <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
                                           <button onClick={() => handlePrintEtiquetaDirect([p])} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}>🏷️ Etiqueta</button>
@@ -3935,8 +4157,8 @@ export default function EstoquePage() {
                           {pendentes.length > 0 && (
                             <tfoot>
                               <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 6 : 4}>TOTAL PENDENTE</td>
-                                <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]" colSpan={isAdmin ? 2 : 1}>{fmt(dateTotal)}</td>
+                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 8 : 6}>TOTAL PENDENTE</td>
+                                <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]" colSpan={isAdmin ? 2 : 1}>{fmt(origemTotal)}</td>
                               </tr>
                             </tfoot>
                           )}
@@ -3944,7 +4166,7 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                  {sortedDates.length > 1 && grandTotal > 0 && (
+                  {sortedOrigens.length > 1 && grandTotal > 0 && (
                     <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
                       <span className={`text-xs font-bold ${textSecondary}`}>TOTAL PENDENTE ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"} a caminho)</span>
                       <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
@@ -4065,6 +4287,108 @@ export default function EstoquePage() {
             </div>
           ) : (
             <>
+            {/* Resumo por origem + botão WhatsApp atacado — A Caminho */}
+            {isACaminhoTab && aCaminho.length > 0 && (
+              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border mb-3 space-y-3`}>
+                {/* Resumo por origem */}
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    const origemConfig: Record<string, { emoji: string; label: string; prazo: string }> = {
+                      EUA: { emoji: "🇺🇸", label: "EUA", prazo: "25-30 dias" },
+                      PARAGUAI: { emoji: "🇵🇾", label: "Paraguai", prazo: "~15 dias" },
+                      SAO_PAULO: { emoji: "🚚", label: "São Paulo", prazo: "1 dia" },
+                      RJ: { emoji: "🏙️", label: "Rio de Janeiro", prazo: "mesmo dia" },
+                    };
+                    const byOrigem: Record<string, number> = {};
+                    let semOrigem = 0;
+                    for (const p of aCaminho) {
+                      if (p.origem_compra && origemConfig[p.origem_compra]) {
+                        byOrigem[p.origem_compra] = (byOrigem[p.origem_compra] || 0) + p.qnt;
+                      } else {
+                        semOrigem += p.qnt;
+                      }
+                    }
+                    return (
+                      <>
+                        {Object.entries(byOrigem).map(([orig, qnt]) => {
+                          const c = origemConfig[orig];
+                          return (
+                            <span key={orig} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"} border ${dm ? "border-[#48484A]" : "border-[#D2D2D7]"}`}>
+                              {c.emoji} {c.label}: <b>{qnt} un.</b> <span className={`${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({c.prazo})</span>
+                            </span>
+                          );
+                        })}
+                        {semOrigem > 0 && (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} border ${dm ? "border-[#48484A]" : "border-[#E5E5EA]"}`}>
+                            📦 Sem origem: <b>{semOrigem} un.</b>
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                {/* Botão copiar */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
+                    <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho — gera texto agrupado por categoria</p>
+                  </div>
+                <button
+                  onClick={() => {
+                    // Agrupa por categoria
+                    const catEmoji: Record<string, string> = {
+                      IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️",
+                      APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
+                    };
+                    const catLabel: Record<string, string> = {
+                      IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
+                      APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
+                    };
+                    const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+
+                    // Agrupa por categoria → lista de "modelo – cor"
+                    const groups: Record<string, string[]> = {};
+                    for (const p of aCaminho) {
+                      const cat = p.categoria || "OUTROS";
+                      if (!groups[cat]) groups[cat] = [];
+                      // Extrai nome limpo + cor
+                      const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
+                        .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
+                        .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
+                        .replace(/\s{2,}/g, " ").trim();
+                      const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
+                      groups[cat].push(`${nome}${cor}`);
+                    }
+
+                    // Monta texto
+                    const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
+                    const sortedCats = Object.keys(groups).sort((a, b) => {
+                      const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+                      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                    });
+                    for (const cat of sortedCats) {
+                      const emoji = catEmoji[cat] || "📦";
+                      const label = catLabel[cat] || cat;
+                      lines.push(`${emoji} *${label}*`);
+                      // Remove duplicatas mantendo ordem
+                      const seen = new Set<string>();
+                      for (const item of groups[cat]) {
+                        if (!seen.has(item)) { seen.add(item); lines.push(item); }
+                      }
+                      lines.push("");
+                    }
+
+                    navigator.clipboard.writeText(lines.join("\n").trim());
+                    setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                >
+                  📋 Copiar Texto Atacado
+                </button>
+                </div>
+              </div>
+            )}
+
             {/* Barra de seleção em lote — A Caminho (admin only) */}
             {false && filtered.length > 0 && (
               <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border`}>
@@ -4617,21 +4941,24 @@ export default function EstoquePage() {
                                               if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
                                               return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">Lacrado</span>;
                                             })()}
-                                            {/* Bateria (só seminovo/pendência) */}
-                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (
-                                              isEditableItemTab && isEditingField(p.id, "bateria") ? (
+                                            {/* Bateria (só seminovo/pendência) — admin pode editar em qualquer aba */}
+                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (() => {
+                                              const bateriaEditable = isEditableItemTab || isAdmin;
+                                              if (bateriaEditable && isEditingField(p.id, "bateria")) return (
                                                 <div className="flex items-center gap-0.5">
                                                   <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
                                                   <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
                                                 </div>
-                                              ) : isEditableItemTab ? (
+                                              );
+                                              if (bateriaEditable) return (
                                                 <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
                                                   {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
                                                 </button>
-                                              ) : p.bateria ? (
+                                              );
+                                              return p.bateria ? (
                                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
-                                              ) : null
-                                            )}
+                                              ) : null;
+                                            })()}
                                             {/* Badges: Grade, Caixa, Garantia */}
                                             {(() => {
                                               const obs = p.observacao || "";
@@ -4653,6 +4980,33 @@ export default function EstoquePage() {
                                                 {ciclos && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
                                                 {p.garantia && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
                                               </>);
+                                            })()}
+                                            {/* Com quem está (pendência) — editável texto livre via tag [COM_QUEM:...] */}
+                                            {isPendenciasTab && (() => {
+                                              const comQuemAtual = p.observacao?.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
+                                              if (isEditingField(p.id, "com_quem")) return (
+                                                <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                                  <input value={getEditVal(p.id, "com_quem") || ""} onChange={(e) => startEditField(p.id, "com_quem", e.target.value)}
+                                                    onKeyDown={async (e) => {
+                                                      if (e.key === "Enter") {
+                                                        const val = (getEditVal(p.id, "com_quem") || "").trim();
+                                                        const obsBase = (p.observacao || "").replace(/\[COM_QUEM:[^\]]+\]/g, "").trim();
+                                                        const newObs = val ? `${obsBase} [COM_QUEM:${val}]`.trim() : (obsBase || null);
+                                                        await apiPatch(p.id, { observacao: newObs });
+                                                        setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
+                                                        cancelEditField(p.id, "com_quem");
+                                                      }
+                                                      if (e.key === "Escape") cancelEditField(p.id, "com_quem");
+                                                    }}
+                                                    className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Ex: Técnico João" />
+                                                </div>
+                                              );
+                                              return (
+                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "com_quem", comQuemAtual); }}
+                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${comQuemAtual ? "bg-blue-50 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
+                                                  {comQuemAtual ? `👤 ${comQuemAtual}` : "+ Com quem"}
+                                                </button>
+                                              );
                                             })()}
                                             {/* Origem/Obs */}
                                             {isEditableItemTab && isEditingField(p.id, "observacao") ? (
@@ -5387,7 +5741,33 @@ export default function EstoquePage() {
                           )}
                         </div>
                       )}
-                      <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span></div>
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Condicao</p>
+                        {(canEdit || isAdmin) ? (
+                          <select
+                            value={p.tipo === "NAO_ATIVADO" ? "NAO_ATIVADO" : isLac ? "NOVO" : "SEMINOVO"}
+                            onChange={async (e) => {
+                              const novo = e.target.value as "NOVO" | "SEMINOVO" | "NAO_ATIVADO";
+                              try {
+                                await apiPatch(p.id, { tipo: novo });
+                                setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, tipo: novo } : x));
+                                setDetailProduct({ ...p, tipo: novo });
+                                showSaved("tipo");
+                                setMsg(`Condição alterada para ${novo === "NOVO" ? "Lacrado" : novo === "NAO_ATIVADO" ? "Não Ativado" : "Usado"}`);
+                              } catch (err) {
+                                setMsg("❌ " + String(err instanceof Error ? err.message : err));
+                              }
+                            }}
+                            className={`mt-0.5 text-[11px] font-semibold px-2 py-1 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                          >
+                            <option value="NOVO">🔵 Lacrado</option>
+                            <option value="NAO_ATIVADO">🟣 Não Ativado</option>
+                            <option value="SEMINOVO">🟡 Usado</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${p.tipo === "NAO_ATIVADO" ? "bg-purple-100 text-purple-700" : isLac ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{p.tipo === "NAO_ATIVADO" ? "Não Ativado" : isLac ? "Lacrado" : "Usado"}</span>
+                        )}
+                      </div>
                       {/* Caixa badge */}
                       {(p.observacao?.includes("[COM_CAIXA]") || /com\s+caixa/i.test(p.observacao || "")) && (
                         <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Caixa</p>
@@ -6186,6 +6566,38 @@ export default function EstoquePage() {
                         <span className={`ml-1 text-[10px] ${textMuted}`}>↗</span>
                       </button>
                     ) : <p className={`text-[13px] ${mP} mt-0.5`}>Não informado</p>}
+                  </div>
+                  {/* Origem da compra */}
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem da Compra</p>
+                    {isAdmin ? (
+                      <select
+                        value={p.origem_compra || ""}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                            await apiPatch(p.id, { origem_compra: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem_compra: val } : x));
+                            setDetailProduct({ ...p, origem_compra: val });
+                            showSaved("origem_compra");
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`mt-0.5 text-[12px] font-semibold w-full px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      >
+                        <option value="">— Não definido —</option>
+                        <option value="RJ">🏙️ Rio de Janeiro</option>
+                        <option value="SAO_PAULO">🚚 São Paulo</option>
+                        <option value="PARAGUAI">🇵🇾 Paraguai</option>
+                        <option value="EUA">🇺🇸 Estados Unidos</option>
+                      </select>
+                    ) : (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>
+                        {p.origem_compra === "RJ" ? "🏙️ Rio de Janeiro" :
+                         p.origem_compra === "SAO_PAULO" ? "🚚 São Paulo" :
+                         p.origem_compra === "PARAGUAI" ? "🇵🇾 Paraguai" :
+                         p.origem_compra === "EUA" ? "🇺🇸 Estados Unidos" : "—"}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (

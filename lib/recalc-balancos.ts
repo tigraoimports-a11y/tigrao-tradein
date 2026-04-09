@@ -1,0 +1,78 @@
+import { createClient } from "@supabase/supabase-js";
+
+/**
+ * Recalcula o balanço (custo_unitario = preço médio ponderado) de todos
+ * os produtos EM ESTOQUE, agrupados por (categoria + nome sem cor).
+ *
+ * Pode ser chamado internamente por qualquer route sem HTTP round-trip.
+ * Retorna { groups, updated }.
+ */
+export async function recalcBalancos(): Promise<{ groups: number; updated: number }> {
+  const sb = createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  );
+
+  const { data: items, error } = await sb
+    .from("estoque")
+    .select("id, categoria, produto, cor, qnt, custo_compra, custo_unitario")
+    .eq("status", "EM ESTOQUE")
+    .gt("qnt", 0)
+    .range(0, 49999);
+
+  if (error || !items || items.length === 0) return { groups: 0, updated: 0 };
+
+  function stripCor(produto: string, cor: string | null): string {
+    const p = (produto || "").toUpperCase().trim();
+    if (!cor) return p;
+    const c = cor.toUpperCase().trim();
+    if (!c) return p;
+    const re = new RegExp(`\\s+${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
+    return p.replace(re, "").trim();
+  }
+
+  type Row = { id: string; categoria: string; produto: string; cor: string | null; qnt: number; custo_compra: number; custo_unitario: number };
+  const groups = new Map<string, Row[]>();
+  for (const raw of items as unknown as Row[]) {
+    const cc = Number(raw.custo_compra || 0);
+    if (cc <= 0) continue;
+    const key = `${raw.categoria || ""}|${stripCor(raw.produto, raw.cor)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(raw);
+  }
+
+  let updated = 0;
+  const updatesByBalanco = new Map<number, string[]>();
+
+  for (const [, rows] of groups) {
+    let totalCusto = 0;
+    let totalQnt = 0;
+    for (const r of rows) {
+      totalCusto += Number(r.qnt || 0) * Number(r.custo_compra || 0);
+      totalQnt += Number(r.qnt || 0);
+    }
+    if (totalQnt <= 0) continue;
+    const balanco = Math.round((totalCusto / totalQnt) * 100) / 100;
+
+    const idsToUpdate = rows
+      .filter(r => Number(r.custo_unitario || 0) !== balanco)
+      .map(r => r.id);
+    if (idsToUpdate.length === 0) continue;
+
+    if (!updatesByBalanco.has(balanco)) updatesByBalanco.set(balanco, []);
+    updatesByBalanco.get(balanco)!.push(...idsToUpdate);
+    updated += idsToUpdate.length;
+  }
+
+  for (const [balanco, ids] of updatesByBalanco) {
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      await sb
+        .from("estoque")
+        .update({ custo_unitario: balanco, updated_at: new Date().toISOString() })
+        .in("id", chunk);
+    }
+  }
+
+  return { groups: groups.size, updated };
+}

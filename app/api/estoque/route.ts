@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
+import { recalcBalancos } from "@/lib/recalc-balancos";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -18,6 +19,13 @@ function getRole(req: NextRequest): string {
 
 function getPermissoes(req: NextRequest): string[] {
   try { return JSON.parse(req.headers.get("x-admin-permissoes") || "[]"); } catch { return []; }
+}
+
+/** Normaliza nomes de produto antes de salvar no estoque.
+ *  Ex: "Apple Watch SE 46MM GPS" → "Apple Watch Series 11 46MM GPS" */
+function normalizeProdutoNome(nome: string): string {
+  // Apple Watch SE 42mm/46mm → Series 11
+  return nome.replace(/\bApple\s+Watch\s+SE\b(\s+(?:4[26])\s*mm)/gi, "Apple Watch Series 11$1");
 }
 
 async function logEstoque(usuario: string, acao: string, produtoId: string | null, produtoNome: string, campo: string, valorAnterior: string, valorNovo: string) {
@@ -196,6 +204,10 @@ export async function POST(req: NextRequest) {
     const rows = body.rows as Record<string, unknown>[];
     if (!rows?.length) return NextResponse.json({ error: "rows required" }, { status: 400 });
 
+    // Normaliza nomes antes de deduplicar
+    for (const r of rows) {
+      if (r.produto && typeof r.produto === "string") r.produto = normalizeProdutoNome(r.produto.trim());
+    }
     // Deduplicar por (produto, cor) — soma quantidades. NÃO calcula média aqui
     // (balanço = custo_unitario é recalculado depois pelo endpoint recalc-balancos).
     const seen = new Map<string, Record<string, unknown>>();
@@ -252,11 +264,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-recalcular balanço (preço médio) após importação
+    if (imported + merged > 0) {
+      try { await recalcBalancos(); } catch { /* silent */ }
+    }
+
     return NextResponse.json({ ok: true, imported, merged, errors: errors.slice(0, 5), total: unique.length });
   }
 
   // Inserir novo produto — verificar se já existe (merge por produto+cor+categoria)
   // Se tem serial_no, NUNCA faz merge — cada serial é uma unidade individual
+  // Auto-renomeia nomes conhecidos (Apple Watch SE 42/46mm → Series 11)
+  if (body.produto) body.produto = normalizeProdutoNome(String(body.produto).trim());
   const produtoNome = String(body.produto || "").trim();
   const corNome = String(body.cor || "").trim() || null;
   const categoriaNome = String(body.categoria || "").trim();
@@ -360,6 +379,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await logActivity(getUsuario(req), "Adicionou ao estoque", `${produtoNome}. Quantidade: ${parseInt(body.qnt) || 0}`, "estoque", data?.id);
+
+  // Auto-recalcular balanço (preço médio) após inserir produto
+  try { await recalcBalancos(); } catch { /* silent */ }
 
   return NextResponse.json({ ok: true, data });
 }

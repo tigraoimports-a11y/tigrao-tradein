@@ -66,6 +66,12 @@ interface RegiaoData {
   cidades: { nome: string; qtd: number }[];
 }
 
+interface CoresPorModelo {
+  modelo: string;
+  totalQnt: number;
+  cores: { cor: string; qnt: number; pct: number }[];
+}
+
 interface AnalyticsVendasData {
   kpi: KPI;
   projecao: ProjecaoData;
@@ -74,6 +80,7 @@ interface AnalyticsVendasData {
   margemCanal: MargemCanal[];
   origemClientes: OrigemCliente[];
   regiao: RegiaoData;
+  coresPorModelo: CoresPorModelo[];
 }
 
 /* ─── Colors ─── */
@@ -227,6 +234,7 @@ export default function AnalyticsVendasPage() {
           pct: o.pct ?? o.percentual ?? 0,
         })),
         regiao: json.vendasPorRegiao || { bairros: [], cidades: [] },
+        coresPorModelo: json.coresPorModelo || [],
       };
       setData(transformed);
     } catch (err: any) {
@@ -451,6 +459,51 @@ export default function AnalyticsVendasPage() {
                 </tbody>
               </table>
             </div>
+          </Section>
+
+          {/* SECTION 3b: Cores mais vendidas por modelo */}
+          <Section title="🎨 Cores mais vendidas por modelo">
+            {data.coresPorModelo.length === 0 ? (
+              <p className="text-sm text-[#86868B] text-center py-8">Sem dados de cores no período</p>
+            ) : (
+              <div className="space-y-3">
+                {data.coresPorModelo.map((m, i) => (
+                  <div key={i} className="p-3 rounded-xl border border-[#E5E5EA] bg-white">
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                      <p className="text-sm font-semibold text-[#1D1D1F]">{m.modelo}</p>
+                      <span className="text-[11px] text-[#86868B]">
+                        {m.totalQnt} un. total
+                      </span>
+                    </div>
+                    {/* Barra empilhada de cores */}
+                    <div className="w-full h-3 rounded-full overflow-hidden flex bg-[#F5F5F7] mb-2">
+                      {m.cores.map((c, j) => (
+                        <div
+                          key={j}
+                          style={{ width: `${c.pct}%`, backgroundColor: PIE_COLORS[j % PIE_COLORS.length] }}
+                          title={`${c.cor}: ${c.qnt} un. (${c.pct}%)`}
+                        />
+                      ))}
+                    </div>
+                    {/* Legenda */}
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {m.cores.map((c, j) => (
+                        <div key={j} className="flex items-center gap-1.5 text-[11px]">
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: PIE_COLORS[j % PIE_COLORS.length] }}
+                          />
+                          <span className="text-[#1D1D1F] font-medium">{c.cor}</span>
+                          <span className="text-[#86868B]">
+                            {c.qnt} un. ({c.pct}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
 
           {/* SECTION 4: Ticket Medio Diario */}

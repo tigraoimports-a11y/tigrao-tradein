@@ -4,6 +4,8 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
+import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -26,6 +28,9 @@ interface Entrega {
   detalhes_upgrade: string | null;
   forma_pagamento: string | null;
   valor: number | null;
+  entrada?: number | null;
+  parcelas?: number | null;
+  valor_total?: number | null;
   vendedor: string | null;
   regiao: string | null;
   finalizada?: boolean | null;
@@ -71,19 +76,66 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
-function formatPagamentoDisplay(formaPagamento: string | null, valor: number | null): string {
+// Tabela de taxas em nível de módulo pra reuso em formatPagamentoDisplay e no form
+const TAXAS_PARCELAS_MODULE: Record<number, number> = {
+  1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+  7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+  13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+  19: 20, 20: 21, 21: 22,
+};
+
+const fmtBRL = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Formata o campo PAGAMENTO do formulário do motoboy com breakdown detalhado.
+ * Suporta 1 ou 2 cartões (parseados do texto forma_pagamento) + entrada Pix/Espécie/Transferência.
+ * Valores de total já vem com taxa embutida (valor_total salvo).
+ */
+function formatPagamentoDisplay(
+  formaPagamento: string | null,
+  valor: number | null,
+  valorTotal?: number | null,
+  entradaCol?: number | null,
+  _parcelasCol?: number | null,
+): string {
   if (!formaPagamento) return "—";
-  const valorStr = valor != null ? `R$ ${Number(valor).toLocaleString("pt-BR")}` : "";
-  // Já vem formatado (ex: "10x no Cartão (ITAU)"), só anexa valor
   const fp = formaPagamento.trim();
-  // Casos comuns normalizados
-  if (/^pix/i.test(fp) && !/\bR\$/.test(fp)) {
-    return `${fp} ${valorStr}`.trim();
+  const total = Number(valorTotal || valor || 0);
+  const entrada = Number(entradaCol || 0);
+  // Label da entrada (Pix / Espécie / Transferência)
+  let labelEntrada = "Entrada";
+  if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
+  else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
+  else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+  // Extrai cartões "Nx no Cartão (MAQ)" — 1 ou 2 ocorrências
+  const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+  const cartoes: { parcelas: number; maquina: string }[] = [];
+  let m;
+  while ((m = cartaoRegex.exec(fp)) !== null) {
+    cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
   }
-  if (/cart[aã]o/i.test(fp) || /\d+x/i.test(fp)) {
-    return valor != null ? `${fp} — Total ${valorStr}` : fp;
+  const baseCartoes = Math.max(0, total - entrada);
+  const linhas: string[] = [fp];
+  if (entrada > 0) linhas.push(`   • ${labelEntrada}: ${fmtBRL(entrada)}`);
+  if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
+    const c = cartoes[0];
+    const vParc = baseCartoes / c.parcelas;
+    if (c.parcelas > 1) {
+      linhas.push(`   • ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(baseCartoes)}`);
+    } else {
+      linhas.push(`   • Cartão${c.maquina ? ` (${c.maquina})` : ""}: ${fmtBRL(baseCartoes)}`);
+    }
+  } else if (cartoes.length === 2) {
+    // Sem granularidade de valores nos dois cartões — aproxima 50/50
+    const metade = baseCartoes / 2;
+    cartoes.forEach((c, i) => {
+      const vParc = c.parcelas > 0 ? metade / c.parcelas : 0;
+      linhas.push(`   • Cartão ${i + 1}: ${c.parcelas}x de ${fmtBRL(vParc)}${c.maquina ? ` (${c.maquina})` : ""} — total ${fmtBRL(metade)}`);
+    });
+  } else if (entrada === 0 && valor != null) {
+    linhas.push(`   • ${fmtBRL(Number(valor))}`);
   }
-  return `${fp}${valorStr ? " " + valorStr : ""}`;
+  return linhas.join("\n");
 }
 
 export default function EntregasPage() {
@@ -144,6 +196,8 @@ export default function EntregasPage() {
     maquina: "",
     forma_pagamento_2: "",
     valor_2: "",
+    parcelas_2: "",
+    maquina_2: "",
     vendedor: "",
     regiao: "",
     local_entrega: "",
@@ -268,11 +322,37 @@ export default function EntregasPage() {
   }, [estoque]);
 
   // Categorias dos preços com labels amigáveis
-  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros" };
+  const CAT_LABELS: Record<string, string> = { IPHONE: "iPhones", IPAD: "iPads", MACBOOK: "MacBooks", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios", MAC_MINI: "Mac Mini", OUTROS: "Outros", SEMINOVOS: "📱 Seminovos" };
+  const temSeminovos = useMemo(() => estoque.some(p => p.tipo === "SEMINOVO" && p.qnt > 0), [estoque]);
   const categoriaPrecos = useMemo(() => {
     const cats = [...new Set(precosVenda.map(p => p.categoria))].sort();
+    if (temSeminovos) cats.push("SEMINOVOS");
     return cats;
-  }, [precosVenda]);
+  }, [precosVenda, temSeminovos]);
+
+  // Lista de seminovos agrupados por modelo base (mesmo padrão do Estoque)
+  const seminovosList = useMemo(() => {
+    type Item = { nome: string; key: string; items: EstoqueItem[] };
+    const groups = new Map<string, Item>();
+    for (const p of estoque) {
+      if (p.tipo !== "SEMINOVO" || p.qnt <= 0) continue;
+      const baseKey = getModeloBase(p.produto, p.categoria);
+      const nome = formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: null, observacao: null });
+      if (!groups.has(baseKey)) groups.set(baseKey, { nome, key: baseKey, items: [] });
+      groups.get(baseKey)!.items.push(p);
+    }
+    return [...groups.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [estoque]);
+
+  // Cores disponíveis para o seminovo selecionado (agrupa por cor)
+  const seminovoCores = useMemo(() => {
+    if (catSel !== "SEMINOVOS" || !produtos[0]) return [];
+    const grupo = seminovosList.find(g => g.nome === produtos[0]);
+    if (!grupo) return [];
+    const set = new Set<string>();
+    for (const it of grupo.items) if (it.cor) set.add(it.cor.toUpperCase());
+    return [...set].sort();
+  }, [catSel, produtos, seminovosList]);
 
   // Produtos filtrados por categoria
   const produtosFiltradosPreco = useMemo(() => {
@@ -292,45 +372,71 @@ export default function EntregasPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel2]);
 
-  // Cores reais do estoque para produto 2 (mesma lógica de coresDisponiveis)
-  const coresDisponiveis2 = useMemo(() => {
-    if (!modelo2) return [];
-    const prodSel = modelo2.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoque) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
-      }
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-      }
-    }
-    return [...cores].sort();
-  }, [modelo2, estoque]);
+  // Cores cadastradas no catálogo global (Configurações > Produtos > aba Cores)
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
+      .catch(() => {});
+  }, []);
 
-  // Cores reais do estoque para o produto selecionado
-  const coresDisponiveis = useMemo(() => {
-    if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoque) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
+  // Match por tokens entre nome do produto selecionado e modelo do catálogo.
+  // Retorna as cores em PT (via corParaPT), dedupadas. Mesma lógica do /gerar-link.
+  const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
+    if (!nomeProduto) return [];
+    const normGen = (s: string) => s
+      .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/\bGENERATION\b/gi, "GEN")
+      .replace(/\bGERAÇÃO\b/gi, "GEN");
+    const stripNoise = (s: string) => normGen(s)
+      .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+      .replace(/\b\d+\s*MM\b/gi, "")
+      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+      .replace(/[""\(\)\+\-]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
+    const expandSynonyms = (toks: string[]): string[] => {
+      const set = new Set(toks);
+      if (set.has("ipad")) {
+        if (set.has("a16")) set.add("11");
+        if (set.has("11")) set.add("a16");
+        if (set.has("a14")) set.add("10");
+        if (set.has("10")) set.add("a14");
       }
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
+      return [...set];
+    };
+    const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
+    const prodTokens = new Set(tokens(nomeProduto));
+
+    let raw: string[] = [];
+    let bestCount = 0;
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      const catTokens = tokens(nome);
+      if (catTokens.length === 0) continue;
+      const allMatch = catTokens.every(t => prodTokens.has(t));
+      if (allMatch && catTokens.length > bestCount) {
+        raw = cores;
+        bestCount = catTokens.length;
       }
     }
-    return [...cores].sort();
-  }, [produtos, estoque]);
+
+    // Dedup por tradução PT (mantém nome PT como label)
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const pt = corParaPT(c);
+      const key = pt.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(pt);
+    }
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [catalogoCores]);
+
+  const coresDisponiveis2 = useMemo(() => coresParaProduto(modelo2), [modelo2, coresParaProduto]);
+  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
 
   // Valor base e final
   // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
@@ -367,6 +473,13 @@ export default function EntregasPage() {
   // Taxa aplicada sobre o valor do PAGAMENTO 1 (não o total a pagar) — importante quando há split
   const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorPag1 * (1 + taxaAtual / 100)) : valorPag1;
   const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
+
+  // Pagamento 2 pode ser cartão também — calcula taxa/parcelas separadamente
+  const isCartao2 = form.forma_pagamento_2 === "Cartao Credito" || form.forma_pagamento_2 === "Link de Pagamento";
+  const nParcelas2 = parseInt(form.parcelas_2) || 0;
+  const taxaAtual2 = isCartao2 && nParcelas2 > 0 ? (TAXAS_PARCELAS[nParcelas2] || 0) : 0;
+  const totalComTaxa2 = taxaAtual2 > 0 ? Math.ceil(valorPag2 * (1 + taxaAtual2 / 100)) : valorPag2;
+  const valorParcela2 = nParcelas2 > 0 ? Math.ceil(totalComTaxa2 / nParcelas2) : 0;
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -474,23 +587,28 @@ export default function EntregasPage() {
         : form.local_entrega === "OUTRO" && form.local_detalhes?.trim()
         ? form.local_detalhes.trim()
         : (form.endereco_entrega?.trim() || form.endereco?.trim() || "");
-    // Forma de pagamento detalhada
+    // Forma de pagamento detalhada (embute parcelas/máquina de ambos os pagamentos)
     let formaPagDetalhada = form.forma_pagamento || "";
     if ((form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Cartao Debito") && form.parcelas) {
       formaPagDetalhada = `${form.parcelas}x no Cartão${form.maquina ? ` (${form.maquina})` : ""}`;
+    } else if (form.forma_pagamento === "Link de Pagamento" && form.parcelas) {
+      formaPagDetalhada = `${form.parcelas}x no Link${form.maquina ? ` (${form.maquina})` : ""}`;
     } else if (form.forma_pagamento === "Pix" && form.maquina) {
       formaPagDetalhada = `PIX (${form.maquina})`;
     }
     if (form.forma_pagamento_2 && form.valor_2) {
-      formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+      if (isCartao2 && form.parcelas_2) {
+        formaPagDetalhada += ` + ${form.parcelas_2}x no ${form.forma_pagamento_2 === "Link de Pagamento" ? "Link" : "Cartão"}${form.maquina_2 ? ` (${form.maquina_2})` : ""}`;
+      } else {
+        formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
+      }
     }
-    // Observação com endereço de cadastro do cliente (se diferente do de entrega)
+    // Total a pagar incluindo taxa dos dois cartões (se houver)
+    const valorTotalFinal = totalComTaxa + totalComTaxa2;
+    // Observação — NÃO inclui mais "Endereço cadastro" (motoboy não precisa saber)
     const obsExtras: string[] = [];
     if (form.observacao) obsExtras.push(form.observacao);
     if (descontoNum > 0) obsExtras.push(`Desconto: R$ ${descontoNum}`);
-    if (form.endereco && form.endereco.trim() !== enderecoEntregaFinal.trim()) {
-      obsExtras.push(`Endereço cadastro: ${form.endereco}`);
-    }
     const res = await fetch("/api/admin/entregas", {
       method: isEdit ? "PATCH" : "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
@@ -513,6 +631,11 @@ export default function EntregasPage() {
         detalhes_upgrade: trocasStr || null,
         forma_pagamento: formaPagDetalhada || null,
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
+        // Campos estruturados pra exibicao detalhada no modal.
+        // `entrada` guarda Pix/Espécie/Transferência do pagamento 2 (não-cartão) — NÃO incluímos cartão aqui.
+        entrada: form.forma_pagamento_2 && !isCartao2 && form.valor_2 ? parseFloat(form.valor_2) : null,
+        parcelas: form.parcelas ? parseInt(form.parcelas) : null,
+        valor_total: valorTotalFinal > 0 ? valorTotalFinal : (form.valor ? parseFloat(form.valor) : null),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
       }),
@@ -1068,7 +1191,7 @@ export default function EntregasPage() {
                     <option value="">-- Categoria --</option>
                     {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
                   </select>
-                  {catSel && (
+                  {catSel && catSel !== "SEMINOVOS" && (
                     <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
                       {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                       {produtosFiltradosPreco.map((m) => {
@@ -1080,9 +1203,9 @@ export default function EntregasPage() {
                               setProdutos([m.nome]);
                               set("valor", String(m.preco));
                               setCorSel("");
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
-                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
-                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                             </button>
                             {sel && coresDisponiveis.length > 0 && (
                               <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
@@ -1093,6 +1216,47 @@ export default function EntregasPage() {
                                       className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
                                     >{cor}</button>
                                   ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {catSel === "SEMINOVOS" && (
+                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                      {seminovosList.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum seminovo em estoque</p>}
+                      {seminovosList.map((g) => {
+                        const sel = produtos[0] === g.nome;
+                        const qtdTotal = g.items.reduce((s, i) => s + i.qnt, 0);
+                        return (
+                          <div key={g.key}>
+                            <button type="button" onClick={() => {
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              setProdutos([g.nome]);
+                              set("valor", "");
+                              setCorSel("");
+                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{g.nome}</p>
+                              <p className={`text-xs font-medium ${sel ? "text-[#E8740E]" : "text-[#86868B]"}`}>{qtdTotal} un.</p>
+                            </button>
+                            {sel && (
+                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA] space-y-2">
+                                {seminovoCores.length > 0 && (<>
+                                  <p className="text-xs font-medium text-[#86868B]">Selecione a cor:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {seminovoCores.map(cor => (
+                                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                      >{cor}</button>
+                                    ))}
+                                  </div>
+                                </>)}
+                                <div>
+                                  <p className={labelCls}>Valor de venda R$</p>
+                                  <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
+                                  <p className="text-[11px] text-[#86868B] italic mt-1">Seminovo não tem preço fixo — digite o valor acordado com o cliente.</p>
                                 </div>
                               </div>
                             )}
@@ -1145,7 +1309,7 @@ export default function EntregasPage() {
                                   setModelo2(m.nome);
                                   setPreco2(m.preco);
                                   setCor2("");
-                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? "bg-[#FFF5EB] border-l-4 border-[#E8740E]" : "hover:bg-[#F9F9FB]"}`}>
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                                   <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
                                   <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                                 </button>
@@ -1351,7 +1515,7 @@ export default function EntregasPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className={labelCls}>Forma</p>
-                    <select value={form.forma_pagamento_2} onChange={(e) => set("forma_pagamento_2", e.target.value)} className={inputCls}>
+                    <select value={form.forma_pagamento_2} onChange={(e) => { set("forma_pagamento_2", e.target.value); if (e.target.value !== "Cartao Credito" && e.target.value !== "Link de Pagamento") { set("parcelas_2", ""); set("maquina_2", ""); } }} className={inputCls}>
                       <option value="">-- Selecionar --</option>
                       <option value="Pix">Pix</option>
                       <option value="Cartao Credito">Cartão Crédito</option>
@@ -1364,15 +1528,43 @@ export default function EntregasPage() {
                     <p className={labelCls}>Valor R$</p>
                     <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="0" className={inputCls} />
                   </div>
+                  {isCartao2 && (<>
+                    <div>
+                      <p className={labelCls}>Parcelas {form.forma_pagamento_2 === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
+                      <select value={form.parcelas_2} onChange={(e) => set("parcelas_2", e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        {(form.forma_pagamento_2 === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className={labelCls}>Máquina</p>
+                      <select value={form.maquina_2} onChange={(e) => set("maquina_2", e.target.value)} className={inputCls}>
+                        <option value="">-- Selecionar --</option>
+                        <option value="ITAU">Itaú</option>
+                        <option value="INFINITE">Infinite</option>
+                      </select>
+                    </div>
+                    {nParcelas2 > 0 && valorPag2 > 0 && (
+                      <div className="col-span-2 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span className="text-[#86868B]">Valor a parcelar: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorPag2.toLocaleString("pt-BR")}</b></span>
+                          <span className="text-red-500">Taxa ({taxaAtual2}%): <b>+R$ {(totalComTaxa2 - valorPag2).toLocaleString("pt-BR")}</b></span>
+                          <span className="text-[#86868B]">Total c/ taxa: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {totalComTaxa2.toLocaleString("pt-BR")}</b></span>
+                          <span className="text-[#E8740E] font-bold">{nParcelas2}x de R$ {valorParcela2.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>)}
                 </div>
               </div>
             )}
 
-            {/* Validador da soma dos pagamentos */}
+            {/* Validador da soma dos pagamentos (soma valores-base, pré-taxa) */}
             {(valorPag1 > 0 || valorPag2 > 0) && valorAPagar > 0 && (() => {
               const soma = valorPag1 + valorPag2;
               const diff = soma - valorAPagar;
               const ok = Math.abs(diff) < 1;
+              const totalCliente = totalComTaxa + totalComTaxa2;
               return (
                 <div className={`col-span-2 md:col-span-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-amber-50 border border-amber-200 text-amber-700"}`}>
                   <span>{ok ? "✅" : "⚠️"}</span>
@@ -1381,6 +1573,7 @@ export default function EntregasPage() {
                     {valorPag2 > 0 && <> + Pagamento 2: <b>R$ {valorPag2.toLocaleString("pt-BR")}</b></>}
                     {" = "}<b>R$ {soma.toLocaleString("pt-BR")}</b>
                     {" · "}Valor a pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
+                    {(taxaAtual > 0 || taxaAtual2 > 0) && <> · Total cliente c/ taxa: <b>R$ {totalCliente.toLocaleString("pt-BR")}</b></>}
                     {!ok && <> · <b>Divergência R$ {Math.abs(diff).toLocaleString("pt-BR")}</b> {diff > 0 ? "a mais" : "a menos"}</>}
                   </span>
                 </div>
@@ -1530,55 +1723,94 @@ export default function EntregasPage() {
         </button>
       </div>
 
-      {modoSelecao && entregasSelecionadas.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
-          <span className="text-sm font-semibold text-blue-700">{entregasSelecionadas.size} selecionada{entregasSelecionadas.size > 1 ? "s" : ""}</span>
-          <button
-            onClick={async () => {
-              if (!confirm(`Finalizar ${entregasSelecionadas.size} entregas?`)) return;
-              const ids = Array.from(entregasSelecionadas);
-              for (const id of ids) {
-                await fetch("/api/admin/entregas", {
-                  method: "PATCH",
-                  headers: apiHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({ id, finalizada: true, status: "ENTREGUE" }),
-                });
-              }
-              setEntregasSelecionadas(new Set());
-              setModoSelecao(false);
-              fetchEntregas();
-            }}
-            className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
-          >
-            ✅ Finalizar selecionadas
-          </button>
-          <button
-            onClick={async () => {
-              if (!confirm(`Marcar comprovante lançado em ${entregasSelecionadas.size} entregas?`)) return;
-              const ids = Array.from(entregasSelecionadas);
-              for (const id of ids) {
-                await fetch("/api/admin/entregas", {
-                  method: "PATCH",
-                  headers: apiHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({ id, comprovante_lancado: true }),
-                });
-              }
-              setEntregasSelecionadas(new Set());
-              setModoSelecao(false);
-              fetchEntregas();
-            }}
-            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
-          >
-            🧾 Marcar comprovante
-          </button>
-          <button
-            onClick={() => setEntregasSelecionadas(new Set())}
-            className="ml-auto text-xs text-blue-700 hover:underline"
-          >
-            Limpar seleção
-          </button>
-        </div>
-      )}
+      {modoSelecao && (() => {
+        // Calcula entregas visíveis na view atual (para "Selecionar todas")
+        const aplicaFiltroBia = (arr: Entrega[]) => arr.filter((e) => {
+          if (filtroBia === "finalizada") return e.finalizada === true;
+          if (filtroBia === "pendentes_final") return e.finalizada !== true;
+          if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+          if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+          return true;
+        });
+        const visiveis = viewMode === "dia"
+          ? aplicaFiltroBia(entregas.filter((e) => e.data_entrega === viewDate))
+          : aplicaFiltroBia(entregas.filter((e) => e.data_entrega >= from && e.data_entrega <= to));
+        const todosMarcados = visiveis.length > 0 && visiveis.every(e => entregasSelecionadas.has(e.id));
+        const toggleTodas = () => {
+          if (todosMarcados) setEntregasSelecionadas(new Set());
+          else setEntregasSelecionadas(new Set(visiveis.map(e => e.id)));
+        };
+        const bulkPatch = async (body: Record<string, unknown>, confirmMsg: string) => {
+          if (entregasSelecionadas.size === 0) { alert("Nenhuma entrega selecionada"); return; }
+          if (!confirm(confirmMsg)) return;
+          const ids = Array.from(entregasSelecionadas);
+          for (const id of ids) {
+            await fetch("/api/admin/entregas", {
+              method: "PATCH",
+              headers: apiHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ id, ...body }),
+            });
+          }
+          setEntregasSelecionadas(new Set());
+          setModoSelecao(false);
+          fetchEntregas();
+        };
+        const selCount = entregasSelecionadas.size;
+        return (
+          <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border ${dm ? "bg-blue-900/20 border-blue-600/40" : "bg-blue-50 border-blue-200"}`}>
+            <button
+              onClick={toggleTodas}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${todosMarcados ? "bg-blue-500 text-white" : dm ? "bg-[#2C2C2E] text-blue-300 border border-blue-600/40" : "bg-white border border-blue-300 text-blue-700"} hover:bg-blue-600 hover:text-white`}
+            >
+              {todosMarcados ? "☑ Desmarcar todas" : `☐ Selecionar todas (${visiveis.length})`}
+            </button>
+            <span className={`text-sm font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>
+              {selCount} selecionada{selCount !== 1 ? "s" : ""}
+            </span>
+            {selCount > 0 && (<>
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <button
+                onClick={() => bulkPatch({ finalizada: true, status: "ENTREGUE" }, `Finalizar ${selCount} entregas?`)}
+                className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
+              >✅ Finalizar</button>
+              <button
+                onClick={() => bulkPatch({ comprovante_lancado: true }, `Marcar comprovante em ${selCount} entregas?`)}
+                className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
+              >🧾 Comprovante</button>
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <span className={`text-[11px] font-semibold uppercase ${dm ? "text-blue-300" : "text-blue-700"}`}>Motoboy:</span>
+              {([
+                { value: "IGOR", label: "Igor", emoji: "🛵" },
+                { value: "LEANDRO", label: "Leandro", emoji: "🛵" },
+                { value: "RETIRADA", label: "Retirada", emoji: "🏬" },
+                { value: "CORREIOS", label: "Correios", emoji: "📦" },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => bulkPatch({ entregador: opt.value }, `Atribuir ${opt.label} a ${selCount} entregas?`)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
+                >{opt.emoji} {opt.label}</button>
+              ))}
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <span className={`text-[11px] font-semibold uppercase ${dm ? "text-blue-300" : "text-blue-700"}`}>Status:</span>
+              {(["PENDENTE","SAIU","ENTREGUE","CANCELADA"] as const).map(st => {
+                const c = STATUS_CONFIG[st];
+                return (
+                  <button
+                    key={st}
+                    onClick={() => bulkPatch({ status: st }, `Mudar status de ${selCount} entregas para ${c.label}?`)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
+                  >{c.icon} {c.label}</button>
+                );
+              })}
+              <button
+                onClick={() => setEntregasSelecionadas(new Set())}
+                className={`ml-auto text-xs hover:underline ${dm ? "text-blue-300" : "text-blue-700"}`}
+              >Limpar seleção</button>
+            </>)}
+          </div>
+        );
+      })()}
 
       {/* Navegação de modo (Dia / Semana) */}
       {!loading && (
@@ -1688,6 +1920,11 @@ export default function EntregasPage() {
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
+                  {modoSelecao && (
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded border-2 ${isSel ? "bg-blue-500 border-blue-500 text-white" : dm ? "border-[#636366] bg-transparent" : "border-[#D2D2D7] bg-white"}`}>
+                      {isSel && <span className="text-[10px] leading-none">✓</span>}
+                    </span>
+                  )}
                   <span>{sc.icon}</span>
                   {e.horario && <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
                 </div>
@@ -1744,9 +1981,9 @@ export default function EntregasPage() {
         return (
           <div className="space-y-3">
             {aguardando.length > 0 && (
-              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl overflow-hidden">
-                <div className="px-4 py-2 bg-yellow-100 border-b-2 border-yellow-300">
-                  <p className="text-xs font-bold text-yellow-800 uppercase">
+              <div className={`rounded-xl overflow-hidden border-2 ${dm ? "bg-yellow-900/20 border-yellow-600/60" : "bg-yellow-50 border-yellow-300"}`}>
+                <div className={`px-4 py-2 border-b-2 ${dm ? "bg-yellow-900/40 border-yellow-600/60" : "bg-yellow-100 border-yellow-300"}`}>
+                  <p className={`text-xs font-bold uppercase ${dm ? "text-yellow-200" : "text-yellow-800"}`}>
                     ⏳ Aguardando motoboy ({aguardando.length})
                   </p>
                 </div>
@@ -2050,9 +2287,58 @@ export default function EntregasPage() {
                 {e.forma_pagamento && (
                   <div className="text-sm">
                     <span className="text-[#86868B]">Pagamento: </span>
-                    <span className="text-[#1D1D1F] font-medium">
-                      {formatPagamentoDisplay(e.forma_pagamento, e.valor)}
-                    </span>
+                    <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
+                    {(() => {
+                      // valor_total salvo já inclui taxa de ambos os cartões
+                      const total = Number(e.valor_total || e.valor || 0);
+                      const entrada = Number(e.entrada || 0);
+                      const fp = e.forma_pagamento || "";
+                      // Detecta forma da entrada (Pix/Espécie/Transferência) pelo texto
+                      let labelEntrada = "Entrada";
+                      if (/\+\s*pix/i.test(fp)) labelEntrada = "Entrada PIX";
+                      else if (/\+\s*esp[eé]cie/i.test(fp)) labelEntrada = "Entrada Espécie";
+                      else if (/\+\s*transfer/i.test(fp)) labelEntrada = "Entrada Transferência";
+                      // Extrai cartões da string "Nx no Cartão (MAQ)" — pode ter 1 ou 2 ocorrências
+                      const cartaoRegex = /(\d+)x\s+no\s+(?:Cart[ãa]o|Link)(?:\s*\(([^)]*)\))?/gi;
+                      const cartoes: { parcelas: number; maquina: string }[] = [];
+                      let m;
+                      while ((m = cartaoRegex.exec(fp)) !== null) {
+                        cartoes.push({ parcelas: parseInt(m[1]), maquina: (m[2] || "").trim() });
+                      }
+                      // Base a parcelar nos cartões = total − entrada
+                      const baseCartoes = Math.max(0, total - entrada);
+                      // Se há 2 cartões, precisamos saber quanto de cada. O esquema atual só guarda total —
+                      // divide igualmente quando não há info específica. Para 1 cartão, usa tudo.
+                      let linhasCartao: { label: string; valor: number; parcelas: number; valorParcela: number }[] = [];
+                      if (cartoes.length === 1 && cartoes[0].parcelas > 0) {
+                        const c = cartoes[0];
+                        linhasCartao.push({
+                          label: `${c.parcelas}x${c.maquina ? ` no Cartão (${c.maquina})` : ""}`,
+                          valor: baseCartoes,
+                          parcelas: c.parcelas,
+                          valorParcela: baseCartoes / c.parcelas,
+                        });
+                      } else if (cartoes.length === 2) {
+                        // Sem granularidade de valores: tenta dividir 50/50 como aproximação
+                        const metade = baseCartoes / 2;
+                        linhasCartao = cartoes.map(c => ({
+                          label: `${c.parcelas}x${c.maquina ? ` no Cartão (${c.maquina})` : ""}`,
+                          valor: metade,
+                          parcelas: c.parcelas,
+                          valorParcela: c.parcelas > 0 ? metade / c.parcelas : 0,
+                        }));
+                      }
+                      if (total <= 0 && linhasCartao.length === 0) return null;
+                      return (
+                        <div className="mt-1 pl-2 text-xs text-[#86868B] space-y-0.5">
+                          {total > 0 && <p>Total: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
+                          {entrada > 0 && <p>{labelEntrada}: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
+                          {linhasCartao.map((l, i) => (
+                            <p key={i}>{l.label}: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {l.valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>{linhasCartao.length > 1 && <> · total R$ {l.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</>}</p>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 {e.vendedor && (
@@ -2147,6 +2433,16 @@ export default function EntregasPage() {
                       const regiao = e.regiao || e.bairro || "";
                       const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
                       const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
+                      // Limpa detalhes da troca: remove linha "Avaliação: R$ X" (motoboy não precisa saber o valor)
+                      const trocaTexto = e.detalhes_upgrade
+                        ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:")).join(" / ")
+                        : "";
+                      // Limpa OBS: remove "Endereço cadastro: ..." (resíduo de entregas antigas)
+                      const obsLimpa = (e.observacao || "")
+                        .split(" | ")
+                        .filter(p => !p.startsWith("Endereço cadastro:"))
+                        .join(" | ")
+                        .trim();
                       const msg = [
                         `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
                         `🛵`,
@@ -2154,11 +2450,11 @@ export default function EntregasPage() {
                         `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
                         `‼️ *TIPO:* ${tipoLabel}`,
-                        ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
-                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor)}`,
+                        ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
+                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas)}`,
                         `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
-                        e.observacao ? `OBS: ${e.observacao}` : "",
+                        obsLimpa ? `OBS: ${obsLimpa}` : "",
                         `💼 Vendedor: ${e.vendedor || ""}`,
                         "________________________________",
                       ].filter(Boolean).join("\n");
@@ -2194,6 +2490,8 @@ export default function EntregasPage() {
                         maquina: "",
                         forma_pagamento_2: "",
                         valor_2: "",
+                        parcelas_2: "",
+                        maquina_2: "",
                         vendedor: e.vendedor || "",
                         regiao: e.regiao || "",
                         local_entrega: "",

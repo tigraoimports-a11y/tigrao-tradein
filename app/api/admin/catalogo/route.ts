@@ -188,12 +188,44 @@ export async function PATCH(req: NextRequest) {
     }
 
     const supabase = getSupabase();
+
+    // Rename de modelo: propagar em estoque.produto / precos.modelo (best-effort por prefix)
+    let nomeAntigo: string | null = null;
+    if (resource === "modelos" && typeof data.nome === "string") {
+      const { data: old } = await supabase.from("catalogo_modelos").select("nome").eq("id", id).maybeSingle();
+      if (old?.nome && old.nome !== data.nome) nomeAntigo = old.nome;
+    }
+
     const { data: row, error } = await supabase.from(table).update(data).eq("id", id).select().single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    return NextResponse.json({ data: row });
+
+    // Propagação: trocar ocorrências exatas do nome antigo pelo novo em outras tabelas.
+    let propagated: Record<string, number> = {};
+    if (nomeAntigo && typeof data.nome === "string") {
+      const nomeNovo = data.nome;
+      try {
+        // estoque.produto — só linhas EXATAMENTE == nomeAntigo (substring match é arriscado demais)
+        const { count: estExact } = await supabase
+          .from("estoque")
+          .update({ produto: nomeNovo, updated_at: new Date().toISOString() }, { count: "exact" })
+          .eq("produto", nomeAntigo);
+        propagated = { ...propagated, estoque_exato: Number(estExact || 0) };
+
+        // precos.modelo — idem
+        const { count: precExact } = await supabase
+          .from("precos")
+          .update({ modelo: nomeNovo }, { count: "exact" })
+          .eq("modelo", nomeAntigo);
+        propagated = { ...propagated, precos_exato: Number(precExact || 0) };
+      } catch (e) {
+        console.error("[catalogo PATCH] erro ao propagar rename:", e);
+      }
+    }
+
+    return NextResponse.json({ data: row, propagated });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

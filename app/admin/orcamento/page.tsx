@@ -72,7 +72,7 @@ export default function OrcamentoPage() {
   const [parcelasSel, setParcelasSel] = useState<number[]>([12]);
   const [textoGerado, setTextoGerado] = useState("");
   const [copiado, setCopiado] = useState(false);
-  const [carrinho, setCarrinho] = useState<{ id: string; nome: string; preco: number; categoria: string }[]>([]);
+  const [carrinho, setCarrinho] = useState<{ key: string; id: string; nome: string; preco: number; categoria: string; qnt: number }[]>([]);
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [trocaProduto2, setTrocaProduto2] = useState("");
@@ -209,15 +209,14 @@ export default function OrcamentoPage() {
     if (tipoOrc === "seminovo") {
       if (!semiProduto && carrinho.length === 0) return;
     } else {
-      if (!produtoSelecionado && carrinho.length === 0) return;
+      if (carrinho.length === 0) return;
     }
 
-    // Se tem carrinho com múltiplos produtos, usar total do carrinho
+    // Itens do orçamento: sempre usa o carrinho (produtos são adicionados automaticamente)
     const itensOrcamento = carrinho.length > 0 ? carrinho
-      : tipoOrc === "seminovo" && semiProduto ? [semiProduto]
-      : produtoSelecionado ? [{ id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]
+      : tipoOrc === "seminovo" && semiProduto ? [{ ...semiProduto, qnt: 1 }]
       : [];
-    const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco, 0);
+    const totalBruto = itensOrcamento.reduce((s, p) => s + p.preco * (p.qnt || 1), 0);
     const trocaVal = parseFloat(trocaValor) || 0;
     const trocaVal2 = parseFloat(trocaValor2) || 0;
     const trocaTotal = trocaVal + trocaVal2;
@@ -229,7 +228,7 @@ export default function OrcamentoPage() {
     const catEmojis: Record<string, string> = { IPHONE: "📱", IPAD: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
 
     if (restante <= 0) {
-      const linhasSimples = itensOrcamento.map(p => `${catEmojis[p.categoria] || "📦"} *${p.nome}*`);
+      const linhasSimples = itensOrcamento.map(p => `${catEmojis[p.categoria] || "📦"} *${p.nome}*${(p.qnt || 1) > 1 ? ` (x${p.qnt})` : ""}`);
       const isSemi = tipoOrc === "seminovo";
       const texto = [
         ...linhasSimples,
@@ -253,7 +252,7 @@ export default function OrcamentoPage() {
     if (itensOrcamento.length > 1) {
       linhas.push(`*ORÇAMENTO -- TigraoImports*`, ``);
       for (const p of itensOrcamento) {
-        linhas.push(`${catEmojis[p.categoria] || "📦"} *${p.nome}* — R$ ${p.preco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+        linhas.push(`${catEmojis[p.categoria] || "📦"} *${p.nome}*${(p.qnt || 1) > 1 ? ` (x${p.qnt})` : ""} — R$ ${(p.preco * (p.qnt || 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
       }
       linhas.push(``, `💰 *Total: R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`, ``);
     } else {
@@ -342,11 +341,12 @@ export default function OrcamentoPage() {
     setTimeout(() => setCopiado(false), 3000);
   };
 
-  // Auto gerar quando muda qualquer campo
+  // Auto gerar quando muda qualquer campo — cálculo reativo
   useEffect(() => {
-    if (produtoSelecionado || carrinho.length > 0 || semiProduto) gerarOrcamento();
+    if (carrinho.length > 0 || semiProduto) gerarOrcamento();
+    else setTextoGerado("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodSel, entrada, parcelasSel, carrinho, trocaProduto, trocaValor, trocaProduto2, trocaValor2, desconto, tipoOrc, semiSel, semiPreco, semiObs]);
+  }, [entrada, parcelasSel, carrinho, trocaProduto, trocaValor, trocaProduto2, trocaValor2, desconto, tipoOrc, semiSel, semiPreco, semiObs]);
 
   const cardCls = `rounded-2xl border p-5 shadow-sm ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`;
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`;
@@ -396,7 +396,12 @@ export default function OrcamentoPage() {
               {loading ? (
                 <p className="text-sm text-[#86868B]">Carregando...</p>
               ) : (
-                <select value={prodSel} onChange={e => setProdSel(e.target.value)} className={inputCls}>
+                <select value="" onChange={e => {
+                  const p = todosProdutos.find(pr => pr.id === e.target.value);
+                  if (p) {
+                    setCarrinho(prev => [...prev, { key: crypto.randomUUID(), id: p.id, nome: p.nome, preco: p.preco_pix, categoria: p.categoria, qnt: 1 }]);
+                  }
+                }} className={inputCls}>
                   <option value="">— Selecionar produto —</option>
                   {produtosFiltrados.map(p => (
                     <option key={p.id} value={p.id}>{p.nome} — R$ {p.preco_pix.toLocaleString("pt-BR")}</option>
@@ -487,57 +492,55 @@ export default function OrcamentoPage() {
           </div>
           )}
 
-          {(produtoSelecionado || semiProduto) && (
+          {(carrinho.length > 0 || semiProduto) && (
             <>
-              {/* Preço PIX — só para lacrado (seminovo já mostra acima) */}
-              {produtoSelecionado && tipoOrc === "lacrado" && (
-              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                <p className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Preço PIX</p>
-                <p className={`text-2xl font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
-                  R$ {produtoSelecionado.preco_pix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              )}
 
               {/* Carrinho */}
               {carrinho.length > 0 && (
                 <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no orcamento ({carrinho.length})</p>
+                  <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no orcamento ({carrinho.reduce((s, c) => s + c.qnt, 0)} itens)</p>
                   {carrinho.map((item, i) => (
-                    <div key={item.id} className="flex items-center justify-between text-sm">
-                      <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {item.nome}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-green-600">R$ {item.preco.toLocaleString("pt-BR")}</span>
-                        <button onClick={() => setCarrinho(prev => prev.filter(c => c.id !== item.id))} className="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
+                    <div key={item.key} className="flex items-center justify-between text-sm gap-2">
+                      <span className={`flex-1 ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{i + 1}. {item.nome}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: Math.max(1, c.qnt - 1) } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>−</button>
+                        <span className={`w-6 text-center text-xs font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{item.qnt}</span>
+                        <button onClick={() => setCarrinho(prev => prev.map(c => c.key === item.key ? { ...c, qnt: c.qnt + 1 } : c))} className={`w-6 h-6 rounded text-xs font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#86868B]"}`}>+</button>
+                        <span className="font-semibold text-green-600 ml-1">R$ {(item.preco * item.qnt).toLocaleString("pt-BR")}</span>
+                        <button onClick={() => setCarrinho(prev => prev.filter(c => c.key !== item.key))} className="text-red-400 hover:text-red-600 text-xs font-bold ml-1">✕</button>
                       </div>
                     </div>
                   ))}
                   <div className={`pt-2 border-t flex justify-between font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
                     <span>Total</span>
-                    <span className="text-green-600">R$ {carrinho.reduce((s, c) => s + c.preco, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-green-600">R$ {carrinho.reduce((s, c) => s + c.preco * c.qnt, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               )}
 
-              {/* Botões adicionar mais */}
+              {/* Botões adicionar mais + limpar */}
               <div className="flex gap-2">
-                <button onClick={() => {
-                  if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
-                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
-                  }
-                  setProdSel(""); setCatSel("");
-                }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
+                <button onClick={() => { setCatSel(""); }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
                   + Outro produto
                 </button>
-                <button onClick={() => {
-                  if (produtoSelecionado && !carrinho.find(c => c.id === produtoSelecionado.id)) {
-                    setCarrinho(prev => [...prev, { id: produtoSelecionado.id, nome: produtoSelecionado.nome, preco: produtoSelecionado.preco_pix, categoria: produtoSelecionado.categoria }]);
-                  }
-                  setProdSel(""); setCatSel("ACESSORIOS");
-                }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
-                  + Acessorios
+                <button onClick={() => { setCatSel("ACESSORIOS"); }} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}>
+                  + Acessórios
                 </button>
               </div>
+              {carrinho.length > 0 && (
+                <button onClick={() => {
+                  setCarrinho([]);
+                  setProdSel(""); setCatSel("");
+                  setEntrada(""); setDesconto("");
+                  setTrocaProduto(""); setTrocaValor("");
+                  setTrocaProduto2(""); setTrocaValor2("");
+                  setShowTroca2(false);
+                  setTextoGerado("");
+                  setSemiSel(null); setSemiPreco(""); setSemiObs("");
+                }} className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${dm ? "bg-red-900/30 text-red-300 hover:bg-red-900/50" : "bg-red-50 text-red-500 border border-red-200 hover:bg-red-100"}`}>
+                  🗑️ Limpar orçamento
+                </button>
+              )}
 
               {/* Troca */}
               <div className={`rounded-xl p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-blue-50 border border-blue-200"}`}>

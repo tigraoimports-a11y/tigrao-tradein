@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity-log";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+const noCache = { "Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache" };
+
+function auth(req: NextRequest) {
+  return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
+}
+function getUsuario(req: NextRequest) {
+  return decodeURIComponent(req.headers.get("x-admin-user") || "sistema");
+}
+
+export async function GET(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCache });
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
+  let q = supabase.from("avisos_clientes").select("*").order("created_at", { ascending: false });
+  if (status) q = q.eq("status", status);
+  const { data, error } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
+  return NextResponse.json({ data: data || [] }, { headers: noCache });
+}
+
+export async function POST(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCache });
+  const usuario = getUsuario(req);
+  const body = await req.json();
+  const { nome, whatsapp, instagram, produto_desejado, observacao } = body;
+  if (!nome?.trim()) return NextResponse.json({ error: "nome obrigatório" }, { status: 400, headers: noCache });
+  if (!produto_desejado?.trim()) return NextResponse.json({ error: "produto_desejado obrigatório" }, { status: 400, headers: noCache });
+  const { data, error } = await supabase
+    .from("avisos_clientes")
+    .insert({
+      nome: nome.trim(),
+      whatsapp: whatsapp?.trim() || null,
+      instagram: instagram?.trim() || null,
+      produto_desejado: produto_desejado.trim(),
+      observacao: observacao?.trim() || null,
+    })
+    .select("*")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
+  await logActivity(usuario, "Aviso cliente criado", `${nome} — ${produto_desejado}`, "clientes", data.id);
+  return NextResponse.json({ ok: true, data }, { headers: noCache });
+}
+
+export async function PATCH(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCache });
+  const usuario = getUsuario(req);
+  const body = await req.json();
+  const { id, nome, whatsapp, instagram, produto_desejado, observacao, status } = body;
+  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400, headers: noCache });
+  const upd: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (nome !== undefined) upd.nome = nome;
+  if (whatsapp !== undefined) upd.whatsapp = whatsapp || null;
+  if (instagram !== undefined) upd.instagram = instagram || null;
+  if (produto_desejado !== undefined) upd.produto_desejado = produto_desejado;
+  if (observacao !== undefined) upd.observacao = observacao || null;
+  if (status !== undefined) {
+    upd.status = status;
+    if (status === "NOTIFICADO") upd.notificado_em = new Date().toISOString();
+  }
+  const { error } = await supabase.from("avisos_clientes").update(upd).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
+  await logActivity(usuario, "Aviso cliente atualizado", `id=${id}`, "clientes", id);
+  return NextResponse.json({ ok: true }, { headers: noCache });
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCache });
+  const usuario = getUsuario(req);
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400, headers: noCache });
+  const { error } = await supabase.from("avisos_clientes").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCache });
+  await logActivity(usuario, "Aviso cliente removido", `id=${id}`, "clientes", id);
+  return NextResponse.json({ ok: true }, { headers: noCache });
+}
