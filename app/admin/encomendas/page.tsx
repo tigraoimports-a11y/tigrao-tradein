@@ -419,6 +419,94 @@ export default function EncomendasPage() {
   // ─── Status change ─────────────────────────────────────────────────────────
 
   const handleStatusChange = async (enc: Encomenda, newStatus: string) => {
+    // ── Finalizar: cria venda automaticamente ──
+    if (newStatus === "FINALIZADO") {
+      if (!confirm(`Finalizar encomenda de ${enc.cliente} como venda?`)) return;
+
+      try {
+        const vendaPayload: Record<string, unknown> = {
+          data: enc.data,
+          cliente: enc.cliente,
+          cpf: enc.cpf || null,
+          email: enc.email || null,
+          produto: enc.produto,
+          fornecedor: enc.fornecedor || null,
+          custo: enc.custo || 0,
+          preco_vendido: enc.valor_venda || 0,
+          origem: "ENCOMENDA",
+          tipo: "VENDA",
+          recebimento: "D+0",
+          forma: enc.forma_pagamento || null,
+          banco: enc.banco_sinal || null,
+          sinal_antecipado: enc.sinal_recebido || 0,
+          banco_sinal: enc.banco_sinal || null,
+          notas: enc.obs_financeira || null,
+          _estoque_id: enc.estoque_id || null,
+          // Troca 1
+          produto_na_troca: enc.troca_valor || 0,
+          troca_produto: enc.troca_produto || null,
+          troca_cor: enc.troca_cor || null,
+          troca_categoria: enc.troca_categoria || null,
+          troca_bateria: enc.troca_bateria || null,
+          troca_grade: enc.troca_grade || null,
+          troca_caixa: enc.troca_caixa || null,
+          troca_cabo: enc.troca_cabo || null,
+          troca_fonte: enc.troca_fonte || null,
+          troca_obs: enc.troca_obs || null,
+          troca_serial: enc.troca_serial || null,
+          troca_imei: enc.troca_imei || null,
+          troca_garantia: enc.troca_garantia || null,
+          // Troca 2
+          produto_na_troca2: enc.troca_valor2 || 0,
+          troca_produto2: enc.troca_produto2 || null,
+          troca_cor2: enc.troca_cor2 || null,
+          troca_categoria2: enc.troca_categoria2 || null,
+          troca_bateria2: enc.troca_bateria2 || null,
+          troca_grade2: enc.troca_grade2 || null,
+          troca_caixa2: enc.troca_caixa2 || null,
+          troca_cabo2: enc.troca_cabo2 || null,
+          troca_fonte2: enc.troca_fonte2 || null,
+          troca_obs2: enc.troca_obs2 || null,
+          troca_serial2: enc.troca_serial2 || null,
+          troca_imei2: enc.troca_imei2 || null,
+          troca_garantia2: enc.troca_garantia2 || null,
+        };
+
+        const res = await fetch("/api/vendas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...hdrs() },
+          body: JSON.stringify(vendaPayload),
+        });
+        const json = await res.json();
+
+        if (!res.ok) {
+          setMsg(`Erro ao criar venda: ${json.error}`);
+          return;
+        }
+
+        const vendaId = json.data?.id;
+
+        // Atualizar encomenda com status FINALIZADO e venda_id
+        await fetch("/api/encomendas", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...hdrs() },
+          body: JSON.stringify({ id: enc.id, status: "FINALIZADO", venda_id: vendaId }),
+        });
+
+        setEncomendas((prev) =>
+          prev.map((e) =>
+            e.id === enc.id ? { ...e, status: "FINALIZADO", venda_id: vendaId } : e
+          )
+        );
+        setMsg("Encomenda finalizada! Venda registrada.");
+        return;
+      } catch (err) {
+        setMsg(`Erro ao finalizar: ${err}`);
+        return;
+      }
+    }
+
+    // ── Outros status: apenas atualiza ──
     await fetch("/api/encomendas", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...hdrs() },
@@ -643,7 +731,7 @@ export default function EncomendasPage() {
                 <p className={labelCls}>Cliente *</p>
                 <input
                   value={form.cliente}
-                  onChange={(e) => set("cliente", e.target.value)}
+                  onChange={(e) => set("cliente", e.target.value.toUpperCase())}
                   className={inputCls}
                   placeholder="Nome do cliente"
                 />
