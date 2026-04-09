@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
+import { recalcBalancos } from "@/lib/recalc-balancos";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -263,6 +264,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-recalcular balanço (preço médio) após importação
+    if (imported + merged > 0) {
+      try { await recalcBalancos(); } catch { /* silent */ }
+    }
+
     return NextResponse.json({ ok: true, imported, merged, errors: errors.slice(0, 5), total: unique.length });
   }
 
@@ -373,6 +379,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await logActivity(getUsuario(req), "Adicionou ao estoque", `${produtoNome}. Quantidade: ${parseInt(body.qnt) || 0}`, "estoque", data?.id);
+
+  // Auto-recalcular balanço (preço médio) após inserir produto
+  try { await recalcBalancos(); } catch { /* silent */ }
 
   return NextResponse.json({ ok: true, data });
 }
