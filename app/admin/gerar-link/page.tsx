@@ -11,6 +11,8 @@ export default function GerarLinkPage() {
 
   const [produtos, setProdutos] = useState<string[]>([""]);
   const [preco, setPreco] = useState("");
+  // Preços individuais por produto (idx → preco numérico), pra somar quando tem 2+ produtos
+  const [precosPorProduto, setPrecosPorProduto] = useState<Record<number, number>>({});
   const [produtoManual, setProdutoManual] = useState(false);
   const [catSel, setCatSel] = useState("");
   const [pickerIdx, setPickerIdx] = useState<number | null>(null);
@@ -1414,10 +1416,18 @@ export default function GerarLinkPage() {
                         const sel = produtos[pickerIdx!] === m.nome;
                         return (
                           <button key={m.nome} onClick={() => {
+                            const idx = pickerIdx!;
                             const np = [...produtos];
-                            np[pickerIdx!] = sel ? "" : m.nome;
+                            np[idx] = sel ? "" : m.nome;
                             setProdutos(np);
-                            if (pickerIdx === 0) { setPreco(sel ? "" : (m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "")); setCorSel(""); }
+                            // Guarda preço individual desse produto e recalcula soma
+                            const novosPrecos = { ...precosPorProduto };
+                            if (sel) { delete novosPrecos[idx]; } else { novosPrecos[idx] = m.preco || 0; }
+                            setPrecosPorProduto(novosPrecos);
+                            // Soma de todos os produtos selecionados
+                            const soma = Object.values(novosPrecos).reduce((s, v) => s + v, 0);
+                            setPreco(soma > 0 ? soma.toLocaleString("pt-BR") : "");
+                            if (idx === 0) setCorSel("");
                             if (!sel) { setPickerIdx(null); setCatSel(""); }
                           }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                             <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
@@ -1433,7 +1443,7 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); }} className={inputCls}>
+            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); }} className={inputCls}>
               <option value="">-- Categoria --</option>
               {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
               <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
@@ -1450,7 +1460,7 @@ export default function GerarLinkPage() {
                     return (
                       <div key={m.nome}>
                         <button onClick={() => {
-                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); return; }
+                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); return; }
                           setProdutos([m.nome]);
                           setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
                           setCorSel("");
