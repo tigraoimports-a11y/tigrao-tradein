@@ -1801,7 +1801,6 @@ export default function EstoquePage() {
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
-          ${p.custo_unitario ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.3mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -1884,7 +1883,6 @@ export default function EstoquePage() {
           ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
           ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
           ${p.data_compra ? `<div class="data">📅 ${p.data_compra.split("-").reverse().join("/")}</div>` : ""}
-          ${p.custo_unitario ? `<div class="custo">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
           <div class="label-troca">Produto na troca</div>
         </div>
       </div>
