@@ -328,8 +328,8 @@ export function UsadosContent() {
     grouped[v.modelo].push(v);
   });
 
-  // Set de modelos conhecidos (pra validar o lado esquerdo do " - " nos descontos)
-  const modelosConhecidos = new Set(valores.map(v => v.modelo));
+  // Set de modelos conhecidos (case-insensitive pra casar "IPHONE 17 PRO MAX" com "iPhone 17 Pro Max")
+  const modelosConhecidosUpper = new Map(valores.map(v => [v.modelo.toUpperCase(), v.modelo]));
 
   // Agrupar descontos: separar gerais vs por modelo (regex genérica — funciona p/ qualquer categoria)
   const descByModel: Record<string, Record<string, DescontoCondicao[]>> = {};
@@ -338,12 +338,12 @@ export function UsadosContent() {
   descontos.forEach((d) => {
     // Formato: "iPhone 16 Pro - Bateria" ou "MacBook Air M2 - Riscos na tela"
     const match = d.condicao.match(/^(.+?) - (.+)$/);
-    if (match && modelosConhecidos.has(match[1])) {
-      const modelo = match[1];
+    const modeloCanon = match ? modelosConhecidosUpper.get(match[1].toUpperCase()) : null;
+    if (match && modeloCanon) {
       const cond = match[2];
-      if (!descByModel[modelo]) descByModel[modelo] = {};
-      if (!descByModel[modelo][cond]) descByModel[modelo][cond] = [];
-      descByModel[modelo][cond].push(d);
+      if (!descByModel[modeloCanon]) descByModel[modeloCanon] = {};
+      if (!descByModel[modeloCanon][cond]) descByModel[modeloCanon][cond] = [];
+      descByModel[modeloCanon][cond].push(d);
     } else {
       if (!descGerais[d.condicao]) descGerais[d.condicao] = [];
       descGerais[d.condicao].push(d);
