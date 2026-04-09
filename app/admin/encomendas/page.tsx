@@ -852,6 +852,21 @@ export default function EncomendasPage() {
             >
               Dados Financeiros
             </h3>
+            <label className={`flex items-center gap-2 mb-3 cursor-pointer`}>
+              <input
+                type="checkbox"
+                checked={parseFloat(form.sinal_recebido) > 0 && parseFloat(form.sinal_recebido) === parseFloat(form.valor_venda)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    set("sinal_recebido", form.valor_venda || "0");
+                  } else {
+                    set("sinal_recebido", "0");
+                  }
+                }}
+                className="accent-[#2ECC71] w-4 h-4"
+              />
+              <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Pago integralmente (cliente ja pagou tudo)</span>
+            </label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className={labelCls}>Sinal Recebido (R$)</p>
