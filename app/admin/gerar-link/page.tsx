@@ -97,13 +97,23 @@ export default function GerarLinkPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoqueItems]);
 
-  // Cores do catálogo por modelo (catalogo_modelo_configs)
+  // Cores do catálogo por modelo — combina todas as categorias
   const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
   useEffect(() => {
-    fetch("/api/catalogo-cores")
-      .then(r => r.json())
-      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
-      .catch(() => {});
+    // Busca cores de todas as categorias em paralelo
+    Promise.all([
+      fetch("/api/cores-dispositivo?device_type=iphone").then(r => r.json()).catch(() => ({ modelos: {} })),
+      fetch("/api/cores-dispositivo?device_type=ipad").then(r => r.json()).catch(() => ({ modelos: {} })),
+      fetch("/api/cores-dispositivo?device_type=macbook").then(r => r.json()).catch(() => ({ modelos: {} })),
+      fetch("/api/cores-dispositivo?device_type=watch").then(r => r.json()).catch(() => ({ modelos: {} })),
+    ]).then(([iphone, ipad, macbook, watch]) => {
+      setCatalogoCores({
+        ...(iphone.modelos || {}),
+        ...(ipad.modelos || {}),
+        ...(macbook.modelos || {}),
+        ...(watch.modelos || {}),
+      });
+    });
   }, []);
 
   // Cores disponíveis pra QUALQUER nome de produto — fonte: catalogo_modelo_configs.
@@ -1508,23 +1518,33 @@ export default function GerarLinkPage() {
           setCatSel("");
         }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
-        {/* Resumo dos produtos com preço individual */}
-        {produtos.filter(Boolean).length > 1 && (
+        {/* Resumo dos produtos com preço individual + cor */}
+        {produtos.filter(Boolean).length >= 1 && (
           <div className={`rounded-xl p-3 space-y-1.5 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no link ({produtos.filter(Boolean).length})</p>
+            <div className="flex items-center justify-between">
+              <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no link ({produtos.filter(Boolean).length})</p>
+              <button onClick={() => {
+                setProdutos([""]); setPreco(""); setCorSel(""); setCoresExtras([]);
+                setCatSel(""); setPickerIdx(null); setProdutoManual(false);
+              }} className="text-[10px] text-red-400 hover:text-red-600 font-semibold">🗑️ Limpar</button>
+            </div>
             {produtos.filter(Boolean).map((p, i) => {
               const pPreco = lookupPreco(p);
+              // Mostrar cor selecionada junto ao nome
+              const corDisplay = i === 0 && corSel ? ` ${corParaPT(corSel)}` : (i > 0 && coresExtras[i - 1] ? ` ${corParaPT(coresExtras[i - 1])}` : "");
               return (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}</span>
+                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}{corDisplay && <span className="text-[#E8740E] font-semibold">{corDisplay}</span>}</span>
                   <span className="font-semibold text-green-600">{pPreco > 0 ? `R$ ${pPreco.toLocaleString("pt-BR")}` : "—"}</span>
                 </div>
               );
             })}
-            <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
-              <span>Total</span>
-              <span className="text-green-600">R$ {produtos.filter(Boolean).reduce((s, p) => s + lookupPreco(p), 0).toLocaleString("pt-BR")}</span>
-            </div>
+            {produtos.filter(Boolean).length > 1 && (
+              <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
+                <span>Total</span>
+                <span className="text-green-600">R$ {produtos.filter(Boolean).reduce((s, p) => s + lookupPreco(p), 0).toLocaleString("pt-BR")}</span>
+              </div>
+            )}
           </div>
         )}
 
