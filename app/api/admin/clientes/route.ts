@@ -219,10 +219,13 @@ export async function GET(req: NextRequest) {
 
   if (search) {
     const clean = search.replace(/[\.\-\/\s]/g, "");
+    // Formata como CPF (XXX.XXX.XXX-XX) para casar com banco que armazena com pontuação
+    const fmtCpf = clean.length >= 3 ? clean.replace(/^(\d{3})(\d{3})?(\d{3})?(\d{1,2})?$/, (_m, a, b, c, d) =>
+      [a, b, c].filter(Boolean).join(".") + (d ? `-${d}` : "")) : clean;
     if (/^[A-Z0-9]{8,}$/i.test(clean)) {
-      query = query.or(`serial_no.ilike.%${clean}%,imei.ilike.%${clean}%,cpf.ilike.%${clean}%,cliente.ilike.%${search}%`);
+      query = query.or(`serial_no.ilike.%${clean}%,imei.ilike.%${clean}%,cpf.ilike.%${clean}%,cpf.ilike.%${fmtCpf}%,cliente.ilike.%${search}%`);
     } else if (/^\d{3,}$/.test(clean)) {
-      query = query.ilike("cpf", `%${clean}%`);
+      query = query.or(`cpf.ilike.%${clean}%,cpf.ilike.%${fmtCpf}%`);
     } else {
       query = query.ilike("cliente", `%${search}%`);
     }

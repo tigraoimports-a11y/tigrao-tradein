@@ -8,9 +8,10 @@ const KEY_MAP: Record<string, string> = {
   p: "produto", v: "preco", w: "whatsapp", f: "forma",
   x: "parcelas", e: "entrada_pix", l: "local", s: "vendedor",
   sh: "shopping", h: "horario", dt: "data_entrega",
-  tp: "troca_produto", tv: "troca_valor", tc: "troca_cor",
+  tp: "troca_produto", tv: "troca_valor", tc: "troca_cor", tcd: "troca_cond",
   tp2: "troca_produto2", tv2: "troca_valor2", tc2: "troca_cor2",
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
+  dc: "desconto",
   pp: "pagamento_pago",
   short: "short",
   // Dados do cliente pré-preenchidos pelo vendedor no gerar-link

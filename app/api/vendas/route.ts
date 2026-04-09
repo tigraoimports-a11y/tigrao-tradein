@@ -75,12 +75,15 @@ export async function GET(req: NextRequest) {
 
   let query = supabase.from("vendas").select("*").order("data", { ascending: false });
   if (search) {
-    // Se parece CPF (só números e pontos/traço), busca por CPF; senão busca por nome
+    // Se parece CPF (só números e pontos/traço), busca por CPF; senão busca por nome ou ambos
     const cleanSearch = search.replace(/[\.\-\/\s]/g, "");
+    // Formata como CPF (XXX.XXX.XXX-XX) para casar com banco que armazena com pontuação
+    const fmtCpf = cleanSearch.length >= 3 ? cleanSearch.replace(/^(\d{3})(\d{3})?(\d{3})?(\d{1,2})?$/, (_m, a, b, c, d) =>
+      [a, b, c].filter(Boolean).join(".") + (d ? `-${d}` : "")) : cleanSearch;
     if (/^\d{3,}$/.test(cleanSearch)) {
-      query = query.ilike("cpf", `%${cleanSearch}%`);
+      query = query.or(`cpf.ilike.%${cleanSearch}%,cpf.ilike.%${fmtCpf}%`);
     } else {
-      query = query.ilike("cliente", `%${search}%`);
+      query = query.or(`cliente.ilike.%${search}%,cpf.ilike.%${search}%`);
     }
   } else {
     if (from) query = query.gte("data", from);

@@ -227,8 +227,8 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
   function handleReset() {
     setStep(1); setResetKey(k => k + 1);
     setDeviceType("iphone"); setDeviceType2("iphone");
-    setUsedModel(""); setUsedStorage(""); setTradeInValue(0);
-    setUsedModel2(""); setUsedStorage2(""); setTradeInValue2(0);
+    setUsedModel(""); setUsedStorage(""); setUsedColor(""); setTradeInValue(0);
+    setUsedModel2(""); setUsedStorage2(""); setUsedColor2(""); setTradeInValue2(0);
     setHasSecondDevice(false);
     setCondition({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
     setCondition2({ screenScratch: "none", sideScratch: "none", peeling: "none", battery: 100, hasDamage: false, partsReplaced: "no", hasWarranty: false, warrantyMonth: null, warrantyYear: null, hasOriginalBox: false } as ConditionData);
