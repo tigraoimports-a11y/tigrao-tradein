@@ -3,6 +3,11 @@
 -- Novos campos de cliente
 ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS cpf TEXT;
 ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS cep TEXT;
+ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS endereco TEXT;
+ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS bairro TEXT;
+ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS numero TEXT;
+ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS complemento TEXT;
 
 -- Produto encomendado (estruturado)
 ALTER TABLE encomendas ADD COLUMN IF NOT EXISTS categoria TEXT;
