@@ -587,17 +587,17 @@ export default function VendasPage() {
         const params = new URLSearchParams();
         if (form.cpf) params.set("cpf", form.cpf);
         if (form.cnpj) params.set("cnpj", form.cnpj);
-        // SEMPRE manda o nome como fallback — o backend tenta cpf/cnpj primeiro e cai pro nome
         if (form.cliente) params.set("nome", form.cliente);
-        const res = await fetch(`/api/admin/lojistas-credito?${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+        // Usa a mesma tabela que a tela Clientes/Lojistas (lojistas.saldo_credito)
+        const res = await fetch(`/api/admin/lojistas?${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
         if (res.ok) {
           const json = await res.json();
           const saldo = Number(json.saldo || 0);
           setCreditoLojistaSaldo(saldo);
-          // Se não achou pelo cpf/cnpj, tenta de novo só pelo nome
+          // Fallback: se veio cpf/cnpj e não achou, tenta só pelo nome
           if (saldo === 0 && form.cliente && (form.cpf || form.cnpj)) {
             const p2 = new URLSearchParams({ nome: form.cliente });
-            const r2 = await fetch(`/api/admin/lojistas-credito?${p2}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+            const r2 = await fetch(`/api/admin/lojistas?${p2}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
             if (r2.ok) {
               const j2 = await r2.json();
               setCreditoLojistaSaldo(Number(j2.saldo || 0));
