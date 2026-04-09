@@ -118,14 +118,18 @@ function formatPagamentoDisplay(
   const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
   const totalFinal = entrada + baseComTaxa;
   const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
-  // Monta string detalhada
+  // Monta string detalhada para o motoboy — sem mencionar taxa, mas com total do cartão
   const linhas: string[] = [fp];
   if (entrada > 0) linhas.push(`   • Entrada PIX: ${fmtBRL(entrada)}`);
   if (parcelas > 1 && valorParcela > 0) {
-    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)}`);
+    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)} (total: ${fmtBRL(baseComTaxa)})`);
+  } else if (parcelas === 1 && baseComTaxa > 0) {
+    linhas.push(`   • Cartão: ${fmtBRL(baseComTaxa)}`);
+  } else if (entrada === 0 && valor != null) {
+    linhas.push(`   • ${fmtBRL(Number(valor))}`);
   }
-  if (total > 0) linhas.push(`   • Total: ${fmtBRL(totalFinal)}`);
-  else if (valor != null) linhas.push(`   • ${fmtBRL(Number(valor))}`);
+  // silent dep: totalFinal não usado aqui, mas mantido no cálculo acima caso precise
+  void totalFinal;
   return linhas.join("\n");
 }
 
@@ -361,28 +365,71 @@ export default function EntregasPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel2]);
 
-  // Match estrito: exige que TODOS os tokens do modelo selecionado apareçam no produto do estoque.
-  // Retorna cores únicas em PT (com EN entre parênteses quando divergente).
-  const coresFromStock = (modelName: string): string[] => {
-    if (!modelName) return [];
-    const prodSel = modelName.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    if (keywords.length === 0) return [];
-    // dedupe por PT canônico pra não repetir (Midnight/Black/Jet Black → Preto)
-    const porPT = new Map<string, string>(); // pt → en original (primeiro visto)
-    for (const item of estoque) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      const all = keywords.every(kw => new RegExp(`(^|\\s)${kw.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}(\\s|$)`).test(prodEstoque));
-      if (!all) continue;
-      if (!item.cor) continue;
-      const pt = corParaPT(item.cor);
-      if (!porPT.has(pt)) porPT.set(pt, item.cor);
-    }
-    return [...porPT.keys()].sort();
-  };
+  // Cores cadastradas no catálogo global (Configurações > Produtos > aba Cores)
+  const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    fetch("/api/catalogo-cores")
+      .then(r => r.json())
+      .then(j => { if (j?.modelos) setCatalogoCores(j.modelos); })
+      .catch(() => {});
+  }, []);
 
-  const coresDisponiveis2 = useMemo(() => coresFromStock(modelo2), [modelo2, estoque]); // eslint-disable-line react-hooks/exhaustive-deps
-  const coresDisponiveis = useMemo(() => coresFromStock(produtos[0] || ""), [produtos, estoque]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Match por tokens entre nome do produto selecionado e modelo do catálogo.
+  // Retorna as cores em PT (via corParaPT), dedupadas. Mesma lógica do /gerar-link.
+  const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
+    if (!nomeProduto) return [];
+    const normGen = (s: string) => s
+      .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
+      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/\bGENERATION\b/gi, "GEN")
+      .replace(/\bGERAÇÃO\b/gi, "GEN");
+    const stripNoise = (s: string) => normGen(s)
+      .replace(/\b\d+\s*(GB|TB)\b/gi, "")
+      .replace(/\b\d+\s*MM\b/gi, "")
+      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
+      .replace(/[""\(\)\+\-]/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
+    const expandSynonyms = (toks: string[]): string[] => {
+      const set = new Set(toks);
+      if (set.has("ipad")) {
+        if (set.has("a16")) set.add("11");
+        if (set.has("11")) set.add("a16");
+        if (set.has("a14")) set.add("10");
+        if (set.has("10")) set.add("a14");
+      }
+      return [...set];
+    };
+    const tokens = (s: string) => expandSynonyms(stripNoise(s).toLowerCase().split(/\s+/).filter(t => t && !STOP.has(t)));
+    const prodTokens = new Set(tokens(nomeProduto));
+
+    let raw: string[] = [];
+    let bestCount = 0;
+    for (const [nome, cores] of Object.entries(catalogoCores)) {
+      const catTokens = tokens(nome);
+      if (catTokens.length === 0) continue;
+      const allMatch = catTokens.every(t => prodTokens.has(t));
+      if (allMatch && catTokens.length > bestCount) {
+        raw = cores;
+        bestCount = catTokens.length;
+      }
+    }
+
+    // Dedup por tradução PT (mantém nome PT como label)
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of raw) {
+      const pt = corParaPT(c);
+      const key = pt.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(pt);
+    }
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [catalogoCores]);
+
+  const coresDisponiveis2 = useMemo(() => coresParaProduto(modelo2), [modelo2, coresParaProduto]);
+  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
 
   // Valor base e final
   // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
