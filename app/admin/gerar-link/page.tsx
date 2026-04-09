@@ -204,6 +204,8 @@ export default function GerarLinkPage() {
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
   const [trocaCondicao, setTrocaCondicao] = useState("");
   const [trocaCor, setTrocaCor] = useState("");
+  const [trocaCondicao2, setTrocaCondicao2] = useState("");
+  const [trocaCor2, setTrocaCor2] = useState("");
   const [trocaProduto2, setTrocaProduto2] = useState("");
   const [trocaValor2, setTrocaValor2] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
@@ -510,6 +512,8 @@ export default function GerarLinkPage() {
           troca_cor: trocaCor || null,
           troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
           troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
+          troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
+          troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
           vendedor: vendedorNome || null,
           cliente_nome: cliNome.trim() || null,
           cliente_telefone: cliTelefone.trim() || null,
@@ -616,6 +620,10 @@ export default function GerarLinkPage() {
       const n = Math.round(parseFloat(trocaVal2Qp));
       if (!isNaN(n) && n > 0) setTrocaValor2(n.toLocaleString("pt-BR"));
     }
+    const trocaCond2Qp = qp.get("troca_condicao2");
+    if (trocaCond2Qp) setTrocaCondicao2(trocaCond2Qp);
+    const trocaCor2Qp = qp.get("troca_cor2");
+    if (trocaCor2Qp) setTrocaCor2(trocaCor2Qp);
     // Modo manual quando vem de simulação
     if (qp.get("produto")) setProdutoManual(true);
   }, []);
@@ -771,6 +779,8 @@ export default function GerarLinkPage() {
     if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
     const rawTroca2Data = trocaValor2.replace(/\./g, "").replace(",", ".");
     if (temSegundaTroca && rawTroca2Data && rawTroca2Data !== "0") shortData.tv2 = rawTroca2Data;
+    if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
+    if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
     if (pagamentoPago) shortData.pp = pagamentoPago;
 
     // Dados do cliente pré-preenchidos (quando o vendedor incluir)
@@ -826,6 +836,8 @@ export default function GerarLinkPage() {
               troca_cor: trocaCor || null,
               troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
               troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
+              troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
+              troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
               vendedor: vendedorNome || null,
               simulacao_id: simulacaoId,
             }),
