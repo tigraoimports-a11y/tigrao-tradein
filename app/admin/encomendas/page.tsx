@@ -554,7 +554,7 @@ export default function EncomendasPage() {
         // Buscar serial do estoque vinculado (se houver)
         let serialNo = "";
         let imei = "";
-        let estoqueIdFinal = enc.estoque_id || null;
+        const estoqueIdFinal = enc.estoque_id || null;
         if (enc.estoque_id) {
           const estoqueRes = await fetch(`/api/estoque`, { headers: hdrs() });
           if (estoqueRes.ok) {
@@ -580,8 +580,11 @@ export default function EncomendasPage() {
           tipo: "VENDA",
           serial_no: serialNo || null,
           imei: imei || null,
+          sinal_antecipado: enc.sinal_recebido || 0,
+          banco_sinal: enc.banco_sinal || null,
+          notas: enc.obs_financeira || null,
           _estoque_id: estoqueIdFinal,
-          // Troca
+          // Troca 1
           produto_na_troca: enc.troca_valor || 0,
           troca_produto: enc.troca_produto || null,
           troca_cor: enc.troca_cor || null,
@@ -589,14 +592,26 @@ export default function EncomendasPage() {
           troca_bateria: enc.troca_bateria || null,
           troca_grade: enc.troca_grade || null,
           troca_caixa: enc.troca_caixa || null,
+          troca_cabo: enc.troca_cabo || null,
+          troca_fonte: enc.troca_fonte || null,
           troca_obs: enc.troca_obs || null,
+          troca_serial: enc.troca_serial || null,
+          troca_imei: enc.troca_imei || null,
+          troca_garantia: enc.troca_garantia || null,
           // Troca 2
           produto_na_troca2: enc.troca_valor2 || 0,
           troca_produto2: enc.troca_produto2 || null,
           troca_cor2: enc.troca_cor2 || null,
           troca_categoria2: enc.troca_categoria2 || null,
-          sinal_antecipado: enc.sinal_recebido || 0,
-          banco_sinal: enc.banco_sinal || null,
+          troca_bateria2: enc.troca_bateria2 || null,
+          troca_grade2: enc.troca_grade2 || null,
+          troca_caixa2: enc.troca_caixa2 || null,
+          troca_cabo2: enc.troca_cabo2 || null,
+          troca_fonte2: enc.troca_fonte2 || null,
+          troca_obs2: enc.troca_obs2 || null,
+          troca_serial2: enc.troca_serial2 || null,
+          troca_imei2: enc.troca_imei2 || null,
+          troca_garantia2: enc.troca_garantia2 || null,
         };
         const vendaRes = await fetch("/api/vendas", {
           method: "POST",
@@ -604,9 +619,8 @@ export default function EncomendasPage() {
           body: JSON.stringify(vendaBody),
         });
         const vendaJson = await vendaRes.json();
-        if (vendaJson.id || vendaJson.data?.id) {
+        if (vendaRes.ok && (vendaJson.id || vendaJson.data?.id)) {
           const vendaId = vendaJson.id || vendaJson.data?.id;
-          // Atualizar encomenda com venda_id e status
           await fetch("/api/encomendas", {
             method: "PATCH",
             headers: { "Content-Type": "application/json", ...hdrs() },
@@ -617,11 +631,11 @@ export default function EncomendasPage() {
           setTimeout(() => setMsg(""), 5000);
           return;
         } else {
-          alert("Erro ao criar venda: " + (vendaJson.error || "desconhecido"));
+          setMsg(`Erro ao criar venda: ${vendaJson.error || "desconhecido"}`);
           return;
         }
       } catch (err) {
-        alert("Erro: " + String(err));
+        setMsg(`Erro ao finalizar: ${err}`);
         return;
       }
     }
@@ -864,7 +878,7 @@ export default function EncomendasPage() {
                 <p className={labelCls}>Cliente *</p>
                 <input
                   value={form.cliente}
-                  onChange={(e) => { set("cliente", e.target.value); setShowCliSugs(true); }}
+                  onChange={(e) => { set("cliente", e.target.value.toUpperCase()); setShowCliSugs(true); }}
                   onFocus={() => { if (cliSugs.length > 0) setShowCliSugs(true); }}
                   className={inputCls}
                   placeholder="Digite 2+ letras para buscar cliente cadastrado..."
