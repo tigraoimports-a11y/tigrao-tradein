@@ -297,6 +297,23 @@ export default function EncomendasPage() {
     setTimeout(() => setParseMsg(""), 5000);
   }
 
+  // Auto-fill endereço via CEP (ViaCEP)
+  useEffect(() => {
+    const digits = form.cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    fetch(`https://viacep.com.br/ws/${digits}/json/`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.erro) return;
+        setForm(f => ({
+          ...f,
+          endereco: data.logradouro || f.endereco,
+          bairro: data.bairro || f.bairro,
+        }));
+      })
+      .catch(() => {});
+  }, [form.cep]);
+
   const [temTroca, setTemTroca] = useState(false);
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
   const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() =>
