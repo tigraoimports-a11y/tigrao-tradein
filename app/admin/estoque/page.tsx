@@ -2283,22 +2283,30 @@ export default function EstoquePage() {
   const esgotados = novos.filter((p) => p.qnt === 0);
 
   // Reposição: agrupar por modelo+cor e verificar se está abaixo do mínimo
+  // Conta itens EM ESTOQUE + A CAMINHO — se a soma cobre o mínimo, não aparece
   const reposicaoCount = (() => {
-    // Agrupar por modelo_base (getModeloBase) + p.cor — mesma lógica da aba Reposição
-    const groups: Record<string, { totalQnt: number; min: number | null }> = {};
+    const groups: Record<string, { qntEstoque: number; qntACaminho: number; min: number | null }> = {};
     for (const p of novos) {
       const base = getModeloBase(p.produto, p.categoria).toUpperCase();
       const cor = (p.cor || "").toUpperCase();
       const key = `${base}|||${cor}`;
-      if (!groups[key]) groups[key] = { totalQnt: 0, min: null };
-      groups[key].totalQnt += p.qnt;
+      if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
+      groups[key].qntEstoque += p.qnt;
       if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
         groups[key].min = p.estoque_minimo;
       }
     }
+    for (const p of aCaminho) {
+      const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+      const cor = (p.cor || "").toUpperCase();
+      const key = `${base}|||${cor}`;
+      if (!groups[key]) groups[key] = { qntEstoque: 0, qntACaminho: 0, min: null };
+      groups[key].qntACaminho += p.qnt;
+    }
     let count = 0;
     for (const g of Object.values(groups)) {
-      if ((g.min && g.totalQnt < g.min) || g.totalQnt === 0) count++;
+      const total = g.qntEstoque + g.qntACaminho;
+      if ((g.min && total < g.min) || (g.qntEstoque === 0 && g.qntACaminho === 0)) count++;
     }
     return count;
   })();
@@ -2995,7 +3003,7 @@ export default function EstoquePage() {
         // === Lógica: estoque como fonte da estrutura (preserva variantes por categoria
         // via getModeloBase: iPad storage/conect, MacBook ram/ssd/cor, Watch tamanho/conect/cor, Mac Mini ram/ssd).
         // Catálogo é usado apenas para FILTRAR cores fantasmas (que não estão cadastradas).
-        type RepoGroup = { totalQnt: number; min: number; corEN: string; corPT: string; corDisplay: string; jaCaminho: boolean; falta: number };
+        type RepoGroup = { qntEstoque: number; qntACaminho: number; totalDisponivel: number; min: number; corEN: string; corPT: string; corDisplay: string; falta: number };
         const byCatModel: Record<string, Record<string, RepoGroup[]>> = {};
 
         // Normalização em tokens (igual gerar-link): geração 2ND/2º→2, remove GB/TB/MM/GPS/etc
@@ -3053,16 +3061,18 @@ export default function EstoquePage() {
         };
 
         // Agrupar estoque por categoria → modelo base (preservando variantes)
-        type Acc = { totalQnt: number; min: number; jaCaminho: boolean };
+        // Inclui TANTO itens EM ESTOQUE quanto A CAMINHO pra calcular falta real
+        type Acc = { qntEstoque: number; qntACaminho: number; min: number };
         const acc = new Map<string, Map<string, Map<string, Acc>>>(); // cat → base → corNorm → dados
         const corDisplayMap = new Map<string, string>(); // corNorm → display original
         const corENMap = new Map<string, string>(); // corNorm → EN
 
-        for (const p of novos) {
+        // Helper pra adicionar item ao acumulador
+        const addToAcc = (p: ProdutoEstoque, isACaminho: boolean) => {
           const base = getModeloBase(p.produto, p.categoria).toUpperCase();
           const cat = p.categoria || "OUTROS";
           const corRaw = (p.cor || extractCor(stripOrigemRepo(p.produto), null) || "").toString().trim();
-          if (!corRaw) continue;
+          if (!corRaw) return;
           const corUpper = corRaw.toUpperCase();
           const enFromPT = PT_TO_EN[corUpper];
           const corEN = enFromPT || corUpper;
@@ -3072,19 +3082,23 @@ export default function EstoquePage() {
           const catMap = acc.get(cat)!;
           if (!catMap.has(base)) catMap.set(base, new Map());
           const baseMap = catMap.get(base)!;
-          const cur = baseMap.get(corNorm) || { totalQnt: 0, min: 0, jaCaminho: false };
-          cur.totalQnt += p.qnt;
+          const cur = baseMap.get(corNorm) || { qntEstoque: 0, qntACaminho: 0, min: 0 };
+          if (isACaminho) { cur.qntACaminho += p.qnt; } else { cur.qntEstoque += p.qnt; }
           if (typeof p.estoque_minimo === "number" && p.estoque_minimo > 0) {
             cur.min = Math.max(cur.min, p.estoque_minimo);
           }
           baseMap.set(corNorm, cur);
           if (!corDisplayMap.has(corNorm)) {
-            // Usa corParaPT que simplifica (Mist Blue → Azul, Sage → Verde, Starlight → Estelar, etc)
             const simples = corParaPT(corEN) || corParaPT(corRaw) || corRaw;
             corDisplayMap.set(corNorm, simples);
             corENMap.set(corNorm, corEN);
           }
-        }
+        };
+
+        // Itens em estoque
+        for (const p of novos) addToAcc(p, false);
+        // Itens a caminho (já comprados, pendentes de chegada)
+        for (const p of aCaminho) addToAcc(p, true);
 
         // Converter + filtrar cores que não estão no catálogo + aplicar hide via modal
         for (const [cat, catMap] of acc.entries()) {
@@ -3104,12 +3118,13 @@ export default function EstoquePage() {
               const corEN = corENMap.get(corNorm) || corNorm.toUpperCase();
               const corPT = COR_PT[corEN.toUpperCase()] || "";
               grupo.push({
-                totalQnt: dados.totalQnt,
+                qntEstoque: dados.qntEstoque,
+                qntACaminho: dados.qntACaminho,
+                totalDisponivel: dados.qntEstoque + dados.qntACaminho,
                 min: dados.min,
                 corEN,
                 corPT,
                 corDisplay: corDisplayMap.get(corNorm) || corEN,
-                jaCaminho: dados.jaCaminho,
                 falta: 0,
               });
             }
@@ -3125,8 +3140,10 @@ export default function EstoquePage() {
         for (const [cat, models] of Object.entries(byCatModel)) {
           for (const [base, cores] of Object.entries(models)) {
             const abaixo = cores.filter(c => {
-              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalQnt) : (c.totalQnt === 0 ? 1 : 0);
-              return (c.min > 0 && c.totalQnt < c.min) || (c.totalQnt === 0);
+              // Falta = mínimo - (em estoque + a caminho)
+              // Se já tem o suficiente contando os a caminho, NÃO aparece na reposição
+              c.falta = c.min > 0 ? Math.max(0, c.min - c.totalDisponivel) : (c.qntEstoque === 0 && c.qntACaminho === 0 ? 1 : 0);
+              return (c.min > 0 && c.totalDisponivel < c.min) || (c.qntEstoque === 0 && c.qntACaminho === 0);
             });
             if (abaixo.length > 0) {
               if (!byCatModelFiltered[cat]) byCatModelFiltered[cat] = {};
@@ -3152,7 +3169,8 @@ export default function EstoquePage() {
             for (const [base, cores] of modelos) {
               lines.push(`\n${base}`);
               for (const c of cores.sort((a, b) => b.falta - a.falta)) {
-                lines.push(`${c.totalQnt === 0 ? "🔴" : "🟡"} ${c.corDisplay}: ${c.totalQnt}/${c.min} (falta ${c.falta})${c.jaCaminho ? " ✈️ A CAMINHO" : ""}`);
+                const aCaminhoTxt = c.qntACaminho > 0 ? ` (${c.qntACaminho} a caminho)` : "";
+                lines.push(`${c.qntEstoque === 0 && c.qntACaminho === 0 ? "🔴" : "🟡"} ${c.corDisplay}: ${c.qntEstoque} em estoque${aCaminhoTxt} / mín ${c.min} → falta ${c.falta}`);
               }
             }
             lines.push("");
@@ -3283,24 +3301,26 @@ export default function EstoquePage() {
                           <div className="grid gap-1.5">
                             {cores.sort((a, b) => b.falta - a.falta).map((c, i) => (
                               <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${
-                                c.totalQnt === 0
+                                c.qntEstoque === 0 && c.qntACaminho === 0
                                   ? (dm ? "bg-red-500/10 border border-red-500/20" : "bg-red-50 border border-red-100")
                                   : (dm ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-yellow-50 border border-yellow-100")
                               }`}>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[14px]">{c.totalQnt === 0 ? "🔴" : "🟡"}</span>
+                                  <span className="text-[14px]">{c.qntEstoque === 0 && c.qntACaminho === 0 ? "🔴" : "🟡"}</span>
                                   <span className={`text-[13px] font-semibold ${textPrimary}`}>{c.corPT ? (c.corPT.charAt(0).toUpperCase() + c.corPT.slice(1).toLowerCase()) : (c.corEN || "—")}</span>
-                                  {c.jaCaminho && (
-                                    <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ A CAMINHO</span>
+                                  {c.qntACaminho > 0 && (
+                                    <span className="text-[10px] font-bold text-blue-500 px-1.5 py-0.5 rounded-full bg-blue-500/10">✈️ {c.qntACaminho} a caminho</span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className={`text-[12px] ${textSecondary}`}>
-                                    {c.totalQnt}/{c.min}
+                                    {c.qntEstoque}{c.qntACaminho > 0 ? `+${c.qntACaminho}` : ""}/{c.min}
                                   </span>
-                                  <span className={`text-[12px] font-bold ${c.totalQnt === 0 ? "text-red-500" : "text-yellow-600"}`}>
-                                    comprar {c.falta}
-                                  </span>
+                                  {c.falta > 0 && (
+                                    <span className={`text-[12px] font-bold ${c.qntEstoque === 0 && c.qntACaminho === 0 ? "text-red-500" : "text-yellow-600"}`}>
+                                      comprar {c.falta}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             ))}
