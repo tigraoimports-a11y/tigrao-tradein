@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import type { UsedDeviceValue, TradeInQuestion } from "@/lib/types";
+import { corParaPT } from "@/lib/cor-pt";
 import { getUniqueUsedModels, getUsedStoragesForModel, getUsedBaseValue } from "@/lib/sheets";
 import {
   calculateAnyTradeInValue, getDiscountsForModel, formatBRL,
@@ -17,7 +18,7 @@ interface StepUsedDeviceMultiProps {
   warrantyBonuses?: WarrantyBonuses;
   questionsConfig?: TradeInQuestion[] | null;
   deviceType: MultiDeviceType;
-  onNext: (data: { usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
+  onNext: (data: { usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType }) => void;
   onTrackQuestion?: (step: number, question: string) => void;
 }
 
@@ -152,6 +153,38 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const [warrantyMonth, setWarrantyMonth] = useState<number|null>(null);
   const [warrantyYear, setWarrantyYear] = useState<number>(new Date().getFullYear());
   const [hasOriginalBox, setHasOriginalBox] = useState<boolean|null>(null);
+  const [cor, setCor] = useState("");
+  const [coresDisponiveis, setCoresDisponiveis] = useState<Record<string, string[]>>({});
+
+  // Busca cores do catálogo/estoque quando muda o deviceType
+  const fetchCores = useCallback(async () => {
+    try {
+      const dt = deviceType === "watch" ? "watch" : deviceType;
+      const res = await fetch(`/api/cores-dispositivo?device_type=${dt}`);
+      const j = await res.json();
+      setCoresDisponiveis(j.modelos || {});
+    } catch { /* ignore */ }
+  }, [deviceType]);
+  useEffect(() => { fetchCores(); }, [fetchCores]);
+
+  // Cores pro modelo selecionado (traduzidas pra PT, dedup)
+  const coresModelo = useMemo(() => {
+    if (!model) return [];
+    // Tenta match exato primeiro, depois substring
+    let cores = coresDisponiveis[model];
+    if (!cores) {
+      const entry = Object.entries(coresDisponiveis).find(([k]) => model.toUpperCase().includes(k.toUpperCase()) || k.toUpperCase().includes(model.toUpperCase()));
+      cores = entry?.[1] ?? [];
+    }
+    if (!cores || cores.length === 0) return [];
+    // Traduz pra PT e dedup
+    const ptMap = new Map<string, string>();
+    for (const c of cores) {
+      const pt = corParaPT(c);
+      if (!ptMap.has(pt)) ptMap.set(pt, c);
+    }
+    return [...ptMap.keys()].sort();
+  }, [model, coresDisponiveis]);
 
   const filtered = useMemo(() => filterByDeviceType(usedValues, deviceType), [usedValues, deviceType]);
   const allModels = useMemo(() => getUniqueUsedModels(filtered), [filtered]);
@@ -229,7 +262,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
   const warrantyFilled = !isQActive(qc, "hasWarranty") || hasWarranty === false || (hasWarranty === true && (!isQActive(qc, "warrantyMonth") || warrantyMonth !== null));
   const partsOk = !isQActive(qc, "partsReplaced") || partsReplaced === "no" || partsReplaced === "apple";
   const boxOk = !isQActive(qc, "hasOriginalBox") || hasOriginalBox !== null;
-  const canProceed = model && storage && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
+  const canProceed = model && storage && cor && baseValue !== null && !isExcluded && damageOk && partsOk && allCond && warrantyFilled && boxOk;
 
   const tq = (q: string) => onTrackQuestion?.(1, q);
   function handleLineChange(l: string) { setLine(l); setSubLine(""); setModel(""); setStorage(""); setHasDamage(null); tq("line"); }
@@ -360,6 +393,47 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
             </div>
           </Section>
         )
+      )}
+
+      {/* Cor do aparelho */}
+      {model && storage && coresModelo.length > 0 && (
+        <Section title="Qual a cor do seu aparelho?">
+          <div className={`grid gap-2 ${coresModelo.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {coresModelo.map(c => (
+              <button key={c} type="button" onClick={() => setCor(c)}
+                className="py-3 rounded-xl text-[14px] font-semibold transition-all"
+                style={cor === c
+                  ? { backgroundColor: "var(--ti-success-light)", color: "var(--ti-success)", border: "2px solid var(--ti-success)" }
+                  : { backgroundColor: "var(--ti-btn-bg)", color: "var(--ti-btn-text)", border: "1px solid var(--ti-btn-border)" }
+                }
+              >{c}</button>
+            ))}
+          </div>
+          {!cor && (
+            <input
+              type="text"
+              value={cor}
+              onChange={(e) => setCor(e.target.value)}
+              placeholder="Ou digite a cor manualmente..."
+              className="w-full mt-2 px-4 py-2.5 rounded-xl text-[14px] text-center"
+              style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
+            />
+          )}
+        </Section>
+      )}
+
+      {/* Cor manual — quando não tem cores do catálogo */}
+      {model && storage && coresModelo.length === 0 && (
+        <Section title="Qual a cor do seu aparelho?">
+          <input
+            type="text"
+            value={cor}
+            onChange={(e) => setCor(e.target.value)}
+            placeholder="Ex: Preto, Prata, Dourado..."
+            className="w-full px-4 py-3 rounded-xl text-[14px] text-center"
+            style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
+          />
+        </Section>
       )}
 
       {model && storage && !isExcluded && isQActive(qc, "hasDamage") && (
@@ -619,7 +693,7 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
       )}
 
       {canProceed && (
-        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, condition: cond, tradeInValue, deviceType: calcDeviceType })}
+        <button onClick={() => onNext({ usedModel: model, usedStorage: storage, usedColor: cor, condition: cond, tradeInValue, deviceType: calcDeviceType })}
           className="w-full py-4 rounded-2xl text-[17px] font-semibold text-white transition-all duration-200 active:scale-[0.98] shadow-lg"
           style={{ backgroundColor: "#22c55e" }}>
           Ver minha avaliacao {"\u2192"}

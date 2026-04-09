@@ -92,16 +92,20 @@ export async function PUT(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [valores, descontos, excluidos] = await Promise.all([
+  const [valores, descontos, excluidos, catConfig, garantias] = await Promise.all([
     supabase.from("avaliacao_usados").select("*").order("modelo").order("armazenamento"),
     supabase.from("descontos_condicao").select("*").order("condicao").order("detalhe"),
     supabase.from("modelos_excluidos").select("*").order("modelo"),
+    supabase.from("tradein_categoria_config").select("*"),
+    supabase.from("tradein_garantia").select("*").order("modelo").order("armazenamento"),
   ]);
 
   return NextResponse.json({
     valores: valores.data ?? [],
     descontos: descontos.data ?? [],
     excluidos: excluidos.data ?? [],
+    catConfig: catConfig.data ?? [],
+    garantias: garantias.data ?? [],
   });
 }
 
@@ -159,6 +163,33 @@ export async function POST(req: NextRequest) {
   if (action === "delete_valor") {
     const { id } = body;
     const { error } = await supabase.from("avaliacao_usados").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Toggle modo (automatico/manual) ou ativo (true/false) por categoria
+  if (action === "update_cat_config") {
+    const { categoria, modo, ativo } = body;
+    if (!categoria) return NextResponse.json({ error: "categoria required" }, { status: 400 });
+    const upd: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (modo !== undefined) upd.modo = modo;
+    if (ativo !== undefined) upd.ativo = ativo;
+    const { error } = await supabase.from("tradein_categoria_config").upsert(
+      { categoria, ...upd },
+      { onConflict: "categoria" }
+    );
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Upsert garantia individual por modelo+armazenamento
+  if (action === "upsert_garantia") {
+    const { modelo, armazenamento, valor_garantia } = body;
+    if (!modelo || !armazenamento) return NextResponse.json({ error: "modelo e armazenamento required" }, { status: 400 });
+    const { error } = await supabase.from("tradein_garantia").upsert(
+      { modelo, armazenamento, valor_garantia: Number(valor_garantia) || 0, updated_at: new Date().toISOString() },
+      { onConflict: "modelo,armazenamento" }
+    );
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
