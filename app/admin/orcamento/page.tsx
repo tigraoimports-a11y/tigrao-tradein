@@ -254,7 +254,12 @@ export default function OrcamentoPage() {
       for (const p of itensOrcamento) {
         linhas.push(`${catEmojis[p.categoria] || "📦"} *${p.nome}*${(p.qnt || 1) > 1 ? ` (x${p.qnt})` : ""} — R$ ${(p.preco * (p.qnt || 1)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
       }
-      linhas.push(``, `💰 *Total: R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`, ``);
+      linhas.push(``, `💰 *Total: R$ ${totalBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`);
+      if (descontoVal > 0) {
+        linhas.push(``, `🏷️ *Desconto especial:* — R$ ${descontoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+        linhas.push(``, `💸 *Total com desconto: R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`);
+      }
+      linhas.push(``);
     } else {
       const emoji = catEmojis[itensOrcamento[0]?.categoria] || "📦";
       linhas.push(`${emoji} *${itensOrcamento[0]?.nome}*`, ``);
@@ -294,8 +299,10 @@ export default function OrcamentoPage() {
       );
     }
 
-    if (descontoVal > 0) {
-      linhas.push(`🏷️ *Desconto especial:* - R$ ${descontoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, ``);
+    // Desconto já mostrado acima no bloco multi-produto. Pra produto único, mostra aqui.
+    if (descontoVal > 0 && itensOrcamento.length <= 1) {
+      linhas.push(`🏷️ *Desconto especial:* — R$ ${descontoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, ``);
+      linhas.push(`💸 *Total com desconto: R$ ${precoPix.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}*`, ``);
     }
 
     if (entradaVal > 0) {
