@@ -604,6 +604,7 @@ interface ProdutoEstoque {
   reserva_operador: string | null;
   origem_compra: string | null;
   custo_compra: number | null;
+  encomenda_id: string | null;
 }
 
 interface ImeiSearchResult {
@@ -802,6 +803,7 @@ export default function EstoquePage() {
   const bgHoverBtn = dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F5F5F7]";
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
+  const [encomendaMap, setEncomendaMap] = useState<Map<string, string>>(new Map()); // estoque_id → cliente
   const [loading, setLoading] = useState(true);
   const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
   const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
@@ -1503,6 +1505,16 @@ export default function EstoquePage() {
         const json = await res.json();
         const data: ProdutoEstoque[] = json.data ?? [];
         setEstoque(data);
+        // Buscar encomendas vinculadas para badge de reserva
+        fetch("/api/encomendas", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) } })
+          .then(r => r.json())
+          .then(j => {
+            const map = new Map<string, string>();
+            for (const enc of j.data ?? []) {
+              if (enc.estoque_id && enc.cliente) map.set(enc.estoque_id, enc.cliente);
+            }
+            setEncomendaMap(map);
+          }).catch(() => {});
         // Migração: corrigir categorias legadas (MACBOOK_NEO/AIR/PRO → MACBOOK)
         const legacyMap: Record<string, string> = { MACBOOK_NEO: "MACBOOK", MACBOOK_AIR: "MACBOOK", MACBOOK_PRO: "MACBOOK", APPLE_WATCH_ATACADO: "APPLE_WATCH" };
         const toFix = data.filter(p => legacyMap[p.categoria]);
@@ -4080,6 +4092,16 @@ export default function EstoquePage() {
                                           <button onClick={e => { e.stopPropagation(); handlePrintEtiquetaDirect([group[0]]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️</button>
                                         </span>
                                       )}
+                                      {isSingleUnit && encomendaMap.has(group[0].id) && (
+                                        <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-blue-900/40 text-blue-300" : "bg-blue-50 text-blue-600"}`}>
+                                          Reservado: {encomendaMap.get(group[0].id)}
+                                        </span>
+                                      )}
+                                      {!isSingleUnit && group.some(p => encomendaMap.has(p.id)) && (
+                                        <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-blue-900/40 text-blue-300" : "bg-blue-50 text-blue-600"}`}>
+                                          Reservado
+                                        </span>
+                                      )}
                                     </td>
                                     <td className={`px-4 py-3 text-center text-sm font-bold ${textPrimary}`}>{totalQnt}</td>
                                     <td className={`px-4 py-3 text-right text-sm ${textSecondary}`}>{group[0].custo_unitario ? fmt(group[0].custo_unitario) : "—"}</td>
@@ -4126,6 +4148,11 @@ export default function EstoquePage() {
                                             <span className={`ml-2 text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>
                                               ✅ {p.serial_no || p.imei}
                                               <button onClick={e => { e.stopPropagation(); handlePrintEtiquetaDirect([p]); }} className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors">🏷️</button>
+                                            </span>
+                                          )}
+                                          {encomendaMap.has(p.id) && (
+                                            <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${dm ? "bg-blue-900/40 text-blue-300" : "bg-blue-50 text-blue-600"}`}>
+                                              Reservado: {encomendaMap.get(p.id)}
                                             </span>
                                           )}
                                         </td>

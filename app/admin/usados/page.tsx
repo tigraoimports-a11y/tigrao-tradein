@@ -328,9 +328,17 @@ export function UsadosContent() {
     grouped[v.modelo].push(v);
   });
 
-  // Map de modelos conhecidos (case-insensitive pra validar o lado esquerdo do " - " nos descontos)
-  const modelosMap = new Map<string, string>(); // lowercase → original
+  // Map de modelos conhecidos (case-insensitive): valores base + modelos extraídos dos descontos
+  const modelosMap = new Map<string, string>(); // lowercase → nome canônico
   valores.forEach(v => { if (v.modelo) modelosMap.set(v.modelo.toLowerCase(), v.modelo); });
+  // Também extrair modelos dos próprios descontos (podem existir descontos por modelo sem valor base)
+  const CONDIÇÕES_GENÉRICAS = new Set(["bateria", "descascado/amassado", "garantia", "garantia apple", "riscos laterais", "riscos na tela"]);
+  descontos.forEach((d) => {
+    const m = d.condicao.match(/^(.+?) - (.+)$/);
+    if (m && CONDIÇÕES_GENÉRICAS.has(m[2].toLowerCase()) && !modelosMap.has(m[1].toLowerCase())) {
+      modelosMap.set(m[1].toLowerCase(), m[1]); // usa o nome como veio do banco
+    }
+  });
 
   // Agrupar descontos: separar gerais vs por modelo (regex genérica — funciona p/ qualquer categoria)
   const descByModel: Record<string, Record<string, DescontoCondicao[]>> = {};
@@ -346,6 +354,9 @@ export function UsadosContent() {
       if (!descByModel[modeloOriginal][cond]) descByModel[modeloOriginal][cond] = [];
       descByModel[modeloOriginal][cond].push(d);
     } else {
+      // Bateria e Garantia são sempre por modelo, não aparecem em gerais
+      const condLow = d.condicao.toLowerCase();
+      if (condLow === "garantia apple" || condLow === "garantia" || condLow === "bateria") return;
       if (!descGerais[d.condicao]) descGerais[d.condicao] = [];
       descGerais[d.condicao].push(d);
     }

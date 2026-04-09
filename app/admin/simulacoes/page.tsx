@@ -850,10 +850,12 @@ export default function AdminPage() {
                       storage_usado: modalRow.storage_usado || "",
                       cor_usado: modalRow.cor_usado || "",
                       avaliacao_usado: String(modalRow.avaliacao_usado || 0),
+                      condicao_linhas: (modalRow.condicao_linhas || []).join("\n"),
                       modelo_usado2: modalRow.modelo_usado2 || "",
                       storage_usado2: modalRow.storage_usado2 || "",
                       cor_usado2: modalRow.cor_usado2 || "",
                       avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
+                      condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
                     });
                     setEditMode(true);
                   }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
@@ -861,24 +863,42 @@ export default function AdminPage() {
                   </button>
                 </div>
                 {editMode ? (
-                  <div className="space-y-2">
-                    <input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} placeholder="Modelo" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                    <div className="flex gap-2">
-                      <input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} placeholder="Storage" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                      <input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} placeholder="Cor" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                  <div className="space-y-4">
+                    {/* 1º Aparelho */}
+                    <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                      <p className="text-xs font-bold text-[#1D1D1F]">{modalRow.modelo_usado2 ? "1º Aparelho" : "Aparelho na Troca"}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas: e.target.value }))} placeholder={"Saude bateria 89%\nSem marcas de uso\nSem pecas trocadas\nSem caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
                     </div>
-                    <input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} placeholder="Avaliação (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                    {/* 2º Aparelho */}
                     {modalRow.modelo_usado2 && (
-                      <>
-                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider pt-2 border-t border-[#E5E5EA]">2º Aparelho</p>
-                        <input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} placeholder="Modelo 2" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                        <div className="flex gap-2">
-                          <input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} placeholder="Storage 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                          <input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} placeholder="Cor 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                      <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                        <p className="text-xs font-bold text-[#1D1D1F]">2º Aparelho</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
                         </div>
-                        <input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} placeholder="Avaliação 2 (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                      </>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        </div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas2 || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas2: e.target.value }))} placeholder={"Saude bateria 87%\nSem marcas de uso\nTem a caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
+                      </div>
                     )}
+                    {/* Resumo em tempo real */}
+                    <div className="bg-[#F5F5F7] rounded-lg p-3 space-y-1">
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(modalRow.preco_novo)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 1º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado) || 0)}</span></div>
+                      {(Number(editData.avaliacao_usado2) || 0) > 0 && <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 2º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado2) || 0)}</span></div>}
+                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt(modalRow.preco_novo - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
+                    </div>
                     <button
                       disabled={savingEdit}
                       onClick={async () => {
@@ -887,21 +907,23 @@ export default function AdminPage() {
                           const aval1 = Number(editData.avaliacao_usado) || 0;
                           const aval2 = Number(editData.avaliacao_usado2) || 0;
                           const dif = modalRow.preco_novo - aval1 - aval2;
+                          const condLines1 = editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
+                          const condLines2 = editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null;
                           const res = await fetch("/api/admin/simulacoes", {
                             method: "PATCH",
                             headers: { "x-admin-password": password, "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, diferenca: dif }),
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif }),
                           });
                           if (res.ok) {
-                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
                             setEditMode(false);
                             fetchData(password);
                           } else { alert("Erro ao salvar"); }
                         } finally { setSavingEdit(false); }
                       }}
-                      className="w-full py-1.5 bg-[#0071E3] text-white text-xs font-semibold rounded-lg hover:bg-[#0062C4] disabled:opacity-50"
+                      className="w-full py-2 bg-[#0071E3] text-white text-sm font-semibold rounded-xl hover:bg-[#0062C4] disabled:opacity-50 transition-colors"
                     >
-                      {savingEdit ? "Salvando..." : "Salvar alterações"}
+                      {savingEdit ? "Salvando..." : "Salvar alteracoes"}
                     </button>
                   </div>
                 ) : (

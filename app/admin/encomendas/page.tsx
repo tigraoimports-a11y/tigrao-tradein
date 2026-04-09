@@ -79,6 +79,11 @@ interface EstoqueItem {
   cor: string | null;
   categoria: string | null;
   status: string;
+  custo_unitario: number | null;
+  fornecedor: string | null;
+  data_compra: string | null;
+  origem_compra: string | null;
+  encomenda_id: string | null;
 }
 
 // ─── Status system ───────────────────────────────────────────────────────────
@@ -158,6 +163,15 @@ export default function EncomendasPage() {
   const [estoqueACaminho, setEstoqueACaminho] = useState<EstoqueItem[]>([]);
   const [estoqueLoading, setEstoqueLoading] = useState(false);
 
+  // Autocomplete clientes
+  type CliSug = { nome: string; telefone: string | null; cpf: string | null; email: string | null; endereco: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+  const [cliSugs, setCliSugs] = useState<CliSug[]>([]);
+  const [showCliSugs, setShowCliSugs] = useState(false);
+
+  // Colar dados do cliente
+  const [dadosClienteTexto, setDadosClienteTexto] = useState("");
+  const [parseMsg, setParseMsg] = useState("");
+
   // Form
   const [form, setForm] = useState({
     // cliente
@@ -165,6 +179,11 @@ export default function EncomendasPage() {
     whatsapp: "",
     cpf: "",
     email: "",
+    cep: "",
+    endereco: "",
+    bairro: "",
+    numero: "",
+    complemento: "",
     data: hojeBR(),
     observacao: "",
     // produto
@@ -213,6 +232,88 @@ export default function EncomendasPage() {
     troca_garantia2: "",
   });
 
+  // Autocomplete: buscar clientes ao digitar nome (3+ chars)
+  useEffect(() => {
+    const q = form.cliente.trim();
+    if (q.length < 2) { setCliSugs([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/link-compras?autocomplete=1&q=${encodeURIComponent(q)}`, { headers: hdrs() });
+        const j = await res.json();
+        if (Array.isArray(j?.clientes)) { setCliSugs(j.clientes); setShowCliSugs(true); }
+      } catch {}
+    }, 300);
+    return () => clearTimeout(t);
+  }, [form.cliente]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const aplicarCliente = (c: CliSug) => {
+    setForm(f => ({
+      ...f,
+      cliente: c.nome || f.cliente,
+      whatsapp: c.telefone || f.whatsapp,
+      cpf: c.cpf || f.cpf,
+      email: c.email || f.email,
+      endereco: c.endereco || f.endereco,
+      bairro: c.bairro || f.bairro,
+    }));
+    setShowCliSugs(false);
+  };
+
+  // Parser de bloco de texto colado (formato WhatsApp)
+  function parseDadosCliente(text: string) {
+    const out: Record<string, string> = {};
+    const clean = text.replace(/[✅☑️✔️]/g, "").replace(/\*/g, "").replace(/_/g, "");
+    const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/^([^:]{2,30}):\s*(.+)$/);
+      if (!m) continue;
+      const label = m[1].toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const value = m[2].trim();
+      if (/nome/.test(label)) out.cliente = value;
+      else if (/cpf/.test(label)) out.cpf = value;
+      else if (/e[-\s]?mail|email/.test(label)) out.email = value;
+      else if (/telefone|celular|whats|fone|tel\b/.test(label)) out.whatsapp = value;
+      else if (/cep/.test(label)) out.cep = value;
+      else if (/endereco|rua|logradouro/.test(label)) {
+        const parts = value.split(",").map(p => p.trim());
+        out.endereco = parts[0];
+        if (parts[1]) out.numero = parts[1].replace(/^n[oº°]?\.?\s*/i, "");
+        if (parts[2]) out.complemento = parts.slice(2).join(", ");
+      } else if (/numero|número/.test(label)) out.numero = value.replace(/^n[oº°]?\.?\s*/i, "");
+      else if (/complemento/.test(label)) out.complemento = value;
+      else if (/bairro/.test(label)) out.bairro = value.split(/\s*-\s*/)[0];
+    }
+    return out;
+  }
+
+  function aplicarParse() {
+    const d = parseDadosCliente(dadosClienteTexto);
+    const found: string[] = [];
+    for (const [k, v] of Object.entries(d)) {
+      if (v) { set(k, v); found.push(k); }
+    }
+    if (found.length === 0) setParseMsg("Nenhum dado identificado. Verifique o formato.");
+    else setParseMsg(`${found.length} campo(s) extraido(s): ${found.join(", ")}`);
+    setTimeout(() => setParseMsg(""), 5000);
+  }
+
+  // Auto-fill endereço via CEP (ViaCEP)
+  useEffect(() => {
+    const digits = form.cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    fetch(`https://viacep.com.br/ws/${digits}/json/`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.erro) return;
+        setForm(f => ({
+          ...f,
+          endereco: data.logradouro || f.endereco,
+          bairro: data.bairro || f.bairro,
+        }));
+      })
+      .catch(() => {});
+  }, [form.cep]);
+
   const [temTroca, setTemTroca] = useState(false);
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
   const [trocaRow, setTrocaRow] = useState<ProdutoRowState>(() =>
@@ -249,6 +350,17 @@ export default function EncomendasPage() {
       .then((j) => setFornecedores(j.data ?? []))
       .catch(() => {});
   }, [password]);
+
+  // Estoque A Caminho para vincular no formulário
+  const [produtosACaminho, setProdutosACaminho] = useState<EstoqueItem[]>([]);
+  const [selectedEstoqueId, setSelectedEstoqueId] = useState("");
+  useEffect(() => {
+    if (tab !== "nova" || !password) return;
+    fetch("/api/estoque?status=A%20CAMINHO", { headers: { "x-admin-password": password } })
+      .then((r) => r.json())
+      .then((j) => setProdutosACaminho((j.data ?? []).filter((p: EstoqueItem) => !p.encomenda_id)))
+      .catch(() => {});
+  }, [tab, password]);
 
   // Headers helper
   const hdrs = useCallback(
@@ -292,10 +404,15 @@ export default function EncomendasPage() {
     setSaving(true);
     setMsg("");
     const body: Record<string, unknown> = {
-      cliente: form.cliente,
+      cliente: form.cliente.toUpperCase(),
       whatsapp: form.whatsapp || null,
       cpf: form.cpf || null,
       email: form.email || null,
+      cep: form.cep || null,
+      endereco: form.endereco || null,
+      bairro: form.bairro || null,
+      numero: form.numero || null,
+      complemento: form.complemento || null,
       data: form.data,
       produto: form.produto,
       cor: form.cor || null,
@@ -311,6 +428,11 @@ export default function EncomendasPage() {
       previsao_chegada: form.previsao_chegada || null,
       observacao: form.observacao || null,
     };
+    // Vincular com produto A Caminho se selecionado
+    if (selectedEstoqueId) {
+      body.estoque_id = selectedEstoqueId;
+      body.status = "A CAMINHO";
+    }
     if (temTroca) {
       body.troca_produto = trocaRow.produto || form.troca_produto || null;
       body.troca_cor = trocaRow.cor || form.troca_cor || null;
@@ -357,11 +479,17 @@ export default function EncomendasPage() {
     const json = await res.json();
     if (json.ok) {
       setMsg("Encomenda registrada!");
+      setSelectedEstoqueId("");
       setForm({
         cliente: "",
         whatsapp: "",
         cpf: "",
         email: "",
+        cep: "",
+        endereco: "",
+        bairro: "",
+        numero: "",
+        complemento: "",
         data: hojeBR(),
         observacao: "",
         produto: "",
@@ -419,13 +547,25 @@ export default function EncomendasPage() {
   // ─── Status change ─────────────────────────────────────────────────────────
 
   const handleStatusChange = async (enc: Encomenda, newStatus: string) => {
-    // ── Finalizar: cria venda automaticamente ──
+    // Finalizar: confirmar e criar venda
     if (newStatus === "FINALIZADO") {
-      if (!confirm(`Finalizar encomenda de ${enc.cliente} como venda?`)) return;
-
+      if (!confirm(`Finalizar encomenda de ${enc.cliente} como venda?\n\nIsso vai registrar uma venda com os dados da encomenda.`)) return;
       try {
-        const vendaPayload: Record<string, unknown> = {
-          data: enc.data,
+        // Buscar serial do estoque vinculado (se houver)
+        let serialNo = "";
+        let imei = "";
+        const estoqueIdFinal = enc.estoque_id || null;
+        if (enc.estoque_id) {
+          const estoqueRes = await fetch(`/api/estoque`, { headers: hdrs() });
+          if (estoqueRes.ok) {
+            const estoqueJson = await estoqueRes.json();
+            const item = (estoqueJson.data ?? []).find((p: { id: string }) => p.id === enc.estoque_id);
+            if (item) { serialNo = item.serial_no || ""; imei = item.imei || ""; }
+          }
+        }
+        // Criar venda
+        const vendaBody: Record<string, unknown> = {
+          data: hojeBR(),
           cliente: enc.cliente,
           cpf: enc.cpf || null,
           email: enc.email || null,
@@ -433,15 +573,17 @@ export default function EncomendasPage() {
           fornecedor: enc.fornecedor || null,
           custo: enc.custo || 0,
           preco_vendido: enc.valor_venda || 0,
+          forma: enc.forma_pagamento || "PIX",
+          banco: enc.banco_sinal || "ITAU",
+          recebimento: "D+0",
           origem: "ENCOMENDA",
           tipo: "VENDA",
-          recebimento: "D+0",
-          forma: enc.forma_pagamento || null,
-          banco: enc.banco_sinal || null,
+          serial_no: serialNo || null,
+          imei: imei || null,
           sinal_antecipado: enc.sinal_recebido || 0,
           banco_sinal: enc.banco_sinal || null,
           notas: enc.obs_financeira || null,
-          _estoque_id: enc.estoque_id || null,
+          _estoque_id: estoqueIdFinal,
           // Troca 1
           produto_na_troca: enc.troca_valor || 0,
           troca_produto: enc.troca_produto || null,
@@ -471,42 +613,33 @@ export default function EncomendasPage() {
           troca_imei2: enc.troca_imei2 || null,
           troca_garantia2: enc.troca_garantia2 || null,
         };
-
-        const res = await fetch("/api/vendas", {
+        const vendaRes = await fetch("/api/vendas", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...hdrs() },
-          body: JSON.stringify(vendaPayload),
+          body: JSON.stringify(vendaBody),
         });
-        const json = await res.json();
-
-        if (!res.ok) {
-          setMsg(`Erro ao criar venda: ${json.error}`);
+        const vendaJson = await vendaRes.json();
+        if (vendaRes.ok && (vendaJson.id || vendaJson.data?.id)) {
+          const vendaId = vendaJson.id || vendaJson.data?.id;
+          await fetch("/api/encomendas", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", ...hdrs() },
+            body: JSON.stringify({ id: enc.id, status: "FINALIZADO", venda_id: vendaId }),
+          });
+          setEncomendas(prev => prev.map(e => e.id === enc.id ? { ...e, status: "FINALIZADO", venda_id: vendaId } : e));
+          setMsg("Encomenda finalizada! Venda registrada.");
+          setTimeout(() => setMsg(""), 5000);
+          return;
+        } else {
+          setMsg(`Erro ao criar venda: ${vendaJson.error || "desconhecido"}`);
           return;
         }
-
-        const vendaId = json.data?.id;
-
-        // Atualizar encomenda com status FINALIZADO e venda_id
-        await fetch("/api/encomendas", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", ...hdrs() },
-          body: JSON.stringify({ id: enc.id, status: "FINALIZADO", venda_id: vendaId }),
-        });
-
-        setEncomendas((prev) =>
-          prev.map((e) =>
-            e.id === enc.id ? { ...e, status: "FINALIZADO", venda_id: vendaId } : e
-          )
-        );
-        setMsg("Encomenda finalizada! Venda registrada.");
-        return;
       } catch (err) {
         setMsg(`Erro ao finalizar: ${err}`);
         return;
       }
     }
 
-    // ── Outros status: apenas atualiza ──
     await fetch("/api/encomendas", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...hdrs() },
@@ -719,68 +852,91 @@ export default function EncomendasPage() {
         <div className="space-y-6">
           {/* Block 1: Dados do Cliente */}
           <div className={cardCls}>
-            <h3
-              className={`text-sm font-bold uppercase tracking-wider mb-4 ${
-                dm ? "text-[#98989D]" : "text-[#86868B]"
-              }`}
-            >
-              Dados do Cliente
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-sm font-bold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                Dados do Cliente
+              </h3>
+            </div>
+            {/* Colar dados do cliente */}
+            <div className={`mb-4 p-3 rounded-xl border border-dashed ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#E8740E]/40 bg-[#FFF8F0]"}`}>
+              <p className={`text-xs font-semibold mb-1.5 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Colar dados do cliente (formato WhatsApp)</p>
+              <textarea
+                value={dadosClienteTexto}
+                onChange={(e) => setDadosClienteTexto(e.target.value)}
+                placeholder={"Nome completo: Joao da Silva\nCPF: 000.000.000-00\nE-mail: joao@email.com\nTelefone: 21 99999-9999\nCEP: 00000-000"}
+                rows={3}
+                className={`${inputCls} text-xs resize-none mb-2`}
+              />
+              <div className="flex gap-2">
+                <button onClick={aplicarParse} className="px-3 py-1 bg-[#E8740E] text-white text-xs font-semibold rounded-lg hover:bg-[#D06A0C]">Extrair dados do texto</button>
+                <button onClick={() => { setDadosClienteTexto(""); setParseMsg(""); }} className="px-3 py-1 text-xs text-[#86868B] hover:text-red-500">Limpar</button>
+              </div>
+              {parseMsg && <p className={`text-xs mt-1.5 ${parseMsg.includes("Nenhum") ? "text-red-500" : "text-green-600"}`}>{parseMsg}</p>}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="col-span-2">
+              <div className="col-span-2 relative">
                 <p className={labelCls}>Cliente *</p>
                 <input
                   value={form.cliente}
-                  onChange={(e) => set("cliente", e.target.value.toUpperCase())}
+                  onChange={(e) => { set("cliente", e.target.value.toUpperCase()); setShowCliSugs(true); }}
+                  onFocus={() => { if (cliSugs.length > 0) setShowCliSugs(true); }}
                   className={inputCls}
-                  placeholder="Nome do cliente"
+                  placeholder="Digite 2+ letras para buscar cliente cadastrado..."
                 />
+                {showCliSugs && cliSugs.length > 0 && (
+                  <div className={`absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border shadow-lg max-h-48 overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
+                    {cliSugs.map((c, i) => (
+                      <button key={i} onClick={() => aplicarCliente(c)} className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 hover:bg-[#E8740E]/10 ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-[#F5F5F7] text-[#1D1D1F]"}`}>
+                        <span className="font-semibold">{c.nome}</span>
+                        {c.cpf && <span className="text-xs text-[#86868B] ml-2">CPF: {c.cpf}</span>}
+                        {c.telefone && <span className="text-xs text-[#86868B] ml-2">{c.telefone}</span>}
+                        {c.email && <span className="text-xs text-[#86868B] ml-2">{c.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p className={labelCls}>WhatsApp</p>
-                <input
-                  value={form.whatsapp}
-                  onChange={(e) => set("whatsapp", e.target.value)}
-                  className={inputCls}
-                  placeholder="(11) 99999-9999"
-                />
+                <input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} className={inputCls} placeholder="(11) 99999-9999" />
               </div>
               <div>
                 <p className={labelCls}>CPF</p>
-                <input
-                  value={form.cpf}
-                  onChange={(e) => set("cpf", e.target.value)}
-                  className={inputCls}
-                  placeholder="000.000.000-00"
-                />
+                <input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} className={inputCls} placeholder="000.000.000-00" />
               </div>
               <div>
                 <p className={labelCls}>Email</p>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                  className={inputCls}
-                  placeholder="email@exemplo.com"
-                />
+                <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls} placeholder="email@exemplo.com" />
+              </div>
+              <div>
+                <p className={labelCls}>CEP</p>
+                <input value={form.cep} onChange={(e) => set("cep", e.target.value)} className={inputCls} placeholder="00000-000" />
+              </div>
+              <div>
+                <p className={labelCls}>Endereco</p>
+                <input value={form.endereco} onChange={(e) => set("endereco", e.target.value)} className={inputCls} placeholder="Rua exemplo" />
+              </div>
+              <div>
+                <p className={labelCls}>Bairro</p>
+                <input value={form.bairro} onChange={(e) => set("bairro", e.target.value)} className={inputCls} placeholder="Bairro" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className={labelCls}>Numero</p>
+                  <input value={form.numero} onChange={(e) => set("numero", e.target.value)} className={inputCls} placeholder="100" />
+                </div>
+                <div>
+                  <p className={labelCls}>Complemento</p>
+                  <input value={form.complemento} onChange={(e) => set("complemento", e.target.value)} className={inputCls} placeholder="Apto..." />
+                </div>
               </div>
               <div>
                 <p className={labelCls}>Data</p>
-                <input
-                  type="date"
-                  value={form.data}
-                  onChange={(e) => set("data", e.target.value)}
-                  className={inputCls}
-                />
+                <input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 md:col-span-3">
                 <p className={labelCls}>Observacao</p>
-                <input
-                  value={form.observacao}
-                  onChange={(e) => set("observacao", e.target.value)}
-                  className={inputCls}
-                  placeholder="Obs gerais da encomenda..."
-                />
+                <input value={form.observacao} onChange={(e) => set("observacao", e.target.value)} className={inputCls} placeholder="Obs gerais da encomenda..." />
               </div>
             </div>
           </div>
@@ -794,6 +950,37 @@ export default function EncomendasPage() {
             >
               Produto Encomendado
             </h3>
+            {/* Vincular com produto A Caminho */}
+            {produtosACaminho.length > 0 && (
+              <div className="mb-4">
+                <p className={labelCls}>Vincular a produto A Caminho</p>
+                <select
+                  value={selectedEstoqueId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedEstoqueId(id);
+                    if (id) {
+                      const item = produtosACaminho.find((p) => p.id === id);
+                      if (item) {
+                        set("produto", item.produto);
+                        set("cor", item.cor || "");
+                        set("categoria", item.categoria || "");
+                        set("custo", String(item.custo_unitario || ""));
+                        set("fornecedor", item.fornecedor || "");
+                      }
+                    }
+                  }}
+                  className={selectCls}
+                >
+                  <option value="">-- Digitar manualmente --</option>
+                  {produtosACaminho.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.produto}{item.cor ? ` (${item.cor})` : ""} — {item.fornecedor || "sem fornecedor"}{item.custo_unitario ? ` — R$ ${Math.round(item.custo_unitario).toLocaleString("pt-BR")}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="col-span-2">
                 <p className={labelCls}>Produto *</p>
@@ -887,6 +1074,21 @@ export default function EncomendasPage() {
             >
               Dados Financeiros
             </h3>
+            <label className={`flex items-center gap-2 mb-3 cursor-pointer`}>
+              <input
+                type="checkbox"
+                checked={parseFloat(form.sinal_recebido) > 0 && parseFloat(form.sinal_recebido) === parseFloat(form.valor_venda)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    set("sinal_recebido", form.valor_venda || "0");
+                  } else {
+                    set("sinal_recebido", "0");
+                  }
+                }}
+                className="accent-[#2ECC71] w-4 h-4"
+              />
+              <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Pago integralmente (cliente ja pagou tudo)</span>
+            </label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className={labelCls}>Sinal Recebido (R$)</p>
@@ -1538,6 +1740,9 @@ export default function EncomendasPage() {
                       }`}
                     >
                       {STATUS_LABELS[enc.status] || enc.status}
+                    </span>
+                    <span className={`text-xs ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>
+                      {enc.data}
                     </span>
                     <span
                       className={`font-medium text-sm ${
