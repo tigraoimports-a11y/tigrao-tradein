@@ -2759,6 +2759,30 @@ export default function EstoquePage() {
               {selectMode ? "Cancelar" : "Selecionar"}
             </button>
           )}
+          {isAdmin && (tab === "estoque" || tab === "seminovos") && !selectMode && (
+            <button
+              onClick={() => {
+                // Filtra itens visíveis (da aba atual) que têm serial ou IMEI
+                const itensVisiveis = tab === "estoque"
+                  ? estoque.filter(p => !isReservado(p) && p.tipo === "NOVO" && p.status === "EM ESTOQUE" && p.qnt > 0)
+                  : estoque.filter(p => !isReservado(p) && (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") && p.status !== "ESGOTADO");
+                const comSerial = itensVisiveis.filter(p => p.serial_no || p.imei);
+                const semSerial = itensVisiveis.length - comSerial.length;
+                if (comSerial.length === 0) {
+                  setMsg("⚠️ Nenhum produto nessa aba tem serial/IMEI cadastrado. Cadastre primeiro antes de imprimir.");
+                  return;
+                }
+                if (semSerial > 0) {
+                  if (!confirm(`${comSerial.length} produto(s) com serial/IMEI serão impressos.\n\n⚠️ ${semSerial} produto(s) SEM serial/IMEI serão ignorados (precisa cadastrar o serial primeiro).\n\nContinuar?`)) return;
+                }
+                handlePrintEtiquetaDirect(comSerial);
+                setMsg(`🏷️ ${comSerial.length} etiqueta(s) enviada(s) pra impressão!${semSerial > 0 ? ` (${semSerial} ignorados por falta de serial)` : ""}`);
+              }}
+              className={`px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${bgCard} border ${borderCard} text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]`}
+            >
+              🏷️ Imprimir Todas Etiquetas
+            </button>
+          )}
           {isAdmin && tab === "seminovos" && !selectMode && (
             <button
               onClick={() => { setBalanceMode(!balanceMode); if (balanceMode) setBalanceSelected(new Set()); }}
