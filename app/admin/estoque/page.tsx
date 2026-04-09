@@ -1799,6 +1799,8 @@ export default function EstoquePage() {
       const qrData = serial || imei || p.id;
       const cor = p.cor || "";
       const fornecedor = p.fornecedor || "";
+      const gradeMatch = (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/);
+      const grade = gradeMatch ? gradeMatch[1] : "";
       // Layout vertical: QR em cima, texto embaixo — para fita 29mm
       return `<div class="label">
         <div style="text-align:center;padding:0.5mm 1mm 0.3mm">
@@ -1810,6 +1812,7 @@ export default function EstoquePage() {
           ${serial ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;margin-top:0.3mm;color:#000">S/N: ${serial}</div>` : ""}
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
           ${(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && p.bateria ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.25;margin-top:0.2mm;color:#000">🔋 Bateria: ${p.bateria}%</div>` : ""}
+          ${grade ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.2mm;color:#000;background:#FFF3CD;padding:0.3mm 1mm;border-radius:1mm;display:inline-block">Grade ${grade}</div>` : ""}
           ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
           ${p.custo_unitario ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.3mm;color:#000">CUSTO: R$${Number(p.custo_unitario).toLocaleString("pt-BR")}</div>` : ""}
         </div>
