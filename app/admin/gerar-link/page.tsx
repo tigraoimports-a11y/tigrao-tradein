@@ -109,6 +109,10 @@ export default function GerarLinkPage() {
   // Cores disponíveis pra QUALQUER nome de produto — fonte: catalogo_modelo_configs.
   const coresParaProduto = useMemo(() => (nomeProduto: string): string[] => {
     if (!nomeProduto) return [];
+    // Apple Watch Ultra: cor já faz parte do nome do produto — NÃO mostrar seletor
+    if (/Apple Watch Ultra/i.test(nomeProduto)) return [];
+    // Acessórios sem cor (Apple Pencil, cabos, etc)
+    if (/Pencil|Cable|Cabo|Carregador|Adapter|Hub|Case|Capa|Pelicula/i.test(nomeProduto)) return [];
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
@@ -164,6 +168,24 @@ export default function GerarLinkPage() {
   }, [catalogoCores]);
 
   const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
+
+  // Auto-soma preço base quando há múltiplos produtos
+  // Lookup preço de cada produto pelo nome na lista de preços
+  const lookupPreco = (nome: string): number => {
+    if (!nome) return 0;
+    const match = precosVenda.find(p => `${p.modelo} ${p.armazenamento}`.trim() === nome);
+    if (match) return match.preco_pix;
+    const semi = seminovosDisponiveis.find(s => s.nome === nome);
+    return semi?.preco || 0;
+  };
+
+  // Quando produtos mudam, recalcula preço base como soma de todos
+  useEffect(() => {
+    const prodsFilled = produtos.filter(Boolean);
+    if (prodsFilled.length <= 1) return; // 1 produto: preço já setado no select
+    const total = prodsFilled.reduce((s, p) => s + lookupPreco(p), 0);
+    if (total > 0) setPreco(total.toLocaleString("pt-BR"));
+  }, [produtos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
@@ -1458,20 +1480,16 @@ export default function GerarLinkPage() {
                           <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}{sel && corSel ? ` ${corParaPT(corSel)}` : ""}</p>
                           <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
                         </button>
-                        {sel && catSel !== "SEMINOVOS" && (
+                        {sel && catSel !== "SEMINOVOS" && coresDisponiveis.length > 0 && (
                           <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
                             <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                            {coresDisponiveis.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {coresDisponiveis.map(cor => (
-                                  <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                                  >{corParaPT(cor)}</button>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className={`text-xs italic ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>Nenhuma cor cadastrada para este modelo no catálogo.</p>
-                            )}
+                            <div className="flex flex-wrap gap-2">
+                              {coresDisponiveis.map(cor => (
+                                <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                >{corParaPT(cor)}</button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1489,6 +1507,26 @@ export default function GerarLinkPage() {
           setPickerIdx(newIdx);
           setCatSel("");
         }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
+
+        {/* Resumo dos produtos com preço individual */}
+        {produtos.filter(Boolean).length > 1 && (
+          <div className={`rounded-xl p-3 space-y-1.5 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no link ({produtos.filter(Boolean).length})</p>
+            {produtos.filter(Boolean).map((p, i) => {
+              const pPreco = lookupPreco(p);
+              return (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}</span>
+                  <span className="font-semibold text-green-600">{pPreco > 0 ? `R$ ${pPreco.toLocaleString("pt-BR")}` : "—"}</span>
+                </div>
+              );
+            })}
+            <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
+              <span>Total</span>
+              <span className="text-green-600">R$ {produtos.filter(Boolean).reduce((s, p) => s + lookupPreco(p), 0).toLocaleString("pt-BR")}</span>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className={labelCls}>Preco Base (R$)</label>
