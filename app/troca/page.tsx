@@ -1,4 +1,4 @@
-import TradeInCalculator from "@/components/TradeInCalculator";
+import TradeInCalculatorMulti from "@/components/TradeInCalculatorMulti";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ ref?: string; tema?: string }> }) {
   const params = await searchParams;
@@ -6,6 +6,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   const tema = params.tema?.toLowerCase() || null;
 
   return (
-    <TradeInCalculator vendedor={vendedor} temaParam={tema} />
+    <TradeInCalculatorMulti vendedor={vendedor} temaParam={tema} />
   );
 }
