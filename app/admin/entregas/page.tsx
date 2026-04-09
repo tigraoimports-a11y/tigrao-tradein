@@ -118,14 +118,18 @@ function formatPagamentoDisplay(
   const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
   const totalFinal = entrada + baseComTaxa;
   const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
-  // Monta string detalhada
+  // Monta string detalhada para o motoboy — sem mencionar taxa, mas com total do cartão
   const linhas: string[] = [fp];
   if (entrada > 0) linhas.push(`   • Entrada PIX: ${fmtBRL(entrada)}`);
   if (parcelas > 1 && valorParcela > 0) {
-    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)}`);
+    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)} (total: ${fmtBRL(baseComTaxa)})`);
+  } else if (parcelas === 1 && baseComTaxa > 0) {
+    linhas.push(`   • Cartão: ${fmtBRL(baseComTaxa)}`);
+  } else if (entrada === 0 && valor != null) {
+    linhas.push(`   • ${fmtBRL(Number(valor))}`);
   }
-  if (total > 0) linhas.push(`   • Total: ${fmtBRL(totalFinal)}`);
-  else if (valor != null) linhas.push(`   • ${fmtBRL(Number(valor))}`);
+  // silent dep: totalFinal não usado aqui, mas mantido no cálculo acima caso precise
+  void totalFinal;
   return linhas.join("\n");
 }
 
