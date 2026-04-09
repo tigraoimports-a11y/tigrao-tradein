@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
 import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
+import { corParaPT } from "@/lib/cor-pt";
 
 interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; }
 
@@ -322,45 +323,28 @@ export default function EntregasPage() {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel2]);
 
-  // Cores reais do estoque para produto 2 (mesma lógica de coresDisponiveis)
-  const coresDisponiveis2 = useMemo(() => {
-    if (!modelo2) return [];
-    const prodSel = modelo2.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
+  // Match estrito: exige que TODOS os tokens do modelo selecionado apareçam no produto do estoque.
+  // Retorna cores únicas em PT (com EN entre parênteses quando divergente).
+  const coresFromStock = (modelName: string): string[] => {
+    if (!modelName) return [];
+    const prodSel = modelName.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
     const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
+    if (keywords.length === 0) return [];
+    // dedupe por PT canônico pra não repetir (Midnight/Black/Jet Black → Preto)
+    const porPT = new Map<string, string>(); // pt → en original (primeiro visto)
     for (const item of estoque) {
       const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
-      }
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-      }
+      const all = keywords.every(kw => new RegExp(`(^|\\s)${kw.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}(\\s|$)`).test(prodEstoque));
+      if (!all) continue;
+      if (!item.cor) continue;
+      const pt = corParaPT(item.cor);
+      if (!porPT.has(pt)) porPT.set(pt, item.cor);
     }
-    return [...cores].sort();
-  }, [modelo2, estoque]);
+    return [...porPT.keys()].sort();
+  };
 
-  // Cores reais do estoque para o produto selecionado
-  const coresDisponiveis = useMemo(() => {
-    if (!produtos[0]) return [];
-    const prodSel = produtos[0].toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-    const keywords = prodSel.split(" ").filter(w => w.length >= 2);
-    const cores = new Set<string>();
-    for (const item of estoque) {
-      const prodEstoque = item.produto.toLowerCase().replace(/[º°""]/g, "").replace(/\s+/g, " ").trim();
-      if (prodEstoque.includes(prodSel) || prodSel.includes(prodEstoque)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-        continue;
-      }
-      const matchCount = keywords.filter(kw => prodEstoque.includes(kw)).length;
-      if (matchCount >= Math.min(3, keywords.length - 1)) {
-        if (item.cor) cores.add(item.cor.toUpperCase());
-      }
-    }
-    return [...cores].sort();
-  }, [produtos, estoque]);
+  const coresDisponiveis2 = useMemo(() => coresFromStock(modelo2), [modelo2, estoque]); // eslint-disable-line react-hooks/exhaustive-deps
+  const coresDisponiveis = useMemo(() => coresFromStock(produtos[0] || ""), [produtos, estoque]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Valor base e final
   // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
