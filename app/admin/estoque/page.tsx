@@ -602,6 +602,8 @@ interface ProdutoEstoque {
   reserva_data: string | null;
   reserva_para: string | null;
   reserva_operador: string | null;
+  origem_compra: string | null;
+  custo_compra: number | null;
 }
 
 interface ImeiSearchResult {
@@ -1419,6 +1421,7 @@ export default function EstoquePage() {
     produto: "", categoria: "IPHONES", qnt: "1", custo_unitario: "",
     status: "EM ESTOQUE", cor: "", observacao: "", tipo: "NOVO",
     bateria: "", cliente: "", fornecedor: "", imei: "", serial_no: "", garantia: "",
+    origem_compra: "",
   });
 
   // Campos estruturados por categoria
@@ -2094,6 +2097,7 @@ export default function EstoquePage() {
           fornecedor: p.fornecedor || null,
           imei: p.imei || null,
           serial_no: p.serial_no || null,
+          origem_compra: form.origem_compra || null,
           data_entrada: hojeBR(),
           observacao: (form.tipo === "A_CAMINHO" && p.condicao && p.condicao !== "NOVO")
             ? `[${p.condicao}]`
@@ -2134,7 +2138,8 @@ export default function EstoquePage() {
         tipo: form.tipo, bateria: form.bateria ? parseInt(form.bateria) : null,
         cliente: form.cliente || null, fornecedor: form.fornecedor || null,
         imei: form.imei || null, serial_no: form.serial_no || null,
-        garantia: form.garantia || null, data_entrada: hojeBR(),
+        garantia: form.garantia || null, origem_compra: form.origem_compra || null,
+        data_entrada: hojeBR(),
       }),
     });
     const json = await res.json();
@@ -3686,6 +3691,17 @@ export default function EstoquePage() {
                 </div>
               )}
             </div>
+            {/* Origem da Compra */}
+            <div>
+              <p className={labelCls}>Origem da Compra</p>
+              <select value={form.origem_compra || ""} onChange={(e) => set("origem_compra", e.target.value)} className={inputCls}>
+                <option value="">— Selecionar —</option>
+                <option value="RJ">🏙️ Rio de Janeiro (mesmo dia)</option>
+                <option value="SAO_PAULO">🚚 São Paulo (1 dia)</option>
+                <option value="PARAGUAI">🇵🇾 Paraguai (~15 dias)</option>
+                <option value="EUA">🇺🇸 Estados Unidos (25-30 dias)</option>
+              </select>
+            </div>
           </div>
 
           {/* Cores e Quantidades */}
@@ -4112,13 +4128,52 @@ export default function EstoquePage() {
             </div>
           ) : (
             <>
-            {/* Botão copiar texto WhatsApp atacado — A Caminho */}
+            {/* Resumo por origem + botão WhatsApp atacado — A Caminho */}
             {isACaminhoTab && aCaminho.length > 0 && (
-              <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border mb-3`}>
-                <div>
-                  <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
-                  <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho — gera texto agrupado por categoria</p>
+              <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FFF8F0] border-[#F5D5B0]"} border mb-3 space-y-3`}>
+                {/* Resumo por origem */}
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    const origemConfig: Record<string, { emoji: string; label: string; prazo: string }> = {
+                      EUA: { emoji: "🇺🇸", label: "EUA", prazo: "25-30 dias" },
+                      PARAGUAI: { emoji: "🇵🇾", label: "Paraguai", prazo: "~15 dias" },
+                      SAO_PAULO: { emoji: "🚚", label: "São Paulo", prazo: "1 dia" },
+                      RJ: { emoji: "🏙️", label: "Rio de Janeiro", prazo: "mesmo dia" },
+                    };
+                    const byOrigem: Record<string, number> = {};
+                    let semOrigem = 0;
+                    for (const p of aCaminho) {
+                      if (p.origem_compra && origemConfig[p.origem_compra]) {
+                        byOrigem[p.origem_compra] = (byOrigem[p.origem_compra] || 0) + p.qnt;
+                      } else {
+                        semOrigem += p.qnt;
+                      }
+                    }
+                    return (
+                      <>
+                        {Object.entries(byOrigem).map(([orig, qnt]) => {
+                          const c = origemConfig[orig];
+                          return (
+                            <span key={orig} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-white text-[#1D1D1F]"} border ${dm ? "border-[#48484A]" : "border-[#D2D2D7]"}`}>
+                              {c.emoji} {c.label}: <b>{qnt} un.</b> <span className={`${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({c.prazo})</span>
+                            </span>
+                          );
+                        })}
+                        {semOrigem > 0 && (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"} border ${dm ? "border-[#48484A]" : "border-[#E5E5EA]"}`}>
+                            📦 Sem origem: <b>{semOrigem} un.</b>
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
+                {/* Botão copiar */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-bold ${textPrimary}`}>📋 Texto para WhatsApp (Atacado)</p>
+                    <p className={`text-[11px] ${textMuted}`}>{aCaminho.length} produto(s) a caminho — gera texto agrupado por categoria</p>
+                  </div>
                 <button
                   onClick={() => {
                     // Agrupa por categoria
@@ -4171,6 +4226,7 @@ export default function EstoquePage() {
                 >
                   📋 Copiar Texto Atacado
                 </button>
+                </div>
               </div>
             )}
 
