@@ -76,19 +76,57 @@ function formatDateBR(dateStr: string) {
   return `${d}/${m}`;
 }
 
-function formatPagamentoDisplay(formaPagamento: string | null, valor: number | null): string {
+// Tabela de taxas em nível de módulo pra reuso em formatPagamentoDisplay e no form
+const TAXAS_PARCELAS_MODULE: Record<number, number> = {
+  1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+  7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+  13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+  19: 20, 20: 21, 21: 22,
+};
+
+const fmtBRL = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Formata o campo PAGAMENTO do formulário do motoboy, incluindo breakdown
+ * completo: entrada + Nx com taxa + total final. Prioriza colunas estruturadas
+ * (valor_total, entrada, parcelas) e cai num parse do texto quando ausentes.
+ */
+function formatPagamentoDisplay(
+  formaPagamento: string | null,
+  valor: number | null,
+  valorTotal?: number | null,
+  entradaCol?: number | null,
+  parcelasCol?: number | null,
+): string {
   if (!formaPagamento) return "—";
-  const valorStr = valor != null ? `R$ ${Number(valor).toLocaleString("pt-BR")}` : "";
-  // Já vem formatado (ex: "10x no Cartão (ITAU)"), só anexa valor
   const fp = formaPagamento.trim();
-  // Casos comuns normalizados
-  if (/^pix/i.test(fp) && !/\bR\$/.test(fp)) {
-    return `${fp} ${valorStr}`.trim();
+  // Resolve total/entrada/parcelas (colunas primeiro, fallback parse do texto)
+  let total = Number(valorTotal || valor || 0);
+  let entrada = Number(entradaCol || 0);
+  let parcelas = Number(parcelasCol || 0);
+  if (parcelas === 0) {
+    const m = fp.match(/(\d+)\s*x/i);
+    if (m) parcelas = parseInt(m[1]);
   }
-  if (/cart[aã]o/i.test(fp) || /\d+x/i.test(fp)) {
-    return valor != null ? `${fp} — Total ${valorStr}` : fp;
+  if (entrada === 0) {
+    const m = fp.match(/(?:Entrada\s*PIX|PIX|Entrada)\s*R?\$?\s*([\d.,]+)/i);
+    if (m) entrada = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
   }
-  return `${fp}${valorStr ? " " + valorStr : ""}`;
+  const isCartao = /cart[aã]o|link/i.test(fp);
+  const taxaPct = isCartao && parcelas > 0 ? (TAXAS_PARCELAS_MODULE[parcelas] || 0) : 0;
+  const baseParcelar = Math.max(0, total - entrada);
+  const baseComTaxa = taxaPct > 0 ? Math.ceil(baseParcelar * (1 + taxaPct / 100)) : baseParcelar;
+  const totalFinal = entrada + baseComTaxa;
+  const valorParcela = parcelas > 0 ? baseComTaxa / parcelas : 0;
+  // Monta string detalhada
+  const linhas: string[] = [fp];
+  if (entrada > 0) linhas.push(`   • Entrada PIX: ${fmtBRL(entrada)}`);
+  if (parcelas > 1 && valorParcela > 0) {
+    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)}${taxaPct > 0 ? ` (taxa ${taxaPct}% inclusa)` : ""}`);
+  }
+  if (total > 0) linhas.push(`   • Total: ${fmtBRL(totalFinal)}`);
+  else if (valor != null) linhas.push(`   • ${fmtBRL(Number(valor))}`);
+  return linhas.join("\n");
 }
 
 export default function EntregasPage() {
@@ -2249,7 +2287,7 @@ export default function EntregasPage() {
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
                         `‼️ *TIPO:* ${tipoLabel}`,
                         ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
-                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor)}`,
+                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas)}`,
                         `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
                         e.observacao ? `OBS: ${e.observacao}` : "",

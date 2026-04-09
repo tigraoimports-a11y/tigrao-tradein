@@ -14,3 +14,9 @@ create table if not exists avisos_clientes (
 
 create index if not exists idx_avisos_clientes_status on avisos_clientes(status);
 create index if not exists idx_avisos_clientes_created on avisos_clientes(created_at desc);
+
+-- Grants: backend usa service_role (bypass RLS), mas garante permissões explícitas
+grant all on table avisos_clientes to service_role;
+grant all on table avisos_clientes to postgres;
+grant all on table avisos_clientes to authenticated;
+alter table avisos_clientes disable row level security;
