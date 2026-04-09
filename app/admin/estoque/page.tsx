@@ -3823,19 +3823,44 @@ export default function EstoquePage() {
               const allItems = acaminhoFilter === "pendentes" ? filtered
                 : acaminhoFilter === "recebidos" ? recebidosFiltrados
                 : [...filtered, ...recebidosFiltrados];
-              const byDate: Record<string, typeof allItems> = {};
+              // Configuração de origens
+              const ORIGEM_CONFIG: Record<string, { emoji: string; label: string; dias: number; cor: string }> = {
+                RJ: { emoji: "🏙️", label: "RIO DE JANEIRO", dias: 0, cor: "bg-green-600" },
+                SAO_PAULO: { emoji: "🚚", label: "SÃO PAULO", dias: 1, cor: "bg-blue-600" },
+                PARAGUAI: { emoji: "🇵🇾", label: "PARAGUAI", dias: 15, cor: "bg-yellow-600" },
+                EUA: { emoji: "🇺🇸", label: "ESTADOS UNIDOS", dias: 30, cor: "bg-red-600" },
+              };
+              const ORIGEM_ORDER = ["RJ", "SAO_PAULO", "PARAGUAI", "EUA", "SEM_ORIGEM"];
+
+              // Calcula previsão de chegada
+              const calcPrevisao = (dataCompra: string | null, origem: string | null): string | null => {
+                if (!dataCompra || !origem || !ORIGEM_CONFIG[origem]) return null;
+                const d = new Date(dataCompra + "T12:00:00");
+                d.setDate(d.getDate() + ORIGEM_CONFIG[origem].dias);
+                return d.toISOString().split("T")[0];
+              };
+
+              // Agrupar por origem (em vez de por data)
+              const byOrigem: Record<string, typeof allItems> = {};
               allItems.forEach(p => {
-                const d = p.data_compra || "Sem data";
-                if (!byDate[d]) byDate[d] = [];
-                byDate[d].push(p);
+                const orig = p.origem_compra && ORIGEM_CONFIG[p.origem_compra] ? p.origem_compra : "SEM_ORIGEM";
+                if (!byOrigem[orig]) byOrigem[orig] = [];
+                byOrigem[orig].push(p);
               });
-              const sortedDates = Object.keys(byDate).sort().reverse();
-              if (sortedDates.length === 0) return (
+              // Dentro de cada origem, ordena por data de compra (mais recente primeiro)
+              for (const items of Object.values(byOrigem)) {
+                items.sort((a, b) => (b.data_compra || "").localeCompare(a.data_compra || ""));
+              }
+              const sortedOrigens = ORIGEM_ORDER.filter(o => byOrigem[o]?.length > 0);
+
+              if (sortedOrigens.length === 0) return (
                 <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
                   <p className={textSecondary}>Nenhum produto a caminho.</p>
                 </div>
               );
               const grandTotal = filtered.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+
+              // Usa selectedACaminho do estado do componente pra edição em lote
               return (
                 <div className="space-y-4">
                   {/* Resumo por origem + botão WhatsApp atacado */}
@@ -3925,21 +3950,46 @@ export default function EstoquePage() {
                       </div>
                     </div>
                   )}
-                  {sortedDates.filter(date => {
-                    // Ocultar pedidos onde todos os itens já foram recebidos (exceto se filtrando por recebidos)
-                    if (acaminhoFilter === "recebidos") return true;
-                    const items = byDate[date];
-                    return acaminhoFilter === "todos" ? true : items.some(p => p.tipo === "A_CAMINHO");
-                  }).map(date => {
-                    const items = byDate[date];
+                  {/* Barra de edição em lote */}
+                  {selectedACaminho.size > 0 && (
+                    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-blue-50 border-blue-200"} border`}>
+                      <span className={`text-sm font-semibold ${textPrimary}`}>{selectedACaminho.size} selecionado(s)</span>
+                      <span className={`text-xs ${textSecondary}`}>Definir origem:</span>
+                      {Object.entries(ORIGEM_CONFIG).map(([key, cfg]) => (
+                        <button
+                          key={key}
+                          onClick={async () => {
+                            const ids = Array.from(selectedACaminho);
+                            for (const id of ids) {
+                              await apiPatch(id, { origem_compra: key });
+                            }
+                            setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, origem_compra: key } : p));
+                            setSelectedACaminho(new Set());
+                            setMsg(`${ids.length} produto(s) → ${cfg.emoji} ${cfg.label}`);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${cfg.cor} text-white hover:opacity-80 transition-opacity`}
+                        >
+                          {cfg.emoji} {cfg.label}
+                        </button>
+                      ))}
+                      <button onClick={() => setSelectedACaminho(new Set())} className={`ml-auto text-xs ${textSecondary} hover:text-red-500`}>Limpar</button>
+                    </div>
+                  )}
+
+                  {/* Cards por ORIGEM */}
+                  {sortedOrigens.map(origemKey => {
+                    const items = byOrigem[origemKey];
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
-                    const dateTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    const origemTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                    const cfg = ORIGEM_CONFIG[origemKey];
+                    const headerColor = cfg ? cfg.cor : "bg-gray-500";
+                    const headerLabel = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
                     return (
-                      <div key={date} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
-                        <div className={`px-4 py-2.5 flex items-center justify-between ${pendentes.length === 0 ? "bg-green-600" : "bg-[#E8740E]"}`}>
+                      <div key={origemKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                        <div className={`px-4 py-2.5 flex items-center justify-between ${headerColor}`}>
                           <span className="font-bold text-white text-[13px]">
-                            Pedido {date !== "Sem data" ? date.split("-").reverse().join("/") : "Sem data"}
+                            {headerLabel}
                           </span>
                           <div className="flex items-center gap-2">
                             {pendentes.length > 0 && (
@@ -3971,9 +4021,11 @@ export default function EstoquePage() {
                               <th className="px-2 py-2 w-8"><input type="checkbox" checked={pendentes.length > 0 && pendentes.every(p => selectedACaminho.has(p.id))} onChange={() => { if (pendentes.every(p => selectedACaminho.has(p.id))) { setSelectedACaminho(new Set()); } else { setSelectedACaminho(new Set(pendentes.map(p => p.id))); } }} className="accent-[#E8740E]" /></th>
                               <th className="px-4 py-2 text-left">Modelo</th>
                               <th className="px-4 py-2 text-center w-16">Qtd.</th>
-                              <th className="px-4 py-2 text-right w-28">Valor unit.</th>
-                              <th className="px-4 py-2 text-left w-36">Fornecedor</th>
-                              <th className="px-4 py-2 text-right w-28">Total</th>
+                              <th className="px-4 py-2 text-right w-24">Valor unit.</th>
+                              <th className="px-4 py-2 text-left w-28">Fornecedor</th>
+                              <th className="px-4 py-2 text-center w-24">Compra</th>
+                              <th className="px-4 py-2 text-center w-24">Previsão</th>
+                              <th className="px-4 py-2 text-right w-24">Total</th>
                               {isAdmin && <th className="px-2 py-2 w-20"></th>}
                             </tr>
                           </thead>
@@ -3990,7 +4042,7 @@ export default function EstoquePage() {
                                 groupMap.get(base)!.push(p);
                               });
                               return Array.from(groupMap.entries()).flatMap(([baseModel, group]) => {
-                                const groupKey = `${date}::${baseModel}`;
+                                const groupKey = `${origemKey}::${baseModel}`;
                                 const isExpanded = expandedACaminhoGroups.has(groupKey);
                                 const totalQnt = group.reduce((s, p) => s + p.qnt, 0);
                                 const totalVal = group.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
@@ -4032,6 +4084,16 @@ export default function EstoquePage() {
                                     <td className={`px-4 py-3 text-center text-sm font-bold ${textPrimary}`}>{totalQnt}</td>
                                     <td className={`px-4 py-3 text-right text-sm ${textSecondary}`}>{group[0].custo_unitario ? fmt(group[0].custo_unitario) : "—"}</td>
                                     <td className={`px-4 py-3 text-sm ${textSecondary}`}>{fornecedorUniq || "—"}</td>
+                                    <td className={`px-4 py-3 text-center text-[11px] ${textSecondary}`}>{group[0].data_compra ? group[0].data_compra.split("-").reverse().join("/") : "—"}</td>
+                                    <td className={`px-4 py-3 text-center text-[11px] font-semibold ${(() => {
+                                      const prev = calcPrevisao(group[0].data_compra, group[0].origem_compra);
+                                      if (!prev) return textSecondary;
+                                      const hoje = new Date().toISOString().split("T")[0];
+                                      return prev <= hoje ? "text-green-600" : "text-[#E8740E]";
+                                    })()}`}>{(() => {
+                                      const prev = calcPrevisao(group[0].data_compra, group[0].origem_compra);
+                                      return prev ? prev.split("-").reverse().join("/") : "—";
+                                    })()}</td>
                                     <td className={`px-4 py-3 text-right text-sm font-bold ${textPrimary}`}>{totalVal > 0 ? fmt(totalVal) : "—"}</td>
                                     {isAdmin && <td className="px-2 py-3 text-center">
                                       {!isSingleUnit ? (
@@ -4070,6 +4132,16 @@ export default function EstoquePage() {
                                         <td className={`px-4 py-2 text-center text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.qnt}</td>
                                         <td className={`px-4 py-2 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
                                         <td className={`px-4 py-2 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || "—"}</td>
+                                        <td className={`px-4 py-2 text-center text-[11px] ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.data_compra ? p.data_compra.split("-").reverse().join("/") : "—"}</td>
+                                        <td className={`px-4 py-2 text-center text-[11px] font-semibold ${(() => {
+                                          const prev = calcPrevisao(p.data_compra, p.origem_compra);
+                                          if (!prev) return textSecondary;
+                                          const hoje = new Date().toISOString().split("T")[0];
+                                          return prev <= hoje ? "text-green-600" : "text-[#E8740E]";
+                                        })()}`} onClick={() => setDetailProduct(p)}>{(() => {
+                                          const prev = calcPrevisao(p.data_compra, p.origem_compra);
+                                          return prev ? prev.split("-").reverse().join("/") : "—";
+                                        })()}</td>
                                         <td className={`px-4 py-2 text-right text-sm font-bold ${textPrimary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.qnt * p.custo_unitario) : "—"}</td>
                                         {isAdmin && <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
                                           <button onClick={() => handlePrintEtiquetaDirect([p])} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}>🏷️ Etiqueta</button>
@@ -4085,8 +4157,8 @@ export default function EstoquePage() {
                           {pendentes.length > 0 && (
                             <tfoot>
                               <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 6 : 4}>TOTAL PENDENTE</td>
-                                <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]" colSpan={isAdmin ? 2 : 1}>{fmt(dateTotal)}</td>
+                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 8 : 6}>TOTAL PENDENTE</td>
+                                <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]" colSpan={isAdmin ? 2 : 1}>{fmt(origemTotal)}</td>
                               </tr>
                             </tfoot>
                           )}
@@ -4094,7 +4166,7 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                  {sortedDates.length > 1 && grandTotal > 0 && (
+                  {sortedOrigens.length > 1 && grandTotal > 0 && (
                     <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
                       <span className={`text-xs font-bold ${textSecondary}`}>TOTAL PENDENTE ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"} a caminho)</span>
                       <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
