@@ -115,7 +115,7 @@ export default function VendasPage() {
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
     valor_total_venda: "",
     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -682,7 +682,7 @@ export default function VendasPage() {
     const trc1 = parseFloat(form.produto_na_troca) || 0;
     const trc2 = parseFloat(form.produto_na_troca2) || 0;
     const trc = trc1 + trc2;
-    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+    const taxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
     const liqAlt = taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal;
     let liqPrinc = 0;
     if (compVal > 0) {
@@ -798,7 +798,7 @@ export default function VendasPage() {
     const esp = parseFloat(overrides.especie ?? form.entrada_especie) || 0;
     // Segundo cartão (comp_alt) — sempre incluído quando preenchido
     const compAltVal = parseFloat(form.comp_alt) || 0;
-    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+    const taxaAlt = compAltVal > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
     const liqAlt = compAltVal > 0 ? (taxaAlt > 0 ? calcularLiquido(compAltVal, taxaAlt) : compAltVal) : 0;
     // Trocas: no modo carrinho, somar de todos os produtos do carrinho + form global
     const trcForm1 = parseFloat(overrides.troca ?? form.produto_na_troca) || 0;
@@ -1206,7 +1206,7 @@ export default function VendasPage() {
           : gForma === "DEBITO" ? 0.75
           : 0;
         const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
-        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO");
+        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
         const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
         payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
@@ -1234,7 +1234,7 @@ export default function VendasPage() {
           // Cartão alternativo (2o cartão)
           const gCompAlt = parseFloat(form.comp_alt) || 0;
           const gTaxaAlt = gCompAlt > 0
-            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
             : 0;
           const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
 
@@ -1307,7 +1307,7 @@ export default function VendasPage() {
               const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
               const gTaxaAlt = gCompAlt > 0
-                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO")
+                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
                 : 0;
               const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
@@ -1431,7 +1431,7 @@ export default function VendasPage() {
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-        parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+        forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
         entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
         valor_total_venda: "",
         troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -1680,6 +1680,7 @@ export default function VendasPage() {
       valor_total_venda: "",
       banco_2nd: v.banco_2nd || "",
       banco_alt: v.banco_alt || "",
+      forma_alt: (v as unknown as Record<string, string>).forma_alt || "",
       parc_alt: String(v.parc_alt || ""),
       band_alt: v.band_alt || "",
       comp_alt: String(v.comp_alt || ""),
@@ -1910,7 +1911,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -2514,7 +2515,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -2680,7 +2681,7 @@ export default function VendasPage() {
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
                           const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
                           const compAltDisp = parseFloat(form.comp_alt) || 0;
-                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+                          const taxaAltDisp = compAltDisp > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
                           const liqAltDisp = compAltDisp > 0 ? (taxaAltDisp > 0 ? calcularLiquido(compAltDisp, taxaAltDisp) : compAltDisp) : 0;
                           return (
                           <>
@@ -2820,25 +2821,33 @@ export default function VendasPage() {
             </div>
             )}
 
-            {/* Segundo cartao (opcional) */}
-            {form.forma === "CARTAO" && (
+            {/* Segundo cartão/link (opcional) */}
+            {(form.forma === "CARTAO" || form.forma === "LINK") && (
             <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
               <label className="flex items-center gap-2 text-sm text-[#86868B]">
                 <input type="checkbox" checked={!!form.banco_alt} onChange={(e) => {
-                  if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); }
-                  else { set("banco_alt", "ITAU"); }
+                  if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); set("forma_alt", ""); }
+                  else { set("banco_alt", form.forma === "LINK" ? "MERCADO_PAGO" : "ITAU"); set("forma_alt", form.forma); }
                 }} className="accent-[#E8740E]" />
-                <span className="font-semibold">Cliente pagou com segundo cartao?</span>
+                <span className="font-semibold">Cliente pagou com 2° {form.forma === "LINK" ? "link/cartão" : "cartão/link"}?</span>
               </label>
               {form.banco_alt && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div><p className={labelCls}>Maquina (2o cartao)</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
-                    <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                  <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                    <option value="CARTAO">Maquina Cartão</option>
+                    <option value="LINK">Link Mercado Pago</option>
                   </select></div>
+                  {(form.forma_alt || form.forma) !== "LINK" && (
+                    <div><p className={labelCls}>Maquina</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
+                      <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                    </select></div>
+                  )}
                   <div><p className={labelCls}>Parcelas</p><input type="number" value={form.parc_alt} onChange={(e) => set("parc_alt", e.target.value)} placeholder="1" className={inputCls} /></div>
-                  <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
-                    <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
-                  </select></div>
+                  {(form.forma_alt || form.forma) !== "LINK" && (
+                    <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
+                      <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+                    </select></div>
+                  )}
                   <div><p className={labelCls}>Valor no comprovante (R$)</p><input type="number" value={form.comp_alt} onChange={(e) => set("comp_alt", e.target.value)} placeholder="0" className={inputCls} /></div>
                 </div>
               )}
@@ -3098,25 +3107,33 @@ export default function VendasPage() {
               </div>
               )}
 
-              {/* Segundo cartao (opcional) — cart mode */}
-              {form.forma === "CARTAO" && (
+              {/* Segundo cartão/link (opcional) — cart mode */}
+              {(form.forma === "CARTAO" || form.forma === "LINK") && (
               <div className="border-t border-[#E8E8ED] pt-3 space-y-3">
                 <label className="flex items-center gap-2 text-sm text-[#86868B]">
                   <input type="checkbox" checked={!!form.banco_alt} onChange={(e) => {
-                    if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); }
-                    else { set("banco_alt", "ITAU"); }
+                    if (!e.target.checked) { set("banco_alt", ""); set("parc_alt", ""); set("band_alt", ""); set("comp_alt", ""); set("forma_alt", ""); }
+                    else { set("banco_alt", form.forma === "LINK" ? "MERCADO_PAGO" : "ITAU"); set("forma_alt", form.forma); }
                   }} className="accent-[#E8740E]" />
-                  <span className="font-semibold">Cliente pagou com segundo cartao?</span>
+                  <span className="font-semibold">Cliente pagou com 2° {form.forma === "LINK" ? "link/cartão" : "cartão/link"}?</span>
                 </label>
                 {form.banco_alt && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div><p className={labelCls}>Maquina (2o cartao)</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
-                      <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                    <div><p className={labelCls}>Forma (2°)</p><select value={form.forma_alt || form.forma} onChange={(e) => set("forma_alt", e.target.value)} className={selectCls}>
+                      <option value="CARTAO">Maquina Cartão</option>
+                      <option value="LINK">Link Mercado Pago</option>
                     </select></div>
+                    {(form.forma_alt || form.forma) !== "LINK" && (
+                      <div><p className={labelCls}>Maquina</p><select value={form.banco_alt} onChange={(e) => set("banco_alt", e.target.value)} className={selectCls}>
+                        <option>ITAU</option><option>INFINITE</option><option>MERCADO_PAGO</option>
+                      </select></div>
+                    )}
                     <div><p className={labelCls}>Parcelas</p><input type="number" value={form.parc_alt} onChange={(e) => set("parc_alt", e.target.value)} placeholder="1" className={inputCls} /></div>
-                    <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
-                      <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
-                    </select></div>
+                    {(form.forma_alt || form.forma) !== "LINK" && (
+                      <div><p className={labelCls}>Bandeira</p><select value={form.band_alt} onChange={(e) => set("band_alt", e.target.value)} className={selectCls}>
+                        <option value="">Selecionar</option><option>VISA</option><option>MASTERCARD</option><option>ELO</option><option>AMEX</option>
+                      </select></div>
+                    )}
                     <div><p className={labelCls}>Valor no comprovante (R$)</p><input type="number" value={form.comp_alt} onChange={(e) => set("comp_alt", e.target.value)} placeholder="0" className={inputCls} /></div>
                   </div>
                 )}
@@ -3271,7 +3288,7 @@ export default function VendasPage() {
             let receitaReal = totalVendido; // fallback: soma dos preços vendidos
             if (gComp > 0 && taxa > 0) {
               const liqPrincipal = calcularLiquido(gComp, taxa);
-              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, "CARTAO") : 0;
+              const taxaAlt = gCompAlt > 0 ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK") : 0;
               const liqAlt = gCompAlt > 0 ? (taxaAlt > 0 ? calcularLiquido(gCompAlt, taxaAlt) : gCompAlt) : 0;
               receitaReal = liqPrincipal + liqAlt + gPixE + gEspecieE + gTrocaE;
             }
@@ -4093,6 +4110,7 @@ export default function VendasPage() {
                                               valor_total_venda: "",
                                               banco_2nd: primaryVenda.banco_2nd || "",
                                               banco_alt: primaryVenda.banco_alt || "",
+                                              forma_alt: (primaryVenda as unknown as Record<string, string>).forma_alt || "",
                                               parc_alt: String(primaryVenda.parc_alt || ""),
                                               band_alt: primaryVenda.band_alt || "",
                                               comp_alt: String(primaryVenda.comp_alt || ""),
@@ -4707,7 +4725,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
@@ -4741,7 +4759,7 @@ export default function VendasPage() {
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
-                    parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+                    forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
                     entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
                     valor_total_venda: "",
                     troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
