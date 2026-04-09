@@ -121,14 +121,30 @@ const DEVICE_CATS = [
   { key: "watch", label: "Apple Watch", prefix: "Apple Watch" },
 ];
 
+interface CatConfig {
+  categoria: string;
+  modo: "automatico" | "manual";
+  ativo: boolean;
+}
+
+interface GarantiaRow {
+  id: string;
+  modelo: string;
+  armazenamento: string;
+  valor_garantia: number;
+}
+
 export function UsadosContent() {
   const { password, user } = useAdmin();
   const [valores, setValores] = useState<ValorUsado[]>([]);
   const [descontos, setDescontos] = useState<DescontoCondicao[]>([]);
   const [excluidos, setExcluidos] = useState<string[]>([]);
+  const [catConfigs, setCatConfigs] = useState<CatConfig[]>([]);
+  const [garantias, setGarantias] = useState<GarantiaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [editingDesc, setEditingDesc] = useState<Record<string, string>>({});
+  const [editingGarantia, setEditingGarantia] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
@@ -137,7 +153,7 @@ export function UsadosContent() {
   const [novoModelo, setNovoModelo] = useState({ modelo: "", armazenamento: "", valor_base: "" });
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
   const [catFilter, setCatFilter] = useState("iphone");
-  const [copyFrom, setCopyFrom] = useState<string | null>(null); // modelo de origem ao copiar descontos
+  const [copyFrom, setCopyFrom] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -148,6 +164,8 @@ export function UsadosContent() {
         setValores(json.valores ?? []);
         setDescontos(json.descontos ?? []);
         setExcluidos((json.excluidos ?? []).map((e: { modelo: string }) => e.modelo));
+        setCatConfigs(json.catConfig ?? []);
+        setGarantias(json.garantias ?? []);
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -339,6 +357,43 @@ export function UsadosContent() {
     fetchData();
   };
 
+  // Config da categoria selecionada
+  const catKeyMap: Record<string, string> = { iphone: "IPHONE", ipad: "IPAD", macbook: "MACBOOK", watch: "APPLE_WATCH" };
+  const currentCatKey = catKeyMap[catFilter] || "IPHONE";
+  const currentCatConfig = catConfigs.find(c => c.categoria === currentCatKey) || { categoria: currentCatKey, modo: "automatico" as const, ativo: true };
+
+  const handleToggleCat = async (field: "modo" | "ativo", value: string | boolean) => {
+    setSaving("cat-config");
+    await apiPost({ action: "update_cat_config", categoria: currentCatKey, [field]: value });
+    setCatConfigs(prev => {
+      const exists = prev.findIndex(c => c.categoria === currentCatKey);
+      const upd = { ...currentCatConfig, [field]: value };
+      if (exists >= 0) { const nv = [...prev]; nv[exists] = upd; return nv; }
+      return [...prev, upd];
+    });
+    setSaving(null);
+    setMsg(`${field === "modo" ? "Modo" : "Status"} atualizado!`);
+  };
+
+  const handleSaveGarantia = async (modelo: string, armazenamento: string) => {
+    const key = `${modelo}|${armazenamento}`;
+    const raw = editingGarantia[key];
+    if (raw === undefined) return;
+    const val = parseFloat(raw) || 0;
+    setSaving(key + "-gar");
+    await apiPost({ action: "upsert_garantia", modelo, armazenamento, valor_garantia: val });
+    setGarantias(prev => {
+      const exists = prev.findIndex(g => g.modelo === modelo && g.armazenamento === armazenamento);
+      if (exists >= 0) { const nv = [...prev]; nv[exists] = { ...nv[exists], valor_garantia: val }; return nv; }
+      return [...prev, { id: crypto.randomUUID(), modelo, armazenamento, valor_garantia: val }];
+    });
+    const e = { ...editingGarantia }; delete e[key]; setEditingGarantia(e);
+    setSaving(null);
+  };
+
+  // Lookup garantia por modelo+armazenamento
+  const getGarantia = (modelo: string, arm: string) => garantias.find(g => g.modelo === modelo && g.armazenamento === arm)?.valor_garantia ?? 0;
+
   // Excluidos filtrados por categoria
   const excluidosFiltrados = excluidos.filter(m => m.startsWith(catPrefix));
 
@@ -436,6 +491,35 @@ export function UsadosContent() {
         })}
       </div>
 
+      {/* Config da categoria: Modo + Ativo */}
+      <div className="flex items-center gap-4 px-4 py-2.5 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7]">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-[#86868B] uppercase">Modo:</span>
+          <button
+            onClick={() => handleToggleCat("modo", currentCatConfig.modo === "automatico" ? "manual" : "automatico")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${currentCatConfig.modo === "automatico" ? "bg-green-500 text-white" : "bg-amber-500 text-white"}`}
+          >
+            {currentCatConfig.modo === "automatico" ? "🤖 Automático" : "✋ Manual"}
+          </button>
+          <span className="text-[10px] text-[#86868B]">
+            {currentCatConfig.modo === "automatico" ? "Calcula e mostra valor pro cliente" : "Cliente envia formulário, vocês avaliam"}
+          </span>
+        </div>
+        <div className="h-5 w-px bg-[#D2D2D7]" />
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-[#86868B] uppercase">Visível:</span>
+          <button
+            onClick={() => handleToggleCat("ativo", !currentCatConfig.ativo)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${currentCatConfig.ativo ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
+          >
+            {currentCatConfig.ativo ? "✅ Ativo" : "❌ Desativado"}
+          </button>
+          <span className="text-[10px] text-[#86868B]">
+            {currentCatConfig.ativo ? "Aparece no formulário público" : "Escondido do cliente"}
+          </span>
+        </div>
+      </div>
+
       {/* Sub-tabs: Valores Base / Descontos / Excluidos */}
       <div className="flex gap-2">
         {(["valores", "descontos", "excluidos"] as const).map((t) => {
@@ -475,6 +559,7 @@ export function UsadosContent() {
                     <tr className="border-b border-[#F5F5F7]">
                       <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Armazenamento</th>
                       <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Valor Base</th>
+                      <th className="px-5 py-2 text-left text-[#86868B] text-xs uppercase tracking-wider font-medium">Garantia (+R$)</th>
                       <th className="px-5 py-2"></th>
                     </tr>
                   </thead>
@@ -497,6 +582,25 @@ export function UsadosContent() {
                                 {fmt(v.valor_base)}
                               </span>
                             )}
+                          </td>
+                          <td className="px-5 py-3">
+                            {(() => {
+                              const gKey = `${v.modelo}|${v.armazenamento}`;
+                              const isEditGar = editingGarantia[gKey] !== undefined;
+                              const garVal = getGarantia(v.modelo, v.armazenamento);
+                              return isEditGar ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[#86868B] text-xs">+R$</span>
+                                  <input type="number" value={editingGarantia[gKey]} onChange={(e) => setEditingGarantia({ ...editingGarantia, [gKey]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && handleSaveGarantia(v.modelo, v.armazenamento)} className="w-16 px-1 py-0.5 rounded border border-[#E8740E] text-xs text-right" autoFocus />
+                                  <button onClick={() => handleSaveGarantia(v.modelo, v.armazenamento)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
+                                  <button onClick={() => { const e = { ...editingGarantia }; delete e[gKey]; setEditingGarantia(e); }} className="text-[10px] text-[#86868B]">✕</button>
+                                </div>
+                              ) : (
+                                <span className={`text-xs font-medium cursor-pointer hover:text-[#E8740E] ${garVal > 0 ? "text-green-600" : "text-[#B0B0B0]"}`} onClick={() => setEditingGarantia({ ...editingGarantia, [gKey]: String(garVal) })}>
+                                  {garVal > 0 ? `+${fmt(garVal)}` : "—"}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-5 py-3 text-right">
                             {isEditing ? (

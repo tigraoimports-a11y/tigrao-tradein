@@ -269,6 +269,7 @@ function CompraForm() {
   const [complemento, setComplemento] = useState(complementoParam);
   const [bairro, setBairro] = useState(bairroParam);
   const [horario, setHorario] = useState(horarioParam);
+  const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>(["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]);
   const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
   const [shopping, setShopping] = useState(shoppingParam);
@@ -281,6 +282,23 @@ function CompraForm() {
   const [instagram, setInstagram] = useState(instagramParam);
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
+
+  // Fetch horários dinâmicos baseado no tipo (entrega/retirada) + data selecionada
+  useEffect(() => {
+    const tipo = local === "Loja" ? "retirada" : "entrega";
+    const params = new URLSearchParams({ tipo });
+    if (dataEntrega) params.set("data", dataEntrega);
+    fetch(`/api/horarios?${params}`)
+      .then(r => r.json())
+      .then(j => {
+        if (j.horarios?.length > 0) {
+          setHorariosDisponiveis(j.horarios);
+          // Se horário selecionado não está mais disponível, limpa
+          if (horario && !j.horarios.includes(horario)) setHorario("");
+        }
+      })
+      .catch(() => {}); // fallback mantém os hardcoded
+  }, [local, dataEntrega]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trade-in state
   const [temTroca, setTemTroca] = useState<boolean | null>(trocaProdutoParam ? true : null);
@@ -1004,11 +1022,11 @@ function CompraForm() {
               className={inputCls} />
           </div>
 
-          {/* Horário — 10h às 18h */}
+          {/* Horário — dinâmico conforme tipo + dia da semana */}
           <div>
             <label className={labelCls}>Horario *</label>
             <div className="grid grid-cols-4 gap-2">
-              {["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"].map(h => (
+              {horariosDisponiveis.map(h => (
                 <button key={h} type="button" onClick={() => setHorario(h)}
                   className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${horario === h ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   {h}
