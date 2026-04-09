@@ -80,6 +80,7 @@ function CompraForm() {
   const trocaCor2Param = searchParams.get("troca_cor2") || "";
   const trocaCaixaParam = searchParams.get("troca_caixa") || "";
   const trocaCaixa2Param = searchParams.get("troca_caixa2") || "";
+  const descontoParam = searchParams.get("desconto") || "";
   const nomeParam = searchParams.get("nome") || "";
   const cpfParam = searchParams.get("cpf") || "";
   const emailParam = searchParams.get("email") || "";
@@ -309,7 +310,8 @@ function CompraForm() {
   const [entradaPixManual, setEntradaPixManual] = useState(entradaPixParam || "");
 
   // Installment calculations
-  const valorBase = preco > 0 ? (trocaNum > 0 ? preco - trocaNum : preco) : 0;
+  const descontoNum = parseFloat(descontoParam) || 0;
+  const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
   const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
   const parcOpts = useMemo(() => {
@@ -352,7 +354,8 @@ function CompraForm() {
       : "Entrega - Residencia";
 
     // Valor base para cálculos (usa precoFinal definido acima)
-    const valorBaseFinal = trocaNum > 0 ? Math.max(precoFinal - trocaNum, 0) : precoFinal;
+    const descontoFinal = parseFloat(descontoParam) || 0;
+    const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
 
