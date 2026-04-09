@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
+
+interface HorarioRow {
+  id: string;
+  tipo: string;
+  dia_semana: string;
+  horario: string;
+  ativo: boolean;
+}
 
 const VENDEDORES_PADRAO = [
   { nome: "André",   numero: "5521967442665" },
@@ -20,6 +28,10 @@ export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+
+  // Horários configuráveis
+  const [horarios, setHorarios] = useState<HorarioRow[]>([]);
+  const [novoHorario, setNovoHorario] = useState({ tipo: "entrega", dia_semana: "seg_sex", horario: "" });
 
   useEffect(() => {
     if (!password) return;
@@ -42,6 +54,50 @@ export default function ConfiguracoesPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [password]);
+
+  // Fetch horários
+  const fetchHorarios = useCallback(async () => {
+    if (!password) return;
+    try {
+      const res = await fetch("/api/admin/horarios", { headers: { "x-admin-password": password } });
+      if (res.ok) {
+        const j = await res.json();
+        setHorarios(j.data || []);
+      }
+    } catch { /* ignore */ }
+  }, [password]);
+
+  useEffect(() => { fetchHorarios(); }, [fetchHorarios]);
+
+  async function toggleHorario(id: string, ativo: boolean) {
+    await fetch("/api/admin/horarios", {
+      method: "PATCH",
+      headers: { "x-admin-password": password, "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ativo }),
+    });
+    setHorarios(prev => prev.map(h => h.id === id ? { ...h, ativo } : h));
+  }
+
+  async function addHorario() {
+    if (!novoHorario.horario) return;
+    const res = await fetch("/api/admin/horarios", {
+      method: "POST",
+      headers: { "x-admin-password": password, "Content-Type": "application/json" },
+      body: JSON.stringify(novoHorario),
+    });
+    if (res.ok) {
+      setNovoHorario({ tipo: "entrega", dia_semana: "seg_sex", horario: "" });
+      fetchHorarios();
+    }
+  }
+
+  async function removeHorario(id: string) {
+    await fetch(`/api/admin/horarios?id=${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-password": password },
+    });
+    setHorarios(prev => prev.filter(h => h.id !== id));
+  }
 
   async function salvar() {
     if (!password) return;
@@ -206,6 +262,66 @@ export default function ConfiguracoesPage() {
                 />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Horários de Entrega / Retirada */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-4">
+          <div>
+            <p className="font-bold text-[#1D1D1F]">🕐 Horários — Link de Compra</p>
+            <p className="text-xs text-[#86868B] mt-1">
+              Horários disponíveis no link de compra para entrega e retirada. Separados por dia da semana.
+            </p>
+          </div>
+
+          {(["entrega", "retirada"] as const).map(tipo => (
+            <div key={tipo} className="space-y-2">
+              <p className="text-sm font-bold text-[#1D1D1F] uppercase">{tipo === "entrega" ? "🚚 Entrega" : "🏬 Retirada no Escritório"}</p>
+              {(["seg_sex", "sabado"] as const).map(dia => {
+                const label = dia === "seg_sex" ? "Segunda a Sexta" : "Sábado";
+                const rows = horarios.filter(h => h.tipo === tipo && h.dia_semana === dia).sort((a, b) => a.horario.localeCompare(b.horario));
+                return (
+                  <div key={dia} className="ml-2">
+                    <p className="text-xs font-semibold text-[#86868B] mb-1">{label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rows.map(h => (
+                        <div key={h.id} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all group ${h.ativo ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-100 border-gray-200 text-gray-400 line-through"}`}>
+                          <button onClick={() => toggleHorario(h.id, !h.ativo)} title={h.ativo ? "Desativar" : "Ativar"}>
+                            {h.horario}
+                          </button>
+                          <button onClick={() => removeHorario(h.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover">✕</button>
+                        </div>
+                      ))}
+                      {rows.length === 0 && <span className="text-xs text-[#B0B0B0]">Nenhum horário</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Adicionar novo horário */}
+          <div className="border-t border-[#E8E8ED] pt-3">
+            <p className="text-xs font-semibold text-[#86868B] mb-2">Adicionar horário</p>
+            <div className="flex gap-2 items-end flex-wrap">
+              <select value={novoHorario.tipo} onChange={e => setNovoHorario(p => ({ ...p, tipo: e.target.value }))} className="px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm">
+                <option value="entrega">Entrega</option>
+                <option value="retirada">Retirada</option>
+              </select>
+              <select value={novoHorario.dia_semana} onChange={e => setNovoHorario(p => ({ ...p, dia_semana: e.target.value }))} className="px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm">
+                <option value="seg_sex">Seg-Sex</option>
+                <option value="sabado">Sábado</option>
+              </select>
+              <input
+                type="time"
+                value={novoHorario.horario}
+                onChange={e => setNovoHorario(p => ({ ...p, horario: e.target.value }))}
+                className="px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm"
+              />
+              <button onClick={addHorario} className="px-4 py-2 rounded-lg bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623]">
+                Adicionar
+              </button>
+            </div>
           </div>
         </div>
 
