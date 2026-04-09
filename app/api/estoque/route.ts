@@ -185,6 +185,8 @@ export async function GET(req: NextRequest) {
 
   let query = supabase.from("estoque").select("*").order("categoria").order("produto").range(0, 49999);
   if (categoria) query = query.eq("categoria", categoria);
+  const statusFilter = searchParams.get("status");
+  if (statusFilter) query = query.eq("status", statusFilter);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
