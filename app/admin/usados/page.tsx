@@ -354,6 +354,9 @@ export function UsadosContent() {
       if (!descByModel[modeloOriginal][cond]) descByModel[modeloOriginal][cond] = [];
       descByModel[modeloOriginal][cond].push(d);
     } else {
+      // Garantia é sempre por modelo, não aparece em gerais
+      const condLow = d.condicao.toLowerCase();
+      if (condLow === "garantia apple" || condLow === "garantia") return;
       if (!descGerais[d.condicao]) descGerais[d.condicao] = [];
       descGerais[d.condicao].push(d);
     }
