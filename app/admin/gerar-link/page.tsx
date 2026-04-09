@@ -1058,6 +1058,17 @@ export default function GerarLinkPage() {
                                 <FD label="Horário" k="horario" type="time" />
                               </div>
                             </section>
+                            {/* Forma de pagamento escolhida pelo cliente no link */}
+                            {(editDados.forma_pagamento || editDados.preco) && (
+                              <section>
+                                <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pagamento (escolhido pelo cliente)</h5>
+                                <div className="grid grid-cols-1 gap-3">
+                                  <FD label="Forma de pagamento" k="forma_pagamento" full />
+                                  <FD label="Preço" k="preco" full />
+                                </div>
+                                <p className="text-[10px] text-[#86868B] mt-1 italic">Esse texto veio do que o cliente escolheu ao preencher (parcelas, entrada, etc).</p>
+                              </section>
+                            )}
                           </>
                         )}
                       </div>
