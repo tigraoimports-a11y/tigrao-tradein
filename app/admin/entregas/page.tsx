@@ -2123,15 +2123,30 @@ export default function EntregasPage() {
                     <span className="text-[#86868B]">Pagamento: </span>
                     <span className="text-[#1D1D1F] font-medium">{e.forma_pagamento}</span>
                     {(() => {
-                      const total = Number(e.valor_total || e.valor || 0);
-                      const entrada = Number(e.entrada || 0);
-                      const parcelas = Number(e.parcelas || 0);
+                      // Prioriza colunas estruturadas; fallback pra parse do texto forma_pagamento
+                      let total = Number(e.valor_total || e.valor || 0);
+                      let entrada = Number(e.entrada || 0);
+                      let parcelas = Number(e.parcelas || 0);
+                      if (parcelas === 0) {
+                        // Tenta extrair "Nx" do texto de forma_pagamento
+                        const m = (e.forma_pagamento || "").match(/(\d+)\s*x/i);
+                        if (m) parcelas = parseInt(m[1]);
+                      }
+                      if (entrada === 0) {
+                        // Tenta extrair "Entrada R$X" ou "PIX R$X"
+                        const m = (e.forma_pagamento || "").match(/(?:Entrada\s*PIX|PIX|Entrada)\s*R?\$?\s*([\d.,]+)/i);
+                        if (m) entrada = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
+                      }
+                      if (total === 0) {
+                        const m = (e.forma_pagamento || "").match(/Total\s*R?\$?\s*([\d.,]+)/i);
+                        if (m) total = Number(m[1].replace(/\./g, "").replace(",", ".")) || 0;
+                      }
                       const naoEntrada = Math.max(0, total - entrada);
                       const valorParcela = parcelas > 0 ? naoEntrada / parcelas : 0;
-                      if (total <= 0) return null;
+                      if (total <= 0 && parcelas <= 0) return null;
                       return (
                         <div className="mt-1 pl-2 text-xs text-[#86868B] space-y-0.5">
-                          <p>Total: <strong className="text-[#1D1D1F]">R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>
+                          {total > 0 && <p>Total: <strong className="text-[#1D1D1F]">R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
                           {entrada > 0 && <p>Entrada: R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>}
                           {parcelas > 1 && valorParcela > 0 && <p>{parcelas}x de <strong className="text-[#1D1D1F]">R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></p>}
                         </div>
