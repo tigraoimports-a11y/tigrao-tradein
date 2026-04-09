@@ -62,3 +62,8 @@ ALTER TABLE encomendas ADD CONSTRAINT encomendas_status_check
 ALTER TABLE estoque ADD COLUMN IF NOT EXISTS encomenda_id UUID;
 CREATE INDEX IF NOT EXISTS idx_estoque_encomenda ON estoque(encomenda_id) WHERE encomenda_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_encomendas_estoque ON encomendas(estoque_id) WHERE estoque_id IS NOT NULL;
+
+-- Adicionar ENCOMENDA como origem válida em vendas
+ALTER TABLE vendas DROP CONSTRAINT IF EXISTS vendas_origem_check;
+ALTER TABLE vendas ADD CONSTRAINT vendas_origem_check
+  CHECK (origem IN ('ANUNCIO','RECOMPRA','INDICACAO','ATACADO','ENCOMENDA'));
