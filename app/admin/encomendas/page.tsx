@@ -1648,6 +1648,9 @@ export default function EncomendasPage() {
                     >
                       {STATUS_LABELS[enc.status] || enc.status}
                     </span>
+                    <span className={`text-xs ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>
+                      {enc.data}
+                    </span>
                     <span
                       className={`font-medium text-sm ${
                         dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"
