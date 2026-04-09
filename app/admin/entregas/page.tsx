@@ -394,13 +394,10 @@ export default function EntregasPage() {
     if (form.forma_pagamento_2 && form.valor_2) {
       formaPagDetalhada += ` + ${form.forma_pagamento_2} R$${form.valor_2}`;
     }
-    // Observação com endereço de cadastro do cliente (se diferente do de entrega)
+    // Observação — NÃO inclui mais "Endereço cadastro" (motoboy não precisa saber)
     const obsExtras: string[] = [];
     if (form.observacao) obsExtras.push(form.observacao);
     if (descontoNum > 0) obsExtras.push(`Desconto: R$ ${descontoNum}`);
-    if (form.endereco && form.endereco.trim() !== enderecoEntregaFinal.trim()) {
-      obsExtras.push(`Endereço cadastro: ${form.endereco}`);
-    }
     const res = await fetch("/api/admin/entregas", {
       method: isEdit ? "PATCH" : "POST",
       headers: apiHeaders({ "Content-Type": "application/json" }),
@@ -2085,6 +2082,16 @@ export default function EntregasPage() {
                       const regiao = e.regiao || e.bairro || "";
                       const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
                       const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
+                      // Limpa detalhes da troca: remove linha "Avaliação: R$ X" (motoboy não precisa saber o valor)
+                      const trocaTexto = e.detalhes_upgrade
+                        ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:")).join(" / ")
+                        : "";
+                      // Limpa OBS: remove "Endereço cadastro: ..." (resíduo de entregas antigas)
+                      const obsLimpa = (e.observacao || "")
+                        .split(" | ")
+                        .filter(p => !p.startsWith("Endereço cadastro:"))
+                        .join(" | ")
+                        .trim();
                       const msg = [
                         `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
                         `🛵`,
@@ -2092,11 +2099,11 @@ export default function EntregasPage() {
                         `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
                         `🍎 *PRODUTO:* ${e.produto || ""}`,
                         `‼️ *TIPO:* ${tipoLabel}`,
-                        ...(isUpgrade && e.detalhes_upgrade ? [`🔄 *PRODUTO NA TROCA:* ${e.detalhes_upgrade}`] : []),
+                        ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
                         `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor)}`,
                         `🧑 *CLIENTE:* ${e.cliente || ""}`,
                         `📞 *CONTATO:* ${e.telefone || ""}`,
-                        e.observacao ? `OBS: ${e.observacao}` : "",
+                        obsLimpa ? `OBS: ${obsLimpa}` : "",
                         `💼 Vendedor: ${e.vendedor || ""}`,
                         "________________________________",
                       ].filter(Boolean).join("\n");
