@@ -149,6 +149,7 @@ export function UsadosContent() {
   const [msg, setMsg] = useState("");
   const [novoExcluido, setNovoExcluido] = useState("");
   const [novoBateria, setNovoBateria] = useState<{ modelo: string; threshold: string; desconto: string } | null>(null);
+  const [novoGarantiaModelo, setNovoGarantiaModelo] = useState<{ modelo: string; detalhe: string; valor: string } | null>(null);
   const [showAddModelo, setShowAddModelo] = useState(false);
   const [novoModelo, setNovoModelo] = useState({ modelo: "", armazenamento: "", valor_base: "" });
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
@@ -227,6 +228,29 @@ export function UsadosContent() {
     setNovoBateria(null);
     setSaving(null);
     setMsg(`Nivel de bateria "Abaixo de ${threshold}%" adicionado!`);
+  };
+
+  const handleAddGarantiaModelo = async () => {
+    if (!novoGarantiaModelo) return;
+    const { modelo, detalhe, valor } = novoGarantiaModelo;
+    if (!detalhe.trim() || !valor.trim()) { setMsg("Preencha o período e o valor"); return; }
+    const desconto = parseFloat(valor);
+    if (isNaN(desconto)) { setMsg("Valor inválido"); return; }
+    const condicao = modelo ? `${modelo} - Garantia` : "Garantia Apple";
+    setSaving("garantia-modelo");
+    await apiPost({ action: "upsert_desconto", condicao, detalhe: detalhe.trim(), desconto });
+    setDescontos((prev) => {
+      const exists = prev.findIndex((d) => d.condicao === condicao && d.detalhe === detalhe.trim());
+      if (exists >= 0) {
+        const nv = [...prev];
+        nv[exists] = { ...nv[exists], desconto };
+        return nv;
+      }
+      return [...prev, { id: crypto.randomUUID(), condicao, detalhe: detalhe.trim(), desconto }];
+    });
+    setNovoGarantiaModelo(null);
+    setSaving(null);
+    setMsg(`Garantia "${detalhe.trim()}" = R$ ${desconto} adicionada${modelo ? ` para ${modelo}` : ""}!`);
   };
 
   const handleRemoveDesconto = async (d: DescontoCondicao) => {
@@ -723,12 +747,20 @@ export function UsadosContent() {
                 <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
                   <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
                     <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
-                    <button
-                      onClick={() => setNovoBateria({ modelo, threshold: "", desconto: "" })}
-                      className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors"
-                    >
-                      + Nivel Bateria
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setNovoBateria({ modelo, threshold: "", desconto: "" })}
+                        className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-[#E8740E]/10 text-[#E8740E] hover:bg-[#E8740E]/20 transition-colors"
+                      >
+                        + Nivel Bateria
+                      </button>
+                      <button
+                        onClick={() => setNovoGarantiaModelo({ modelo, detalhe: "", valor: "" })}
+                        className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors"
+                      >
+                        + Garantia
+                      </button>
+                    </div>
                   </div>
                   {/* Form para novo nível de bateria neste modelo */}
                   {novoBateria && novoBateria.modelo === modelo && (
@@ -741,6 +773,22 @@ export function UsadosContent() {
                       <button onClick={() => setNovoBateria(null)} className="text-xs text-[#86868B]">Cancelar</button>
                     </div>
                   )}
+                  {/* Form para garantia individual neste modelo */}
+                  {novoGarantiaModelo && novoGarantiaModelo.modelo === modelo && (
+                    <div className="px-5 py-3 bg-green-50 border-b border-green-200 flex items-center gap-3 flex-wrap">
+                      <span className="text-xs text-[#86868B]">Período:</span>
+                      <select value={novoGarantiaModelo.detalhe} onChange={(e) => setNovoGarantiaModelo({ ...novoGarantiaModelo, detalhe: e.target.value })} className="px-2 py-1 rounded-lg border border-green-400 text-sm">
+                        <option value="">— Selecionar —</option>
+                        <option value="Ate 3 meses">Até 3 meses</option>
+                        <option value="3 a 6 meses">3 a 6 meses</option>
+                        <option value="6 meses ou mais">6 meses ou mais</option>
+                      </select>
+                      <span className="text-xs text-[#86868B]">→ R$</span>
+                      <input type="number" value={novoGarantiaModelo.valor} onChange={(e) => setNovoGarantiaModelo({ ...novoGarantiaModelo, valor: e.target.value })} placeholder="200" className="w-20 px-2 py-1 rounded-lg border border-green-400 text-sm text-right" onKeyDown={(e) => e.key === "Enter" && handleAddGarantiaModelo()} />
+                      <button onClick={handleAddGarantiaModelo} disabled={saving === "garantia-modelo"} className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600">Salvar</button>
+                      <button onClick={() => setNovoGarantiaModelo(null)} className="text-xs text-[#86868B]">Cancelar</button>
+                    </div>
+                  )}
                   <div className="p-4 space-y-4">
                     {Object.entries(condicoes).map(([cond, rows]) => (
                       <div key={cond}>
@@ -749,7 +797,7 @@ export function UsadosContent() {
                           {rows.map((d) => {
                             const key = `${d.condicao}|${d.detalhe}`;
                             const isEd = editingDesc[key] !== undefined;
-                            const isBateria = cond === "Bateria";
+                            const canRemove = cond === "Bateria" || cond === "Garantia";
                             return (
                               <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm group">
                                 <span className="text-[#1D1D1F] text-xs">{d.detalhe}</span>
@@ -764,7 +812,7 @@ export function UsadosContent() {
                                     {d.desconto > 0 ? `+${fmt(d.desconto)}` : d.desconto < 0 ? `${fmt(d.desconto)}` : "R$ 0"}
                                   </span>
                                 )}
-                                {isBateria && !isEd && (
+                                {canRemove && !isEd && (
                                   <button onClick={() => handleRemoveDesconto(d)} className="text-red-400 hover:text-red-600 text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Remover">✕</button>
                                 )}
                                 </div>
