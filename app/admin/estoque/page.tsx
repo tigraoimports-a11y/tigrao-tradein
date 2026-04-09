@@ -6408,6 +6408,38 @@ export default function EstoquePage() {
                       </button>
                     ) : <p className={`text-[13px] ${mP} mt-0.5`}>Não informado</p>}
                   </div>
+                  {/* Origem da compra */}
+                  <div>
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Origem da Compra</p>
+                    {isAdmin ? (
+                      <select
+                        value={p.origem_compra || ""}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                            await apiPatch(p.id, { origem_compra: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, origem_compra: val } : x));
+                            setDetailProduct({ ...p, origem_compra: val });
+                            showSaved("origem_compra");
+                          } catch (err) { setMsg("❌ " + String(err instanceof Error ? err.message : err)); }
+                        }}
+                        className={`mt-0.5 text-[12px] font-semibold w-full px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      >
+                        <option value="">— Não definido —</option>
+                        <option value="RJ">🏙️ Rio de Janeiro</option>
+                        <option value="SAO_PAULO">🚚 São Paulo</option>
+                        <option value="PARAGUAI">🇵🇾 Paraguai</option>
+                        <option value="EUA">🇺🇸 Estados Unidos</option>
+                      </select>
+                    ) : (
+                      <p className={`text-[13px] ${mP} mt-0.5`}>
+                        {p.origem_compra === "RJ" ? "🏙️ Rio de Janeiro" :
+                         p.origem_compra === "SAO_PAULO" ? "🚚 São Paulo" :
+                         p.origem_compra === "PARAGUAI" ? "🇵🇾 Paraguai" :
+                         p.origem_compra === "EUA" ? "🇺🇸 Estados Unidos" : "—"}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (
                   <div className="mt-3">
