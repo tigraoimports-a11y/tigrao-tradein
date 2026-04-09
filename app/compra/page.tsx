@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { WHATSAPP_FORMULARIO } from "@/lib/whatsapp-config";
+import { corParaPT } from "@/lib/cor-pt";
 
 function maskCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -84,7 +85,6 @@ function CompraForm() {
   const trocaCor2Param = searchParams.get("troca_cor2") || "";
   const trocaCaixaParam = searchParams.get("troca_caixa") || "";
   const trocaCaixa2Param = searchParams.get("troca_caixa2") || "";
-  const descontoParam = searchParams.get("desconto") || "";
   const nomeParam = searchParams.get("nome") || "";
   const cpfParam = searchParams.get("cpf") || "";
   const emailParam = searchParams.get("email") || "";
@@ -114,6 +114,7 @@ function CompraForm() {
   const formaParam = pagamentoPagoStr || FORMA_MAP[formaRaw] || formaRaw;
   const parcelasParam = searchParams.get("parcelas") || "";
   const entradaPixParam = searchParams.get("entrada_pix") || "";
+  const descontoParam = parseFloat(searchParams.get("desconto") || "0") || 0;
 
   // Local de entrega (vindo do gerador de link)
   const localParam = searchParams.get("local") || "";
@@ -255,6 +256,23 @@ function CompraForm() {
     setCoresDisponiveis([...cores].sort());
   }, [produtoInput, produtoParam, catalogo]);
 
+  // Auto-detect cor embutida no nome do produto (ex: "iPhone 15 Preto Espacial")
+  useEffect(() => {
+    if (corSel || coresDisponiveis.length === 0) return;
+    const prod = produtoInput || produtoParam;
+    if (!prod) return;
+    const words = prod.split(" ");
+    for (const n of [3, 2, 1]) {
+      if (words.length < n) continue;
+      const candidate = words.slice(-n).join(" ");
+      const match = coresDisponiveis.find(c =>
+        c.toLowerCase() === candidate.toLowerCase() ||
+        corParaPT(c).toLowerCase() === candidate.toLowerCase()
+      );
+      if (match) { setCorSel(match); break; }
+    }
+  }, [coresDisponiveis, produtoInput, produtoParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const preco = precoParam ? parseInt(precoParam) : precoAuto;
 
   // Form state — aceita pre-preenchimento vindo do gerar-link
@@ -332,7 +350,7 @@ function CompraForm() {
   const [entradaPixManual, setEntradaPixManual] = useState(entradaPixParam || "");
 
   // Installment calculations
-  const descontoNum = parseFloat(descontoParam) || 0;
+  const descontoNum = parseFloat(String(descontoParam)) || 0;
   const valorBase = preco > 0 ? Math.max(preco - descontoNum - trocaNum, 0) : 0;
   const entradaPixNum = parseFloat(entradaPixManual || entradaPixParam) || 0;
   const valorParcelar = entradaPixNum > 0 ? Math.max(valorBase - entradaPixNum, 0) : valorBase;
@@ -376,7 +394,7 @@ function CompraForm() {
       : "Entrega - Residencia";
 
     // Valor base para cálculos (usa precoFinal definido acima)
-    const descontoFinal = parseFloat(descontoParam) || 0;
+    const descontoFinal = parseFloat(String(descontoParam)) || 0;
     const valorBaseFinal = Math.max(precoFinal - descontoFinal - trocaNum, 0);
     const entradaFinal = entradaPixNum || parseFloat(entradaPixParam) || 0;
     const valorParcelarFinal = entradaFinal > 0 ? Math.max(valorBaseFinal - entradaFinal, 0) : valorBaseFinal;
@@ -440,6 +458,8 @@ function CompraForm() {
       // Produto e pagamento
       `*Produto:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
       ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
+      ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
+      ...(descontoParam > 0 ? [`*Total final:* R$ ${fmt(valorBaseFinal)}`] : []),
       `*Forma de pagamento:* ${pagStr}`,
     ];
 
@@ -587,8 +607,11 @@ function CompraForm() {
                   <div className="mt-2 space-y-1">
                     <p className="text-[#86868B] text-xs uppercase tracking-wider">Preco de venda</p>
                     <p className="text-[#E8740E] font-bold text-2xl">R$ {fmt(preco)}</p>
-                    {trocaNum > 0 && (
-                      <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>
+                    {descontoParam > 0 && (
+                      <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>
+                    )}
+                    {(trocaNum > 0 || descontoParam > 0) && (
+                      <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>
                     )}
                   </div>
                 )}
@@ -638,7 +661,8 @@ function CompraForm() {
                 {preco > 0 ? (
                   <>
                     <p className="text-[#E8740E] font-bold text-xl">R$ {fmt(preco)}</p>
-                    {trocaNum > 0 && <p className="text-green-600 font-semibold text-sm">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
+                    {descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm">Desconto: - R$ {fmt(descontoParam)}</p>}
+                    {(trocaNum > 0 || descontoParam > 0) && <p className="text-green-600 font-semibold text-sm">{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
                   </>
                 ) : (
                   <div>
@@ -708,7 +732,8 @@ function CompraForm() {
               )}
             </div>
           )}
-          {preco > 0 && <p className="text-[#E8740E] font-bold text-lg pt-2 border-t border-green-200">Diferenca a pagar: R$ {fmt(valorBase)}</p>}
+          {preco > 0 && descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm pt-2 border-t border-green-200">Desconto: - R$ {fmt(descontoParam)}</p>}
+          {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
         </div>
       )}
 

@@ -20,12 +20,17 @@ interface SimulacaoRow {
   modelo_usado: string;
   storage_usado: string;
   cor_usado?: string | null;
-  cor_usado2?: string | null;
   avaliacao_usado: number;
   diferenca: number;
   status: "GOSTEI" | "SAIR";
   forma_pagamento: string | null;
   condicao_linhas: string[] | null;
+  // 2º aparelho na troca
+  modelo_usado2?: string | null;
+  storage_usado2?: string | null;
+  cor_usado2?: string | null;
+  avaliacao_usado2?: number | null;
+  condicao_linhas2?: string[] | null;
   contatado: boolean | null;
   vendedor: string | null;
   follow_up_enviado: boolean | null;
@@ -113,6 +118,9 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [modalRow, setModalRow] = useState<SimulacaoRow | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState<Record<string, string>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -829,19 +837,100 @@ export default function AdminPage() {
                 <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
               </div>
 
-              {/* Used device */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca</h3>
-                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
-                {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
-                  <div className="text-xs text-[#6E6E73] space-y-0.5">
-                    {modalRow.condicao_linhas.map((linha, i) => (
-                      <p key={i}>{linha}</p>
-                    ))}
+              {/* Used device(s) */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                    {modalRow.modelo_usado2 ? "Aparelho na Troca (1º)" : "Aparelho na Troca"}
+                  </h3>
+                  <button onClick={() => {
+                    if (editMode) { setEditMode(false); return; }
+                    setEditData({
+                      modelo_usado: modalRow.modelo_usado || "",
+                      storage_usado: modalRow.storage_usado || "",
+                      cor_usado: modalRow.cor_usado || "",
+                      avaliacao_usado: String(modalRow.avaliacao_usado || 0),
+                      modelo_usado2: modalRow.modelo_usado2 || "",
+                      storage_usado2: modalRow.storage_usado2 || "",
+                      cor_usado2: modalRow.cor_usado2 || "",
+                      avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
+                    });
+                    setEditMode(true);
+                  }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
+                    {editMode ? "Cancelar" : "Editar"}
+                  </button>
+                </div>
+                {editMode ? (
+                  <div className="space-y-2">
+                    <input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} placeholder="Modelo" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                    <div className="flex gap-2">
+                      <input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} placeholder="Storage" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                      <input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} placeholder="Cor" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                    </div>
+                    <input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} placeholder="Avaliação (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                    {modalRow.modelo_usado2 && (
+                      <>
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider pt-2 border-t border-[#E5E5EA]">2º Aparelho</p>
+                        <input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} placeholder="Modelo 2" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                        <div className="flex gap-2">
+                          <input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} placeholder="Storage 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                          <input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} placeholder="Cor 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                        </div>
+                        <input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} placeholder="Avaliação 2 (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                      </>
+                    )}
+                    <button
+                      disabled={savingEdit}
+                      onClick={async () => {
+                        setSavingEdit(true);
+                        try {
+                          const aval1 = Number(editData.avaliacao_usado) || 0;
+                          const aval2 = Number(editData.avaliacao_usado2) || 0;
+                          const dif = modalRow.preco_novo - aval1 - aval2;
+                          const res = await fetch("/api/admin/simulacoes", {
+                            method: "PATCH",
+                            headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, diferenca: dif }),
+                          });
+                          if (res.ok) {
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setEditMode(false);
+                            fetchData(password);
+                          } else { alert("Erro ao salvar"); }
+                        } finally { setSavingEdit(false); }
+                      }}
+                      className="w-full py-1.5 bg-[#0071E3] text-white text-xs font-semibold rounded-lg hover:bg-[#0062C4] disabled:opacity-50"
+                    >
+                      {savingEdit ? "Salvando..." : "Salvar alterações"}
+                    </button>
                   </div>
+                ) : (
+                  <>
+                    <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
+                    {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
+                      <div className="text-xs text-[#6E6E73] space-y-0.5">
+                        {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
+                      </div>
+                    )}
+                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
+                  </>
                 )}
-                <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
               </div>
+              {/* 2nd used device */}
+              {modalRow.modelo_usado2 && !editMode && (
+                <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca (2º)</h3>
+                  <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado2} {modalRow.storage_usado2 || ""}{modalRow.cor_usado2 ? ` — ${corParaPT(modalRow.cor_usado2)}` : ""}</p>
+                  {modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0 && (
+                    <div className="text-xs text-[#6E6E73] space-y-0.5">
+                      {modalRow.condicao_linhas2.map((linha, i) => <p key={i}>{linha}</p>)}
+                    </div>
+                  )}
+                  {(modalRow.avaliacao_usado2 ?? 0) > 0 && (
+                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado2!)}</p>
+                  )}
+                </div>
+              )}
 
               {/* Financial summary */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
@@ -891,6 +980,7 @@ export default function AdminPage() {
                     const cond = parseCondicao(modalRow.condicao_linhas);
                     const obs = buildTrocaObs(modalRow.condicao_linhas);
                     const params = new URLSearchParams({
+                      sim_id: modalRow.id || "",
                       produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
                       preco: String(modalRow.preco_novo || ""),
                       cliente_nome: modalRow.nome || "",
@@ -898,12 +988,18 @@ export default function AdminPage() {
                       troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
                       troca_valor: String(modalRow.avaliacao_usado || ""),
                       troca_cor: modalRow.cor_usado || "",
-                      troca_bateria: cond.bateria,
-                      troca_marcas_uso: cond.marcasUso,
-                      troca_pecas_trocadas: cond.pecasTrocadas,
-                      troca_caixa_original: cond.caixaOriginal,
-                      troca_observacao: obs,
+                      troca_condicao: Array.isArray(modalRow.condicao_linhas) ? modalRow.condicao_linhas.join(" | ") : "",
+                      vendedor: modalRow.vendedor || "",
                     });
+                    // Device 2
+                    if (modalRow.modelo_usado2) {
+                      params.set("troca_produto2", `${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}`.trim());
+                      if (modalRow.avaliacao_usado2) params.set("troca_valor2", String(modalRow.avaliacao_usado2));
+                      if (modalRow.cor_usado2) params.set("troca_cor2", modalRow.cor_usado2);
+                      if (Array.isArray(modalRow.condicao_linhas2) && modalRow.condicao_linhas2.length > 0) params.set("troca_condicao2", modalRow.condicao_linhas2.join(" | "));
+                    }
+                    // Limpa params vazios
+                    for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k); }
                     window.open(`/admin/gerar-link?${params.toString()}`, "_blank");
                   }}
                   className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#0071E3] hover:bg-[#0062C4] text-white text-sm font-semibold transition-colors text-center"

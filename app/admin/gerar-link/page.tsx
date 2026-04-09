@@ -202,6 +202,8 @@ export default function GerarLinkPage() {
   const [trocaProduto, setTrocaProduto] = useState("");
   const [trocaValor, setTrocaValor] = useState("");
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
+  const [trocaCondicao, setTrocaCondicao] = useState("");
+  const [trocaCor, setTrocaCor] = useState("");
   const [trocaProduto2, setTrocaProduto2] = useState("");
   const [trocaValor2, setTrocaValor2] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
@@ -302,13 +304,18 @@ export default function GerarLinkPage() {
     produtos_extras: string[] | null;
     cor: string | null;
     valor: number;
+    desconto: number;
     forma_pagamento: string | null;
     parcelas: string | null;
     entrada: number;
     troca_produto: string | null;
     troca_valor: number;
+    troca_condicao: string | null;
+    troca_cor: string | null;
     troca_produto2: string | null;
     troca_valor2: number;
+    troca_condicao2: string | null;
+    troca_cor2: string | null;
     vendedor: string | null;
     operador: string | null;
     status: string | null;
@@ -493,11 +500,14 @@ export default function GerarLinkPage() {
           }) : null,
           cor: corENCanon || null,
           valor: Number(rawPreco) || 0,
+          desconto: descontoNum || 0,
           forma_pagamento: forma || null,
           parcelas: parcelas || null,
           entrada: Number(rawEntrada) || 0,
           troca_produto: trocaProduto || null,
           troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+          troca_condicao: trocaCondicao || null,
+          troca_cor: trocaCor || null,
           troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
           troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
           vendedor: vendedorNome || null,
@@ -544,6 +554,9 @@ export default function GerarLinkPage() {
     if (l.cor) setCorSel(l.cor);
     if (l.valor) setPreco(Number(l.valor).toLocaleString("pt-BR"));
     if (l.forma_pagamento) setForma(l.forma_pagamento);
+    if (l.parcelas) setParcelas(String(l.parcelas));
+    if (l.entrada) setEntradaPix(Number(l.entrada).toLocaleString("pt-BR"));
+    if (l.desconto) setDesconto(Number(l.desconto).toLocaleString("pt-BR"));
     if (l.vendedor) setVendedorNome(l.vendedor);
     if (l.cliente_nome || l.cliente_telefone || l.cliente_cpf) {
       setIncluirDadosCliente(true);
@@ -555,6 +568,8 @@ export default function GerarLinkPage() {
       setTemTroca(true);
       setTrocaProduto(l.troca_produto);
       if (l.troca_valor) setTrocaValor(Number(l.troca_valor).toLocaleString("pt-BR"));
+      if (l.troca_condicao) setTrocaCondicao(l.troca_condicao);
+      if (l.troca_cor) setTrocaCor(l.troca_cor);
     }
     setAba("novo");
   }
@@ -574,12 +589,35 @@ export default function GerarLinkPage() {
     const corQp = qp.get("cor");
     if (corQp) setCorSel(corQp.toUpperCase());
     const trocaProd = qp.get("troca_produto");
-    if (trocaProd) setTrocaProduto(trocaProd);
+    if (trocaProd) { setTemTroca(true); setTrocaProduto(trocaProd); }
     const trocaVal = qp.get("troca_valor");
     if (trocaVal) {
       const n = Math.round(parseFloat(trocaVal));
       if (!isNaN(n) && n > 0) setTrocaValor(n.toLocaleString("pt-BR"));
     }
+    const trocaCorQp = qp.get("troca_cor");
+    if (trocaCorQp) setTrocaCor(trocaCorQp);
+    const trocaCondQp = qp.get("troca_condicao");
+    if (trocaCondQp) setTrocaCondicao(trocaCondQp);
+    // Dados do cliente vindos de simulação
+    const cliNomeQp = qp.get("cliente_nome");
+    if (cliNomeQp) { setIncluirDadosCliente(true); setCliNome(cliNomeQp); }
+    const cliTelQp = qp.get("cliente_whatsapp") || qp.get("cliente_telefone");
+    if (cliTelQp) setCliTelefone(cliTelQp);
+    const vendedorQp = qp.get("vendedor");
+    if (vendedorQp) setVendedorNome(vendedorQp);
+    const simIdQp = qp.get("sim_id");
+    if (simIdQp) setSimulacaoId(simIdQp);
+    // Device 2
+    const trocaProd2Qp = qp.get("troca_produto2");
+    if (trocaProd2Qp) { setTemSegundaTroca(true); setTrocaProduto2(trocaProd2Qp); }
+    const trocaVal2Qp = qp.get("troca_valor2");
+    if (trocaVal2Qp) {
+      const n = Math.round(parseFloat(trocaVal2Qp));
+      if (!isNaN(n) && n > 0) setTrocaValor2(n.toLocaleString("pt-BR"));
+    }
+    // Modo manual quando vem de simulação
+    if (qp.get("produto")) setProdutoManual(true);
   }, []);
 
   const formatPreco = (raw: string) => {
@@ -726,6 +764,8 @@ export default function GerarLinkPage() {
     if (horario) shortData.h = horario;
     if (dataEntrega) shortData.dt = dataEntrega;
     if (trocaProduto) shortData.tp = trocaProduto;
+    if (trocaCondicao) shortData.tcd = trocaCondicao;
+    if (trocaCor) shortData.tc = trocaCor;
     const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
     if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
     if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
@@ -776,11 +816,14 @@ export default function GerarLinkPage() {
               produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => aplicarCorExtra(nome, i + 1)) : null,
               cor: corENCanon || null,
               valor: Number(rawPreco) || 0,
+              desconto: descontoNum || 0,
               forma_pagamento: forma || null,
               parcelas: parcelas || null,
               entrada: Number(rawEntrada) || 0,
               troca_produto: trocaProduto || null,
               troca_valor: Number(trocaValor.replace(/\./g, "").replace(",", ".")) || 0,
+              troca_condicao: trocaCondicao || null,
+              troca_cor: trocaCor || null,
               troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
               troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
               vendedor: vendedorNome || null,
@@ -1269,7 +1312,10 @@ export default function GerarLinkPage() {
                       </p>
                     )}
                     {l.tipo === "TROCA" && l.troca_produto && (
-                      <p className="text-xs text-purple-700 mt-1">🔄 Troca: {l.troca_produto}{l.troca_valor ? ` — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}` : ""}</p>
+                      <>
+                        <p className="text-xs text-purple-700 mt-1">🔄 Troca: {l.troca_produto}{l.troca_cor ? ` ${l.troca_cor}` : ""}{l.troca_valor ? ` — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}` : ""}</p>
+                        {l.troca_condicao && <p className="text-[10px] text-purple-500 mt-0.5">{l.troca_condicao}</p>}
+                      </>
                     )}
                     <p className="text-[10px] text-[#86868B] font-mono mt-1">{l.url_curta || `/c/${l.short_code}`}</p>
                   </div>
@@ -1568,7 +1614,7 @@ export default function GerarLinkPage() {
             <input
               type="checkbox"
               checked={temTroca}
-              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); } }}
+              onChange={(e) => { setTemTroca(e.target.checked); if (!e.target.checked) { setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor(""); setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); } }}
               className="w-4 h-4 rounded accent-[#E8740E]"
             />
             <span className="text-sm font-semibold text-[#1D1D1F]">Produto na troca</span>
@@ -1585,6 +1631,17 @@ export default function GerarLinkPage() {
                   className={inputCls + " resize-none"}
                 />
               </div>
+              {trocaCondicao && (
+                <div className={`p-2.5 rounded-lg text-xs ${dm ? "bg-purple-900/30 text-purple-300" : "bg-purple-50 text-purple-700"}`}>
+                  <span className="font-semibold">Condição:</span> {trocaCondicao}
+                </div>
+              )}
+              {trocaCor && (
+                <div className="flex items-center gap-2">
+                  <label className={labelCls + " mb-0"}>Cor do usado:</label>
+                  <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{trocaCor}</span>
+                </div>
+              )}
               <div>
                 <label className={labelCls}>Valor de Avaliacao do {temSegundaTroca ? "1º " : ""}Usado (R$)</label>
                 <input
