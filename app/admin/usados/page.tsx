@@ -114,6 +114,13 @@ const DEFAULT_EXCLUIDOS = [
   "iPhone 12 Mini", "iPhone 13 Mini", "iPhone SE",
 ];
 
+const DEVICE_CATS = [
+  { key: "iphone", label: "iPhones", prefix: "iPhone" },
+  { key: "ipad", label: "iPads", prefix: "iPad" },
+  { key: "macbook", label: "MacBooks", prefix: "Mac" },
+  { key: "watch", label: "Apple Watch", prefix: "Apple Watch" },
+];
+
 export function UsadosContent() {
   const { password, user } = useAdmin();
   const [valores, setValores] = useState<ValorUsado[]>([]);
@@ -129,6 +136,8 @@ export function UsadosContent() {
   const [showAddModelo, setShowAddModelo] = useState(false);
   const [novoModelo, setNovoModelo] = useState({ modelo: "", armazenamento: "", valor_base: "" });
   const [tab, setTab] = useState<"valores" | "descontos" | "excluidos">("valores");
+  const [catFilter, setCatFilter] = useState("iphone");
+  const [copyFrom, setCopyFrom] = useState<string | null>(null); // modelo de origem ao copiar descontos
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -267,21 +276,27 @@ export function UsadosContent() {
 
   const inputCls = "w-24 px-2 py-1.5 rounded-lg border border-[#0071E3] bg-white text-[#1D1D1F] text-sm focus:outline-none";
 
-  // Agrupar valores por modelo
+  // Categoria selecionada
+  const catPrefix = DEVICE_CATS.find(c => c.key === catFilter)?.prefix || "iPhone";
+
+  // Agrupar valores por modelo — filtrado pela categoria
   const grouped: Record<string, ValorUsado[]> = {};
-  valores.forEach((v) => {
+  valores.filter(v => v.modelo.startsWith(catPrefix)).forEach((v) => {
     if (!grouped[v.modelo]) grouped[v.modelo] = [];
     grouped[v.modelo].push(v);
   });
 
-  // Agrupar descontos: separar gerais vs por modelo
-  // Descontos por modelo têm condicao no formato "iPhone XX - Condição"
+  // Set de modelos conhecidos (pra validar o lado esquerdo do " - " nos descontos)
+  const modelosConhecidos = new Set(valores.map(v => v.modelo));
+
+  // Agrupar descontos: separar gerais vs por modelo (regex genérica — funciona p/ qualquer categoria)
   const descByModel: Record<string, Record<string, DescontoCondicao[]>> = {};
   const descGerais: Record<string, DescontoCondicao[]> = {};
 
   descontos.forEach((d) => {
-    const match = d.condicao.match(/^(iPhone .+?) - (.+)$/);
-    if (match) {
+    // Formato: "iPhone 16 Pro - Bateria" ou "MacBook Air M2 - Riscos na tela"
+    const match = d.condicao.match(/^(.+?) - (.+)$/);
+    if (match && modelosConhecidos.has(match[1])) {
       const modelo = match[1];
       const cond = match[2];
       if (!descByModel[modelo]) descByModel[modelo] = {};
@@ -292,6 +307,40 @@ export function UsadosContent() {
       descGerais[d.condicao].push(d);
     }
   });
+
+  // Filtra descontos por modelo conforme a categoria selecionada
+  const descByModelFiltered = Object.fromEntries(
+    Object.entries(descByModel).filter(([modelo]) => modelo.startsWith(catPrefix))
+  );
+
+  // Modelos na Valores Base que NÃO têm descontos específicos (pra oferecer "Copiar de...")
+  const modelosSemDesconto = Object.keys(grouped).filter(m => !descByModel[m]);
+  // Modelos COM desconto na mesma categoria (pra servir de origem da cópia)
+  const modelosComDesconto = Object.keys(descByModel).filter(m => m.startsWith(catPrefix));
+
+  const handleCopyDescontos = async (destModelo: string, origemModelo: string) => {
+    if (!descByModel[origemModelo]) return;
+    setSaving("copy-desc");
+    const promises: Promise<Response>[] = [];
+    for (const [cond, rows] of Object.entries(descByModel[origemModelo])) {
+      for (const d of rows) {
+        promises.push(apiPost({
+          action: "upsert_desconto",
+          condicao: `${destModelo} - ${cond}`,
+          detalhe: d.detalhe,
+          desconto: d.desconto,
+        }));
+      }
+    }
+    await Promise.all(promises);
+    setSaving(null);
+    setMsg(`Descontos de "${origemModelo}" copiados para "${destModelo}"!`);
+    setCopyFrom(null);
+    fetchData();
+  };
+
+  // Excluidos filtrados por categoria
+  const excluidosFiltrados = excluidos.filter(m => m.startsWith(catPrefix));
 
   return (
     <div className="space-y-6">
@@ -374,13 +423,33 @@ export function UsadosContent() {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Category tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {DEVICE_CATS.map(c => {
+          const count = valores.filter(v => v.modelo.startsWith(c.prefix)).length;
+          return (
+            <button key={c.key} onClick={() => setCatFilter(c.key)}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${catFilter === c.key ? "bg-[#1D1D1F] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#1D1D1F]"}`}>
+              {c.label} <span className="opacity-60 ml-1">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sub-tabs: Valores Base / Descontos / Excluidos */}
       <div className="flex gap-2">
-        {(["valores", "descontos", "excluidos"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "valores" ? `Valores Base (${valores.length})` : t === "descontos" ? `Descontos (${descontos.length})` : `Excluidos (${excluidos.length})`}
-          </button>
-        ))}
+        {(["valores", "descontos", "excluidos"] as const).map((t) => {
+          const countMap = {
+            valores: Object.values(grouped).reduce((s, arr) => s + arr.length, 0),
+            descontos: descontos.length,
+            excluidos: excluidosFiltrados.length,
+          };
+          return (
+            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${tab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
+              {t === "valores" ? `Valores Base (${countMap.valores})` : t === "descontos" ? `Descontos (${countMap.descontos})` : `Excluidos (${countMap.excluidos})`}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -518,8 +587,35 @@ export function UsadosContent() {
                 </div>
               )}
 
-              {/* Descontos por modelo — 1 card por iPhone */}
-              {Object.entries(descByModel).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, condicoes]) => (
+              {/* Modelos SEM desconto específico — oferecer "Copiar de..." */}
+              {modelosSemDesconto.filter(m => m.startsWith(catPrefix)).length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                  <p className="text-xs font-bold text-amber-700 uppercase">⚠️ Modelos sem descontos específicos</p>
+                  <div className="flex flex-wrap gap-2">
+                    {modelosSemDesconto.filter(m => m.startsWith(catPrefix)).map(m => (
+                      <div key={m} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-amber-200 text-sm">
+                        <span className="text-[#1D1D1F] font-medium">{m}</span>
+                        {copyFrom === m ? (
+                          <select
+                            autoFocus
+                            onChange={(e) => { if (e.target.value) handleCopyDescontos(m, e.target.value); }}
+                            onBlur={() => setCopyFrom(null)}
+                            className="text-xs border border-[#E8740E] rounded px-2 py-1"
+                          >
+                            <option value="">Copiar de...</option>
+                            {modelosComDesconto.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : (
+                          <button onClick={() => setCopyFrom(m)} className="text-[10px] text-[#E8740E] font-semibold hover:underline">Copiar descontos</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Descontos por modelo — filtrado pela categoria */}
+              {Object.entries(descByModelFiltered).sort(([a], [b]) => a.localeCompare(b)).map(([modelo, condicoes]) => (
                 <div key={modelo} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
                   <div className="px-5 py-3 bg-[#F5F5F7] border-b border-[#D2D2D7] flex items-center justify-between">
                     <h3 className="font-semibold text-[#1D1D1F]">{modelo}</h3>
@@ -586,7 +682,7 @@ export function UsadosContent() {
           <p className="text-sm text-[#86868B]">Modelos que NAO sao aceitos no trade-in:</p>
 
           <div className="flex gap-2 flex-wrap">
-            {excluidos.map((m) => (
+            {excluidosFiltrados.map((m) => (
               <span key={m} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
                 {m}
                 <button onClick={async () => {
