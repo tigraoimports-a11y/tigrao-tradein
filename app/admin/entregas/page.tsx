@@ -122,7 +122,7 @@ function formatPagamentoDisplay(
   const linhas: string[] = [fp];
   if (entrada > 0) linhas.push(`   • Entrada PIX: ${fmtBRL(entrada)}`);
   if (parcelas > 1 && valorParcela > 0) {
-    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)}${taxaPct > 0 ? ` (taxa ${taxaPct}% inclusa)` : ""}`);
+    linhas.push(`   • ${parcelas}x de ${fmtBRL(valorParcela)}`);
   }
   if (total > 0) linhas.push(`   • Total: ${fmtBRL(totalFinal)}`);
   else if (valor != null) linhas.push(`   • ${fmtBRL(Number(valor))}`);
@@ -1627,55 +1627,94 @@ export default function EntregasPage() {
         </button>
       </div>
 
-      {modoSelecao && entregasSelecionadas.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
-          <span className="text-sm font-semibold text-blue-700">{entregasSelecionadas.size} selecionada{entregasSelecionadas.size > 1 ? "s" : ""}</span>
-          <button
-            onClick={async () => {
-              if (!confirm(`Finalizar ${entregasSelecionadas.size} entregas?`)) return;
-              const ids = Array.from(entregasSelecionadas);
-              for (const id of ids) {
-                await fetch("/api/admin/entregas", {
-                  method: "PATCH",
-                  headers: apiHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({ id, finalizada: true, status: "ENTREGUE" }),
-                });
-              }
-              setEntregasSelecionadas(new Set());
-              setModoSelecao(false);
-              fetchEntregas();
-            }}
-            className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
-          >
-            ✅ Finalizar selecionadas
-          </button>
-          <button
-            onClick={async () => {
-              if (!confirm(`Marcar comprovante lançado em ${entregasSelecionadas.size} entregas?`)) return;
-              const ids = Array.from(entregasSelecionadas);
-              for (const id of ids) {
-                await fetch("/api/admin/entregas", {
-                  method: "PATCH",
-                  headers: apiHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify({ id, comprovante_lancado: true }),
-                });
-              }
-              setEntregasSelecionadas(new Set());
-              setModoSelecao(false);
-              fetchEntregas();
-            }}
-            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
-          >
-            🧾 Marcar comprovante
-          </button>
-          <button
-            onClick={() => setEntregasSelecionadas(new Set())}
-            className="ml-auto text-xs text-blue-700 hover:underline"
-          >
-            Limpar seleção
-          </button>
-        </div>
-      )}
+      {modoSelecao && (() => {
+        // Calcula entregas visíveis na view atual (para "Selecionar todas")
+        const aplicaFiltroBia = (arr: Entrega[]) => arr.filter((e) => {
+          if (filtroBia === "finalizada") return e.finalizada === true;
+          if (filtroBia === "pendentes_final") return e.finalizada !== true;
+          if (filtroBia === "comprovante") return e.comprovante_lancado === true;
+          if (filtroBia === "sem_comprovante") return e.comprovante_lancado !== true;
+          return true;
+        });
+        const visiveis = viewMode === "dia"
+          ? aplicaFiltroBia(entregas.filter((e) => e.data_entrega === viewDate))
+          : aplicaFiltroBia(entregas.filter((e) => e.data_entrega >= from && e.data_entrega <= to));
+        const todosMarcados = visiveis.length > 0 && visiveis.every(e => entregasSelecionadas.has(e.id));
+        const toggleTodas = () => {
+          if (todosMarcados) setEntregasSelecionadas(new Set());
+          else setEntregasSelecionadas(new Set(visiveis.map(e => e.id)));
+        };
+        const bulkPatch = async (body: Record<string, unknown>, confirmMsg: string) => {
+          if (entregasSelecionadas.size === 0) { alert("Nenhuma entrega selecionada"); return; }
+          if (!confirm(confirmMsg)) return;
+          const ids = Array.from(entregasSelecionadas);
+          for (const id of ids) {
+            await fetch("/api/admin/entregas", {
+              method: "PATCH",
+              headers: apiHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ id, ...body }),
+            });
+          }
+          setEntregasSelecionadas(new Set());
+          setModoSelecao(false);
+          fetchEntregas();
+        };
+        const selCount = entregasSelecionadas.size;
+        return (
+          <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border ${dm ? "bg-blue-900/20 border-blue-600/40" : "bg-blue-50 border-blue-200"}`}>
+            <button
+              onClick={toggleTodas}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${todosMarcados ? "bg-blue-500 text-white" : dm ? "bg-[#2C2C2E] text-blue-300 border border-blue-600/40" : "bg-white border border-blue-300 text-blue-700"} hover:bg-blue-600 hover:text-white`}
+            >
+              {todosMarcados ? "☑ Desmarcar todas" : `☐ Selecionar todas (${visiveis.length})`}
+            </button>
+            <span className={`text-sm font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>
+              {selCount} selecionada{selCount !== 1 ? "s" : ""}
+            </span>
+            {selCount > 0 && (<>
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <button
+                onClick={() => bulkPatch({ finalizada: true, status: "ENTREGUE" }, `Finalizar ${selCount} entregas?`)}
+                className="px-3 py-1 rounded-lg bg-green-500 text-white text-xs font-bold hover:bg-green-600"
+              >✅ Finalizar</button>
+              <button
+                onClick={() => bulkPatch({ comprovante_lancado: true }, `Marcar comprovante em ${selCount} entregas?`)}
+                className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600"
+              >🧾 Comprovante</button>
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <span className={`text-[11px] font-semibold uppercase ${dm ? "text-blue-300" : "text-blue-700"}`}>Motoboy:</span>
+              {([
+                { value: "IGOR", label: "Igor", emoji: "🛵" },
+                { value: "LEANDRO", label: "Leandro", emoji: "🛵" },
+                { value: "RETIRADA", label: "Retirada", emoji: "🏬" },
+                { value: "CORREIOS", label: "Correios", emoji: "📦" },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => bulkPatch({ entregador: opt.value }, `Atribuir ${opt.label} a ${selCount} entregas?`)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
+                >{opt.emoji} {opt.label}</button>
+              ))}
+              <div className="h-5 w-px bg-blue-300/50 mx-1" />
+              <span className={`text-[11px] font-semibold uppercase ${dm ? "text-blue-300" : "text-blue-700"}`}>Status:</span>
+              {(["PENDENTE","SAIU","ENTREGUE","CANCELADA"] as const).map(st => {
+                const c = STATUS_CONFIG[st];
+                return (
+                  <button
+                    key={st}
+                    onClick={() => bulkPatch({ status: st }, `Mudar status de ${selCount} entregas para ${c.label}?`)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F] hover:border-[#E8740E]"}`}
+                  >{c.icon} {c.label}</button>
+                );
+              })}
+              <button
+                onClick={() => setEntregasSelecionadas(new Set())}
+                className={`ml-auto text-xs hover:underline ${dm ? "text-blue-300" : "text-blue-700"}`}
+              >Limpar seleção</button>
+            </>)}
+          </div>
+        );
+      })()}
 
       {/* Navegação de modo (Dia / Semana) */}
       {!loading && (
@@ -1785,6 +1824,11 @@ export default function EntregasPage() {
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
+                  {modoSelecao && (
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded border-2 ${isSel ? "bg-blue-500 border-blue-500 text-white" : dm ? "border-[#636366] bg-transparent" : "border-[#D2D2D7] bg-white"}`}>
+                      {isSel && <span className="text-[10px] leading-none">✓</span>}
+                    </span>
+                  )}
                   <span>{sc.icon}</span>
                   {e.horario && <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
                 </div>

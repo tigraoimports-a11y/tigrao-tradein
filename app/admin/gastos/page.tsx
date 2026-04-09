@@ -575,13 +575,22 @@ export default function GastosPage() {
     return result;
   }, [grupos, filtroMes, filtroCategoria, categoriasExcluidas]);
   const shiftMes = (delta: number) => setFiltroMes(prev => {
-    const [y, m] = prev.split("-").map(Number);
+    // Se não tem filtro (Todos), começa do mês atual
+    const hoje = new Date();
+    let y: number, m: number;
+    if (prev && /^\d{4}-\d{2}$/.test(prev)) {
+      [y, m] = prev.split("-").map(Number);
+    } else {
+      y = hoje.getFullYear();
+      m = hoje.getMonth() + 1;
+    }
     const d = new Date(y, m - 1 + delta, 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
   const mesLabel = useMemo(() => {
-    if (!filtroMes) return "Todos";
+    if (!filtroMes || !/^\d{4}-\d{2}$/.test(filtroMes)) return "Todos";
     const [y, m] = filtroMes.split("-").map(Number);
+    if (!y || !m || m < 1 || m > 12) return "Todos";
     const nomes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     return `${nomes[m - 1]} ${y}`;
   }, [filtroMes]);
