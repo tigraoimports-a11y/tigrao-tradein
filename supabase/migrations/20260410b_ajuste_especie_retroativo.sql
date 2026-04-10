@@ -2,7 +2,7 @@
 -- AJUSTE RETROATIVO: Vendas em espécie + Depósitos
 -- ============================================================
 --
--- Problema: vendas em dinheiro não estavam com forma=ESPECIE/banco=ESPECIE
+-- Problema: vendas em dinheiro não estavam com forma=DINHEIRO/banco=ESPECIE
 -- e depósitos estavam como tipo=SAIDA ao invés de TRANSFERENCIA.
 --
 -- Este script corrige os registros existentes.

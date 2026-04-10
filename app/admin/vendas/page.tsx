@@ -22,8 +22,8 @@ export default function VendasPage() {
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const VENDAS_TABS = ["nova", "andamento", "hoje", "finalizadas"] as const;
-  const [tab, setTab] = useTabParam<"nova" | "andamento" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
+  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,9 @@ export default function VendasPage() {
   const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
+  const [vendaProgramada, setVendaProgramada] = useState(false);
+  const [programadaJaPago, setProgramadaJaPago] = useState(false);
+  const [dataProgramada, setDataProgramada] = useState("");
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
@@ -999,7 +1002,8 @@ export default function VendasPage() {
       troca_ciclos2: prodFields.troca_ciclos2 || null,
       troca_garantia2: prodFields.troca_garantia2 || null,
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
-      status_pagamento: "AGUARDANDO",
+      status_pagamento: vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA") : "AGUARDANDO",
+      data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
@@ -1509,9 +1513,11 @@ export default function VendasPage() {
       setEstoqueId("");
       setProdutoManual(false);
       setShowSegundaTroca(false); setTrocaEnabled(false);
+      setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
       localStorage.removeItem("tigrao_venda_draft");
+      const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
@@ -1837,6 +1843,7 @@ export default function VendasPage() {
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
+            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hojeStr && v.status_pagamento !== "CANCELADO")).length, color: "bg-purple-500", visible: podeVerAndamento },
           ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
@@ -1845,7 +1852,7 @@ export default function VendasPage() {
         </div>
 
         {/* Filtros — só no histórico e em andamento */}
-        {(tab === "andamento" || tab === "finalizadas") && (
+        {(tab === "andamento" || tab === "programadas" || tab === "hoje" || tab === "finalizadas") && (
           <div className="flex gap-1.5 items-center ml-auto flex-wrap">
             <input
               type="text"
@@ -3455,13 +3462,61 @@ export default function VendasPage() {
             );
           })()}
 
+          {/* Toggle Programar Venda */}
+          {!editandoVendaId && (
+            <div className={`p-3 rounded-xl border space-y-3 ${vendaProgramada ? (dm ? "border-purple-500 bg-purple-900/20" : "border-purple-400 bg-purple-50") : dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={vendaProgramada}
+                  onChange={(e) => {
+                    setVendaProgramada(e.target.checked);
+                    if (!e.target.checked) { setProgramadaJaPago(false); setDataProgramada(""); }
+                    else {
+                      // Default: amanhã
+                      const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+                      setDataProgramada(amanha.toISOString().split("T")[0]);
+                    }
+                  }}
+                  className="w-4 h-4 rounded accent-purple-500"
+                />
+                <span className={`text-sm font-semibold ${vendaProgramada ? (dm ? "text-purple-300" : "text-purple-700") : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  📅 Programar venda
+                </span>
+              </label>
+              {vendaProgramada && (
+                <div className="space-y-2 pl-6">
+                  <div className="flex gap-3 items-center">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={!programadaJaPago} onChange={() => setProgramadaJaPago(false)} className="accent-purple-500" />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>⏳ Aguardando pagamento</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={programadaJaPago} onChange={() => setProgramadaJaPago(true)} className="accent-green-500" />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✅ Já pago — entrega futura</span>
+                    </label>
+                  </div>
+                  <div className="flex gap-3 items-center">
+                    <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data programada:</span>
+                    <input
+                      type="date"
+                      value={dataProgramada}
+                      onChange={(e) => setDataProgramada(e.target.value)}
+                      className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
             >
-              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -3483,6 +3538,8 @@ export default function VendasPage() {
           const hoje = hojeStr;
           const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : tab === "programadas"
+            ? vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hoje && v.status_pagamento !== "CANCELADO"))
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
@@ -4484,7 +4541,7 @@ export default function VendasPage() {
                                         )}
                                       </div>}
                                       <div className="flex gap-2 flex-wrap">
-                                        {podeVerHistorico && v.status_pagamento === "AGUARDANDO" && (
+                                        {podeVerHistorico && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4530,11 +4587,14 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                         {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {v.status_pagamento === "AGUARDANDO" && v.local === "ENTREGA" && (
+                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && v.local === "ENTREGA" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
+                                              const defaultDate = v.data_programada
+                                                ? new Date(v.data_programada + "T12:00:00").toLocaleDateString("pt-BR")
+                                                : new Date().toLocaleDateString("pt-BR");
+                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", defaultDate);
                                               if (!dataEntrega) return;
                                               // Converter DD/MM/AAAA para YYYY-MM-DD
                                               const parts = dataEntrega.split("/");
@@ -4557,7 +4617,7 @@ export default function VendasPage() {
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
                                           >
-                                            📦 Encaminhar Entrega
+                                            📦 {v.status_pagamento === "PROGRAMADA" || v.data_programada ? "Agendar Entrega" : "Encaminhar Entrega"}
                                           </button>
                                         )}
                                         {/* Botão Reajuste — só admin */}
