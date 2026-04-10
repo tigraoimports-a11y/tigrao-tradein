@@ -82,6 +82,8 @@ export interface Venda {
   frete_valor: number | null;
   frete_recebido: boolean | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
+  // Venda programada
+  data_programada: string | null;
 }
 
 export interface Reajuste {
