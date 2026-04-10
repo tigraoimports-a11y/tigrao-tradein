@@ -28,6 +28,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
     label: "Operacional",
     pages: [
       { key: "vendas_ver", label: "Vendas (visualizar)" },
+      { key: "vendas_andamento", label: "Vendas (Em Andamento)" },
       { key: "vendas_registrar", label: "Vendas (registrar)" },
       { key: "entregas", label: "Entregas" },
       { key: "avisos_clientes", label: "Avisos para Clientes" },

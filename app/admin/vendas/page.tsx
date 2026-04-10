@@ -100,8 +100,10 @@ export default function VendasPage() {
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
-  // Pode ver histórico e vendas pendentes (André, Nicolas e admins)
+  // Pode ver histórico completo (admin + vendas_ver)
   const podeVerHistorico = isAdmin || (user?.permissoes?.includes("vendas_ver") ?? false);
+  // Pode ver Em Andamento (admin + vendas_ver + vendas_andamento)
+  const podeVerAndamento = podeVerHistorico || (user?.permissoes?.includes("vendas_andamento") ?? false);
 
   const [msg, setMsg] = useState("");
   const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; cnpj: string; email: string; endereco: string; pessoa: string; origem: string; tipo: string } | null>(null);
@@ -1781,11 +1783,11 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", restrito: false },
-            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", restrito: true },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", restrito: false },
-            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", restrito: true },
-          ] as const).filter(t => !t.restrito || podeVerHistorico).map((t) => (
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: true },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: true },
+            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
+          ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
@@ -4067,7 +4069,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
-                                        <button
+                                        {podeVerHistorico && <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             // Detectar se faz parte de um grupo
@@ -4285,7 +4287,7 @@ export default function VendasPage() {
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
                                         >
                                           ✏️ Editar
-                                        </button>
+                                        </button>}
                                         {/* Gerar Termo de Procedência — só quando há troca */}
                                         {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (
                                           <button
@@ -4432,7 +4434,7 @@ export default function VendasPage() {
                                         )}
                                       </div>}
                                       <div className="flex gap-2 flex-wrap">
-                                        {v.status_pagamento === "AGUARDANDO" && (
+                                        {podeVerHistorico && v.status_pagamento === "AGUARDANDO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4449,7 +4451,7 @@ export default function VendasPage() {
                                             ✅ Finalizar Venda
                                           </button>
                                         )}
-                                        {v.status_pagamento !== "CANCELADO" && (
+                                        {podeVerHistorico && v.status_pagamento !== "CANCELADO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4477,14 +4479,45 @@ export default function VendasPage() {
                                             ❌ Cancelar Venda
                                           </button>
                                         )}
-                                        {/* Botão Reajuste */}
-                                        <button
+                                        {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
+                                        {v.status_pagamento === "AGUARDANDO" && v.local === "ENTREGA" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
+                                              if (!dataEntrega) return;
+                                              // Converter DD/MM/AAAA para YYYY-MM-DD
+                                              const parts = dataEntrega.split("/");
+                                              const dataISO = parts.length === 3 ? `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}` : dataEntrega;
+                                              try {
+                                                const res = await fetch("/api/admin/vendas/encaminhar-entrega", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({ venda_id: v.id, data_entrega: dataISO }),
+                                                });
+                                                const json = await res.json();
+                                                if (res.ok) {
+                                                  setMsg("📦 Entrega criada com sucesso!");
+                                                } else {
+                                                  setMsg(`Erro: ${json.error || "Falha ao criar entrega"}`);
+                                                }
+                                              } catch {
+                                                setMsg("Erro ao encaminhar para entrega");
+                                              }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
+                                          >
+                                            📦 Encaminhar Entrega
+                                          </button>
+                                        )}
+                                        {/* Botão Reajuste — só admin */}
+                                        {podeVerHistorico && <button
                                           onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" }); }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
                                         >
                                           💲 Reajuste
-                                        </button>
-                                        {v.status_pagamento === "FINALIZADO" && (
+                                        </button>}
+                                        {podeVerHistorico && v.status_pagamento === "FINALIZADO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
