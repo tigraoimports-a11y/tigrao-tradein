@@ -4255,6 +4255,71 @@ export default function VendasPage() {
                                         >
                                           ✏️ Editar
                                         </button>
+                                        {/* Gerar Termo de Procedência — só quando há troca */}
+                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const aparelhos: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
+                                              if (v.troca_produto) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto,
+                                                  capacidade: "",
+                                                  cor: v.troca_cor || "",
+                                                  imei: v.troca_imei || "",
+                                                  serial: v.troca_serial || "",
+                                                  condicao: [
+                                                    v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
+                                                    v.troca_grade ? `Grade ${v.troca_grade}` : "",
+                                                    v.troca_caixa === "SIM" ? "Com Caixa" : "",
+                                                    v.troca_cabo === "SIM" ? "Com Cabo" : "",
+                                                    v.troca_fonte === "SIM" ? "Com Fonte" : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (v.troca_produto2) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto2,
+                                                  cor: v.troca_cor2 || "",
+                                                  imei: v.troca_imei2 || "",
+                                                  serial: v.troca_serial2 || "",
+                                                  condicao: [
+                                                    v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
+                                                    v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (aparelhos.length === 0) return;
+                                              try {
+                                                const res = await fetch("/api/admin/termo-procedencia", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({
+                                                    cliente_nome: v.cliente,
+                                                    cliente_cpf: v.cpf || "",
+                                                    aparelhos,
+                                                    venda_id: v.id,
+                                                  }),
+                                                });
+                                                if (res.headers.get("content-type")?.includes("pdf")) {
+                                                  const blob = await res.blob();
+                                                  const url = URL.createObjectURL(blob);
+                                                  const a = document.createElement("a");
+                                                  a.href = url;
+                                                  a.download = `TERMO_PROCEDENCIA_${v.cliente.replace(/\s+/g, "_")}.pdf`;
+                                                  a.click();
+                                                  URL.revokeObjectURL(url);
+                                                } else {
+                                                  const json = await res.json();
+                                                  setMsg("Erro: " + (json.error || "falha ao gerar termo"));
+                                                }
+                                              } catch { setMsg("Erro ao gerar termo de procedencia"); }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                                          >
+                                            📜 Gerar Termo de Procedencia
+                                          </button>
+                                        )}
                                       </div>
                                       {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO) */}
                                       {v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">

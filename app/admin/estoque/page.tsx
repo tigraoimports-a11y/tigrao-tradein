@@ -5433,6 +5433,46 @@ export default function EstoquePage() {
                       🏷️ Etiqueta
                     </button>
                   )}
+                  {p.tipo === "PENDENCIA" && (
+                    <button
+                      onClick={async () => {
+                        const aparelhos = [{
+                          modelo: p.produto,
+                          cor: p.cor || "",
+                          imei: p.imei || "",
+                          serial: p.serial_no || "",
+                          condicao: p.bateria ? `Bateria ${p.bateria}%` : "",
+                        }];
+                        try {
+                          const res = await fetch("/api/admin/termo-procedencia", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
+                            body: JSON.stringify({
+                              cliente_nome: p.cliente || "",
+                              cliente_cpf: "",
+                              aparelhos,
+                              pendencia_id: p.id,
+                            }),
+                          });
+                          if (res.headers.get("content-type")?.includes("pdf")) {
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `TERMO_PROCEDENCIA_${(p.cliente || "item").replace(/\s+/g, "_")}.pdf`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          } else {
+                            const json = await res.json();
+                            setMsg("Erro: " + (json.error || "falha ao gerar termo"));
+                          }
+                        } catch { setMsg("Erro ao gerar termo de procedencia"); }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                    >
+                      📜 Termo
+                    </button>
+                  )}
                   <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
                 </div>
               </div>

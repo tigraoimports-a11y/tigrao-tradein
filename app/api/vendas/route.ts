@@ -433,6 +433,44 @@ export async function POST(req: NextRequest) {
 
   // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
+  // Criar termo de procedência automaticamente (status PENDENTE) se houver troca
+  if (hasTroca1Info || (data?.troca_produto2)) {
+    try {
+      const aparelhosTermo: { modelo: string; cor?: string; imei?: string; serial?: string; condicao?: string }[] = [];
+      if (data?.troca_produto || seminovoData?.produto) {
+        aparelhosTermo.push({
+          modelo: data?.troca_produto || seminovoData?.produto || "",
+          cor: data?.troca_cor || "",
+          imei: data?.troca_imei || seminovoData?.imei || "",
+          serial: data?.troca_serial || seminovoData?.serial_no || "",
+          condicao: [
+            data?.troca_bateria ? `Bateria ${data.troca_bateria}%` : "",
+            data?.troca_grade ? `Grade ${data.troca_grade}` : "",
+          ].filter(Boolean).join(", "),
+        });
+      }
+      if (data?.troca_produto2) {
+        aparelhosTermo.push({
+          modelo: data.troca_produto2,
+          cor: data?.troca_cor2 || "",
+          imei: data?.troca_imei2 || "",
+          serial: data?.troca_serial2 || "",
+          condicao: data?.troca_bateria2 ? `Bateria ${data.troca_bateria2}%` : "",
+        });
+      }
+      if (aparelhosTermo.length > 0) {
+        await supabase.from("termos_procedencia").insert({
+          venda_id: data?.id,
+          cliente_nome: (body.cliente || "").toUpperCase(),
+          cliente_cpf: body.cpf || "",
+          aparelhos: aparelhosTermo,
+          status: "PENDENTE",
+          gerado_por: usuario,
+        });
+      }
+    } catch { /* ignore — não bloqueia a venda */ }
+  }
+
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
 
