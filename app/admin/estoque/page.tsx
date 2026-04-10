@@ -4879,7 +4879,6 @@ export default function EstoquePage() {
                                       return (
                                         <div className="flex gap-1 mt-0.5">
                                           {tamanho && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
-                                          {pulseira && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#8E8E93]" : "bg-[#F2F2F7] text-[#8E8E93]"}`}>{pulseira}</span>}
                                         </div>
                                       );
                                     })()}
