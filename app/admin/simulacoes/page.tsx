@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
+import TradeInCalculatorMulti from "@/components/TradeInCalculatorMulti";
 import { corParaPT } from "@/lib/cor-pt";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
@@ -126,7 +127,7 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
@@ -265,10 +266,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
-        {(["simulacoes", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
+        {(["simulacoes", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -294,6 +295,19 @@ export default function AdminPage() {
 
       {/* WhatsApp Config tab */}
       {mainTab === "whatsapp" && <WhatsAppConfigPanel password={password} />}
+
+      {/* Simulador Interno tab */}
+      {mainTab === "simulador" && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-[#D2D2D7] bg-[#F5F5F7]">
+            <h2 className="font-bold text-[#1D1D1F]">Simulador Interno</h2>
+            <p className="text-sm text-[#86868B] mt-1">Use o simulador abaixo para calcular valores de troca internamente, sem gerar registro de cliente.</p>
+          </div>
+          <div className="max-w-2xl mx-auto py-6 px-4">
+            <TradeInCalculatorMulti vendedor={null} temaParam="clean" />
+          </div>
+        </div>
+      )}
 
       {/* Follow-up tab */}
       {mainTab === "followup" && (() => {
