@@ -3638,8 +3638,10 @@ export default function EstoquePage() {
           {/* Nome do produto — editável, pré-preenchido automaticamente */}
           {hasStructuredFields && (() => {
             const autoName = buildProdutoName(form.categoria);
-            // Se o campo produto está vazio ou igual ao auto-gerado anterior, atualizar
-            if (!form.produto && autoName) {
+            // Atualizar se vazio OU se o nome atual parece auto-gerado (começa igual ao prefixo da categoria)
+            const prefixoCat = (form.categoria || "").replace(/_/g, " ").split(" ")[0].toUpperCase();
+            const pareceAutoGerado = !form.produto || (prefixoCat && form.produto.toUpperCase().startsWith(prefixoCat));
+            if (pareceAutoGerado && autoName) {
               setTimeout(() => set("produto", autoName), 0);
             }
             return (
