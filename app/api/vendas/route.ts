@@ -197,6 +197,15 @@ export async function POST(req: NextRequest) {
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
   delete body.usar_credito_loja;
 
+  // Garantir que preco_vendido inclui crédito de lojista (frontend já soma, mas safety net)
+  if (usarCreditoLoja > 0 && body.preco_vendido !== undefined) {
+    const precoAtual = Number(body.preco_vendido) || 0;
+    // Se preco_vendido é menor que o crédito usado, significa que não foi incluído
+    if (precoAtual < usarCreditoLoja) {
+      body.preco_vendido = precoAtual + usarCreditoLoja;
+    }
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,

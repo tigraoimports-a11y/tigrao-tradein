@@ -785,12 +785,13 @@ export default function VendasPage() {
   const valorLiquido = taxa > 0
     ? calcularLiquido(valorComprovanteInput > 0 ? valorComprovanteInput : comprovante || parteCartao, taxa)
     : parteCartao;
-  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca;
+  const creditoLojaNum = parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0;
+  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca + creditoLojaNum;
   const lucro = totalRealRecebido - custo;
   const margem = totalRealRecebido > 0 ? (lucro / totalRealRecebido) * 100 : 0;
 
   // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
-  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string }) => {
+  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string; credito?: string }) => {
     const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
     const curTaxa = taxa;
     const curForma = form.forma;
@@ -806,15 +807,21 @@ export default function VendasPage() {
     const trcCarrinho = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0), 0);
     const trc = produtosCarrinho.length > 0 ? Math.max(trcCarrinho, trcForm1 + trcForm2) : trcForm1 + trcForm2;
 
+    // Crédito de lojista conta como valor recebido
+    const credLoja = parseFloat(String(overrides.credito ?? (form.usar_credito_loja || "0")).replace(/\./g, "").replace(",", ".")) || 0;
+
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      result = String(Math.round(compVal + esp + trc + liqAlt));
+      result = String(Math.round(compVal + esp + trc + liqAlt + credLoja));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt));
+      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt + credLoja));
     } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
-      const total = pix + esp + trc + compVal + liqAlt;
+      const total = pix + esp + trc + compVal + liqAlt + credLoja;
       if (total > 0) result = String(Math.round(total));
+    } else if (credLoja > 0) {
+      // Pagamento 100% via crédito de lojista (sem forma de pagamento adicional)
+      result = String(Math.round(pix + esp + trc + liqAlt + credLoja));
     } else if (liqAlt > 0) {
       // Apenas 2o cartão preenchido
       result = String(Math.round(pix + esp + trc + liqAlt));
@@ -2099,6 +2106,9 @@ export default function VendasPage() {
                           const digits = e.target.value.replace(/\D/g, "");
                           const v = digits ? Math.min(parseInt(digits), creditoLojistaSaldo) : 0;
                           set("usar_credito_loja", v ? String(v) : "");
+                          // Recalcular preco_vendido incluindo crédito
+                          const newResult = recalcVendido({ credito: v ? String(v) : "0" });
+                          if (newResult) set("preco_vendido", newResult);
                         }}
                         placeholder="0"
                         className={inputCls}
@@ -2106,7 +2116,12 @@ export default function VendasPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => set("usar_credito_loja", String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo)))}
+                      onClick={() => {
+                        const val = String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo));
+                        set("usar_credito_loja", val);
+                        const newResult = recalcVendido({ credito: val });
+                        if (newResult) set("preco_vendido", newResult);
+                      }}
                       className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 whitespace-nowrap"
                     >
                       Usar tudo
