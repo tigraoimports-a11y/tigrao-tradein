@@ -705,6 +705,14 @@ export default function VendasPage() {
     }
   }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
 
+  // Auto-desbloquear para quem tem vendas_andamento mas não vendas_ver (equipe como Bianca)
+  useEffect(() => {
+    if (podeVerAndamento && !podeVerHistorico && !vendasUnlocked) {
+      setVendasUnlocked(true);
+      setTab("andamento");
+    }
+  }, [podeVerAndamento, podeVerHistorico, vendasUnlocked]);
+
   if (!vendasUnlocked) {
     return (
       <div className="flex items-center justify-center py-20">
