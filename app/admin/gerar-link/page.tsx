@@ -728,6 +728,25 @@ export default function GerarLinkPage() {
     setParseMsg("");
   }
 
+  function limparTudo() {
+    // Produtos / carrinho
+    setProdutos([""]); setPreco(""); setPrecosPorProduto({}); setCarrinhoLink([]);
+    setProdutoManual(""); setCorSel(""); setCoresExtras([]); setAddingProduct(false);
+    // Pagamento
+    setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
+    setPagamentoPago(false);
+    // Entrega
+    setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega("");
+    // Troca
+    setTemTroca(false); setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor("");
+    setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
+    // Cliente
+    setIncluirDadosCliente(false); limparDadosCliente();
+    // Link gerado
+    setGeneratedLink(""); setCopied(false); setPasteMsg("");
+    setVendedorNome("");
+  }
+
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
   const rawEntrada = entradaPix.replace(/\./g, "").replace(",", ".");
   const rawTrocaVal = trocaValor.replace(/\./g, "").replace(",", ".");
@@ -1459,12 +1478,20 @@ export default function GerarLinkPage() {
         {/* Botão colar resumo */}
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-[#1D1D1F]">Dados do pedido</p>
-          <button
-            onClick={colarResumo}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
-          >
-            📋 Colar resumo
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={limparTudo}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-red-400 text-red-500 hover:bg-red-50 transition-colors"
+            >
+              🗑️ Limpar dados
+            </button>
+            <button
+              onClick={colarResumo}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+            >
+              📋 Colar resumo
+            </button>
+          </div>
         </div>
 
         {pasteMsg && (
