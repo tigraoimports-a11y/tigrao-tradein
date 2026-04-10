@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("vendas")
       .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei,status_pagamento")
-      .ilike("cliente", clientVendas)
+      .ilike("cliente", `%${clientVendas}%`)
       .order("data", { ascending: false })
       .limit(200);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

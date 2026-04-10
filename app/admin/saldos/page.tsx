@@ -124,6 +124,7 @@ export default function SaldosPage() {
   const [depHistModal, setDepHistModal] = useState(false);
   const [depHist, setDepHist] = useState<DepHist[]>([]);
   const [depHistLoading, setDepHistLoading] = useState(false);
+  const [depHistFiltroMes, setDepHistFiltroMes] = useState("");
   const fetchDepHist = async () => {
     setDepHistLoading(true);
     try {
@@ -237,17 +238,42 @@ export default function SaldosPage() {
         </button>
       </div>
 
-      {depHistModal && (
+      {depHistModal && (() => {
+        const mesesDisp = [...new Set(depHist.map(d => d.data?.slice(0, 7)).filter(Boolean))].sort().reverse();
+        const nomeMes = (ym: string) => {
+          const [y, m] = ym.split("-");
+          const nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+          return `${nomes[parseInt(m) - 1]} ${y}`;
+        };
+        const filtrados = depHistFiltroMes ? depHist.filter(d => d.data?.startsWith(depHistFiltroMes)) : depHist;
+        const totalFiltrado = filtrados.reduce((s, d) => s + Number(d.valor), 0);
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDepHistModal(false)}>
           <div className={`w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b flex items-center justify-between ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
-              <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
-              <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            <div className={`px-5 py-4 border-b flex flex-col gap-2 ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
+                <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+              </div>
+              {mesesDisp.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => setDepHistFiltroMes("")}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${!depHistFiltroMes ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                    Todos
+                  </button>
+                  {mesesDisp.map(m => (
+                    <button key={m} onClick={() => setDepHistFiltroMes(m)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${depHistFiltroMes === m ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                      {nomeMes(m)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="overflow-y-auto">
               {depHistLoading ? (
                 <p className="p-8 text-center text-sm text-[#86868B]">Carregando...</p>
-              ) : depHist.length === 0 ? (
+              ) : filtrados.length === 0 ? (
                 <p className="p-8 text-center text-sm text-[#86868B]">Nenhum depósito encontrado.</p>
               ) : (
                 <table className="w-full text-sm">
@@ -260,21 +286,29 @@ export default function SaldosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {depHist.map((d) => (
+                    {filtrados.map((d) => (
                       <tr key={d.id} className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
-                        <td className="px-4 py-2 font-medium">{d.data}</td>
+                        <td className="px-4 py-2 font-medium">{d.data?.split("-").reverse().join("/")}</td>
                         <td className="px-4 py-2">{d.banco}</td>
                         <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">{fmt(Number(d.valor))}</td>
                         <td className="px-4 py-2 text-xs text-[#86868B]">{d.descricao}</td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                    <tr>
+                      <td colSpan={2} className="px-4 py-2 text-xs font-bold text-[#86868B]">Total ({filtrados.length} depósitos)</td>
+                      <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">{fmt(totalFiltrado)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
