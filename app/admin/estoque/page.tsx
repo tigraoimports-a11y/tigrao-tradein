@@ -810,6 +810,7 @@ export default function EstoquePage() {
   const [historicoLogs, setHistoricoLogs] = useState<{ id: string; created_at: string; usuario: string; acao: string; produto_nome: string; campo: string; valor_anterior: string; valor_novo: string; detalhes: string }[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
+  const [filterBateria, setFilterBateria] = useState("");
   const [search, setSearch] = useState("");
   const [filterDataCompra, setFilterDataCompra] = useState("");
   const [acaminhoFilter, setAcaminhoFilter] = useState<"pendentes" | "recebidos" | "todos">("pendentes");
@@ -2349,6 +2350,14 @@ export default function EstoquePage() {
 
   const filtered = currentList.filter((p) => {
     if (filterCat && p.categoria !== filterCat) return false;
+    if (filterBateria) {
+      const bat = p.bateria;
+      if (filterBateria === "90" && (!bat || bat < 90)) return false;
+      if (filterBateria === "85" && (!bat || bat < 85 || bat >= 90)) return false;
+      if (filterBateria === "80" && (!bat || bat < 80 || bat >= 85)) return false;
+      if (filterBateria === "low" && (!bat || bat >= 80)) return false;
+      if (filterBateria === "none" && bat) return false;
+    }
     if (filterDataCompra && tab === "acaminho" && p.data_compra !== filterDataCompra) return false;
     if (search) {
       const s = search.toLowerCase();
@@ -2839,6 +2848,16 @@ export default function EstoquePage() {
                 {CATEGORIAS.map((c) => <option key={c} value={c}>{dynamicCatLabels[c] || c}</option>)}
               </select>
             )}
+            {(tab === "seminovos" || tab === "pendencias") && (
+              <select value={filterBateria} onChange={(e) => setFilterBateria(e.target.value)} className={`px-2.5 py-1.5 rounded-lg border text-[11px] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#E5E5EA]"}`}>
+                <option value="">🔋 Bateria</option>
+                <option value="90">90%+</option>
+                <option value="85">85-89%</option>
+                <option value="80">80-84%</option>
+                <option value="low">Abaixo de 80%</option>
+                <option value="none">Sem info</option>
+              </select>
+            )}
             {tab === "acaminho" && (<>
               {/* Filtro: Pendentes / Recebidos / Todos */}
               <div className={`flex rounded-lg overflow-hidden border text-[11px] font-semibold ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
@@ -2919,9 +2938,9 @@ export default function EstoquePage() {
                 {label}
               </button>
             ))}
-            {(filterLinha || filterCaract.length > 0) && (
+            {(filterLinha || filterCaract.length > 0 || filterBateria) && (
               <button
-                onClick={() => { setFilterLinha(""); setFilterCaract([]); }}
+                onClick={() => { setFilterLinha(""); setFilterCaract([]); setFilterBateria(""); }}
                 className="px-2 py-1 rounded-lg text-[11px] font-medium text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400/60 transition-colors"
               >
                 ✕ Limpar filtros
@@ -4898,6 +4917,21 @@ export default function EstoquePage() {
                                             const en = corEnOriginal(p.cor);
                                             return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[12px] ${textSecondary}`}>{en}</span>}</>;
                                           })()}
+                                          {/* Pulseira badge extraído do nome do produto */}
+                                          {(() => {
+                                            const pulseiraMatch = p.produto?.match(/PULSEIRA\s+(.+)/i);
+                                            if (!pulseiraMatch) return null;
+                                            return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F0] text-[#86868B]"}`}>{pulseiraMatch[1]}</span>;
+                                          })()}
+                                          {/* Bateria badge colorido (só seminovos) */}
+                                          {p.bateria && p.tipo === "SEMINOVO" && (
+                                            <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              p.bateria >= 90 ? "bg-green-100 text-green-700" :
+                                              p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" :
+                                              p.bateria >= 80 ? "bg-orange-100 text-orange-700" :
+                                              "bg-red-100 text-red-700"
+                                            }`}>🔋 {p.bateria}%</span>
+                                          )}
                                         </td>
                                         <td className={`px-3 py-2.5 text-right`}>
                                           <span className={`text-sm font-bold ${p.qnt === 1 ? "text-yellow-500" : "text-green-500"}`}>

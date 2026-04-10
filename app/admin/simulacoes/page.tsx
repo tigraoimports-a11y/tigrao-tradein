@@ -139,8 +139,13 @@ export default function AdminPage() {
       if (res.ok) {
         const json = await res.json();
         setData(json.data ?? []);
+      } else {
+        // Evitar tela em branco — setar array vazio se erro
+        setData([]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setData([]);
+    }
     setLoading(false);
   }, []);
 
