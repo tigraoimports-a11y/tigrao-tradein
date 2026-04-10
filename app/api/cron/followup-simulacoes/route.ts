@@ -16,6 +16,16 @@ function primeiroNome(nome: string): string {
   return (nome || "").split(" ")[0] || "Cliente";
 }
 
+// Normaliza nome pra comparacao: "  João Silva " → "JOAO SILVA"
+function normalizarNome(nome: string): string {
+  return (nome || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
 // Envia mensagem via Z-API (instancia de follow-up)
 async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
   const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
@@ -30,7 +40,6 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
   const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
   try {
-    // Formatar telefone: garantir 55 + DDD + numero
     let fone = phone.replace(/\D/g, "");
     if (!fone.startsWith("55")) fone = `55${fone}`;
 
@@ -52,6 +61,7 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
 }
 
 // Roda todo dia as 14h — envia WhatsApp automatico pro cliente que simulou e nao fechou
+// Verifica se o cliente ja comprou antes de enviar
 export async function GET(req: NextRequest) {
   if (!authCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -78,7 +88,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao nos ultimos 3 dias" });
     }
 
-    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado E com whatsapp
+    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado
     const naoConvertidas = sims.filter(s =>
       s.status === "SAIR" && !s.follow_up_enviado
     );
@@ -87,19 +97,42 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Todas simulacoes ja foram acompanhadas" });
     }
 
-    // === ENVIO AUTOMATICO DE WHATSAPP ===
-    // Envia pra quem saiu sem fechar, tem whatsapp, e tem pelo menos 1 dia
+    // Buscar vendas recentes pra cruzar (quem ja comprou)
+    const { data: vendas } = await supabase
+      .from("vendas")
+      .select("cliente")
+      .gte("created_at", dataLimite);
+
+    const clientesQueCompraram = new Set<string>();
+    if (vendas) {
+      for (const v of vendas) {
+        if (v.cliente) clientesQueCompraram.add(normalizarNome(v.cliente));
+      }
+    }
+
+    // Enviar WhatsApp pra quem saiu sem fechar, tem whatsapp, e tem pelo menos 1 dia
     const paraEnviarWA = naoConvertidas.filter(s => {
       const dias = diasAtras(s.created_at);
-      return s.whatsapp && dias >= 1; // espera pelo menos 24h
+      return s.whatsapp && dias >= 1;
     });
 
     let whatsappEnviados = 0;
+    let jaCompraram = 0;
     const whatsappErros: string[] = [];
 
     for (const s of paraEnviarWA) {
-      const nome = primeiroNome(s.nome);
+      // Verificar se o cliente ja comprou
+      const nomeNorm = normalizarNome(s.nome);
+      if (clientesQueCompraram.has(nomeNorm)) {
+        jaCompraram++;
+        await supabase
+          .from("simulacoes")
+          .update({ follow_up_enviado: true })
+          .eq("id", s.id);
+        continue;
+      }
 
+      const nome = primeiroNome(s.nome);
       const modeloUsado = s.modelo_usado ? `${s.modelo_usado}${s.storage_usado ? ` ${s.storage_usado}` : ""}` : "seu aparelho";
       const modeloNovoFull = s.modelo_novo ? `${s.modelo_novo}${s.storage_novo ? ` ${s.storage_novo}` : ""}` : "o produto";
 
@@ -109,7 +142,6 @@ export async function GET(req: NextRequest) {
 
       if (enviou) {
         whatsappEnviados++;
-        // Marcar no banco que o follow-up foi enviado
         await supabase
           .from("simulacoes")
           .update({ follow_up_enviado: true })
@@ -118,7 +150,7 @@ export async function GET(req: NextRequest) {
         whatsappErros.push(s.nome || "Sem nome");
       }
 
-      // Delay de 3s entre mensagens pra nao ser bloqueado
+      // Delay de 3s entre mensagens
       if (paraEnviarWA.indexOf(s) < paraEnviarWA.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
@@ -129,6 +161,7 @@ export async function GET(req: NextRequest) {
       total_simulacoes: sims.length,
       nao_convertidas: naoConvertidas.length,
       whatsapp_enviados: whatsappEnviados,
+      ja_compraram: jaCompraram,
       whatsapp_erros: whatsappErros,
     });
   } catch (err) {

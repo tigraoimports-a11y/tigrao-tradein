@@ -14,6 +14,16 @@ function fmtBRL(v: number): string {
   return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 }
 
+// Normaliza nome pra comparacao: "  João Silva " → "JOAO SILVA"
+function normalizarNome(nome: string): string {
+  return (nome || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/\s+/g, " ");
+}
+
 // Envia mensagem via Z-API (instancia de follow-up)
 async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
   const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
@@ -49,7 +59,7 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
 }
 
 // Roda todo dia as 11h — verifica se algum produto baixou de preco
-// e avisa o cliente que simulou aquele produto
+// e avisa o cliente que simulou aquele produto (so se ele NAO comprou)
 export async function GET(req: NextRequest) {
   if (!authCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -67,15 +77,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Erro ao buscar precos" }, { status: 500 });
     }
 
-    // Montar mapa de precos atuais: "iPhone 16 Pro|256GB" → 5797
+    // Mapa de precos atuais: "iPhone 16 Pro|256GB" → 5797
     const precoAtualMap = new Map<string, number>();
     for (const p of precos) {
       const key = `${p.modelo}|${p.armazenamento}`;
       precoAtualMap.set(key, Number(p.preco_pix));
     }
 
-    // 2. Buscar simulacoes dos ultimos 30 dias que sairam sem fechar
-    //    e ainda nao receberam alerta de preco
+    // 2. Buscar simulacoes dos ultimos 30 dias (status SAIR, sem alerta enviado)
     const trintaDiasAtras = new Date();
     trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
     const dataLimite = trintaDiasAtras.toISOString();
@@ -97,18 +106,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao elegivel" });
     }
 
-    // 3. Comparar precos e enviar alertas
+    // 3. Buscar vendas dos ultimos 30 dias pra cruzar (quem ja comprou)
+    const { data: vendas } = await supabase
+      .from("vendas")
+      .select("cliente")
+      .gte("created_at", dataLimite);
+
+    // Montar set de nomes normalizados de quem ja comprou
+    const clientesQueCompraram = new Set<string>();
+    if (vendas) {
+      for (const v of vendas) {
+        if (v.cliente) clientesQueCompraram.add(normalizarNome(v.cliente));
+      }
+    }
+
+    // 4. Comparar precos e enviar alertas
     let alertasEnviados = 0;
+    let jaCompraram = 0;
     const erros: string[] = [];
     const QUEDA_MINIMA = 100; // so avisa se baixou pelo menos R$100
 
     for (const s of sims) {
       if (!s.whatsapp || !s.modelo_novo || !s.storage_novo || !s.preco_novo) continue;
 
+      // Verificar se o cliente ja comprou (match por nome)
+      const nomeNorm = normalizarNome(s.nome);
+      if (clientesQueCompraram.has(nomeNorm)) {
+        jaCompraram++;
+        // Marcar como enviado pra nao checar de novo
+        await supabase
+          .from("simulacoes")
+          .update({ alerta_preco_enviado: true })
+          .eq("id", s.id);
+        continue;
+      }
+
       const key = `${s.modelo_novo}|${s.storage_novo}`;
       const precoAtual = precoAtualMap.get(key);
 
-      if (!precoAtual) continue; // produto nao existe mais no catalogo
+      if (!precoAtual) continue; // produto nao existe mais
 
       const precoOriginal = Number(s.preco_novo);
       const queda = precoOriginal - precoAtual;
@@ -148,6 +184,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       simulacoes_analisadas: sims.length,
       alertas_enviados: alertasEnviados,
+      ja_compraram: jaCompraram,
       erros,
     });
   } catch (err) {
