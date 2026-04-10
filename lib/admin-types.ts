@@ -8,7 +8,7 @@ export type Banco = "ITAU" | "INFINITE" | "MERCADO_PAGO" | "ESPECIE";
 export type FormaPagamento = "PIX" | "CARTAO" | "DEBITO" | "ESPECIE" | "DINHEIRO" | "FIADO";
 export type Recebimento = "D+0" | "D+1" | "FIADO" | "PARCELADO";
 export type Bandeira = "VISA" | "MASTERCARD" | "ELO" | "AMEX";
-export type TipoGasto = "SAIDA" | "ENTRADA";
+export type TipoGasto = "SAIDA" | "ENTRADA" | "TRANSFERENCIA";
 
 export interface Venda {
   id: string;

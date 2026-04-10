@@ -458,7 +458,13 @@ export default function StepUsedDevice({ usedValues, excludedModels, modelDiscou
                 <Btn sel={hasWarranty===true} onClick={() => { setHasWarranty(true); tq("warranty"); }} className="flex-1" variant="success">{yesOpt?.label || "Sim"}</Btn>
               </>;
             })()}
-          </div></Section>)}
+          </div>
+          {hasWarranty === true && !md.warrantyBonuses && (
+            <p className="mt-2 text-xs text-center" style={{ color: "var(--ti-muted)" }}>
+              A garantia não impacta na avaliação deste modelo.
+            </p>
+          )}
+          </Section>)}
 
           {hasWarranty === true && isQActive(qc, "warrantyMonth") && (
             <Section title={getQTitle(qc, "warrantyMonth", "Até qual mês vai a garantia do seu aparelho?")}>

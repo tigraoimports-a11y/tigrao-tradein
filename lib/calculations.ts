@@ -231,9 +231,11 @@ export function calculateTradeInValue(
 
   value += applyBatteryDiscount(condition.battery, d.batteryTiers);
 
-  // Usa bonus de garantia especifico do modelo (se tiver), senao usa o global
-  const effectiveBonuses = d.warrantyBonuses || warrantyBonuses;
-  value += calculateWarrantyBonus(condition.warrantyMonth, effectiveBonuses, condition.warrantyYear, baseValue);
+  // Bonus de garantia: so aplica se o modelo tiver configuracao explicita.
+  // Modelos sem warrantyBonuses configurado NAO recebem bonus (evita bonus indevido em linhas antigas).
+  if (d.warrantyBonuses) {
+    value += calculateWarrantyBonus(condition.warrantyMonth, d.warrantyBonuses, condition.warrantyYear, baseValue);
+  }
 
   // Desconto por não ter caixa original: -R$ 100
   if (!condition.hasOriginalBox) {
