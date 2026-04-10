@@ -18,6 +18,8 @@ export function useAutoRefetch(refetch: () => void, enabled: boolean = true, int
   useEffect(() => {
     if (!enabled) return;
     const call = () => { try { refetchRef.current(); } catch { /* ignore */ } };
+    // Fetch inicial imediato na montagem
+    call();
     const interval = intervalMs > 0 ? setInterval(call, intervalMs) : null;
     // Refetch ao focar apenas se a aba esteve oculta (evita re-fetch em toda troca de foco de janela)
     let wasHidden = false;
