@@ -731,7 +731,7 @@ export default function GerarLinkPage() {
   function limparTudo() {
     // Produtos / carrinho
     setProdutos([""]); setPreco(""); setPrecosPorProduto({}); setCarrinhoLink([]);
-    setProdutoManual(""); setCorSel(""); setCoresExtras([]); setAddingProduct(false);
+    setProdutoManual(false); setCorSel(""); setCoresExtras([]); setAddingProduct(false);
     // Pagamento
     setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
     setPagamentoPago(false);
