@@ -62,11 +62,14 @@ export async function POST(request: Request) {
     formaPag = formaPag ? `${formaPag} (${venda.banco})` : venda.banco;
   }
 
-  // Montar observação com detalhes úteis pro motoboy
+  // Montar observação com detalhes úteis pro motoboy (incluindo 1º e 2º produto na troca)
   const obsPartes: string[] = [];
   if (observacao) obsPartes.push(observacao);
   if (venda.troca_produto) {
     obsPartes.push(`TROCA: ${venda.troca_produto} (R$ ${Number(venda.produto_na_troca || 0).toLocaleString("pt-BR")})`);
+  }
+  if (venda.troca_produto2) {
+    obsPartes.push(`TROCA 2: ${venda.troca_produto2} (R$ ${Number(venda.produto_na_troca2 || 0).toLocaleString("pt-BR")})`);
   }
   if (venda.observacao) obsPartes.push(`Obs venda: ${venda.observacao}`);
   const obsFinal = obsPartes.join(" | ") || null;
@@ -100,7 +103,17 @@ export async function POST(request: Request) {
       entregador: entregador || null,
       observacao: obsFinal,
       produto: produtoTxt || null,
-      tipo: (venda.troca_produto || Number(venda.produto_na_troca || 0) > 0) ? "TROCA" : null,
+      tipo: (venda.troca_produto || venda.troca_produto2 || Number(venda.produto_na_troca || 0) > 0) ? "TROCA" : null,
+      detalhes_upgrade: (() => {
+        const partes: string[] = [];
+        if (venda.troca_produto) {
+          partes.push(`${venda.troca_produto}${venda.troca_cor ? ` ${venda.troca_cor}` : ""} — R$ ${Number(venda.produto_na_troca || 0).toLocaleString("pt-BR")}${venda.troca_bateria ? ` (Bat: ${venda.troca_bateria}%)` : ""}${venda.troca_obs ? ` ${venda.troca_obs}` : ""}`);
+        }
+        if (venda.troca_produto2) {
+          partes.push(`${venda.troca_produto2}${venda.troca_cor2 ? ` ${venda.troca_cor2}` : ""} — R$ ${Number(venda.produto_na_troca2 || 0).toLocaleString("pt-BR")}${venda.troca_bateria2 ? ` (Bat: ${venda.troca_bateria2}%)` : ""}${venda.troca_obs2 ? ` ${venda.troca_obs2}` : ""}`);
+        }
+        return partes.length > 0 ? partes.join(" + ") : null;
+      })(),
       forma_pagamento: formaPag,
       valor: Number(venda.preco_vendido || 0) || null,
       vendedor: venda.vendedor || null,
