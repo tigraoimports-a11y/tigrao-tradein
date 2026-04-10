@@ -731,10 +731,16 @@ function getModeloBase(produto: string, categoria: string): string {
     return `MacBook${chip}${memPair}`;
   }
   if (baseCat === "MAC_MINI") {
-    const mem = getMem();
+    // Mac Mini: agrupar por RAM + SSD (mesmo padrão do MacBook)
+    const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
+    const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
+    const sorted = [...vals].sort((a, b) => a.gb - b.gb);
+    const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
+    const ssd = sorted.length >= 1 ? `/${sorted[sorted.length - 1].raw}` : "";
+    const memPair = `${ram}${ssd}`;
     const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
     const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    return `Mac Mini${chip}${mem}`;
+    return `Mac Mini${chip}${memPair}`;
   }
   if (baseCat === "APPLE_WATCH") {
     // Watch: agrupar por modelo + geração + tamanho + conectividade
