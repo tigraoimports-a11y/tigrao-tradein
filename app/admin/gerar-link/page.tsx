@@ -396,7 +396,8 @@ export default function GerarLinkPage() {
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
-  const [editLink, setEditLink] = useState<Record<string, unknown>>({});
+  const [editLink, setEditLink] = useState<Record<string, string>>({});
+  const [editLinkExtras, setEditLinkExtras] = useState<string[] | null>(null);
   const [savingDados, setSavingDados] = useState(false);
 
   useEffect(() => {
@@ -423,11 +424,16 @@ export default function GerarLinkPage() {
         troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
         observacao: viewDataLink.observacao || "",
         desconto: viewDataLink.desconto != null ? String(viewDataLink.desconto) : "",
-        produtos_extras: viewDataLink.produtos_extras || null,
       });
+      // Produtos extras como array separado
+      const pe = viewDataLink.produtos_extras;
+      if (Array.isArray(pe)) setEditLinkExtras(pe as string[]);
+      else if (typeof pe === "string") { try { const p = JSON.parse(pe); setEditLinkExtras(Array.isArray(p) ? p : null); } catch { setEditLinkExtras(null); } }
+      else setEditLinkExtras(null);
     } else {
       setEditDados({});
       setEditLink({});
+      setEditLinkExtras(null);
     }
   }, [viewDataLink]);
 
@@ -459,7 +465,7 @@ export default function GerarLinkPage() {
         troca_valor2: Number(editLink.troca_valor2) || 0,
         observacao: editLink.observacao || null,
         desconto: Number(editLink.desconto) || 0,
-        produtos_extras: editLink.produtos_extras || null,
+        produtos_extras: editLinkExtras || null,
       };
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -1028,7 +1034,7 @@ export default function GerarLinkPage() {
                       <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
                       <input
                         type={type}
-                        value={String(editLink[k] || "")}
+                        value={editLink[k] || ""}
                         onChange={(e) => setEditLink({ ...editLink, [k]: e.target.value })}
                         className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
                       />
@@ -1042,10 +1048,10 @@ export default function GerarLinkPage() {
                         <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
                         <div className="grid grid-cols-2 gap-3">
                           <FL label="Produto" k="produto" full />
-                          {editLink.produtos_extras && Array.isArray(editLink.produtos_extras) && editLink.produtos_extras.length > 0 && (
+                          {editLinkExtras && editLinkExtras.length > 0 && (
                             <div className="col-span-2">
                               <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Produtos extras</label>
-                              {editLink.produtos_extras.map((pe: string, i: number) => (
+                              {editLinkExtras.map((pe, i) => (
                                 <p key={i} className="text-sm px-3 py-1.5 rounded-lg border border-[#D2D2D7] mb-1">{pe}</p>
                               ))}
                             </div>
