@@ -1841,7 +1841,6 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
-            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA").length, color: "bg-purple-500", visible: podeVerHistorico },
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
             { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hojeStr && v.status_pagamento !== "CANCELADO")).length, color: "bg-purple-500", visible: podeVerAndamento },
@@ -4542,23 +4541,6 @@ export default function VendasPage() {
                                         )}
                                       </div>}
                                       <div className="flex gap-2 flex-wrap">
-                                        {podeVerHistorico && v.status_pagamento === "PROGRAMADA" && (
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              await fetch("/api/vendas", {
-                                                method: "PATCH",
-                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                                body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }),
-                                              });
-                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "AGUARDANDO" } : r));
-                                              setMsg("Venda movida para Em Andamento!");
-                                            }}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500 text-white hover:bg-purple-600 transition-colors"
-                                          >
-                                            ▶️ Iniciar Venda
-                                          </button>
-                                        )}
                                         {podeVerHistorico && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA") && (
                                           <button
                                             onClick={async (e) => {
@@ -4605,11 +4587,14 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                         {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {v.status_pagamento === "AGUARDANDO" && v.local === "ENTREGA" && (
+                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && v.local === "ENTREGA" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
-                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
+                                              const defaultDate = v.data_programada
+                                                ? new Date(v.data_programada + "T12:00:00").toLocaleDateString("pt-BR")
+                                                : new Date().toLocaleDateString("pt-BR");
+                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", defaultDate);
                                               if (!dataEntrega) return;
                                               // Converter DD/MM/AAAA para YYYY-MM-DD
                                               const parts = dataEntrega.split("/");
@@ -4632,7 +4617,7 @@ export default function VendasPage() {
                                             }}
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
                                           >
-                                            📦 Encaminhar Entrega
+                                            📦 {v.status_pagamento === "PROGRAMADA" || v.data_programada ? "Agendar Entrega" : "Encaminhar Entrega"}
                                           </button>
                                         )}
                                         {/* Botão Reajuste — só admin */}
