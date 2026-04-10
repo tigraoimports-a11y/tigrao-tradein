@@ -1791,9 +1791,9 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: true },
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: true },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
           ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
