@@ -16,15 +16,19 @@ export async function GET(req: NextRequest) {
   // =========== Vendas de um cliente específico (lazy load) ===========
   const clientVendas = searchParams.get("client_vendas");
   if (clientVendas) {
+    // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui NULL
     const { data, error } = await supabase
       .from("vendas")
-      .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei")
+      .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei,status_pagamento")
       .ilike("cliente", clientVendas)
-      .neq("status_pagamento", "CANCELADO")
       .order("data", { ascending: false })
       .limit(200);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ vendas: data || [] });
+    // Filtrar cancelados em JS (evita bug do .neq() com NULL)
+    const vendas = (data || []).filter((v: { status_pagamento?: string | null }) =>
+      v.status_pagamento !== "CANCELADO"
+    );
+    return NextResponse.json({ vendas });
   }
 
   // =========== TAB: FORNECEDORES ===========
