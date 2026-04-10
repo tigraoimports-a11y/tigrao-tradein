@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       .from("catalogo_modelo_configs")
       .select("modelo_id, tipo_chave, valor")
       .in("modelo_id", modeloIds)
-      .eq("tipo_chave", "cores");
+      .in("tipo_chave", ["cores", "cores_aw"]);
     if (e2) return NextResponse.json({ modelos: {} });
 
     const idToNome: Record<string, string> = {};

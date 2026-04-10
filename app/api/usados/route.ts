@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       const modelDiscountsRaw: Record<string, Record<string, Record<string, number>>> = {};
 
       for (const d of dbDescontos) {
-        const match = d.condicao.match(/^(iPhone .+?) - (.+)$/);
+        const match = d.condicao.match(/^(.+?) - (.+)$/);
         if (match) {
           // Desconto por modelo
           const modelo = match[1];

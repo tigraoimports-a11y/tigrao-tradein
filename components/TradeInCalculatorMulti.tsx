@@ -104,6 +104,7 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
   });
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
+  const [catConfigs, setCatConfigs] = useState<{ categoria: string; modo: string; ativo: boolean }[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
   // Mapa dinamico de WhatsApp por vendedor — usa DB se disponivel
@@ -170,6 +171,14 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
           const tiCfgData = tiConfigRes ? await tiConfigRes.json() : null;
           if (tiCfgData?.data) setTradeinConfig(tiCfgData.data);
         } catch { /* use hardcoded fallback */ }
+        // Load tradein category configs (modo + ativo)
+        try {
+          const catRes = await fetch("/api/tradein-cat-config");
+          if (catRes.ok) {
+            const catData = await catRes.json();
+            if (catData?.data) setCatConfigs(catData.data);
+          }
+        } catch { /* ignore */ }
         // Load theme config from mostruario_config (Supabase)
         try {
           const lojaData = lojaRes ? await lojaRes.json() : null;
@@ -207,16 +216,21 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  const [usedColor, setUsedColor] = useState("");
+  const [usedColor2, setUsedColor2] = useState("");
+
   function handleStep1Complete(data: {
-    usedModel: string; usedStorage: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
+    usedModel: string; usedStorage: string; usedColor: string; condition: AnyConditionData; tradeInValue: number; deviceType: DeviceType;
   }) {
     trackComplete(1);
     fbq("track", "ViewContent", { content_name: `${data.usedModel} ${data.usedStorage}`, content_category: "trade-in-usado" });
     if (step === 1) {
       setDeviceType(data.deviceType); setUsedModel(data.usedModel); setUsedStorage(data.usedStorage);
+      setUsedColor(data.usedColor || "");
       setCondition(data.condition); setTradeInValue(data.tradeInValue); setStep(1.5);
     } else {
       setDeviceType2(data.deviceType); setUsedModel2(data.usedModel); setUsedStorage2(data.usedStorage);
+      setUsedColor2(data.usedColor || "");
       setCondition2(data.condition); setTradeInValue2(data.tradeInValue); setHasSecondDevice(true); setStep(2);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -376,7 +390,11 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
                 <p className="text-[14px] mt-1" style={{ color: "var(--ti-muted)" }}>Selecione o tipo de dispositivo</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {DEVICE_OPTIONS.map((d) => (
+                {DEVICE_OPTIONS.filter(d => {
+                  const catMap: Record<string, string> = { iphone: "IPHONE", ipad: "IPAD", macbook: "MACBOOK", watch: "APPLE_WATCH" };
+                  const cfg = catConfigs.find(c => c.categoria === catMap[d.type]);
+                  return !cfg || cfg.ativo; // se não tem config ou está ativo, mostra
+                }).map((d) => (
                   <button
                     key={d.type}
                     onClick={() => handleDeviceSelect(d.type)}

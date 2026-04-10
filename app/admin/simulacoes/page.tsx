@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
+import TradeInCalculatorMulti from "@/components/TradeInCalculatorMulti";
 import { corParaPT } from "@/lib/cor-pt";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
@@ -20,12 +22,17 @@ interface SimulacaoRow {
   modelo_usado: string;
   storage_usado: string;
   cor_usado?: string | null;
-  cor_usado2?: string | null;
   avaliacao_usado: number;
   diferenca: number;
   status: "GOSTEI" | "SAIR";
   forma_pagamento: string | null;
   condicao_linhas: string[] | null;
+  // 2º aparelho na troca
+  modelo_usado2?: string | null;
+  storage_usado2?: string | null;
+  cor_usado2?: string | null;
+  avaliacao_usado2?: number | null;
+  condicao_linhas2?: string[] | null;
   contatado: boolean | null;
   vendedor: string | null;
   follow_up_enviado: boolean | null;
@@ -113,11 +120,14 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [modalRow, setModalRow] = useState<SimulacaoRow | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState<Record<string, string>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
@@ -129,8 +139,13 @@ export default function AdminPage() {
       if (res.ok) {
         const json = await res.json();
         setData(json.data ?? []);
+      } else {
+        // Evitar tela em branco — setar array vazio se erro
+        setData([]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setData([]);
+    }
     setLoading(false);
   }, []);
 
@@ -143,6 +158,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (password) fetchData(password);
   }, [password, fetchData]);
+  useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -255,10 +271,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
-        {(["simulacoes", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
+        {(["simulacoes", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -284,6 +300,19 @@ export default function AdminPage() {
 
       {/* WhatsApp Config tab */}
       {mainTab === "whatsapp" && <WhatsAppConfigPanel password={password} />}
+
+      {/* Simulador Interno tab */}
+      {mainTab === "simulador" && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-[#D2D2D7] bg-[#F5F5F7]">
+            <h2 className="font-bold text-[#1D1D1F]">Simulador Interno</h2>
+            <p className="text-sm text-[#86868B] mt-1">Use o simulador abaixo para calcular valores de troca internamente, sem gerar registro de cliente.</p>
+          </div>
+          <div className="max-w-2xl mx-auto py-6 px-4">
+            <TradeInCalculatorMulti vendedor={null} temaParam="clean" />
+          </div>
+        </div>
+      )}
 
       {/* Follow-up tab */}
       {mainTab === "followup" && (() => {
@@ -829,19 +858,122 @@ export default function AdminPage() {
                 <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
               </div>
 
-              {/* Used device */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca</h3>
-                <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
-                {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
-                  <div className="text-xs text-[#6E6E73] space-y-0.5">
-                    {modalRow.condicao_linhas.map((linha, i) => (
-                      <p key={i}>{linha}</p>
-                    ))}
+              {/* Used device(s) */}
+              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">
+                    {modalRow.modelo_usado2 ? "Aparelho na Troca (1º)" : "Aparelho na Troca"}
+                  </h3>
+                  <button onClick={() => {
+                    if (editMode) { setEditMode(false); return; }
+                    setEditData({
+                      modelo_usado: modalRow.modelo_usado || "",
+                      storage_usado: modalRow.storage_usado || "",
+                      cor_usado: modalRow.cor_usado || "",
+                      avaliacao_usado: String(modalRow.avaliacao_usado || 0),
+                      condicao_linhas: (modalRow.condicao_linhas || []).join("\n"),
+                      modelo_usado2: modalRow.modelo_usado2 || "",
+                      storage_usado2: modalRow.storage_usado2 || "",
+                      cor_usado2: modalRow.cor_usado2 || "",
+                      avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
+                      condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
+                    });
+                    setEditMode(true);
+                  }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
+                    {editMode ? "Cancelar" : "Editar"}
+                  </button>
+                </div>
+                {editMode ? (
+                  <div className="space-y-4">
+                    {/* 1º Aparelho */}
+                    <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                      <p className="text-xs font-bold text-[#1D1D1F]">{modalRow.modelo_usado2 ? "1º Aparelho" : "Aparelho na Troca"}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas: e.target.value }))} placeholder={"Saude bateria 89%\nSem marcas de uso\nSem pecas trocadas\nSem caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
+                    </div>
+                    {/* 2º Aparelho */}
+                    {modalRow.modelo_usado2 && (
+                      <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                        <p className="text-xs font-bold text-[#1D1D1F]">2º Aparelho</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        </div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas2 || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas2: e.target.value }))} placeholder={"Saude bateria 87%\nSem marcas de uso\nTem a caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
+                      </div>
+                    )}
+                    {/* Resumo em tempo real */}
+                    <div className="bg-[#F5F5F7] rounded-lg p-3 space-y-1">
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(modalRow.preco_novo)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 1º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado) || 0)}</span></div>
+                      {(Number(editData.avaliacao_usado2) || 0) > 0 && <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 2º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado2) || 0)}</span></div>}
+                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt(modalRow.preco_novo - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
+                    </div>
+                    <button
+                      disabled={savingEdit}
+                      onClick={async () => {
+                        setSavingEdit(true);
+                        try {
+                          const aval1 = Number(editData.avaliacao_usado) || 0;
+                          const aval2 = Number(editData.avaliacao_usado2) || 0;
+                          const dif = modalRow.preco_novo - aval1 - aval2;
+                          const condLines1 = editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
+                          const condLines2 = editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null;
+                          const res = await fetch("/api/admin/simulacoes", {
+                            method: "PATCH",
+                            headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif }),
+                          });
+                          if (res.ok) {
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setEditMode(false);
+                            fetchData(password);
+                          } else { alert("Erro ao salvar"); }
+                        } finally { setSavingEdit(false); }
+                      }}
+                      className="w-full py-2 bg-[#0071E3] text-white text-sm font-semibold rounded-xl hover:bg-[#0062C4] disabled:opacity-50 transition-colors"
+                    >
+                      {savingEdit ? "Salvando..." : "Salvar alteracoes"}
+                    </button>
                   </div>
+                ) : (
+                  <>
+                    <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
+                    {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
+                      <div className="text-xs text-[#6E6E73] space-y-0.5">
+                        {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
+                      </div>
+                    )}
+                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
+                  </>
                 )}
-                <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
               </div>
+              {/* 2nd used device */}
+              {modalRow.modelo_usado2 && !editMode && (
+                <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+                  <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Aparelho na Troca (2º)</h3>
+                  <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado2} {modalRow.storage_usado2 || ""}{modalRow.cor_usado2 ? ` — ${corParaPT(modalRow.cor_usado2)}` : ""}</p>
+                  {modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0 && (
+                    <div className="text-xs text-[#6E6E73] space-y-0.5">
+                      {modalRow.condicao_linhas2.map((linha, i) => <p key={i}>{linha}</p>)}
+                    </div>
+                  )}
+                  {(modalRow.avaliacao_usado2 ?? 0) > 0 && (
+                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado2!)}</p>
+                  )}
+                </div>
+              )}
 
               {/* Financial summary */}
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
@@ -891,6 +1023,7 @@ export default function AdminPage() {
                     const cond = parseCondicao(modalRow.condicao_linhas);
                     const obs = buildTrocaObs(modalRow.condicao_linhas);
                     const params = new URLSearchParams({
+                      sim_id: modalRow.id || "",
                       produto: `${modalRow.modelo_novo} ${modalRow.storage_novo}`.trim(),
                       preco: String(modalRow.preco_novo || ""),
                       cliente_nome: modalRow.nome || "",
@@ -898,12 +1031,18 @@ export default function AdminPage() {
                       troca_produto: `${modalRow.modelo_usado} ${modalRow.storage_usado}`.trim(),
                       troca_valor: String(modalRow.avaliacao_usado || ""),
                       troca_cor: modalRow.cor_usado || "",
-                      troca_bateria: cond.bateria,
-                      troca_marcas_uso: cond.marcasUso,
-                      troca_pecas_trocadas: cond.pecasTrocadas,
-                      troca_caixa_original: cond.caixaOriginal,
-                      troca_observacao: obs,
+                      troca_condicao: Array.isArray(modalRow.condicao_linhas) ? modalRow.condicao_linhas.join(" | ") : "",
+                      vendedor: modalRow.vendedor || "",
                     });
+                    // Device 2
+                    if (modalRow.modelo_usado2) {
+                      params.set("troca_produto2", `${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}`.trim());
+                      if (modalRow.avaliacao_usado2) params.set("troca_valor2", String(modalRow.avaliacao_usado2));
+                      if (modalRow.cor_usado2) params.set("troca_cor2", modalRow.cor_usado2);
+                      if (Array.isArray(modalRow.condicao_linhas2) && modalRow.condicao_linhas2.length > 0) params.set("troca_condicao2", modalRow.condicao_linhas2.join(" | "));
+                    }
+                    // Limpa params vazios
+                    for (const [k, v] of [...params.entries()]) { if (!v) params.delete(k); }
                     window.open(`/admin/gerar-link?${params.toString()}`, "_blank");
                   }}
                   className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#0071E3] hover:bg-[#0062C4] text-white text-sm font-semibold transition-colors text-center"

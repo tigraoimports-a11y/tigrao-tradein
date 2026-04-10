@@ -75,12 +75,15 @@ export async function GET(req: NextRequest) {
 
   let query = supabase.from("vendas").select("*").order("data", { ascending: false });
   if (search) {
-    // Se parece CPF (só números e pontos/traço), busca por CPF; senão busca por nome
+    // Se parece CPF (só números e pontos/traço), busca por CPF; senão busca por nome ou ambos
     const cleanSearch = search.replace(/[\.\-\/\s]/g, "");
+    // Formata como CPF (XXX.XXX.XXX-XX) para casar com banco que armazena com pontuação
+    const fmtCpf = cleanSearch.length >= 3 ? cleanSearch.replace(/^(\d{3})(\d{3})?(\d{3})?(\d{1,2})?$/, (_m, a, b, c, d) =>
+      [a, b, c].filter(Boolean).join(".") + (d ? `-${d}` : "")) : cleanSearch;
     if (/^\d{3,}$/.test(cleanSearch)) {
-      query = query.ilike("cpf", `%${cleanSearch}%`);
+      query = query.or(`cpf.ilike.%${cleanSearch}%,cpf.ilike.%${fmtCpf}%`);
     } else {
-      query = query.ilike("cliente", `%${search}%`);
+      query = query.or(`cliente.ilike.%${search}%,cpf.ilike.%${search}%`);
     }
   } else {
     if (from) query = query.gte("data", from);
@@ -96,7 +99,7 @@ export async function GET(req: NextRequest) {
   const fornecedor = searchParams.get("fornecedor");
   if (fornecedor) query = query.ilike("fornecedor", fornecedor);
 
-  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 1000;
+  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 500;
   const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
@@ -438,6 +441,44 @@ export async function POST(req: NextRequest) {
   }
 
   // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
+
+  // Criar termo de procedência automaticamente (status PENDENTE) se houver troca
+  if (hasTroca1Info || (data?.troca_produto2)) {
+    try {
+      const aparelhosTermo: { modelo: string; cor?: string; imei?: string; serial?: string; condicao?: string }[] = [];
+      if (data?.troca_produto || seminovoData?.produto) {
+        aparelhosTermo.push({
+          modelo: data?.troca_produto || seminovoData?.produto || "",
+          cor: data?.troca_cor || "",
+          imei: data?.troca_imei || seminovoData?.imei || "",
+          serial: data?.troca_serial || seminovoData?.serial_no || "",
+          condicao: [
+            data?.troca_bateria ? `Bateria ${data.troca_bateria}%` : "",
+            data?.troca_grade ? `Grade ${data.troca_grade}` : "",
+          ].filter(Boolean).join(", "),
+        });
+      }
+      if (data?.troca_produto2) {
+        aparelhosTermo.push({
+          modelo: data.troca_produto2,
+          cor: data?.troca_cor2 || "",
+          imei: data?.troca_imei2 || "",
+          serial: data?.troca_serial2 || "",
+          condicao: data?.troca_bateria2 ? `Bateria ${data.troca_bateria2}%` : "",
+        });
+      }
+      if (aparelhosTermo.length > 0) {
+        await supabase.from("termos_procedencia").insert({
+          venda_id: data?.id,
+          cliente_nome: (body.cliente || "").toUpperCase(),
+          cliente_cpf: body.cpf || "",
+          aparelhos: aparelhosTermo,
+          status: "PENDENTE",
+          gerado_por: usuario,
+        });
+      }
+    } catch { /* ignore — não bloqueia a venda */ }
+  }
 
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});

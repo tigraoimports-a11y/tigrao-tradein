@@ -244,6 +244,39 @@ export async function GET(req: NextRequest) {
         is_lojista: Boolean(r.is_lojista),
         vendas: [],
       }));
+
+      // Mergear clientes de encomendas (podem não ter vendas ainda)
+      if (tab === "clientes") {
+        let encQuery = supabase.from("encomendas").select("cliente, cpf, email, whatsapp, bairro, data, produto, valor_venda").not("status", "eq", "CANCELADA");
+        if (search) encQuery = encQuery.or(`cliente.ilike.%${search}%,cpf.ilike.%${search}%`);
+        const { data: encs } = await encQuery;
+        if (encs && encs.length > 0) {
+          const existingNames = new Set(clientes.map(c => c.nome.toLowerCase().trim()));
+          const encMap = new Map<string, ResumoRow>();
+          for (const e of encs) {
+            if (!e.cliente) continue;
+            const key = e.cliente.toLowerCase().trim();
+            if (existingNames.has(key)) continue; // já está nos clientes de vendas
+            const existing = encMap.get(key);
+            if (existing) {
+              existing.total_compras++;
+              existing.total_gasto += Number(e.valor_venda || 0);
+              if (e.data > existing.ultima_compra) { existing.ultima_compra = e.data; existing.ultimo_produto = e.produto || ""; }
+              if (e.data < existing.cliente_desde) existing.cliente_desde = e.data;
+            } else {
+              encMap.set(key, {
+                nome: e.cliente, cpf: e.cpf || null, cnpj: null, email: e.email || null,
+                bairro: e.bairro || null, cidade: null, uf: null,
+                total_compras: 1, total_gasto: Number(e.valor_venda || 0),
+                ultima_compra: e.data || "", ultimo_produto: e.produto || "",
+                cliente_desde: e.data || "", is_lojista: false, vendas: [],
+              });
+            }
+          }
+          clientes.push(...encMap.values());
+        }
+      }
+
       return NextResponse.json({
         clientes,
         total: clientes.length,
@@ -262,10 +295,13 @@ export async function GET(req: NextRequest) {
 
   if (search) {
     const clean = search.replace(/[\.\-\/\s]/g, "");
+    // Formata como CPF (XXX.XXX.XXX-XX) para casar com banco que armazena com pontuação
+    const fmtCpf = clean.length >= 3 ? clean.replace(/^(\d{3})(\d{3})?(\d{3})?(\d{1,2})?$/, (_m, a, b, c, d) =>
+      [a, b, c].filter(Boolean).join(".") + (d ? `-${d}` : "")) : clean;
     if (/^[A-Z0-9]{8,}$/i.test(clean)) {
-      query = query.or(`serial_no.ilike.%${clean}%,imei.ilike.%${clean}%,cpf.ilike.%${clean}%,cliente.ilike.%${search}%`);
+      query = query.or(`serial_no.ilike.%${clean}%,imei.ilike.%${clean}%,cpf.ilike.%${clean}%,cpf.ilike.%${fmtCpf}%,cliente.ilike.%${search}%`);
     } else if (/^\d{3,}$/.test(clean)) {
-      query = query.ilike("cpf", `%${clean}%`);
+      query = query.or(`cpf.ilike.%${clean}%,cpf.ilike.%${fmtCpf}%`);
     } else {
       query = query.ilike("cliente", `%${search}%`);
     }

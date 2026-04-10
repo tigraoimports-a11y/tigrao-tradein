@@ -169,8 +169,11 @@ export async function POST(request: Request) {
     entrada: Number(body.entrada) || 0,
     troca_produto: body.troca_produto || null,
     troca_valor: Number(body.troca_valor) || 0,
+    troca_condicao: body.troca_condicao || null,
+    troca_cor: body.troca_cor || null,
     troca_produto2: body.troca_produto2 || null,
     troca_valor2: Number(body.troca_valor2) || 0,
+    desconto: Number(body.desconto) || 0,
     vendedor: body.vendedor || null,
     operador: getUser(request),
     simulacao_id: body.simulacao_id || null,
@@ -199,12 +202,18 @@ export async function PATCH(request: Request) {
   const editableFields = [
     "arquivado", "status", "observacao",
     "cliente_nome", "cliente_telefone", "cliente_cpf", "cliente_email",
-    "produto", "cor", "valor", "forma_pagamento", "parcelas", "entrada",
-    "troca_produto", "troca_valor", "troca_produto2", "troca_valor2",
+    "produto", "cor", "valor", "desconto", "forma_pagamento", "parcelas", "entrada",
+    "produtos_extras",
+    "troca_produto", "troca_valor", "troca_condicao", "troca_cor",
+    "troca_produto2", "troca_valor2", "troca_condicao2", "troca_cor2",
     "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
+  }
+  // produtos_extras deve ser salvo como JSON string
+  if (allowed.produtos_extras && Array.isArray(allowed.produtos_extras)) {
+    allowed.produtos_extras = JSON.stringify(allowed.produtos_extras);
   }
   allowed.updated_at = new Date().toISOString();
 

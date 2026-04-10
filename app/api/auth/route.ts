@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { rateLimit } from "@/lib/rate-limit";
+import bcrypt from "bcryptjs";
 
 // GET: buscar permissões atualizadas de um usuário (usado para re-validar sessão)
 export async function GET(req: NextRequest) {
@@ -31,21 +33,46 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 5 tentativas por minuto por IP
+  const rl = rateLimit(req, 5, 60 * 1000, "auth-login");
+  if (rl) return rl;
+
   const { login, senha } = await req.json();
 
   if (!login || !senha) {
     return NextResponse.json({ error: "Login e senha obrigatorios" }, { status: 400 });
   }
 
+  // Buscar usuário pelo login (sem comparar senha direto no query)
   const { data: user } = await supabase
     .from("usuarios")
     .select("*")
     .eq("login", login.toLowerCase().trim())
-    .eq("senha", senha)
     .eq("ativo", true)
     .single();
 
   if (!user) {
+    return NextResponse.json({ error: "Login ou senha incorretos" }, { status: 401 });
+  }
+
+  // Verificar senha: suporta bcrypt hash ($2a$/$2b$) ou texto puro (legado)
+  const senhaDB = user.senha || "";
+  const isHash = senhaDB.startsWith("$2a$") || senhaDB.startsWith("$2b$");
+
+  let senhaValida = false;
+  if (isHash) {
+    senhaValida = await bcrypt.compare(senha, senhaDB);
+  } else {
+    // Legado: comparação direta em texto puro
+    senhaValida = senha === senhaDB;
+    // Auto-migrar para hash na próxima oportunidade
+    if (senhaValida) {
+      const hash = await bcrypt.hash(senha, 10);
+      await supabase.from("usuarios").update({ senha: hash }).eq("id", user.id);
+    }
+  }
+
+  if (!senhaValida) {
     return NextResponse.json({ error: "Login ou senha incorretos" }, { status: 401 });
   }
 

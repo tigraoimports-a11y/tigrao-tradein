@@ -51,7 +51,6 @@ const NAV: NavEntry[] = [
       { href: "/admin/etiquetas-preco", label: "Etiquetas de Preco", icon: "\u{1F4B0}", pageKey: "etiquetas_preco" },
       { href: "/admin/encomendas", label: "Encomendas", icon: "\u{1F6D2}", pageKey: "encomendas" },
       { href: "/admin/contrato-encomenda", label: "Contrato de Encomenda", icon: "\u{1F4C4}", pageKey: "contrato_encomenda" },
-      { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
       { href: "/admin/clientes?tab=fornecedores", label: "Fornecedores", icon: "\u{1F91D}", pageKey: "fornecedores" },
       { href: "/admin/catalogo", label: "Configurações Produtos", icon: "⚙️", pageKey: "catalogo" },
     ],
@@ -77,7 +76,8 @@ const NAV: NavEntry[] = [
     items: [
       { href: "/admin/mostruario", label: "Mostruario", icon: "\u{1F5BC}\uFE0F", pageKey: "mostruario" },
       { href: "/admin/simulacoes", label: "Simulacoes", icon: "\u{1F4F1}", pageKey: "simulacoes" },
-      { href: "/admin/tradein-precos", label: "Precos Trade-In", icon: "\u{1F4B0}", pageKey: "tradein_precos" },
+      { href: "/admin/precos", label: "Alteração de Preços", icon: "\u{1F3F7}\uFE0F", pageKey: "precos" },
+      { href: "/admin/usados", label: "Precos Trade-In", icon: "\u{1F4B0}", pageKey: "tradein_precos" },
       { href: "/admin/analytics", label: "Funil Trade-In", icon: "\u{1F4C8}", pageKey: "funil_tradein" },
     ],
   },

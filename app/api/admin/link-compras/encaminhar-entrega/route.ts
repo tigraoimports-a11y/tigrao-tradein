@@ -45,7 +45,35 @@ export async function POST(request: Request) {
 
   if (!cliente) return NextResponse.json({ error: "Nome do cliente ausente — cliente ainda não preencheu?" }, { status: 400 });
 
-  const produtoTxt = link.cor ? `${link.produto}` : link.produto;
+  // Combinar produto principal + extras (multi-produto)
+  const prods = [link.produto];
+  if (link.produtos_extras) {
+    try {
+      const extras = typeof link.produtos_extras === "string"
+        ? JSON.parse(link.produtos_extras)
+        : link.produtos_extras;
+      if (Array.isArray(extras)) prods.push(...extras);
+    } catch { /* ignore */ }
+  }
+  const produtoTxt = prods.join(" + ");
+
+  // Calcular valor com taxa de cartão (mesma tabela do gerar-link)
+  const TAXAS: Record<number, number> = {
+    1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
+    7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
+    13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
+    19: 20, 20: 21, 21: 22,
+  };
+  const valorBase = link.valor != null ? Number(link.valor) - Number(link.desconto || 0) : 0;
+  const entradaVal = Number(link.entrada || 0);
+  const trocaVal = Number(link.troca_valor || 0) + Number(link.troca_valor2 || 0);
+  const parcelasNum = Number(link.parcelas || 0);
+  const forma = link.forma_pagamento || "";
+  const isCartao = forma === "Cartao Credito" || forma === "Link de Pagamento";
+  const restante = Math.max(0, valorBase - entradaVal - trocaVal);
+  const taxaPct = isCartao && parcelasNum > 0 ? (TAXAS[parcelasNum] || 0) : 0;
+  const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
+  const valorFinal = entradaVal + restanteComTaxa;
 
   const { data: entrega, error: e2 } = await supabase
     .from("entregas")
@@ -61,11 +89,15 @@ export async function POST(request: Request) {
       observacao: observacao || `Encaminhada do link ${link.short_code}`,
       produto: produtoTxt,
       tipo: link.tipo === "TROCA" ? "TROCA" : null,
-      forma_pagamento: link.forma_pagamento || null,
-      valor: link.valor || null,
-      entrada: link.entrada != null ? link.entrada : null,
-      parcelas: link.parcelas != null ? Number(link.parcelas) : null,
-      valor_total: link.valor != null ? Number(link.valor) : null,
+      forma_pagamento: (() => {
+        if (!forma) return null;
+        if (isCartao && parcelasNum > 0) return `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`;
+        return forma;
+      })(),
+      valor: valorFinal > 0 ? valorFinal : (valorBase > 0 ? valorBase : null),
+      entrada: entradaVal > 0 ? entradaVal : null,
+      parcelas: parcelasNum > 0 ? parcelasNum : null,
+      valor_total: valorFinal > 0 ? valorFinal : (valorBase > 0 ? valorBase : null),
       vendedor: link.vendedor || null,
     })
     .select()

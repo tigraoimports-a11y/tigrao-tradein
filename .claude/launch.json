@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "tigrao-tradein",
-      "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["/Users/Nicolas/Projetos/tigrao-tradein/start-dev.sh"],
+      "runtimeExecutable": "/opt/homebrew/bin/npx",
+      "runtimeArgs": ["next", "dev"],
       "port": 3000
     }
   ]
