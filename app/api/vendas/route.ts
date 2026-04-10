@@ -605,6 +605,24 @@ export async function PATCH(req: NextRequest) {
       if (!ok) console.error("[Vendas] Falha ao enviar notificação Telegram para:", venda.cliente);
       else console.log("[Vendas] Notificação Telegram enviada com sucesso para:", venda.cliente);
     }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
+
+    // Enviar Nota Fiscal por email ao cliente (se tem email + NF anexada)
+    if (venda.email && venda.nota_fiscal_url) {
+      import("@/lib/email").then(({ enviarNotaFiscal }) => {
+        enviarNotaFiscal({
+          to: venda.email!,
+          clienteNome: venda.cliente || "Cliente",
+          produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
+          valor: Number(venda.preco_vendido || 0),
+          notaFiscalUrl: venda.nota_fiscal_url!,
+        }).then(() => {
+          console.log("[Vendas] NF enviada por email para:", venda.email);
+          logActivity(usuario, "NF enviada por email", `${venda.cliente} → ${venda.email}`, "vendas", id).catch(() => {});
+        }).catch(err => {
+          console.error("[Vendas] Erro ao enviar NF por email:", err);
+        });
+      }).catch(err => console.error("[Vendas] Erro ao importar email:", err));
+    }
   }
 
   // Se tem reajustes, sincronizar com tabela reajustes (para relatório da noite)
