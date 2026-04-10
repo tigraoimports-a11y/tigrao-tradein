@@ -396,7 +396,7 @@ export default function GerarLinkPage() {
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
-  const [editLink, setEditLink] = useState<Record<string, string>>({});
+  const [editLink, setEditLink] = useState<Record<string, unknown>>({});
   const [savingDados, setSavingDados] = useState(false);
 
   useEffect(() => {
@@ -422,6 +422,8 @@ export default function GerarLinkPage() {
         troca_produto2: viewDataLink.troca_produto2 || "",
         troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
         observacao: viewDataLink.observacao || "",
+        desconto: viewDataLink.desconto != null ? String(viewDataLink.desconto) : "",
+        produtos_extras: viewDataLink.produtos_extras || null,
       });
     } else {
       setEditDados({});
@@ -456,6 +458,8 @@ export default function GerarLinkPage() {
         troca_produto2: editLink.troca_produto2 || null,
         troca_valor2: Number(editLink.troca_valor2) || 0,
         observacao: editLink.observacao || null,
+        desconto: Number(editLink.desconto) || 0,
+        produtos_extras: editLink.produtos_extras || null,
       };
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -1024,7 +1028,7 @@ export default function GerarLinkPage() {
                       <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">{label}</label>
                       <input
                         type={type}
-                        value={editLink[k] || ""}
+                        value={String(editLink[k] || "")}
                         onChange={(e) => setEditLink({ ...editLink, [k]: e.target.value })}
                         className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
                       />
