@@ -64,7 +64,7 @@ WHERE serial_no IN ('HPVP9MTC7J', 'DM64TR2VTP', 'G7KM2MWMW9', 'M5DVPK2RQ2');
 -- Precisamos do ID do gasto. Usar subquery:
 UPDATE estoque SET pedido_fornecedor_id = (
   SELECT id FROM gastos
-  WHERE descricao ILIKE '%CRISTIANO%' AND data = '2026-03-30' AND horario = '12:54:00'
+  WHERE descricao ILIKE '%CRISTIANO%' AND data = '2026-03-30' AND hora = '12:54:00'
   LIMIT 1
 ), updated_at = now()
 WHERE serial_no IN ('GY2V22WCJR', 'MGX1F4CP70', 'LGVM2Y0FHK', 'D7C4G764N2')
@@ -73,7 +73,7 @@ WHERE serial_no IN ('GY2V22WCJR', 'MGX1F4CP70', 'LGVM2Y0FHK', 'D7C4G764N2')
 -- Vincular os itens corretos ao gasto do Caso 2 (11:48)
 UPDATE estoque SET pedido_fornecedor_id = (
   SELECT id FROM gastos
-  WHERE descricao ILIKE '%CRISTIANO%' AND data = '2026-03-30' AND horario = '11:48:00'
+  WHERE descricao ILIKE '%CRISTIANO%' AND data = '2026-03-30' AND hora = '11:48:00'
   LIMIT 1
 ), updated_at = now()
 WHERE serial_no IN ('F9CXCQP49N', 'JGW4RM9JMX')
