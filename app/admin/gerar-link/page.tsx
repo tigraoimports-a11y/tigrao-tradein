@@ -118,7 +118,7 @@ export default function GerarLinkPage() {
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
-      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/(\d+)\s*[ºª°]/g, "$1")
       .replace(/\bGENERATION\b/gi, "GEN")
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
