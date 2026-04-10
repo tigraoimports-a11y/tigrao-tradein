@@ -210,6 +210,34 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // =========== Detalhe: vendas de um cliente específico (p/ modal) ===========
+  const vendasCliente = searchParams.get("vendas_cliente");
+  if (vendasCliente) {
+    const isLojista = tab === "lojistas";
+    let query = supabase
+      .from("vendas")
+      .select("id,data,cliente,produto,preco_vendido,forma,banco,serial_no,imei,tipo,origem,status_pagamento,usar_credito_loja")
+      .order("data", { ascending: false });
+
+    if (isLojista) {
+      query = query.ilike("cliente", `%${vendasCliente}%`).or("tipo.eq.ATACADO,origem.eq.ATACADO");
+    } else {
+      query = query.ilike("cliente", `%${vendasCliente}%`);
+    }
+
+    const { data: rows } = await query.limit(100);
+    const vendas = (rows || [])
+      .filter((v: Record<string, unknown>) => v.status_pagamento !== "CANCELADO")
+      .map((v: Record<string, unknown>) => ({
+        id: v.id, data: v.data, produto: v.produto,
+        preco_vendido: Number(v.preco_vendido || 0),
+        forma: v.forma, banco: v.banco,
+        serial_no: v.serial_no, imei: v.imei,
+        usar_credito_loja: Number((v as Record<string, unknown>).usar_credito_loja || 0),
+      }));
+    return NextResponse.json({ vendas });
+  }
+
   // =========== TABS: clientes / lojistas — via RPC (SQL group by) ===========
   // Evita baixar todas as vendas pro Node — Postgres agrega e retorna só o resumo.
   if (tab === "clientes" || tab === "lojistas") {

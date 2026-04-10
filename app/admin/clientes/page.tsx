@@ -153,6 +153,8 @@ export default function ClientesPage() {
     return n;
   });
   const [detailClient, setDetailClient] = useState<Cliente | null>(null);
+  const [detailVendas, setDetailVendas] = useState<VendaResumo[]>([]);
+  const [loadingDetailVendas, setLoadingDetailVendas] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
   const [savingClient, setSavingClient] = useState(false);
@@ -257,6 +259,24 @@ export default function ClientesPage() {
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
     } finally { setSavingCredito(false); }
   };
+
+  // Abre modal de detalhe e busca vendas do cliente
+  const openDetail = useCallback(async (c: Cliente) => {
+    setDetailClient(c);
+    setDetailVendas(c.vendas.length > 0 ? c.vendas : []);
+    if (c.vendas.length === 0) {
+      setLoadingDetailVendas(true);
+      try {
+        const params = new URLSearchParams({ tab: c.is_lojista ? "lojistas" : "clientes", vendas_cliente: c.nome });
+        const res = await fetch(`/api/admin/clientes?${params}`, { headers: apiHeaders() });
+        if (res.ok) {
+          const json = await res.json();
+          setDetailVendas(json.vendas || []);
+        }
+      } catch (err) { console.error("Fetch vendas detail:", err); }
+      setLoadingDetailVendas(false);
+    }
+  }, [apiHeaders, tab]);
 
   // Debounce search
   useEffect(() => {
@@ -855,7 +875,7 @@ export default function ClientesPage() {
               {!loading && sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
-                    onClick={() => setDetailClient(c)}
+                    onClick={() => openDetail(c)}
                     className={`${rowCls} ${expandedId === c.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
                   >
                     <td className="px-4 py-3">
@@ -1139,7 +1159,7 @@ export default function ClientesPage() {
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Resumo Financeiro</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid ${c.is_lojista ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Compras</p>
                     <p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{c.total_compras}</p>
@@ -1148,6 +1168,17 @@ export default function ClientesPage() {
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Gasto</p>
                     <p className="text-[14px] font-bold text-green-600 mt-0.5">{fmt(c.total_gasto)}</p>
                   </div>
+                  {c.is_lojista && (() => {
+                    const saldo = saldosLojistas[lojistaKey(c)] || 0;
+                    return (
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Saldo Credito</p>
+                        <p className={`text-[14px] font-bold mt-0.5 ${saldo > 0 ? "text-blue-600" : mS}`}>
+                          {saldo > 0 ? fmt(saldo) : "R$ 0"}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cliente Desde</p>
                     <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(c.cliente_desde)}</p>
@@ -1165,12 +1196,14 @@ export default function ClientesPage() {
               )}
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
-                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({c.vendas.length})</p>
-                {c.vendas.length === 0 ? (
+                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({detailVendas.length})</p>
+                {loadingDetailVendas ? (
+                  <p className={`text-sm text-center py-4 ${mS}`}>Carregando operacoes...</p>
+                ) : detailVendas.length === 0 ? (
                   <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
                 ) : (
                   <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                    {c.vendas.map((v) => (
+                    {detailVendas.map((v) => (
                       <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
