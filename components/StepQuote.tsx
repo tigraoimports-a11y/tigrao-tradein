@@ -5,7 +5,6 @@ import type { QuoteResult, InstallmentOption, AnyConditionData, DeviceType } fro
 import type { LeadSaiu } from "@/lib/supabase";
 import type { NewProduct } from "@/lib/types";
 import { calculateQuote, getWhatsAppUrl, getAnyConditionLines, formatBRL } from "@/lib/calculations";
-import FlexiblePaymentSimulator, { type PaymentBlock, type PaymentSummary, calculatePaymentSummary } from "./FlexiblePaymentSimulator";
 
 const PARCELAS_OPCOES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
 const MOTIVOS_SAIDA = ["Achei o valor alto","Quero me organizar financeiramente","Quero tirar duvidas primeiro","Vou pesquisar em outros lugares","Outro motivo"];
@@ -60,9 +59,6 @@ export default function StepQuote(p: StepQuoteProps) {
   const [entradaStr, setEntradaStr] = useState(""); const [parc, setParc] = useState("");
   const [sairLoading, setSairLoading] = useState(false); const [showFeedback, setShowFeedback] = useState(false); const [showAllParc, setShowAllParc] = useState(false);
   const [motivo, setMotivo] = useState("");
-  const [payMode, setPayMode] = useState<"simples" | "flex">("simples");
-  const [flexBlocks, setFlexBlocks] = useState<PaymentBlock[]>([]);
-  const [flexSummary, setFlexSummary] = useState<PaymentSummary | null>(null);
   const countdown = useCountdown(validadeHoras);
 
   const qt: QuoteResult = calculateQuote(tradeInValue, newPrice);
@@ -72,13 +68,7 @@ export default function StepQuote(p: StepQuoteProps) {
   const qr: QuoteResult = temEnt ? calculateQuote(0, rest) : qt;
   const parcOpts: InstallmentOption[] = qr.installments.filter(i => PARCELAS_OPCOES.includes(i.parcelas));
   const instSel = parc && parc !== "pix" ? qr.installments.find(i => i.parcelas === parseInt(parc)) ?? null : null;
-  const formaPagSimples = buildFormaPag(entNum, dif, parc, qr);
-  const formaPagFlex = flexSummary ? flexSummary.blocks.map(b =>
-    b.tipo === "PIX" ? `PIX: R$ ${b.valor.toLocaleString("pt-BR")}`
-    : b.tipo === "DEBITO" ? `Debito: R$ ${b.valor.toLocaleString("pt-BR")}`
-    : `Credito ${b.parcelas}x de R$ ${b.valorParcela.toLocaleString("pt-BR")} (total R$ ${b.totalBloco.toLocaleString("pt-BR")})`
-  ).join(" + ") : "";
-  const formaPag = payMode === "flex" && formaPagFlex ? formaPagFlex : formaPagSimples;
+  const formaPag = buildFormaPag(entNum, dif, parc, qr);
   const f2 = (v: number) => `R$ ${v.toLocaleString("pt-BR")}`;
   const cL1 = getAnyConditionLines(deviceType, condition);
   const igLine = clienteInstagram ? `Instagram: ${clienteInstagram}\n` : "";
@@ -168,125 +158,101 @@ export default function StepQuote(p: StepQuoteProps) {
           <p className="text-[36px] font-bold" style={{ color: "var(--ti-success)" }}>{formatBRL(dif)}</p>
         </div>
 
-        {/* Toggle Simples / Personalizado */}
-        <div className="flex rounded-xl overflow-hidden" style={{ border: "1px solid var(--ti-card-border, #E8E8ED)" }}>
-          <button onClick={() => setPayMode("simples")}
-            className="flex-1 py-2.5 text-[13px] font-semibold transition-all"
-            style={payMode === "simples" ? { backgroundColor: "var(--ti-accent, #E8740E)", color: "#fff" } : { backgroundColor: "var(--ti-input-bg, #F0F0F5)", color: "var(--ti-text, #1D1D1F)" }}>
-            Parcelamento
-          </button>
-          <button onClick={() => setPayMode("flex")}
-            className="flex-1 py-2.5 text-[13px] font-semibold transition-all"
-            style={payMode === "flex" ? { backgroundColor: "var(--ti-accent, #E8740E)", color: "#fff" } : { backgroundColor: "var(--ti-input-bg, #F0F0F5)", color: "var(--ti-text, #1D1D1F)" }}>
-            Personalizado
-          </button>
+        {/* Installment preview: 12x and 21x (usando valores reais com juros) */}
+        <div className="text-center space-y-1">
+          {(() => {
+            const p12 = parcOpts.find(i => i.parcelas === 12);
+            const p21 = parcOpts.find(i => i.parcelas === 21);
+            return <>
+              {p12 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+                ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>12x de {formatBRL(p12.valorParcela)}</span> no cartão
+              </p>}
+              {p21 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
+                ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>21x de {formatBRL(p21.valorParcela)}</span> no cartão
+              </p>}
+            </>;
+          })()}
         </div>
 
-        {payMode === "simples" ? (
-          <>
-            {/* Installment preview: 12x and 21x */}
-            <div className="text-center space-y-1">
-              {(() => {
-                const p12 = parcOpts.find(i => i.parcelas === 12);
-                const p21 = parcOpts.find(i => i.parcelas === 21);
-                return <>
-                  {p12 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
-                    ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>12x de {formatBRL(p12.valorParcela)}</span> no cartão
-                  </p>}
-                  {p21 && <p className="text-[13px]" style={{ color: "var(--ti-muted)" }}>
-                    ou <span className="font-semibold" style={{ color: "var(--ti-text)" }}>21x de {formatBRL(p21.valorParcela)}</span> no cartão
-                  </p>}
-                </>;
-              })()}
+        {/* Entrada PIX */}
+        <div>
+          <p className="text-[13px] font-medium mb-3 text-center" style={{ color: "var(--ti-text)" }}>Deseja dar uma entrada no PIX? Qual valor?</p>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-medium" style={{ color: "var(--ti-muted)" }}>R$</span>
+            <input type="number" inputMode="numeric" min={0} max={dif-1} placeholder="0" value={entradaStr}
+              onChange={(e) => { setEntradaStr(e.target.value); setParc(""); }}
+              className="w-full pl-10 pr-4 py-3.5 rounded-2xl text-[15px] transition-colors" style={inputStyle} />
+          </div>
+          {temEnt && (
+            <div className="mt-2 rounded-xl px-4 py-3 flex justify-between text-[13px]" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
+              <span style={{ color: "var(--ti-muted)" }}>Restante a parcelar</span>
+              <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(rest)}</span>
             </div>
+          )}
+        </div>
 
-            {/* Entrada PIX */}
-            <div>
-              <p className="text-[13px] font-medium mb-3 text-center" style={{ color: "var(--ti-text)" }}>Deseja dar uma entrada no PIX? Qual valor?</p>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-medium" style={{ color: "var(--ti-muted)" }}>R$</span>
-                <input type="number" inputMode="numeric" min={0} max={dif-1} placeholder="0" value={entradaStr}
-                  onChange={(e) => { setEntradaStr(e.target.value); setParc(""); }}
-                  className="w-full pl-10 pr-4 py-3.5 rounded-2xl text-[15px] transition-colors" style={inputStyle} />
+        {/* Collapsible installment options */}
+        <div>
+          <button onClick={() => setShowAllParc(!showAllParc)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
+            style={{ color: "var(--ti-accent)", backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+            <span>Visualizar todos os parcelamentos</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ti-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: showAllParc ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          {/* Modal popup de parcelas */}
+          {showAllParc && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAllParc(false)}>
+              <div className="w-full max-w-md mx-4 mb-4 sm:mb-0 rounded-2xl overflow-hidden animate-fadeIn" style={{ backgroundColor: "var(--ti-card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
+                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--ti-card-border, #E8E8ED)" }}>
+                  <p className="text-[15px] font-bold" style={{ color: "var(--ti-text)" }}>Escolha o parcelamento</p>
+                  <button onClick={() => setShowAllParc(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-[16px]" style={{ color: "var(--ti-muted)" }}>✕</button>
+                </div>
+                <div className="px-4 py-3 max-h-[60vh] overflow-y-auto space-y-1.5">
+                  {/* PIX */}
+                  <button onClick={() => { setParc("pix"); setShowAllParc(false); }}
+                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all"
+                    style={parc === "pix" ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
+                    <span className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>PIX / A vista</span>
+                    <span className="text-[15px] font-bold" style={{ color: "var(--ti-accent)" }}>{formatBRL(dif)}</span>
+                  </button>
+                  {/* Parcelas */}
+                  {parcOpts.map((i) => (
+                    <button key={i.parcelas} onClick={() => { setParc(String(i.parcelas)); setShowAllParc(false); }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+                      style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
+                      <span className="text-[14px] font-semibold" style={{ color: "var(--ti-text)" }}>{i.parcelas}x de {formatBRL(i.valorParcela)}</span>
+                      <span className="text-[12px]" style={{ color: "var(--ti-muted)" }}>(total {formatBRL(i.total)})</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              {temEnt && (
-                <div className="mt-2 rounded-xl px-4 py-3 flex justify-between text-[13px]" style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)" }}>
-                  <span style={{ color: "var(--ti-muted)" }}>Restante a parcelar</span>
-                  <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(rest)}</span>
-                </div>
-              )}
             </div>
+          )}
 
-            {/* Collapsible installment options */}
-            <div>
-              <button onClick={() => setShowAllParc(!showAllParc)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-[14px] font-medium transition-all duration-200"
-                style={{ color: "var(--ti-accent)", backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
-                <span>Visualizar todos os parcelamentos</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ti-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  style={{ transform: showAllParc ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-
-              {/* Modal popup de parcelas */}
-              {showAllParc && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAllParc(false)}>
-                  <div className="w-full max-w-md mx-4 mb-4 sm:mb-0 rounded-2xl overflow-hidden animate-fadeIn" style={{ backgroundColor: "var(--ti-card-bg, #fff)" }} onClick={e => e.stopPropagation()}>
-                    <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--ti-card-border, #E8E8ED)" }}>
-                      <p className="text-[15px] font-bold" style={{ color: "var(--ti-text)" }}>Escolha o parcelamento</p>
-                      <button onClick={() => setShowAllParc(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-[16px]" style={{ color: "var(--ti-muted)" }}>✕</button>
-                    </div>
-                    <div className="px-4 py-3 max-h-[60vh] overflow-y-auto space-y-1.5">
-                      {/* PIX */}
-                      <button onClick={() => { setParc("pix"); setShowAllParc(false); }}
-                        className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all"
-                        style={parc === "pix" ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
-                        <span className="text-[14px] font-bold" style={{ color: "var(--ti-text)" }}>PIX / A vista</span>
-                        <span className="text-[15px] font-bold" style={{ color: "var(--ti-accent)" }}>{formatBRL(dif)}</span>
-                      </button>
-                      {/* Parcelas */}
-                      {parcOpts.map((i) => (
-                        <button key={i.parcelas} onClick={() => { setParc(String(i.parcelas)); setShowAllParc(false); }}
-                          className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
-                          style={parc === String(i.parcelas) ? { backgroundColor: "var(--ti-accent-light)", border: "2px solid var(--ti-accent)" } : { backgroundColor: "var(--ti-input-bg)", border: "2px solid transparent" }}>
-                          <span className="text-[14px] font-semibold" style={{ color: "var(--ti-text)" }}>{i.parcelas}x de {formatBRL(i.valorParcela)}</span>
-                          <span className="text-[12px]" style={{ color: "var(--ti-muted)" }}>(total {formatBRL(i.total)})</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Resumo da parcela selecionada */}
-              {instSel && (
-                <div className="mt-3 rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
-                  {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
-                    <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
-                  </div>}
-                  <div className="flex justify-between text-[13px] mb-2">
-                    <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
-                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
-                  </div>
-                  <div className="flex justify-between text-[13px]">
-                    <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>(total {formatBRL(instSel.total)})</span>
-                  </div>
-                  {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
-                    <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
-                    <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
-                  </div>}
-                </div>
-              )}
+          {/* Resumo da parcela selecionada — inline */}
+          {instSel && (
+            <div className="mt-3 rounded-2xl p-4 animate-fadeIn" style={{ backgroundColor: "var(--ti-accent-light)", border: "1px solid var(--ti-accent)" }}>
+              {temEnt && <div className="flex justify-between text-[13px] mb-2 pb-2" style={{ borderBottom: `1px solid var(--ti-accent)` }}>
+                <span style={{ color: "var(--ti-muted)" }}>Entrada PIX</span><span className="font-semibold" style={{ color: "var(--ti-success)" }}>{formatBRL(entNum)}</span>
+              </div>}
+              <div className="flex justify-between text-[13px] mb-2">
+                <span style={{ color: "var(--ti-muted)" }}>{instSel.parcelas}x no cartao</span>
+                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>{formatBRL(instSel.valorParcela)}/mes</span>
+              </div>
+              <div className="flex justify-between text-[13px]">
+                <span style={{ color: "var(--ti-muted)" }}>Total cartao</span><span style={{ color: "var(--ti-muted)" }}>(total {formatBRL(instSel.total)})</span>
+              </div>
+              {temEnt && <div className="flex justify-between text-[13px] mt-2 pt-2" style={{ borderTop: `1px solid var(--ti-accent)` }}>
+                <span className="font-semibold" style={{ color: "var(--ti-text)" }}>Total geral</span>
+                <span className="font-bold" style={{ color: "var(--ti-text)" }}>{formatBRL(entNum + instSel.total)}</span>
+              </div>}
             </div>
-          </>
-        ) : (
-          /* Modo Personalizado — simulador flexivel */
-          <FlexiblePaymentSimulator
-            totalAPagar={dif}
-            onPaymentChange={(blocks, summary) => { setFlexBlocks(blocks); setFlexSummary(summary); }}
-          />
-        )}
+          )}
+        </div>
       </div>
 
       {/* CTA — leva pro formulário de compra preenchido */}
