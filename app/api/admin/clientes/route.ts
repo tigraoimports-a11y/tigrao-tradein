@@ -13,6 +13,20 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search")?.trim() || "";
   const tab = searchParams.get("tab") || "clientes";
 
+  // =========== Vendas de um cliente específico (lazy load) ===========
+  const clientVendas = searchParams.get("client_vendas");
+  if (clientVendas) {
+    const { data, error } = await supabase
+      .from("vendas")
+      .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei")
+      .ilike("cliente", clientVendas)
+      .neq("status_pagamento", "CANCELADO")
+      .order("data", { ascending: false })
+      .limit(200);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ vendas: data || [] });
+  }
+
   // =========== TAB: FORNECEDORES ===========
   if (tab === "fornecedores") {
     // 1) Buscar cadastro de fornecedores (tabela master)
@@ -210,34 +224,6 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // =========== Detalhe: vendas de um cliente específico (p/ modal) ===========
-  const vendasCliente = searchParams.get("vendas_cliente");
-  if (vendasCliente) {
-    const isLojista = tab === "lojistas";
-    let query = supabase
-      .from("vendas")
-      .select("id,data,cliente,produto,preco_vendido,forma,banco,serial_no,imei,tipo,origem,status_pagamento,usar_credito_loja")
-      .order("data", { ascending: false });
-
-    if (isLojista) {
-      query = query.ilike("cliente", `%${vendasCliente}%`).or("tipo.eq.ATACADO,origem.eq.ATACADO");
-    } else {
-      query = query.ilike("cliente", `%${vendasCliente}%`);
-    }
-
-    const { data: rows } = await query.limit(100);
-    const vendas = (rows || [])
-      .filter((v: Record<string, unknown>) => v.status_pagamento !== "CANCELADO")
-      .map((v: Record<string, unknown>) => ({
-        id: v.id, data: v.data, produto: v.produto,
-        preco_vendido: Number(v.preco_vendido || 0),
-        forma: v.forma, banco: v.banco,
-        serial_no: v.serial_no, imei: v.imei,
-        usar_credito_loja: Number((v as Record<string, unknown>).usar_credito_loja || 0),
-      }));
-    return NextResponse.json({ vendas });
-  }
-
   // =========== TABS: clientes / lojistas — via RPC (SQL group by) ===========
   // Evita baixar todas as vendas pro Node — Postgres agrega e retorna só o resumo.
   if (tab === "clientes" || tab === "lojistas") {
@@ -272,6 +258,39 @@ export async function GET(req: NextRequest) {
         is_lojista: Boolean(r.is_lojista),
         vendas: [],
       }));
+
+      // Mergear clientes de encomendas (podem não ter vendas ainda)
+      if (tab === "clientes") {
+        let encQuery = supabase.from("encomendas").select("cliente, cpf, email, whatsapp, bairro, data, produto, valor_venda").not("status", "eq", "CANCELADA");
+        if (search) encQuery = encQuery.or(`cliente.ilike.%${search}%,cpf.ilike.%${search}%`);
+        const { data: encs } = await encQuery;
+        if (encs && encs.length > 0) {
+          const existingNames = new Set(clientes.map(c => c.nome.toLowerCase().trim()));
+          const encMap = new Map<string, ResumoRow>();
+          for (const e of encs) {
+            if (!e.cliente) continue;
+            const key = e.cliente.toLowerCase().trim();
+            if (existingNames.has(key)) continue; // já está nos clientes de vendas
+            const existing = encMap.get(key);
+            if (existing) {
+              existing.total_compras++;
+              existing.total_gasto += Number(e.valor_venda || 0);
+              if (e.data > existing.ultima_compra) { existing.ultima_compra = e.data; existing.ultimo_produto = e.produto || ""; }
+              if (e.data < existing.cliente_desde) existing.cliente_desde = e.data;
+            } else {
+              encMap.set(key, {
+                nome: e.cliente, cpf: e.cpf || null, cnpj: null, email: e.email || null,
+                bairro: e.bairro || null, cidade: null, uf: null,
+                total_compras: 1, total_gasto: Number(e.valor_venda || 0),
+                ultima_compra: e.data || "", ultimo_produto: e.produto || "",
+                cliente_desde: e.data || "", is_lojista: false, vendas: [],
+              });
+            }
+          }
+          clientes.push(...encMap.values());
+        }
+      }
+
       return NextResponse.json({
         clientes,
         total: clientes.length,

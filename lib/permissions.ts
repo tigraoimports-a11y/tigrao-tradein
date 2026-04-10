@@ -28,6 +28,7 @@ export const PAGE_GROUPS: { label: string; pages: { key: string; label: string }
     label: "Operacional",
     pages: [
       { key: "vendas_ver", label: "Vendas (visualizar)" },
+      { key: "vendas_andamento", label: "Vendas (Em Andamento)" },
       { key: "vendas_registrar", label: "Vendas (registrar)" },
       { key: "entregas", label: "Entregas" },
       { key: "avisos_clientes", label: "Avisos para Clientes" },
@@ -144,9 +145,16 @@ export function pathToPageKey(path: string): string | null {
   return PATH_TO_KEY[path] || null;
 }
 
+/** Pages that can be accessed with ANY of these alternative keys */
+const PATH_ALTERNATIVES: Record<string, string[]> = {
+  "/admin/vendas": ["vendas_ver", "vendas_andamento", "vendas_registrar"],
+};
+
 /** Check if a user can access a page by URL path */
 export function canAccessPage(role: string, page: string, permissoes?: string[]): boolean {
   if (role === "admin") return true;
+  const alts = PATH_ALTERNATIVES[page];
+  if (alts) return alts.some(k => (permissoes ?? []).includes(k));
   const key = PATH_TO_KEY[page];
   if (!key) return false;
   return (permissoes ?? []).includes(key);

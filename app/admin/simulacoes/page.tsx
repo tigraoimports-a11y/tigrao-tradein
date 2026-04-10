@@ -3,8 +3,19 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
 import { corParaPT } from "@/lib/cor-pt";
+import {
+  calculateTradeInValue,
+  calculateIPadTradeInValue,
+  calculateMacBookTradeInValue,
+  calculateQuote,
+  getDiscountsForModel,
+  formatBRL,
+} from "@/lib/calculations";
+import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
+import type { UsedDeviceValue } from "@/lib/types";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
 
@@ -125,7 +136,7 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
@@ -137,8 +148,13 @@ export default function AdminPage() {
       if (res.ok) {
         const json = await res.json();
         setData(json.data ?? []);
+      } else {
+        // Evitar tela em branco — setar array vazio se erro
+        setData([]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setData([]);
+    }
     setLoading(false);
   }, []);
 
@@ -151,6 +167,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (password) fetchData(password);
   }, [password, fetchData]);
+  useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -263,10 +280,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
-        {(["simulacoes", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
+        {(["simulacoes", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -292,6 +309,9 @@ export default function AdminPage() {
 
       {/* WhatsApp Config tab */}
       {mainTab === "whatsapp" && <WhatsAppConfigPanel password={password} />}
+
+      {/* Simulador Interno tab */}
+      {mainTab === "simulador" && <SimuladorInterno password={password} />}
 
       {/* Follow-up tab */}
       {mainTab === "followup" && (() => {
@@ -850,10 +870,12 @@ export default function AdminPage() {
                       storage_usado: modalRow.storage_usado || "",
                       cor_usado: modalRow.cor_usado || "",
                       avaliacao_usado: String(modalRow.avaliacao_usado || 0),
+                      condicao_linhas: (modalRow.condicao_linhas || []).join("\n"),
                       modelo_usado2: modalRow.modelo_usado2 || "",
                       storage_usado2: modalRow.storage_usado2 || "",
                       cor_usado2: modalRow.cor_usado2 || "",
                       avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
+                      condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
                     });
                     setEditMode(true);
                   }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
@@ -861,24 +883,42 @@ export default function AdminPage() {
                   </button>
                 </div>
                 {editMode ? (
-                  <div className="space-y-2">
-                    <input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} placeholder="Modelo" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                    <div className="flex gap-2">
-                      <input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} placeholder="Storage" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                      <input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} placeholder="Cor" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                  <div className="space-y-4">
+                    {/* 1º Aparelho */}
+                    <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                      <p className="text-xs font-bold text-[#1D1D1F]">{modalRow.modelo_usado2 ? "1º Aparelho" : "Aparelho na Troca"}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado || ""} onChange={e => setEditData(p => ({ ...p, storage_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado || ""} onChange={e => setEditData(p => ({ ...p, cor_usado: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                      </div>
+                      <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas: e.target.value }))} placeholder={"Saude bateria 89%\nSem marcas de uso\nSem pecas trocadas\nSem caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
                     </div>
-                    <input value={editData.avaliacao_usado || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado: e.target.value }))} placeholder="Avaliação (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                    {/* 2º Aparelho */}
                     {modalRow.modelo_usado2 && (
-                      <>
-                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider pt-2 border-t border-[#E5E5EA]">2º Aparelho</p>
-                        <input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} placeholder="Modelo 2" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                        <div className="flex gap-2">
-                          <input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} placeholder="Storage 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                          <input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} placeholder="Cor 2" className="flex-1 px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
+                      <div className="bg-white rounded-lg border border-[#E5E5EA] p-3 space-y-2.5">
+                        <p className="text-xs font-bold text-[#1D1D1F]">2º Aparelho</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2"><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Modelo</p><input value={editData.modelo_usado2 || ""} onChange={e => setEditData(p => ({ ...p, modelo_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Storage</p><input value={editData.storage_usado2 || ""} onChange={e => setEditData(p => ({ ...p, storage_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
                         </div>
-                        <input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} placeholder="Avaliação 2 (R$)" type="number" className="w-full px-2 py-1 text-sm rounded border border-[#D2D2D7]" />
-                      </>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Cor</p><input value={editData.cor_usado2 || ""} onChange={e => setEditData(p => ({ ...p, cor_usado2: e.target.value }))} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                          <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Avaliacao (R$)</p><input value={editData.avaliacao_usado2 || ""} onChange={e => setEditData(p => ({ ...p, avaliacao_usado2: e.target.value }))} type="number" className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors" /></div>
+                        </div>
+                        <div><p className="text-[10px] font-semibold text-[#86868B] uppercase tracking-wider mb-0.5">Condicao do aparelho</p><textarea value={editData.condicao_linhas2 || ""} onChange={e => setEditData(p => ({ ...p, condicao_linhas2: e.target.value }))} placeholder={"Saude bateria 87%\nSem marcas de uso\nTem a caixa original"} rows={4} className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none transition-colors resize-none font-mono" /></div>
+                      </div>
                     )}
+                    {/* Resumo em tempo real */}
+                    <div className="bg-[#F5F5F7] rounded-lg p-3 space-y-1">
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(modalRow.preco_novo)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 1º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado) || 0)}</span></div>
+                      {(Number(editData.avaliacao_usado2) || 0) > 0 && <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 2º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado2) || 0)}</span></div>}
+                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt(modalRow.preco_novo - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
+                    </div>
                     <button
                       disabled={savingEdit}
                       onClick={async () => {
@@ -887,21 +927,23 @@ export default function AdminPage() {
                           const aval1 = Number(editData.avaliacao_usado) || 0;
                           const aval2 = Number(editData.avaliacao_usado2) || 0;
                           const dif = modalRow.preco_novo - aval1 - aval2;
+                          const condLines1 = editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
+                          const condLines2 = editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null;
                           const res = await fetch("/api/admin/simulacoes", {
                             method: "PATCH",
                             headers: { "x-admin-password": password, "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, diferenca: dif }),
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif }),
                           });
                           if (res.ok) {
-                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
                             setEditMode(false);
                             fetchData(password);
                           } else { alert("Erro ao salvar"); }
                         } finally { setSavingEdit(false); }
                       }}
-                      className="w-full py-1.5 bg-[#0071E3] text-white text-xs font-semibold rounded-lg hover:bg-[#0062C4] disabled:opacity-50"
+                      className="w-full py-2 bg-[#0071E3] text-white text-sm font-semibold rounded-xl hover:bg-[#0062C4] disabled:opacity-50 transition-colors"
                     >
-                      {savingEdit ? "Salvando..." : "Salvar alterações"}
+                      {savingEdit ? "Salvando..." : "Salvar alteracoes"}
                     </button>
                   </div>
                 ) : (
@@ -1219,6 +1261,421 @@ function WhatsAppConfigPanel({ password }: { password: string }) {
           className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
           {saving ? "Salvando..." : "Salvar"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────
+// Simulador Interno — formulário simples
+// ──────────────────────────────────────────
+
+type UsadoCategoria = "iPhone" | "iPad" | "MacBook" | "Apple Watch";
+const USADO_CATEGORIAS: UsadoCategoria[] = ["iPhone", "iPad", "MacBook", "Apple Watch"];
+
+interface PrecosRow {
+  modelo: string;
+  armazenamento: string;
+  preco_pix: number;
+  categoria?: string;
+  status?: string;
+}
+
+const inputCls = "w-full px-3 py-2 rounded-lg bg-[#F5F5F7] border border-[#D2D2D7] text-sm text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E] transition-colors";
+const labelCls = "block text-xs font-semibold text-[#86868B] mb-1";
+const checkCls = "w-4 h-4 accent-[#E8740E] rounded";
+
+function SimuladorInterno({ password }: { password: string }) {
+  // --- Data from APIs ---
+  const [usedValues, setUsedValues] = useState<UsedDeviceValue[]>([]);
+  const [excludedModels, setExcludedModels] = useState<string[]>([]);
+  const [discountRules, setDiscountRules] = useState<{ condicao: string; detalhe: string; desconto: number }[]>([]);
+  const [modelDiscounts, setModelDiscounts] = useState<Record<string, Partial<ModelDiscounts>>>({});
+  const [precos, setPrecos] = useState<PrecosRow[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // --- Usado (trade-in) ---
+  const [usadoCat, setUsadoCat] = useState<UsadoCategoria>("iPhone");
+  const [usadoModelo, setUsadoModelo] = useState("");
+  const [usadoStorage, setUsadoStorage] = useState("");
+  const [bateria, setBateria] = useState(100);
+  const [marcasUso, setMarcasUso] = useState(false);
+  const [arranhoes, setArranhoes] = useState(false);
+  const [trincado, setTrincado] = useState(false);
+  const [defeito, setDefeito] = useState(false);
+  const [manutencao, setManutencao] = useState<"no" | "apple" | "thirdParty">("no");
+  const [garantiaApple, setGarantiaApple] = useState(false);
+  const [garantiaMes, setGarantiaMes] = useState<number>(1);
+  const [garantiaAno, setGarantiaAno] = useState<number>(new Date().getFullYear());
+  const [caixaOriginal, setCaixaOriginal] = useState(false);
+  // MacBook extras
+  const [ciclosBateria, setCiclosBateria] = useState(0);
+  const [tecladoCondition, setTecladoCondition] = useState<"perfect" | "sticky">("perfect");
+  const [temCarregador, setTemCarregador] = useState(true);
+  // iPad extras
+  const [temPencil, setTemPencil] = useState(false);
+
+  // --- Novo (compra) ---
+  const [novoCat, setNovoCat] = useState("");
+  const [novoModelo, setNovoModelo] = useState("");
+
+  // Fetch data
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [usadosRes, precosRes] = await Promise.all([
+          fetch("/api/usados"),
+          fetch("/api/admin/precos", { headers: { "x-admin-password": password } }),
+        ]);
+        if (cancelled) return;
+        const usadosJson = await usadosRes.json();
+        const precosJson = await precosRes.json();
+        setUsedValues(usadosJson.usedValues || []);
+        setExcludedModels(usadosJson.excludedModels || []);
+        setDiscountRules(usadosJson.discountRules || []);
+        setModelDiscounts(usadosJson.modelDiscounts || {});
+        setPrecos((precosJson.data || []).filter((p: PrecosRow) => p.status === "ativo"));
+      } catch (err) {
+        console.error("Erro ao carregar dados do simulador:", err);
+      }
+      if (!cancelled) setLoadingData(false);
+    })();
+    return () => { cancelled = true; };
+  }, [password]);
+
+  // --- Derived: usado models/storages ---
+  const usadoModelos = useMemo(() => {
+    const prefix = usadoCat === "Apple Watch" ? "Apple Watch" : usadoCat;
+    const models = [...new Set(
+      usedValues
+        .filter((v) => v.modelo.startsWith(prefix))
+        .filter((v) => !excludedModels.includes(v.modelo))
+        .map((v) => v.modelo)
+    )].sort();
+    return models;
+  }, [usedValues, excludedModels, usadoCat]);
+
+  const usadoStorages = useMemo(() => {
+    if (!usadoModelo) return [];
+    return [...new Set(usedValues.filter((v) => v.modelo === usadoModelo).map((v) => v.armazenamento))];
+  }, [usedValues, usadoModelo]);
+
+  // Reset selections on category change
+  useEffect(() => { setUsadoModelo(""); setUsadoStorage(""); }, [usadoCat]);
+  useEffect(() => { setUsadoStorage(""); }, [usadoModelo]);
+
+  // --- Derived: novo categories/models ---
+  const novoCategorias = useMemo(() => {
+    return [...new Set(precos.map((p) => p.categoria || "IPHONE"))].sort();
+  }, [precos]);
+
+  const novoModelos = useMemo(() => {
+    if (!novoCat) return [];
+    return [...new Set(
+      precos
+        .filter((p) => (p.categoria || "IPHONE") === novoCat)
+        .map((p) => `${p.modelo} ${p.armazenamento}`)
+    )].sort();
+  }, [precos, novoCat]);
+
+  useEffect(() => { setNovoModelo(""); }, [novoCat]);
+
+  // --- Calculate trade-in value ---
+  const baseValue = useMemo(() => {
+    if (!usadoModelo || !usadoStorage) return 0;
+    const found = usedValues.find((v) => v.modelo === usadoModelo && v.armazenamento === usadoStorage);
+    return found?.valorBase || 0;
+  }, [usedValues, usadoModelo, usadoStorage]);
+
+  const tradeInValue = useMemo(() => {
+    if (!baseValue) return 0;
+    if (defeito) return 0;
+
+    const isMac = usadoCat === "MacBook";
+    const isIPad = usadoCat === "iPad";
+
+    if (isMac) {
+      const cond: MacBookConditionData = {
+        screenScratch: arranhoes ? "multiple" : "none",
+        bodyScratch: marcasUso ? "heavy" : "none",
+        batteryCycles: ciclosBateria,
+        keyboardCondition: tecladoCondition,
+        hasCharger: temCarregador,
+        hasDamage: trincado,
+        hasWarranty: garantiaApple,
+        warrantyMonth: garantiaApple ? garantiaMes : null,
+        warrantyYear: garantiaApple ? garantiaAno : null,
+        hasOriginalBox: caixaOriginal,
+      };
+      return calculateMacBookTradeInValue(baseValue, cond);
+    }
+
+    if (isIPad) {
+      const cond: IPadConditionData = {
+        screenScratch: arranhoes ? "multiple" : "none",
+        sideScratch: "none",
+        peeling: marcasUso ? "heavy" : "none",
+        battery: bateria,
+        hasDamage: trincado,
+        partsReplaced: manutencao,
+        hasWarranty: garantiaApple,
+        warrantyMonth: garantiaApple ? garantiaMes : null,
+        warrantyYear: garantiaApple ? garantiaAno : null,
+        hasOriginalBox: caixaOriginal,
+        hasApplePencil: temPencil,
+        hasWearMarks: undefined,
+      };
+      return calculateIPadTradeInValue(baseValue, cond);
+    }
+
+    // iPhone / Apple Watch — use the same iPhone logic
+    const md = getDiscountsForModel(usadoModelo, modelDiscounts);
+    const cond: ConditionData = {
+      screenScratch: arranhoes ? "multiple" : "none",
+      sideScratch: "none",
+      peeling: marcasUso ? "heavy" : "none",
+      battery: bateria,
+      hasDamage: trincado,
+      partsReplaced: manutencao,
+      hasWarranty: garantiaApple,
+      warrantyMonth: garantiaApple ? garantiaMes : null,
+      warrantyYear: garantiaApple ? garantiaAno : null,
+      hasOriginalBox: caixaOriginal,
+    };
+    return calculateTradeInValue(baseValue, cond, md);
+  }, [baseValue, usadoCat, usadoModelo, bateria, marcasUso, arranhoes, trincado, defeito, manutencao, garantiaApple, garantiaMes, garantiaAno, caixaOriginal, ciclosBateria, tecladoCondition, temCarregador, temPencil, modelDiscounts]);
+
+  // --- New device price ---
+  const newPrice = useMemo(() => {
+    if (!novoModelo) return 0;
+    // novoModelo = "iPhone 16 Pro 256GB" — find it in precos
+    const found = precos.find((p) => `${p.modelo} ${p.armazenamento}` === novoModelo);
+    return found?.preco_pix || 0;
+  }, [precos, novoModelo]);
+
+  // --- Quote ---
+  const quote = useMemo(() => {
+    if (!newPrice) return null;
+    return calculateQuote(tradeInValue, newPrice);
+  }, [tradeInValue, newPrice]);
+
+  const catLabel: Record<string, string> = {
+    IPHONE: "iPhone", IPHONES: "iPhone", IPAD: "iPad", IPADS: "iPad",
+    MACBOOK: "MacBook", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods",
+    ACESSORIOS: "Acessorios", MAC_MINI: "Mac Mini", MAC_STUDIO: "Mac Studio",
+    OUTROS: "Outros",
+  };
+
+  if (loadingData) {
+    return (
+      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-8 shadow-sm text-center">
+        <p className="text-[#86868B]">Carregando dados do simulador...</p>
+      </div>
+    );
+  }
+
+  const months = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+  return (
+    <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-[#D2D2D7] bg-[#F5F5F7]">
+        <h2 className="font-bold text-[#1D1D1F]">Simulador Interno</h2>
+        <p className="text-sm text-[#86868B] mt-1">Calcule valores de troca internamente, sem gerar registro de cliente.</p>
+      </div>
+
+      <div className="p-5 space-y-6 max-w-3xl mx-auto">
+        {/* ─── APARELHO USADO ─── */}
+        <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+          <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Usado (trade-in)</h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Categoria</label>
+              <select className={inputCls} value={usadoCat} onChange={(e) => setUsadoCat(e.target.value as UsadoCategoria)}>
+                {USADO_CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Modelo</label>
+              <select className={inputCls} value={usadoModelo} onChange={(e) => setUsadoModelo(e.target.value)}>
+                <option value="">Selecione</option>
+                {usadoModelos.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Armazenamento</label>
+              <select className={inputCls} value={usadoStorage} onChange={(e) => setUsadoStorage(e.target.value)}>
+                <option value="">Selecione</option>
+                {usadoStorages.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Bateria / Ciclos */}
+          {usadoCat === "MacBook" ? (
+            <div>
+              <label className={labelCls}>Ciclos de bateria</label>
+              <input type="number" className={inputCls} value={ciclosBateria} min={0} max={9999}
+                onChange={(e) => setCiclosBateria(Number(e.target.value))} placeholder="Ex: 250" />
+            </div>
+          ) : (
+            <div>
+              <label className={labelCls}>Saude da bateria (%)</label>
+              <input type="number" className={inputCls} value={bateria} min={0} max={100}
+                onChange={(e) => setBateria(Math.min(100, Math.max(0, Number(e.target.value))))} />
+            </div>
+          )}
+
+          {/* Checkboxes de condicao */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-4">
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={marcasUso} onChange={(e) => setMarcasUso(e.target.checked)} />
+              Marcas de uso
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={arranhoes} onChange={(e) => setArranhoes(e.target.checked)} />
+              Arranhoes
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={trincado} onChange={(e) => setTrincado(e.target.checked)} />
+              Trincado
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={defeito} onChange={(e) => setDefeito(e.target.checked)} />
+              Defeito
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={caixaOriginal} onChange={(e) => setCaixaOriginal(e.target.checked)} />
+              Caixa original
+            </label>
+            {usadoCat === "iPad" && (
+              <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+                <input type="checkbox" className={checkCls} checked={temPencil} onChange={(e) => setTemPencil(e.target.checked)} />
+                Apple Pencil
+              </label>
+            )}
+            {usadoCat === "MacBook" && (
+              <>
+                <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+                  <input type="checkbox" className={checkCls} checked={temCarregador} onChange={(e) => setTemCarregador(e.target.checked)} />
+                  Carregador
+                </label>
+                <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+                  <input type="checkbox" className={checkCls} checked={tecladoCondition === "sticky"} onChange={(e) => setTecladoCondition(e.target.checked ? "sticky" : "perfect")} />
+                  Teclado grudando
+                </label>
+              </>
+            )}
+          </div>
+
+          {/* Manutencao */}
+          {usadoCat !== "MacBook" && (
+            <div>
+              <label className={labelCls}>Manutencao / Pecas trocadas</label>
+              <select className={inputCls} value={manutencao} onChange={(e) => setManutencao(e.target.value as "no" | "apple" | "thirdParty")}>
+                <option value="no">Nenhuma peca trocada</option>
+                <option value="apple">Trocada na Apple (autorizada)</option>
+                <option value="thirdParty">Trocada fora da Apple (rejeita)</option>
+              </select>
+            </div>
+          )}
+
+          {/* Garantia Apple */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-[#1D1D1F] cursor-pointer">
+              <input type="checkbox" className={checkCls} checked={garantiaApple} onChange={(e) => setGarantiaApple(e.target.checked)} />
+              <span className="font-semibold text-xs text-[#86868B]">Garantia Apple</span>
+            </label>
+            {garantiaApple && (
+              <div className="grid grid-cols-2 gap-3 pl-6">
+                <div>
+                  <label className={labelCls}>Mes vencimento</label>
+                  <select className={inputCls} value={garantiaMes} onChange={(e) => setGarantiaMes(Number(e.target.value))}>
+                    {months.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Ano</label>
+                  <select className={inputCls} value={garantiaAno} onChange={(e) => setGarantiaAno(Number(e.target.value))}>
+                    {[2025, 2026, 2027, 2028].map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Valor avaliado */}
+          {baseValue > 0 && (
+            <div className="bg-[#F5F5F7] rounded-lg p-3 flex items-center justify-between">
+              <span className="text-sm text-[#86868B]">Valor base: <b className="text-[#1D1D1F]">{formatBRL(baseValue)}</b></span>
+              <span className="text-sm font-bold" style={{ color: tradeInValue > 0 ? "#2ECC71" : "#E74C3C" }}>
+                Avaliado: {formatBRL(tradeInValue)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ─── APARELHO NOVO ─── */}
+        <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
+          <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Novo (compra)</h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Categoria</label>
+              <select className={inputCls} value={novoCat} onChange={(e) => setNovoCat(e.target.value)}>
+                <option value="">Selecione</option>
+                {novoCategorias.map((c) => <option key={c} value={c}>{catLabel[c] || c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Modelo + Armazenamento</label>
+              <select className={inputCls} value={novoModelo} onChange={(e) => setNovoModelo(e.target.value)}>
+                <option value="">Selecione</option>
+                {novoModelos.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {newPrice > 0 && (
+            <div className="bg-[#F5F5F7] rounded-lg p-3">
+              <span className="text-sm text-[#86868B]">Preco PIX: </span>
+              <span className="text-sm font-bold text-[#1D1D1F]">{formatBRL(newPrice)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* ─── RESULTADO ─── */}
+        {quote && (
+          <div className="border-2 border-[#E8740E] rounded-xl p-5 space-y-3 bg-[#FFF8F0]">
+            <h3 className="font-bold text-[#E8740E] text-sm">Resultado da Simulacao</h3>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <span className="text-[#86868B]">Valor do usado avaliado:</span>
+              <span className="text-right font-semibold text-[#2ECC71]">{formatBRL(quote.tradeInValue)}</span>
+              <span className="text-[#86868B]">Preco do novo:</span>
+              <span className="text-right font-semibold text-[#1D1D1F]">{formatBRL(quote.newPrice)}</span>
+              <span className="text-[#86868B] font-bold">Diferenca a pagar (PIX):</span>
+              <span className="text-right font-bold text-[#E8740E] text-base">{formatBRL(quote.difference)}</span>
+            </div>
+            {/* Parcelas */}
+            <div className="border-t border-[#E8740E]/20 pt-3 mt-2">
+              <p className="text-xs font-semibold text-[#86868B] mb-2">Parcelas (sobre a diferenca):</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[12, 18, 21].map((n) => {
+                  const inst = quote.installments.find((i) => i.parcelas === n);
+                  if (!inst) return null;
+                  return (
+                    <div key={n} className="bg-white border border-[#D2D2D7] rounded-lg p-2 text-center">
+                      <p className="text-xs text-[#86868B]">{n}x</p>
+                      <p className="font-bold text-sm text-[#1D1D1F]">{formatBRL(inst.valorParcela)}</p>
+                      <p className="text-[10px] text-[#86868B]">Total: {formatBRL(inst.total)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

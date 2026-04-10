@@ -208,22 +208,26 @@ export default function EntregasPage() {
   const [trocas, setTrocas] = useState<string[]>([]);
   const [showPagAlt, setShowPagAlt] = useState(false);
 
-  // Estoque picker states — linha 1 do produto
+  // Estoque picker states
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
-  const [cor1, setCor1] = useState(""); // cor do produto 1
-  const [preco1, setPreco1] = useState(0); // preço do produto 1 (tabela ou custo)
   const [serialBusca, setSerialBusca] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
-  const [corSel, setCorSel] = useState("");
+  const [jaPago, setJaPago] = useState(false);
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
-  // Linha 2 do produto (opcional — aparece ao clicar "+ Adicionar 2º produto")
-  const [showProduto2, setShowProduto2] = useState(false);
-  const [catSel2, setCatSel2] = useState("");
-  const [modelo2, setModelo2] = useState("");
-  const [cor2, setCor2] = useState("");
-  const [preco2, setPreco2] = useState(0);
+
+  // Carrinho — substitui preco1/preco2/corSel/showProduto2/modelo2/cor2/catSel2
+  interface CarrinhoItem {
+    key: string;
+    nome: string;
+    cor: string;
+    preco: number;
+    categoria: string;
+  }
+  const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [tempCor, setTempCor] = useState("");
   const [desconto, setDesconto] = useState("");
   const [trocaAtiva, setTrocaAtiva] = useState(false);
   const [trocaValor, setTrocaValor] = useState("");
@@ -344,16 +348,6 @@ export default function EntregasPage() {
     return [...groups.values()].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [estoque]);
 
-  // Cores disponíveis para o seminovo selecionado (agrupa por cor)
-  const seminovoCores = useMemo(() => {
-    if (catSel !== "SEMINOVOS" || !produtos[0]) return [];
-    const grupo = seminovosList.find(g => g.nome === produtos[0]);
-    if (!grupo) return [];
-    const set = new Set<string>();
-    for (const it of grupo.items) if (it.cor) set.add(it.cor.toUpperCase());
-    return [...set].sort();
-  }, [catSel, produtos, seminovosList]);
-
   // Produtos filtrados por categoria
   const produtosFiltradosPreco = useMemo(() => {
     if (!catSel) return [];
@@ -362,15 +356,6 @@ export default function EntregasPage() {
       .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }, [precosVenda, catSel]);
-
-  // Produto 2 — mesma fonte (precosVenda) pra garantir nomes formatados igual ao produto 1
-  const produtosFiltradosPreco2 = useMemo(() => {
-    if (!catSel2) return [];
-    return precosVenda
-      .filter(p => p.categoria === catSel2)
-      .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
-      .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [precosVenda, catSel2]);
 
   // Cores cadastradas no catálogo global (Configurações > Produtos > aba Cores)
   const [catalogoCores, setCatalogoCores] = useState<Record<string, string[]>>({});
@@ -387,13 +372,11 @@ export default function EntregasPage() {
     if (!nomeProduto) return [];
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
-      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/(\d+)\s*[ºª°]/g, "$1")
       .replace(/\bGENERATION\b/gi, "GEN")
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
-      .replace(/\b\d+\s*MM\b/gi, "")
-      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
@@ -432,15 +415,18 @@ export default function EntregasPage() {
       seen.add(key);
       out.push(pt);
     }
+    // Se o nome do produto já contém uma cor/variante, não mostrar seletor
+    const CORES_CONHECIDAS = ["black","white","silver","gold","blue","red","green","pink","purple","orange","yellow","titanium","starlight","midnight","natural","preto","branco","prata","dourado","azul","vermelho","verde","rosa","roxo","estelar","meia-noite","milanes","milanês","ocean","alpine","braided","sport"];
+    const prodLow = nomeProduto.toLowerCase();
+    const jaTemCor = CORES_CONHECIDAS.some(c => prodLow.includes(c));
+    if (jaTemCor) return [];
+
     return out.sort((a, b) => a.localeCompare(b));
   }, [catalogoCores]);
 
-  const coresDisponiveis2 = useMemo(() => coresParaProduto(modelo2), [modelo2, coresParaProduto]);
-  const coresDisponiveis = useMemo(() => coresParaProduto(produtos[0] || ""), [produtos, coresParaProduto]);
-
   // Valor base e final
-  // Se tiver preco1/preco2 (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
-  const somaProdutos = preco1 + preco2;
+  // Se tiver itens no carrinho (seleção do catálogo), usa a soma. Senão usa o campo manual form.valor.
+  const somaProdutos = carrinho.reduce((s, p) => s + p.preco, 0);
   const valorBase = somaProdutos > 0 ? somaProdutos : (parseFloat(form.valor) || 0);
   const descontoNum = parseFloat(desconto) || 0;
   const trocaNum = parseFloat(trocaValor) || 0;
@@ -571,13 +557,9 @@ export default function EntregasPage() {
     setSaving(true);
     setMsg("");
 
-    const produtosFilled = produtos.filter(Boolean);
-    if (corSel && produtosFilled[0]) produtosFilled[0] = `${produtosFilled[0]} ${corSel}`;
-    // Se tiver Produto 2 selecionado, adiciona ao final
-    if (showProduto2 && modelo2) {
-      produtosFilled.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
-    }
-    const produtosStr = produtosFilled.join(" | ");
+    const produtosStr = carrinho.length > 0
+      ? carrinho.map(p => p.cor ? `${p.nome} ${p.cor}` : p.nome).join(" + ")
+      : (produtos.filter(Boolean).join(" + ") || "");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
     // Endereço de entrega final: Shopping → shopping_nome; Outro → local_detalhes; senão endereco_entrega; fallback endereco cadastro
@@ -629,7 +611,7 @@ export default function EntregasPage() {
         produto: produtosStr || null,
         tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
-        forma_pagamento: formaPagDetalhada || null,
+        forma_pagamento: jaPago ? "JÁ PAGO" : (formaPagDetalhada || null),
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         // Campos estruturados pra exibicao detalhada no modal.
         // `entrada` guarda Pix/Espécie/Transferência do pagamento 2 (não-cartão) — NÃO incluímos cartão aqui.
@@ -646,8 +628,8 @@ export default function EntregasPage() {
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
-      setCatSel(""); setEstoqueId(""); setCorSel(""); setCor1(""); setPreco1(0);
-      setShowProduto2(false); setCatSel2(""); setModelo2(""); setCor2(""); setPreco2(0);
+      setCarrinho([]); setAddingProduct(false); setTempCor("");
+      setCatSel(""); setEstoqueId("");
       setValorPag1Override("");
       setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
       setEditingEntregaId(null);
@@ -1002,7 +984,7 @@ export default function EntregasPage() {
                   if (r.cliente) set("cliente", r.cliente);
                   if (r.telefone) set("telefone", r.telefone);
                   if (r.bairro) set("bairro", r.bairro);
-                  if (r.endereco) { set("endereco", r.endereco); set("endereco_entrega", r.endereco); }
+                  if (r.endereco) { set("endereco", r.endereco); if (!form.endereco_entrega?.trim()) set("endereco_entrega", r.endereco); }
                   if (r.horario) set("horario", r.horario);
                   if (r.vendedor) set("vendedor", r.vendedor);
                   if (r.local_entrega) set("local_entrega", r.local_entrega);
@@ -1166,7 +1148,7 @@ export default function EntregasPage() {
             <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto</p>
-                <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) { setCatSel(""); setEstoqueId(""); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
+                <button onClick={() => { setProdutoManual(!produtoManual); if (!produtoManual) { setCatSel(""); setEstoqueId(""); setCarrinho([]); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
                   {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
                 </button>
               </div>
@@ -1185,141 +1167,70 @@ export default function EntregasPage() {
                   <button onClick={() => setProdutos([...produtos, ""])} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
                 </div>
               ) : (
-                /* Picker igual ao gerar-link — categoria + lista de preços + cor */
+                /* Carrinho — lista de produtos selecionados + picker */
                 <div className="space-y-3">
-                  <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); set("valor", ""); setCorSel(""); }} className={inputCls}>
-                    <option value="">-- Categoria --</option>
-                    {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
-                  </select>
-                  {catSel && catSel !== "SEMINOVOS" && (
-                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                      {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                      {produtosFiltradosPreco.map((m) => {
-                        const sel = produtos[0] === m.nome;
-                        return (
-                          <div key={m.nome}>
-                            <button onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
-                              setProdutos([m.nome]);
-                              set("valor", String(m.preco));
-                              setCorSel("");
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
-                              <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
-                            </button>
-                            {sel && coresDisponiveis.length > 0 && (
-                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
-                                <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {coresDisponiveis.map(cor => (
-                                    <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
-                                    >{cor}</button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                  {/* Carrinho display */}
+                  {carrinho.length > 0 && (
+                    <div className={`rounded-xl border p-3 space-y-2 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-green-50 border-green-200"}`}>
+                      <p className={`text-xs font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Carrinho</p>
+                      {carrinho.map((item, idx) => (
+                        <div key={item.key} className={`flex items-center justify-between text-sm ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+                          <span className="font-medium">{idx + 1}. {item.cor ? `${item.nome} ${item.cor}` : item.nome}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">R$ {item.preco.toLocaleString("pt-BR")}</span>
+                            <button type="button" onClick={() => setCarrinho(prev => prev.filter(p => p.key !== item.key))} className="text-red-400 hover:text-red-600 text-base leading-none">✕</button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {catSel === "SEMINOVOS" && (
-                    <div className="max-h-[300px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                      {seminovosList.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum seminovo em estoque</p>}
-                      {seminovosList.map((g) => {
-                        const sel = produtos[0] === g.nome;
-                        const qtdTotal = g.items.reduce((s, i) => s + i.qnt, 0);
-                        return (
-                          <div key={g.key}>
-                            <button type="button" onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
-                              setProdutos([g.nome]);
-                              set("valor", "");
-                              setCorSel("");
-                            }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                              <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{g.nome}</p>
-                              <p className={`text-xs font-medium ${sel ? "text-[#E8740E]" : "text-[#86868B]"}`}>{qtdTotal} un.</p>
-                            </button>
-                            {sel && (
-                              <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA] space-y-2">
-                                {seminovoCores.length > 0 && (<>
-                                  <p className="text-xs font-medium text-[#86868B]">Selecione a cor:</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {seminovoCores.map(cor => (
-                                      <button key={cor} type="button" onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
-                                      >{cor}</button>
-                                    ))}
-                                  </div>
-                                </>)}
-                                <div>
-                                  <p className={labelCls}>Valor de venda R$</p>
-                                  <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
-                                  <p className="text-[11px] text-[#86868B] italic mt-1">Seminovo não tem preço fixo — digite o valor acordado com o cliente.</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {/* Produto 2 — opcional (add-on do origin/main) */}
-                  {!showProduto2 && produtos[0] && (
-                    <button
-                      type="button"
-                      onClick={() => setShowProduto2(true)}
-                      className="w-full mt-2 px-4 py-2 rounded-xl border-2 border-dashed border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
-                    >
-                      + Adicionar 2º produto
-                    </button>
-                  )}
-                  {showProduto2 && (
-                    <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowProduto2(false);
-                            setCatSel2("");
-                            setModelo2("");
-                            setCor2("");
-                            setPreco2(0);
-                          }}
-                          className="text-xs text-red-400 hover:text-red-600 font-semibold"
-                        >
-                          ✕ Remover
-                        </button>
+                        </div>
+                      ))}
+                      <div className={`border-t pt-2 mt-1 flex justify-between text-sm font-bold ${dm ? "border-[#3A3A3C] text-green-400" : "border-green-300 text-green-700"}`}>
+                        <span>Total</span>
+                        <span>R$ {carrinho.reduce((s, p) => s + p.preco, 0).toLocaleString("pt-BR")}</span>
                       </div>
-                      <select value={catSel2} onChange={(e) => { setCatSel2(e.target.value); setModelo2(""); setPreco2(0); setCor2(""); }} className={inputCls}>
+                    </div>
+                  )}
+
+                  {/* Product picker — shown when addingProduct is true */}
+                  {addingProduct ? (
+                    <div className={`rounded-xl border p-3 space-y-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#D2D2D7]"}`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Selecionar produto</p>
+                        <button type="button" onClick={() => { setAddingProduct(false); setCatSel(""); setTempCor(""); }} className="text-xs text-red-400 hover:text-red-600 font-semibold">✕ Fechar</button>
+                      </div>
+                      <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setTempCor(""); }} className={inputCls}>
                         <option value="">-- Categoria --</option>
                         {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
                       </select>
-                      {catSel2 && (
-                        <div className="max-h-[280px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
-                          {produtosFiltradosPreco2.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
-                          {produtosFiltradosPreco2.map((m) => {
-                            const sel = modelo2 === m.nome;
+                      {catSel && catSel !== "SEMINOVOS" && (
+                        <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
+                          {produtosFiltradosPreco.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
+                          {produtosFiltradosPreco.map((m) => {
+                            const cores = coresParaProduto(m.nome);
                             return (
                               <div key={m.nome}>
                                 <button type="button" onClick={() => {
-                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); return; }
-                                  setModelo2(m.nome);
-                                  setPreco2(m.preco);
-                                  setCor2("");
-                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                                  <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
-                                  <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                                  if (cores.length === 0) {
+                                    // No colors — add directly to carrinho
+                                    setCarrinho(prev => [...prev, { key: `${m.nome}-${Date.now()}`, nome: m.nome, cor: "", preco: m.preco, categoria: catSel }]);
+                                    setAddingProduct(false); setCatSel(""); setTempCor("");
+                                  } else {
+                                    // Has colors — select this product to show color chips
+                                    setProdutos([m.nome]);
+                                    setTempCor("");
+                                  }
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${produtos[0] === m.nome ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                                  <p className={`text-sm font-semibold ${produtos[0] === m.nome ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                                  <p className={`text-sm font-bold ${produtos[0] === m.nome ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                                 </button>
-                                {sel && coresDisponiveis2.length > 0 && (
-                                  <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
+                                {produtos[0] === m.nome && cores.length > 0 && (
+                                  <div className={`px-4 py-3 border-t ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                                     <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
                                     <div className="flex flex-wrap gap-2">
-                                      {coresDisponiveis2.map(cor => (
-                                        <button key={cor} type="button" onClick={() => setCor2(cor2 === cor ? "" : cor)}
-                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${cor2 === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                      {cores.map(cor => (
+                                        <button key={cor} type="button" onClick={() => {
+                                          setCarrinho(prev => [...prev, { key: `${m.nome}-${cor}-${Date.now()}`, nome: m.nome, cor, preco: m.preco, categoria: catSel }]);
+                                          setAddingProduct(false); setCatSel(""); setTempCor(""); setProdutos([""]);
+                                        }}
+                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${dm ? "bg-[#1C1C1E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E] hover:bg-[#3A2410]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E] hover:bg-[#FFF5EB]"}`}
                                         >{cor}</button>
                                       ))}
                                     </div>
@@ -1330,7 +1241,70 @@ export default function EntregasPage() {
                           })}
                         </div>
                       )}
+                      {catSel === "SEMINOVOS" && (
+                        <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
+                          {seminovosList.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum seminovo em estoque</p>}
+                          {seminovosList.map((g) => {
+                            const sel = produtos[0] === g.nome;
+                            const qtdTotal = g.items.reduce((s, i) => s + i.qnt, 0);
+                            // Seminovos: get cores from items
+                            const coresSemi = (() => {
+                              if (!sel) return [];
+                              const set = new Set<string>();
+                              for (const it of g.items) if (it.cor) set.add(it.cor.toUpperCase());
+                              return [...set].sort();
+                            })();
+                            return (
+                              <div key={g.key}>
+                                <button type="button" onClick={() => {
+                                  if (sel) { setProdutos([""]); return; }
+                                  setProdutos([g.nome]);
+                                  setTempCor("");
+                                }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
+                                  <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{g.nome}</p>
+                                  <p className={`text-xs font-medium ${sel ? "text-[#E8740E]" : "text-[#86868B]"}`}>{qtdTotal} un.</p>
+                                </button>
+                                {sel && (
+                                  <div className={`px-4 py-3 border-t space-y-2 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
+                                    {coresSemi.length > 0 && (<>
+                                      <p className="text-xs font-medium text-[#86868B]">Selecione a cor:</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {coresSemi.map(cor => (
+                                          <button key={cor} type="button" onClick={() => setTempCor(tempCor === cor ? "" : cor)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${tempCor === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#1C1C1E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
+                                          >{cor}</button>
+                                        ))}
+                                      </div>
+                                    </>)}
+                                    <div>
+                                      <p className={labelCls}>Valor de venda R$</p>
+                                      <input type="number" value={form.valor} onChange={(e) => set("valor", e.target.value)} placeholder="0" className={inputCls} />
+                                      <p className="text-[11px] text-[#86868B] italic mt-1">Seminovo não tem preço fixo — digite o valor acordado com o cliente.</p>
+                                    </div>
+                                    <button type="button" onClick={() => {
+                                      const precoSemi = parseFloat(form.valor) || 0;
+                                      setCarrinho(prev => [...prev, { key: `${g.nome}-${tempCor}-${Date.now()}`, nome: g.nome, cor: tempCor, preco: precoSemi, categoria: "SEMINOVOS" }]);
+                                      setAddingProduct(false); setCatSel(""); setTempCor(""); setProdutos([""]);
+                                    }} className="w-full px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#D06A0D] transition-colors">
+                                      Adicionar ao carrinho
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    /* "+ Adicionar produto" button */
+                    <button
+                      type="button"
+                      onClick={() => { setAddingProduct(true); setCatSel(""); setProdutos([""]); }}
+                      className={`w-full px-4 py-2 rounded-xl border-2 border-dashed text-sm font-semibold transition-colors ${dm ? "border-[#E8740E] text-[#E8740E] hover:bg-[#3A2410]" : "border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB]"}`}
+                    >
+                      + Adicionar produto
+                    </button>
                   )}
                 </div>
               )}
@@ -1415,9 +1389,17 @@ export default function EntregasPage() {
               </div>
             </div>
 
+            {/* JÁ PAGO */}
+            <div className="col-span-2 md:col-span-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={jaPago} onChange={(e) => setJaPago(e.target.checked)} className="w-4 h-4 accent-[#2ECC71]" />
+                <span className={`text-sm font-semibold ${jaPago ? "text-[#2ECC71]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>✅ Já está pago</span>
+              </label>
+            </div>
+
             {/* PAGAMENTO 1 */}
-            <div className="col-span-2 md:col-span-3 rounded-xl border border-[#D2D2D7] bg-white px-4 py-3 space-y-3">
-              <p className="text-sm font-bold text-[#1D1D1F]">💳 Pagamento 1</p>
+            {!jaPago && <div className={`col-span-2 md:col-span-3 rounded-xl border px-4 py-3 space-y-3 ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-white"}`}>
+              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💳 Pagamento 1</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <p className={labelCls}>Forma</p>
@@ -1482,7 +1464,7 @@ export default function EntregasPage() {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* PAGAMENTO 2 (opcional) */}
             {!showPagAlt && (

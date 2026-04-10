@@ -2,7 +2,7 @@
 // Tipos do sistema administrativo TigrãoImports
 // ============================================
 
-export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO" | "NAO_INFORMARAM";
+export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO" | "NAO_INFORMARAM" | "ENCOMENDA";
 export type TipoVenda = "VENDA" | "UPGRADE" | "ATACADO";
 export type Banco = "ITAU" | "INFINITE" | "MERCADO_PAGO" | "ESPECIE";
 export type FormaPagamento = "PIX" | "CARTAO" | "DEBITO" | "ESPECIE" | "DINHEIRO" | "FIADO";
@@ -68,6 +68,15 @@ export interface Venda {
   troca_cor2: string | null;
   troca_bateria2: string | null;
   troca_obs2: string | null;
+  troca_imei: string | null;
+  troca_serial: string | null;
+  troca_grade: string | null;
+  troca_caixa: string | null;
+  troca_cabo: string | null;
+  troca_fonte: string | null;
+  troca_imei2: string | null;
+  troca_serial2: string | null;
+  troca_grade2: string | null;
   produto_na_troca2: number;
   // Entrega atacado cobrada à parte
   frete_valor: number | null;

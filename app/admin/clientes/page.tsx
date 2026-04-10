@@ -154,7 +154,7 @@ export default function ClientesPage() {
   });
   const [detailClient, setDetailClient] = useState<Cliente | null>(null);
   const [detailVendas, setDetailVendas] = useState<VendaResumo[]>([]);
-  const [loadingDetailVendas, setLoadingDetailVendas] = useState(false);
+  const [loadingVendas, setLoadingVendas] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
   const [savingClient, setSavingClient] = useState(false);
@@ -259,24 +259,6 @@ export default function ClientesPage() {
       setCreditoForm({ tipo: "CREDITO", valor: "", motivo: "" });
     } finally { setSavingCredito(false); }
   };
-
-  // Abre modal de detalhe e busca vendas do cliente
-  const openDetail = useCallback(async (c: Cliente) => {
-    setDetailClient(c);
-    setDetailVendas(c.vendas.length > 0 ? c.vendas : []);
-    if (c.vendas.length === 0) {
-      setLoadingDetailVendas(true);
-      try {
-        const params = new URLSearchParams({ tab: c.is_lojista ? "lojistas" : "clientes", vendas_cliente: c.nome });
-        const res = await fetch(`/api/admin/clientes?${params}`, { headers: apiHeaders() });
-        if (res.ok) {
-          const json = await res.json();
-          setDetailVendas(json.vendas || []);
-        }
-      } catch (err) { console.error("Fetch vendas detail:", err); }
-      setLoadingDetailVendas(false);
-    }
-  }, [apiHeaders, tab]);
 
   // Debounce search
   useEffect(() => {
@@ -875,7 +857,19 @@ export default function ClientesPage() {
               {!loading && sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
-                    onClick={() => openDetail(c)}
+                    onClick={async () => {
+                      setDetailClient(c);
+                      setDetailVendas([]);
+                      setLoadingVendas(true);
+                      try {
+                        const res = await fetch(`/api/admin/clientes?client_vendas=${encodeURIComponent(c.nome)}`, { headers: apiHeaders() });
+                        if (res.ok) {
+                          const json = await res.json();
+                          setDetailVendas(json.vendas || []);
+                        }
+                      } catch { /* ignore */ }
+                      setLoadingVendas(false);
+                    }}
                     className={`${rowCls} ${expandedId === c.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
                   >
                     <td className="px-4 py-3">
@@ -1057,7 +1051,7 @@ export default function ClientesPage() {
 
         const saveEdit = async () => {
           setSavingClient(true);
-          for (const v of c.vendas) {
+          for (const v of detailVendas) {
             const updates: Record<string, string | null> = {};
             if (editForm.nome && editForm.nome !== c.nome) updates.cliente = editForm.nome.toUpperCase();
             if (editForm.cpf !== (c.cpf || "")) updates.cpf = editForm.cpf || null;
@@ -1196,9 +1190,9 @@ export default function ClientesPage() {
               )}
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
-                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({detailVendas.length})</p>
-                {loadingDetailVendas ? (
-                  <p className={`text-sm text-center py-4 ${mS}`}>Carregando operacoes...</p>
+                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({loadingVendas ? "..." : detailVendas.length})</p>
+                {loadingVendas ? (
+                  <p className={`text-sm text-center py-4 ${mS}`}>Carregando...</p>
                 ) : detailVendas.length === 0 ? (
                   <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
                 ) : (

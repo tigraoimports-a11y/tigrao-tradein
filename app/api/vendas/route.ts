@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   const fornecedor = searchParams.get("fornecedor");
   if (fornecedor) query = query.ilike("fornecedor", fornecedor);
 
-  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 1000;
+  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 500;
   const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
@@ -199,6 +199,15 @@ export async function POST(req: NextRequest) {
   // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
   delete body.usar_credito_loja;
+
+  // Garantir que preco_vendido inclui crédito de lojista (frontend já soma, mas safety net)
+  if (usarCreditoLoja > 0 && body.preco_vendido !== undefined) {
+    const precoAtual = Number(body.preco_vendido) || 0;
+    // Se preco_vendido é menor que o crédito usado, significa que não foi incluído
+    if (precoAtual < usarCreditoLoja) {
+      body.preco_vendido = precoAtual + usarCreditoLoja;
+    }
+  }
 
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
@@ -433,6 +442,44 @@ export async function POST(req: NextRequest) {
 
   // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
+  // Criar termo de procedência automaticamente (status PENDENTE) se houver troca
+  if (hasTroca1Info || (data?.troca_produto2)) {
+    try {
+      const aparelhosTermo: { modelo: string; cor?: string; imei?: string; serial?: string; condicao?: string }[] = [];
+      if (data?.troca_produto || seminovoData?.produto) {
+        aparelhosTermo.push({
+          modelo: data?.troca_produto || seminovoData?.produto || "",
+          cor: data?.troca_cor || "",
+          imei: data?.troca_imei || seminovoData?.imei || "",
+          serial: data?.troca_serial || seminovoData?.serial_no || "",
+          condicao: [
+            data?.troca_bateria ? `Bateria ${data.troca_bateria}%` : "",
+            data?.troca_grade ? `Grade ${data.troca_grade}` : "",
+          ].filter(Boolean).join(", "),
+        });
+      }
+      if (data?.troca_produto2) {
+        aparelhosTermo.push({
+          modelo: data.troca_produto2,
+          cor: data?.troca_cor2 || "",
+          imei: data?.troca_imei2 || "",
+          serial: data?.troca_serial2 || "",
+          condicao: data?.troca_bateria2 ? `Bateria ${data.troca_bateria2}%` : "",
+        });
+      }
+      if (aparelhosTermo.length > 0) {
+        await supabase.from("termos_procedencia").insert({
+          venda_id: data?.id,
+          cliente_nome: (body.cliente || "").toUpperCase(),
+          cliente_cpf: body.cpf || "",
+          aparelhos: aparelhosTermo,
+          status: "PENDENTE",
+          gerado_por: usuario,
+        });
+      }
+    } catch { /* ignore — não bloqueia a venda */ }
+  }
+
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
 
@@ -537,6 +584,30 @@ export async function PATCH(req: NextRequest) {
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
+  // (previne itens vendidos que ficam "EM ESTOQUE" por falta de vínculo)
+  if (fields.serial_no && data && data.length > 0) {
+    const serialU = String(fields.serial_no).toUpperCase();
+    const vendaEstoqueId = data[0].estoque_id;
+    const { data: estoqueItems } = await supabase
+      .from("estoque")
+      .select("id")
+      .eq("serial_no", serialU)
+      .eq("status", "EM ESTOQUE");
+    if (estoqueItems && estoqueItems.length > 0) {
+      const idsParaEsgotar = estoqueItems
+        .filter(e => e.id !== vendaEstoqueId)
+        .map(e => e.id);
+      // Se a venda não tem estoque_id, esgotar TODOS com esse serial
+      const ids = vendaEstoqueId ? idsParaEsgotar : estoqueItems.map(e => e.id);
+      if (ids.length > 0) {
+        await supabase.from("estoque")
+          .update({ qnt: 0, status: "ESGOTADO", updated_at: new Date().toISOString() })
+          .in("id", ids);
+      }
+    }
+  }
+
   // Enviar notificação no Telegram quando venda é FINALIZADA
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];
@@ -558,6 +629,24 @@ export async function PATCH(req: NextRequest) {
       if (!ok) console.error("[Vendas] Falha ao enviar notificação Telegram para:", venda.cliente);
       else console.log("[Vendas] Notificação Telegram enviada com sucesso para:", venda.cliente);
     }).catch(err => console.error("[Vendas] Erro notificação Telegram:", err));
+
+    // Enviar Nota Fiscal por email ao cliente (se tem email + NF anexada)
+    if (venda.email && venda.nota_fiscal_url) {
+      import("@/lib/email").then(({ enviarNotaFiscal }) => {
+        enviarNotaFiscal({
+          to: venda.email!,
+          clienteNome: venda.cliente || "Cliente",
+          produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
+          valor: Number(venda.preco_vendido || 0),
+          notaFiscalUrl: venda.nota_fiscal_url!,
+        }).then(() => {
+          console.log("[Vendas] NF enviada por email para:", venda.email);
+          logActivity(usuario, "NF enviada por email", `${venda.cliente} → ${venda.email}`, "vendas", id).catch(() => {});
+        }).catch(err => {
+          console.error("[Vendas] Erro ao enviar NF por email:", err);
+        });
+      }).catch(err => console.error("[Vendas] Erro ao importar email:", err));
+    }
   }
 
   // Se tem reajustes, sincronizar com tabela reajustes (para relatório da noite)
@@ -757,9 +846,43 @@ export async function DELETE(req: NextRequest) {
   // Buscar venda antes de deletar (para limpar seminovo se houver)
   const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
 
-  // Se lojista pediu pra manter como crédito, creditar antes de apagar (usa tabela `lojistas`)
-  if (devolver_como_credito && venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO") && venda.cliente) {
-    const valorCredito = Number(venda.preco_vendido || 0);
+  // Reverter débito de crédito de lojista (se houve) — busca movimentação real, não preco_vendido
+  const isAtacado = venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO");
+  let creditoDevolvido = 0;
+  if (isAtacado && venda?.cliente) {
+    // Buscar se houve débito de crédito nessa venda (pela tabela de movimentações)
+    const { data: movDebito } = await supabase
+      .from("lojistas_movimentacoes")
+      .select("valor, lojista_id")
+      .eq("venda_id", id)
+      .eq("tipo", "DEBITO")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (movDebito && movDebito.valor > 0) {
+      // Sempre devolver o crédito que foi debitado, independente de devolver_como_credito
+      creditoDevolvido = movDebito.valor;
+      try {
+        await supabase.rpc("mover_saldo_lojista", {
+          p_lojista_id: movDebito.lojista_id,
+          p_tipo: "CREDITO",
+          p_valor: movDebito.valor,
+          p_venda_id: id,
+          p_motivo: `Cancelamento venda ${String(id).slice(0, 8)} → crédito devolvido`,
+          p_usuario: usuario,
+        });
+        await logActivity(usuario, "Venda cancelada → crédito lojista devolvido", `${venda.cliente}: +R$${movDebito.valor}`, "vendas", id);
+      } catch (e) {
+        console.error("[Vendas] Erro ao devolver crédito lojista:", e);
+      }
+    }
+  }
+
+  // Se lojista pediu pra manter valor da venda como crédito ADICIONAL (ex: devolver tudo como crédito)
+  // Subtrai o que já foi devolvido acima (crédito original) pra não duplicar
+  if (devolver_como_credito && isAtacado && venda?.cliente) {
+    const valorCredito = Math.max(0, Number(venda.preco_vendido || 0) - creditoDevolvido);
     if (valorCredito > 0) {
       try {
         const normNome = String(venda.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();

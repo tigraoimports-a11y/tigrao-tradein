@@ -203,12 +203,17 @@ export async function PATCH(request: Request) {
     "arquivado", "status", "observacao",
     "cliente_nome", "cliente_telefone", "cliente_cpf", "cliente_email",
     "produto", "cor", "valor", "desconto", "forma_pagamento", "parcelas", "entrada",
+    "produtos_extras",
     "troca_produto", "troca_valor", "troca_condicao", "troca_cor",
     "troca_produto2", "troca_valor2", "troca_condicao2", "troca_cor2",
     "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
+  }
+  // produtos_extras deve ser salvo como JSON string
+  if (allowed.produtos_extras && Array.isArray(allowed.produtos_extras)) {
+    allowed.produtos_extras = JSON.stringify(allowed.produtos_extras);
   }
   allowed.updated_at = new Date().toISOString();
 

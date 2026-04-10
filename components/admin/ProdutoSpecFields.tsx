@@ -321,12 +321,13 @@ export default function ProdutoSpecFields({
   const macMiniSsdOptions = cfgOr("ssd", MAC_MINI_STORAGES);
   const macStudioRamOptions = cfgOr("ram", MAC_STUDIO_RAMS);
   const macStudioSsdOptions = cfgOr("ssd", MAC_STUDIO_STORAGES);
-  // Núcleos: usa chip_air ou chip_pro_max do catálogo (configurado por modelo)
+  // Núcleos: detecta QUALQUER spec type que comece com "chip" no catálogo
+  // (chips_air, chips_pro_max, chip_neo, etc.)
   // Se tem modelo do catálogo selecionado, mostra APENAS o que está configurado
   // Se não tem modelo do catálogo, usa fallback hardcoded
-  const nucleosChipAir = modeloConfigs["chips_air"] || modeloConfigs["chip_air"] || [];
-  const nucleosChipProMax = modeloConfigs["chips_pro_max"] || modeloConfigs["chip_pro_max"] || [];
-  const macNucleosCatalog = [...nucleosChipAir, ...nucleosChipProMax];
+  const macNucleosCatalog = Object.entries(modeloConfigs)
+    .filter(([key]) => key.startsWith("chip"))
+    .flatMap(([, values]) => values);
   const mbNucleosOptions = hasCatalogModel
     ? macNucleosCatalog  // só o que está no catálogo (pode ser vazio = sem dropdown)
     : MACBOOK_NUCLEOS.map(n => `(${n})`);
