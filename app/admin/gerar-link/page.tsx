@@ -1612,7 +1612,10 @@ export default function GerarLinkPage() {
               const pPreco = lookupPreco(p);
               return (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}</span>
+                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {(() => {
+                    const corExtra = i === 0 ? (corSel ? corParaPT(corSel) : "") : (coresExtras[i - 1] ? corParaPT(coresExtras[i - 1]) : "");
+                    return corExtra ? `${p} ${corExtra}` : p;
+                  })()}</span>
                   <span className="font-semibold text-green-600">{pPreco > 0 ? `R$ ${pPreco.toLocaleString("pt-BR")}` : "—"}</span>
                 </div>
               );
