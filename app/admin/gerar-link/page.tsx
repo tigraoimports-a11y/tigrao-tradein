@@ -1047,15 +1047,22 @@ export default function GerarLinkPage() {
                       <section>
                         <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
                         <div className="grid grid-cols-2 gap-3">
-                          <FL label="Produto" k="produto" full />
-                          {editLinkExtras && editLinkExtras.length > 0 && (
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Produtos extras</label>
-                              {editLinkExtras.map((pe, i) => (
-                                <p key={i} className="text-sm px-3 py-1.5 rounded-lg border border-[#D2D2D7] mb-1">{pe}</p>
-                              ))}
+                          <FL label={editLinkExtras && editLinkExtras.length > 0 ? "Produto 1" : "Produto"} k="produto" full />
+                          {editLinkExtras && editLinkExtras.map((pe, i) => (
+                            <div key={i} className="col-span-2">
+                              <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Produto {i + 2}</label>
+                              <input
+                                type="text"
+                                value={pe}
+                                onChange={(e) => {
+                                  const updated = [...editLinkExtras];
+                                  updated[i] = e.target.value;
+                                  setEditLinkExtras(updated);
+                                }}
+                                className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                              />
                             </div>
-                          )}
+                          ))}
                           <FL label="Cor" k="cor" />
                           <FL label="Valor (R$)" k="valor" type="number" />
                           <FL label="Forma de pagamento" k="forma_pagamento" />
