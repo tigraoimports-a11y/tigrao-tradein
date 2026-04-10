@@ -217,6 +217,7 @@ export default function EntregasPage() {
   const [estoqueId, setEstoqueId] = useState("");
   const [produtoManual, setProdutoManual] = useState(false);
   const [corSel, setCorSel] = useState("");
+  const [jaPago, setJaPago] = useState(false);
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   // Linha 2 do produto (opcional — aparece ao clicar "+ Adicionar 2º produto")
   const [showProduto2, setShowProduto2] = useState(false);
@@ -430,6 +431,12 @@ export default function EntregasPage() {
       seen.add(key);
       out.push(pt);
     }
+    // Se o nome do produto já contém uma cor/variante, não mostrar seletor
+    const CORES_CONHECIDAS = ["black","white","silver","gold","blue","red","green","pink","purple","orange","yellow","titanium","starlight","midnight","natural","preto","branco","prata","dourado","azul","vermelho","verde","rosa","roxo","estelar","meia-noite","milanes","milanês","ocean","alpine","braided","sport"];
+    const prodLow = nomeProduto.toLowerCase();
+    const jaTemCor = CORES_CONHECIDAS.some(c => prodLow.includes(c));
+    if (jaTemCor) return [];
+
     return out.sort((a, b) => a.localeCompare(b));
   }, [catalogoCores]);
 
@@ -1275,7 +1282,7 @@ export default function EntregasPage() {
                     </button>
                   )}
                   {showProduto2 && (
-                    <div className="mt-3 p-3 rounded-xl bg-[#F9F9FB] border border-[#D2D2D7] space-y-3">
+                    <div className={`mt-3 p-3 rounded-xl border space-y-3 ${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-[#F9F9FB] border-[#D2D2D7]"}`}>
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto 2</p>
                         <button
@@ -1415,9 +1422,17 @@ export default function EntregasPage() {
               </div>
             </div>
 
+            {/* JÁ PAGO */}
+            <div className="col-span-2 md:col-span-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={jaPago} onChange={(e) => setJaPago(e.target.checked)} className="w-4 h-4 accent-[#2ECC71]" />
+                <span className={`text-sm font-semibold ${jaPago ? "text-[#2ECC71]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>✅ Já está pago</span>
+              </label>
+            </div>
+
             {/* PAGAMENTO 1 */}
-            <div className="col-span-2 md:col-span-3 rounded-xl border border-[#D2D2D7] bg-white px-4 py-3 space-y-3">
-              <p className="text-sm font-bold text-[#1D1D1F]">💳 Pagamento 1</p>
+            {!jaPago && <div className={`col-span-2 md:col-span-3 rounded-xl border px-4 py-3 space-y-3 ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-white"}`}>
+              <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💳 Pagamento 1</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <p className={labelCls}>Forma</p>
@@ -1482,7 +1497,7 @@ export default function EntregasPage() {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* PAGAMENTO 2 (opcional) */}
             {!showPagAlt && (

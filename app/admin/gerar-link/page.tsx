@@ -562,7 +562,9 @@ export default function GerarLinkPage() {
   }
 
   function reutilizarLink(l: LinkCompra) {
-    setProdutos([l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim()]);
+    const prod1 = l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim();
+    const extras = l.produtos_extras && Array.isArray(l.produtos_extras) ? l.produtos_extras : [];
+    setProdutos([prod1, ...extras]);
     if (l.cor) setCorSel(l.cor);
     if (l.valor) setPreco(Number(l.valor).toLocaleString("pt-BR"));
     if (l.forma_pagamento) setForma(l.forma_pagamento);
