@@ -33,6 +33,15 @@ export async function enviarRelatorioPDF(opts: {
   return info;
 }
 
+// Transporter dedicado para envio de NF (contato@tigraoimports.com)
+const nfTransporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.NF_EMAIL_USER || process.env.EMAIL_USER,
+    pass: process.env.NF_EMAIL_APP_PASSWORD || process.env.EMAIL_APP_PASSWORD,
+  },
+});
+
 /**
  * Envia a Nota Fiscal por email ao cliente quando a venda é finalizada.
  * Baixa o PDF da URL pública (Supabase Storage) e envia como anexo.
@@ -81,8 +90,9 @@ export async function enviarNotaFiscal(opts: {
     </div>
   `;
 
-  const info = await transporter.sendMail({
-    from: `"TigrãoImports" <${process.env.EMAIL_USER}>`,
+  const nfEmail = process.env.NF_EMAIL_USER || process.env.EMAIL_USER;
+  const info = await nfTransporter.sendMail({
+    from: `"TigrãoImports" <${nfEmail}>`,
     to: opts.to,
     subject: `Nota Fiscal — ${opts.produto} — TigrãoImports`,
     html,
