@@ -153,7 +153,8 @@ export default function VendasPage() {
     }
   }, [form]);
 
-  // 2ª troca toggle
+  // Troca toggles
+  const [trocaEnabled, setTrocaEnabled] = useState(false);
   const [showSegundaTroca, setShowSegundaTroca] = useState(false);
 
   // Busca por serial number
@@ -863,8 +864,8 @@ export default function VendasPage() {
   };
 
   // Resumo financeiro
-  // temTroca: mostra o form de troca se tem valor > 0 OU se já preencheu produto da troca OU se é UPGRADE
-  const temTroca = valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto || form.tipo === "UPGRADE";
+  // temTroca: controlado pelo checkbox trocaEnabled OU automaticamente se já tem dados de troca
+  const temTroca = trocaEnabled || valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto;
   const temEntradaPix = entradaPix > 0;
   const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO";
@@ -1101,7 +1102,7 @@ export default function VendasPage() {
     setCatSel("");
     setEstoqueId("");
     setProdutoManual(false);
-    setShowSegundaTroca(false);
+    setShowSegundaTroca(false); setTrocaEnabled(false);
   };
 
   // Add current product to cart
@@ -1453,7 +1454,7 @@ export default function VendasPage() {
       setCatSel("");
       setEstoqueId("");
       setProdutoManual(false);
-      setShowSegundaTroca(false);
+      setShowSegundaTroca(false); setTrocaEnabled(false);
       localStorage.removeItem("tigrao_venda_draft");
       const plural = successCount > 1 ? "s" : "";
       setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
@@ -1721,7 +1722,7 @@ export default function VendasPage() {
     setEstoqueId("");
     setProdutoManual(true); // produto duplicado vai como manual
     setProdutosCarrinho([]); // limpar carrinho ao duplicar
-    setShowSegundaTroca(false);
+    setShowSegundaTroca(false); setTrocaEnabled(false);
     const [y, m, d] = (v.data || "").split("-");
     setDuplicadoInfo({ data: d && m ? `${d}/${m}` : v.data, cliente: v.cliente });
     setTab("nova");
@@ -1929,7 +1930,7 @@ export default function VendasPage() {
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
-                  setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+                  setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
@@ -2542,7 +2543,7 @@ export default function VendasPage() {
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
@@ -3161,8 +3162,20 @@ export default function VendasPage() {
 
           {/* PRODUTO NA TROCA */}
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-            <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={trocaEnabled} onChange={(e) => {
+                setTrocaEnabled(e.target.checked);
+                if (!e.target.checked) {
+                  // Limpar dados de troca ao desmarcar
+                  setForm(f => ({ ...f, produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "", troca_serial: "", troca_imei: "", troca_categoria: "" }));
+                  setTrocaRow(createEmptyProdutoRow());
+                  const newVendido = recalcVendido({ troca: "0" });
+                  if (newVendido) setForm(f => ({ ...f, preco_vendido: newVendido }));
+                }
+              }} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</span>
+            </label>
+            {trocaEnabled && <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Valor da troca (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.produto_na_troca)} onChange={(e) => {
                 const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                 const newVendido = recalcVendido({ troca: clean });
@@ -3209,7 +3222,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>IMEI</p><input value={form.troca_imei} onChange={(e) => set("troca_imei", e.target.value.replace(/\D/g, "").slice(0, 15))} placeholder="Ex: 35938..." className={inputCls} inputMode="numeric" /></div>
                 </>
               )}
-            </div>
+            </div>}
             {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
 
             {/* Botão para adicionar 2º produto na troca */}
@@ -3231,7 +3244,7 @@ export default function VendasPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowSegundaTroca(false);
+                      setShowSegundaTroca(false); setTrocaEnabled(false);
                       setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
@@ -4167,6 +4180,9 @@ export default function VendasPage() {
                                               usar_credito_loja: "",
                                             });
                                             setProdutoManual(true);
+                                            // Ativar checkbox de troca somente se a venda realmente tem troca
+                                            const temTrocaNaVenda = !!(trocaProd || (parseFloat(String(primaryVenda.produto_na_troca)) || 0) > 0);
+                                            setTrocaEnabled(temTrocaNaVenda);
 
                                             // Popular trocaRow/trocaRow2 para o ProdutoSpecFields mostrar os dados
                                             if (grupoVendas.length === 1) {
@@ -4752,7 +4768,7 @@ export default function VendasPage() {
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
@@ -4786,7 +4802,7 @@ export default function VendasPage() {
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
