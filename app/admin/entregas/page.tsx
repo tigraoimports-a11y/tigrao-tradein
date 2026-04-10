@@ -582,7 +582,7 @@ export default function EntregasPage() {
     if (showProduto2 && modelo2) {
       produtosFilled.push(cor2 ? `${modelo2} ${cor2}` : modelo2);
     }
-    const produtosStr = produtosFilled.join(" | ");
+    const produtosStr = produtosFilled.join(" + ");
     const trocasStr = trocaAtiva ? [trocaProduto, trocaCor ? `Cor: ${trocaCor}` : "", trocaBateria ? `Bateria: ${trocaBateria}%` : "", trocaObs, trocaValor ? `Avaliação: R$ ${trocaValor}` : ""].filter(Boolean).join("\n") : "";
     const isEdit = !!editingEntregaId;
     // Endereço de entrega final: Shopping → shopping_nome; Outro → local_detalhes; senão endereco_entrega; fallback endereco cadastro
@@ -634,7 +634,7 @@ export default function EntregasPage() {
         produto: produtosStr || null,
         tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
         detalhes_upgrade: trocasStr || null,
-        forma_pagamento: formaPagDetalhada || null,
+        forma_pagamento: jaPago ? "JÁ PAGO" : (formaPagDetalhada || null),
         valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
         // Campos estruturados pra exibicao detalhada no modal.
         // `entrada` guarda Pix/Espécie/Transferência do pagamento 2 (não-cartão) — NÃO incluímos cartão aqui.

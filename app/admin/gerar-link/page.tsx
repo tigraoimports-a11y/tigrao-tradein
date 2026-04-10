@@ -993,8 +993,8 @@ export default function GerarLinkPage() {
     }
   }
 
-  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
-  const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
+  const inputCls = `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `block text-sm font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#1D1D1F]"}`;
 
   const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Link de Pagamento";
   const showEntradaPix = forma === "Cartao Credito";
