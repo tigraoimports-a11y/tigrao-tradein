@@ -32,6 +32,7 @@ interface GastoGrupo {
   items: Gasto[];
   totalValor: number;
   data: string;
+  tipo: string;
   categoria: string;
   descricao: string | null;
   observacao: string | null;
@@ -65,6 +66,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       items,
       totalValor: items.reduce((s, i) => s + Number(i.valor), 0),
       data: first.data,
+      tipo: first.tipo,
       categoria: first.categoria,
       descricao: first.descricao,
       observacao: first.observacao,
@@ -82,6 +84,7 @@ function agruparGastos(gastos: Gasto[]): GastoGrupo[] {
       items: [g],
       totalValor: Number(g.valor),
       data: g.data,
+      tipo: g.tipo,
       categoria: g.categoria,
       descricao: g.descricao,
       observacao: g.observacao,
@@ -568,7 +571,8 @@ export default function GastosPage() {
   });
   const toggleCategoria = (cat: string) => setCategoriasExcluidas(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
   const gruposFiltrados = useMemo(() => {
-    let result = grupos;
+    // Exclui transferências de depósito (aparecem na tela de Saldos, não em Gastos)
+    let result = grupos.filter(g => g.tipo !== "TRANSFERENCIA" && !g.is_dep_esp);
     if (filtroMes) result = result.filter(g => (g.data || "").startsWith(filtroMes));
     if (filtroCategoria) result = result.filter(g => g.categoria === filtroCategoria);
     if (categoriasExcluidas.size > 0) result = result.filter(g => !categoriasExcluidas.has(g.categoria));

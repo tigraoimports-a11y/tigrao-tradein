@@ -16,6 +16,7 @@ import {
 } from "@/lib/calculations";
 import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
+import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
 
 const FunnelPanel = dynamic(() => import("@/app/admin/analytics/page"), { ssr: false });
 
@@ -1657,9 +1658,9 @@ function SimuladorInterno({ password }: { password: string }) {
               <span className="text-[#86868B] font-bold">Diferenca a pagar (PIX):</span>
               <span className="text-right font-bold text-[#E8740E] text-base">{formatBRL(quote.difference)}</span>
             </div>
-            {/* Parcelas */}
+            {/* Referência rápida de parcelas */}
             <div className="border-t border-[#E8740E]/20 pt-3 mt-2">
-              <p className="text-xs font-semibold text-[#86868B] mb-2">Parcelas (sobre a diferenca):</p>
+              <p className="text-xs font-semibold text-[#86868B] mb-2">Referencia rapida:</p>
               <div className="grid grid-cols-3 gap-2">
                 {[12, 18, 21].map((n) => {
                   const inst = quote.installments.find((i) => i.parcelas === n);
@@ -1673,6 +1674,11 @@ function SimuladorInterno({ password }: { password: string }) {
                   );
                 })}
               </div>
+            </div>
+            {/* Simulador de pagamento flexível */}
+            <div className="border-t border-[#E8740E]/20 pt-4 mt-3">
+              <p className="text-xs font-semibold text-[#86868B] mb-3">Montar pagamento personalizado:</p>
+              <FlexiblePaymentSimulator totalAPagar={quote.difference} />
             </div>
           </div>
         )}

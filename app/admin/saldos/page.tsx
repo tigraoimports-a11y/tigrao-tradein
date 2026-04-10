@@ -264,7 +264,7 @@ export default function SaldosPage() {
                       <tr key={d.id} className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
                         <td className="px-4 py-2 font-medium">{d.data}</td>
                         <td className="px-4 py-2">{d.banco}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">R$ {fmt(Number(d.valor))}</td>
+                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">{fmt(Number(d.valor))}</td>
                         <td className="px-4 py-2 text-xs text-[#86868B]">{d.descricao}</td>
                       </tr>
                     ))}
