@@ -200,6 +200,15 @@ export async function POST(req: NextRequest) {
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
   delete body.usar_credito_loja;
 
+  // Garantir que preco_vendido inclui crédito de lojista (frontend já soma, mas safety net)
+  if (usarCreditoLoja > 0 && body.preco_vendido !== undefined) {
+    const precoAtual = Number(body.preco_vendido) || 0;
+    // Se preco_vendido é menor que o crédito usado, significa que não foi incluído
+    if (precoAtual < usarCreditoLoja) {
+      body.preco_vendido = precoAtual + usarCreditoLoja;
+    }
+  }
+
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
     estoque_id: estoqueId || null,
@@ -795,9 +804,43 @@ export async function DELETE(req: NextRequest) {
   // Buscar venda antes de deletar (para limpar seminovo se houver)
   const { data: venda } = await supabase.from("vendas").select("*").eq("id", id).single();
 
-  // Se lojista pediu pra manter como crédito, creditar antes de apagar (usa tabela `lojistas`)
-  if (devolver_como_credito && venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO") && venda.cliente) {
-    const valorCredito = Number(venda.preco_vendido || 0);
+  // Reverter débito de crédito de lojista (se houve) — busca movimentação real, não preco_vendido
+  const isAtacado = venda && (venda.tipo === "ATACADO" || venda.origem === "ATACADO");
+  let creditoDevolvido = 0;
+  if (isAtacado && venda?.cliente) {
+    // Buscar se houve débito de crédito nessa venda (pela tabela de movimentações)
+    const { data: movDebito } = await supabase
+      .from("lojistas_movimentacoes")
+      .select("valor, lojista_id")
+      .eq("venda_id", id)
+      .eq("tipo", "DEBITO")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (movDebito && movDebito.valor > 0) {
+      // Sempre devolver o crédito que foi debitado, independente de devolver_como_credito
+      creditoDevolvido = movDebito.valor;
+      try {
+        await supabase.rpc("mover_saldo_lojista", {
+          p_lojista_id: movDebito.lojista_id,
+          p_tipo: "CREDITO",
+          p_valor: movDebito.valor,
+          p_venda_id: id,
+          p_motivo: `Cancelamento venda ${String(id).slice(0, 8)} → crédito devolvido`,
+          p_usuario: usuario,
+        });
+        await logActivity(usuario, "Venda cancelada → crédito lojista devolvido", `${venda.cliente}: +R$${movDebito.valor}`, "vendas", id);
+      } catch (e) {
+        console.error("[Vendas] Erro ao devolver crédito lojista:", e);
+      }
+    }
+  }
+
+  // Se lojista pediu pra manter valor da venda como crédito ADICIONAL (ex: devolver tudo como crédito)
+  // Subtrai o que já foi devolvido acima (crédito original) pra não duplicar
+  if (devolver_como_credito && isAtacado && venda?.cliente) {
+    const valorCredito = Math.max(0, Number(venda.preco_vendido || 0) - creditoDevolvido);
     if (valorCredito > 0) {
       try {
         const normNome = String(venda.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
