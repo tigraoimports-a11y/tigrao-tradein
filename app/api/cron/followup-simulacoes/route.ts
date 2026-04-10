@@ -114,7 +114,10 @@ export async function GET(req: NextRequest) {
       const modeloNovo = s.modelo_novo || "o produto";
       const diferenca = fmtBRL(Number(s.diferenca || 0));
 
-      const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de trade-in aqui na *TigrãoImports* pro *${modeloNovo}*.\n\nA diferença ficou em *${diferenca}*, mas consigo melhorar essa condição pra você! Quer que eu veja? 🐯`;
+      const modeloUsado = s.modelo_usado ? `${s.modelo_usado}${s.storage_usado ? ` ${s.storage_usado}` : ""}` : "seu aparelho";
+      const modeloNovoFull = s.modelo_novo ? `${s.modelo_novo}${s.storage_novo ? ` ${s.storage_novo}` : ""}` : "o produto";
+
+      const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}.\n\nFicou alguma dúvida? Posso te ajudar a fechar essa troca ainda hoje! Estou à disposição 🐯`;
 
       const enviou = await enviarWhatsApp(s.whatsapp, msg);
 
