@@ -135,7 +135,7 @@ export default function AdminNav({ userRole, userPermissoes }: AdminNavProps) {
 
   // Aliases: se o usuário tem qualquer uma dessas permissões, pode ver o item
   const PAGE_ALIASES: Record<string, string[]> = {
-    vendas_ver: ["vendas_ver", "vendas_registrar"],
+    vendas_ver: ["vendas_ver", "vendas_andamento", "vendas_registrar"],
   };
 
   function canSee(pageKey: string): boolean {
