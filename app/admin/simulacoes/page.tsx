@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useAdmin } from "@/components/admin/AdminShell";
+import { useAutoRefetch } from "@/lib/useAutoRefetch";
 import TradeInQuestionsAdmin from "@/components/admin/TradeInQuestionsAdmin";
 import { corParaPT } from "@/lib/cor-pt";
 
@@ -151,6 +152,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (password) fetchData(password);
   }, [password, fetchData]);
+  useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {

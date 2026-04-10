@@ -5436,12 +5436,18 @@ export default function EstoquePage() {
                   {p.tipo === "PENDENCIA" && (
                     <button
                       onClick={async () => {
+                        const condicaoParts: string[] = [];
+                        if (p.bateria) condicaoParts.push(`Bateria ${p.bateria}%`);
+                        if (p.status) condicaoParts.push(p.status);
+                        if (p.garantia) condicaoParts.push(`Garantia: ${p.garantia}`);
+                        if (p.observacao) condicaoParts.push(p.observacao);
                         const aparelhos = [{
                           modelo: p.produto,
+                          capacidade: "",
                           cor: p.cor || "",
                           imei: p.imei || "",
                           serial: p.serial_no || "",
-                          condicao: p.bateria ? `Bateria ${p.bateria}%` : "",
+                          condicao: condicaoParts.join(", "),
                         }];
                         try {
                           const res = await fetch("/api/admin/termo-procedencia", {
