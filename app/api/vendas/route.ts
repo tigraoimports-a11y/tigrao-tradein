@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   const fornecedor = searchParams.get("fornecedor");
   if (fornecedor) query = query.ilike("fornecedor", fornecedor);
 
-  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 1000;
+  const limit = searchParams.get("limit") ? parseInt(searchParams.get("limit")!) : 500;
   const { data, error } = await query.limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });

@@ -48,12 +48,14 @@ export async function GET(req: NextRequest) {
     const { data: estoqueItems } = await supabase
       .from("estoque")
       .select("*")
-      .ilike("imei", `%${imeiSearch}%`);
+      .ilike("imei", `%${imeiSearch}%`)
+      .limit(50);
 
     const { data: vendaItems } = await supabase
       .from("vendas")
       .select("*")
-      .ilike("imei", `%${imeiSearch}%`);
+      .ilike("imei", `%${imeiSearch}%`)
+      .limit(50);
 
     return NextResponse.json({ estoque: estoqueItems ?? [], vendas: vendaItems ?? [] });
   }
@@ -183,7 +185,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data });
   }
 
-  let query = supabase.from("estoque").select("*").order("categoria").order("produto").range(0, 49999);
+  let query = supabase.from("estoque").select("*").order("categoria").order("produto").limit(2000);
   if (categoria) query = query.eq("categoria", categoria);
   const statusFilter = searchParams.get("status");
   if (statusFilter) query = query.eq("status", statusFilter);
