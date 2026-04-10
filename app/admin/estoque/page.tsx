@@ -1582,9 +1582,10 @@ export default function EstoquePage() {
     } catch { /* ignore */ }
   }, [password]);
 
-  useEffect(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
-  // intervalMs=0 → desativa polling automático; só re-puxa quando a aba ganha foco
-  useAutoRefetch(useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]), !!password, 0);
+  // Fetch inicial + refetch ao voltar de aba oculta (sem polling constante)
+  const refetchAll = useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
+  useEffect(() => { refetchAll(); }, [refetchAll]);
+  useAutoRefetch(refetchAll, !!password);
 
   // Reset estados de edição quando abre novo produto no modal
   useEffect(() => {
