@@ -41,11 +41,41 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const usuario = getUsuario(req);
 
-  const { cliente_nome, cliente_cpf, aparelhos, venda_id, encomenda_id, pendencia_id, cidade, gerar_pdf } = body;
+  let { cliente_nome, cliente_cpf, aparelhos, venda_id, encomenda_id, pendencia_id, cidade, gerar_pdf } = body;
 
-  if (!cliente_nome || !cliente_cpf) {
-    return NextResponse.json({ error: "cliente_nome e cliente_cpf obrigatórios" }, { status: 400 });
+  // Se faltar nome/CPF, tentar buscar da venda ou encomenda vinculada
+  if ((!cliente_nome || !cliente_cpf) && venda_id) {
+    const { data: venda } = await supabase.from("vendas").select("cliente,cpf").eq("id", venda_id).maybeSingle();
+    if (venda) {
+      if (!cliente_nome) cliente_nome = venda.cliente;
+      if (!cliente_cpf) cliente_cpf = venda.cpf;
+    }
   }
+  if ((!cliente_nome || !cliente_cpf) && encomenda_id) {
+    const { data: enc } = await supabase.from("encomendas").select("cliente,cpf").eq("id", encomenda_id).maybeSingle();
+    if (enc) {
+      if (!cliente_nome) cliente_nome = enc.cliente;
+      if (!cliente_cpf) cliente_cpf = enc.cpf;
+    }
+  }
+  if ((!cliente_nome || !cliente_cpf) && pendencia_id) {
+    // Pendência: buscar cliente do estoque, e CPF da venda mais recente desse cliente
+    const { data: pend } = await supabase.from("estoque").select("cliente").eq("id", pendencia_id).maybeSingle();
+    if (pend?.cliente) {
+      if (!cliente_nome) cliente_nome = pend.cliente;
+      if (!cliente_cpf) {
+        const { data: vendaCliente } = await supabase.from("vendas").select("cpf").ilike("cliente", pend.cliente).not("cpf", "is", null).limit(1).maybeSingle();
+        if (vendaCliente?.cpf) cliente_cpf = vendaCliente.cpf;
+      }
+    }
+  }
+
+  if (!cliente_nome) {
+    return NextResponse.json({ error: "cliente_nome não encontrado — preencha ou vincule a uma venda" }, { status: 400 });
+  }
+  // CPF pode ficar vazio se não encontrado (será campo em branco no PDF)
+  if (!cliente_cpf) cliente_cpf = "";
+
   if (!aparelhos || !Array.isArray(aparelhos) || aparelhos.length === 0) {
     return NextResponse.json({ error: "aparelhos (array) obrigatório com pelo menos 1 item" }, { status: 400 });
   }

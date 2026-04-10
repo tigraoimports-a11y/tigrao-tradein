@@ -4855,7 +4855,7 @@ export default function EstoquePage() {
                                     })()}
                                     {/* Apple Watch badges: tamanho + pulseira */}
                                     {prodItems[0]?.categoria === "APPLE_WATCH" && (() => {
-                                      const { tamanho, pulseira } = extractWatchBadges(prodNome);
+                                      const { tamanho, pulseira } = extractWatchBadges(prodItems[0]?.produto || prodNome);
                                       if (!tamanho && !pulseira) return null;
                                       return (
                                         <div className="flex gap-1 mt-0.5">
@@ -5436,12 +5436,18 @@ export default function EstoquePage() {
                   {p.tipo === "PENDENCIA" && (
                     <button
                       onClick={async () => {
+                        const condicaoParts: string[] = [];
+                        if (p.bateria) condicaoParts.push(`Bateria ${p.bateria}%`);
+                        if (p.status) condicaoParts.push(p.status);
+                        if (p.garantia) condicaoParts.push(`Garantia: ${p.garantia}`);
+                        if (p.observacao) condicaoParts.push(p.observacao);
                         const aparelhos = [{
                           modelo: p.produto,
+                          capacidade: "",
                           cor: p.cor || "",
                           imei: p.imei || "",
                           serial: p.serial_no || "",
-                          condicao: p.bateria ? `Bateria ${p.bateria}%` : "",
+                          condicao: condicaoParts.join(", "),
                         }];
                         try {
                           const res = await fetch("/api/admin/termo-procedencia", {
@@ -5855,9 +5861,9 @@ export default function EstoquePage() {
                       )}
                       {/* Apple Watch: tamanho + pulseira info */}
                       {p.categoria === "APPLE_WATCH" && (() => {
-                        const { tamanho } = extractWatchBadges(p.produto);
+                        const { tamanho, pulseira: pulseiraFromName } = extractWatchBadges(p.produto);
                         const pulseiraTam = p.observacao?.match(/\[PULSEIRA_TAM:([^\]]+)\]/)?.[1];
-                        const bandModel = p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1];
+                        const bandModel = p.observacao?.match(/\[BAND:([^\]]+)\]/)?.[1] || pulseiraFromName;
                         return (<>
                           {tamanho && <div><p className={`text-[10px] uppercase tracking-wider ${mS}`}>Tamanho</p>
                             <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-0.5 ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>⌚ {tamanho}</span></div>}
@@ -6285,9 +6291,15 @@ export default function EstoquePage() {
                           const obs = getLatestObs();
                           const cleaned = obs.replace(/\[BAND:[^\]]+\]/g, "").trim();
                           const finalObs = val ? `${cleaned} [BAND:${val}]`.trim() : (cleaned || null);
-                          await apiPatch(p.id, { observacao: finalObs });
-                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs } : x));
-                          setDetailProduct(prev => prev ? { ...prev, observacao: finalObs } : null);
+                          // Also update pulseira in product name to keep them in sync
+                          const currentProduto = p.produto || "";
+                          const nomeSemPulseira = currentProduto.replace(/\s*PULSEIRA\s+.*$/i, "").trim();
+                          const novoProduto = val ? `${nomeSemPulseira} PULSEIRA ${val}`.toUpperCase() : nomeSemPulseira;
+                          const updates: Record<string, unknown> = { observacao: finalObs };
+                          if (novoProduto !== currentProduto) updates.produto = novoProduto;
+                          await apiPatch(p.id, updates);
+                          setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: finalObs, ...(novoProduto !== currentProduto ? { produto: novoProduto } : {}) } : x));
+                          setDetailProduct(prev => prev ? { ...prev, observacao: finalObs, ...(novoProduto !== currentProduto ? { produto: novoProduto } : {}) } : null);
                           showSaved("band_model");
                         }} className={selCls}>
                           <option value="">— Selecionar —</option>
