@@ -32,6 +32,19 @@ export async function GET(req: NextRequest) {
   const categoria = searchParams.get("categoria");
   const contatoNome = searchParams.get("contato_nome");
 
+  // Filtro especial: buscar apenas depósitos de espécie (para histórico de depósitos)
+  const isDepEsp = searchParams.get("is_dep_esp");
+  if (isDepEsp === "1") {
+    const { data, error } = await supabase
+      .from("gastos")
+      .select("*")
+      .or("is_dep_esp.eq.true,tipo.eq.TRANSFERENCIA")
+      .order("data", { ascending: false })
+      .limit(200);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  }
+
   let query = supabase.from("gastos").select("*").order("data", { ascending: false }).order("hora", { ascending: false });
   if (from) query = query.gte("data", from);
   if (to) query = query.lte("data", to);

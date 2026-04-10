@@ -1165,11 +1165,12 @@ export default function ClientesPage() {
                   {c.is_lojista && (() => {
                     const saldo = saldosLojistas[lojistaKey(c)] || 0;
                     return (
-                      <div>
+                      <div className="cursor-pointer hover:opacity-80" onClick={(e) => { e.stopPropagation(); openCreditoModal(c); }}>
                         <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Saldo Credito</p>
                         <p className={`text-[14px] font-bold mt-0.5 ${saldo > 0 ? "text-blue-600" : mS}`}>
                           {saldo > 0 ? fmt(saldo) : "R$ 0"}
                         </p>
+                        <p className="text-[9px] text-blue-500 mt-0.5">Ver extrato →</p>
                       </div>
                     );
                   })()}
