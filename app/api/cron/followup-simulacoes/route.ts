@@ -21,7 +21,43 @@ function primeiroNome(nome: string): string {
   return (nome || "").split(" ")[0] || "Cliente";
 }
 
+// Envia mensagem via Z-API (instancia de follow-up)
+async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
+  const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
+  const token = process.env.ZAPI_FOLLOWUP_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN ?? "";
+
+  if (!instanceId || !token) {
+    console.log("[Followup] Z-API nao configurado, pulando envio WhatsApp");
+    return false;
+  }
+
+  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+
+  try {
+    // Formatar telefone: garantir 55 + DDD + numero
+    let fone = phone.replace(/\D/g, "");
+    if (!fone.startsWith("55")) fone = `55${fone}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
+      body: JSON.stringify({ phone: fone, message }),
+    });
+    const json = await res.json();
+    console.log(`[Followup] WhatsApp enviado para ${fone}:`, JSON.stringify(json));
+    return res.ok;
+  } catch (err) {
+    console.error(`[Followup] Erro ao enviar WhatsApp para ${phone}:`, err);
+    return false;
+  }
+}
+
 // Roda todo dia as 14h — verifica simulacoes dos ultimos 3 dias que nao converteram
+// Envia WhatsApp automatico pro cliente + resumo no Telegram
 export async function GET(req: NextRequest) {
   if (!authCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -50,8 +86,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao nos ultimos 3 dias" });
     }
 
-    // Filtrar: status SAIR (nao fechou) OU GOSTEI mas sem follow-up
-    // Prioridade: quem saiu sem fechar e nao foi contatado
+    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado E com whatsapp
     const naoConvertidas = sims.filter(s =>
       s.status === "SAIR" && !s.follow_up_enviado
     );
@@ -64,26 +99,73 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Todas simulacoes ja foram acompanhadas" });
     }
 
-    // Montar mensagem Telegram
+    // === ENVIO AUTOMATICO DE WHATSAPP ===
+    // Envia pra quem saiu sem fechar, tem whatsapp, e tem pelo menos 1 dia
+    const paraEnviarWA = naoConvertidas.filter(s => {
+      const dias = diasAtras(s.created_at);
+      return s.whatsapp && dias >= 1; // espera pelo menos 24h
+    });
+
+    let whatsappEnviados = 0;
+    const whatsappErros: string[] = [];
+
+    for (const s of paraEnviarWA) {
+      const nome = primeiroNome(s.nome);
+      const modeloNovo = s.modelo_novo || "o produto";
+      const diferenca = fmtBRL(Number(s.diferenca || 0));
+
+      const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de trade-in aqui na *TigrãoImports* pro *${modeloNovo}*.\n\nA diferença ficou em *${diferenca}*, mas consigo melhorar essa condição pra você! Quer que eu veja? 🐯`;
+
+      const enviou = await enviarWhatsApp(s.whatsapp, msg);
+
+      if (enviou) {
+        whatsappEnviados++;
+        // Marcar no banco que o follow-up foi enviado
+        await supabase
+          .from("simulacoes")
+          .update({ follow_up_enviado: true })
+          .eq("id", s.id);
+      } else {
+        whatsappErros.push(s.nome || "Sem nome");
+      }
+
+      // Delay de 3s entre mensagens pra nao ser bloqueado
+      if (paraEnviarWA.indexOf(s) < paraEnviarWA.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+
+    // === MONTAR MENSAGEM TELEGRAM (resumo pra equipe) ===
     const lines: string[] = [
-      `<b>FOLLOW-UP SIMULACOES</b>`,
-      `<i>${sims.length} simulacoes nos ultimos 3 dias</i>`,
+      `<b>🐯 FOLLOW-UP SIMULAÇÕES</b>`,
+      `<i>${sims.length} simulações nos últimos 3 dias</i>`,
       ``,
     ];
 
+    // WhatsApp enviados
+    if (whatsappEnviados > 0) {
+      lines.push(`<b>✅ WhatsApp enviado automaticamente: ${whatsappEnviados} cliente(s)</b>`);
+      lines.push(``);
+    }
+    if (whatsappErros.length > 0) {
+      lines.push(`<b>⚠️ Falha no envio: ${whatsappErros.join(", ")}</b>`);
+      lines.push(``);
+    }
+
     // Quem saiu sem fechar (prioridade alta)
     if (naoConvertidas.length > 0) {
-      lines.push(`<b>NAO FECHARAM (${naoConvertidas.length}):</b>`);
+      lines.push(`<b>🔴 NÃO FECHARAM (${naoConvertidas.length}):</b>`);
       for (const s of naoConvertidas) {
         const dias = diasAtras(s.created_at);
-        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `ha ${dias} dias`;
+        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
         const fone = s.whatsapp ? s.whatsapp.replace(/\D/g, "") : "";
         const waLink = fone ? `https://wa.me/55${fone.replace(/^55/, "")}` : "";
+        const waStatus = s.follow_up_enviado ? "✅" : (fone ? "⏳" : "❌ sem tel");
 
-        lines.push(`  <b>${s.nome || "Sem nome"}</b> (${diasTxt})`);
+        lines.push(`  <b>${s.nome || "Sem nome"}</b> (${diasTxt}) ${waStatus}`);
         lines.push(`  Quer: ${s.modelo_novo || "?"} ${s.storage_novo || ""}`);
         lines.push(`  Troca: ${s.modelo_usado || "?"} ${s.storage_usado || ""}`);
-        lines.push(`  Diferenca: ${fmtBRL(Number(s.diferenca || 0))}`);
+        lines.push(`  Diferença: ${fmtBRL(Number(s.diferenca || 0))}`);
         if (waLink) lines.push(`  WhatsApp: ${waLink}`);
         lines.push(``);
       }
@@ -91,40 +173,24 @@ export async function GET(req: NextRequest) {
 
     // Gostaram mas nao foram contatados
     if (gosteiFaltaContato.length > 0) {
-      lines.push(`<b>GOSTARAM MAS NAO FORAM CONTATADOS (${gosteiFaltaContato.length}):</b>`);
+      lines.push(`<b>🟡 GOSTARAM MAS NÃO FORAM CONTATADOS (${gosteiFaltaContato.length}):</b>`);
       for (const s of gosteiFaltaContato) {
         const dias = diasAtras(s.created_at);
-        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `ha ${dias} dias`;
+        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
         const fone = s.whatsapp ? s.whatsapp.replace(/\D/g, "") : "";
         const waLink = fone ? `https://wa.me/55${fone.replace(/^55/, "")}` : "";
 
         lines.push(`  <b>${s.nome || "Sem nome"}</b> (${diasTxt})`);
         lines.push(`  Quer: ${s.modelo_novo || "?"} ${s.storage_novo || ""}`);
-        lines.push(`  Diferenca: ${fmtBRL(Number(s.diferenca || 0))}`);
+        lines.push(`  Diferença: ${fmtBRL(Number(s.diferenca || 0))}`);
         if (waLink) lines.push(`  WhatsApp: ${waLink}`);
-        lines.push(``);
-      }
-    }
-
-    // Mensagens prontas pra Bianca copiar (top 3 mais recentes que sairam)
-    const top3 = naoConvertidas.slice(0, 3);
-    if (top3.length > 0) {
-      lines.push(`<b>MENSAGENS PRONTAS PRA ENVIAR:</b>`);
-      lines.push(``);
-      for (const s of top3) {
-        const nome = primeiroNome(s.nome);
-        const modeloNovo = s.modelo_novo || "o produto";
-        const diferenca = fmtBRL(Number(s.diferenca || 0));
-        const msg = `Oi ${nome}! Tudo bem? Vi que voce fez uma simulacao de trade-in aqui na TigraoImports pro ${modeloNovo}. A diferenca ficou em ${diferenca}. Consigo melhorar essa condicao pra voce! Quer que eu veja?`;
-        lines.push(`<b>Para ${s.nome}:</b>`);
-        lines.push(`<code>${msg}</code>`);
         lines.push(``);
       }
     }
 
     // Resumo final
     const totalPotencial = naoConvertidas.reduce((s, sim) => s + Number(sim.diferenca || 0), 0);
-    lines.push(`<b>Potencial de receita: ${fmtBRL(totalPotencial)}</b>`);
+    lines.push(`<b>💰 Potencial de receita: ${fmtBRL(totalPotencial)}</b>`);
 
     await sendTelegramMessage(lines.join("\n"), chatId);
 
@@ -133,6 +199,8 @@ export async function GET(req: NextRequest) {
       total_simulacoes: sims.length,
       nao_convertidas: naoConvertidas.length,
       gostei_sem_contato: gosteiFaltaContato.length,
+      whatsapp_enviados: whatsappEnviados,
+      whatsapp_erros: whatsappErros,
       potencial: totalPotencial,
     });
   } catch (err) {
