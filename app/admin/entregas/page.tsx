@@ -392,8 +392,6 @@ export default function EntregasPage() {
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
-      .replace(/\b\d+\s*MM\b/gi, "")
-      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
@@ -1199,9 +1197,10 @@ export default function EntregasPage() {
                         return (
                           <div key={m.nome}>
                             <button onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); setPreco1(0); setCor1(""); return; }
                               setProdutos([m.nome]);
-                              set("valor", String(m.preco));
+                              setPreco1(m.preco);
+                              set("valor", String(m.preco + preco2));
                               setCorSel("");
                             }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                               <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
@@ -1298,28 +1297,29 @@ export default function EntregasPage() {
                         {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
                       </select>
                       {catSel2 && (
-                        <div className="max-h-[280px] overflow-y-auto rounded-xl border border-[#D2D2D7] divide-y divide-[#E5E5EA]">
+                        <div className={`max-h-[280px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
                           {produtosFiltradosPreco2.length === 0 && <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>}
                           {produtosFiltradosPreco2.map((m) => {
                             const sel = modelo2 === m.nome;
                             return (
                               <div key={m.nome}>
                                 <button type="button" onClick={() => {
-                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); return; }
+                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); set("valor", String(preco1)); return; }
                                   setModelo2(m.nome);
                                   setPreco2(m.preco);
+                                  set("valor", String(preco1 + m.preco));
                                   setCor2("");
                                 }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                                  <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
-                                  <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
+                                  <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
+                                  <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>R$ {m.preco.toLocaleString("pt-BR")}</p>
                                 </button>
                                 {sel && coresDisponiveis2.length > 0 && (
-                                  <div className="px-4 py-3 bg-[#FAFAFA] border-t border-[#E5E5EA]">
+                                  <div className={`px-4 py-3 border-t ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#FAFAFA] border-[#E5E5EA]"}`}>
                                     <p className="text-xs font-medium mb-2 text-[#86868B]">Selecione a cor:</p>
                                     <div className="flex flex-wrap gap-2">
                                       {coresDisponiveis2.map(cor => (
                                         <button key={cor} type="button" onClick={() => setCor2(cor2 === cor ? "" : cor)}
-                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${cor2 === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]"}`}
+                                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${cor2 === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#1C1C1E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
                                         >{cor}</button>
                                       ))}
                                     </div>

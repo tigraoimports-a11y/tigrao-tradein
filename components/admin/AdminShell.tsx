@@ -258,6 +258,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     "--admin-accent": "#E8740E",
   } as React.CSSProperties : {};
 
+  const apiHeadersFn = useCallback((extra?: Record<string, string>) => ({
+    "x-admin-password": password,
+    "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
+    "x-admin-role": user?.role || "admin",
+    "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
+    ...extra,
+  }), [password, user?.nome, user?.role, user?.permissoes]);
+
   return (
     <AdminContext.Provider value={{
       password,
@@ -267,13 +275,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       toggleDark,
       sidebarCollapsed,
       setSidebarCollapsed,
-      apiHeaders: (extra?: Record<string, string>) => ({
-        "x-admin-password": password,
-        "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
-        "x-admin-role": user?.role || "admin",
-        "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
-        ...extra,
-      }),
+      apiHeaders: apiHeadersFn,
     }}>
       <div
         className={`min-h-screen overflow-x-hidden transition-colors duration-300 admin-themed ${adminTheme} ${darkMode ? "admin-dark" : ""}`}
