@@ -984,7 +984,7 @@ export default function EntregasPage() {
                   if (r.cliente) set("cliente", r.cliente);
                   if (r.telefone) set("telefone", r.telefone);
                   if (r.bairro) set("bairro", r.bairro);
-                  if (r.endereco) { set("endereco", r.endereco); set("endereco_entrega", r.endereco); }
+                  if (r.endereco) { set("endereco", r.endereco); if (!form.endereco_entrega?.trim()) set("endereco_entrega", r.endereco); }
                   if (r.horario) set("horario", r.horario);
                   if (r.vendedor) set("vendedor", r.vendedor);
                   if (r.local_entrega) set("local_entrega", r.local_entrega);
