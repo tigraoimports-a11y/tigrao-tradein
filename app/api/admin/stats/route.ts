@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("simulacoes")
-    .select("id,created_at,nome,telefone,modelo,armazenamento,valor_avaliacao,status,cor,categoria")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(500);
 
