@@ -285,8 +285,9 @@ export default function GerarLinkPage() {
     if (c.telefone) setCliTelefone(c.telefone);
     if (c.cpf) setCliCpf(c.cpf);
     if (c.email) setCliEmail(c.email);
-    if (c.endereco) setCliEndereco(c.endereco);
-    if (c.bairro) setCliBairro(c.bairro);
+    // Só preenche endereço se o campo estiver vazio (preserva edição manual)
+    if (c.endereco && !cliEndereco.trim()) setCliEndereco(c.endereco);
+    if (c.bairro && !cliBairro.trim()) setCliBairro(c.bairro);
     setIncluirDadosCliente(true);
     setShowCliSugs(false);
   };
@@ -710,10 +711,11 @@ export default function GerarLinkPage() {
     if (d.email) { setCliEmail(d.email); encontrados.push("E-mail"); }
     if (d.telefone) { setCliTelefone(d.telefone); encontrados.push("Telefone"); }
     if (d.cep) { setCliCep(d.cep); encontrados.push("CEP"); }
-    if (d.endereco) { setCliEndereco(d.endereco); encontrados.push("Endereço"); }
-    if (d.numero) { setCliNumero(d.numero); encontrados.push("Número"); }
-    if (d.complemento) { setCliComplemento(d.complemento); encontrados.push("Complemento"); }
-    if (d.bairro) { setCliBairro(d.bairro); encontrados.push("Bairro"); }
+    // Só preenche endereço se o campo estiver vazio (preserva edição manual)
+    if (d.endereco) { if (!cliEndereco.trim()) setCliEndereco(d.endereco); encontrados.push("Endereço"); }
+    if (d.numero) { if (!cliNumero.trim()) setCliNumero(d.numero); encontrados.push("Número"); }
+    if (d.complemento) { if (!cliComplemento.trim()) setCliComplemento(d.complemento); encontrados.push("Complemento"); }
+    if (d.bairro) { if (!cliBairro.trim()) setCliBairro(d.bairro); encontrados.push("Bairro"); }
     if (encontrados.length === 0) setParseMsg("❌ Não consegui identificar nenhum dado. Verifique o formato.");
     else setParseMsg(`✅ ${encontrados.length} campo(s) extraído(s): ${encontrados.join(", ")}`);
     setTimeout(() => setParseMsg(""), 5000);

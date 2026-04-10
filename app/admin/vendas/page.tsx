@@ -1352,7 +1352,28 @@ export default function VendasPage() {
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
-            clearProductFields();
+            setLastClienteData(null);
+            // Limpar TODOS os campos (cliente + produto) após edição
+            setForm({
+              data: hojeBR(),
+              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+              qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+              valor_total_venda: "",
+              troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+              troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "",
+              troca_serial: "", troca_imei: "",
+              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
+              troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+              serial_no: "", imei: "",
+              cep: "", bairro: "", cidade: "", uf: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+            });
+            setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+            localStorage.removeItem("tigrao_venda_draft");
             setMsg(`${editandoGrupoIds.length} vendas atualizadas com sucesso!`);
             fetchVendas();
             fetchEstoque();
@@ -1372,7 +1393,28 @@ export default function VendasPage() {
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
-            clearProductFields();
+            setLastClienteData(null);
+            // Limpar TODOS os campos (cliente + produto) após edição
+            setForm({
+              data: hojeBR(),
+              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+              qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+              valor_total_venda: "",
+              troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+              troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "",
+              troca_serial: "", troca_imei: "",
+              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
+              troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+              serial_no: "", imei: "",
+              cep: "", bairro: "", cidade: "", uf: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+            });
+            setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+            localStorage.removeItem("tigrao_venda_draft");
             setMsg("Venda atualizada com sucesso!");
             fetchVendas();
             fetchEstoque();
@@ -4829,6 +4871,7 @@ export default function VendasPage() {
                   setEstoqueId("");
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
+                  localStorage.removeItem("tigrao_venda_draft");
                 }}
                 className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
               >
@@ -4863,6 +4906,7 @@ export default function VendasPage() {
                   setEstoqueId("");
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
+                  localStorage.removeItem("tigrao_venda_draft");
                   setMsg("");
                 }}
                 className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#E5E5EA] text-[#1D1D1F] hover:bg-[#D2D2D7]"}`}
