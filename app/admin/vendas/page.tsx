@@ -22,8 +22,8 @@ export default function VendasPage() {
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const VENDAS_TABS = ["nova", "andamento", "hoje", "finalizadas"] as const;
-  const [tab, setTab] = useTabParam<"nova" | "andamento" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
+  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,7 @@ export default function VendasPage() {
   const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
+  const [vendaProgramada, setVendaProgramada] = useState(false);
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
@@ -999,7 +1000,7 @@ export default function VendasPage() {
       troca_ciclos2: prodFields.troca_ciclos2 || null,
       troca_garantia2: prodFields.troca_garantia2 || null,
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
-      status_pagamento: "AGUARDANDO",
+      status_pagamento: vendaProgramada ? "PROGRAMADA" : "AGUARDANDO",
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
@@ -1509,9 +1510,11 @@ export default function VendasPage() {
       setEstoqueId("");
       setProdutoManual(false);
       setShowSegundaTroca(false); setTrocaEnabled(false);
+      setVendaProgramada(false);
       localStorage.removeItem("tigrao_venda_draft");
+      const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
@@ -1835,6 +1838,7 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
+            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA").length, color: "bg-purple-500", visible: podeVerHistorico },
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
           ] as const).filter(t => t.visible).map((t) => (
@@ -1845,7 +1849,7 @@ export default function VendasPage() {
         </div>
 
         {/* Filtros — só no histórico e em andamento */}
-        {(tab === "andamento" || tab === "finalizadas") && (
+        {(tab === "andamento" || tab === "programadas" || tab === "finalizadas") && (
           <div className="flex gap-1.5 items-center ml-auto flex-wrap">
             <input
               type="text"
@@ -3455,13 +3459,35 @@ export default function VendasPage() {
             );
           })()}
 
+          {/* Toggle Programar Venda */}
+          {!editandoVendaId && (
+            <div className={`flex items-center gap-3 p-3 rounded-xl border ${vendaProgramada ? "border-purple-400 bg-purple-50" : dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={vendaProgramada}
+                  onChange={(e) => setVendaProgramada(e.target.checked)}
+                  className="w-4 h-4 rounded accent-purple-500"
+                />
+                <span className={`text-sm font-semibold ${vendaProgramada ? "text-purple-700" : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  📅 Programar venda
+                </span>
+              </label>
+              {vendaProgramada && (
+                <span className="text-xs text-purple-600 ml-auto">
+                  Será salva como programada para {form.data || "a data selecionada"}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? "bg-purple-600 text-white hover:bg-purple-700" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
             >
-              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 Programar Venda para ${form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -3483,6 +3509,8 @@ export default function VendasPage() {
           const hoje = hojeStr;
           const filteredRaw = tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : tab === "programadas"
+            ? vendas.filter(v => v.status_pagamento === "PROGRAMADA")
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
@@ -4484,7 +4512,24 @@ export default function VendasPage() {
                                         )}
                                       </div>}
                                       <div className="flex gap-2 flex-wrap">
-                                        {podeVerHistorico && v.status_pagamento === "AGUARDANDO" && (
+                                        {podeVerHistorico && v.status_pagamento === "PROGRAMADA" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }),
+                                              });
+                                              setVendas(prev => prev.map(r => r.id === v.id ? { ...r, status_pagamento: "AGUARDANDO" } : r));
+                                              setMsg("Venda movida para Em Andamento!");
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+                                          >
+                                            ▶️ Iniciar Venda
+                                          </button>
+                                        )}
+                                        {podeVerHistorico && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
