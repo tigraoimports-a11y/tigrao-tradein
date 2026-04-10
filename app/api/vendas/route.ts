@@ -537,6 +537,30 @@ export async function PATCH(req: NextRequest) {
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
+  // (previne itens vendidos que ficam "EM ESTOQUE" por falta de vínculo)
+  if (fields.serial_no && data && data.length > 0) {
+    const serialU = String(fields.serial_no).toUpperCase();
+    const vendaEstoqueId = data[0].estoque_id;
+    const { data: estoqueItems } = await supabase
+      .from("estoque")
+      .select("id")
+      .eq("serial_no", serialU)
+      .eq("status", "EM ESTOQUE");
+    if (estoqueItems && estoqueItems.length > 0) {
+      const idsParaEsgotar = estoqueItems
+        .filter(e => e.id !== vendaEstoqueId)
+        .map(e => e.id);
+      // Se a venda não tem estoque_id, esgotar TODOS com esse serial
+      const ids = vendaEstoqueId ? idsParaEsgotar : estoqueItems.map(e => e.id);
+      if (ids.length > 0) {
+        await supabase.from("estoque")
+          .update({ qnt: 0, status: "ESGOTADO", updated_at: new Date().toISOString() })
+          .in("id", ids);
+      }
+    }
+  }
+
   // Enviar notificação no Telegram quando venda é FINALIZADA
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];

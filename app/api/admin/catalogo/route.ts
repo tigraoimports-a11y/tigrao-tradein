@@ -19,13 +19,50 @@ export async function GET(req: NextRequest) {
     const allConfigs = req.nextUrl.searchParams.get("all_configs");
 
     // Return configs for a specific model
+    // If no model-specific configs exist for a spec type, fall back to
+    // the global spec values defined in catalogo_spec_valores for that category.
     if (modeloId) {
-      const { data, error } = await supabase
+      const { data: modelConfigs, error } = await supabase
         .from("catalogo_modelo_configs")
         .select("*")
         .eq("modelo_id", modeloId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ configs: data ?? [] });
+
+      // If model has configs, return them directly
+      if (modelConfigs && modelConfigs.length > 0) {
+        return NextResponse.json({ configs: modelConfigs });
+      }
+
+      // No model-specific configs → fall back to category-level spec values
+      // 1) Find the model's categoria_key
+      const { data: modelo } = await supabase
+        .from("catalogo_modelos")
+        .select("categoria_key")
+        .eq("id", modeloId)
+        .maybeSingle();
+      if (!modelo?.categoria_key) {
+        return NextResponse.json({ configs: [] });
+      }
+
+      // 2) Get which spec types this category uses
+      const { data: catSpecs } = await supabase
+        .from("catalogo_categoria_specs")
+        .select("tipo_chave")
+        .eq("categoria_key", modelo.categoria_key);
+      if (!catSpecs || catSpecs.length === 0) {
+        return NextResponse.json({ configs: [] });
+      }
+
+      const specTypes = catSpecs.map(s => s.tipo_chave);
+
+      // 3) Get all global values for those spec types
+      const { data: specValues } = await supabase
+        .from("catalogo_spec_valores")
+        .select("tipo_chave, valor")
+        .in("tipo_chave", specTypes)
+        .order("ordem");
+
+      return NextResponse.json({ configs: specValues ?? [] });
     }
 
     // Return ALL model configs (used by estoque page to know all valid colors per model)

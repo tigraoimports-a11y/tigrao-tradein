@@ -13,6 +13,20 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search")?.trim() || "";
   const tab = searchParams.get("tab") || "clientes";
 
+  // =========== Vendas de um cliente específico (lazy load) ===========
+  const clientVendas = searchParams.get("client_vendas");
+  if (clientVendas) {
+    const { data, error } = await supabase
+      .from("vendas")
+      .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei")
+      .ilike("cliente", clientVendas)
+      .neq("status_pagamento", "CANCELADO")
+      .order("data", { ascending: false })
+      .limit(200);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ vendas: data || [] });
+  }
+
   // =========== TAB: FORNECEDORES ===========
   if (tab === "fornecedores") {
     // 1) Buscar cadastro de fornecedores (tabela master)
