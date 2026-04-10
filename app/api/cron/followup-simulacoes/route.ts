@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { sendTelegramMessage } from "@/lib/telegram";
 
 function authCron(req: NextRequest) {
   const secret = req.headers.get("authorization")?.replace("Bearer ", "");
   return secret === process.env.CRON_SECRET;
-}
-
-function fmtBRL(v: number): string {
-  return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
 }
 
 function diasAtras(dateStr: string): number {
@@ -56,14 +51,11 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
   }
 }
 
-// Roda todo dia as 14h — verifica simulacoes dos ultimos 3 dias que nao converteram
-// Envia WhatsApp automatico pro cliente + resumo no Telegram
+// Roda todo dia as 14h — envia WhatsApp automatico pro cliente que simulou e nao fechou
 export async function GET(req: NextRequest) {
   if (!authCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const chatId = process.env.TELEGRAM_CHAT_ID ?? "";
 
   try {
     // Buscar simulacoes dos ultimos 3 dias
@@ -91,11 +83,7 @@ export async function GET(req: NextRequest) {
       s.status === "SAIR" && !s.follow_up_enviado
     );
 
-    const gosteiFaltaContato = sims.filter(s =>
-      s.status === "GOSTEI" && !s.contatado
-    );
-
-    if (naoConvertidas.length === 0 && gosteiFaltaContato.length === 0) {
+    if (naoConvertidas.length === 0) {
       return NextResponse.json({ ok: true, message: "Todas simulacoes ja foram acompanhadas" });
     }
 
@@ -111,8 +99,6 @@ export async function GET(req: NextRequest) {
 
     for (const s of paraEnviarWA) {
       const nome = primeiroNome(s.nome);
-      const modeloNovo = s.modelo_novo || "o produto";
-      const diferenca = fmtBRL(Number(s.diferenca || 0));
 
       const modeloUsado = s.modelo_usado ? `${s.modelo_usado}${s.storage_usado ? ` ${s.storage_usado}` : ""}` : "seu aparelho";
       const modeloNovoFull = s.modelo_novo ? `${s.modelo_novo}${s.storage_novo ? ` ${s.storage_novo}` : ""}` : "o produto";
@@ -138,73 +124,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === MONTAR MENSAGEM TELEGRAM (resumo pra equipe) ===
-    const lines: string[] = [
-      `<b>🐯 FOLLOW-UP SIMULAÇÕES</b>`,
-      `<i>${sims.length} simulações nos últimos 3 dias</i>`,
-      ``,
-    ];
-
-    // WhatsApp enviados
-    if (whatsappEnviados > 0) {
-      lines.push(`<b>✅ WhatsApp enviado automaticamente: ${whatsappEnviados} cliente(s)</b>`);
-      lines.push(``);
-    }
-    if (whatsappErros.length > 0) {
-      lines.push(`<b>⚠️ Falha no envio: ${whatsappErros.join(", ")}</b>`);
-      lines.push(``);
-    }
-
-    // Quem saiu sem fechar (prioridade alta)
-    if (naoConvertidas.length > 0) {
-      lines.push(`<b>🔴 NÃO FECHARAM (${naoConvertidas.length}):</b>`);
-      for (const s of naoConvertidas) {
-        const dias = diasAtras(s.created_at);
-        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
-        const fone = s.whatsapp ? s.whatsapp.replace(/\D/g, "") : "";
-        const waLink = fone ? `https://wa.me/55${fone.replace(/^55/, "")}` : "";
-        const waStatus = s.follow_up_enviado ? "✅" : (fone ? "⏳" : "❌ sem tel");
-
-        lines.push(`  <b>${s.nome || "Sem nome"}</b> (${diasTxt}) ${waStatus}`);
-        lines.push(`  Quer: ${s.modelo_novo || "?"} ${s.storage_novo || ""}`);
-        lines.push(`  Troca: ${s.modelo_usado || "?"} ${s.storage_usado || ""}`);
-        lines.push(`  Diferença: ${fmtBRL(Number(s.diferenca || 0))}`);
-        if (waLink) lines.push(`  WhatsApp: ${waLink}`);
-        lines.push(``);
-      }
-    }
-
-    // Gostaram mas nao foram contatados
-    if (gosteiFaltaContato.length > 0) {
-      lines.push(`<b>🟡 GOSTARAM MAS NÃO FORAM CONTATADOS (${gosteiFaltaContato.length}):</b>`);
-      for (const s of gosteiFaltaContato) {
-        const dias = diasAtras(s.created_at);
-        const diasTxt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
-        const fone = s.whatsapp ? s.whatsapp.replace(/\D/g, "") : "";
-        const waLink = fone ? `https://wa.me/55${fone.replace(/^55/, "")}` : "";
-
-        lines.push(`  <b>${s.nome || "Sem nome"}</b> (${diasTxt})`);
-        lines.push(`  Quer: ${s.modelo_novo || "?"} ${s.storage_novo || ""}`);
-        lines.push(`  Diferença: ${fmtBRL(Number(s.diferenca || 0))}`);
-        if (waLink) lines.push(`  WhatsApp: ${waLink}`);
-        lines.push(``);
-      }
-    }
-
-    // Resumo final
-    const totalPotencial = naoConvertidas.reduce((s, sim) => s + Number(sim.diferenca || 0), 0);
-    lines.push(`<b>💰 Potencial de receita: ${fmtBRL(totalPotencial)}</b>`);
-
-    await sendTelegramMessage(lines.join("\n"), chatId);
-
     return NextResponse.json({
       ok: true,
       total_simulacoes: sims.length,
       nao_convertidas: naoConvertidas.length,
-      gostei_sem_contato: gosteiFaltaContato.length,
       whatsapp_enviados: whatsappEnviados,
       whatsapp_erros: whatsappErros,
-      potencial: totalPotencial,
     });
   } catch (err) {
     console.error("[Followup] Error:", err);
