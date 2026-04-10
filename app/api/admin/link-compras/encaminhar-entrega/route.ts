@@ -89,7 +89,11 @@ export async function POST(request: Request) {
       observacao: observacao || `Encaminhada do link ${link.short_code}`,
       produto: produtoTxt,
       tipo: link.tipo === "TROCA" ? "TROCA" : null,
-      forma_pagamento: forma || null,
+      forma_pagamento: (() => {
+        if (!forma) return null;
+        if (isCartao && parcelasNum > 0) return `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`;
+        return forma;
+      })(),
       valor: valorFinal > 0 ? valorFinal : (valorBase > 0 ? valorBase : null),
       entrada: entradaVal > 0 ? entradaVal : null,
       parcelas: parcelasNum > 0 ? parcelasNum : null,
