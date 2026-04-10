@@ -392,8 +392,6 @@ export default function EntregasPage() {
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
-      .replace(/\b\d+\s*MM\b/gi, "")
-      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
@@ -1199,9 +1197,10 @@ export default function EntregasPage() {
                         return (
                           <div key={m.nome}>
                             <button onClick={() => {
-                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); return; }
+                              if (sel) { setProdutos([""]); set("valor", ""); setCorSel(""); setPreco1(0); setCor1(""); return; }
                               setProdutos([m.nome]);
-                              set("valor", String(m.preco));
+                              setPreco1(m.preco);
+                              set("valor", String(m.preco + preco2));
                               setCorSel("");
                             }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                               <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}</p>
@@ -1305,9 +1304,10 @@ export default function EntregasPage() {
                             return (
                               <div key={m.nome}>
                                 <button type="button" onClick={() => {
-                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); return; }
+                                  if (sel) { setModelo2(""); setPreco2(0); setCor2(""); set("valor", String(preco1)); return; }
                                   setModelo2(m.nome);
                                   setPreco2(m.preco);
+                                  set("valor", String(preco1 + m.preco));
                                   setCor2("");
                                 }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#3A2410] border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
                                   <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : "text-[#1D1D1F]"}`}>{m.nome}</p>

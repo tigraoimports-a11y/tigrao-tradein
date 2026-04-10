@@ -123,8 +123,6 @@ export default function GerarLinkPage() {
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
-      .replace(/\b\d+\s*MM\b/gi, "")
-      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
