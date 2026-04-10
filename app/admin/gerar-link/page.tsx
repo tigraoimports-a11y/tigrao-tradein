@@ -734,7 +734,7 @@ export default function GerarLinkPage() {
     setProdutoManual(false); setCorSel(""); setCoresExtras([]); setAddingProduct(false);
     // Pagamento
     setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
-    setPagamentoPago(false);
+    setPagamentoPago("");
     // Entrega
     setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega("");
     // Troca
