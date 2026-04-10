@@ -917,7 +917,7 @@ export default function GastosPage() {
   const inputCls = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-[#E8740E] transition-colors ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`;
 
-  const totalSaida = gastos.filter(g => !g.is_dep_esp && g.tipo !== "ENTRADA").reduce((s, g) => s + Number(g.valor), 0);
+  const totalSaida = gastos.filter(g => !g.is_dep_esp && g.tipo === "SAIDA").reduce((s, g) => s + Number(g.valor), 0);
   void totalSaida;
 
   const bancoInputGrid = (valores: BancoValores, onChange: (b: Banco, v: string) => void, cls: string) => (

@@ -1153,7 +1153,7 @@ export default function ClientesPage() {
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Resumo Financeiro</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid ${c.is_lojista ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Compras</p>
                     <p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{c.total_compras}</p>
@@ -1162,6 +1162,17 @@ export default function ClientesPage() {
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Gasto</p>
                     <p className="text-[14px] font-bold text-green-600 mt-0.5">{fmt(c.total_gasto)}</p>
                   </div>
+                  {c.is_lojista && (() => {
+                    const saldo = saldosLojistas[lojistaKey(c)] || 0;
+                    return (
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Saldo Credito</p>
+                        <p className={`text-[14px] font-bold mt-0.5 ${saldo > 0 ? "text-blue-600" : mS}`}>
+                          {saldo > 0 ? fmt(saldo) : "R$ 0"}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cliente Desde</p>
                     <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(c.cliente_desde)}</p>

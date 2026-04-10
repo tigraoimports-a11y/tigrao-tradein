@@ -120,7 +120,7 @@ export default function SaldosPage() {
   const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
   const [depData, setDepData] = useState("");
   // Histórico de depósitos em espécie
-  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string };
+  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string; observacao?: string; usuario?: string; created_at?: string };
   const [depHistModal, setDepHistModal] = useState(false);
   const [depHist, setDepHist] = useState<DepHist[]>([]);
   const [depHistLoading, setDepHistLoading] = useState(false);
@@ -129,7 +129,9 @@ export default function SaldosPage() {
     try {
       const res = await fetch(`/api/gastos?is_dep_esp=1&limit=100`, { headers: { "x-admin-password": password } });
       const j = await res.json();
-      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string }) => g.is_dep_esp || g.categoria === "TRANSFERENCIA");
+      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string; tipo?: string }) =>
+        g.is_dep_esp || g.categoria === "TRANSFERENCIA" || g.tipo === "TRANSFERENCIA"
+      );
       setDepHist(rows);
     } catch { /* ignore */ }
     setDepHistLoading(false);
@@ -179,7 +181,7 @@ export default function SaldosPage() {
         },
         body: JSON.stringify({
           data: dataDep,
-          tipo: "SAIDA",
+          tipo: "TRANSFERENCIA",
           categoria: "TRANSFERENCIA",
           descricao: `Depósito espécie → ${bancoSel.label}`,
           banco: bancoSel.key,

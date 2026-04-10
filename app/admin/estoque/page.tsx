@@ -2091,6 +2091,7 @@ export default function EstoquePage() {
 
   const handleSubmitMulti = async () => {
     if (pedidoProdutos.length === 0) { setMsg("Adicione pelo menos 1 produto"); return; }
+    if (form.tipo === "A_CAMINHO" && !form.origem_compra) { setMsg("⚠️ Selecione a origem da compra para produtos A Caminho"); return; }
 
     const status = form.tipo === "A_CAMINHO" ? "A CAMINHO" : "EM ESTOQUE";
     const tipo = form.tipo;
@@ -2147,6 +2148,7 @@ export default function EstoquePage() {
   const handleSubmit = async (keepForm = false) => {
     const nomeProduto = form.produto || (hasStructuredFields ? buildProdutoName(form.categoria) : "");
     if (!nomeProduto) { setMsg("Preencha o nome do produto"); return; }
+    if (form.tipo === "A_CAMINHO" && !form.origem_compra) { setMsg("⚠️ Selecione a origem da compra para produtos A Caminho"); return; }
     const res = await fetch("/api/estoque", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
@@ -3733,8 +3735,14 @@ export default function EstoquePage() {
             </div>
             {/* Origem da Compra */}
             <div>
-              <p className={labelCls}>Origem da Compra</p>
-              <select value={form.origem_compra || ""} onChange={(e) => set("origem_compra", e.target.value)} className={inputCls}>
+              <p className={labelCls}>
+                Origem da Compra
+                {form.tipo === "A_CAMINHO" && !form.origem_compra && (
+                  <span className="text-red-500 ml-1">* obrigatoria</span>
+                )}
+              </p>
+              <select value={form.origem_compra || ""} onChange={(e) => set("origem_compra", e.target.value)}
+                className={`${inputCls} ${form.tipo === "A_CAMINHO" && !form.origem_compra ? "!border-red-400" : ""}`}>
                 <option value="">— Selecionar —</option>
                 <option value="RJ">🏙️ Rio de Janeiro (mesmo dia)</option>
                 <option value="SAO_PAULO">🚚 São Paulo (1 dia)</option>
@@ -4032,6 +4040,14 @@ export default function EstoquePage() {
                             {headerLabel}
                           </span>
                           <div className="flex items-center gap-2">
+                            {origemKey === "SEM_ORIGEM" && pendentes.length > 0 && (
+                              <button
+                                onClick={() => setSelectedACaminho(new Set(pendentes.map(p => p.id)))}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+                              >
+                                Selecionar todos ({pendentes.length})
+                              </button>
+                            )}
                             {pendentes.length > 0 && (
                               <span className="text-white/80 text-[11px] font-medium">{pendentes.length} a caminho</span>
                             )}
@@ -4042,6 +4058,28 @@ export default function EstoquePage() {
                             )}
                           </div>
                         </div>
+                        {/* Barra rapida: definir origem pra todos do grupo SEM_ORIGEM */}
+                        {origemKey === "SEM_ORIGEM" && pendentes.length > 0 && selectedACaminho.size === 0 && (
+                          <div className={`flex items-center gap-2 px-4 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-yellow-50"} border-b ${dm ? "border-[#3A3A3C]" : "border-yellow-200"}`}>
+                            <span className={`text-[11px] font-medium ${dm ? "text-[#98989D]" : "text-yellow-700"}`}>Definir origem para todos:</span>
+                            {Object.entries(ORIGEM_CONFIG).map(([key, cfg]) => (
+                              <button
+                                key={key}
+                                onClick={async () => {
+                                  const ids = pendentes.map(p => p.id);
+                                  for (const id of ids) {
+                                    await apiPatch(id, { origem_compra: key });
+                                  }
+                                  setEstoque(prev => prev.map(p => ids.includes(p.id) ? { ...p, origem_compra: key } : p));
+                                  setMsg(`✅ ${ids.length} produto(s) → ${cfg.emoji} ${cfg.label}`);
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${cfg.cor} text-white hover:opacity-80 transition-opacity`}
+                              >
+                                {cfg.emoji} {cfg.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {/* Barra de ações em lote */}
                         {selectedACaminho.size > 0 && (
                           <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-[#FFF5EB] border border-[#E8740E]/30"}`}>
