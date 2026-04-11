@@ -191,19 +191,26 @@ export async function POST(req: NextRequest) {
       const precoNovo = sim.preco_novo
         ? `R$ ${Number(sim.preco_novo).toLocaleString("pt-BR")}`
         : "—";
-      const diferenca = sim.diferenca
-        ? `R$ ${Number(sim.diferenca).toLocaleString("pt-BR")}`
+      const difNum = Number(sim.diferenca) || 0;
+      const diferenca = difNum > 0
+        ? `R$ ${difNum.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
         : "—";
-      const formaPagamento = sim.forma_pagamento || "";
+
+      // Calcular parcelas com juros (mesma tabela do sistema)
+      const parcela12x = difNum > 0 ? Math.round((difNum * 1.13) / 12) : 0;
+      const parcela21x = difNum > 0 ? Math.round((difNum * 1.22) / 21) : 0;
+
+      const opcoesPagamento = difNum > 0
+        ? `${diferenca} à vista no PIX\n12x de R$ ${parcela12x.toLocaleString("pt-BR")} no cartão\n21x de R$ ${parcela21x.toLocaleString("pt-BR")} no cartão`
+        : diferenca;
 
       // Montar mensagem completa
       const resumo = `Que ótimo, ${nome}! 😄\n\nAqui está o resumo da sua simulação:\n\n` +
         `📱 *Seu aparelho:*\n${modeloUsado}${corUsado}\n${condicoes}\nAvaliado em: *${avaliacaoUsado}*` +
         `${segundoAparelho}\n\n` +
         `🆕 *Produto desejado:*\n${modeloNovo}\nValor: *${precoNovo}*\n\n` +
-        `💰 *Valor da troca:*\n*${diferenca}*` +
-        `${formaPagamento ? `\n${formaPagamento}` : ""}\n\n` +
-        `As informações estão corretas? Em breve um dos nossos consultores vai te chamar pra finalizar! 🐯`;
+        `💰 *Valor da troca:*\n${opcoesPagamento}\n\n` +
+        `As informações estão corretas mesmo? 🐯`;
 
       // Enviar resumo após 5 segundos
       await new Promise(resolve => setTimeout(resolve, 5000));
