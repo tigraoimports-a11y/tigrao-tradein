@@ -533,6 +533,26 @@ export default function VendasPage() {
 
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
+  // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
+  const transicionadasRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!password || vendas.length === 0) return;
+    const programadasVencidas = vendas.filter(
+      v => v.status_pagamento === "PROGRAMADA" && v.data_programada && v.data_programada <= hojeStr && !transicionadasRef.current.has(v.id)
+    );
+    if (programadasVencidas.length === 0) return;
+    programadasVencidas.forEach(v => transicionadasRef.current.add(v.id));
+    // Mover para AGUARDANDO automaticamente
+    const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
+    Promise.all(programadasVencidas.map(v =>
+      fetch("/api/vendas", { method: "PATCH", headers, body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }) })
+    )).then(() => {
+      const ids = new Set(programadasVencidas.map(v => v.id));
+      setVendas(prev => prev.map(v => ids.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendas, password]);
+
   // Fetch client history when client name changes (3+ chars, debounced)
   const fetchClienteHistorico = useCallback(async (nome: string) => {
     if (!nome || nome.length < 3 || !password) {
@@ -1189,6 +1209,12 @@ export default function VendasPage() {
 
     if (allProducts.length === 0) {
       setMsg("Preencha ao menos o produto da compra, da troca ou adicione ao carrinho");
+      return;
+    }
+
+    // Validação: forma de pagamento obrigatória (exceto vendas programadas e brindes)
+    if (!form.forma && !vendaProgramada && !form.is_brinde) {
+      setMsg("Selecione a FORMA DE PAGAMENTO antes de registrar");
       return;
     }
 
@@ -1852,7 +1878,7 @@ export default function VendasPage() {
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
-            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hojeStr && v.status_pagamento !== "CANCELADO")).length, color: "bg-purple-500", visible: podeVerAndamento },
+            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA").length, color: "bg-purple-500", visible: podeVerAndamento },
           ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
@@ -3578,7 +3604,7 @@ export default function VendasPage() {
           const filteredRaw = (tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : tab === "programadas"
-            ? vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hoje && v.status_pagamento !== "CANCELADO"))
+            ? vendas.filter(v => v.status_pagamento === "PROGRAMADA")
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento)

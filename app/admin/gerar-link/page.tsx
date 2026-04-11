@@ -1252,14 +1252,28 @@ export default function GerarLinkPage() {
                               </div>
                             </section>
                             {/* Forma de pagamento escolhida pelo cliente no link */}
-                            {(editDados.forma_pagamento || editDados.preco) && (
+                            {(editDados.forma_pagamento || editDados.preco || editLink.forma_pagamento) && (
                               <section>
-                                <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pagamento (escolhido pelo cliente)</h5>
-                                <div className="grid grid-cols-1 gap-3">
-                                  <FD label="Forma de pagamento" k="forma_pagamento" full />
-                                  <FD label="Preço" k="preco" full />
+                                <h5 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wide mb-2">Pagamento</h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <FD label="Forma (cliente)" k="forma_pagamento" full />
+                                  <FD label="Parcelas" k="parcelas" />
+                                  <FD label="Entrada PIX" k="entrada_pix" />
+                                  <FD label="Desconto" k="desconto" />
+                                  <FD label="Preco total" k="preco" full />
                                 </div>
-                                <p className="text-[10px] text-[#86868B] mt-1 italic">Esse texto veio do que o cliente escolheu ao preencher (parcelas, entrada, etc).</p>
+                                {/* Badge pagamento pago */}
+                                <div className="mt-2">
+                                  {viewDataLink.pagamento_pago ? (
+                                    <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                      Pagamento ja efetuado via {viewDataLink.pagamento_pago === "link" ? "Link" : "PIX"}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+                                      Pagamento pendente
+                                    </span>
+                                  )}
+                                </div>
                               </section>
                             )}
                           </>
@@ -1269,7 +1283,46 @@ export default function GerarLinkPage() {
                   );
                 })()}
               </div>
-              <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-end gap-2">
+              <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F9F9FB] flex items-center justify-between">
+                <button
+                  onClick={async () => {
+                    const d = editDados;
+                    const l = editLink;
+                    const lines: string[] = ["*PEDIDO — TIGRAO IMPORTS*", ""];
+                    if (l.produto) lines.push(`*Produto:* ${l.produto}`);
+                    if (l.cor) lines.push(`*Cor:* ${l.cor}`);
+                    if (l.valor) lines.push(`*Valor:* R$ ${Number(l.valor).toLocaleString("pt-BR")}`);
+                    if (Number(l.desconto) > 0) lines.push(`*Desconto:* R$ ${Number(l.desconto).toLocaleString("pt-BR")}`);
+                    lines.push("");
+                    const nome = d.nome || l.cliente_nome;
+                    if (nome) lines.push(`*Cliente:* ${nome}`);
+                    const cpf = d.cpf || d.cnpj || l.cliente_cpf;
+                    if (cpf) lines.push(`*${d.pessoa === "PJ" ? "CNPJ" : "CPF"}:* ${cpf}`);
+                    const tel = d.telefone || l.cliente_telefone;
+                    if (tel) lines.push(`*Telefone:* ${tel}`);
+                    if (d.email || l.cliente_email) lines.push(`*Email:* ${d.email || l.cliente_email}`);
+                    if (d.instagram) lines.push(`*Instagram:* ${d.instagram}`);
+                    const endereco = d.endereco_completo || (d.endereco ? `${d.endereco}${d.numero ? `, ${d.numero}` : ""}${d.complemento ? ` - ${d.complemento}` : ""}` : "");
+                    if (endereco) { lines.push(""); lines.push(`*Endereco:* ${endereco}`); }
+                    if (d.bairro) lines.push(`*Bairro:* ${d.bairro}`);
+                    if (d.cep) lines.push(`*CEP:* ${d.cep}`);
+                    lines.push("");
+                    const pgto = d.forma_pagamento || l.forma_pagamento;
+                    if (pgto) lines.push(`*Pagamento:* ${pgto}${d.parcelas ? ` ${d.parcelas}` : (l.parcelas ? ` ${l.parcelas}x` : "")}`);
+                    if (d.entrada_pix || Number(l.entrada) > 0) lines.push(`*Entrada PIX:* R$ ${Number(d.entrada_pix || l.entrada).toLocaleString("pt-BR")}`);
+                    if (viewDataLink.pagamento_pago) lines.push(`*Status:* Pago via ${viewDataLink.pagamento_pago === "link" ? "Link" : "PIX"}`);
+                    if (Number(l.troca_valor) > 0) { lines.push(""); lines.push(`*Troca:* ${l.troca_produto || "Produto na troca"} — R$ ${Number(l.troca_valor).toLocaleString("pt-BR")}`); }
+                    if (Number(l.troca_valor2) > 0) lines.push(`*Troca 2:* ${l.troca_produto2 || "Produto na troca"} — R$ ${Number(l.troca_valor2).toLocaleString("pt-BR")}`);
+                    if (d.data_entrega || d.horario) { lines.push(""); lines.push(`*Entrega:* ${d.data_entrega || ""} ${d.horario || ""}`.trim()); }
+                    if (d.local) lines.push(`*Local:* ${d.local}`);
+                    if (d.origem) lines.push(`*Origem:* ${d.origem}`);
+                    try { await navigator.clipboard.writeText(lines.join("\n")); setPasteMsg("✅ Copiado para WhatsApp!"); } catch { setPasteMsg("❌ Erro ao copiar"); }
+                  }}
+                  className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"
+                >
+                  📋 Copiar p/ WhatsApp
+                </button>
+                <div className="flex gap-2">
                 <button onClick={() => setViewDataLink(null)} className="px-4 py-2 text-sm font-semibold text-[#86868B] hover:text-[#1D1D1F]">Cancelar</button>
                 <button
                   onClick={salvarDadosCliente}
@@ -1278,6 +1331,7 @@ export default function GerarLinkPage() {
                 >
                   {savingDados ? "Salvando…" : "💾 Salvar alterações"}
                 </button>
+                </div>
               </div>
             </>
           </div>

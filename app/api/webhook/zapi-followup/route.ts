@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     // Detectar intenção: SIM ou NAO
     const respostaSim = ["SIM", "SIMM", "SIMMM", "TENHO", "TENHOINTERESSE", "QUERO", "INTERESSE"].includes(textoNorm);
-    const respostaNao = ["NAO", "NAOO", "NAOQUERO", "SEMINTERESSE", "PARA", "PARAR", "SAIR", "CANCELAR", "REMOVER", "NAO QUERO"].includes(textoNorm);
+    const respostaNao = ["NAO", "NAOO", "NAOQUERO", "SEMINTERESSE", "PARA", "PARAR", "SAIR", "CANCELAR", "REMOVER"].includes(textoNorm);
 
     if (!respostaSim && !respostaNao) {
       // Não é uma resposta ao follow-up, ignorar
