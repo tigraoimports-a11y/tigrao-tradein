@@ -26,8 +26,8 @@ function normalizarNome(nome: string): string {
     .replace(/\s+/g, " ");
 }
 
-// Envia mensagem com botões via Z-API (instancia de follow-up)
-async function enviarWhatsAppComBotoes(phone: string, message: string, simId: string): Promise<boolean> {
+// Envia mensagem de texto simples via Z-API (instancia de follow-up)
+async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
   const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
   const token = process.env.ZAPI_FOLLOWUP_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN ?? "";
@@ -37,7 +37,7 @@ async function enviarWhatsAppComBotoes(phone: string, message: string, simId: st
     return false;
   }
 
-  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-option-list`;
+  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
   try {
     let fone = phone.replace(/\D/g, "");
@@ -49,21 +49,10 @@ async function enviarWhatsAppComBotoes(phone: string, message: string, simId: st
         "Content-Type": "application/json",
         "Client-Token": clientToken,
       },
-      body: JSON.stringify({
-        phone: fone,
-        message,
-        optionList: {
-          title: "Escolha uma opção",
-          buttonLabel: "Responder",
-          options: [
-            { id: `SIM_${simId}`, title: "✅ Tenho interesse", description: "Quero continuar a negociação" },
-            { id: `NAO_${simId}`, title: "❌ Sem interesse", description: "Não quero receber mais mensagens" },
-          ],
-        },
-      }),
+      body: JSON.stringify({ phone: fone, message }),
     });
     const json = await res.json();
-    console.log(`[Followup] WhatsApp com botões enviado para ${fone}:`, JSON.stringify(json));
+    console.log(`[Followup] WhatsApp enviado para ${fone}:`, JSON.stringify(json));
     return res.ok;
   } catch (err) {
     console.error(`[Followup] Erro ao enviar WhatsApp para ${phone}:`, err);
@@ -147,9 +136,9 @@ export async function GET(req: NextRequest) {
       const modeloUsado = s.modelo_usado ? `${s.modelo_usado}${s.storage_usado ? ` ${s.storage_usado}` : ""}` : "seu aparelho";
       const modeloNovoFull = s.modelo_novo ? `${s.modelo_novo}${s.storage_novo ? ` ${s.storage_novo}` : ""}` : "o produto";
 
-      const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}.\n\nFicou alguma dúvida? Posso te ajudar a fechar essa troca ainda hoje! Estou à disposição 🐯`;
+      const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}.\n\nFicou alguma dúvida? Posso te ajudar a fechar essa troca ainda hoje! Estou à disposição 🐯\n\n_Responda *SIM* se tiver interesse ou *NAO* para não receber mais mensagens._`;
 
-      const enviou = await enviarWhatsAppComBotoes(s.whatsapp, msg, s.id);
+      const enviou = await enviarWhatsApp(s.whatsapp, msg);
 
       if (enviou) {
         whatsappEnviados++;
