@@ -2062,6 +2062,7 @@ export default function GerarLinkPage() {
             <label className={labelCls}>Horario</label>
             <select value={horario} onChange={(e) => setHorario(e.target.value)} className={inputCls}>
               <option value="">-- Opcional --</option>
+              <option value="LOGISTICA">🚚 Logística define</option>
               {(() => {
                 const opts: string[] = [];
                 for (let h = 10; h <= 19; h++) {
