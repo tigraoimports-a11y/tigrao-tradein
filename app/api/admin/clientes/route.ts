@@ -16,13 +16,22 @@ export async function GET(req: NextRequest) {
   // =========== Vendas de um cliente específico (lazy load) ===========
   const clientVendas = searchParams.get("client_vendas");
   if (clientVendas) {
-    // Não usar .neq("status_pagamento", "CANCELADO") — bug do Supabase exclui NULL
+    // Gerar variantes do nome pra casar com diferentes grafias no banco
+    // Ex: "LOJA SIRI" → busca por "LOJA SIRI", "SIRI" (sem prefixo LOJA)
+    const nome = clientVendas.trim();
+    const semPrefixo = nome.replace(/^(LOJA|LOJAS)\s+/i, "").trim();
+    const semSufixo = nome.replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\s*$/i, "").trim();
+
+    // Monta OR com todas variantes
+    const patterns = [...new Set([nome, semPrefixo, semSufixo].filter(Boolean))];
+    const orFilter = patterns.map(p => `cliente.ilike.%${p}%`).join(",");
+
     const { data, error } = await supabase
       .from("vendas")
       .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei,status_pagamento")
-      .ilike("cliente", `%${clientVendas}%`)
+      .or(orFilter)
       .order("data", { ascending: false })
-      .limit(200);
+      .limit(500);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     // Filtrar cancelados em JS (evita bug do .neq() com NULL)
     const vendas = (data || []).filter((v: { status_pagamento?: string | null }) =>

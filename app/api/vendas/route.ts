@@ -199,6 +199,8 @@ export async function POST(req: NextRequest) {
   // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
   delete body.usar_credito_loja;
+  // Salvar na coluna credito_lojista_usado (para rastreio na tela de operações)
+  if (usarCreditoLoja > 0) body.credito_lojista_usado = usarCreditoLoja;
 
   // Garantir que preco_vendido inclui crédito de lojista (frontend já soma, mas safety net)
   if (usarCreditoLoja > 0 && body.preco_vendido !== undefined) {
