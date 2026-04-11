@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity-log";
+import { invalidateTaxasCache } from "@/lib/taxas";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -171,6 +172,9 @@ export async function PUT(req: NextRequest) {
       if (insErr) errorCount++;
     }
   }
+
+  // Invalidar cache para que getTaxa() use os novos valores
+  invalidateTaxasCache();
 
   await logActivity(
     usuario,
