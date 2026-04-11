@@ -16,10 +16,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log("[ZAPI Webhook] Recebido:", JSON.stringify(body));
 
-    // Z-API envia o buttonId quando o cliente clica num botão
-    // Formato: { phone, buttonId, ... } ou { button: { id, text }, ... }
-    const buttonId = body.buttonId || body.button?.id || body.buttonPayload || "";
-    const phone = body.phone || body.from || "";
+    // Z-API envia o ID da opção selecionada em diferentes formatos
+    // option-list: { listResponseMessage: { singleSelectReply: { selectedRowId } }, phone }
+    // button-actions: { buttonId, phone }
+    // button: { button: { id }, phone }
+    const buttonId = body.listResponseMessage?.singleSelectReply?.selectedRowId
+      || body.buttonId
+      || body.button?.id
+      || body.buttonPayload
+      || body.selectedButtonId
+      || "";
+    const phone = body.phone || body.from || body.chatId || "";
 
     if (!buttonId) {
       // Não é um clique de botão, pode ser mensagem normal — ignorar

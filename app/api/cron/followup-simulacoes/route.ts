@@ -37,7 +37,7 @@ async function enviarWhatsAppComBotoes(phone: string, message: string, simId: st
     return false;
   }
 
-  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-button-actions`;
+  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-option-list`;
 
   try {
     let fone = phone.replace(/\D/g, "");
@@ -51,13 +51,15 @@ async function enviarWhatsAppComBotoes(phone: string, message: string, simId: st
       },
       body: JSON.stringify({
         phone: fone,
-        title: "Tigrão Imports",
         message,
-        footerText: "Responda clicando em um dos botões abaixo",
-        buttons: [
-          { id: `SIM_${simId}`, label: "✅ Tenho interesse" },
-          { id: `NAO_${simId}`, label: "❌ Não tenho interesse" },
-        ],
+        optionList: {
+          title: "Escolha uma opção",
+          buttonLabel: "Responder",
+          options: [
+            { id: `SIM_${simId}`, title: "✅ Tenho interesse", description: "Quero continuar a negociação" },
+            { id: `NAO_${simId}`, title: "❌ Sem interesse", description: "Não quero receber mais mensagens" },
+          ],
+        },
       }),
     });
     const json = await res.json();
