@@ -51,8 +51,8 @@ const REPASSE_PARCELAS_ORDER = [
   "19x", "20x", "21x",
 ];
 
-// Elo/Amex on Itau max 12x
-const ELO_AMEX_MAX = 12;
+// Elo/Amex on Itau — suporta até 21x
+const ELO_AMEX_MAX = 21;
 
 function getParcelasForBanco(banco: string): string[] {
   if (banco === "ITAU") return ITAU_PARCELAS;
