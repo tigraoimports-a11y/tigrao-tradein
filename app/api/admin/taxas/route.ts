@@ -141,7 +141,8 @@ export async function PUT(req: NextRequest) {
   const now = new Date().toISOString();
 
   for (const u of updates) {
-    const { error } = await supabase
+    // Tentar update primeiro
+    const { data: updated, error: updErr } = await supabase
       .from("taxas_config")
       .update({
         taxa_pct: Number(u.taxa_pct),
@@ -150,9 +151,25 @@ export async function PUT(req: NextRequest) {
       })
       .eq("banco", u.banco)
       .eq("bandeira", u.bandeira)
-      .eq("parcelas", u.parcelas);
+      .eq("parcelas", u.parcelas)
+      .select("id");
 
-    if (error) errorCount++;
+    if (updErr) { errorCount++; continue; }
+
+    // Se não atualizou nenhuma row, inserir nova
+    if (!updated || updated.length === 0) {
+      const { error: insErr } = await supabase
+        .from("taxas_config")
+        .insert({
+          banco: u.banco,
+          bandeira: u.bandeira,
+          parcelas: u.parcelas,
+          taxa_pct: Number(u.taxa_pct),
+          updated_at: now,
+          updated_by: usuario,
+        });
+      if (insErr) errorCount++;
+    }
   }
 
   await logActivity(
