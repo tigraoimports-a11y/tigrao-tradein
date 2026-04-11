@@ -4687,7 +4687,7 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                         {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && v.local === "ENTREGA" && (
+                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
