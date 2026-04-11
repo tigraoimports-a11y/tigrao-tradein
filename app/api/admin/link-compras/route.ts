@@ -178,6 +178,7 @@ export async function POST(request: Request) {
     operador: getUser(request),
     simulacao_id: body.simulacao_id || null,
     observacao: body.observacao || null,
+    pagamento_pago: body.pagamento_pago || null,
   };
 
   if (!payload.short_code || !payload.produto) {
@@ -207,6 +208,7 @@ export async function PATCH(request: Request) {
     "troca_produto", "troca_valor", "troca_condicao", "troca_cor",
     "troca_produto2", "troca_valor2", "troca_condicao2", "troca_cor2",
     "vendedor", "entrega_id", "cliente_dados_preenchidos", "cliente_preencheu_em",
+    "pagamento_pago",
   ];
   for (const k of editableFields) {
     if (k in patch) allowed[k] = patch[k];
