@@ -534,7 +534,6 @@ export default function VendasPage() {
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
   // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
-  // Usa Set para rastrear IDs já transicionados (evita loop infinito)
   const transicionadasRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!password || vendas.length === 0) return;
@@ -542,7 +541,6 @@ export default function VendasPage() {
       v => v.status_pagamento === "PROGRAMADA" && v.data_programada && v.data_programada <= hojeStr && !transicionadasRef.current.has(v.id)
     );
     if (programadasVencidas.length === 0) return;
-    // Marcar como processadas antes do fetch
     programadasVencidas.forEach(v => transicionadasRef.current.add(v.id));
     // Mover para AGUARDANDO automaticamente
     const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
