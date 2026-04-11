@@ -22,8 +22,8 @@ export default function VendasPage() {
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const VENDAS_TABS = ["nova", "andamento", "hoje", "finalizadas"] as const;
-  const [tab, setTab] = useTabParam<"nova" | "andamento" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
+  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,9 @@ export default function VendasPage() {
   const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
+  const [vendaProgramada, setVendaProgramada] = useState(false);
+  const [programadaJaPago, setProgramadaJaPago] = useState(false);
+  const [dataProgramada, setDataProgramada] = useState("");
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editSaving, setEditSaving] = useState(false);
@@ -101,8 +104,10 @@ export default function VendasPage() {
 
   // Admin não precisa de senha extra
   const isAdmin = user?.role === "admin";
-  // Pode ver histórico e vendas pendentes (André, Nicolas e admins)
+  // Pode ver histórico completo (admin + vendas_ver)
   const podeVerHistorico = isAdmin || (user?.permissoes?.includes("vendas_ver") ?? false);
+  // Pode ver Em Andamento (admin + vendas_ver + vendas_andamento)
+  const podeVerAndamento = podeVerHistorico || (user?.permissoes?.includes("vendas_andamento") ?? false);
 
   const [msg, setMsg] = useState("");
   const [lastClienteData, setLastClienteData] = useState<{ cliente: string; cpf: string; cnpj: string; email: string; endereco: string; pessoa: string; origem: string; tipo: string } | null>(null);
@@ -133,8 +138,6 @@ export default function VendasPage() {
     usar_credito_loja: "",
     // Brinde / Cortesia
     is_brinde: false as boolean,
-    // Data agendada (quando a venda é programada para outro dia)
-    data_agendada: "",
   });
   const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
   // Restaurar rascunho do localStorage ao montar
@@ -159,7 +162,8 @@ export default function VendasPage() {
     }
   }, [form]);
 
-  // 2ª troca toggle
+  // Troca toggles
+  const [trocaEnabled, setTrocaEnabled] = useState(false);
   const [showSegundaTroca, setShowSegundaTroca] = useState(false);
 
   // Busca por serial number
@@ -707,6 +711,14 @@ export default function VendasPage() {
     }
   }, [form.comp_alt, form.banco_alt, form.parc_alt, form.band_alt, form.valor_comprovante_input, form.entrada_pix, form.entrada_especie, form.produto_na_troca, form.produto_na_troca2, form.forma, form.banco, form.bandeira, form.qnt_parcelas, produtosCarrinho.length]);
 
+  // Auto-desbloquear para quem tem vendas_andamento mas não vendas_ver (equipe como Bianca)
+  useEffect(() => {
+    if (podeVerAndamento && !podeVerHistorico && !vendasUnlocked) {
+      setVendasUnlocked(true);
+      setTab("andamento");
+    }
+  }, [podeVerAndamento, podeVerHistorico, vendasUnlocked]);
+
   if (!vendasUnlocked) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -791,12 +803,13 @@ export default function VendasPage() {
   const valorLiquido = taxa > 0
     ? calcularLiquido(valorComprovanteInput > 0 ? valorComprovanteInput : comprovante || parteCartao, taxa)
     : parteCartao;
-  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca;
+  const creditoLojaNum = parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0;
+  const totalRealRecebido = valorLiquido + entradaPix + entradaEspecie + valorTroca + creditoLojaNum;
   const lucro = totalRealRecebido - custo;
   const margem = totalRealRecebido > 0 ? (lucro / totalRealRecebido) * 100 : 0;
 
   // Helper: recalcular preco_vendido total quando muda qualquer componente do pagamento
-  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string }) => {
+  const recalcVendido = (overrides: { pix?: string; especie?: string; troca?: string; troca2?: string; comp?: string; credito?: string }) => {
     const compVal = parseFloat(overrides.comp ?? form.valor_comprovante_input) || 0;
     const curTaxa = taxa;
     const curForma = form.forma;
@@ -812,15 +825,21 @@ export default function VendasPage() {
     const trcCarrinho = produtosCarrinho.reduce((s, p) => s + (parseFloat(p.produto_na_troca) || 0) + (parseFloat(p.produto_na_troca2) || 0), 0);
     const trc = produtosCarrinho.length > 0 ? Math.max(trcCarrinho, trcForm1 + trcForm2) : trcForm1 + trcForm2;
 
+    // Crédito de lojista conta como valor recebido
+    const credLoja = parseFloat(String(overrides.credito ?? (form.usar_credito_loja || "0")).replace(/\./g, "").replace(",", ".")) || 0;
+
     let result: string | undefined;
     if (curForma === "PIX" && compVal > 0) {
-      result = String(Math.round(compVal + esp + trc + liqAlt));
+      result = String(Math.round(compVal + esp + trc + liqAlt + credLoja));
     } else if (compVal > 0 && curTaxa > 0) {
       const liqCartao = calcularLiquido(compVal, curTaxa);
-      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt));
+      result = String(Math.round(liqCartao + pix + esp + trc + liqAlt + credLoja));
     } else if (curForma === "ESPECIE" || curForma === "DINHEIRO") {
-      const total = pix + esp + trc + compVal + liqAlt;
+      const total = pix + esp + trc + compVal + liqAlt + credLoja;
       if (total > 0) result = String(Math.round(total));
+    } else if (credLoja > 0) {
+      // Pagamento 100% via crédito de lojista (sem forma de pagamento adicional)
+      result = String(Math.round(pix + esp + trc + liqAlt + credLoja));
     } else if (liqAlt > 0) {
       // Apenas 2o cartão preenchido
       result = String(Math.round(pix + esp + trc + liqAlt));
@@ -862,8 +881,8 @@ export default function VendasPage() {
   };
 
   // Resumo financeiro
-  // temTroca: mostra o form de troca se tem valor > 0 OU se já preencheu produto da troca OU se é UPGRADE
-  const temTroca = valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto || form.tipo === "UPGRADE";
+  // temTroca: controlado pelo checkbox trocaEnabled OU automaticamente se já tem dados de troca
+  const temTroca = trocaEnabled || valorTroca > 0 || !!form.troca_produto || !!trocaRow.produto;
   const temEntradaPix = entradaPix > 0;
   const temEntradaEspecie = entradaEspecie > 0;
   const temCartao = form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO";
@@ -906,7 +925,6 @@ export default function VendasPage() {
     const isBrinde = !!form.is_brinde;
     const payload: Record<string, unknown> = {
       data: form.data,
-      data_agendada: form.data_agendada || null,
       is_brinde: isBrinde,
       cliente: form.cliente,
       cpf: form.cpf || null,
@@ -989,7 +1007,8 @@ export default function VendasPage() {
       troca_ciclos2: prodFields.troca_ciclos2 || null,
       troca_garantia2: prodFields.troca_garantia2 || null,
       produto_na_troca2: pValorTroca2 > 0 ? String(pValorTroca2) : (prodFields.troca_produto2 ? "0" : null),
-      status_pagamento: "AGUARDANDO",
+      status_pagamento: vendaProgramada ? (programadaJaPago ? "FINALIZADO" : "PROGRAMADA") : "AGUARDANDO",
+      data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
@@ -1104,7 +1123,7 @@ export default function VendasPage() {
     setCatSel("");
     setEstoqueId("");
     setProdutoManual(false);
-    setShowSegundaTroca(false);
+    setShowSegundaTroca(false); setTrocaEnabled(false);
   };
 
   // Add current product to cart
@@ -1360,7 +1379,29 @@ export default function VendasPage() {
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
-            clearProductFields();
+            setLastClienteData(null);
+            // Limpar TODOS os campos (cliente + produto) após edição
+            setForm({
+              data: hojeBR(),
+              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+              qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+              valor_total_venda: "",
+              troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+              troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "",
+              troca_serial: "", troca_imei: "",
+              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
+              troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+              serial_no: "", imei: "",
+              cep: "", bairro: "", cidade: "", uf: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              is_brinde: false,
+            });
+            setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+            localStorage.removeItem("tigrao_venda_draft");
             setMsg(`${editandoGrupoIds.length} vendas atualizadas com sucesso!`);
             fetchVendas();
             fetchEstoque();
@@ -1380,7 +1421,29 @@ export default function VendasPage() {
             setEditandoGrupoIds([]);
             setDuplicadoInfo(null);
             setProdutosCarrinho([]);
-            clearProductFields();
+            setLastClienteData(null);
+            // Limpar TODOS os campos (cliente + produto) após edição
+            setForm({
+              data: hojeBR(),
+              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
+              qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
+              entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
+              forma_alt: "", parc_alt: "", band_alt: "", comp_alt: "", sinal_antecipado: "", banco_sinal: "",
+              entrada_fiado: "", fiado_qnt_parcelas: "1", fiado_data_inicio: "", fiado_intervalo: "7",
+              valor_total_venda: "",
+              troca_produto: "", troca_cor: "", troca_categoria: "", troca_bateria: "", troca_obs: "",
+              troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "",
+              troca_serial: "", troca_imei: "",
+              produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
+              troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
+              serial_no: "", imei: "",
+              cep: "", bairro: "", cidade: "", uf: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              is_brinde: false,
+            });
+            setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+            localStorage.removeItem("tigrao_venda_draft");
             setMsg("Venda atualizada com sucesso!");
             fetchVendas();
             fetchEstoque();
@@ -1452,15 +1515,17 @@ export default function VendasPage() {
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
         frete_valor: "", frete_recebido: false, usar_credito_loja: "",
-        is_brinde: false, data_agendada: "",
+        is_brinde: false,
       });
       setCatSel("");
       setEstoqueId("");
       setProdutoManual(false);
-      setShowSegundaTroca(false);
+      setShowSegundaTroca(false); setTrocaEnabled(false);
+      setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
       localStorage.removeItem("tigrao_venda_draft");
+      const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
-      setMsg(`${successCount} venda${plural} registrada${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
+      setMsg(`${successCount} venda${plural} ${statusTxt}${plural}!${errors.length > 0 ? ` (${errors.length} erro${errors.length > 1 ? "s" : ""})` : ""}`);
       fetchVendas();
       fetchEstoque();
       // NF é adicionada depois nas vendas pendentes, não no momento do registro
@@ -1720,13 +1785,13 @@ export default function VendasPage() {
       uf: "",
       frete_valor: "",
       frete_recebido: false, usar_credito_loja: "",
-      is_brinde: false, data_agendada: "",
+      is_brinde: false,
     });
     setCatSel("");
     setEstoqueId("");
     setProdutoManual(true); // produto duplicado vai como manual
     setProdutosCarrinho([]); // limpar carrinho ao duplicar
-    setShowSegundaTroca(false);
+    setShowSegundaTroca(false); setTrocaEnabled(false);
     const [y, m, d] = (v.data || "").split("-");
     setDuplicadoInfo({ data: d && m ? `${d}/${m}` : v.data, cliente: v.cliente });
     setTab("nova");
@@ -1783,11 +1848,12 @@ export default function VendasPage() {
       <div className="flex gap-2 overflow-x-auto items-center flex-wrap">
         <div className="flex gap-2">
           {([
-            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", restrito: false },
-            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", restrito: true },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_agendada || v.data) === hojeStr).length, color: "bg-blue-500", restrito: false },
-            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", restrito: true },
-          ] as const).filter(t => !t.restrito || podeVerHistorico).map((t) => (
+            { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
+            { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
+            { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
+            { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hojeStr && v.status_pagamento !== "CANCELADO")).length, color: "bg-purple-500", visible: podeVerAndamento },
+          ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
             </button>
@@ -1795,7 +1861,7 @@ export default function VendasPage() {
         </div>
 
         {/* Filtros — só no histórico e em andamento */}
-        {(tab === "andamento" || tab === "finalizadas") && (
+        {(tab === "andamento" || tab === "programadas" || tab === "hoje" || tab === "finalizadas") && (
           <div className="flex gap-1.5 items-center ml-auto flex-wrap">
             <input
               type="text"
@@ -1934,9 +2000,9 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
-                    is_brinde: false, data_agendada: "",
+                    is_brinde: false,
                   });
-                  setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
+                  setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
@@ -2054,10 +2120,9 @@ export default function VendasPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          {/* Row 1: Data + Agendamento + Brinde */}
+          {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
-            <div><p className={labelCls}>Agendar para (opcional)</p><input type="date" value={form.data_agendada} onChange={(e) => set("data_agendada", e.target.value)} className={inputCls} /></div>
             <div className="flex items-end pb-1">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -2137,6 +2202,9 @@ export default function VendasPage() {
                           const digits = e.target.value.replace(/\D/g, "");
                           const v = digits ? Math.min(parseInt(digits), creditoLojistaSaldo) : 0;
                           set("usar_credito_loja", v ? String(v) : "");
+                          // Recalcular preco_vendido incluindo crédito
+                          const newResult = recalcVendido({ credito: v ? String(v) : "0" });
+                          if (newResult) set("preco_vendido", newResult);
                         }}
                         placeholder="0"
                         className={inputCls}
@@ -2144,7 +2212,12 @@ export default function VendasPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => set("usar_credito_loja", String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo)))}
+                      onClick={() => {
+                        const val = String(Math.min(creditoLojistaSaldo, parseFloat(form.preco_vendido) || creditoLojistaSaldo));
+                        set("usar_credito_loja", val);
+                        const newResult = recalcVendido({ credito: val });
+                        if (newResult) set("preco_vendido", newResult);
+                      }}
                       className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 whitespace-nowrap"
                     >
                       Usar tudo
@@ -2564,9 +2637,9 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
-                    is_brinde: false, data_agendada: "",
+                    is_brinde: false,
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
@@ -3185,8 +3258,20 @@ export default function VendasPage() {
 
           {/* PRODUTO NA TROCA */}
           <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-            <p className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={trocaEnabled} onChange={(e) => {
+                setTrocaEnabled(e.target.checked);
+                if (!e.target.checked) {
+                  // Limpar dados de troca ao desmarcar
+                  setForm(f => ({ ...f, produto_na_troca: "", troca_produto: "", troca_cor: "", troca_bateria: "", troca_obs: "", troca_grade: "", troca_caixa: "", troca_cabo: "", troca_fonte: "", troca_pulseira: "", troca_ciclos: "", troca_garantia: "", troca_serial: "", troca_imei: "", troca_categoria: "" }));
+                  setTrocaRow(createEmptyProdutoRow());
+                  const newVendido = recalcVendido({ troca: "0" });
+                  if (newVendido) setForm(f => ({ ...f, preco_vendido: newVendido }));
+                }
+              }} className="w-4 h-4 accent-orange-500" />
+              <span className="text-sm font-bold text-[#1D1D1F]">🔄 Produto na troca? (para o produto acima)</span>
+            </label>
+            {trocaEnabled && <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div><p className={labelCls}>Valor da troca (R$)</p><input type="text" inputMode="numeric" value={fmtMil(form.produto_na_troca)} onChange={(e) => {
                 const clean = e.target.value.replace(/\./g, "").replace(/\D/g, "");
                 const newVendido = recalcVendido({ troca: clean });
@@ -3233,7 +3318,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>IMEI</p><input value={form.troca_imei} onChange={(e) => set("troca_imei", e.target.value.replace(/\D/g, "").slice(0, 15))} placeholder="Ex: 35938..." className={inputCls} inputMode="numeric" /></div>
                 </>
               )}
-            </div>
+            </div>}
             {temTroca && <p className="text-xs text-orange-500">O produto na troca será adicionado como PENDENTE (aguardando recebimento)</p>}
 
             {/* Botão para adicionar 2º produto na troca */}
@@ -3255,7 +3340,7 @@ export default function VendasPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowSegundaTroca(false);
+                      setShowSegundaTroca(false); setTrocaEnabled(false);
                       setForm(f => ({ ...f, produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "", troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "" }));
                     }}
                     className="text-xs text-red-400 hover:text-red-600"
@@ -3416,13 +3501,61 @@ export default function VendasPage() {
             );
           })()}
 
+          {/* Toggle Programar Venda */}
+          {!editandoVendaId && (
+            <div className={`p-3 rounded-xl border space-y-3 ${vendaProgramada ? (dm ? "border-purple-500 bg-purple-900/20" : "border-purple-400 bg-purple-50") : dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={vendaProgramada}
+                  onChange={(e) => {
+                    setVendaProgramada(e.target.checked);
+                    if (!e.target.checked) { setProgramadaJaPago(false); setDataProgramada(""); }
+                    else {
+                      // Default: amanhã
+                      const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+                      setDataProgramada(amanha.toISOString().split("T")[0]);
+                    }
+                  }}
+                  className="w-4 h-4 rounded accent-purple-500"
+                />
+                <span className={`text-sm font-semibold ${vendaProgramada ? (dm ? "text-purple-300" : "text-purple-700") : dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                  📅 Programar venda
+                </span>
+              </label>
+              {vendaProgramada && (
+                <div className="space-y-2 pl-6">
+                  <div className="flex gap-3 items-center">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={!programadaJaPago} onChange={() => setProgramadaJaPago(false)} className="accent-purple-500" />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>⏳ Aguardando pagamento</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" checked={programadaJaPago} onChange={() => setProgramadaJaPago(true)} className="accent-green-500" />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✅ Já pago — entrega futura</span>
+                    </label>
+                  </div>
+                  <div className="flex gap-3 items-center">
+                    <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data programada:</span>
+                    <input
+                      type="date"
+                      value={dataProgramada}
+                      onChange={(e) => setDataProgramada(e.target.value)}
+                      className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
             >
-              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -3444,8 +3577,10 @@ export default function VendasPage() {
           const hoje = hojeStr;
           const filteredRaw = (tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
+            : tab === "programadas"
+            ? vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hoje && v.status_pagamento !== "CANCELADO"))
             : tab === "hoje"
-            ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_agendada || v.data) === hoje)
+            ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hoje)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento)
           ).filter(v => !filtroBrinde || v.is_brinde);
           const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
@@ -3478,7 +3613,7 @@ export default function VendasPage() {
           // Agrupar vendas por data para exibição com divisórias
           const vendasPorData = new Map<string, Venda[]>();
           for (const v of filtered) {
-            const d = v.data_agendada || v.data || "sem-data";
+            const d = v.data_programada || v.data || "sem-data";
             const list = vendasPorData.get(d) || [];
             list.push(v);
             vendasPorData.set(d, list);
@@ -3749,16 +3884,16 @@ export default function VendasPage() {
                               )}
                               <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">
                                 {(() => {
-                                  const efetiva = v.data_agendada || v.data || "";
+                                  const efetiva = v.data_programada || v.data || "";
                                   const [y, m, d] = efetiva.split("-");
                                   return d && m ? `${d}/${m}` : efetiva;
                                 })()}
-                                {v.data_agendada && v.data_agendada !== v.data && (
+                                {v.data_programada && v.data_programada !== v.data && (
                                   <span className="block text-[10px] text-blue-500">
                                     Criado: {(() => { const [, m2, d2] = (v.data || "").split("-"); return d2 && m2 ? `${d2}/${m2}` : v.data; })()}
                                   </span>
                                 )}
-                                {v.created_at && !v.data_agendada && (
+                                {v.created_at && !v.data_programada && (
                                   <span className="block text-[10px] text-[#B0B0B0]">
                                     {new Date(v.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                                   </span>
@@ -3790,6 +3925,11 @@ export default function VendasPage() {
                                   ))}
                                 </div>
                                 <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
+                                {Number(v.credito_lojista_usado || 0) > 0 && (
+                                  <span className="inline-block mt-0.5 ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">
+                                    💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
@@ -4090,7 +4230,7 @@ export default function VendasPage() {
                                     <div className="space-y-2">
                                       <h4 className="text-xs font-bold text-[#86868B] uppercase">Status</h4>
                                       <div className="flex gap-2 flex-wrap">
-                                        <button
+                                        {podeVerHistorico && <button
                                           onClick={async (e) => {
                                             e.stopPropagation();
                                             // Detectar se faz parte de um grupo
@@ -4223,9 +4363,11 @@ export default function VendasPage() {
                                               frete_recebido: !!primaryVenda.frete_recebido,
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
-                                              data_agendada: primaryVenda.data_agendada || "",
                                             });
                                             setProdutoManual(true);
+                                            // Ativar checkbox de troca somente se a venda realmente tem troca
+                                            const temTrocaNaVenda = !!(trocaProd || (parseFloat(String(primaryVenda.produto_na_troca)) || 0) > 0);
+                                            setTrocaEnabled(temTrocaNaVenda);
 
                                             // Popular trocaRow/trocaRow2 para o ProdutoSpecFields mostrar os dados
                                             if (grupoVendas.length === 1) {
@@ -4307,10 +4449,120 @@ export default function VendasPage() {
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
                                         >
                                           ✏️ Editar
-                                        </button>
+                                        </button>}
+                                        {/* Gerar Termo de Procedência — só quando há troca */}
+                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              // Se faltam S/N ou IMEI, pedir preenchimento via prompt
+                                              let serial1 = v.troca_serial || "";
+                                              let imei1 = v.troca_imei || "";
+                                              let serial2 = v.troca_serial2 || "";
+                                              let imei2 = v.troca_imei2 || "";
+                                              const falta1 = v.troca_produto && (!serial1 || !imei1);
+                                              const falta2 = v.troca_produto2 && (!serial2 || !imei2);
+                                              if (falta1 || falta2) {
+                                                // Mini formulário via prompts
+                                                if (falta1 && !serial1) {
+                                                  const val = prompt(`Número de Série de "${v.troca_produto}":`);
+                                                  if (val === null) return; // cancelou
+                                                  serial1 = val.trim();
+                                                }
+                                                if (falta1 && !imei1) {
+                                                  const val = prompt(`IMEI de "${v.troca_produto}":`);
+                                                  if (val === null) return;
+                                                  imei1 = val.trim();
+                                                }
+                                                if (falta2 && !serial2) {
+                                                  const val = prompt(`Número de Série de "${v.troca_produto2}":`);
+                                                  if (val === null) return;
+                                                  serial2 = val.trim();
+                                                }
+                                                if (falta2 && !imei2) {
+                                                  const val = prompt(`IMEI de "${v.troca_produto2}":`);
+                                                  if (val === null) return;
+                                                  imei2 = val.trim();
+                                                }
+                                                // Salvar na venda para não pedir de novo
+                                                const updates: Record<string, string> = {};
+                                                if (serial1 && !v.troca_serial) updates.troca_serial = serial1;
+                                                if (imei1 && !v.troca_imei) updates.troca_imei = imei1;
+                                                if (serial2 && !v.troca_serial2) updates.troca_serial2 = serial2;
+                                                if (imei2 && !v.troca_imei2) updates.troca_imei2 = imei2;
+                                                if (Object.keys(updates).length > 0) {
+                                                  await fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify({ id: v.id, ...updates }),
+                                                  }).catch(() => {});
+                                                  // Atualizar local
+                                                  setVendas(prev => prev.map(vv => vv.id === v.id ? { ...vv, ...updates } : vv));
+                                                }
+                                              }
+                                              const aparelhos: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
+                                              if (v.troca_produto) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto,
+                                                  capacidade: "",
+                                                  cor: v.troca_cor || "",
+                                                  imei: imei1,
+                                                  serial: serial1,
+                                                  condicao: [
+                                                    v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
+                                                    v.troca_grade ? `Grade ${v.troca_grade}` : "",
+                                                    v.troca_caixa === "SIM" ? "Com Caixa" : "",
+                                                    v.troca_cabo === "SIM" ? "Com Cabo" : "",
+                                                    v.troca_fonte === "SIM" ? "Com Fonte" : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (v.troca_produto2) {
+                                                aparelhos.push({
+                                                  modelo: v.troca_produto2,
+                                                  cor: v.troca_cor2 || "",
+                                                  imei: imei2,
+                                                  serial: serial2,
+                                                  condicao: [
+                                                    v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
+                                                    v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
+                                                  ].filter(Boolean).join(", "),
+                                                });
+                                              }
+                                              if (aparelhos.length === 0) return;
+                                              try {
+                                                const res = await fetch("/api/admin/termo-procedencia", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({
+                                                    cliente_nome: v.cliente,
+                                                    cliente_cpf: v.cpf || "",
+                                                    aparelhos,
+                                                    venda_id: v.id,
+                                                  }),
+                                                });
+                                                if (res.headers.get("content-type")?.includes("pdf")) {
+                                                  const blob = await res.blob();
+                                                  const url = URL.createObjectURL(blob);
+                                                  const a = document.createElement("a");
+                                                  a.href = url;
+                                                  a.download = `TERMO_PROCEDENCIA_${v.cliente.replace(/\s+/g, "_")}.pdf`;
+                                                  a.click();
+                                                  URL.revokeObjectURL(url);
+                                                } else {
+                                                  const json = await res.json();
+                                                  setMsg("Erro: " + (json.error || "falha ao gerar termo"));
+                                                }
+                                              } catch { setMsg("Erro ao gerar termo de procedencia"); }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                                          >
+                                            📜 Gerar Termo de Procedencia
+                                          </button>
+                                        )}
                                       </div>
-                                      {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO) */}
-                                      {v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
+                                      {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO e pra quem só tem vendas_andamento) */}
+                                      {podeVerHistorico && v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
                                         {v.nota_fiscal_url ? (
                                           <>
                                             <a href={v.nota_fiscal_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
@@ -4389,7 +4641,7 @@ export default function VendasPage() {
                                         )}
                                       </div>}
                                       <div className="flex gap-2 flex-wrap">
-                                        {v.status_pagamento === "AGUARDANDO" && (
+                                        {podeVerHistorico && (v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4406,7 +4658,7 @@ export default function VendasPage() {
                                             ✅ Finalizar Venda
                                           </button>
                                         )}
-                                        {v.status_pagamento !== "CANCELADO" && (
+                                        {podeVerHistorico && v.status_pagamento !== "CANCELADO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4434,14 +4686,48 @@ export default function VendasPage() {
                                             ❌ Cancelar Venda
                                           </button>
                                         )}
-                                        {/* Botão Reajuste */}
-                                        <button
+                                        {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
+                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && v.local === "ENTREGA" && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const defaultDate = v.data_programada
+                                                ? new Date(v.data_programada + "T12:00:00").toLocaleDateString("pt-BR")
+                                                : new Date().toLocaleDateString("pt-BR");
+                                              const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", defaultDate);
+                                              if (!dataEntrega) return;
+                                              // Converter DD/MM/AAAA para YYYY-MM-DD
+                                              const parts = dataEntrega.split("/");
+                                              const dataISO = parts.length === 3 ? `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}` : dataEntrega;
+                                              try {
+                                                const res = await fetch("/api/admin/vendas/encaminhar-entrega", {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                  body: JSON.stringify({ venda_id: v.id, data_entrega: dataISO }),
+                                                });
+                                                const json = await res.json();
+                                                if (res.ok) {
+                                                  setMsg("📦 Entrega criada com sucesso!");
+                                                } else {
+                                                  setMsg(`Erro: ${json.error || "Falha ao criar entrega"}`);
+                                                }
+                                              } catch {
+                                                setMsg("Erro ao encaminhar para entrega");
+                                              }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-600 border border-purple-200 hover:bg-purple-50 transition-colors"
+                                          >
+                                            📦 {v.status_pagamento === "PROGRAMADA" || v.data_programada ? "Agendar Entrega" : "Encaminhar Entrega"}
+                                          </button>
+                                        )}
+                                        {/* Botão Reajuste — só admin */}
+                                        {podeVerHistorico && <button
                                           onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" }); }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
                                         >
                                           💲 Reajuste
-                                        </button>
-                                        {v.status_pagamento === "FINALIZADO" && (
+                                        </button>}
+                                        {podeVerHistorico && v.status_pagamento === "FINALIZADO" && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4810,14 +5096,15 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
-                    is_brinde: false, data_agendada: "",
+                    is_brinde: false,
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
+                  localStorage.removeItem("tigrao_venda_draft");
                 }}
                 className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
               >
@@ -4845,14 +5132,15 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
-                    is_brinde: false, data_agendada: "",
+                    is_brinde: false,
                   });
-                  setShowSegundaTroca(false);
+                  setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
                   setCatSel("");
                   setEstoqueId("");
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
+                  localStorage.removeItem("tigrao_venda_draft");
                   setMsg("");
                 }}
                 className={`flex-1 py-3 rounded-xl font-semibold transition-colors ${dm ? "bg-[#3A3A3C] text-[#F5F5F7] hover:bg-[#4A4A4C]" : "bg-[#E5E5EA] text-[#1D1D1F] hover:bg-[#D2D2D7]"}`}

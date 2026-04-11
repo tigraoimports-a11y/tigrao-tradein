@@ -13,6 +13,33 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search")?.trim() || "";
   const tab = searchParams.get("tab") || "clientes";
 
+  // =========== Vendas de um cliente específico (lazy load) ===========
+  const clientVendas = searchParams.get("client_vendas");
+  if (clientVendas) {
+    // Gerar variantes do nome pra casar com diferentes grafias no banco
+    // Ex: "LOJA SIRI" → busca por "LOJA SIRI", "SIRI" (sem prefixo LOJA)
+    const nome = clientVendas.trim();
+    const semPrefixo = nome.replace(/^(LOJA|LOJAS)\s+/i, "").trim();
+    const semSufixo = nome.replace(/\s+(ATACADO|ATAC|LOJAS?|STORE|IMPORTS?|CELL|CEL)\s*$/i, "").trim();
+
+    // Monta OR com todas variantes
+    const patterns = [...new Set([nome, semPrefixo, semSufixo].filter(Boolean))];
+    const orFilter = patterns.map(p => `cliente.ilike.%${p}%`).join(",");
+
+    const { data, error } = await supabase
+      .from("vendas")
+      .select("id,data,produto,preco_vendido,forma,banco,serial_no,imei,status_pagamento")
+      .or(orFilter)
+      .order("data", { ascending: false })
+      .limit(500);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Filtrar cancelados em JS (evita bug do .neq() com NULL)
+    const vendas = (data || []).filter((v: { status_pagamento?: string | null }) =>
+      v.status_pagamento !== "CANCELADO"
+    );
+    return NextResponse.json({ vendas });
+  }
+
   // =========== TAB: FORNECEDORES ===========
   if (tab === "fornecedores") {
     // 1) Buscar cadastro de fornecedores (tabela master)
@@ -244,6 +271,39 @@ export async function GET(req: NextRequest) {
         is_lojista: Boolean(r.is_lojista),
         vendas: [],
       }));
+
+      // Mergear clientes de encomendas (podem não ter vendas ainda)
+      if (tab === "clientes") {
+        let encQuery = supabase.from("encomendas").select("cliente, cpf, email, whatsapp, bairro, data, produto, valor_venda").not("status", "eq", "CANCELADA");
+        if (search) encQuery = encQuery.or(`cliente.ilike.%${search}%,cpf.ilike.%${search}%`);
+        const { data: encs } = await encQuery;
+        if (encs && encs.length > 0) {
+          const existingNames = new Set(clientes.map(c => c.nome.toLowerCase().trim()));
+          const encMap = new Map<string, ResumoRow>();
+          for (const e of encs) {
+            if (!e.cliente) continue;
+            const key = e.cliente.toLowerCase().trim();
+            if (existingNames.has(key)) continue; // já está nos clientes de vendas
+            const existing = encMap.get(key);
+            if (existing) {
+              existing.total_compras++;
+              existing.total_gasto += Number(e.valor_venda || 0);
+              if (e.data > existing.ultima_compra) { existing.ultima_compra = e.data; existing.ultimo_produto = e.produto || ""; }
+              if (e.data < existing.cliente_desde) existing.cliente_desde = e.data;
+            } else {
+              encMap.set(key, {
+                nome: e.cliente, cpf: e.cpf || null, cnpj: null, email: e.email || null,
+                bairro: e.bairro || null, cidade: null, uf: null,
+                total_compras: 1, total_gasto: Number(e.valor_venda || 0),
+                ultima_compra: e.data || "", ultimo_produto: e.produto || "",
+                cliente_desde: e.data || "", is_lojista: false, vendas: [],
+              });
+            }
+          }
+          clientes.push(...encMap.values());
+        }
+      }
+
       return NextResponse.json({
         clientes,
         total: clientes.length,

@@ -17,6 +17,20 @@ export default function GerarLinkPage() {
   const [catSel, setCatSel] = useState("");
   const [pickerIdx, setPickerIdx] = useState<number | null>(null);
 
+  // === Carrinho de produtos (padrão cart como /admin/entregas) ===
+  interface CarrinhoLinkItem {
+    key: string;
+    nome: string;      // "IPHONE 17 256GB"
+    cor: string;        // "Branco" (PT)
+    corEN: string;      // "White" (EN) - for the link URL
+    preco: number;
+    categoria: string;
+  }
+  const [carrinhoLink, setCarrinhoLink] = useState<CarrinhoLinkItem[]>([]);
+  const [addingProduct, setAddingProduct] = useState(true); // starts open for first product
+  const [cartCatSel, setCartCatSel] = useState(""); // categoria selecionada no picker do carrinho
+  const [cartCorPending, setCartCorPending] = useState<{ nome: string; preco: number; categoria: string } | null>(null); // modelo pendente de cor
+
   // Fetch preços de venda (tabela precos com categoria)
   const [precosVenda, setPrecosVenda] = useState<{ modelo: string; armazenamento: string; preco_pix: number; categoria: string }[]>([]);
   useEffect(() => {
@@ -118,13 +132,11 @@ export default function GerarLinkPage() {
     // Normaliza gerações (2ND/2º/2 → 2, 3RD/3º → 3) e remove ruído
     const normGen = (s: string) => s
       .replace(/(\d+)\s*(ST|ND|RD|TH)\b/gi, "$1")
-      .replace(/(\d+)\s*[º°]/g, "$1")
+      .replace(/(\d+)\s*[ºª°]/g, "$1")
       .replace(/\bGENERATION\b/gi, "GEN")
       .replace(/\bGERAÇÃO\b/gi, "GEN");
     const stripNoise = (s: string) => normGen(s)
       .replace(/\b\d+\s*(GB|TB)\b/gi, "")
-      .replace(/\b\d+\s*MM\b/gi, "")
-      .replace(/\b(GPS|CELLULAR|WI[- ]?FI|CELL)\b/gi, "")
       .replace(/[""\(\)\+\-]/g, " ")
       .replace(/\s+/g, " ").trim();
     const STOP = new Set(["de","the","with","com","e","a","o","gen"]);
@@ -189,6 +201,13 @@ export default function GerarLinkPage() {
     if (total > 0) setPreco(total.toLocaleString("pt-BR"));
   }, [produtos]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-soma preço do carrinho
+  useEffect(() => {
+    if (carrinhoLink.length === 0) return;
+    const total = carrinhoLink.reduce((s, item) => s + item.preco, 0);
+    if (total > 0) setPreco(total.toLocaleString("pt-BR"));
+  }, [carrinhoLink]);
+
   const [vendedorNome, setVendedorNome] = useState("");
   const [forma, setForma] = useState("");
   const [parcelas, setParcelas] = useState("");
@@ -204,6 +223,8 @@ export default function GerarLinkPage() {
   const [temSegundaTroca, setTemSegundaTroca] = useState(false);
   const [trocaCondicao, setTrocaCondicao] = useState("");
   const [trocaCor, setTrocaCor] = useState("");
+  const [trocaCondicao2, setTrocaCondicao2] = useState("");
+  const [trocaCor2, setTrocaCor2] = useState("");
   const [trocaProduto2, setTrocaProduto2] = useState("");
   const [trocaValor2, setTrocaValor2] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
@@ -264,8 +285,9 @@ export default function GerarLinkPage() {
     if (c.telefone) setCliTelefone(c.telefone);
     if (c.cpf) setCliCpf(c.cpf);
     if (c.email) setCliEmail(c.email);
-    if (c.endereco) setCliEndereco(c.endereco);
-    if (c.bairro) setCliBairro(c.bairro);
+    // Só preenche endereço se o campo estiver vazio (preserva edição manual)
+    if (c.endereco && !cliEndereco.trim()) setCliEndereco(c.endereco);
+    if (c.bairro && !cliBairro.trim()) setCliBairro(c.bairro);
     setIncluirDadosCliente(true);
     setShowCliSugs(false);
   };
@@ -395,6 +417,7 @@ export default function GerarLinkPage() {
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
   const [editLink, setEditLink] = useState<Record<string, string>>({});
+  const [editLinkExtras, setEditLinkExtras] = useState<string[] | null>(null);
   const [savingDados, setSavingDados] = useState(false);
 
   useEffect(() => {
@@ -420,10 +443,17 @@ export default function GerarLinkPage() {
         troca_produto2: viewDataLink.troca_produto2 || "",
         troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
         observacao: viewDataLink.observacao || "",
+        desconto: viewDataLink.desconto != null ? String(viewDataLink.desconto) : "",
       });
+      // Produtos extras como array separado
+      const pe = viewDataLink.produtos_extras;
+      if (Array.isArray(pe)) setEditLinkExtras(pe as string[]);
+      else if (typeof pe === "string") { try { const p = JSON.parse(pe); setEditLinkExtras(Array.isArray(p) ? p : null); } catch { setEditLinkExtras(null); } }
+      else setEditLinkExtras(null);
     } else {
       setEditDados({});
       setEditLink({});
+      setEditLinkExtras(null);
     }
   }, [viewDataLink]);
 
@@ -454,6 +484,8 @@ export default function GerarLinkPage() {
         troca_produto2: editLink.troca_produto2 || null,
         troca_valor2: Number(editLink.troca_valor2) || 0,
         observacao: editLink.observacao || null,
+        desconto: Number(editLink.desconto) || 0,
+        produtos_extras: editLinkExtras || null,
       };
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -484,10 +516,11 @@ export default function GerarLinkPage() {
 
   async function salvarEdicaoLink() {
     if (!editingLinkId) return false;
-    const prodsFilled = produtos.filter(Boolean);
-    const corPTSimples = corSel ? corParaPT(corSel) : "";
-    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
+    const useCart = carrinhoLink.length > 0;
+    const prodsFilled = useCart ? carrinhoLink.map(item => item.nome) : produtos.filter(Boolean);
+    const corPTSimples = useCart ? (carrinhoLink[0]?.cor || "") : (corSel ? corParaPT(corSel) : "");
+    const corENCanon = useCart ? (carrinhoLink[0]?.corEN || "") : (corSel ? (corParaEN(corSel) || corSel) : "");
+    const nomeProdutoFinal = corPTSimples ? `${prodsFilled[0]} ${corPTSimples}` : (prodsFilled[0] || "");
     try {
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -496,6 +529,7 @@ export default function GerarLinkPage() {
           id: editingLinkId,
           produto: nomeProdutoFinal,
           produtos_extras: prodsFilled.length > 1 ? prodsFilled.slice(1).map((nome, i) => {
+            if (useCart) { const item = carrinhoLink[i + 1]; return item?.cor ? `${nome} ${item.cor}` : nome; }
             const c = coresExtras[i]; return c ? `${nome} ${corParaPT(c)}` : nome;
           }) : null,
           cor: corENCanon || null,
@@ -510,6 +544,8 @@ export default function GerarLinkPage() {
           troca_cor: trocaCor || null,
           troca_produto2: temSegundaTroca ? (trocaProduto2 || null) : null,
           troca_valor2: temSegundaTroca ? (Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0) : 0,
+          troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
+          troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
           vendedor: vendedorNome || null,
           cliente_nome: cliNome.trim() || null,
           cliente_telefone: cliTelefone.trim() || null,
@@ -550,7 +586,11 @@ export default function GerarLinkPage() {
   }
 
   function reutilizarLink(l: LinkCompra) {
-    setProdutos([l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim()]);
+    const prod1 = l.produto.replace(new RegExp(`\\s+${l.cor || ""}$`, "i"), "").trim();
+    const extras = l.produtos_extras && Array.isArray(l.produtos_extras) ? l.produtos_extras : [];
+    setProdutos([prod1, ...extras]);
+    setProdutoManual(true);
+    setCarrinhoLink([]);
     if (l.cor) setCorSel(l.cor);
     if (l.valor) setPreco(Number(l.valor).toLocaleString("pt-BR"));
     if (l.forma_pagamento) setForma(l.forma_pagamento);
@@ -616,6 +656,10 @@ export default function GerarLinkPage() {
       const n = Math.round(parseFloat(trocaVal2Qp));
       if (!isNaN(n) && n > 0) setTrocaValor2(n.toLocaleString("pt-BR"));
     }
+    const trocaCond2Qp = qp.get("troca_condicao2");
+    if (trocaCond2Qp) setTrocaCondicao2(trocaCond2Qp);
+    const trocaCor2Qp = qp.get("troca_cor2");
+    if (trocaCor2Qp) setTrocaCor2(trocaCor2Qp);
     // Modo manual quando vem de simulação
     if (qp.get("produto")) setProdutoManual(true);
   }, []);
@@ -667,10 +711,11 @@ export default function GerarLinkPage() {
     if (d.email) { setCliEmail(d.email); encontrados.push("E-mail"); }
     if (d.telefone) { setCliTelefone(d.telefone); encontrados.push("Telefone"); }
     if (d.cep) { setCliCep(d.cep); encontrados.push("CEP"); }
-    if (d.endereco) { setCliEndereco(d.endereco); encontrados.push("Endereço"); }
-    if (d.numero) { setCliNumero(d.numero); encontrados.push("Número"); }
-    if (d.complemento) { setCliComplemento(d.complemento); encontrados.push("Complemento"); }
-    if (d.bairro) { setCliBairro(d.bairro); encontrados.push("Bairro"); }
+    // Só preenche endereço se o campo estiver vazio (preserva edição manual)
+    if (d.endereco) { if (!cliEndereco.trim()) setCliEndereco(d.endereco); encontrados.push("Endereço"); }
+    if (d.numero) { if (!cliNumero.trim()) setCliNumero(d.numero); encontrados.push("Número"); }
+    if (d.complemento) { if (!cliComplemento.trim()) setCliComplemento(d.complemento); encontrados.push("Complemento"); }
+    if (d.bairro) { if (!cliBairro.trim()) setCliBairro(d.bairro); encontrados.push("Bairro"); }
     if (encontrados.length === 0) setParseMsg("❌ Não consegui identificar nenhum dado. Verifique o formato.");
     else setParseMsg(`✅ ${encontrados.length} campo(s) extraído(s): ${encontrados.join(", ")}`);
     setTimeout(() => setParseMsg(""), 5000);
@@ -681,6 +726,25 @@ export default function GerarLinkPage() {
     setCliNome(""); setCliCpf(""); setCliEmail(""); setCliTelefone("");
     setCliCep(""); setCliEndereco(""); setCliNumero(""); setCliComplemento(""); setCliBairro("");
     setParseMsg("");
+  }
+
+  function limparTudo() {
+    // Produtos / carrinho
+    setProdutos([""]); setPreco(""); setPrecosPorProduto({}); setCarrinhoLink([]);
+    setProdutoManual(false); setCorSel(""); setCoresExtras([]); setAddingProduct(false);
+    // Pagamento
+    setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
+    setPagamentoPago("");
+    // Entrega
+    setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega("");
+    // Troca
+    setTemTroca(false); setTrocaProduto(""); setTrocaValor(""); setTrocaCondicao(""); setTrocaCor("");
+    setTemSegundaTroca(false); setTrocaProduto2(""); setTrocaValor2(""); setTrocaCondicao2(""); setTrocaCor2("");
+    // Cliente
+    setIncluirDadosCliente(false); limparDadosCliente();
+    // Link gerado
+    setGeneratedLink(""); setCopied(false); setPasteMsg("");
+    setVendedorNome("");
   }
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");
@@ -714,15 +778,17 @@ export default function GerarLinkPage() {
   // WhatsApp por vendedor (centralizado em lib/whatsapp-config.ts)
 
   async function gerarLink() {
-    // Snapshot local — evita race com re-renders/setState que possam limpar produtos[0]
-    const prodsFilled = produtos.filter(Boolean);
+    // Suporta carrinho (modo estoque) ou produtos array (modo manual/legado)
+    const useCart = carrinhoLink.length > 0;
+    const prodsFilled = useCart ? carrinhoLink.map(item => item.nome) : produtos.filter(Boolean);
     if (prodsFilled.length === 0) {
       setPasteMsg("⚠️ Selecione ao menos um produto antes de gerar o link.");
       return;
     }
-    const corPTSimples = corSel ? corParaPT(corSel) : "";
-    const corENCanon = corSel ? (corParaEN(corSel) || corSel) : "";
-    const nomeProdutoFinal = corSel ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
+    // Cor do primeiro produto: do carrinho ou do seletor legado
+    const corPTSimples = useCart ? (carrinhoLink[0].cor || "") : (corSel ? corParaPT(corSel) : "");
+    const corENCanon = useCart ? (carrinhoLink[0].corEN || "") : (corSel ? (corParaEN(corSel) || corSel) : "");
+    const nomeProdutoFinal = corPTSimples ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
     if (!nomeProdutoFinal || !nomeProdutoFinal.trim()) {
       setPasteMsg("⚠️ Nome do produto vazio — selecione novamente.");
       return;
@@ -740,6 +806,10 @@ export default function GerarLinkPage() {
 
     // Helper: aplica cor extra no nome (PT simples)
     const aplicarCorExtra = (nome: string, idx: number): string => {
+      if (useCart) {
+        const item = carrinhoLink[idx];
+        return item?.cor ? `${nome} ${item.cor}` : nome;
+      }
       const cor = coresExtras[idx - 1];
       if (!cor) return nome;
       return `${nome} ${corParaPT(cor)}`;
@@ -771,6 +841,8 @@ export default function GerarLinkPage() {
     if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
     const rawTroca2Data = trocaValor2.replace(/\./g, "").replace(",", ".");
     if (temSegundaTroca && rawTroca2Data && rawTroca2Data !== "0") shortData.tv2 = rawTroca2Data;
+    if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
+    if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
     if (pagamentoPago) shortData.pp = pagamentoPago;
 
     // Dados do cliente pré-preenchidos (quando o vendedor incluir)
@@ -826,6 +898,8 @@ export default function GerarLinkPage() {
               troca_cor: trocaCor || null,
               troca_produto2: temSegundaTroca ? trocaProduto2 || null : null,
               troca_valor2: temSegundaTroca ? Number(trocaValor2.replace(/\./g, "").replace(",", ".")) || 0 : 0,
+              troca_condicao2: temSegundaTroca ? trocaCondicao2 || null : null,
+              troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
               vendedor: vendedorNome || null,
               simulacao_id: simulacaoId,
             }),
@@ -957,7 +1031,11 @@ export default function GerarLinkPage() {
         }
       }
 
-      if (parsedProdutos.length > 0) setProdutos(parsedProdutos);
+      if (parsedProdutos.length > 0) {
+        setProdutos(parsedProdutos);
+        setProdutoManual(true);
+        setCarrinhoLink([]);
+      }
 
       if (filled > 0) {
         setPasteMsg(`Resumo colado! ${filled} campo(s), ${parsedProdutos.length} produto(s).`);
@@ -971,8 +1049,8 @@ export default function GerarLinkPage() {
     }
   }
 
-  const inputCls = "w-full px-3 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-[#1D1D1F] text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]";
-  const labelCls = "block text-sm font-medium text-[#1D1D1F] mb-1";
+  const inputCls = `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E] ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`;
+  const labelCls = `block text-sm font-medium mb-1 ${dm ? "text-[#98989D]" : "text-[#1D1D1F]"}`;
 
   const showParcelas = forma === "Cartao Credito" || forma === "Cartao Debito" || forma === "Link de Pagamento";
   const showEntradaPix = forma === "Cartao Credito";
@@ -1025,7 +1103,22 @@ export default function GerarLinkPage() {
                       <section>
                         <h4 className="text-xs font-bold text-[#E8740E] uppercase tracking-wide mb-2">🛒 Pedido (link)</h4>
                         <div className="grid grid-cols-2 gap-3">
-                          <FL label="Produto" k="produto" full />
+                          <FL label={editLinkExtras && editLinkExtras.length > 0 ? "Produto 1" : "Produto"} k="produto" full />
+                          {editLinkExtras && editLinkExtras.map((pe, i) => (
+                            <div key={i} className="col-span-2">
+                              <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Produto {i + 2}</label>
+                              <input
+                                type="text"
+                                value={pe}
+                                onChange={(e) => {
+                                  const updated = [...editLinkExtras];
+                                  updated[i] = e.target.value;
+                                  setEditLinkExtras(updated);
+                                }}
+                                className="w-full px-3 py-2 rounded-lg border border-[#D2D2D7] text-sm focus:border-[#E8740E] focus:outline-none"
+                              />
+                            </div>
+                          ))}
                           <FL label="Cor" k="cor" />
                           <FL label="Valor (R$)" k="valor" type="number" />
                           <FL label="Forma de pagamento" k="forma_pagamento" />
@@ -1036,7 +1129,9 @@ export default function GerarLinkPage() {
                         </div>
                         {/* Resumo do pagamento */}
                         {(() => {
-                          const valor = Number(editLink.valor || 0);
+                          const valorBruto = Number(editLink.valor || 0);
+                          const descontoLink = Number(editLink.desconto || 0);
+                          const valor = valorBruto - descontoLink;
                           const entrada = Number(editLink.entrada || 0);
                           const troca = Number(editLink.troca_valor || 0) + Number(editLink.troca_valor2 || 0);
                           const parcelasN = Number(editLink.parcelas || 0);
@@ -1057,7 +1152,8 @@ export default function GerarLinkPage() {
                           return (
                             <div className={`mt-3 p-3 rounded-xl border text-xs space-y-1 ${boxCls}`}>
                               <p className={`font-bold uppercase tracking-wide text-[10px] ${titleCls}`}>💳 Resumo do pagamento</p>
-                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              <div className="flex justify-between"><span className={mutedCls}>Valor do produto</span><span className={`font-mono ${valCls}`}>R$ {valorBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>
+                              {descontoLink > 0 && <div className="flex justify-between"><span className="text-blue-500">− Desconto</span><span className="font-mono text-blue-500">R$ {descontoLink.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {entrada > 0 && <div className="flex justify-between"><span className={mutedCls}>− Entrada</span><span className={`font-mono ${valCls}`}>R$ {entrada.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {troca > 0 && <div className="flex justify-between"><span className={mutedCls}>− Troca abatida</span><span className={`font-mono ${valCls}`}>R$ {troca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span></div>}
                               {taxaPct > 0 && (
@@ -1382,12 +1478,20 @@ export default function GerarLinkPage() {
         {/* Botão colar resumo */}
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-[#1D1D1F]">Dados do pedido</p>
-          <button
-            onClick={colarResumo}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
-          >
-            📋 Colar resumo
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={limparTudo}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-red-400 text-red-500 hover:bg-red-50 transition-colors"
+            >
+              🗑️ Limpar dados
+            </button>
+            <button
+              onClick={colarResumo}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border-2 border-dashed border-[#E8740E] text-[#E8740E] hover:bg-[#FFF5EB] transition-colors"
+            >
+              📋 Colar resumo
+            </button>
+          </div>
         </div>
 
         {pasteMsg && (
@@ -1399,7 +1503,7 @@ export default function GerarLinkPage() {
         {/* Produto — seleção do estoque ou manual */}
         <div className="flex items-center justify-between">
           <label className={labelCls}>Produto *</label>
-          <button onClick={() => { setProdutoManual(!produtoManual); setCatSel(""); setPickerIdx(null); }} className="text-xs text-[#E8740E] font-medium hover:underline">
+          <button onClick={() => { const goingManual = !produtoManual; setProdutoManual(goingManual); setCatSel(""); setPickerIdx(null); if (goingManual) { setCarrinhoLink([]); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } else { setProdutos([""]); setCorSel(""); setPreco(""); setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); } }} className="text-xs text-[#E8740E] font-medium hover:underline">
             {produtoManual ? "📋 Selecionar do estoque" : "✏️ Digitar manual"}
           </button>
         </div>
@@ -1511,76 +1615,140 @@ export default function GerarLinkPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <select value={catSel} onChange={(e) => { setCatSel(e.target.value); setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); }} className={inputCls}>
-              <option value="">-- Categoria --</option>
-              {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
-              <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
-            </select>
-            {catSel && (
-              <div className={`max-h-[300px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
-                {(() => {
-                  const listaBase = catSel === "SEMINOVOS" ? seminovosDisponiveis : produtosFiltradosPreco;
-                  if (listaBase.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
-                  // Se há produto selecionado, mostra só ele (colapsa a lista)
-                  const lista = produtos[0] ? listaBase.filter(m => m.nome === produtos[0]) : listaBase;
-                  return lista.map((m) => {
-                    const sel = produtos[0] === m.nome;
-                    return (
-                      <div key={m.nome}>
-                        <button onClick={() => {
-                          if (sel) { setProdutos([""]); setPreco(""); setCorSel(""); setPrecosPorProduto({}); return; }
-                          setProdutos([m.nome]);
-                          setPreco(m.preco > 0 ? m.preco.toLocaleString("pt-BR") : "");
-                          setCorSel("");
-                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${sel ? (dm ? "bg-[#E8740E]/20 border-l-4 border-[#E8740E]" : "bg-[#FFF5EB] border-l-4 border-[#E8740E]") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]")}`}>
-                          <p className={`text-sm font-semibold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.nome}{sel && corSel ? ` ${corParaPT(corSel)}` : ""}</p>
-                          <p className={`text-sm font-bold ${sel ? "text-[#E8740E]" : (dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]")}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
-                        </button>
-                        {sel && catSel !== "SEMINOVOS" && coresDisponiveis.length > 0 && (
-                          <div className={`px-4 py-3 ${dm ? "bg-[#1C1C1E] border-t border-[#3A3A3C]" : "bg-[#FAFAFA] border-t border-[#E5E5EA]"}`}>
-                            <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Selecione a cor:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {coresDisponiveis.map(cor => (
-                                <button key={cor} onClick={() => setCorSel(corSel === cor ? "" : cor)}
-                                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${corSel === cor ? "bg-[#E8740E] text-white border-[#E8740E]" : (dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E]" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E]")}`}
-                                >{corParaPT(cor)}</button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
+            {/* === CARRINHO: produtos já adicionados === */}
+            {carrinhoLink.length > 0 && (
+              <div className={`rounded-xl p-3 space-y-1.5 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-green-50 border-green-200"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>
+                  Produtos no link ({carrinhoLink.length})
+                </p>
+                {carrinhoLink.map((item, i) => (
+                  <div key={item.key} className="flex items-center justify-between text-xs gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>
+                        {i + 1}. {item.nome}{item.cor ? ` ${item.cor}` : ""}
+                      </span>
+                    </div>
+                    <span className={`font-semibold shrink-0 ${dm ? "text-green-400" : "text-green-600"}`}>
+                      {item.preco > 0 ? `R$ ${item.preco.toLocaleString("pt-BR")}` : "—"}
+                    </span>
+                    <button
+                      onClick={() => setCarrinhoLink(carrinhoLink.filter((_, idx) => idx !== i))}
+                      className="text-red-400 hover:text-red-600 text-sm shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50"
+                      title="Remover produto"
+                    >✕</button>
+                  </div>
+                ))}
+                {carrinhoLink.length > 1 && (
+                  <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
+                    <span>Total</span>
+                    <span className={dm ? "text-green-400" : "text-green-600"}>
+                      R$ {carrinhoLink.reduce((s, item) => s + item.preco, 0).toLocaleString("pt-BR")}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-        <button onClick={() => {
-          const newIdx = produtos.length;
-          setProdutos([...produtos, ""]);
-          setProdutoManual(true);
-          setPickerIdx(newIdx);
-          setCatSel("");
-        }} className="text-xs text-[#E8740E] font-medium hover:underline">+ Adicionar produto</button>
 
-        {/* Resumo dos produtos com preço individual */}
-        {produtos.filter(Boolean).length > 1 && (
-          <div className={`rounded-xl p-3 space-y-1.5 ${dm ? "bg-[#2C2C2E] border border-[#3A3A3C]" : "bg-green-50 border border-green-200"}`}>
-            <p className={`text-[10px] font-bold uppercase tracking-wider ${dm ? "text-green-400" : "text-green-700"}`}>Produtos no link ({produtos.filter(Boolean).length})</p>
-            {produtos.filter(Boolean).map((p, i) => {
-              const pPreco = lookupPreco(p);
-              return (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <span className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{i + 1}. {p}</span>
-                  <span className="font-semibold text-green-600">{pPreco > 0 ? `R$ ${pPreco.toLocaleString("pt-BR")}` : "—"}</span>
+            {/* === PICKER: selecionar categoria → modelo → cor → add to cart === */}
+            {addingProduct ? (
+              <div className={`space-y-2 p-3 rounded-xl border ${dm ? "border-[#E8740E]/40 bg-[#E8740E]/5" : "border-[#E8740E]/30 bg-[#FFF5EB]/60"}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#E8740E]">
+                    {carrinhoLink.length === 0 ? "Selecione o produto:" : `Produto ${carrinhoLink.length + 1} — selecionar:`}
+                  </p>
+                  {carrinhoLink.length > 0 && (
+                    <button onClick={() => { setAddingProduct(false); setCartCatSel(""); setCartCorPending(null); }} className="text-xs text-[#86868B] hover:text-red-500">✕</button>
+                  )}
                 </div>
-              );
-            })}
-            <div className={`pt-1.5 border-t flex justify-between text-xs font-bold ${dm ? "border-[#3A3A3C] text-[#F5F5F7]" : "border-green-300 text-[#1D1D1F]"}`}>
-              <span>Total</span>
-              <span className="text-green-600">R$ {produtos.filter(Boolean).reduce((s, p) => s + lookupPreco(p), 0).toLocaleString("pt-BR")}</span>
-            </div>
+                <select value={cartCatSel} onChange={(e) => { setCartCatSel(e.target.value); setCartCorPending(null); }} className={inputCls}>
+                  <option value="">-- Categoria --</option>
+                  {categoriaPrecos.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                  <option value="SEMINOVOS">📱 Seminovos (em estoque)</option>
+                </select>
+
+                {/* Cor selector when a model is pending color choice */}
+                {cartCorPending && (() => {
+                  const cores = coresParaProduto(cartCorPending.nome);
+                  if (cores.length === 0) return null;
+                  return (
+                    <div className={`px-4 py-3 rounded-xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-[#FAFAFA] border border-[#E5E5EA]"}`}>
+                      <p className={`text-xs font-medium mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+                        Selecione a cor de <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{cartCorPending.nome}</strong>:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {cores.map(cor => (
+                          <button key={cor} onClick={() => {
+                            const corPT = corParaPT(cor);
+                            const corEN = corParaEN(cor) || cor;
+                            setCarrinhoLink([...carrinhoLink, {
+                              key: `${Date.now()}-${Math.random()}`,
+                              nome: cartCorPending!.nome,
+                              cor: corPT,
+                              corEN,
+                              preco: cartCorPending!.preco,
+                              categoria: cartCorPending!.categoria,
+                            }]);
+                            setCartCorPending(null);
+                            setCartCatSel("");
+                            setAddingProduct(false);
+                          }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border-[#3A3A3C] hover:border-[#E8740E] hover:bg-[#E8740E]/20" : "bg-white text-[#1D1D1F] border-[#D2D2D7] hover:border-[#E8740E] hover:bg-[#FFF5EB]"}`}
+                          >{corParaPT(cor)}</button>
+                        ))}
+                      </div>
+                      <button onClick={() => setCartCorPending(null)} className="text-[10px] text-[#86868B] hover:text-[#1D1D1F] mt-2">← Voltar</button>
+                    </div>
+                  );
+                })()}
+
+                {/* Model list (hidden when pending color) */}
+                {cartCatSel && !cartCorPending && (
+                  <div className={`max-h-[250px] overflow-y-auto rounded-xl border divide-y ${dm ? "border-[#3A3A3C] divide-[#3A3A3C]" : "border-[#D2D2D7] divide-[#E5E5EA]"}`}>
+                    {(() => {
+                      const cartProdutos = precosVenda
+                        .filter(p => p.categoria === cartCatSel)
+                        .map(p => ({ nome: `${p.modelo} ${p.armazenamento}`.trim(), preco: p.preco_pix }))
+                        .sort((a, b) => a.nome.localeCompare(b.nome));
+                      const lista = cartCatSel === "SEMINOVOS" ? seminovosDisponiveis : cartProdutos;
+                      if (lista.length === 0) return <p className="text-xs text-center text-[#86868B] py-4">Nenhum produto</p>;
+                      return lista.map((m) => (
+                        <button key={m.nome} onClick={() => {
+                          const cores = coresParaProduto(m.nome);
+                          const isSeminovo = cartCatSel === "SEMINOVOS";
+                          if (!isSeminovo && cores.length > 0) {
+                            // Has colors: show color picker
+                            setCartCorPending({ nome: m.nome, preco: m.preco, categoria: cartCatSel });
+                          } else {
+                            // No colors: add directly
+                            setCarrinhoLink([...carrinhoLink, {
+                              key: `${Date.now()}-${Math.random()}`,
+                              nome: m.nome,
+                              cor: "",
+                              corEN: "",
+                              preco: m.preco,
+                              categoria: isSeminovo ? "SEMINOVOS" : cartCatSel,
+                            }]);
+                            setCartCatSel("");
+                            setAddingProduct(false);
+                          }
+                        }} className={`w-full px-4 py-3 flex items-center justify-between text-left transition-all ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F9F9FB]"}`}>
+                          <p className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{m.nome}</p>
+                          <p className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{m.preco > 0 ? `R$ ${m.preco.toLocaleString("pt-BR")}` : "—"}</p>
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Button to open picker again */
+              <button
+                onClick={() => { setAddingProduct(true); setCartCatSel(""); setCartCorPending(null); }}
+                className={`w-full py-2.5 rounded-xl text-sm font-semibold border-2 border-dashed transition-colors ${dm ? "border-[#E8740E]/50 text-[#E8740E] hover:bg-[#E8740E]/10" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#FFF5EB]"}`}
+              >
+                + Adicionar produto
+              </button>
+            )}
           </div>
         )}
 
@@ -1686,6 +1854,17 @@ export default function GerarLinkPage() {
                       className={inputCls + " resize-none"}
                     />
                   </div>
+                  {trocaCondicao2 && (
+                    <div className={`p-2.5 rounded-lg text-xs ${dm ? "bg-purple-900/30 text-purple-300" : "bg-purple-50 text-purple-700"}`}>
+                      <span className="font-semibold">Condição:</span> {trocaCondicao2}
+                    </div>
+                  )}
+                  {trocaCor2 && (
+                    <div className="flex items-center gap-2">
+                      <label className={labelCls + " mb-0"}>Cor do usado:</label>
+                      <span className={`text-xs font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{trocaCor2}</span>
+                    </div>
+                  )}
                   <div>
                     <label className={labelCls}>Valor de Avaliacao do 2º Usado (R$)</label>
                     <input
@@ -1883,6 +2062,7 @@ export default function GerarLinkPage() {
             <label className={labelCls}>Horario</label>
             <select value={horario} onChange={(e) => setHorario(e.target.value)} className={inputCls}>
               <option value="">-- Opcional --</option>
+              <option value="LOGISTICA">🚚 Logística define</option>
               {(() => {
                 const opts: string[] = [];
                 for (let h = 10; h <= 19; h++) {
@@ -1997,7 +2177,7 @@ export default function GerarLinkPage() {
 
         <button
           onClick={gerarLink}
-          disabled={!produtos.some(Boolean)}
+          disabled={carrinhoLink.length === 0 && !produtos.some(Boolean)}
           className="w-full py-3 bg-[#E8740E] text-white font-bold rounded-xl hover:bg-[#D06A0D] active:bg-[#B85E0B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Gerar Link

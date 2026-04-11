@@ -2,13 +2,13 @@
 // Tipos do sistema administrativo TigrãoImports
 // ============================================
 
-export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO" | "NAO_INFORMARAM";
+export type Origem = "ANUNCIO" | "RECOMPRA" | "INDICACAO" | "ATACADO" | "NAO_INFORMARAM" | "ENCOMENDA";
 export type TipoVenda = "VENDA" | "UPGRADE" | "ATACADO";
 export type Banco = "ITAU" | "INFINITE" | "MERCADO_PAGO" | "ESPECIE";
 export type FormaPagamento = "PIX" | "CARTAO" | "DEBITO" | "ESPECIE" | "DINHEIRO" | "FIADO";
 export type Recebimento = "D+0" | "D+1" | "FIADO" | "PARCELADO";
 export type Bandeira = "VISA" | "MASTERCARD" | "ELO" | "AMEX";
-export type TipoGasto = "SAIDA" | "ENTRADA";
+export type TipoGasto = "SAIDA" | "ENTRADA" | "TRANSFERENCIA";
 
 export interface Venda {
   id: string;
@@ -68,6 +68,15 @@ export interface Venda {
   troca_cor2: string | null;
   troca_bateria2: string | null;
   troca_obs2: string | null;
+  troca_imei: string | null;
+  troca_serial: string | null;
+  troca_grade: string | null;
+  troca_caixa: string | null;
+  troca_cabo: string | null;
+  troca_fonte: string | null;
+  troca_imei2: string | null;
+  troca_serial2: string | null;
+  troca_grade2: string | null;
   produto_na_troca2: number;
   // Entrega atacado cobrada à parte
   frete_valor: number | null;
@@ -75,8 +84,10 @@ export interface Venda {
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
   // Brinde / Cortesia — não impacta faturamento nem lucro
   is_brinde: boolean;
-  // Data agendada — quando presente, é a data efetiva da venda
-  data_agendada: string | null;
+  // Venda programada
+  data_programada: string | null;
+  // Crédito de lojista usado nesta venda
+  credito_lojista_usado: number;
 }
 
 export interface Reajuste {

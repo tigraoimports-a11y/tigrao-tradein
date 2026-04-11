@@ -38,18 +38,20 @@ export default function SaldosPage() {
   const [inf, setInf] = useState("");
   const [mp, setMp] = useState("");
   const [esp, setEsp] = useState("");
+  const [histMes, setHistMes] = useState(""); // "" = últimos 7 dias, "2026-03" = mês específico
 
   const fetchSaldos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/saldos", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+      const params = histMes ? `?mes=${histMes}` : "";
+      const res = await fetch(`/api/saldos${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setSaldos(json.data ?? []);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password]);
+  }, [password, histMes]);
 
   const fetchSaldoData = useCallback(async (d: string) => {
     try {
@@ -120,16 +122,19 @@ export default function SaldosPage() {
   const [depBanco, setDepBanco] = useState<"ITAU" | "INFINITE" | "MERCADO_PAGO">("ITAU");
   const [depData, setDepData] = useState("");
   // Histórico de depósitos em espécie
-  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string };
+  type DepHist = { id: string; data: string; valor: number; banco: string; descricao: string; observacao?: string; usuario?: string; created_at?: string };
   const [depHistModal, setDepHistModal] = useState(false);
   const [depHist, setDepHist] = useState<DepHist[]>([]);
   const [depHistLoading, setDepHistLoading] = useState(false);
+  const [depHistFiltroMes, setDepHistFiltroMes] = useState("");
   const fetchDepHist = async () => {
     setDepHistLoading(true);
     try {
       const res = await fetch(`/api/gastos?is_dep_esp=1&limit=100`, { headers: { "x-admin-password": password } });
       const j = await res.json();
-      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string }) => g.is_dep_esp || g.categoria === "TRANSFERENCIA");
+      const rows = (j.data || j || []).filter((g: { is_dep_esp?: boolean; categoria?: string; tipo?: string }) =>
+        g.is_dep_esp || g.categoria === "TRANSFERENCIA" || g.tipo === "TRANSFERENCIA"
+      );
       setDepHist(rows);
     } catch { /* ignore */ }
     setDepHistLoading(false);
@@ -179,7 +184,7 @@ export default function SaldosPage() {
         },
         body: JSON.stringify({
           data: dataDep,
-          tipo: "SAIDA",
+          tipo: "TRANSFERENCIA",
           categoria: "TRANSFERENCIA",
           descricao: `Depósito espécie → ${bancoSel.label}`,
           banco: bancoSel.key,
@@ -235,17 +240,42 @@ export default function SaldosPage() {
         </button>
       </div>
 
-      {depHistModal && (
+      {depHistModal && (() => {
+        const mesesDisp = [...new Set(depHist.map(d => d.data?.slice(0, 7)).filter(Boolean))].sort().reverse();
+        const nomeMes = (ym: string) => {
+          const [y, m] = ym.split("-");
+          const nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+          return `${nomes[parseInt(m) - 1]} ${y}`;
+        };
+        const filtrados = depHistFiltroMes ? depHist.filter(d => d.data?.startsWith(depHistFiltroMes)) : depHist;
+        const totalFiltrado = filtrados.reduce((s, d) => s + Number(d.valor), 0);
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDepHistModal(false)}>
           <div className={`w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white"}`} onClick={(e) => e.stopPropagation()}>
-            <div className={`px-5 py-4 border-b flex items-center justify-between ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
-              <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
-              <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+            <div className={`px-5 py-4 border-b flex flex-col gap-2 ${dm ? "border-[#3A3A3C]" : "border-[#E5E5EA]"}`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Histórico de depósitos em espécie</h3>
+                <button onClick={() => setDepHistModal(false)} className="text-lg text-[#86868B] hover:text-red-500">✕</button>
+              </div>
+              {mesesDisp.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => setDepHistFiltroMes("")}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${!depHistFiltroMes ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                    Todos
+                  </button>
+                  {mesesDisp.map(m => (
+                    <button key={m} onClick={() => setDepHistFiltroMes(m)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${depHistFiltroMes === m ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                      {nomeMes(m)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="overflow-y-auto">
               {depHistLoading ? (
                 <p className="p-8 text-center text-sm text-[#86868B]">Carregando...</p>
-              ) : depHist.length === 0 ? (
+              ) : filtrados.length === 0 ? (
                 <p className="p-8 text-center text-sm text-[#86868B]">Nenhum depósito encontrado.</p>
               ) : (
                 <table className="w-full text-sm">
@@ -258,21 +288,29 @@ export default function SaldosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {depHist.map((d) => (
+                    {filtrados.map((d) => (
                       <tr key={d.id} className={`border-t ${dm ? "border-[#3A3A3C]" : "border-[#F2F2F7]"}`}>
-                        <td className="px-4 py-2 font-medium">{d.data}</td>
+                        <td className="px-4 py-2 font-medium">{d.data?.split("-").reverse().join("/")}</td>
                         <td className="px-4 py-2">{d.banco}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">R$ {fmt(Number(d.valor))}</td>
+                        <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">{fmt(Number(d.valor))}</td>
                         <td className="px-4 py-2 text-xs text-[#86868B]">{d.descricao}</td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
+                    <tr>
+                      <td colSpan={2} className="px-4 py-2 text-xs font-bold text-[#86868B]">Total ({filtrados.length} depósitos)</td>
+                      <td className="px-4 py-2 text-right font-bold text-[#2ECC71]">{fmt(totalFiltrado)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
@@ -328,8 +366,41 @@ export default function SaldosPage() {
 
       {/* Histórico */}
       <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
-        <div className={`px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
-          <h3 className={`font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Historico (ultimos 7 dias)</h3>
+        <div className={`px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2 ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+          <h3 className={`font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+            {histMes ? (() => {
+              const [y, m] = histMes.split("-").map(Number);
+              const nomes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+              return `Historico — ${nomes[m-1]} ${y}`;
+            })() : "Historico (ultimos 7 dias)"}
+          </h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => {
+              if (!histMes) {
+                const d = new Date();
+                setHistMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              } else {
+                const [y, m] = histMes.split("-").map(Number);
+                const prev = new Date(y, m - 2, 1);
+                setHistMes(`${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`);
+              }
+            }} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"} hover:opacity-80`}>
+              ← Anterior
+            </button>
+            {histMes && (
+              <button onClick={() => {
+                const [y, m] = histMes.split("-").map(Number);
+                const next = new Date(y, m, 1);
+                setHistMes(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+              }} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"} hover:opacity-80`}>
+                Proximo →
+              </button>
+            )}
+            <button onClick={() => setHistMes("")}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${!histMes ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+              7 dias
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

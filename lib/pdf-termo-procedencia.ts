@@ -1,48 +1,28 @@
-// lib/pdf-termo-procedencia.ts — Gerador de Termo de Procedencia em PDF (PDFKit)
+// lib/pdf-termo-procedencia.ts — Gerador do Termo de Declaração de Propriedade e Procedência
 import PDFDocument from "pdfkit";
 
-// ============================================
-// Types
-// ============================================
+export interface AparelhoTermo {
+  modelo: string;
+  capacidade?: string;
+  cor?: string;
+  imei?: string;
+  serial?: string;
+  condicao?: string; // ex: "Bateria 87%, Grade A, Com Caixa"
+}
 
 export interface TermoProcedenciaData {
   clienteNome: string;
-  clienteCPF?: string;
-  clienteTelefone?: string;
-  produtoModelo: string;
-  produtoStorage?: string;
-  produtoCor?: string;
-  serialNo: string;
-  imei: string;
-  bateria?: string;
-  grade?: string;
-  valorAvaliado?: number;
-  data: string; // DD/MM/AAAA
+  clienteCPF: string;
+  aparelhos: AparelhoTermo[];
+  cidade?: string; // default "Rio de Janeiro"
+  data?: string;   // DD/MM/AAAA
 }
-
-// ============================================
-// Colors
-// ============================================
-
-const C = {
-  headerBg: "#1A1A2E",
-  headerText: "#FFFFFF",
-  accent: "#E8740E",
-  text: "#333333",
-  textLight: "#666666",
-  border: "#D2D2D7",
-  sectionBg: "#F5F5F7",
-};
-
-// ============================================
-// PDF Generation
-// ============================================
 
 export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
-      margins: { top: 40, bottom: 40, left: 50, right: 50 },
+      margins: { top: 60, bottom: 60, left: 60, right: 60 },
     });
 
     const chunks: Uint8Array[] = [];
@@ -51,166 +31,141 @@ export async function gerarTermoProcedenciaPDF(dados: TermoProcedenciaData): Pro
     doc.on("error", reject);
 
     const pageW = doc.page.width;
-    const contentW = pageW - 100;
-    let y = 40;
+    const contentW = pageW - 120; // 60px margin each side
+    const leftMargin = 60;
 
-    // ==========================================
-    // HEADER
-    // ==========================================
-    doc.rect(0, 0, pageW, 80).fill(C.headerBg);
+    // ── HEADER ──────────────────────────────────────────────
+    // Logo text (centralizado, bold)
+    doc.fontSize(11).font("Helvetica-Bold").fillColor("#1A1A2E");
+    doc.text("TERMO DE DECLARAÇÃO DE PROPRIEDADE E PROCEDÊNCIA DE APARELHO", leftMargin, 60, {
+      width: contentW,
+      align: "center",
+    });
 
-    doc.fontSize(22).font("Helvetica-Bold").fillColor(C.headerText);
-    doc.text("TIGRAO IMPORTS", 50, 18, { width: contentW, align: "center" });
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#1A1A2E");
+    doc.text("TIGRÃO IMPORTS LTDA – CNPJ: 50.139.554/0001-42", leftMargin, doc.y + 8, {
+      width: contentW,
+      align: "center",
+    });
 
-    doc.fontSize(12).font("Helvetica").fillColor(C.accent);
-    doc.text("TERMO DE PROCEDENCIA", 50, 46, { width: contentW, align: "center" });
+    let y = doc.y + 30;
 
-    y = 95;
+    // ── TEXTO JURÍDICO ──────────────────────────────────────
+    const fontSize = 11;
+    const lineGap = 6;
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
 
-    // Data
-    doc.fontSize(9).font("Helvetica").fillColor(C.textLight);
-    doc.text(`Data: ${dados.data}`, 50, y, { width: contentW, align: "right" });
-    y += 20;
+    // Parágrafo 1: Declaração
+    const nome = dados.clienteNome || "___________________________";
+    const cpf = dados.clienteCPF || "_______________";
 
-    // ==========================================
-    // SECTION 1: Dados do Cliente
-    // ==========================================
-    y = drawSectionHeader(doc, "1. DADOS DO CLIENTE", y, contentW);
-    y = drawField(doc, "Nome", dados.clienteNome, y, contentW);
-    if (dados.clienteCPF) y = drawField(doc, "CPF", dados.clienteCPF, y, contentW);
-    if (dados.clienteTelefone) y = drawField(doc, "Telefone", dados.clienteTelefone, y, contentW);
-    y += 10;
-
-    // ==========================================
-    // SECTION 2: Dados do Aparelho
-    // ==========================================
-    y = drawSectionHeader(doc, "2. DADOS DO APARELHO", y, contentW);
-    y = drawField(doc, "Modelo", dados.produtoModelo, y, contentW);
-    if (dados.produtoStorage) y = drawField(doc, "Armazenamento", dados.produtoStorage, y, contentW);
-    if (dados.produtoCor) y = drawField(doc, "Cor", dados.produtoCor, y, contentW);
-    y = drawField(doc, "Numero de Serie", dados.serialNo, y, contentW);
-    y = drawField(doc, "IMEI", dados.imei, y, contentW);
-    if (dados.bateria) y = drawField(doc, "Bateria", dados.bateria, y, contentW);
-    if (dados.grade) y = drawField(doc, "Grade", dados.grade, y, contentW);
-    if (dados.valorAvaliado) y = drawField(doc, "Valor Avaliado", `R$ ${dados.valorAvaliado.toLocaleString("pt-BR")}`, y, contentW);
-    y += 10;
-
-    // ==========================================
-    // SECTION 3: Declaracao de Procedencia
-    // ==========================================
-    y = drawSectionHeader(doc, "3. DECLARACAO DE PROCEDENCIA", y, contentW);
-
-    const declaracao = [
-      `Eu, ${dados.clienteNome}${dados.clienteCPF ? `, portador(a) do CPF ${dados.clienteCPF}` : ""}, declaro para os devidos fins que:`,
-      "",
-      "1. Sou o(a) legitimo(a) proprietario(a) do aparelho acima descrito.",
-      "",
-      "2. O aparelho foi adquirido de forma licita e nao possui qualquer restricao judicial, policial ou administrativa.",
-      "",
-      "3. O aparelho nao possui bloqueio de operadora, bloqueio por IMEI, ou quaisquer pendencias que impossibilitem seu uso ou comercializacao.",
-      "",
-      "4. Autorizo a empresa TigraoImports a comercializar o referido aparelho apos a conclusao da transacao de trade-in.",
-      "",
-      "5. Declaro estar ciente de que qualquer informacao falsa prestada neste termo podera acarretar responsabilidade civil e criminal, nos termos da legislacao vigente.",
-    ];
-
-    doc.fontSize(9).font("Helvetica").fillColor(C.text);
-    for (const linha of declaracao) {
-      if (!linha) { y += 4; continue; }
-      const h = doc.heightOfString(linha, { width: contentW - 10 });
-      y = checkPageBreak(doc, y, h + 6);
-      doc.text(linha, 55, y, { width: contentW - 10 });
-      y += h + 2;
-    }
-
-    y += 20;
-
-    // ==========================================
-    // SECTION 4: Assinaturas
-    // ==========================================
-    y = checkPageBreak(doc, y, 120);
-    y = drawSectionHeader(doc, "4. ASSINATURAS", y, contentW);
-    y += 15;
-
-    const sigWidth = (contentW - 40) / 2;
-
-    // Cliente signature line
-    doc.moveTo(50, y + 40).lineTo(50 + sigWidth, y + 40).strokeColor(C.text).lineWidth(0.8).stroke();
-    doc.fontSize(9).font("Helvetica").fillColor(C.text);
-    doc.text("Cliente", 50, y + 45, { width: sigWidth, align: "center" });
-    doc.fontSize(8).fillColor(C.textLight);
-    doc.text(dados.clienteNome, 50, y + 57, { width: sigWidth, align: "center" });
-    if (dados.clienteCPF) {
-      doc.text(`CPF: ${dados.clienteCPF}`, 50, y + 68, { width: sigWidth, align: "center" });
-    }
-
-    // TigraoImports signature line
-    const sigX2 = 50 + sigWidth + 40;
-    doc.moveTo(sigX2, y + 40).lineTo(sigX2 + sigWidth, y + 40).strokeColor(C.text).lineWidth(0.8).stroke();
-    doc.fontSize(9).font("Helvetica").fillColor(C.text);
-    doc.text("TigraoImports", sigX2, y + 45, { width: sigWidth, align: "center" });
-
-    y += 85;
-
-    // ==========================================
-    // FOOTER
-    // ==========================================
-    const now = new Date();
-    const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
-
-    doc.fontSize(8).font("Helvetica").fillColor(C.textLight);
     doc.text(
-      `${dados.data} as ${hora} — TigraoImports — Barra da Tijuca, RJ`,
-      50,
-      doc.page.height - 40,
-      { width: contentW, align: "center" }
+      `        Conforme assegura o artigo 82 da lei nº10.406 de 2002, que versa sobre bens imóveis, eu, ${nome}, CPF nº ${cpf}, detentor do(s) aparelho(s) abaixo descrito(s):`,
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
     );
+
+    y = doc.y + 15;
+
+    // ── APARELHOS ───────────────────────────────────────────
+    for (let i = 0; i < dados.aparelhos.length; i++) {
+      const ap = dados.aparelhos[i];
+      const num = dados.aparelhos.length > 1 ? `Aparelho ${i + 1}: ` : "";
+
+      // Box com borda
+      const boxY = y;
+      doc.save();
+      doc.roundedRect(leftMargin, boxY, contentW, 0, 4); // placeholder, will resize
+
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#1A1A2E");
+      doc.text(`${num}${ap.modelo || "—"}`, leftMargin + 12, y + 8, { width: contentW - 24 });
+      y = doc.y + 4;
+
+      doc.fontSize(9.5).font("Helvetica").fillColor("#555555");
+      const detalhes: string[] = [];
+      if (ap.capacidade) detalhes.push(`Capacidade: ${ap.capacidade}`);
+      if (ap.cor) detalhes.push(`Cor: ${ap.cor}`);
+      if (ap.imei) detalhes.push(`IMEI: ${ap.imei}`);
+      if (ap.serial) detalhes.push(`Nº de Série: ${ap.serial}`);
+      if (ap.condicao) detalhes.push(`Condições: ${ap.condicao}`);
+
+      if (detalhes.length > 0) {
+        doc.text(detalhes.join("   |   "), leftMargin + 12, y, { width: contentW - 24 });
+        y = doc.y + 4;
+      }
+
+      const boxH = y - boxY + 8;
+      doc.restore();
+      doc.lineWidth(0.5).strokeColor("#D2D2D7").roundedRect(leftMargin, boxY, contentW, boxH, 4).stroke();
+      y = boxY + boxH + 10;
+    }
+
+    y += 5;
+
+    // ── DECLARAÇÃO ──────────────────────────────────────────
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
+    doc.text(
+      "declaro, ser o proprietário e detentor da posse legítima e pacífica do(s) aparelho(s) ora mencionado(s), e afirmo que não haver qualquer embaraço civil ou criminal.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 15;
+
+    // Parágrafo 2: Anuência
+    doc.text(
+      "        Cumpre ressaltar que a empresa Tigrão Imports LTDA, possui minha anuência para verificar o IMEI em bases públicas e privadas, consultar status de bloqueio, perda, roubo ou restrições, e compartilhar este termo com autoridades competentes, se necessário.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 15;
+
+    // Parágrafo 3: Isenção
+    doc.text(
+      "        Isento de Responsabilidade a Tigrão Imports LTDA, e reconheço que a empresa atua de boa-fé e não poderá ser responsabilizada por irregularidades anteriores à entrega do aparelho, sendo minha inteira responsabilidade qualquer consequência legal, e autorizo o trânsito do aparelho em território nacional ou fora dele.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 15;
+
+    // Parágrafo 4: Penalidades
+    doc.text(
+      "        Atesto a veracidade das informações prestadas e estou ciente das penalidades previstas nos arts. 297 a 299 e art. 180 do Código Penal.",
+      leftMargin, y,
+      { width: contentW, lineGap, align: "justify" }
+    );
+    y = doc.y + 30;
+
+    // ── DATA E CIDADE ───────────────────────────────────────
+    const cidade = dados.cidade || "Rio de Janeiro";
+    const dataStr = dados.data || (() => {
+      const d = new Date();
+      const dia = d.getDate();
+      const meses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+      return `${dia} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
+    })();
+
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
+    doc.text(`${cidade}, ${dataStr}.`, leftMargin, y, { width: contentW });
+    y = doc.y + 50;
+
+    // ── ASSINATURAS ─────────────────────────────────────────
+    const sigW = contentW * 0.45;
+    const sigX1 = leftMargin + (contentW - sigW) / 2;
+
+    // Declarante
+    doc.lineWidth(0.5).strokeColor("#333333")
+      .moveTo(sigX1, y).lineTo(sigX1 + sigW, y).stroke();
+    doc.fontSize(9).font("Helvetica").fillColor("#555555");
+    doc.text("Assinatura do Declarante", sigX1, y + 5, { width: sigW, align: "center" });
+
+    y = doc.y + 40;
+
+    // Representante
+    doc.lineWidth(0.5).strokeColor("#333333")
+      .moveTo(sigX1, y).lineTo(sigX1 + sigW, y).stroke();
+    doc.fontSize(9).font("Helvetica").fillColor("#555555");
+    doc.text("Assinatura do Representante da Tigrão Imports LTDA", sigX1, y + 5, { width: sigW, align: "center" });
 
     doc.end();
   });
-}
-
-// ============================================
-// Drawing Helpers
-// ============================================
-
-function drawSectionHeader(
-  doc: PDFKit.PDFDocument,
-  title: string,
-  y: number,
-  contentW: number
-): number {
-  doc.fontSize(11).font("Helvetica-Bold").fillColor(C.accent);
-  doc.text(title, 50, y, { width: contentW });
-  y += 16;
-  doc.moveTo(50, y).lineTo(50 + contentW, y).strokeColor(C.accent).lineWidth(1).stroke();
-  y += 8;
-  return y;
-}
-
-function drawField(
-  doc: PDFKit.PDFDocument,
-  label: string,
-  value: string,
-  y: number,
-  contentW: number,
-  valueColor?: string
-): number {
-  doc.fontSize(9).font("Helvetica-Bold").fillColor(C.text);
-  doc.text(`${label}:`, 50, y, { width: 130 });
-  doc.fontSize(9).font("Helvetica").fillColor(valueColor || C.textLight);
-  doc.text(value, 180, y, { width: contentW - 130 });
-  return y + 16;
-}
-
-function checkPageBreak(
-  doc: PDFKit.PDFDocument,
-  y: number,
-  neededHeight: number
-): number {
-  if (y + neededHeight > doc.page.height - 60) {
-    doc.addPage();
-    return 40;
-  }
-  return y;
 }

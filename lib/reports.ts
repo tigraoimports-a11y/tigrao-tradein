@@ -27,11 +27,11 @@ export async function gerarParcial(
   supabase: SupabaseClient,
   dataISO: string
 ): Promise<DashboardParcial> {
-  // Incluir vendas do dia (por data ou data_agendada)
+  // Incluir vendas do dia (por data ou data_programada)
   const { data: vendas } = await supabase
     .from("vendas")
     .select("*")
-    .or(`and(data_agendada.is.null,data.eq.${dataISO}),data_agendada.eq.${dataISO}`)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .order("created_at", { ascending: false });
 
   const rows = (vendas ?? []) as Venda[];
@@ -114,7 +114,7 @@ export async function gerarNoite(
   const { data: vendasHoje } = await supabase
     .from("vendas")
     .select("*")
-    .or(`and(data_agendada.is.null,data.eq.${dataISO}),data_agendada.eq.${dataISO}`)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+0")
     .neq("status_pagamento", "CANCELADO");
 
@@ -128,7 +128,7 @@ export async function gerarNoite(
   const { data: vendasD1Hoje } = await supabase
     .from("vendas")
     .select("*")
-    .or(`and(data_agendada.is.null,data.eq.${dataISO}),data_agendada.eq.${dataISO}`)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+1")
     .neq("status_pagamento", "CANCELADO");
 
@@ -223,7 +223,7 @@ export async function gerarNoite(
   const { data: todasVendasHoje } = await supabase
     .from("vendas")
     .select("entrada_especie")
-    .or(`and(data_agendada.is.null,data.eq.${dataISO}),data_agendada.eq.${dataISO}`)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .neq("status_pagamento", "CANCELADO");
   const entradaEspecieHoje = (todasVendasHoje ?? []).reduce((s, v) => s + Number(v.entrada_especie || 0), 0);
 
@@ -253,7 +253,7 @@ export async function gerarNoite(
   const { data: todasVendas } = await supabase
     .from("vendas")
     .select("preco_vendido, lucro, custo, origem, tipo, margem_pct, is_brinde")
-    .or(`and(data_agendada.is.null,data.eq.${dataISO}),data_agendada.eq.${dataISO}`)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .neq("status_pagamento", "CANCELADO");
 
   const allRaw = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number; is_brinde?: boolean }[];

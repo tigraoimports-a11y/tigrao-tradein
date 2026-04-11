@@ -200,6 +200,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   // Hooks devem ser chamados ANTES de qualquer return condicional
   const { isOnline } = useOnlineStatus();
 
+  const apiHeadersFn = useCallback((extra?: Record<string, string>) => ({
+    "x-admin-password": password,
+    "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
+    "x-admin-role": user?.role || "admin",
+    "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
+    ...extra,
+  }), [password, user?.nome, user?.role, user?.permissoes]);
+
   if (!ready) return null;
 
   // Login screen
@@ -267,13 +275,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       toggleDark,
       sidebarCollapsed,
       setSidebarCollapsed,
-      apiHeaders: (extra?: Record<string, string>) => ({
-        "x-admin-password": password,
-        "x-admin-user": encodeURIComponent(user?.nome || "sistema"),
-        "x-admin-role": user?.role || "admin",
-        "x-admin-permissoes": JSON.stringify(user?.permissoes ?? []),
-        ...extra,
-      }),
+      apiHeaders: apiHeadersFn,
     }}>
       <div
         className={`min-h-screen overflow-x-hidden transition-colors duration-300 admin-themed ${adminTheme} ${darkMode ? "admin-dark" : ""}`}

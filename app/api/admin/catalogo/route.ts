@@ -19,13 +19,55 @@ export async function GET(req: NextRequest) {
     const allConfigs = req.nextUrl.searchParams.get("all_configs");
 
     // Return configs for a specific model
+    // Return configs for a specific model, merging with category-level
+    // fallback for any spec types that have no model-specific configs.
     if (modeloId) {
-      const { data, error } = await supabase
+      const { data: modelConfigs, error } = await supabase
         .from("catalogo_modelo_configs")
         .select("*")
         .eq("modelo_id", modeloId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ configs: data ?? [] });
+
+      // Find which spec types already have model-specific configs
+      const configuredTypes = new Set((modelConfigs || []).map((c: { tipo_chave: string }) => c.tipo_chave));
+
+      // Find the model's categoria_key to get category-level fallbacks
+      const { data: modelo } = await supabase
+        .from("catalogo_modelos")
+        .select("categoria_key")
+        .eq("id", modeloId)
+        .maybeSingle();
+
+      let fallbackConfigs: { tipo_chave: string; valor: string }[] = [];
+
+      if (modelo?.categoria_key) {
+        // Get which spec types this category uses
+        const { data: catSpecs } = await supabase
+          .from("catalogo_categoria_specs")
+          .select("tipo_chave")
+          .eq("categoria_key", modelo.categoria_key);
+
+        if (catSpecs && catSpecs.length > 0) {
+          // Find spec types that are NOT configured at model level
+          const missingTypes = catSpecs
+            .map(s => s.tipo_chave)
+            .filter(t => !configuredTypes.has(t));
+
+          if (missingTypes.length > 0) {
+            // Get global values for the missing spec types
+            const { data: specValues } = await supabase
+              .from("catalogo_spec_valores")
+              .select("tipo_chave, valor")
+              .in("tipo_chave", missingTypes)
+              .order("ordem");
+            fallbackConfigs = specValues || [];
+          }
+        }
+      }
+
+      // Merge: model-specific configs + category-level fallback for missing types
+      const merged = [...(modelConfigs || []), ...fallbackConfigs];
+      return NextResponse.json({ configs: merged });
     }
 
     // Return ALL model configs (used by estoque page to know all valid colors per model)

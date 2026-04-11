@@ -11,13 +11,15 @@ import { useEffect, useRef } from "react";
  * inline causava clear+reset do timer constantemente (travando
  * polling e gerando lag percebido).
  */
-export function useAutoRefetch(refetch: () => void, enabled: boolean = true, intervalMs: number = 20000) {
+export function useAutoRefetch(refetch: () => void, enabled: boolean = true, intervalMs: number = 0) {
   const refetchRef = useRef(refetch);
   useEffect(() => { refetchRef.current = refetch; }, [refetch]);
 
   useEffect(() => {
     if (!enabled) return;
     const call = () => { try { refetchRef.current(); } catch { /* ignore */ } };
+    // Fetch inicial imediato na montagem
+    call();
     const interval = intervalMs > 0 ? setInterval(call, intervalMs) : null;
     // Refetch ao focar apenas se a aba esteve oculta (evita re-fetch em toda troca de foco de janela)
     let wasHidden = false;

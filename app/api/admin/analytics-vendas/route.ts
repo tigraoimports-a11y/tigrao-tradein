@@ -10,7 +10,7 @@ function auth(req: NextRequest) {
 interface Venda {
   id: number;
   data: string;
-  data_agendada?: string | null;
+  data_programada?: string | null;
   produto: string;
   preco_vendido: number;
   custo: number;
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   try {
     // Fetch all non-cancelled sales for the period
     // Supabase has a 1000-row default limit — paginate to get all rows
-    const selectFields = "id, data, data_agendada, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento, is_brinde";
+    const selectFields = "id, data, data_programada, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento, is_brinde";
     let allRows: Venda[] = [];
     let offset = 0;
     const PAGE_SIZE = 1000;
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
     const diaComparacao = Math.min(diaAtual, new Date(mesAnteriorDate.getFullYear(), mesAnteriorDate.getMonth() + 1, 0).getDate());
     const mesAnteriorFim = `${mesAnteriorStr}-${String(diaComparacao).padStart(2, "0")}`;
 
-    const de = (v: Venda) => (v as unknown as { data_agendada?: string | null }).data_agendada || v.data;
+    const de = (v: Venda) => (v as unknown as { data_programada?: string | null }).data_programada || v.data;
     const vendasMesAtual = rows.filter(v => de(v) >= mesAtualInicio && de(v) <= mesAtualFim);
     const vendasMesAnterior = rows.filter(v => de(v) >= mesAnteriorInicio && de(v) <= mesAnteriorFim);
 

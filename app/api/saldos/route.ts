@@ -48,12 +48,42 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: prev ?? null });
   }
 
-  // Últimos 7 dias
+  // Filtro por mês (ex: ?mes=2026-03) ou período (ex: ?from=2026-03-01&to=2026-03-31)
+  const mesParam = searchParams.get("mes");
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  const limitParam = parseInt(searchParams.get("limit") || "0") || 0;
+
+  if (mesParam && /^\d{4}-\d{2}$/.test(mesParam)) {
+    const [y, m] = mesParam.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const from = `${mesParam}-01`;
+    const to = `${mesParam}-${String(lastDay).padStart(2, "0")}`;
+    const { data, error } = await supabase
+      .from("saldos_bancarios")
+      .select("*")
+      .gte("data", from)
+      .lte("data", to)
+      .order("data", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  }
+
+  if (fromParam || toParam) {
+    let query = supabase.from("saldos_bancarios").select("*").order("data", { ascending: false });
+    if (fromParam) query = query.gte("data", fromParam);
+    if (toParam) query = query.lte("data", toParam);
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  }
+
+  // Default: últimos N dias (default 7, configurável via ?limit=30)
   const { data, error } = await supabase
     .from("saldos_bancarios")
     .select("*")
     .order("data", { ascending: false })
-    .limit(7);
+    .limit(limitParam > 0 ? Math.min(limitParam, 90) : 7);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });

@@ -153,6 +153,8 @@ export default function ClientesPage() {
     return n;
   });
   const [detailClient, setDetailClient] = useState<Cliente | null>(null);
+  const [detailVendas, setDetailVendas] = useState<VendaResumo[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ nome: "", cpf: "", email: "", bairro: "", cidade: "", uf: "", cep: "", endereco: "" });
   const [savingClient, setSavingClient] = useState(false);
@@ -166,7 +168,7 @@ export default function ClientesPage() {
 
   // Crédito de lojistas — usa a tabela `lojistas` nova (UUID auto)
   const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({}); // indexa por nome upper → saldo
-  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string };
+  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string; venda_produto?: string | null; venda_data?: string | null; venda_preco?: number | null };
   const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; lojista_id: string; saldo: number; log: CreditoLog[] }>(null);
   const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
   const [savingCredito, setSavingCredito] = useState(false);
@@ -855,7 +857,19 @@ export default function ClientesPage() {
               {!loading && sorted.map((c) => (
                 <React.Fragment key={c.nome}>
                   <tr
-                    onClick={() => setDetailClient(c)}
+                    onClick={async () => {
+                      setDetailClient(c);
+                      setDetailVendas([]);
+                      setLoadingVendas(true);
+                      try {
+                        const res = await fetch(`/api/admin/clientes?client_vendas=${encodeURIComponent(c.nome)}`, { headers: apiHeaders() });
+                        if (res.ok) {
+                          const json = await res.json();
+                          setDetailVendas(json.vendas || []);
+                        }
+                      } catch { /* ignore */ }
+                      setLoadingVendas(false);
+                    }}
                     className={`${rowCls} ${expandedId === c.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
                   >
                     <td className="px-4 py-3">
@@ -996,20 +1010,28 @@ export default function ClientesPage() {
                 <div className="max-h-[300px] overflow-y-auto space-y-1.5">
                   {creditoModal.log.length === 0 && <p className={`text-xs text-center ${mM} py-4`}>Sem movimentações</p>}
                   {creditoModal.log.map(l => (
-                    <div key={l.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-semibold ${mP}`}>
-                          <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
-                            {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
-                          </span>
-                          <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                    <div key={l.id} className={`px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold ${mP}`}>
+                            <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
+                              {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
+                            </span>
+                            <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                          </p>
+                        </div>
+                        <div className={`text-[10px] ${mM} text-right shrink-0`}>
+                          <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
+                          <p>{l.usuario}</p>
+                        </div>
+                      </div>
+                      {l.venda_produto && (
+                        <p className={`text-[10px] mt-1 ${mM}`}>
+                          📦 {l.venda_produto} — {fmt(Number(l.venda_preco || 0))}
                         </p>
-                        {l.motivo && <p className={`text-[10px] truncate ${mM}`}>{l.motivo}</p>}
-                      </div>
-                      <div className={`text-[10px] ${mM} text-right shrink-0`}>
-                        <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
-                        <p>{l.usuario}</p>
-                      </div>
+                      )}
+                      {l.motivo && !l.venda_produto && <p className={`text-[10px] mt-1 ${mM}`}>{l.motivo}</p>}
+                      {l.motivo && l.venda_produto && <p className={`text-[10px] ${mM}`}>{l.motivo}</p>}
                     </div>
                   ))}
                 </div>
@@ -1037,7 +1059,7 @@ export default function ClientesPage() {
 
         const saveEdit = async () => {
           setSavingClient(true);
-          for (const v of c.vendas) {
+          for (const v of detailVendas) {
             const updates: Record<string, string | null> = {};
             if (editForm.nome && editForm.nome !== c.nome) updates.cliente = editForm.nome.toUpperCase();
             if (editForm.cpf !== (c.cpf || "")) updates.cpf = editForm.cpf || null;
@@ -1139,7 +1161,7 @@ export default function ClientesPage() {
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
                 <p className={`text-xs font-bold ${mP} mb-3`}>Resumo Financeiro</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid ${c.is_lojista ? "grid-cols-4" : "grid-cols-3"} gap-3`}>
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Compras</p>
                     <p className="text-[14px] font-bold text-[#E8740E] mt-0.5">{c.total_compras}</p>
@@ -1148,6 +1170,18 @@ export default function ClientesPage() {
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Total Gasto</p>
                     <p className="text-[14px] font-bold text-green-600 mt-0.5">{fmt(c.total_gasto)}</p>
                   </div>
+                  {c.is_lojista && (() => {
+                    const saldo = saldosLojistas[lojistaKey(c)] || 0;
+                    return (
+                      <div className="cursor-pointer hover:opacity-80" onClick={(e) => { e.stopPropagation(); openCreditoModal(c); }}>
+                        <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Saldo Credito</p>
+                        <p className={`text-[14px] font-bold mt-0.5 ${saldo > 0 ? "text-blue-600" : mS}`}>
+                          {saldo > 0 ? fmt(saldo) : "R$ 0"}
+                        </p>
+                        <p className="text-[9px] text-blue-500 mt-0.5">Ver extrato →</p>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Cliente Desde</p>
                     <p className={`text-[13px] ${mP} mt-0.5`}>{fmtDate(c.cliente_desde)}</p>
@@ -1165,12 +1199,14 @@ export default function ClientesPage() {
               )}
 
               <div className={`mx-5 mt-3 p-4 rounded-xl border ${mSec}`}>
-                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({c.vendas.length})</p>
-                {c.vendas.length === 0 ? (
+                <p className={`text-xs font-bold ${mP} mb-3`}>Ultimas Operacoes ({loadingVendas ? "..." : detailVendas.length})</p>
+                {loadingVendas ? (
+                  <p className={`text-sm text-center py-4 ${mS}`}>Carregando...</p>
+                ) : detailVendas.length === 0 ? (
                   <p className={`text-sm text-center py-4 ${mS}`}>Nenhuma operacao encontrada</p>
                 ) : (
                   <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                    {c.vendas.map((v) => (
+                    {detailVendas.map((v) => (
                       <div key={v.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#1C1C1E] hover:bg-[#252525]" : "bg-white hover:bg-[#F5F5F7]"} transition-colors`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <span className={`shrink-0 ${mS}`}>{fmtDate(v.data)}</span>
