@@ -533,6 +533,26 @@ export default function VendasPage() {
 
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
+  // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
+  const autoTransicaoRef = useRef(false);
+  useEffect(() => {
+    if (!password || vendas.length === 0 || autoTransicaoRef.current) return;
+    const programadasVencidas = vendas.filter(
+      v => v.status_pagamento === "PROGRAMADA" && v.data_programada && v.data_programada <= hojeStr
+    );
+    if (programadasVencidas.length === 0) return;
+    autoTransicaoRef.current = true;
+    // Mover para AGUARDANDO automaticamente
+    const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
+    Promise.all(programadasVencidas.map(v =>
+      fetch("/api/vendas", { method: "PATCH", headers, body: JSON.stringify({ id: v.id, status_pagamento: "AGUARDANDO" }) })
+    )).then(() => {
+      const ids = new Set(programadasVencidas.map(v => v.id));
+      setVendas(prev => prev.map(v => ids.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendas.length, password]);
+
   // Fetch client history when client name changes (3+ chars, debounced)
   const fetchClienteHistorico = useCallback(async (nome: string) => {
     if (!nome || nome.length < 3 || !password) {
@@ -1189,6 +1209,12 @@ export default function VendasPage() {
 
     if (allProducts.length === 0) {
       setMsg("Preencha ao menos o produto da compra, da troca ou adicione ao carrinho");
+      return;
+    }
+
+    // Validação: forma de pagamento obrigatória (exceto vendas programadas e brindes)
+    if (!form.forma && !vendaProgramada && !form.is_brinde) {
+      setMsg("Selecione a FORMA DE PAGAMENTO antes de registrar");
       return;
     }
 
