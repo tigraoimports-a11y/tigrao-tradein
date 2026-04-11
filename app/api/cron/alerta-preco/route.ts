@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     const { data: sims, error: errSims } = await supabase
       .from("simulacoes")
-      .select("id, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, diferenca, status, alerta_preco_enviado")
+      .select("id, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, diferenca, status, alerta_preco_enviado, opt_out_whatsapp")
       .gte("created_at", dataLimite)
       .eq("status", "SAIR")
       .or("alerta_preco_enviado.is.null,alerta_preco_enviado.eq.false")
@@ -102,7 +102,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: errSims.message }, { status: 500 });
     }
 
-    if (!sims || sims.length === 0) {
+    // Filtrar opt-out no código (evita conflito de múltiplos .or() no Supabase)
+    const simsElegiveis = (sims || []).filter(s => !s.opt_out_whatsapp);
+
+    if (simsElegiveis.length === 0) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao elegivel" });
     }
 
@@ -126,7 +129,7 @@ export async function GET(req: NextRequest) {
     const erros: string[] = [];
     const QUEDA_MINIMA = 100; // so avisa se baixou pelo menos R$100
 
-    for (const s of sims) {
+    for (const s of simsElegiveis) {
       if (!s.whatsapp || !s.modelo_novo || !s.storage_novo || !s.preco_novo) continue;
 
       // Verificar se o cliente ja comprou (match por nome)

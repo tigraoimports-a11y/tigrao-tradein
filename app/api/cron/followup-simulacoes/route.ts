@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
     const { data: sims, error } = await supabase
       .from("simulacoes")
-      .select("id, created_at, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, avaliacao_usado, diferenca, status, contatado, follow_up_enviado, vendedor")
+      .select("id, created_at, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, avaliacao_usado, diferenca, status, contatado, follow_up_enviado, opt_out_whatsapp, vendedor")
       .gte("created_at", dataLimite)
       .order("created_at", { ascending: false });
 
@@ -88,9 +88,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao nos ultimos 3 dias" });
     }
 
-    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado
+    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado E sem opt-out
     const naoConvertidas = sims.filter(s =>
-      s.status === "SAIR" && !s.follow_up_enviado
+      s.status === "SAIR" && !s.follow_up_enviado && !s.opt_out_whatsapp
     );
 
     if (naoConvertidas.length === 0) {
