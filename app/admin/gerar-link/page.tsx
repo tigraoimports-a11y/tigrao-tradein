@@ -346,6 +346,7 @@ export default function GerarLinkPage() {
     entrega_id: string | null;
     observacao: string | null;
     arquivado: boolean;
+    pagamento_pago: string | null;
     created_at: string;
   };
   const [aba, setAba] = useState<"novo" | "historico">("novo");
@@ -444,6 +445,7 @@ export default function GerarLinkPage() {
         troca_valor2: viewDataLink.troca_valor2 != null ? String(viewDataLink.troca_valor2) : "",
         observacao: viewDataLink.observacao || "",
         desconto: viewDataLink.desconto != null ? String(viewDataLink.desconto) : "",
+        pagamento_pago: viewDataLink.pagamento_pago || "",
       });
       // Produtos extras como array separado
       const pe = viewDataLink.produtos_extras;
@@ -486,6 +488,7 @@ export default function GerarLinkPage() {
         observacao: editLink.observacao || null,
         desconto: Number(editLink.desconto) || 0,
         produtos_extras: editLinkExtras || null,
+        pagamento_pago: editLink.pagamento_pago || null,
       };
       const res = await fetch("/api/admin/link-compras", {
         method: "PATCH",
@@ -902,6 +905,7 @@ export default function GerarLinkPage() {
               troca_cor2: temSegundaTroca ? trocaCor2 || null : null,
               vendedor: vendedorNome || null,
               simulacao_id: simulacaoId,
+              pagamento_pago: pagamentoPago || null,
             }),
           });
           if (!resHist.ok) {
@@ -1126,6 +1130,18 @@ export default function GerarLinkPage() {
                           <FL label="Entrada (R$)" k="entrada" type="number" full />
                           <FL label="Vendedor" k="vendedor" full />
                           <FL label="Observação" k="observacao" full />
+                          {/* Status do pagamento */}
+                          <div className="col-span-2">
+                            <label className="block text-[10px] font-semibold text-[#86868B] uppercase tracking-wide mb-1">Pagamento efetuado?</label>
+                            <div className="flex gap-2">
+                              {([["", "Pendente"], ["link", "Pago via Link"], ["pix", "Pago via PIX"]] as const).map(([val, label]) => (
+                                <button key={val} type="button" onClick={() => setEditLink(prev => ({ ...prev, pagamento_pago: val }))}
+                                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${editLink.pagamento_pago === val ? (val ? "bg-green-600 text-white border-green-600" : "bg-yellow-500 text-white border-yellow-500") : "bg-white text-[#86868B] border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                         {/* Resumo do pagamento */}
                         {(() => {
@@ -1402,6 +1418,16 @@ export default function GerarLinkPage() {
                         </div>
                       );
                     })()}
+                    {/* Badge pagamento pago */}
+                    {l.pagamento_pago ? (
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                        Pago via {l.pagamento_pago === "link" ? "Link" : "PIX"}
+                      </span>
+                    ) : (
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700">
+                        Pagamento pendente
+                      </span>
+                    )}
                     {(l.cliente_nome || l.cliente_telefone) && (
                       <p className="text-xs text-[#86868B] mt-1">
                         👤 {l.cliente_nome || "—"}{l.cliente_telefone ? ` · ${l.cliente_telefone}` : ""}{l.cliente_cpf ? ` · ${l.cliente_cpf}` : ""}

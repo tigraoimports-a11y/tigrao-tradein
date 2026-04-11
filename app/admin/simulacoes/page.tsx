@@ -1299,6 +1299,8 @@ function SimuladorInterno({ password }: { password: string }) {
   const [usadoCat, setUsadoCat] = useState<UsadoCategoria>("iPhone");
   const [usadoModelo, setUsadoModelo] = useState("");
   const [usadoStorage, setUsadoStorage] = useState("");
+  const [valorBaseManual, setValorBaseManual] = useState<number | null>(null);
+  const [salvandoValorBase, setSalvandoValorBase] = useState(false);
   const [bateria, setBateria] = useState(100);
   const [marcasUso, setMarcasUso] = useState(false);
   const [arranhoes, setArranhoes] = useState(false);
@@ -1363,8 +1365,8 @@ function SimuladorInterno({ password }: { password: string }) {
   }, [usedValues, usadoModelo]);
 
   // Reset selections on category change
-  useEffect(() => { setUsadoModelo(""); setUsadoStorage(""); }, [usadoCat]);
-  useEffect(() => { setUsadoStorage(""); }, [usadoModelo]);
+  useEffect(() => { setUsadoModelo(""); setUsadoStorage(""); setValorBaseManual(null); }, [usadoCat]);
+  useEffect(() => { setUsadoStorage(""); setValorBaseManual(null); }, [usadoModelo]);
 
   // --- Derived: novo categories/models ---
   const novoCategorias = useMemo(() => {
@@ -1389,8 +1391,17 @@ function SimuladorInterno({ password }: { password: string }) {
     return found?.valorBase || 0;
   }, [usedValues, usadoModelo, usadoStorage]);
 
+  // Valor efetivo: usa manual se definido, senão o do catálogo
+  const effectiveBaseValue = useMemo(() => {
+    if (valorBaseManual !== null && valorBaseManual > 0) return valorBaseManual;
+    return baseValue;
+  }, [baseValue, valorBaseManual]);
+
+  // Flag: seminovo selecionado mas sem valor
+  const semValorBase = usadoModelo && usadoStorage && baseValue === 0;
+
   const tradeInValue = useMemo(() => {
-    if (!baseValue) return 0;
+    if (!effectiveBaseValue) return 0;
     if (defeito) return 0;
 
     const isMac = usadoCat === "MacBook";
@@ -1409,7 +1420,7 @@ function SimuladorInterno({ password }: { password: string }) {
         warrantyYear: garantiaApple ? garantiaAno : null,
         hasOriginalBox: caixaOriginal,
       };
-      return calculateMacBookTradeInValue(baseValue, cond);
+      return calculateMacBookTradeInValue(effectiveBaseValue, cond);
     }
 
     if (isIPad) {
@@ -1427,7 +1438,7 @@ function SimuladorInterno({ password }: { password: string }) {
         hasApplePencil: temPencil,
         hasWearMarks: undefined,
       };
-      return calculateIPadTradeInValue(baseValue, cond);
+      return calculateIPadTradeInValue(effectiveBaseValue, cond);
     }
 
     // iPhone / Apple Watch — use the same iPhone logic
@@ -1444,8 +1455,8 @@ function SimuladorInterno({ password }: { password: string }) {
       warrantyYear: garantiaApple ? garantiaAno : null,
       hasOriginalBox: caixaOriginal,
     };
-    return calculateTradeInValue(baseValue, cond, md);
-  }, [baseValue, usadoCat, usadoModelo, bateria, marcasUso, arranhoes, trincado, defeito, manutencao, garantiaApple, garantiaMes, garantiaAno, caixaOriginal, ciclosBateria, tecladoCondition, temCarregador, temPencil, modelDiscounts]);
+    return calculateTradeInValue(effectiveBaseValue, cond, md);
+  }, [effectiveBaseValue, usadoCat, usadoModelo, bateria, marcasUso, arranhoes, trincado, defeito, manutencao, garantiaApple, garantiaMes, garantiaAno, caixaOriginal, ciclosBateria, tecladoCondition, temCarregador, temPencil, modelDiscounts]);
 
   // --- New device price ---
   const newPrice = useMemo(() => {
@@ -1606,14 +1617,78 @@ function SimuladorInterno({ password }: { password: string }) {
             )}
           </div>
 
+          {/* Seminovo sem valor base — aviso + campo manual */}
+          {semValorBase && !valorBaseManual && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 space-y-2">
+              <p className="text-sm font-semibold text-yellow-800">Seminovo sem valor base cadastrado</p>
+              <p className="text-xs text-yellow-700">Defina o valor manualmente para continuar a simulacao:</p>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-yellow-700 font-medium">Valor base: R$</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-yellow-400 text-sm focus:border-[#E8740E] focus:outline-none"
+                  onKeyDown={(e) => { if (e.key === "Enter") { const v = parseFloat((e.target as HTMLInputElement).value); if (v > 0) setValorBaseManual(v); } }}
+                />
+                <button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>('input[placeholder="0"]');
+                    const v = parseFloat(input?.value || "0");
+                    if (v > 0) setValorBaseManual(v);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Valor avaliado */}
-          {baseValue > 0 && (
-            <div className="bg-[#F5F5F7] rounded-lg p-3 flex items-center justify-between">
-              <span className="text-sm text-[#86868B]">Valor base: <b className="text-[#1D1D1F]">{formatBRL(baseValue)}</b></span>
+          {effectiveBaseValue > 0 && (
+            <div className={`rounded-lg p-3 flex items-center justify-between ${valorBaseManual ? "bg-blue-50 border border-blue-200" : "bg-[#F5F5F7]"}`}>
+              <span className="text-sm text-[#86868B]">
+                Valor base{valorBaseManual ? " (manual)" : ""}: <b className="text-[#1D1D1F]">{formatBRL(effectiveBaseValue)}</b>
+                {valorBaseManual && (
+                  <button onClick={() => setValorBaseManual(null)} className="ml-2 text-[10px] text-red-400 hover:text-red-600">limpar</button>
+                )}
+              </span>
               <span className="text-sm font-bold" style={{ color: tradeInValue > 0 ? "#2ECC71" : "#E74C3C" }}>
                 Avaliado: {formatBRL(tradeInValue)}
               </span>
             </div>
+          )}
+
+          {/* Salvar valor base no catálogo */}
+          {valorBaseManual && valorBaseManual > 0 && usadoModelo && usadoStorage && (
+            <button
+              disabled={salvandoValorBase}
+              onClick={async () => {
+                setSalvandoValorBase(true);
+                try {
+                  const res = await fetch("/api/admin/usados", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "x-admin-password": password },
+                    body: JSON.stringify({ action: "upsert_valor", modelo: usadoModelo, armazenamento: usadoStorage, valor_base: valorBaseManual }),
+                  });
+                  if (res.ok) {
+                    // Atualizar lista local
+                    setUsedValues(prev => {
+                      const idx = prev.findIndex(v => v.modelo === usadoModelo && v.armazenamento === usadoStorage);
+                      if (idx >= 0) { const updated = [...prev]; updated[idx] = { ...updated[idx], valorBase: valorBaseManual }; return updated; }
+                      return [...prev, { modelo: usadoModelo, armazenamento: usadoStorage, valorBase: valorBaseManual }];
+                    });
+                    alert("Valor base salvo no catalogo de usados!");
+                  } else {
+                    alert("Erro ao salvar valor base");
+                  }
+                } catch { alert("Erro ao salvar"); }
+                setSalvandoValorBase(false);
+              }}
+              className="w-full py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {salvandoValorBase ? "Salvando..." : "Salvar como valor base no catalogo de usados"}
+            </button>
           )}
         </div>
 
