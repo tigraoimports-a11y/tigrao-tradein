@@ -26,8 +26,8 @@ function normalizarNome(nome: string): string {
     .replace(/\s+/g, " ");
 }
 
-// Envia mensagem via Z-API (instancia de follow-up)
-async function enviarWhatsApp(phone: string, message: string): Promise<boolean> {
+// Envia mensagem com botões via Z-API (instancia de follow-up)
+async function enviarWhatsAppComBotoes(phone: string, message: string, simId: string): Promise<boolean> {
   const instanceId = process.env.ZAPI_FOLLOWUP_INSTANCE_ID;
   const token = process.env.ZAPI_FOLLOWUP_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN ?? "";
@@ -37,7 +37,7 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
     return false;
   }
 
-  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+  const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-option-list`;
 
   try {
     let fone = phone.replace(/\D/g, "");
@@ -49,10 +49,21 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
         "Content-Type": "application/json",
         "Client-Token": clientToken,
       },
-      body: JSON.stringify({ phone: fone, message }),
+      body: JSON.stringify({
+        phone: fone,
+        message,
+        optionList: {
+          title: "Escolha uma opção",
+          buttonLabel: "Responder",
+          options: [
+            { id: `SIM_${simId}`, title: "✅ Tenho interesse", description: "Quero continuar a negociação" },
+            { id: `NAO_${simId}`, title: "❌ Sem interesse", description: "Não quero receber mais mensagens" },
+          ],
+        },
+      }),
     });
     const json = await res.json();
-    console.log(`[Followup] WhatsApp enviado para ${fone}:`, JSON.stringify(json));
+    console.log(`[Followup] WhatsApp com botões enviado para ${fone}:`, JSON.stringify(json));
     return res.ok;
   } catch (err) {
     console.error(`[Followup] Erro ao enviar WhatsApp para ${phone}:`, err);
@@ -75,7 +86,7 @@ export async function GET(req: NextRequest) {
 
     const { data: sims, error } = await supabase
       .from("simulacoes")
-      .select("id, created_at, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, avaliacao_usado, diferenca, status, contatado, follow_up_enviado, vendedor")
+      .select("id, created_at, nome, whatsapp, modelo_novo, storage_novo, preco_novo, modelo_usado, storage_usado, avaliacao_usado, diferenca, status, contatado, follow_up_enviado, opt_out_whatsapp, vendedor")
       .gte("created_at", dataLimite)
       .order("created_at", { ascending: false });
 
@@ -88,9 +99,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, message: "Nenhuma simulacao nos ultimos 3 dias" });
     }
 
-    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado
+    // Filtrar: status SAIR (nao fechou) E sem follow-up enviado E sem opt-out
     const naoConvertidas = sims.filter(s =>
-      s.status === "SAIR" && !s.follow_up_enviado
+      s.status === "SAIR" && !s.follow_up_enviado && !s.opt_out_whatsapp
     );
 
     if (naoConvertidas.length === 0) {
@@ -138,7 +149,7 @@ export async function GET(req: NextRequest) {
 
       const msg = `Oi ${nome}! Tudo bem? 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}.\n\nFicou alguma dúvida? Posso te ajudar a fechar essa troca ainda hoje! Estou à disposição 🐯`;
 
-      const enviou = await enviarWhatsApp(s.whatsapp, msg);
+      const enviou = await enviarWhatsAppComBotoes(s.whatsapp, msg, s.id);
 
       if (enviou) {
         whatsappEnviados++;
