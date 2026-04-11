@@ -36,10 +36,26 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
   }
 }
 
+// Log para debug — salva todo payload recebido no Supabase
+async function logWebhook(payload: Record<string, unknown>) {
+  try {
+    await supabase.from("webhook_logs").insert({
+      source: "zapi-followup",
+      payload: JSON.stringify(payload),
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("[ZAPI Webhook] Erro ao salvar log:", e);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     console.log("[ZAPI Webhook] Recebido:", JSON.stringify(body));
+
+    // Salvar log de TUDO que chega
+    await logWebhook(body);
 
     // Z-API envia o ID da opção selecionada em diferentes formatos
     const buttonId = body.listResponseMessage?.selectedRowId
