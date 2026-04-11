@@ -163,8 +163,8 @@ export async function POST(req: NextRequest) {
         `${formaPagamento ? `\n${formaPagamento}` : ""}\n\n` +
         `As informações estão corretas? Em breve um dos nossos consultores vai te chamar pra finalizar! 🐯`;
 
-      // Aguardar 30 segundos antes de enviar o resumo
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      // Enviar resumo após 5 segundos (limite do Vercel serverless)
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       await enviarWhatsApp(sim.whatsapp || phone, resumo);
 
