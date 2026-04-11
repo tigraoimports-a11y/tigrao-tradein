@@ -3962,8 +3962,9 @@ export default function EstoquePage() {
                             const catEmoji: Record<string, string> = { IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
                             const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios" };
                             const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+                            const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
                             const groups: Record<string, string[]> = {};
-                            for (const p of aCaminho) {
+                            for (const p of fonte) {
                               const cat = p.categoria || "OUTROS";
                               if (!groups[cat]) groups[cat] = [];
                               const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
@@ -3989,11 +3990,11 @@ export default function EstoquePage() {
                               lines.push("");
                             }
                             navigator.clipboard.writeText(lines.join("\n").trim());
-                            setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                            setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
                           }}
                           className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                         >
-                          📋 Copiar Texto Atacado
+                          📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
                         </button>
                       </div>
                     </div>
@@ -4440,8 +4441,9 @@ export default function EstoquePage() {
                     const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
 
                     // Agrupa por categoria → lista de "modelo – cor"
+                    const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
                     const groups: Record<string, string[]> = {};
-                    for (const p of aCaminho) {
+                    for (const p of fonte) {
                       const cat = p.categoria || "OUTROS";
                       if (!groups[cat]) groups[cat] = [];
                       // Extrai nome limpo + cor
@@ -4472,11 +4474,11 @@ export default function EstoquePage() {
                     }
 
                     navigator.clipboard.writeText(lines.join("\n").trim());
-                    setMsg("📋 Texto copiado! Cole no WhatsApp.");
+                    setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
                   }}
                   className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                 >
-                  📋 Copiar Texto Atacado
+                  📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
                 </button>
                 </div>
               </div>
