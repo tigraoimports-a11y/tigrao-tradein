@@ -1053,14 +1053,20 @@ function CompraForm() {
           {/* Horário — dinâmico conforme tipo + dia da semana */}
           <div>
             <label className={labelCls}>Horario *</label>
-            <div className="grid grid-cols-4 gap-2">
-              {horariosDisponiveis.map(h => (
-                <button key={h} type="button" onClick={() => setHorario(h)}
-                  className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${horario === h ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
-                  {h}
-                </button>
-              ))}
-            </div>
+            {horarioParam === "LOGISTICA" ? (
+              <div className="py-3 px-4 rounded-lg bg-[#FFF5EB] border border-[#E8740E]/30 text-sm text-[#86868B]">
+                🚚 O horário da sua entrega será definido pela nossa equipe de logística. Entraremos em contato para confirmar.
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {horariosDisponiveis.map(h => (
+                  <button key={h} type="button" onClick={() => setHorario(h)}
+                    className={`py-2.5 rounded-lg text-sm font-medium border transition-colors ${horario === h ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
+                    {h}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {local === "Entrega" && (
