@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
       const modeloNovoFull = s.modelo_novo ? `${s.modelo_novo}${s.storage_novo ? ` ${s.storage_novo}` : ""}` : "o produto";
 
       const nomeVendedor = s.vendedor || "Nicolas";
-      const msg = `Oi ${nome}! Tudo bem? Me chamo ${nomeVendedor}. 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}. Mas não fechou seu pedido conosco 🙁\n\nQueria saber se ficou com alguma dúvida? Talvez eu consiga te ajudar a fechar seu pedido hoje 🤩`;
+      const msg = `Oi ${nome}! Tudo bem? Me chamo ${nomeVendedor}. 😊\n\nVi que você fez uma simulação de upgrade aqui na TIGRÃO IMPORTS, dando seu ${modeloUsado} na compra do ${modeloNovoFull}. Mas não fechou seu pedido conosco 🙁\n\nQueria saber se ficou com alguma dúvida? Talvez eu consiga te ajudar a fechar seu pedido hoje 🤩\n\n_Digite *1* se tiver interesse ou *2* para não receber mais mensagens._`;
 
       const enviou = await enviarWhatsApp(s.whatsapp, msg);
 
