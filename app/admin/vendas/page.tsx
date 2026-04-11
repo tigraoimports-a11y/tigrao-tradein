@@ -98,6 +98,7 @@ export default function VendasPage() {
   const [filtroDia, setFiltroDia] = useState("");
   const [filtroCpf, setFiltroCpf] = useState("");
   const [ordenar, setOrdenar] = useState<"recente" | "antigo" | "origem" | "cliente">("recente");
+  const [filtroBrinde, setFiltroBrinde] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [finalizandoLote, setFinalizandoLote] = useState(false);
 
@@ -135,6 +136,8 @@ export default function VendasPage() {
     frete_valor: "", frete_recebido: false as boolean,
     // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
     usar_credito_loja: "",
+    // Brinde / Cortesia
+    is_brinde: false as boolean,
   });
   const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
   // Restaurar rascunho do localStorage ao montar
@@ -919,8 +922,10 @@ export default function VendasPage() {
     if (gForma === "ESPECIE") pBancoFinal = "ESPECIE";
     if (!gForma) pBancoFinal = "ITAU";
 
+    const isBrinde = !!form.is_brinde;
     const payload: Record<string, unknown> = {
       data: form.data,
+      is_brinde: isBrinde,
       cliente: form.cliente,
       cpf: form.cpf || null,
       cnpj: form.cnpj || null,
@@ -1393,6 +1398,7 @@ export default function VendasPage() {
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
               frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
@@ -1434,6 +1440,7 @@ export default function VendasPage() {
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
               frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
             localStorage.removeItem("tigrao_venda_draft");
@@ -1508,6 +1515,7 @@ export default function VendasPage() {
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
         frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+        is_brinde: false,
       });
       setCatSel("");
       setEstoqueId("");
@@ -1777,6 +1785,7 @@ export default function VendasPage() {
       uf: "",
       frete_valor: "",
       frete_recebido: false, usar_credito_loja: "",
+      is_brinde: false,
     });
     setCatSel("");
     setEstoqueId("");
@@ -1841,7 +1850,7 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
             { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hojeStr && v.status_pagamento !== "CANCELADO")).length, color: "bg-purple-500", visible: podeVerAndamento },
           ] as const).filter(t => t.visible).map((t) => (
@@ -1894,6 +1903,11 @@ export default function VendasPage() {
                 {exportando ? "Exportando..." : "Exportar Mes"}
               </button>
             </>)}
+            {/* Filtro Brinde */}
+            <label className="flex items-center gap-1.5 cursor-pointer select-none whitespace-nowrap">
+              <input type="checkbox" checked={filtroBrinde} onChange={(e) => setFiltroBrinde(e.target.checked)} className="w-3.5 h-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500" />
+              <span className="text-xs text-pink-700 font-medium">Apenas Brindes</span>
+            </label>
           </div>
         )}
       </div>
@@ -1986,6 +2000,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
@@ -2105,10 +2120,33 @@ export default function VendasPage() {
 
           {msg && <div className={`px-4 py-3 rounded-xl text-sm ${msg.includes("Erro") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{msg}</div>}
 
-          {/* Row 1: Data */}
+          {/* Row 1: Data + Brinde */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><p className={labelCls}>Data</p><input type="date" value={form.data} onChange={(e) => set("data", e.target.value)} className={inputCls} /></div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.is_brinde}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm(f => ({
+                      ...f,
+                      is_brinde: checked,
+                      ...(checked ? { custo: "0", preco_vendido: "0" } : {}),
+                    }));
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                />
+                <span className="text-sm font-medium text-pink-700">Brinde / Cortesia</span>
+              </label>
+            </div>
           </div>
+          {form.is_brinde && (
+            <div className="px-3 py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs">
+              Esta venda sera registrada como brinde. Nao entrara no faturamento nem no lucro. O estoque sera atualizado normalmente.
+            </div>
+          )}
 
           {/* Campos condicionais por tipo */}
           {form.tipo === "ATACADO" ? (
@@ -2599,6 +2637,7 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
@@ -3536,13 +3575,14 @@ export default function VendasPage() {
         /* Vendas Em Andamento / Finalizadas */
         (() => {
           const hoje = hojeStr;
-          const filteredRaw = tab === "andamento"
+          const filteredRaw = (tab === "andamento"
             ? vendas.filter(v => v.status_pagamento === "AGUARDANDO")
             : tab === "programadas"
             ? vendas.filter(v => v.status_pagamento === "PROGRAMADA" || (v.data_programada && v.data_programada >= hoje && v.status_pagamento !== "CANCELADO"))
             : tab === "hoje"
-            ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && v.data === hoje)
-            : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento);
+            ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hoje)
+            : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento)
+          ).filter(v => !filtroBrinde || v.is_brinde);
           const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
           const filtered = [...filteredRaw].sort((a, b) => {
             if (ordenar === "origem") return (a.origem || "").localeCompare(b.origem || "");
@@ -3573,7 +3613,7 @@ export default function VendasPage() {
           // Agrupar vendas por data para exibição com divisórias
           const vendasPorData = new Map<string, Venda[]>();
           for (const v of filtered) {
-            const d = v.data || "sem-data";
+            const d = v.data_programada || v.data || "sem-data";
             const list = vendasPorData.get(d) || [];
             list.push(v);
             vendasPorData.set(d, list);
@@ -3844,10 +3884,16 @@ export default function VendasPage() {
                               )}
                               <td className="px-3 py-2.5 text-xs text-[#86868B] whitespace-nowrap">
                                 {(() => {
-                                  const [y, m, d] = (v.data || "").split("-");
-                                  return d && m ? `${d}/${m}` : v.data;
+                                  const efetiva = v.data_programada || v.data || "";
+                                  const [y, m, d] = efetiva.split("-");
+                                  return d && m ? `${d}/${m}` : efetiva;
                                 })()}
-                                {v.created_at && (
+                                {v.data_programada && v.data_programada !== v.data && (
+                                  <span className="block text-[10px] text-blue-500">
+                                    Criado: {(() => { const [, m2, d2] = (v.data || "").split("-"); return d2 && m2 ? `${d2}/${m2}` : v.data; })()}
+                                  </span>
+                                )}
+                                {v.created_at && !v.data_programada && (
                                   <span className="block text-[10px] text-[#B0B0B0]">
                                     {new Date(v.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                                   </span>
@@ -3855,7 +3901,10 @@ export default function VendasPage() {
                               </td>
                               <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">{v.cliente}</td>
                               <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
-                              <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span></td>
+                              <td className="px-3 py-2.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span>
+                                {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
+                              </td>
                               <td className="px-3 py-2.5 max-w-[220px] text-xs">
                                 <span className="truncate block whitespace-nowrap">{v.produto}</span>
                                 {isFirstInGrupo && (
@@ -4313,6 +4362,7 @@ export default function VendasPage() {
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
                                               usar_credito_loja: "",
+                                              is_brinde: !!primaryVenda.is_brinde,
                                             });
                                             setProdutoManual(true);
                                             // Ativar checkbox de troca somente se a venda realmente tem troca
@@ -4637,7 +4687,7 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                         {/* Botão Encaminhar Entrega — cria entrega com dados da venda */}
-                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && v.local === "ENTREGA" && (
+                                        {(v.status_pagamento === "AGUARDANDO" || v.status_pagamento === "PROGRAMADA" || (v.status_pagamento === "FINALIZADO" && v.data_programada)) && (v.local === "ENTREGA" || v.local === "RETIRADA") && (
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -5046,6 +5096,7 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);
@@ -5081,6 +5132,7 @@ export default function VendasPage() {
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
                     frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
                   setLastClienteData(null);

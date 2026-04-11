@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "tigrao-tradein",
-      "runtimeExecutable": "/opt/homebrew/bin/npx",
+      "runtimeExecutable": "/usr/local/bin/npx",
       "runtimeArgs": ["next", "dev"],
       "port": 3000
     }

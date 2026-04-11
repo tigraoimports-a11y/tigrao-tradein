@@ -196,6 +196,15 @@ export async function POST(req: NextRequest) {
   // forma pode ser null (pagamento a definir depois)
   if (!body.forma) body.forma = null;
 
+  // Brinde / Cortesia: forçar valores zerados para não impactar faturamento
+  if (body.is_brinde) {
+    body.custo = 0;
+    body.preco_vendido = 0;
+    if (!body.notas || !body.notas.includes("Brinde")) {
+      body.notas = body.notas ? `Brinde / Presente ao cliente\n${body.notas}` : "Brinde / Presente ao cliente";
+    }
+  }
+
   // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
   delete body.usar_credito_loja;

@@ -10,6 +10,7 @@ function auth(req: NextRequest) {
 interface Venda {
   id: number;
   data: string;
+  data_programada?: string | null;
   produto: string;
   preco_vendido: number;
   custo: number;
@@ -20,6 +21,7 @@ interface Venda {
   cidade: string | null;
   uf: string | null;
   status_pagamento: string;
+  is_brinde?: boolean;
 }
 
 const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
   try {
     // Fetch all non-cancelled sales for the period
     // Supabase has a 1000-row default limit — paginate to get all rows
-    const selectFields = "id, data, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento";
+    const selectFields = "id, data, data_programada, produto, preco_vendido, custo, lucro, margem_pct, origem, bairro, cidade, uf, status_pagamento, is_brinde";
     let allRows: Venda[] = [];
     let offset = 0;
     const PAGE_SIZE = 1000;
@@ -86,8 +88,9 @@ export async function GET(req: NextRequest) {
       offset += PAGE_SIZE;
     }
 
-    const rows = allRows;
-    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length}`);
+    // Excluir brindes dos cálculos financeiros
+    const rows = allRows.filter(v => !v.is_brinde);
+    console.log(`[analytics-vendas] meses=${meses} dataInicio=${dataInicioStr} hoje=${hojeStr} totalRows=${rows.length} (excl. brindes)`);
 
     // ---------------------------------------------------------------
     // 1. COMPARATIVO MENSAL
@@ -103,8 +106,9 @@ export async function GET(req: NextRequest) {
     const diaComparacao = Math.min(diaAtual, new Date(mesAnteriorDate.getFullYear(), mesAnteriorDate.getMonth() + 1, 0).getDate());
     const mesAnteriorFim = `${mesAnteriorStr}-${String(diaComparacao).padStart(2, "0")}`;
 
-    const vendasMesAtual = rows.filter(v => v.data >= mesAtualInicio && v.data <= mesAtualFim);
-    const vendasMesAnterior = rows.filter(v => v.data >= mesAnteriorInicio && v.data <= mesAnteriorFim);
+    const de = (v: Venda) => (v as unknown as { data_programada?: string | null }).data_programada || v.data;
+    const vendasMesAtual = rows.filter(v => de(v) >= mesAtualInicio && de(v) <= mesAtualFim);
+    const vendasMesAnterior = rows.filter(v => de(v) >= mesAnteriorInicio && de(v) <= mesAnteriorFim);
 
     const agg = (arr: Venda[]) => ({
       vendas: arr.length,

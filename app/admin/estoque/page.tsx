@@ -5504,38 +5504,32 @@ export default function EstoquePage() {
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
                 <div className="flex items-center gap-2">
-                  {(p.serial_no || p.imei) && (
-                    <button
-                      onClick={() => handlePrintEtiquetaDirect([p])}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
-                    >
-                      🏷️ Etiqueta
-                    </button>
-                  )}
                   {p.tipo === "PENDENCIA" && (
                     <button
                       onClick={async () => {
+                        if (!p.serial_no || !p.imei) {
+                          setMsg("Preencha o Numero de Serie e IMEI antes de gerar o Termo de Procedencia.");
+                          return;
+                        }
                         const condicaoParts: string[] = [];
                         if (p.bateria) condicaoParts.push(`Bateria ${p.bateria}%`);
-                        if (p.status) condicaoParts.push(p.status);
                         if (p.garantia) condicaoParts.push(`Garantia: ${p.garantia}`);
-                        if (p.observacao) condicaoParts.push(p.observacao);
-                        const aparelhos = [{
-                          modelo: p.produto,
-                          capacidade: "",
-                          cor: p.cor || "",
-                          imei: p.imei || "",
-                          serial: p.serial_no || "",
-                          condicao: condicaoParts.join(", "),
-                        }];
+                        const gradeMatch = (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/);
+                        if (gradeMatch) condicaoParts.push(`Grade ${gradeMatch[1]}`);
                         try {
                           const res = await fetch("/api/admin/termo-procedencia", {
                             method: "POST",
                             headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
                             body: JSON.stringify({
                               cliente_nome: p.cliente || "",
-                              cliente_cpf: "",
-                              aparelhos,
+                              aparelhos: [{
+                                modelo: p.produto,
+                                capacidade: (p.produto.match(/\d+\s*GB/i) || [""])[0] || "",
+                                cor: p.cor || "",
+                                imei: p.imei,
+                                serial: p.serial_no,
+                                condicao: condicaoParts.join(", "),
+                              }],
                               pendencia_id: p.id,
                             }),
                           });
@@ -5551,13 +5545,30 @@ export default function EstoquePage() {
                             const json = await res.json();
                             setMsg("Erro: " + (json.error || "falha ao gerar termo"));
                           }
-                        } catch { setMsg("Erro ao gerar termo de procedencia"); }
+                        } catch (err) {
+                          setMsg("Erro ao gerar Termo: " + String(err instanceof Error ? err.message : err));
+                        }
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
+                      disabled={!p.serial_no || !p.imei}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        p.serial_no && p.imei
+                          ? "bg-[#E8740E] text-white hover:bg-[#D06A0D]"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      }`}
+                      title={!p.serial_no || !p.imei ? "Preencha Serial e IMEI primeiro" : "Gerar Termo de Procedencia"}
                     >
                       📜 Termo
                     </button>
                   )}
+                  {(p.serial_no || p.imei) && (
+                    <button
+                      onClick={() => handlePrintEtiquetaDirect([p])}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
+                    >
+                      Etiqueta
+                    </button>
+                  )}
+                  {/* Termo da main removido — usamos o botão com validação de Serial+IMEI acima */}
                   <button onClick={() => setDetailProduct(null)} className={`w-8 h-8 flex items-center justify-center rounded-full ${dm ? "hover:bg-[#3A3A3C]" : "hover:bg-[#F0F0F5]"} ${mS} hover:text-[#E8740E] text-lg`}>✕</button>
                 </div>
               </div>
