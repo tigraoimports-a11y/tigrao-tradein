@@ -84,6 +84,8 @@ export interface Venda {
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
   // Venda programada
   data_programada: string | null;
+  // Crédito de lojista usado nesta venda
+  credito_lojista_usado: number;
 }
 
 export interface Reajuste {

@@ -168,7 +168,7 @@ export default function ClientesPage() {
 
   // Crédito de lojistas — usa a tabela `lojistas` nova (UUID auto)
   const [saldosLojistas, setSaldosLojistas] = useState<Record<string, number>>({}); // indexa por nome upper → saldo
-  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string };
+  type CreditoLog = { id: string; tipo: string; valor: number; saldo_antes: number; saldo_depois: number; motivo: string | null; usuario: string | null; created_at: string; venda_produto?: string | null; venda_data?: string | null; venda_preco?: number | null };
   const [creditoModal, setCreditoModal] = useState<null | { cliente: Cliente; lojista_id: string; saldo: number; log: CreditoLog[] }>(null);
   const [creditoForm, setCreditoForm] = useState({ tipo: "CREDITO" as "CREDITO" | "DEBITO" | "AJUSTE", valor: "", motivo: "" });
   const [savingCredito, setSavingCredito] = useState(false);
@@ -1010,20 +1010,28 @@ export default function ClientesPage() {
                 <div className="max-h-[300px] overflow-y-auto space-y-1.5">
                   {creditoModal.log.length === 0 && <p className={`text-xs text-center ${mM} py-4`}>Sem movimentações</p>}
                   {creditoModal.log.map(l => (
-                    <div key={l.id} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-semibold ${mP}`}>
-                          <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
-                            {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
-                          </span>
-                          <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                    <div key={l.id} className={`px-3 py-2.5 rounded-lg text-xs ${dm ? "bg-[#2C2C2E]" : "bg-[#F9F9FB]"}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold ${mP}`}>
+                            <span className={l.tipo === "CREDITO" ? "text-green-600" : l.tipo === "DEBITO" ? "text-red-600" : "text-blue-600"}>
+                              {l.tipo === "CREDITO" ? "+" : l.tipo === "DEBITO" ? "−" : "="} {fmt(Number(l.valor))}
+                            </span>
+                            <span className={`ml-2 text-[10px] ${mS}`}>Saldo: {fmt(Number(l.saldo_depois))}</span>
+                          </p>
+                        </div>
+                        <div className={`text-[10px] ${mM} text-right shrink-0`}>
+                          <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
+                          <p>{l.usuario}</p>
+                        </div>
+                      </div>
+                      {l.venda_produto && (
+                        <p className={`text-[10px] mt-1 ${mM}`}>
+                          📦 {l.venda_produto} — {fmt(Number(l.venda_preco || 0))}
                         </p>
-                        {l.motivo && <p className={`text-[10px] truncate ${mM}`}>{l.motivo}</p>}
-                      </div>
-                      <div className={`text-[10px] ${mM} text-right shrink-0`}>
-                        <p>{new Date(l.created_at).toLocaleDateString("pt-BR")}</p>
-                        <p>{l.usuario}</p>
-                      </div>
+                      )}
+                      {l.motivo && !l.venda_produto && <p className={`text-[10px] mt-1 ${mM}`}>{l.motivo}</p>}
+                      {l.motivo && l.venda_produto && <p className={`text-[10px] ${mM}`}>{l.motivo}</p>}
                     </div>
                   ))}
                 </div>

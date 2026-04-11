@@ -57,7 +57,17 @@ export async function GET(req: NextRequest) {
       .eq("lojista_id", id)
       .order("created_at", { ascending: false })
       .limit(100);
-    return NextResponse.json({ lojista, log: log || [] }, { headers: noCacheHeaders });
+    // Enriquecer log: buscar detalhes da venda vinculada (produto, data)
+    const logEnriquecido = await Promise.all((log || []).map(async (m: Record<string, unknown>) => {
+      if (!m.venda_id) return m;
+      const { data: venda } = await supabase
+        .from("vendas")
+        .select("produto, data, preco_vendido, cliente")
+        .eq("id", m.venda_id)
+        .maybeSingle();
+      return { ...m, venda_produto: venda?.produto || null, venda_data: venda?.data || null, venda_preco: venda?.preco_vendido || null };
+    }));
+    return NextResponse.json({ lojista, log: logEnriquecido }, { headers: noCacheHeaders });
   }
   const { data, error } = await supabase.from("lojistas").select("*").order("nome");
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: noCacheHeaders });

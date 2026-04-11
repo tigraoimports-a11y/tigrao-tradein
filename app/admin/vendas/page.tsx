@@ -3876,6 +3876,11 @@ export default function VendasPage() {
                                   ))}
                                 </div>
                                 <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
+                                {Number(v.credito_lojista_usado || 0) > 0 && (
+                                  <span className="inline-block mt-0.5 ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">
+                                    💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
@@ -4400,14 +4405,59 @@ export default function VendasPage() {
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
+                                              // Se faltam S/N ou IMEI, pedir preenchimento via prompt
+                                              let serial1 = v.troca_serial || "";
+                                              let imei1 = v.troca_imei || "";
+                                              let serial2 = v.troca_serial2 || "";
+                                              let imei2 = v.troca_imei2 || "";
+                                              const falta1 = v.troca_produto && (!serial1 || !imei1);
+                                              const falta2 = v.troca_produto2 && (!serial2 || !imei2);
+                                              if (falta1 || falta2) {
+                                                // Mini formulário via prompts
+                                                if (falta1 && !serial1) {
+                                                  const val = prompt(`Número de Série de "${v.troca_produto}":`);
+                                                  if (val === null) return; // cancelou
+                                                  serial1 = val.trim();
+                                                }
+                                                if (falta1 && !imei1) {
+                                                  const val = prompt(`IMEI de "${v.troca_produto}":`);
+                                                  if (val === null) return;
+                                                  imei1 = val.trim();
+                                                }
+                                                if (falta2 && !serial2) {
+                                                  const val = prompt(`Número de Série de "${v.troca_produto2}":`);
+                                                  if (val === null) return;
+                                                  serial2 = val.trim();
+                                                }
+                                                if (falta2 && !imei2) {
+                                                  const val = prompt(`IMEI de "${v.troca_produto2}":`);
+                                                  if (val === null) return;
+                                                  imei2 = val.trim();
+                                                }
+                                                // Salvar na venda para não pedir de novo
+                                                const updates: Record<string, string> = {};
+                                                if (serial1 && !v.troca_serial) updates.troca_serial = serial1;
+                                                if (imei1 && !v.troca_imei) updates.troca_imei = imei1;
+                                                if (serial2 && !v.troca_serial2) updates.troca_serial2 = serial2;
+                                                if (imei2 && !v.troca_imei2) updates.troca_imei2 = imei2;
+                                                if (Object.keys(updates).length > 0) {
+                                                  await fetch("/api/vendas", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                    body: JSON.stringify({ id: v.id, ...updates }),
+                                                  }).catch(() => {});
+                                                  // Atualizar local
+                                                  setVendas(prev => prev.map(vv => vv.id === v.id ? { ...vv, ...updates } : vv));
+                                                }
+                                              }
                                               const aparelhos: { modelo: string; capacidade?: string; cor: string; imei: string; serial: string; condicao: string }[] = [];
                                               if (v.troca_produto) {
                                                 aparelhos.push({
                                                   modelo: v.troca_produto,
                                                   capacidade: "",
                                                   cor: v.troca_cor || "",
-                                                  imei: v.troca_imei || "",
-                                                  serial: v.troca_serial || "",
+                                                  imei: imei1,
+                                                  serial: serial1,
                                                   condicao: [
                                                     v.troca_bateria ? `Bateria ${v.troca_bateria}%` : "",
                                                     v.troca_grade ? `Grade ${v.troca_grade}` : "",
@@ -4421,8 +4471,8 @@ export default function VendasPage() {
                                                 aparelhos.push({
                                                   modelo: v.troca_produto2,
                                                   cor: v.troca_cor2 || "",
-                                                  imei: v.troca_imei2 || "",
-                                                  serial: v.troca_serial2 || "",
+                                                  imei: imei2,
+                                                  serial: serial2,
                                                   condicao: [
                                                     v.troca_bateria2 ? `Bateria ${v.troca_bateria2}%` : "",
                                                     v.troca_grade2 ? `Grade ${v.troca_grade2}` : "",
