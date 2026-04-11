@@ -27,25 +27,28 @@ export async function gerarParcial(
   supabase: SupabaseClient,
   dataISO: string
 ): Promise<DashboardParcial> {
+  // Incluir vendas do dia (por data ou data_programada)
   const { data: vendas } = await supabase
     .from("vendas")
     .select("*")
-    .eq("data", dataISO)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .order("created_at", { ascending: false });
 
   const rows = (vendas ?? []) as Venda[];
-  const totalVendas = rows.length;
-  const receitaBruta = rows.reduce((s, v) => s + Number(v.preco_vendido), 0);
-  const lucroTotal = rows.reduce((s, v) => s + Number(v.lucro), 0);
+  // Excluir brindes dos cálculos financeiros
+  const activeRows = rows.filter(v => !v.is_brinde);
+  const totalVendas = activeRows.length;
+  const receitaBruta = activeRows.reduce((s, v) => s + Number(v.preco_vendido), 0);
+  const lucroTotal = activeRows.reduce((s, v) => s + Number(v.lucro), 0);
   const ticketMedio = totalVendas > 0 ? receitaBruta / totalVendas : 0;
   const margemMedia = totalVendas > 0
-    ? rows.reduce((s, v) => s + Number(v.margem_pct), 0) / totalVendas
+    ? activeRows.reduce((s, v) => s + Number(v.margem_pct), 0) / totalVendas
     : 0;
 
   const porOrigem: DashboardParcial["porOrigem"] = {};
   const porTipo: DashboardParcial["porTipo"] = {};
 
-  for (const v of rows) {
+  for (const v of activeRows) {
     if (!porOrigem[v.origem]) porOrigem[v.origem] = { qty: 0, receita: 0, lucro: 0 };
     porOrigem[v.origem].qty++;
     porOrigem[v.origem].receita += Number(v.preco_vendido);
@@ -111,7 +114,7 @@ export async function gerarNoite(
   const { data: vendasHoje } = await supabase
     .from("vendas")
     .select("*")
-    .eq("data", dataISO)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+0")
     .neq("status_pagamento", "CANCELADO");
 
@@ -125,7 +128,7 @@ export async function gerarNoite(
   const { data: vendasD1Hoje } = await supabase
     .from("vendas")
     .select("*")
-    .eq("data", dataISO)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .eq("recebimento", "D+1")
     .neq("status_pagamento", "CANCELADO");
 
@@ -220,7 +223,7 @@ export async function gerarNoite(
   const { data: todasVendasHoje } = await supabase
     .from("vendas")
     .select("entrada_especie")
-    .eq("data", dataISO)
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .neq("status_pagamento", "CANCELADO");
   const entradaEspecieHoje = (todasVendasHoje ?? []).reduce((s, v) => s + Number(v.entrada_especie || 0), 0);
 
@@ -249,11 +252,12 @@ export async function gerarNoite(
   // Totais do dia
   const { data: todasVendas } = await supabase
     .from("vendas")
-    .select("preco_vendido, lucro, custo, origem, tipo, margem_pct")
-    .eq("data", dataISO)
+    .select("preco_vendido, lucro, custo, origem, tipo, margem_pct, is_brinde")
+    .or(`and(data_programada.is.null,data.eq.${dataISO}),data_programada.eq.${dataISO}`)
     .neq("status_pagamento", "CANCELADO");
 
-  const all = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number }[];
+  const allRaw = (todasVendas ?? []) as { preco_vendido: number; lucro: number; custo: number; origem: string; tipo: string; margem_pct: number; is_brinde?: boolean }[];
+  const all = allRaw.filter(v => !v.is_brinde);
   const totalVendas = all.length;
   const faturamento = all.reduce((s, v) => s + Number(v.preco_vendido), 0);
   const custoTotal = all.reduce((s, v) => s + Number(v.custo), 0);

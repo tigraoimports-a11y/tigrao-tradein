@@ -10,3 +10,8 @@ export function hojeBR(): string {
 export function horaBR(): string {
   return new Date().toLocaleTimeString("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 }
+
+/** Retorna a data efetiva de uma venda (data_programada se existir, senão data) */
+export function dataEfetiva(v: { data: string; data_programada?: string | null }): string {
+  return v.data_programada || v.data;
+}

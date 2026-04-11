@@ -5502,12 +5502,55 @@ export default function EstoquePage() {
               <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"}`}>
                 <h3 className={`text-sm font-bold ${mP}`}>{canEdit ? "Editar Item" : "Detalhes do Item"} {p.serial_no ? `- ${p.serial_no}` : ""}</h3>
                 <div className="flex items-center gap-2">
+                  {p.tipo === "PENDENCIA" && (
+                    <button
+                      onClick={async () => {
+                        if (!p.serial_no || !p.imei) {
+                          setMsg("Preencha o Numero de Serie e IMEI antes de gerar o Termo de Procedencia.");
+                          return;
+                        }
+                        try {
+                          const res = await fetch("/api/admin/termo-procedencia", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password },
+                            body: JSON.stringify({
+                              clienteNome: p.cliente || "Cliente",
+                              produtoModelo: p.produto,
+                              produtoStorage: (p.produto.match(/\d+\s*GB/i) || [""])[0] || undefined,
+                              produtoCor: p.cor || undefined,
+                              serialNo: p.serial_no,
+                              imei: p.imei,
+                              bateria: p.bateria ? `${p.bateria}%` : undefined,
+                              grade: (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1] || undefined,
+                              valorAvaliado: p.custo_unitario || undefined,
+                              data: new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+                            }),
+                          });
+                          if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Erro"); }
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          window.open(url, "_blank");
+                        } catch (err) {
+                          setMsg("Erro ao gerar Termo: " + String(err instanceof Error ? err.message : err));
+                        }
+                      }}
+                      disabled={!p.serial_no || !p.imei}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        p.serial_no && p.imei
+                          ? "bg-[#E8740E] text-white hover:bg-[#D06A0D]"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      }`}
+                      title={!p.serial_no || !p.imei ? "Preencha Serial e IMEI primeiro" : "Gerar Termo de Procedencia"}
+                    >
+                      Termo
+                    </button>
+                  )}
                   {(p.serial_no || p.imei) && (
                     <button
                       onClick={() => handlePrintEtiquetaDirect([p])}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0066CC] text-white hover:bg-[#0055AA] transition-colors"
                     >
-                      🏷️ Etiqueta
+                      Etiqueta
                     </button>
                   )}
                   {p.tipo === "PENDENCIA" && (
