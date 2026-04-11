@@ -534,14 +534,16 @@ export default function VendasPage() {
   useEffect(() => { if (password) fetchVendas(); }, [password, fetchVendas]);
 
   // Auto-transição: vendas PROGRAMADAS cuja data já chegou → mover para AGUARDANDO
-  const autoTransicaoRef = useRef(false);
+  // Usa Set para rastrear IDs já transicionados (evita loop infinito)
+  const transicionadasRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!password || vendas.length === 0 || autoTransicaoRef.current) return;
+    if (!password || vendas.length === 0) return;
     const programadasVencidas = vendas.filter(
-      v => v.status_pagamento === "PROGRAMADA" && v.data_programada && v.data_programada <= hojeStr
+      v => v.status_pagamento === "PROGRAMADA" && v.data_programada && v.data_programada <= hojeStr && !transicionadasRef.current.has(v.id)
     );
     if (programadasVencidas.length === 0) return;
-    autoTransicaoRef.current = true;
+    // Marcar como processadas antes do fetch
+    programadasVencidas.forEach(v => transicionadasRef.current.add(v.id));
     // Mover para AGUARDANDO automaticamente
     const headers = { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") };
     Promise.all(programadasVencidas.map(v =>
@@ -551,7 +553,7 @@ export default function VendasPage() {
       setVendas(prev => prev.map(v => ids.has(v.id) ? { ...v, status_pagamento: "AGUARDANDO" } : v));
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendas.length, password]);
+  }, [vendas, password]);
 
   // Fetch client history when client name changes (3+ chars, debounced)
   const fetchClienteHistorico = useCallback(async (nome: string) => {

@@ -1646,16 +1646,32 @@ function SimuladorInterno({ password }: { password: string }) {
 
           {/* Valor avaliado */}
           {effectiveBaseValue > 0 && (
-            <div className={`rounded-lg p-3 flex items-center justify-between ${valorBaseManual ? "bg-blue-50 border border-blue-200" : "bg-[#F5F5F7]"}`}>
-              <span className="text-sm text-[#86868B]">
-                Valor base{valorBaseManual ? " (manual)" : ""}: <b className="text-[#1D1D1F]">{formatBRL(effectiveBaseValue)}</b>
-                {valorBaseManual && (
-                  <button onClick={() => setValorBaseManual(null)} className="ml-2 text-[10px] text-red-400 hover:text-red-600">limpar</button>
-                )}
-              </span>
-              <span className="text-sm font-bold" style={{ color: tradeInValue > 0 ? "#2ECC71" : "#E74C3C" }}>
-                Avaliado: {formatBRL(tradeInValue)}
-              </span>
+            <div className={`rounded-lg p-3 space-y-2 ${valorBaseManual ? "bg-blue-50 border border-blue-200" : "bg-[#F5F5F7]"}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#86868B]">
+                  Valor base{valorBaseManual ? " (manual)" : ""}: <b className="text-[#1D1D1F]">{formatBRL(effectiveBaseValue)}</b>
+                  {valorBaseManual ? (
+                    <button onClick={() => setValorBaseManual(null)} className="ml-2 text-[10px] text-red-400 hover:text-red-600">limpar</button>
+                  ) : (
+                    <button onClick={() => setValorBaseManual(baseValue)} className="ml-2 text-[10px] text-blue-500 hover:text-blue-700">editar</button>
+                  )}
+                </span>
+                <span className="text-sm font-bold" style={{ color: tradeInValue > 0 ? "#2ECC71" : "#E74C3C" }}>
+                  Avaliado: {formatBRL(tradeInValue)}
+                </span>
+              </div>
+              {/* Campo editável inline quando clicou "editar" */}
+              {valorBaseManual !== null && (
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs text-blue-600 font-medium">R$</span>
+                  <input
+                    type="number"
+                    value={valorBaseManual}
+                    onChange={(e) => setValorBaseManual(parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-2 py-1 rounded-lg border border-blue-300 text-sm focus:border-[#E8740E] focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 
