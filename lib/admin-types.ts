@@ -73,6 +73,10 @@ export interface Venda {
   frete_valor: number | null;
   frete_recebido: boolean | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
+  // Brinde / Cortesia — não impacta faturamento nem lucro
+  is_brinde: boolean;
+  // Data agendada — quando presente, é a data efetiva da venda
+  data_agendada: string | null;
 }
 
 export interface Reajuste {
