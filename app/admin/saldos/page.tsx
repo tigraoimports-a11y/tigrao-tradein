@@ -38,18 +38,20 @@ export default function SaldosPage() {
   const [inf, setInf] = useState("");
   const [mp, setMp] = useState("");
   const [esp, setEsp] = useState("");
+  const [histMes, setHistMes] = useState(""); // "" = últimos 7 dias, "2026-03" = mês específico
 
   const fetchSaldos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/saldos", { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
+      const params = histMes ? `?mes=${histMes}` : "";
+      const res = await fetch(`/api/saldos${params}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } });
       if (res.ok) {
         const json = await res.json();
         setSaldos(json.data ?? []);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [password]);
+  }, [password, histMes]);
 
   const fetchSaldoData = useCallback(async (d: string) => {
     try {
@@ -364,8 +366,41 @@ export default function SaldosPage() {
 
       {/* Histórico */}
       <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
-        <div className={`px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
-          <h3 className={`font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Historico (ultimos 7 dias)</h3>
+        <div className={`px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2 ${dm ? "border-[#3A3A3C]" : "border-[#D2D2D7]"}`}>
+          <h3 className={`font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+            {histMes ? (() => {
+              const [y, m] = histMes.split("-").map(Number);
+              const nomes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+              return `Historico — ${nomes[m-1]} ${y}`;
+            })() : "Historico (ultimos 7 dias)"}
+          </h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => {
+              if (!histMes) {
+                const d = new Date();
+                setHistMes(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+              } else {
+                const [y, m] = histMes.split("-").map(Number);
+                const prev = new Date(y, m - 2, 1);
+                setHistMes(`${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`);
+              }
+            }} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"} hover:opacity-80`}>
+              ← Anterior
+            </button>
+            {histMes && (
+              <button onClick={() => {
+                const [y, m] = histMes.split("-").map(Number);
+                const next = new Date(y, m, 1);
+                setHistMes(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`);
+              }} className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${dm ? "bg-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] text-[#1D1D1F]"} hover:opacity-80`}>
+                Proximo →
+              </button>
+            )}
+            <button onClick={() => setHistMes("")}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${!histMes ? "bg-[#E8740E] text-white" : dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+              7 dias
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
