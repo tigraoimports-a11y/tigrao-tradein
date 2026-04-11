@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     console.log("[ZAPI Webhook] Recebido:", JSON.stringify(body));
 
     // Z-API envia o ID da opção selecionada em diferentes formatos
-    const buttonId = body.listResponseMessage?.singleSelectReply?.selectedRowId
+    const buttonId = body.listResponseMessage?.selectedRowId
+      || body.buttonsResponseMessage?.buttonId
       || body.buttonId
       || body.button?.id
       || body.buttonPayload
