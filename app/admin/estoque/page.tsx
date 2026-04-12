@@ -5991,6 +5991,18 @@ export default function EstoquePage() {
                   const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
                   if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
                 }
+                // Fallback: inferir nucleos padrao a partir do chip no nome
+                if (!cpu || !gpu) {
+                  const chipInName = nome.match(/(A18\s*PRO|M4\s*MAX|M4\s*PRO|M4|M3\s*MAX|M3\s*PRO|M3)/i)?.[1]?.toUpperCase().replace(/\s+/g, " ");
+                  const defaultCores: Record<string, [string, string]> = {
+                    "A18 PRO": ["6", "5"], "M4": ["10", "10"], "M4 PRO": ["12", "16"],
+                    "M4 MAX": ["16", "40"], "M3": ["8", "10"], "M3 PRO": ["12", "18"], "M3 MAX": ["14", "30"],
+                  };
+                  if (chipInName && defaultCores[chipInName]) {
+                    const [dc, dg] = defaultCores[chipInName];
+                    cpu = cpu || dc; gpu = gpu || dg;
+                  }
+                }
                 const tela = tag(/\[TELA:([^\]]+)\]/);
                 const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
                 const band = tag(/\[BAND:([^\]]+)\]/);
