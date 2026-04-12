@@ -113,8 +113,19 @@ function formatProdutoDisplay(p: {
     if (ssd) parts.push(ssd);
     if (cor) parts.push(cor);
   } else if (baseCat === "MAC_MINI") {
-    // Chip NÃO entra no nome de preview — só no modal de detalhes.
-    parts.push("Mac Mini");
+    // Chip: extrair do nome ou inferir dos nucleos (nome ou observacao)
+    const mmChip = up.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1] || (() => {
+      const nucMatch = up.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i)
+        || obs.toUpperCase().match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+      if (!nucMatch) return "";
+      const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+      if (c === 10 && g === 10) return "M4";
+      if (c === 12 && g === 16) return "M4 Pro";
+      if (c === 14 && g === 20) return "M4 Pro";
+      if (c === 16 && g === 40) return "M4 Max";
+      return "";
+    })();
+    parts.push(`Mac Mini${mmChip ? " " + mmChip : ""}`);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
   } else if (baseCat === "APPLE_WATCH") {
