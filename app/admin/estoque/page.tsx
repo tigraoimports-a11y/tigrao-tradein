@@ -4562,7 +4562,7 @@ export default function EstoquePage() {
                         const obsLimpo = cleanObs(obs);
                         const cliente = p._groupCliente || "";
                         return (
-                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%-6px)] sm:w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
                             {/* Cliente */}
                             <p className={`text-[10px] font-semibold uppercase tracking-wider ${textSecondary}`}>👤 {cliente}</p>
                             {/* Produto + Cor */}
@@ -4659,7 +4659,7 @@ export default function EstoquePage() {
                     // Expandir seriais ao clicar no card
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%-6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
+                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
                         {/* Produto + Cor */}
                         <div>
                           <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
