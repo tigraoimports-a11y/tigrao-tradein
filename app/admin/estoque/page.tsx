@@ -4603,787 +4603,86 @@ export default function EstoquePage() {
                 );
               });
             })()}
-            {/* ========== LIST VIEW (todas as outras abas) ========== */}
-            {!isPendenciasTab && Object.entries(byCat).sort(([a], [b]) => {
-              return a.localeCompare(b);
-            }).map(([cat, modelos]) => (
+            {/* ========== CARD VIEW (todas as outras abas) ========== */}
+            {!isPendenciasTab && Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => {
+              // Flatten all items from all modelos
+              const allItems = Object.values(modelos).flat()
+                .filter(p => !(tab === "estoque" && p.qnt === 0))
+                .filter(p => !(tab === "seminovos" && p.qnt === 0));
+              if (allItems.length === 0) return null;
+              const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
+              const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+              return (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
-                    {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
+                    {allItems.length} produto{allItems.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
                 </h2>
-
-                {(() => {
-                  const modeloEntriesRaw = Object.entries(modelos).sort(([a], [b]) => a.localeCompare(b));
-                  const modeloEntries = sortByCardOrder(modeloEntriesRaw, cat);
-                  return modeloEntries.map(([modelo, items], cardIdx) => {
-                  // No estoque: ocultar cards onde TODAS as unidades têm qnt=0
-                  if (tab === "estoque" && items.every(p => p.qnt === 0)) return null;
-                  // Sub-agrupar por nome do produto (sem origem VC/LL/J/BE/BR/HN/IN/ZA)
-                  const stripOrigem = (nome: string) => nome
-                    .replace(/\s+(VC|LL|BE|BR|HN|IN|ZA|BZ)(?=\s|$|\()(\s*\([^)]*\))?/gi, "")
-                    .replace(/\s+J(?=\s*\(|\s*$)(\s*\([^)]*\))?/gi, "")
-                    .replace(/[-–]\s*(CHIP\s+(F[ÍI]SICO\s*\+\s*)?)?E-?SIM/gi, "")
-                    .replace(/[-–]\s*CHIP\s+VIRTUAL/gi, "")
-                    .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")  // (10C CPU/10C GPU)
-                    .replace(/\s{2,}/g, " ")
-                    .replace(/\s*[-–]\s*$/, "")
-                    .trim();
-                  const byProduto: Record<string, ProdutoEstoque[]> = {};
-                  // Normaliza cor: traduz PT→EN e remove código de origem (LL/BR/etc)
-                  const canonicalCor = (cor: string | null | undefined, categoria: string | null | undefined): string => {
-                    if (!cor) return "";
-                    const isIphone = (categoria || "").toUpperCase() === "IPHONES" || !categoria;
-                    const c = isIphone ? stripCode(cor) : cor;
-                    const upper = c.toUpperCase().trim();
-                    return (PT_TO_EN[upper] || upper).toUpperCase();
-                  };
-                  items.forEach((p) => {
-                    // Seminovos: ocultar qnt=0. Lacrados: manter (mostrar como esgotado)
-                    if (tab === "seminovos" && p.qnt === 0) return;
-                    // Agrupar por modelo base (sem cor) + cor canônica (PT→EN)
-                    // Isso evita duplicação quando o produto foi cadastrado com cor diferente
-                    // (ex: "IPHONE 17 PRO 256GB COSMIC ORANGE" vs "IPHONE 17 PRO 256GB LARANJA")
-                    const baseModelo = getModeloBase(p.produto, p.categoria).toUpperCase();
-                    const corCanon = canonicalCor(p.cor, p.categoria);
-                    const groupKey = `${baseModelo}|||${corCanon}`;
-                    if (!byProduto[groupKey]) byProduto[groupKey] = [];
-                    byProduto[groupKey].push(p);
-                  });
-                  // Ordenar por storage (64GB < 128GB < 256GB < 512GB < 1TB < 2TB)
-                  function storageToNum(name: string): number {
-                    const m = name.match(/(\d+)\s*(GB|TB)/i);
-                    if (!m) return 0;
-                    const val = parseInt(m[1]);
-                    return m[2].toUpperCase() === "TB" ? val * 1024 : val;
-                  }
-                  const produtoEntries = Object.entries(byProduto)
-                    .filter(([, arr]) => arr.length > 0)
-                    .sort(([a], [b]) => {
-                      const sa = storageToNum(a);
-                      const sb = storageToNum(b);
-                      if (sa !== sb) return sa - sb;
-                      return a.localeCompare(b);
-                    });
-                  // No estoque: ocultar card inteiramente se todos os itens foram filtrados
-                  if (tab === "estoque" && produtoEntries.length === 0) return null;
-
-                  const isCardDragging = dragCardKey === modelo;
-                  const isDropBefore = dropTarget?.modelo === modelo && dropTarget?.position === "before";
-                  const isDropAfter = dropTarget?.modelo === modelo && dropTarget?.position === "after";
-                  return (
-                  <div
-                    key={modelo}
-                    onDragOver={(e) => handleCardDragOver(e, modelo)}
-                    onDragLeave={() => { if (dropTarget?.modelo === modelo) setDropTarget(null); }}
-                    onDrop={(e) => { e.preventDefault(); handleCardDrop(cat, modeloEntries); }}
-                    className="relative"
-                  >
-                    {/* Drop indicator - before */}
-                    {isDropBefore && dragCardKey && (
-                      <div className="absolute -top-1.5 left-4 right-4 h-[3px] rounded-full bg-[#E8740E] z-10 shadow-[0_0_8px_rgba(232,116,14,0.5)]" />
-                    )}
-                  <div
-                    className={`${bgCard} border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${isCardDragging ? "opacity-30 scale-[0.98] border-[#E8740E] border-2" : borderCard}`}
-                  >
-                    <div className={`px-5 py-3.5 border-b ${borderCard} flex items-center justify-between cursor-pointer group/card`} onClick={() => { if (selectMode) return; setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
-                      <div className="flex items-center gap-3">
-                        {selectMode ? (
-                          <input
-                            type="checkbox"
-                            checked={items.filter(p => !(tab === "seminovos" && p.qnt === 0)).every(p => selectedIds.has(p.id))}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              const valid = items.filter(p => !(tab === "seminovos" && p.qnt === 0));
-                              setSelectedIds(prev => {
-                                const n = new Set(prev);
-                                if (valid.every(p => n.has(p.id))) { valid.forEach(p => n.delete(p.id)); }
-                                else { valid.forEach(p => n.add(p.id)); }
-                                return n;
-                              });
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            className="w-4 h-4 accent-[#E8740E] cursor-pointer shrink-0"
-                          />
-                        ) : (
-                          <span className={`${textMuted} text-xs select-none`}>{expandedModels.has(modelo) ? "▼" : "▶"}</span>
+                <div className="flex flex-wrap gap-3">
+                  {allItems.map(p => {
+                    const obs = p.observacao || "";
+                    const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+                    const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                    const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
+                    const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
+                    const hasPulseira = obs.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(obs);
+                    const ciclos = obs.match(/\[CICLOS:(\d+)\]/)?.[1];
+                    const comQuem = obs.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
+                    const obsLimpo = cleanObs(obs);
+                    const isUsado = p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA";
+                    const corPt = p.cor ? corParaPT(p.cor) : "";
+                    return (
+                      <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                        {/* Produto + Cor */}
+                        <div>
+                          <p className={`font-bold text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(p)}</p>
+                          {corPt && <p className={`text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                        </div>
+                        {/* Badges */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {p.qnt > 1 && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{p.qnt}x</span>
+                          )}
+                          {p.qnt === 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600">Esgotado</span>
+                          )}
+                          {p.bateria && isUsado && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.bateria >= 90 ? "bg-green-100 text-green-700" : p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" : p.bateria >= 80 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>🔋 {p.bateria}%</span>
+                          )}
+                          {gradeMatch && <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${gradeMatch === "A+" ? "bg-amber-100 text-amber-700" : gradeMatch === "A" ? "bg-green-100 text-green-700" : gradeMatch === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{gradeMatch}</span>}
+                          {hasCaixa && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">📦 Caixa</span>}
+                          {hasCabo && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔌 Cabo</span>}
+                          {hasFonte && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔋 Fonte</span>}
+                          {hasPulseira && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">⌚ Pulseira</span>}
+                          {ciclos && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
+                          {p.garantia && <span className={`px-1 py-0.5 rounded text-[10px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
+                          {comQuem && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">👤 {comQuem}</span>}
+                        </div>
+                        {/* Preço + Qtd + IMEI/Serial */}
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-bold ${p.custo_unitario ? "text-[#E8740E]" : "text-red-500"}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "Sem preço"}</span>
+                          {(p.imei || p.serial_no) && (
+                            <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(p.serial_no || p.imei || "").slice(-8)}</span>
+                          )}
+                        </div>
+                        {/* Status */}
+                        {p.status && p.status !== "EM ESTOQUE" && (
+                          <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-semibold ${dm ? (p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
                         )}
-                        {editingCardTitle === modelo ? (
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              value={editCardTitleValue}
-                              onChange={(e) => setEditCardTitleValue(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === "Enter") saveCardTitleOverride(modelo, editCardTitleValue); if (e.key === "Escape") setEditingCardTitle(""); }}
-                              className={`px-2 py-0.5 rounded border text-sm font-bold ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "border-[#D2D2D7]"} focus:outline-none focus:border-[#E8740E]`}
-                              autoFocus
-                            />
-                            <button onClick={() => saveCardTitleOverride(modelo, editCardTitleValue)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                            <button onClick={() => setEditingCardTitle("")} className={`text-[10px] ${textSecondary}`}>✕</button>
-                          </div>
-                        ) : (
-                          <h3 className={`font-bold ${textPrimary} text-[15px] flex items-center gap-2`}>
-                            {getCardTitle(modelo)}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingCardTitle(modelo); setEditCardTitleValue(getCardTitle(modelo)); }}
-                              className={`w-5 h-5 rounded flex items-center justify-center text-[10px] opacity-0 group-hover/card:opacity-100 transition-opacity ${dm ? "text-[#636366] hover:text-[#E8740E]" : "text-[#86868B] hover:text-[#E8740E]"}`}
-                              title="Editar título do card"
-                            >✏️</button>
-                          </h3>
-                        )}
-                        {modeloEntries.length > 1 && (
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              disabled={cardIdx === 0}
-                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "up")}
-                              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${cardIdx === 0 ? "opacity-20 cursor-not-allowed" : dm ? "text-[#86868B] hover:text-white hover:bg-[#3A3A3C]" : "text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#E5E5EA]"}`}
-                              title="Mover para cima"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-                            </button>
-                            <button
-                              disabled={cardIdx === modeloEntries.length - 1}
-                              onClick={() => moveCard(cat, modeloEntries, cardIdx, "down")}
-                              className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${cardIdx === modeloEntries.length - 1 ? "opacity-20 cursor-not-allowed" : dm ? "text-[#86868B] hover:text-white hover:bg-[#3A3A3C]" : "text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#E5E5EA]"}`}
-                              title="Mover para baixo"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                            </button>
-                            <span
-                              draggable
-                              onDragStart={(e) => { e.stopPropagation(); dragCardRef.current = modelo; setDragCardKey(modelo); }}
-                              onDragEnd={() => { setDragCardKey(null); setDropTarget(null); dragCardRef.current = null; }}
-                              className={`w-6 h-6 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing transition-colors ${dm ? "text-[#636366] hover:text-[#E8740E] hover:bg-[#3A3A3C]" : "text-[#C7C7CC] hover:text-[#E8740E] hover:bg-[#E5E5EA]"}`}
-                              title="Arrastar para reordenar"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
-                            </span>
-                          </div>
+                        {obsLimpo && <p className={`text-[10px] ${textMuted} truncate`}>{obsLimpo}</p>}
+                        {/* Cliente + Data (seminovos/a caminho) */}
+                        {p.cliente && (
+                          <p className={`text-[10px] ${textSecondary} truncate`}>👤 {p.cliente}{p.data_compra ? ` (${p.data_compra})` : ""}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-4" onClick={(e) => { e.stopPropagation(); setExpandedModels(prev => { const s = new Set(prev); s.has(modelo) ? s.delete(modelo) : s.add(modelo); return s; }); }}>
-                        {(() => {
-                          // Agrupar por cor pra mostrar resumo no header (em português)
-                          // Normaliza case-insensitive para não duplicar "Preto" vs "PRETO" vs "Black"
-                          const colorSummary: Record<string, { label: string; qnt: number }> = {};
-                          items.forEach(p => {
-                            if (!p.cor || !p.cor.trim() || p.cor.trim() === "—") return;
-                            const label = corParaPT(p.cor);
-                            if (!label || label === "—") return;
-                            const key = label.toUpperCase().trim();
-                            if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
-                            colorSummary[key].qnt += p.qnt;
-                          });
-                          // Apenas para LACRADOS (tipo NOVO) — injeta cores do catálogo que zeraram como 0x
-                          const isLacrado = (items[0]?.tipo || "NOVO") === "NOVO" && items[0]?.categoria !== "SEMINOVOS";
-                          if (isLacrado) {
-                            const coresValidas = getCoresValidasParaProduto(items[0]?.produto || "", items[0]?.categoria || "");
-                            coresValidas.forEach(corEN => {
-                              const label = corParaPT(corEN);
-                              if (!label || label === "—") return;
-                              const key = label.toUpperCase().trim();
-                              if (!colorSummary[key]) colorSummary[key] = { label, qnt: 0 };
-                            });
-                          }
-                          return (
-                            <span className={`text-[11px] ${textSecondary} hidden sm:flex items-center gap-1 flex-wrap cursor-pointer`}>
-                              {Object.values(colorSummary).sort((a,b) => a.label.localeCompare(b.label)).map((c, i) => (
-                                <span key={c.label} className="whitespace-nowrap">{i > 0 && <span className="mx-0.5">·</span>}{c.qnt}x {c.label}</span>
-                              ))}
-                            </span>
-                          );
-                        })()}
-                        {(() => {
-                          const totalQnt = items.reduce((s, p) => s + p.qnt, 0);
-                          const totalValor = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                          const avgCusto = totalQnt > 0 ? Math.round(totalValor / totalQnt) : 0;
-                          const hasVariation = items.some(p => p.custo_unitario !== items[0]?.custo_unitario);
-                          return <>
-                            <span className={`text-[11px] font-medium ${totalQnt === 0 ? "text-red-500" : textPrimary}`}>{totalQnt} un.</span>
-                            {totalQnt === 0 && tab === "estoque" && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-600 uppercase tracking-wide">Esgotado</span>
-                            )}
-                          </>;
-                        })()}
-                        <span className={`text-[11px] font-semibold text-[#E8740E]`}>{fmt(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0))}</span>
-                        {(() => {
-                          const totalQntBal = items.reduce((s, p) => s + p.qnt, 0);
-                          const totalValorBal = items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                          const avgCusto = totalQntBal > 0 ? Math.round(totalValorBal / totalQntBal) : 0;
-                          if (totalQntBal === 0) return null;
-                          if (editBalancoKey === modelo) return (
-                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                              <span className={`text-[10px] ${dm ? "text-blue-400" : "text-blue-600"}`}>Bal. R$</span>
-                              <input
-                                type="number"
-                                value={editBalancoVal}
-                                onChange={(e) => setEditBalancoVal(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") handleSaveBalanco(items); if (e.key === "Escape") { setEditBalancoKey(""); setEditBalancoVal(""); } }}
-                                className={`w-20 px-1 py-0.5 rounded border border-blue-500 text-xs text-right ${dm ? "bg-[#1A1A1A] text-blue-300" : "bg-white text-blue-600"}`}
-                                placeholder={String(avgCusto)}
-                                autoFocus
-                              />
-                              <button onClick={(e) => { e.stopPropagation(); handleSaveBalanco(items); }} className="text-[10px] text-blue-400 font-bold">OK</button>
-                              <button onClick={(e) => { e.stopPropagation(); setEditBalancoKey(""); setEditBalancoVal(""); }} className="text-[10px] text-red-400">✕</button>
-                            </div>
-                          );
-                          return (
-                            <span
-                              className={`text-[10px] px-1.5 py-0.5 rounded ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-600"} ${isAdmin ? "cursor-pointer hover:bg-blue-900/50" : ""}`}
-                              title={isAdmin ? "Clique para editar preço de balanço" : "Preço médio de balanço"}
-                              onClick={(e) => { if (isAdmin) { e.stopPropagation(); setEditBalancoKey(modelo); setEditBalancoVal(String(avgCusto)); } }}
-                            >
-                              Bal. {fmt(avgCusto)}
-                            </span>
-                          );
-                        })()}
-                        {/* Botão Etiqueta no header do card — só Pendências */}
-                        {isPendenciasTab && isAdmin && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); items.forEach(p => handlePrintEtiquetaPendencia(p)); }}
-                            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white hover:border-[#E8740E]" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
-                          >
-                            🏷️ Etiqueta
-                          </button>
-                        )}
-                        {/* Botão qtd. mínima em massa */}
-                        {isAdmin && !isPendenciasTab && (
-                          bulkMinimoKey === modelo ? (
-                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                              <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>mín.</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={bulkMinimoVal}
-                                onChange={(e) => setBulkMinimoVal(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") handleBulkMinimo(items); if (e.key === "Escape") { setBulkMinimoKey(""); setBulkMinimoVal(""); } }}
-                                className={`w-16 px-2 py-1 rounded border border-[#0071E3] text-xs text-center ${dm ? "bg-[#1A1A1A] text-white" : "bg-white text-[#1D1D1F]"}`}
-                                placeholder="0"
-                                autoFocus
-                              />
-                              <button onClick={(e) => { e.stopPropagation(); handleBulkMinimo(items); }} className="text-[11px] text-[#E8740E] font-bold">OK</button>
-                              <button onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(""); setBulkMinimoVal(""); }} className="text-[11px] text-red-400">✕</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setBulkMinimoKey(modelo); setBulkMinimoVal(""); }}
-                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-blue-400 hover:border-blue-400" : "border-[#D2D2D7] text-[#86868B] hover:text-blue-500 hover:border-blue-500"}`}
-                              title="Definir quantidade mínima para todas as variantes"
-                            >
-                              {items.some(p => p.estoque_minimo != null) ? `mín. ${items[0].estoque_minimo ?? "—"}` : "Qtd. mínima"}
-                            </button>
-                          )
-                        )}
-                        {/* Botão editar preço em massa — todas as unidades do grupo */}
-                        {isAdmin && (
-                          bulkCustoKey === modelo ? (
-                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                              <span className="text-[10px] text-white/30">R$</span>
-                              <input
-                                type="number"
-                                value={bulkCustoVal}
-                                onChange={(e) => setBulkCustoVal(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") handleBulkCusto(items); if (e.key === "Escape") { setBulkCustoKey(""); setBulkCustoVal(""); } }}
-                                className="w-24 px-2 py-1 rounded border border-[#0071E3] text-xs text-right bg-[#1A1A1A] text-white"
-                                placeholder="Novo preco"
-                                autoFocus
-                              />
-                              <button onClick={(e) => { e.stopPropagation(); handleBulkCusto(items); }} className="text-[11px] text-[#E8740E] font-bold">OK</button>
-                              <button onClick={(e) => { e.stopPropagation(); setBulkCustoKey(""); setBulkCustoVal(""); }} className="text-[11px] text-red-400">✕</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setBulkCustoKey(modelo); setBulkCustoVal(""); }}
-                              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]"}`}
-                              title="Editar preco de todas as unidades"
-                            >
-                              Editar preco
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                    {expandedModels.has(modelo) && <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <tbody>
-                          {/* Balanço agora aparece no header do card */}
-                          {produtoEntries.map(([prodNome, prodItemsRaw]) => {
-                            // Ordenar por cor → data de entrada
-                            const prodItems = [...prodItemsRaw].sort((a, b) => (a.cor || "").localeCompare(b.cor || "") || (a.data_entrada || "").localeCompare(b.data_entrada || ""));
-                            // No estoque: ocultar grupos onde TODAS as unidades têm qnt=0
-                            const prodTotal = prodItems.reduce((s, p) => s + p.qnt, 0);
-                            if (tab === "estoque" && prodTotal === 0) return null;
-                            const showObs = tab === "seminovos" || isEditableItemTab;
-                            const showMover = isPendenciasTab;
-                            const prodValor = prodItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
-                            const corKey = `${modelo}::${prodNome}`;
-
-                            return (
-                              <React.Fragment key={prodNome}>
-                                {/* Sub-row de cor — clicável pra expandir itens individuais */}
-                                {(() => {
-                                  const isExpanded = expandedColors.has(corKey);
-                                  const toggleExpand = () => {
-                                    setExpandedColors(prev => {
-                                      const s = new Set(prev);
-                                      s.has(corKey) ? s.delete(corKey) : s.add(corKey);
-                                      return s;
-                                    });
-                                  };
-                                  return (<>
-                                <tr className={`${dm ? "bg-[#2A2A2A]" : "bg-[#1D1D1F]"} cursor-pointer`} onClick={toggleExpand}>
-                                  <td className="w-1" style={{ background: "#E8740E" }}></td>
-                                  <td className="px-3 py-2.5 font-semibold text-[12px] text-white" colSpan={1}>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] text-white/40 w-3">{isExpanded ? "▼" : "▶"}</span>
-                                    {(() => {
-                                      const canEditNome = isPendenciasTab;
-                                      return editingNome[prodItems[0]?.id] !== undefined && canEditNome ? (
-                                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                          <input
-                                            value={editingNome[prodItems[0].id]}
-                                            onChange={(e) => setEditingNome({ ...editingNome, [prodItems[0].id]: e.target.value })}
-                                            onKeyDown={(e) => {
-                                              if (e.key === "Enter") handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id]);
-                                              if (e.key === "Escape") { const en = { ...editingNome }; delete en[prodItems[0].id]; setEditingNome(en); }
-                                            }}
-                                            className="w-full px-2 py-0.5 rounded border border-[#0071E3] text-sm font-semibold"
-                                            autoFocus
-                                          />
-                                          <button onClick={() => handleSaveNome(prodItems.map((x) => x.id), editingNome[prodItems[0].id])} className="text-[10px] text-[#E8740E] font-bold shrink-0">OK</button>
-                                        </div>
-                                      ) : (
-                                        <span className={`flex items-center gap-1.5 ${canEditNome ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (canEditNome) { e.stopPropagation(); setEditingNome({ ...editingNome, [prodItems[0].id]: prodItems[0].produto }); } }}>
-                                          {formatProdutoDisplay(prodItems[0] || { produto: prodNome })}
-                                          {(() => {
-                                            const en = corEnOriginal(prodItems[0]?.cor);
-                                            const pt = prodItems[0]?.cor ? corParaPT(prodItems[0].cor) : "";
-                                            if (!en || (pt && en.toLowerCase() === pt.toLowerCase())) return null;
-                                            return <span className="text-[11px] font-normal opacity-60 ml-1">{en}</span>;
-                                          })()}
-                                          {canEditNome && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
-                                        </span>
-                                      );
-                                    })()}
-                                    {/* Apple Watch badges: tamanho + pulseira */}
-                                    {prodItems[0]?.categoria === "APPLE_WATCH" && (() => {
-                                      const { tamanho, pulseira } = extractWatchBadges(prodItems[0]?.produto || prodNome);
-                                      if (!tamanho && !pulseira) return null;
-                                      return (
-                                        <div className="flex gap-1 mt-0.5">
-                                          {tamanho && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#E5E5EA] text-[#636366]"}`}>{tamanho}</span>}
-                                        </div>
-                                      );
-                                    })()}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-2 text-right">
-                                    <span className="text-xs font-bold text-white/90">{prodTotal} un.</span>
-                                  </td>
-                                  <td className="px-4 py-2"></td>
-                                  <td className="px-4 py-2 text-xs font-semibold text-white/90">{fmt(prodValor)}</td>
-                                  <td colSpan={2}></td>
-                                </tr>
-                                {/* Linhas de cada cor */}
-                                {isExpanded && prodItems
-                                  .filter(p => tab !== "estoque" || p.qnt > 0) // no estoque: ocultar qnt=0
-                                  .map((p) => {
-                                  const isEditCusto = editingCusto[p.id] !== undefined;
-                                  const isEditQnt = editingQnt[p.id] !== undefined;
-
-                                  // ── Vista simplificada: só nome + cor (PT) + qtd ────────────────
-                                  if (tab === "estoque") {
-                                    return (
-                                      <tr
-                                        key={p.id}
-                                        onClick={() => setDetailProduct(p)}
-                                        className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
-                                      >
-                                        <td className="pl-3 py-2.5 w-4">
-                                          <span className={`w-2.5 h-2.5 rounded-full inline-block ${p.qnt === 1 ? "bg-yellow-400" : "bg-green-500"}`} />
-                                        </td>
-                                        <td className={`px-3 py-2.5 text-[14px] font-medium ${textPrimary}`}>
-                                          {(() => {
-                                            if (!p.cor) return "—";
-                                            const pt = corParaPT(p.cor);
-                                            const en = corEnOriginal(p.cor);
-                                            return <>{pt}{en && en.toLowerCase() !== pt.toLowerCase() && <span className={`ml-1 text-[12px] ${textSecondary}`}>{en}</span>}</>;
-                                          })()}
-                                          {/* Pulseira badge extraído do nome do produto */}
-                                          {(() => {
-                                            const pulseiraMatch = p.produto?.match(/PULSEIRA\s+(.+)/i);
-                                            if (!pulseiraMatch) return null;
-                                            return <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F0F0F0] text-[#86868B]"}`}>{pulseiraMatch[1]}</span>;
-                                          })()}
-                                          {/* Bateria badge colorido (só seminovos) */}
-                                          {p.bateria && p.tipo === "SEMINOVO" && (
-                                            <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                              p.bateria >= 90 ? "bg-green-100 text-green-700" :
-                                              p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" :
-                                              p.bateria >= 80 ? "bg-orange-100 text-orange-700" :
-                                              "bg-red-100 text-red-700"
-                                            }`}>🔋 {p.bateria}%</span>
-                                          )}
-                                        </td>
-                                        <td className={`px-3 py-2.5 text-right`}>
-                                          <span className={`text-sm font-bold ${p.qnt === 1 ? "text-yellow-500" : "text-green-500"}`}>
-                                            {p.qnt} {p.qnt === 1 ? "un." : "un."}
-                                          </span>
-                                        </td>
-                                        <td className={`px-4 py-2.5 text-xs ${textSecondary}`}>
-                                          {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
-                                        </td>
-                                        <td colSpan={4} className={`px-4 py-2.5 text-right text-[11px] ${textMuted}`}>
-                                          {(p.imei || p.serial_no) && <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>#{p.serial_no || p.imei}</span>}
-                                        </td>
-                                      </tr>
-                                    );
-                                  }
-
-                                  return (
-                                    <tr
-                                      key={p.id}
-                                      draggable={!selectMode && !balanceMode}
-                                      onDragStart={(e) => { if (selectMode || balanceMode) return; e.stopPropagation(); dragItemRef.current = p.id; setDragId(p.id); }}
-                                      onDragEnter={(e) => { e.stopPropagation(); dragOverRef.current = p.id; }}
-                                      onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                                      onDragEnd={(e) => { e.stopPropagation(); handleEstoqueDragEnd(); }}
-                                      onClick={balanceMode ? () => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; }) : selectMode ? () => toggleSelect(p.id) : () => setDetailProduct(p)}
-                                      className={`border-b ${borderLight} last:border-0 transition-colors cursor-pointer ${dragId === p.id ? "opacity-40" : ""} ${balanceMode && balanceSelected.has(p.id) ? (dm ? "bg-blue-500/10" : "bg-blue-50") : selectMode && selectedIds.has(p.id) ? (dm ? "bg-[#E8740E]/10" : "bg-[#FFF5EB]") : ""} ${dm ? "hover:bg-[#252525]" : "hover:bg-[#FAFAFA]"}`}
-                                    >
-                                      <td className="pl-2 py-2.5 select-none w-4">
-                                        {balanceMode && tab === "seminovos" ? (
-                                          <input type="checkbox" checked={balanceSelected.has(p.id)} onChange={() => setBalanceSelected(prev => { const s = new Set(prev); s.has(p.id) ? s.delete(p.id) : s.add(p.id); return s; })} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" onClick={e => e.stopPropagation()} />
-                                        ) : selectMode ? (
-                                          <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-3.5 h-3.5 accent-[#E8740E] cursor-pointer" />
-                                        ) : (
-                                          <span className="text-[10px] cursor-grab active:cursor-grabbing text-[#C7C7CC]">⠿</span>
-                                        )}
-                                      </td>
-                                      <td className="px-2 py-2.5 text-sm">
-                                        <div className="flex flex-col gap-1">
-                                          {isEditableItemTab && isEditingField(p.id, "cor") ? (
-                                            <div className="flex items-center gap-1">
-                                              <input value={getEditVal(p.id, "cor") || ""} onChange={(e) => startEditField(p.id, "cor", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "cor"); if (e.key === "Escape") cancelEditField(p.id, "cor"); }} className="w-24 px-1 py-0.5 rounded border border-[#0071E3] text-xs" autoFocus placeholder="Cor" />
-                                              <button onClick={() => saveField(p.id, "cor")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                            </div>
-                                          ) : (
-                                            <span className={`${textSecondary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); startEditField(p.id, "cor", p.cor || ""); } }}>• {(() => { const u = (p.cor || "").toUpperCase().trim(); const customPt = CUSTOM_COR_PT[u]; if (customPt) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({customPt})</span></>; const en = PT_TO_EN[u]; if (en) return <>{en}<span className="ml-1 opacity-60 text-[10px]">({p.cor?.charAt(0).toUpperCase()}{p.cor?.slice(1).toLowerCase()})</span></>; const pt = COR_PT[u]; if (pt && pt.toLowerCase() !== (p.cor || "").toLowerCase()) return <>{p.cor}<span className="ml-1 opacity-60 text-[10px]">({pt})</span></>; return p.cor || "—"; })()}</span>
-                                          )}
-                                          {(p.imei || p.serial_no) && (
-                                            <div className={`flex flex-wrap gap-x-3 gap-y-1 mt-0.5 px-2 py-1 rounded-lg ${dm ? "bg-[#1C1C1E]" : "bg-[#F5F5F7]"}`}>
-                                              {p.imei && (
-                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.imei || ""); setMsg(`IMEI copiado: ${p.imei}`); }} className="flex items-center gap-1 text-[11px] font-mono text-[#0071E3] hover:text-[#E8740E] cursor-pointer" title="Copiar IMEI">
-                                                  <span className="text-[9px] font-sans font-bold text-[#86868B]">IMEI</span>{p.imei}
-                                                </button>
-                                              )}
-                                              {p.serial_no && (
-                                                <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(p.serial_no || ""); setMsg(`Serial copiado: ${p.serial_no}`); }} className="flex items-center gap-1 text-[11px] font-mono text-purple-600 hover:text-[#E8740E] cursor-pointer" title="Copiar Serial">
-                                                  <span className="text-[9px] font-sans font-bold text-[#86868B]">SN</span>{p.serial_no}
-                                                </button>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="px-2 py-2.5 text-xs">
-                                        <div className="flex flex-col gap-1">
-                                          {isEditableItemTab && <span className="font-medium">{p.cliente || "—"}{p.data_compra ? <span className="text-[#86868B] ml-1">({p.data_compra})</span> : ""}</span>}
-                                          <div className="flex flex-wrap gap-1 items-center">
-                                            {/* Condição: Lacrado / Usado — para A_CAMINHO ler do observacao */}
-                                            {(() => {
-                                              const cond = p.tipo === "A_CAMINHO" ? getCondicaoFromObs(p) : p.tipo;
-                                              if (cond === "SEMINOVO" || cond === "PENDENCIA") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-yellow-100 text-yellow-700">Usado</span>;
-                                              if (cond === "NAO_ATIVADO") return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Não Ativado</span>;
-                                              return <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">Lacrado</span>;
-                                            })()}
-                                            {/* Bateria (só seminovo/pendência) — admin pode editar em qualquer aba */}
-                                            {(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && (() => {
-                                              const bateriaEditable = isEditableItemTab || isAdmin;
-                                              if (bateriaEditable && isEditingField(p.id, "bateria")) return (
-                                                <div className="flex items-center gap-0.5">
-                                                  <input type="number" value={getEditVal(p.id, "bateria") || ""} onChange={(e) => startEditField(p.id, "bateria", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "bateria"); if (e.key === "Escape") cancelEditField(p.id, "bateria"); }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="%" />
-                                                  <button onClick={() => saveField(p.id, "bateria")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                                </div>
-                                              );
-                                              if (bateriaEditable) return (
-                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "bateria", String(p.bateria || "")); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${p.bateria ? "bg-green-50 text-green-600" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                  {p.bateria ? `🔋 ${p.bateria}%` : "+ Bateria"}
-                                                </button>
-                                              );
-                                              return p.bateria ? (
-                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-600">🔋 {p.bateria}%</span>
-                                              ) : null;
-                                            })()}
-                                            {/* Badges: Grade, Caixa, Garantia */}
-                                            {(() => {
-                                              const obs = p.observacao || "";
-                                              const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
-                                              const grade = gradeMatch || null;
-                                              const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
-                                              const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
-                                              const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
-                                              const hasPulseira = obs.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(obs);
-                                              const ciclos = obs.match(/\[CICLOS:(\d+)\]/)?.[1];
-                                              const isUsado = p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA";
-                                              if (!isUsado) return null;
-                                              return (<>
-                                                {grade && <span className={`px-1 py-px rounded text-[9px] font-bold ${grade === "A+" ? "bg-amber-100 text-amber-700" : grade === "A" ? "bg-green-100 text-green-700" : grade === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{grade}</span>}
-                                                {hasCaixa && <span className="text-[9px]" title="Com caixa">📦</span>}
-                                                {hasCabo && <span className="text-[9px]" title="Com cabo">🔌</span>}
-                                                {hasFonte && <span className="text-[9px]" title="Com carregador">🔋</span>}
-                                                {hasPulseira && <span className="text-[9px]" title="Com pulseira">⌚</span>}
-                                                {ciclos && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
-                                                {p.garantia && <span className={`px-1 py-px rounded text-[9px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
-                                              </>);
-                                            })()}
-                                            {/* Com quem está (pendência) — editável texto livre via tag [COM_QUEM:...] */}
-                                            {isPendenciasTab && (() => {
-                                              const comQuemAtual = p.observacao?.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
-                                              if (isEditingField(p.id, "com_quem")) return (
-                                                <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                                                  <input value={getEditVal(p.id, "com_quem") || ""} onChange={(e) => startEditField(p.id, "com_quem", e.target.value)}
-                                                    onKeyDown={async (e) => {
-                                                      if (e.key === "Enter") {
-                                                        const val = (getEditVal(p.id, "com_quem") || "").trim();
-                                                        const obsBase = (p.observacao || "").replace(/\[COM_QUEM:[^\]]+\]/g, "").trim();
-                                                        const newObs = val ? `${obsBase} [COM_QUEM:${val}]`.trim() : (obsBase || null);
-                                                        await apiPatch(p.id, { observacao: newObs });
-                                                        setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, observacao: newObs } : x));
-                                                        cancelEditField(p.id, "com_quem");
-                                                      }
-                                                      if (e.key === "Escape") cancelEditField(p.id, "com_quem");
-                                                    }}
-                                                    className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Ex: Técnico João" />
-                                                </div>
-                                              );
-                                              return (
-                                                <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "com_quem", comQuemAtual); }}
-                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${comQuemAtual ? "bg-blue-50 text-blue-700" : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E]`}>
-                                                  {comQuemAtual ? `👤 ${comQuemAtual}` : "+ Com quem"}
-                                                </button>
-                                              );
-                                            })()}
-                                            {/* Origem/Obs */}
-                                            {isEditableItemTab && isEditingField(p.id, "observacao") ? (
-                                              <div className="flex items-center gap-0.5">
-                                                <input value={getEditVal(p.id, "observacao") || ""} onChange={(e) => startEditField(p.id, "observacao", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveField(p.id, "observacao"); if (e.key === "Escape") cancelEditField(p.id, "observacao"); }} className="w-32 px-1 py-0.5 rounded border border-[#0071E3] text-[10px]" autoFocus placeholder="Origem..." />
-                                                <button onClick={() => saveField(p.id, "observacao")} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                              </div>
-                                            ) : isEditableItemTab ? (
-                                              <button onClick={(e) => { e.stopPropagation(); startEditField(p.id, "observacao", p.observacao || ""); }} className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${cleanObs(p.observacao) ? `${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-[#86868B]"}` : `${dm ? "bg-[#2C2C2E] text-[#636366]" : "bg-gray-100 text-[#86868B]"}`} hover:ring-1 hover:ring-[#E8740E] max-w-[150px] truncate`}>
-                                                {cleanObs(p.observacao) || "+ Obs"}
-                                              </button>
-                                            ) : cleanObs(p.observacao) ? (
-                                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"} max-w-[150px] truncate`}>{cleanObs(p.observacao)}</span>
-                                            ) : null}
-                                          </div>
-                                          {!isEditableItemTab && p.data_entrada && (
-                                            <span className={`text-[10px] ${dm ? "text-[#636366]" : "text-[#C7C7CC]"}`}>{p.data_entrada}</span>
-                                          )}
-                                        </div>
-                                      </td>
-                                      <td className="px-4 py-2.5">
-                                        {isEditQnt ? (
-                                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                            <input type="number" min="0" value={editingQnt[p.id]} onChange={(e) => setEditingQnt({ ...editingQnt, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { const v = parseInt(editingQnt[p.id]); if (!isNaN(v) && v >= 0) handleUpdateQnt(p, v); } if (e.key === "Escape") { const eq = { ...editingQnt }; delete eq[p.id]; setEditingQnt(eq); } }} className="w-14 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-center font-bold" autoFocus />
-                                            <button onClick={() => { const v = parseInt(editingQnt[p.id]); if (!isNaN(v) && v >= 0) handleUpdateQnt(p, v); }} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                          </div>
-                                        ) : (
-                                          <span className={`font-bold min-w-[24px] text-center ${p.qnt === 0 ? "text-red-500" : p.qnt === 1 ? "text-yellow-600" : textPrimary} ${isEditableItemTab ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={(e) => { if (isEditableItemTab) { e.stopPropagation(); setEditingQnt({ ...editingQnt, [p.id]: String(p.qnt) }); } }}>{p.qnt}</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5">
-                                        {isEditCusto ? (
-                                          <div className="flex items-center gap-1">
-                                            <input type="number" value={editingCusto[p.id]} onChange={(e) => setEditingCusto({ ...editingCusto, [p.id]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") handleSaveCusto(p); if (e.key === "Escape") { const ec = { ...editingCusto }; delete ec[p.id]; setEditingCusto(ec); } }} className="w-20 px-1 py-0.5 rounded border border-[#0071E3] text-xs text-right" autoFocus />
-                                            <button onClick={() => handleSaveCusto(p)} className="text-[10px] text-[#E8740E] font-bold">OK</button>
-                                          </div>
-                                        ) : (
-                                          <span className={`text-xs flex items-center gap-1 ${isAdmin ? "cursor-pointer hover:text-[#E8740E]" : ""}`} onClick={() => isAdmin && setEditingCusto({ ...editingCusto, [p.id]: String(p.custo_unitario || "") })}>
-                                            {p.custo_unitario ? fmt(p.custo_unitario) : "—"}
-                                            {isAdmin && <svg className="w-3 h-3 text-[#86868B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-xs font-medium">{p.custo_unitario && p.qnt ? fmt(p.custo_unitario * p.qnt) : "—"}</td>
-                                      <td></td>
-                                      <td className="px-4 py-2.5">
-                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${dm ? (p.status === "EM ESTOQUE" ? "bg-green-900/30 text-green-400" : p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
-                                        {p.qnt === 0 && produtosACaminho.has(p.produto.toUpperCase()) && (
-                                          <span className={`ml-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold ${dm ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"}`}>Ja a caminho</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5">
-                                        <div className="flex gap-2 items-center opacity-40 group-hover/row:opacity-100 transition-opacity">
-                                        {showMover && (() => {
-                                          const needsSerial = !["MAC_MINI", "ACESSORIOS", "OUTROS", "AIRPODS"].includes(p.categoria);
-                                          const qnt = p.qnt || 1;
-
-                                          if (needsSerial && qnt > 1) {
-                                            // Múltiplas unidades: inputs de serial + botão Salvar (separa em registros individuais)
-                                            return (
-                                              <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
-                                                <div className="flex gap-1 flex-wrap">
-                                                  {Array.from({ length: qnt }, (_, i) => (
-                                                    <input key={i} placeholder={`Serial ${i + 1}`} id={`serial-${p.id}-${i}`}
-                                                      style={{ textTransform: "uppercase" }}
-                                                      className={`px-2 py-1 rounded-lg text-[11px] w-32 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                                                      onPaste={(e) => handleSerialPaste(e, (v) => { const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement; if (el) { el.value = v; } }, setOcrLoading)} />
-                                                  ))}
-                                                </div>
-                                                <button onClick={async () => {
-                                                  const serials: string[] = [];
-                                                  for (let i = 0; i < qnt; i++) {
-                                                    const el = document.getElementById(`serial-${p.id}-${i}`) as HTMLInputElement;
-                                                    const val = el?.value?.trim() || "";
-                                                    if (!val && needsSerial) { setMsg(`Preencha o Serial ${i + 1}`); return; }
-                                                    serials.push(val.toUpperCase());
-                                                  }
-                                                  // Separar em registros individuais (garante A_CAMINHO)
-                                                  const res1 = await apiPatch(p.id, { serial_no: serials[0], qnt: 1, tipo: "A_CAMINHO", status: "A CAMINHO" });
-                                                  let created = 0;
-                                                  for (let i = 1; i < serials.length; i++) {
-                                                    const res = await fetch("/api/estoque", {
-                                                      method: "POST",
-                                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) },
-                                                      body: JSON.stringify({
-                                                        produto: p.produto, categoria: p.categoria, qnt: 1,
-                                                        custo_unitario: p.custo_unitario, cor: p.cor, fornecedor: p.fornecedor,
-                                                        serial_no: serials[i], tipo: "A_CAMINHO", status: "A CAMINHO",
-                                                        data_compra: p.data_compra, pedido_fornecedor_id: p.pedido_fornecedor_id,
-                                                      }),
-                                                    });
-                                                    if (res.ok) created++;
-                                                  }
-                                                  setMsg(`✅ ${serials.length} seriais salvos (${created + 1} registros)! Selecione e clique "Mover → Estoque".`);
-                                                  await fetchEstoque();
-                                                }} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
-                                                  💾 Salvar {qnt} seriais
-                                                </button>
-                                              </div>
-                                            );
-                                          }
-
-                                          // 1 unidade
-                                          if (needsSerial && !p.serial_no) {
-                                            // Sem serial: input pra digitar + salvar
-                                            return (
-                                              <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
-                                                <input placeholder={ocrLoading ? "Lendo..." : "Serial Number"}
-                                                  style={{ textTransform: "uppercase" }}
-                                                  className={`px-2 py-1 rounded-lg text-[11px] w-28 border ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
-                                                  onKeyDown={async (e) => { if (e.key === "Enter") { const val = (e.target as HTMLInputElement).value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); setMsg(`✅ Serial ${val} salvo!`); } }}
-                                                  onBlur={async (e) => { const val = e.target.value.trim().toUpperCase(); if (!val) return; await apiPatch(p.id, { serial_no: val }); setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, serial_no: val } : x)); }}
-                                                  onPaste={(e) => handleSerialPaste(e, (v) => { (e.target as HTMLInputElement).value = v; }, setOcrLoading)}
-                                                />
-                                              </div>
-                                            );
-                                          }
-
-                                          // Já tem serial ou não precisa: mostra o serial salvo (pronto pra selecionar)
-                                          return (
-                                            <div className="flex gap-1 items-center">
-                                              {p.serial_no && <span className={`text-[10px] font-mono ${dm ? "text-green-400" : "text-green-600"}`}>✅ {p.serial_no}</span>}
-                                              {!needsSerial && <span className={`text-[10px] ${dm ? "text-green-400" : "text-green-600"}`}>✅ Pronto</span>}
-                                            </div>
-                                          );
-                                        })()}
-                                        {/* Botão Etiqueta — Pendências (produto na troca) */}
-                                        {isPendenciasTab && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }}
-                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
-                                          >
-                                            🏷️ Etiqueta
-                                          </button>
-                                        )}
-                                        {/* Botão Etiqueta — só no tab A Caminho */}
-                                        {isACaminhoTab && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const qnt = p.qnt || 1;
-                                              const fmtCusto = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 0 });
-                                              const fmtDate = (d: string) => { try { const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}`; } catch { return d; } };
-                                              const labels = Array.from({ length: qnt }, () => `
-                                                <div class="label">
-                                                  <div class="produto">${p.produto}</div>
-                                                  ${p.cor ? `<div class="cor">${formatCorEtiquetaPTEN(p.cor)}</div>` : ""}
-                                                  <div class="custo">R$ ${fmtCusto(p.custo_unitario || 0)}</div>
-                                                  ${p.fornecedor ? `<div class="fornecedor">${p.fornecedor}</div>` : ""}
-                                                  ${p.data_compra ? `<div class="data">${fmtDate(p.data_compra)}</div>` : ""}
-                                                </div>
-                                              `).join("");
-                                              const win = window.open("", "_blank", "width=400,height=400");
-                                              if (win) {
-                                                win.document.write(`<!DOCTYPE html><html><head>
-                                                  <title>Etiqueta - ${p.produto}</title>
-                                                  <style>
-                                                    *{margin:0;padding:0;box-sizing:border-box}
-                                                    body{font-family:Arial,sans-serif}
-                                                    .label{text-align:center;padding:3mm 4mm 2mm;page-break-after:always;width:62mm;height:45mm;display:flex;flex-direction:column;justify-content:center;align-items:center}
-                                                    .label:last-child{page-break-after:auto}
-                                                    .produto{font-size:11pt;font-weight:bold;line-height:1.2}
-                                                    .cor{font-size:8pt;color:#333;margin-top:1mm}
-                                                    .custo{font-size:12pt;font-weight:bold;color:#E8740E;margin-top:2mm}
-                                                    .fornecedor{font-size:7pt;color:#555;margin-top:1mm;text-transform:uppercase}
-                                                    .data{font-size:6pt;color:#888;margin-top:1mm}
-                                                    @page{size:62mm 45mm;margin:0}
-                                                  </style></head><body>${labels}
-                                                  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
-                                                </body></html>`);
-                                                win.document.close();
-                                              }
-                                            }}
-                                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-purple-400 hover:bg-purple-500 hover:text-white" : "bg-purple-50 text-purple-500 hover:bg-purple-500 hover:text-white"}`}
-                                          >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                                            Etiqueta
-                                          </button>
-                                        )}
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setDetailProduct(p); }}
-                                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-[#F5A623] hover:bg-[#E8740E] hover:text-white" : "bg-[#FFF3E0] text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}
-                                        >
-                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                          Ver
-                                        </button>
-                                        {isAdmin && <button onClick={async (e) => {
-                                          e.stopPropagation();
-                                          if (!confirm(`Excluir ${p.produto}${p.cor ? ` ${p.cor}` : ""}?`)) return;
-                                          await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ id: p.id }) });
-                                          setEstoque((prev) => prev.filter((r) => r.id !== p.id));
-                                        }} className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${dm ? "bg-[#3A3A3C] text-red-400 hover:bg-red-500 hover:text-white" : "bg-red-50 text-red-400 hover:bg-red-500 hover:text-white"}`}
-                                        >
-                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                          Excluir
-                                        </button>}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                                </>);
-                                })()}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>}
-                  </div>
-                    {/* Drop indicator - after */}
-                    {isDropAfter && dragCardKey && (
-                      <div className="absolute -bottom-1.5 left-4 right-4 h-[3px] rounded-full bg-[#E8740E] z-10 shadow-[0_0_8px_rgba(232,116,14,0.5)]" />
-                    )}
-                  </div>
-                  );
-                });
-                })()}
+                    );
+                  })}
+                </div>
               </div>
-            ))}
+              );
+            })}
             </>
           )}
         </div>
