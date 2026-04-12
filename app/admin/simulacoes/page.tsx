@@ -855,7 +855,19 @@ export default function AdminPage() {
               <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto Novo</h3>
                 <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_novo} {modalRow.storage_novo}</p>
-                <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
+                {editMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#86868B]">Valor (R$):</span>
+                    <input
+                      type="number"
+                      value={editData.preco_novo || ""}
+                      onChange={(e) => setEditData(p => ({ ...p, preco_novo: e.target.value }))}
+                      className="flex-1 px-2.5 py-1.5 text-sm font-bold text-[#E8740E] rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
+                )}
               </div>
 
               {/* Used device(s) */}
@@ -877,6 +889,7 @@ export default function AdminPage() {
                       cor_usado2: modalRow.cor_usado2 || "",
                       avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
                       condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
+                      preco_novo: String(modalRow.preco_novo || 0),
                     });
                     setEditMode(true);
                   }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
@@ -915,10 +928,10 @@ export default function AdminPage() {
                     )}
                     {/* Resumo em tempo real */}
                     <div className="bg-[#F5F5F7] rounded-lg p-3 space-y-1">
-                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(modalRow.preco_novo)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(Number(editData.preco_novo) || 0)}</span></div>
                       <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 1º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado) || 0)}</span></div>
                       {(Number(editData.avaliacao_usado2) || 0) > 0 && <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 2º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado2) || 0)}</span></div>}
-                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt(modalRow.preco_novo - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
+                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt((Number(editData.preco_novo) || 0) - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
                     </div>
                     <button
                       disabled={savingEdit}
@@ -927,16 +940,17 @@ export default function AdminPage() {
                         try {
                           const aval1 = Number(editData.avaliacao_usado) || 0;
                           const aval2 = Number(editData.avaliacao_usado2) || 0;
-                          const dif = modalRow.preco_novo - aval1 - aval2;
+                          const precoNovo = Number(editData.preco_novo) || modalRow.preco_novo;
+                          const dif = precoNovo - aval1 - aval2;
                           const condLines1 = editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
                           const condLines2 = editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null;
                           const res = await fetch("/api/admin/simulacoes", {
                             method: "PATCH",
                             headers: { "x-admin-password": password, "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif }),
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif, preco_novo: precoNovo }),
                           });
                           if (res.ok) {
-                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif, preco_novo: precoNovo } as SimulacaoRow);
                             setEditMode(false);
                             fetchData(password);
                           } else { alert("Erro ao salvar"); }

@@ -3876,15 +3876,15 @@ export default function VendasPage() {
                         };
                         if (v.forma === "CARTAO" && v.qnt_parcelas) {
                           pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.banco === "MERCADO_PAGO" && !temEntrada && !valorTrocaTotal) {
-                          pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}`);
-                        } else if (v.forma && v.forma !== "CARTAO" && (resto > 0 || (!temEntrada && !valorTrocaTotal))) {
+                        } else if (v.banco === "MERCADO_PAGO") {
+                          pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
+                        } else if (v.forma && v.forma !== "CARTAO") {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
                           pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
                         }
-                        // Upgrade/troca sem forma definida: mostrar o complemento a pagar
-                        if (!v.forma && valorTrocaTotal > 0 && resto > 0) {
+                        // Sem forma definida mas tem complemento a pagar
+                        if (!v.forma && resto > 0) {
                           pagParts.push(`Complemento: ${fmt(resto)}`);
                         }
                         if (v.banco_alt) {
