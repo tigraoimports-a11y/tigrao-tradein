@@ -4622,18 +4622,35 @@ export default function EstoquePage() {
               // Ordenar por storage
               const storageToNum = (name: string): number => { const m = name.match(/(\d+)\s*(GB|TB)/i); if (!m) return 0; return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]); };
               const groupEntries = Object.entries(grouped).sort(([a], [b]) => { const sa = storageToNum(a); const sb = storageToNum(b); if (sa !== sb) return sa - sb; return a.localeCompare(b); });
+              // Agrupar cards por linha de modelo (ex: "iPhone 17 Pro Max") — sem storage
+              const byLine: Record<string, typeof groupEntries> = {};
+              groupEntries.forEach(entry => {
+                const [key] = entry;
+                const modeloFull = key.split("|||")[0];
+                const line = modeloFull;
+                if (!byLine[line]) byLine[line] = [];
+                byLine[line].push(entry);
+              });
               const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
               const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
-              <div key={cat} className="space-y-3">
+              <div key={cat} className="space-y-5">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {groupEntries.length} modelo{groupEntries.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
                 </h2>
-                <div className="flex flex-wrap gap-3">
-                  {groupEntries.map(([groupKey, items]) => {
+                {Object.entries(byLine).map(([lineName, lineEntries]) => {
+                  const lineQnt = lineEntries.reduce((s, [, items]) => s + items.reduce((ss, p) => ss + p.qnt, 0), 0);
+                  return (
+                  <div key={lineName} className="space-y-2">
+                    <h3 className={`text-sm font-semibold ${textSecondary} flex items-center gap-2`}>
+                      {lineName}
+                      <span className={`text-[11px] font-normal ${textMuted}`}>{lineQnt} un.</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                  {lineEntries.map(([groupKey, items]) => {
                     const rep = items[0];
                     const qntTotal = items.reduce((s, p) => s + p.qnt, 0);
                     const avgCusto = qntTotal > 0 ? Math.round(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0) / qntTotal) : (rep.custo_unitario || 0);
@@ -4688,7 +4705,10 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                </div>
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
               );
             })}

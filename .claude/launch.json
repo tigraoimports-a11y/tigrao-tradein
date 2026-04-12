@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "tigrao-tradein",
-      "runtimeExecutable": "/usr/local/bin/npx",
+      "runtimeExecutable": "/Users/andrefelippe/.nvm/versions/node/v24.14.0/bin/npx",
       "runtimeArgs": ["next", "dev"],
       "port": 3000
     }
