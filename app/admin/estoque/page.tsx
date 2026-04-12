@@ -49,12 +49,15 @@ function formatProdutoDisplay(p: {
   // RAM: vem de tag [RAM:X] ou, se não, o menor valor GB/TB quando há 2+
   const ramTag = obs.match(/\[RAM:([^\]]+)\]/);
   let ram = ramTag ? ramTag[1].trim().toUpperCase() : "";
+  // Limpar valores invalidos
+  if (ram && !/\d/.test(ram)) ram = "";
   if (!ram && sorted.length >= 2) {
     ram = sorted[sorted.length - 1].raw;
   }
   // SSD: tag [SSD:X] ou storage principal
   const ssdTag = obs.match(/\[SSD:([^\]]+)\]/);
-  const ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+  let ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+  if (ssd && !/\d/.test(ssd)) ssd = storage;
 
   // Tela (polegadas)
   const telaTag = obs.match(/\[TELA:([^\]]+)\]/);
@@ -5972,19 +5975,22 @@ export default function EstoquePage() {
                   push("Tamanho", telaFinal);
                   push("RAM", ram);
                   push("SSD", ssd);
-                  const mbChipName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1] || (() => {
-                    if (!cpu || !gpu) return null;
-                    const c = parseInt(cpu), g = parseInt(gpu);
-                    if (c === 8 && (g === 8 || g === 10)) return "M4";
-                    if (c === 10 && g === 10) return "M4";
-                    if (c === 12 && (g === 16 || g === 19)) return "M4 Pro";
-                    if (c === 14 && g === 20) return "M4 Pro";
-                    if (c === 16 && g === 40) return "M4 Max";
-                    if (c === 6 && g === 5) return "A18 Pro";
-                    if (c === 8 && g === 7) return "M3";
-                    if (c === 11 && g === 14) return "M3 Pro";
-                    if (c === 12 && g === 18) return "M3 Pro";
-                    if (c === 14 && g === 30) return "M3 Max";
+                  const mbChipName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?|A\d+\s*PRO)/i)?.[1] || (() => {
+                    if (cpu && gpu) {
+                      const c = parseInt(cpu), g = parseInt(gpu);
+                      if (c === 8 && (g === 8 || g === 10)) return "M4";
+                      if (c === 10 && g === 10) return "M4";
+                      if (c === 12 && (g === 16 || g === 19)) return "M4 Pro";
+                      if (c === 14 && g === 20) return "M4 Pro";
+                      if (c === 16 && g === 40) return "M4 Max";
+                      if (c === 6 && g === 5) return "A18 Pro";
+                      if (c === 8 && g === 7) return "M3";
+                      if (c === 11 && g === 14) return "M3 Pro";
+                      if (c === 12 && g === 18) return "M3 Pro";
+                      if (c === 14 && g === 30) return "M3 Max";
+                    }
+                    // Fallback: Neo = A18 Pro
+                    if (/NEO/i.test(nome)) return "A18 Pro";
                     return null;
                   })();
                   const nucleos = cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : null;
