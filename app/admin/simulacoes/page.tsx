@@ -852,7 +852,7 @@ export default function AdminPage() {
               </div>
 
               {/* New product */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+              <div className={`rounded-xl p-4 space-y-2 ${!modalRow.preco_novo ? "bg-yellow-50 border border-yellow-300" : "bg-[#F5F5F7]"}`}>
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto Novo</h3>
                 <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_novo} {modalRow.storage_novo}</p>
                 {editMode ? (
@@ -864,6 +864,59 @@ export default function AdminPage() {
                       onChange={(e) => setEditData(p => ({ ...p, preco_novo: e.target.value }))}
                       className="flex-1 px-2.5 py-1.5 text-sm font-bold text-[#E8740E] rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none"
                     />
+                  </div>
+                ) : !modalRow.preco_novo ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-yellow-800">Aguardando precificacao</p>
+                    <p className="text-xs text-yellow-700">Defina o valor de venda deste seminovo:</p>
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs text-yellow-700 font-medium">R$</span>
+                      <input
+                        type="number"
+                        placeholder="Ex: 7500"
+                        id="modal-preco-seminovo"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-yellow-400 text-sm focus:border-[#E8740E] focus:outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const v = parseFloat((e.target as HTMLInputElement).value);
+                            if (v > 0) {
+                              // Salvar direto via PATCH
+                              const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                              const dif = v - aval;
+                              fetch("/api/admin/simulacoes", {
+                                method: "PATCH",
+                                headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: modalRow.id, preco_novo: v, diferenca: dif }),
+                              }).then(() => {
+                                setModalRow({ ...modalRow, preco_novo: v, diferenca: dif } as SimulacaoRow);
+                                fetchData(password);
+                              });
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const input = document.getElementById("modal-preco-seminovo") as HTMLInputElement;
+                          const v = parseFloat(input?.value || "0");
+                          if (v > 0) {
+                            const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                            const dif = v - aval;
+                            fetch("/api/admin/simulacoes", {
+                              method: "PATCH",
+                              headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: modalRow.id, preco_novo: v, diferenca: dif }),
+                            }).then(() => {
+                              setModalRow({ ...modalRow, preco_novo: v, diferenca: dif } as SimulacaoRow);
+                              fetchData(password);
+                            });
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition"
+                      >
+                        Salvar e recalcular
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
@@ -990,17 +1043,39 @@ export default function AdminPage() {
               )}
 
               {/* Financial summary */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+              <div className={`rounded-xl p-4 space-y-2 ${!modalRow.preco_novo ? "bg-yellow-50 border border-yellow-300" : "bg-[#F5F5F7]"}`}>
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Resumo Financeiro</h3>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#86868B]">Diferenca PIX:</span>
-                  <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
-                </div>
-                {modalRow.forma_pagamento && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#86868B]">Forma de pagamento:</span>
-                    <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
-                  </div>
+                {!modalRow.preco_novo ? (
+                  <p className="text-sm text-yellow-700 italic">Defina o valor do seminovo acima para ver o resumo</p>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#86868B]">Produto novo:</span>
+                      <span className="text-[#1D1D1F] font-semibold">{fmt(modalRow.preco_novo)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#86868B]">Avaliacao troca:</span>
+                      <span className="text-green-600 font-semibold">- {fmt((modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0))}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]">
+                      <span className="text-[#E8740E] font-bold">Diferenca PIX:</span>
+                      <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
+                    </div>
+                    {modalRow.diferenca > 0 && (
+                      <div className="text-xs text-[#86868B] space-y-0.5 pt-1">
+                        {[3, 6, 10, 12].map(n => {
+                          const parcela = Math.round(modalRow.diferenca / n);
+                          return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
+                        })}
+                      </div>
+                    )}
+                    {modalRow.forma_pagamento && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#86868B]">Forma de pagamento:</span>
+                        <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
