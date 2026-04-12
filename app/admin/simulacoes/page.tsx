@@ -1015,13 +1015,21 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <>
-                    <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
-                    {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
-                      <div className="text-xs text-[#6E6E73] space-y-0.5">
-                        {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
-                      </div>
+                    {modalRow.modelo_usado ? (
+                      <>
+                        <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
+                        {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 ? (
+                          <div className="text-xs text-[#6E6E73] space-y-0.5">
+                            {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-yellow-600 italic">Condicao nao informada — clique Editar para adicionar</p>
+                        )}
+                        <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-[#86868B] italic">Nenhum aparelho na troca informado</p>
                     )}
-                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
                   </>
                 )}
               </div>
