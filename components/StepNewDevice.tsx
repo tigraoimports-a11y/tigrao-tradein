@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import type { NewProduct, TradeInConfig } from "@/lib/types";
 import { getUniqueModels, getStoragesForModel, getProductPrice } from "@/lib/sheets";
 import { formatBRL, calculateQuote, getAnyConditionLines, type AnyConditionData, type DeviceType } from "@/lib/calculations";
+import { WHATSAPP_SEMINOVO } from "@/lib/whatsapp-config";
 
 interface StepNewDeviceProps {
   products: NewProduct[];
@@ -369,7 +370,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       } : {}),
                     }),
                   }).catch(() => {});
-                  const waNum = whatsappNumber || "5521967442665";
+                  const waNum = WHATSAPP_SEMINOVO;
                   const msg = encodeURIComponent(buildWhatsAppMsg());
                   window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");
                 }}
