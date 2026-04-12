@@ -1051,8 +1051,11 @@ export default function AdminPage() {
               )}
 
               {/* Financial summary */}
-              <div className={`rounded-xl p-4 space-y-2 ${!modalRow.preco_novo ? "bg-yellow-50 border border-yellow-300" : "bg-[#F5F5F7]"}`}>
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Resumo Financeiro</h3>
+              <div className={`rounded-xl overflow-hidden border ${!modalRow.preco_novo ? "border-yellow-300 bg-yellow-50" : "border-[#E8740E]/30 bg-gradient-to-b from-[#FFF8F2] to-white"}`}>
+                <div className={`px-4 py-2.5 ${!modalRow.preco_novo ? "bg-yellow-100" : "bg-[#E8740E]"}`}>
+                  <h3 className={`text-xs font-bold uppercase tracking-wider ${!modalRow.preco_novo ? "text-yellow-800" : "text-white"}`}>Resumo Financeiro</h3>
+                </div>
+                <div className="p-4 space-y-2">
                 {!modalRow.preco_novo ? (
                   <p className="text-sm text-yellow-700 italic">Defina o valor do seminovo acima para ver o resumo</p>
                 ) : (
@@ -1065,90 +1068,84 @@ export default function AdminPage() {
                       <span className="text-[#86868B]">Avaliacao troca:</span>
                       <span className="text-green-600 font-semibold">- {fmt((modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0))}</span>
                     </div>
-                    <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]">
-                      <span className="text-[#E8740E] font-bold">Diferenca PIX:</span>
-                      <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
+                    <div className="flex justify-between text-base pt-2 mt-1 border-t-2 border-[#E8740E]/20">
+                      <span className="text-[#E8740E] font-bold">No PIX:</span>
+                      <span className="text-[#E8740E] font-bold text-lg">{fmt(modalRow.diferenca)}</span>
                     </div>
                     {modalRow.diferenca > 0 && (() => {
                       const TODAS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
                       const DEFAULT = [12, 18, 21];
                       const selecionadas = modalParcelasVisiveis || DEFAULT;
                       return (
-                        <div className="text-xs text-[#86868B] space-y-1 pt-1">
+                        <div className="space-y-2 pt-2">
                           <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider">Parcelamento</p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setModalParcelasVisiveis(selecionadas.length === TODAS.length ? DEFAULT : [...TODAS]);
-                              }}
-                              className="text-[10px] text-[#0071E3] hover:underline"
-                            >
-                              {selecionadas.length === TODAS.length ? "Menos" : "Todas"}
+                            <p className="text-[11px] font-bold text-[#1D1D1F] uppercase tracking-wider">Parcelamento</p>
+                            <button type="button" onClick={() => setModalParcelasVisiveis(selecionadas.length === TODAS.length ? DEFAULT : [...TODAS])} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
+                              {selecionadas.length === TODAS.length ? "Padrao" : "Todas"}
                             </button>
                           </div>
-                          <div className="flex flex-wrap gap-1 mb-1">
+                          <div className="flex flex-wrap gap-[3px]">
                             {TODAS.map(n => {
                               const ativo = selecionadas.includes(n);
                               return (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  onClick={() => {
-                                    setModalParcelasVisiveis(
-                                      ativo ? selecionadas.filter(x => x !== n) : [...selecionadas, n].sort((a,b) => a-b)
-                                    );
-                                  }}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition ${ativo ? "bg-[#E8740E] text-white" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
+                                <button key={n} type="button"
+                                  onClick={() => setModalParcelasVisiveis(ativo ? selecionadas.filter(x => x !== n) : [...selecionadas, n].sort((a,b) => a-b))}
+                                  className={`w-8 h-7 rounded-md text-[11px] font-semibold transition-all ${ativo ? "bg-[#E8740E] text-white shadow-sm" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
                                 >
                                   {n}x
                                 </button>
                               );
                             })}
                           </div>
-                          {selecionadas.map(n => {
-                            const parcela = Math.round(modalRow.diferenca / n);
-                            return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
-                          })}
-                          {/* Botão copiar para WhatsApp */}
-                          <button
-                            type="button"
+                          <div className="bg-[#F5F5F7] rounded-lg p-2.5 space-y-1">
+                            {selecionadas.map(n => {
+                              const parcela = Math.round(modalRow.diferenca / n);
+                              return <div key={n} className="flex justify-between text-sm"><span className="text-[#86868B]">{n}x:</span><span className="font-bold text-[#1D1D1F]">{fmt(parcela)}</span></div>;
+                            })}
+                          </div>
+                          <button type="button"
                             onClick={() => {
-                              const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
                               const lines: string[] = [];
+                              lines.push("*TIGRAO IMPORTS — ORCAMENTO*");
+                              lines.push("");
                               lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
                               lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
                               lines.push("");
                               if (modalRow.modelo_usado) {
                                 lines.push(`*Seu aparelho na troca:*`);
-                                lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` — ${modalRow.cor_usado}` : ""}`);
+                                lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` (${modalRow.cor_usado})` : ""}`);
                                 if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
-                                  modalRow.condicao_linhas.forEach(l => lines.push(`• ${l}`));
+                                  modalRow.condicao_linhas.forEach(l => lines.push(`  ${l}`));
                                 }
                                 lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
-                                lines.push("");
                                 if (modalRow.modelo_usado2) {
-                                  lines.push(`*2o aparelho na troca:*`);
-                                  lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` — ${modalRow.cor_usado2}` : ""}`);
+                                  lines.push("");
+                                  lines.push(`*2o aparelho:*`);
+                                  lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` (${modalRow.cor_usado2})` : ""}`);
                                   if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
-                                    modalRow.condicao_linhas2.forEach(l => lines.push(`• ${l}`));
+                                    modalRow.condicao_linhas2.forEach(l => lines.push(`  ${l}`));
                                   }
                                   lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
-                                  lines.push("");
                                 }
+                                lines.push("");
                               }
                               lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
                               lines.push("");
-                              lines.push("*Parcelado:*");
-                              selecionadas.forEach(n => {
-                                const parcela = Math.round(modalRow.diferenca / n);
-                                lines.push(`${n}x de ${fmt(parcela)}`);
-                              });
+                              if (selecionadas.length > 0) {
+                                lines.push("*Parcelado:*");
+                                selecionadas.forEach(n => {
+                                  lines.push(`  ${n}x de ${fmt(Math.round(modalRow.diferenca / n))}`);
+                                });
+                                lines.push("");
+                              }
+                              lines.push("_Orcamento valido por 24 horas._");
                               navigator.clipboard.writeText(lines.join("\n")).then(() => {
-                                alert("Copiado para a area de transferencia!");
+                                const btn = document.getElementById("btn-copiar-wpp");
+                                if (btn) { btn.textContent = "✅ Copiado!"; setTimeout(() => { btn.textContent = "📋 Copiar para WhatsApp"; }, 2000); }
                               });
                             }}
-                            className="w-full mt-2 py-2 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition flex items-center justify-center gap-1.5"
+                            id="btn-copiar-wpp"
+                            className="w-full py-2.5 rounded-xl text-sm font-bold bg-[#25D366] text-white hover:bg-[#1DA851] transition-all shadow-sm flex items-center justify-center gap-2"
                           >
                             📋 Copiar para WhatsApp
                           </button>
@@ -1156,13 +1153,15 @@ export default function AdminPage() {
                       );
                     })()}
                     {modalRow.forma_pagamento && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#86868B]">Forma de pagamento:</span>
+                      <div className="flex justify-between text-xs pt-1 border-t border-[#E5E5EA]">
+                        <span className="text-[#86868B]">Forma:</span>
                         <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
                       </div>
                     )}
+                    <p className="text-[10px] text-[#86868B] italic text-center pt-1">Orcamento valido por 24 horas</p>
                   </>
                 )}
+                </div>
               </div>
 
               {/* Action buttons */}
