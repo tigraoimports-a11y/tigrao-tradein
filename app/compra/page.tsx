@@ -289,7 +289,7 @@ function CompraForm() {
   const [bairro, setBairro] = useState(bairroParam);
   const [horario, setHorario] = useState(horarioParam);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState<string[]>(["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]);
-  const [local, setLocal] = useState<"Loja" | "Entrega">(localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
+  const [local, setLocal] = useState<"Loja" | "Entrega" | "Correios">(localParam === "correios" ? "Correios" : localParam === "shopping" || localParam === "residencia" ? "Entrega" : localParam === "loja" ? "Loja" : "Loja");
   const [tipoEntrega, setTipoEntrega] = useState<"Shopping" | "Residencia">(localParam === "shopping" ? "Shopping" : "Residencia");
   const [shopping, setShopping] = useState(shoppingParam);
   const [dataEntrega, setDataEntrega] = useState(dataEntregaParam);
@@ -390,6 +390,7 @@ function CompraForm() {
     }
 
     const localStr = local === "Loja" ? "Retirada em loja"
+      : local === "Correios" ? "Envio Correios"
       : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
       : "Entrega - Residencia";
 
@@ -430,7 +431,7 @@ function CompraForm() {
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-    const pagEntrega = local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
+    const pagEntrega = local === "Correios" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
 
     const lines = [
       `Ola, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliacao de troca no site e preenchi o formulario de compra." : "Vim pelo formulario de compra!"}`,
@@ -1003,6 +1004,11 @@ function CompraForm() {
         {/* Entrega */}
         <div className={cardCls}>
           <p className={sectionTitle}>Entrega</p>
+          {local === "Correios" ? (
+          <div className="py-3 px-4 rounded-lg bg-[#FFF5EB] border border-[#E8740E]/30 text-sm text-[#6E6E73]">
+            📦 Seu pedido será enviado pelos <strong>Correios</strong>. Nossa equipe entrará em contato para confirmar o endereço e o código de rastreio.
+          </div>
+          ) : (
           <div>
             <label className="block text-sm font-medium text-[#1D1D1F] mb-2">Como deseja receber? *</label>
             <div className="flex gap-3">
@@ -1018,9 +1024,10 @@ function CompraForm() {
               </label>
             </div>
           </div>
+          )}
 
-          {/* Data — seg a sab */}
-          <div>
+          {/* Data — seg a sab (não mostra pra Correios) */}
+          {local !== "Correios" && (<div>
             <label className={labelCls}>Data *</label>
             <input type="date" required value={dataEntrega}
               onChange={(e) => {
@@ -1048,10 +1055,10 @@ function CompraForm() {
                 return `${y}-${m}-${day}`;
               })()}
               className={inputCls} />
-          </div>
+          </div>)}
 
-          {/* Horário — dinâmico conforme tipo + dia da semana */}
-          <div>
+          {/* Horário — dinâmico conforme tipo + dia da semana (não mostra pra Correios) */}
+          {local !== "Correios" && (<div>
             <label className={labelCls}>Horario *</label>
             {horarioParam === "LOGISTICA" ? (
               <div className="py-3 px-4 rounded-lg bg-[#FFF5EB] border border-[#E8740E]/30 text-sm text-[#86868B]">
@@ -1067,7 +1074,7 @@ function CompraForm() {
                 ))}
               </div>
             )}
-          </div>
+          </div>)}
 
           {local === "Entrega" && (
             <div className="space-y-3">
