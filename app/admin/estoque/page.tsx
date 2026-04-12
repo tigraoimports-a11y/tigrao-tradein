@@ -4605,11 +4605,23 @@ export default function EstoquePage() {
             })()}
             {/* ========== CARD VIEW (todas as outras abas) ========== */}
             {!isPendenciasTab && Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => {
-              // Flatten all items from all modelos
+              // Flatten all items, then group by modelo+cor
               const allItems = Object.values(modelos).flat()
                 .filter(p => !(tab === "estoque" && p.qnt === 0))
                 .filter(p => !(tab === "seminovos" && p.qnt === 0));
               if (allItems.length === 0) return null;
+              // Agrupar por modelo base + cor canônica
+              const grouped: Record<string, typeof allItems> = {};
+              allItems.forEach(p => {
+                const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+                const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
+                const key = `${base}|||${cor}`;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(p);
+              });
+              // Ordenar por storage
+              const storageToNum = (name: string): number => { const m = name.match(/(\d+)\s*(GB|TB)/i); if (!m) return 0; return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]); };
+              const groupEntries = Object.entries(grouped).sort(([a], [b]) => { const sa = storageToNum(a); const sb = storageToNum(b); if (sa !== sb) return sa - sb; return a.localeCompare(b); });
               const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
               const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
@@ -4617,64 +4629,61 @@ export default function EstoquePage() {
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
-                    {allItems.length} produto{allItems.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
+                    {groupEntries.length} modelo{groupEntries.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
                 </h2>
                 <div className="flex flex-wrap gap-3">
-                  {allItems.map(p => {
-                    const obs = p.observacao || "";
-                    const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
-                    const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
-                    const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
-                    const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
-                    const hasPulseira = obs.includes("[COM_PULSEIRA]") || /com\s+pulseira/i.test(obs);
-                    const ciclos = obs.match(/\[CICLOS:(\d+)\]/)?.[1];
-                    const comQuem = obs.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
-                    const obsLimpo = cleanObs(obs);
-                    const isUsado = p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA";
-                    const corPt = p.cor ? corParaPT(p.cor) : "";
+                  {groupEntries.map(([groupKey, items]) => {
+                    const rep = items[0];
+                    const qntTotal = items.reduce((s, p) => s + p.qnt, 0);
+                    const avgCusto = qntTotal > 0 ? Math.round(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0) / qntTotal) : (rep.custo_unitario || 0);
+                    const corPt = rep.cor ? corParaPT(rep.cor) : "";
+                    const isUsado = items.some(p => p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA");
+                    // Expandir seriais ao clicar no card
+                    const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
                         {/* Produto + Cor */}
                         <div>
-                          <p className={`font-bold text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(p)}</p>
+                          <p className={`font-bold text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
                           {corPt && <p className={`text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
                         </div>
-                        {/* Badges */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {p.qnt > 1 && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{p.qnt}x</span>
-                          )}
-                          {p.qnt === 0 && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600">Esgotado</span>
-                          )}
-                          {p.bateria && isUsado && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.bateria >= 90 ? "bg-green-100 text-green-700" : p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" : p.bateria >= 80 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>🔋 {p.bateria}%</span>
-                          )}
-                          {gradeMatch && <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${gradeMatch === "A+" ? "bg-amber-100 text-amber-700" : gradeMatch === "A" ? "bg-green-100 text-green-700" : gradeMatch === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{gradeMatch}</span>}
-                          {hasCaixa && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">📦 Caixa</span>}
-                          {hasCabo && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔌 Cabo</span>}
-                          {hasFonte && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔋 Fonte</span>}
-                          {hasPulseira && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">⌚ Pulseira</span>}
-                          {ciclos && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-gray-100 text-gray-600"}`}>{ciclos}c</span>}
-                          {p.garantia && <span className={`px-1 py-0.5 rounded text-[10px] font-medium ${dm ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"}`}>🛡️{p.garantia}</span>}
-                          {comQuem && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">👤 {comQuem}</span>}
+                        {/* Quantidade */}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
+                            {qntTotal === 0 ? "Esgotado" : `${qntTotal} un.`}
+                          </span>
+                          {/* Badges para seminovos (bateria média, grades) */}
+                          {isUsado && (() => {
+                            const bats = items.filter(p => p.bateria).map(p => p.bateria!);
+                            const grades = [...new Set(items.map(p => (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1]).filter(Boolean))];
+                            return (<div className="flex flex-wrap gap-1">
+                              {bats.length > 0 && <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${Math.min(...bats) >= 90 ? "bg-green-100 text-green-700" : Math.min(...bats) >= 85 ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>🔋 {bats.length === 1 ? `${bats[0]}%` : `${Math.min(...bats)}-${Math.max(...bats)}%`}</span>}
+                              {grades.map(g => <span key={g} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${g === "A+" ? "bg-amber-100 text-amber-700" : g === "A" ? "bg-green-100 text-green-700" : g === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{g}</span>)}
+                            </div>);
+                          })()}
                         </div>
-                        {/* Preço + Qtd + IMEI/Serial */}
+                        {/* Preço */}
                         <div className="flex items-center justify-between">
-                          <span className={`text-sm font-bold ${p.custo_unitario ? "text-[#E8740E]" : "text-red-500"}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "Sem preço"}</span>
-                          {(p.imei || p.serial_no) && (
-                            <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(p.serial_no || p.imei || "").slice(-8)}</span>
+                          <span className={`text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
+                          {items.length > 1 && <span className={`text-[10px] ${textMuted}`}>{cardExpanded ? "▲" : "▼"} ver seriais</span>}
+                          {items.length === 1 && (rep.imei || rep.serial_no) && (
+                            <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(rep.serial_no || rep.imei || "").slice(-8)}</span>
                           )}
                         </div>
-                        {/* Status */}
-                        {p.status && p.status !== "EM ESTOQUE" && (
-                          <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-semibold ${dm ? (p.status === "A CAMINHO" ? "bg-blue-900/30 text-blue-400" : p.status === "PENDENTE" ? "bg-yellow-900/30 text-yellow-400" : p.status === "ESGOTADO" ? "bg-red-900/30 text-red-400" : "bg-[#2C2C2E] text-[#98989D]") : (STATUS_COLORS[p.status] || "bg-gray-100 text-gray-700")}`}>{p.status}</span>
-                        )}
-                        {obsLimpo && <p className={`text-[10px] ${textMuted} truncate`}>{obsLimpo}</p>}
-                        {/* Cliente + Data (seminovos/a caminho) */}
-                        {p.cliente && (
-                          <p className={`text-[10px] ${textSecondary} truncate`}>👤 {p.cliente}{p.data_compra ? ` (${p.data_compra})` : ""}</p>
+                        {/* Seriais expandidos */}
+                        {cardExpanded && items.length > 1 && (
+                          <div className={`pt-2 mt-1 border-t border-dashed space-y-1`} style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+                            {items.map(p => (
+                              <div key={p.id} className={`flex items-center justify-between text-[11px] px-2 py-1.5 rounded-lg transition-colors ${dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]"}`} onClick={(e) => { e.stopPropagation(); setDetailProduct(p); }}>
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-mono ${dm ? "text-[#98989D]" : "text-[#636366]"}`}>{p.serial_no || p.imei || "—"}</span>
+                                  {p.bateria && <span className={`text-[9px] px-1 rounded ${p.bateria >= 90 ? "bg-green-100 text-green-700" : p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>🔋{p.bateria}%</span>}
+                                </div>
+                                <span className={`text-[10px] ${textSecondary}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
                     );
