@@ -1070,7 +1070,8 @@ export default function AdminPage() {
                     </div>
                     {modalRow.diferenca > 0 && (
                       <div className="text-xs text-[#86868B] space-y-0.5 pt-1">
-                        {[3, 6, 10, 12].map(n => {
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1">Parcelamento (sem juros)</p>
+                        {[3, 6, 10, 12, 18, 21].map(n => {
                           const parcela = Math.round(modalRow.diferenca / n);
                           return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
                         })}
