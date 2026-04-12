@@ -880,7 +880,6 @@ export default function AdminPage() {
                           if (e.key === "Enter") {
                             const v = parseFloat((e.target as HTMLInputElement).value);
                             if (v > 0) {
-                              // Salvar direto via PATCH
                               const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
                               const dif = v - aval;
                               fetch("/api/admin/simulacoes", {
