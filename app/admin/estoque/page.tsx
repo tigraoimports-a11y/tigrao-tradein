@@ -722,24 +722,46 @@ function getModeloBase(produto: string, categoria: string): string {
     const ssd = sorted.length >= 1 ? ` ${sorted[sorted.length - 1].raw}` : "";
     const memPair = `${ram}${ssd}`;
     const size = getSize();
-    // Extrair chip (M4, M5, M4 Pro, M5 Pro)
-    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
-    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
+    // Extrair chip do nome ou inferir dos nucleos
+    const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
+    let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
+    if (!chip) {
+      const nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      if (nucMatch) {
+        const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+        if (c === 8 && (g === 8 || g === 10)) chip = " M4";
+        else if (c === 12 && (g === 16 || g === 19)) chip = " M4 Pro";
+        else if (c === 14 && g === 20) chip = " M4 Pro";
+        else if (c === 16 && g === 40) chip = " M4 Max";
+        else if (c === 6 && g === 5) chip = " A18 Pro";
+      }
+    }
     if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
     return `MacBook${chip}${memPair}`;
   }
   if (baseCat === "MAC_MINI") {
-    // Mac Mini: agrupar por RAM + SSD (mesmo padrão do MacBook)
+    // Mac Mini: agrupar por chip + RAM + SSD
     const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
     const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
     const sorted = [...vals].sort((a, b) => a.gb - b.gb);
     const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
     const ssd = sorted.length >= 1 ? `/${sorted[sorted.length - 1].raw}` : "";
     const memPair = `${ram}${ssd}`;
-    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
-    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
+    // Chip: extrair do nome ou inferir dos nucleos
+    const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
+    let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
+    if (!chip) {
+      const nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      if (nucMatch) {
+        const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+        if (c === 10 && g === 10) chip = " M4";
+        else if (c === 12 && g === 16) chip = " M4 Pro";
+        else if (c === 14 && g === 20) chip = " M4 Pro";
+        else if (c === 16 && g === 40) chip = " M4 Max";
+      }
+    }
     return `Mac Mini${chip}${memPair}`;
   }
   if (baseCat === "APPLE_WATCH") {
