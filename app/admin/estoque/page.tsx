@@ -4529,39 +4529,88 @@ export default function EstoquePage() {
                 )}
               </div>
             )}
-            {Object.entries(byCat).sort(([a], [b]) => {
-              // Pendências: ordenar por data (mais recente primeiro), depois por cliente
-              if (tab === "pendencias") {
-                const [dateA] = a.split("|||");
-                const [dateB] = b.split("|||");
-                if (dateA !== dateB) return dateB.localeCompare(dateA);
-                return a.localeCompare(b);
-              }
+            {/* ========== CARD VIEW PARA PENDÊNCIAS ========== */}
+            {isPendenciasTab && (() => {
+              const allPendItems = Object.entries(byCat)
+                .sort(([a], [b]) => { const [dA] = a.split("|||"); const [dB] = b.split("|||"); if (dA !== dB) return dB.localeCompare(dA); return a.localeCompare(b); })
+                .flatMap(([cat, modelos]) => {
+                  const [dateStr, cliente] = cat.split("|||");
+                  return Object.values(modelos).flat().map(p => ({ ...p, _groupDate: dateStr, _groupCliente: cliente }));
+                });
+              // Agrupar por data+cliente pra manter os headers
+              const groups: Record<string, (typeof allPendItems)> = {};
+              allPendItems.forEach(p => {
+                const key = `${p._groupDate}|||${p._groupCliente}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(p);
+              });
+              return Object.entries(groups).sort(([a], [b]) => { const [dA] = a.split("|||"); const [dB] = b.split("|||"); if (dA !== dB) return dB.localeCompare(dA); return a.localeCompare(b); }).map(([groupKey, items]) => {
+                const [dateStr, cliente] = groupKey.split("|||");
+                const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
+                return (
+                  <div key={groupKey} className="space-y-3">
+                    <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
+                      <span className="flex items-center gap-3 flex-wrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
+                        <span className="flex items-center gap-1.5"><span className={`text-sm ${textSecondary}`}>👤</span>{cliente}</span>
+                      </span>
+                      <span className={`text-xs font-normal ${textSecondary}`}>{items.length} produto{items.length !== 1 ? "s" : ""}</span>
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {items.map(p => {
+                        const obs = p.observacao || "";
+                        const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
+                        const hasCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                        const hasCabo = obs.includes("[COM_CABO]") || /com\s+cabo/i.test(obs);
+                        const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
+                        const comQuem = obs.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
+                        const obsLimpo = cleanObs(obs);
+                        return (
+                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer`} onClick={() => setDetailProduct(p)}>
+                            {/* Produto + Cor */}
+                            <div>
+                              <p className={`font-bold text-sm ${textPrimary}`}>{formatProdutoDisplay(p)}</p>
+                              {p.cor && <p className={`text-xs ${textSecondary}`}>{p.cor}</p>}
+                            </div>
+                            {/* Badges: bateria, grade, acessórios */}
+                            <div className="flex flex-wrap gap-1.5">
+                              {p.bateria && (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.bateria >= 90 ? "bg-green-100 text-green-700" : p.bateria >= 85 ? "bg-yellow-100 text-yellow-700" : p.bateria >= 80 ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>🔋 {p.bateria}%</span>
+                              )}
+                              {gradeMatch && <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${gradeMatch === "A+" ? "bg-amber-100 text-amber-700" : gradeMatch === "A" ? "bg-green-100 text-green-700" : gradeMatch === "AB" ? "bg-yellow-100 text-yellow-700" : "bg-orange-100 text-orange-700"}`}>{gradeMatch}</span>}
+                              {hasCaixa && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">📦 Caixa</span>}
+                              {hasCabo && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔌 Cabo</span>}
+                              {hasFonte && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600">🔋 Fonte</span>}
+                              {comQuem && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">👤 {comQuem}</span>}
+                            </div>
+                            {/* Preço + IMEI/Serial */}
+                            <div className="flex items-center justify-between">
+                              <span className={`text-sm font-bold ${p.custo_unitario ? "text-[#E8740E]" : "text-red-500"}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "Sem preço"}</span>
+                              {(p.imei || p.serial_no) && (
+                                <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(p.serial_no || p.imei || "").slice(-8)}</span>
+                              )}
+                            </div>
+                            {obsLimpo && <p className={`text-[10px] ${textMuted} truncate`}>{obsLimpo}</p>}
+                            {/* Ações */}
+                            <div className="flex gap-2 pt-1 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
+                              <button onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}>🏷️ Etiqueta</button>
+                              <button onClick={(e) => { e.stopPropagation(); setBulkCustoKey(p.produto); setBulkCustoVal(String(p.custo_unitario || "")); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]"}`}>Editar preço</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+            {/* ========== LIST VIEW (todas as outras abas) ========== */}
+            {!isPendenciasTab && Object.entries(byCat).sort(([a], [b]) => {
               return a.localeCompare(b);
             }).map(([cat, modelos]) => (
               <div key={cat} className="space-y-3">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                  {tab === "pendencias" ? (() => {
-                    const [dateStr, cliente] = cat.split("|||");
-                    const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
-                    const resps = Array.from(new Set(
-                      Object.values(modelos).flat().map(p => getResp(p.observacao)).filter(Boolean)
-                    ));
-                    return (
-                      <span className="flex items-center gap-3 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className={`text-sm ${textSecondary}`}>👤</span>
-                          {cliente}
-                        </span>
-                        {resps.length > 0 && (
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-blue-900/30 text-blue-300" : "bg-blue-50 text-blue-700"}`}>
-                            📦 {resps.join(", ")}
-                          </span>
-                        )}
-                      </span>
-                    );
-                  })() : (dynamicCatLabels[cat] || cat)}
+                  {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {Object.values(modelos).flat().length} produto{Object.values(modelos).flat().length !== 1 ? "s" : ""} | {Object.values(modelos).flat().reduce((s, p) => s + p.qnt, 0)} un.
                   </span>
