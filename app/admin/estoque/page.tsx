@@ -2,7 +2,6 @@
 import { hojeBR } from "@/lib/date-utils";
 
 import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { useTabParam } from "@/lib/useTabParam";
 import { useAutoRefetch } from "@/lib/useAutoRefetch";
@@ -1616,15 +1615,11 @@ export default function EstoquePage() {
     }).catch(() => {});
   }, [password]);
 
-  const handleLineDragEnd = useCallback((result: DropResult) => {
-    if (!result.destination || result.source.index === result.destination.index) return;
-    const cat = result.source.droppableId;
-    const currentOrder = lineOrder[cat] || [];
-    // Build full list from current render order (fallback for lines not yet in saved order)
-    const allLines = (result.type === "LINE" ? currentOrder : []);
-    const items = Array.from(allLines);
-    const [moved] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, moved);
+  const moveLineInOrder = useCallback((cat: string, sortedNames: string[], fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= sortedNames.length) return;
+    const items = Array.from(sortedNames);
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved);
     saveLineOrder({ ...lineOrder, [cat]: items });
   }, [lineOrder, saveLineOrder]);
 
@@ -4681,19 +4676,8 @@ export default function EstoquePage() {
                 return { cat, byLine, sortedLineNames, groupEntries, totalQnt, totalVal };
               }).filter(Boolean) as { cat: string; byLine: Record<string, [string, any[]][]>; sortedLineNames: string[]; groupEntries: [string, any[]][]; totalQnt: number; totalVal: number }[];
 
-              const onDragEnd = (result: DropResult) => {
-                if (!result.destination || result.source.index === result.destination.index) return;
-                const cat = result.source.droppableId;
-                const cd = catData.find(c => c.cat === cat);
-                if (!cd) return;
-                const items = Array.from(cd.sortedLineNames);
-                const [moved] = items.splice(result.source.index, 1);
-                items.splice(result.destination.index, 0, moved);
-                saveLineOrder({ ...lineOrder, [cat]: items });
-              };
-
               return (
-              <DragDropContext onDragEnd={onDragEnd}>
+              <>
               {catData.map(({ cat, byLine, sortedLineNames, groupEntries, totalQnt, totalVal }) => (
               <div key={cat} className="space-y-5">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
@@ -4701,23 +4685,24 @@ export default function EstoquePage() {
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {groupEntries.length} modelo{groupEntries.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
-                  <button onClick={() => setReorderMode(!reorderMode)} className={`ml-auto text-[11px] px-2 py-1 rounded-lg transition-colors ${reorderMode ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                  <button onClick={(e) => { e.stopPropagation(); setReorderMode(!reorderMode); }} className={`ml-auto text-[11px] px-2 py-1 rounded-lg transition-colors ${reorderMode ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                     {reorderMode ? "Pronto" : "Reordenar"}
                   </button>
                 </h2>
-                <Droppable droppableId={cat} isDropDisabled={!reorderMode}>
-                  {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                <div className="space-y-4">
                 {sortedLineNames.map((lineName, lineIdx) => {
                   const lineEntries = byLine[lineName];
                   if (!lineEntries) return null;
                   const lineQnt = lineEntries.reduce((s, [, items]) => s + items.reduce((ss, p) => ss + p.qnt, 0), 0);
                   return (
-                  <Draggable key={lineName} draggableId={`${cat}:::${lineName}`} index={lineIdx} isDragDisabled={!reorderMode}>
-                    {(dragProvided, dragSnapshot) => (
-                  <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} className={`space-y-2 ${dragSnapshot.isDragging ? "opacity-80" : ""}`}>
+                  <div key={lineName} className="space-y-2">
                     <h3 className={`text-sm font-semibold ${textSecondary} flex items-center gap-2`}>
-                      {reorderMode && <span {...dragProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing text-base select-none">&#x2630;</span>}
+                      {reorderMode && (
+                        <span className="flex flex-col gap-0 mr-1">
+                          <button onClick={(e) => { e.stopPropagation(); moveLineInOrder(cat, sortedLineNames, lineIdx, lineIdx - 1); }} disabled={lineIdx === 0} className={`text-[10px] leading-none px-1 py-0.5 rounded transition-colors ${lineIdx === 0 ? "opacity-30 cursor-not-allowed" : "hover:bg-[#E8740E] hover:text-white cursor-pointer"}`}>▲</button>
+                          <button onClick={(e) => { e.stopPropagation(); moveLineInOrder(cat, sortedLineNames, lineIdx, lineIdx + 1); }} disabled={lineIdx === sortedLineNames.length - 1} className={`text-[10px] leading-none px-1 py-0.5 rounded transition-colors ${lineIdx === sortedLineNames.length - 1 ? "opacity-30 cursor-not-allowed" : "hover:bg-[#E8740E] hover:text-white cursor-pointer"}`}>▼</button>
+                        </span>
+                      )}
                       {lineName}
                       <span className={`text-[11px] font-normal ${textMuted}`}>{lineQnt} un.</span>
                     </h3>
@@ -4777,17 +4762,12 @@ export default function EstoquePage() {
                   })}
                     </div>
                   </div>
-                    )}
-                  </Draggable>
                   );
                 })}
-                {provided.placeholder}
-                  </div>
-                  )}
-                </Droppable>
+                </div>
               </div>
               ))}
-              </DragDropContext>
+              </>
               );
             })()}
             </>
