@@ -4531,32 +4531,27 @@ export default function EstoquePage() {
             )}
             {/* ========== CARD VIEW PARA PENDÊNCIAS ========== */}
             {isPendenciasTab && (() => {
+              // Coletar todos os itens com data e cliente
               const allPendItems = Object.entries(byCat)
-                .sort(([a], [b]) => { const [dA] = a.split("|||"); const [dB] = b.split("|||"); if (dA !== dB) return dB.localeCompare(dA); return a.localeCompare(b); })
                 .flatMap(([cat, modelos]) => {
                   const [dateStr, cliente] = cat.split("|||");
                   return Object.values(modelos).flat().map(p => ({ ...p, _groupDate: dateStr, _groupCliente: cliente }));
                 });
-              // Agrupar por data+cliente pra manter os headers
-              const groups: Record<string, (typeof allPendItems)> = {};
+              // Agrupar por DATA (não por cliente)
+              const byDate: Record<string, (typeof allPendItems)> = {};
               allPendItems.forEach(p => {
-                const key = `${p._groupDate}|||${p._groupCliente}`;
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(p);
+                if (!byDate[p._groupDate]) byDate[p._groupDate] = [];
+                byDate[p._groupDate].push(p);
               });
-              return Object.entries(groups).sort(([a], [b]) => { const [dA] = a.split("|||"); const [dB] = b.split("|||"); if (dA !== dB) return dB.localeCompare(dA); return a.localeCompare(b); }).map(([groupKey, items]) => {
-                const [dateStr, cliente] = groupKey.split("|||");
+              return Object.entries(byDate).sort(([a], [b]) => b.localeCompare(a)).map(([dateStr, items]) => {
                 const fmtD = dateStr !== "Sem data" ? dateStr.split("-").reverse().join("/") : "Sem data";
                 return (
-                  <div key={groupKey} className="space-y-3">
+                  <div key={dateStr} className="space-y-3">
                     <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
-                      <span className="flex items-center gap-3 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
-                        <span className="flex items-center gap-1.5"><span className={`text-sm ${textSecondary}`}>👤</span>{cliente}</span>
-                      </span>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${dm ? "bg-[#E8740E]/20 text-[#E8740E]" : "bg-[#FFF3E8] text-[#E8740E]"}`}>{fmtD}</span>
                       <span className={`text-xs font-normal ${textSecondary}`}>{items.length} produto{items.length !== 1 ? "s" : ""}</span>
                     </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="flex flex-wrap gap-3">
                       {items.map(p => {
                         const obs = p.observacao || "";
                         const gradeMatch = obs.match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1];
@@ -4565,8 +4560,11 @@ export default function EstoquePage() {
                         const hasFonte = obs.includes("[COM_FONTE]") || /com\s+(fonte|carregador)/i.test(obs);
                         const comQuem = obs.match(/\[COM_QUEM:([^\]]+)\]/)?.[1] || "";
                         const obsLimpo = cleanObs(obs);
+                        const cliente = p._groupCliente || "";
                         return (
-                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer`} onClick={() => setDetailProduct(p)}>
+                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                            {/* Cliente */}
+                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${textSecondary}`}>👤 {cliente}</p>
                             {/* Produto + Cor */}
                             <div>
                               <p className={`font-bold text-sm ${textPrimary}`}>{formatProdutoDisplay(p)}</p>
