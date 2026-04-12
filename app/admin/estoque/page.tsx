@@ -5902,8 +5902,21 @@ export default function EstoquePage() {
                 const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
                 const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
                 const ciclos = tag(/\[CICLOS:(\d+)\]/);
-                const ram = tag(/\[RAM:([^\]]+)\]/);
-                const ssd = tag(/\[SSD:([^\]]+)\]/);
+                let ram = tag(/\[RAM:([^\]]+)\]/);
+                let ssd = tag(/\[SSD:([^\]]+)\]/);
+                // Limpar valores invalidos (ex: "=")
+                if (ram && !/\d/.test(ram)) ram = null;
+                if (ssd && !/\d/.test(ssd)) ssd = null;
+                // Fallback: extrair RAM e SSD do nome (2 valores GB/TB → menor=RAM, maior=SSD)
+                if ((!ram || !ssd) && (baseCat === "MACBOOK" || baseCat === "MAC_MINI")) {
+                  const cleanNome = nome.replace(/=/g, " ");
+                  const gbVals = [...cleanNome.matchAll(/(\d+)\s*(GB|TB)/gi)].map(m => ({
+                    raw: `${m[1]}${m[2].toUpperCase()}`,
+                    gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]),
+                  })).sort((a, b) => a.gb - b.gb);
+                  if (!ram && gbVals.length >= 2) ram = gbVals[0].raw;
+                  if (!ssd && gbVals.length >= 1) ssd = gbVals[gbVals.length - 1].raw;
+                }
                 let cpu = tag(/\[CPU:([^\]]+)\]/);
                 let gpu = tag(/\[GPU:([^\]]+)\]/);
                 // Fallback: extrai do nome ex "(10C CPU/8C GPU)"
