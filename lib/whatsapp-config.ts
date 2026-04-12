@@ -4,6 +4,7 @@
 export const WHATSAPP_NUMBERS = {
   andre: "5521967442665",
   bianca: "5521972461357",
+  nicolas: "5521995618747",
   nicole: "5521972461357",  // Nicole via Instagram — formulário vai pra Bianca
 } as const;
 
@@ -12,6 +13,9 @@ export const WHATSAPP_DEFAULT = WHATSAPP_NUMBERS.bianca;
 
 // Número pra formulários de compra (Bianca gerencia entregas)
 export const WHATSAPP_FORMULARIO = WHATSAPP_NUMBERS.bianca;
+
+// Número pra seminovos (Nicolas)
+export const WHATSAPP_SEMINOVO = WHATSAPP_NUMBERS.nicolas;
 
 // Buscar número por nome do vendedor
 export function getWhatsAppByVendedor(vendedor: string): string {
