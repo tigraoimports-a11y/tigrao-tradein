@@ -1,6 +1,7 @@
-// Webhook Z-API — recebe cliques de botões do follow-up
-// "Tenho interesse" → aguarda 30s, envia resumo da simulação pro cliente, notifica vendedor
-// "Sem interesse" → marca opt_out_whatsapp automaticamente
+// Webhook Z-API — recebe respostas de texto do follow-up
+// Cliente responde "SIM" → envia resumo da simulação, notifica vendedor
+// Cliente responde "NAO" → marca opt_out_whatsapp automaticamente
+// Ignora mensagens de grupo e mensagens enviadas por nós (fromMe)
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -36,67 +37,108 @@ async function enviarWhatsApp(phone: string, message: string): Promise<boolean> 
   }
 }
 
+// Log para debug — salva todo payload recebido no Supabase
+async function logWebhook(payload: Record<string, unknown>) {
+  try {
+    await supabase.from("webhook_logs").insert({
+      source: "zapi-followup",
+      payload: JSON.stringify(payload),
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("[ZAPI Webhook] Erro ao salvar log:", e);
+  }
+}
+
+// Normaliza texto pra comparação: remove acentos, espaços, uppercase
+function normalizar(texto: string): string {
+  return (texto || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z]/g, "");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     console.log("[ZAPI Webhook] Recebido:", JSON.stringify(body));
 
-    // Z-API envia o ID da opção selecionada em diferentes formatos
-    const buttonId = body.listResponseMessage?.selectedRowId
-      || body.buttonsResponseMessage?.buttonId
-      || body.buttonId
-      || body.button?.id
-      || body.buttonPayload
-      || body.selectedButtonId
-      || "";
-    const phone = body.phone || body.from || body.chatId || "";
+    // Salvar log de TUDO que chega
+    await logWebhook(body);
 
-    if (!buttonId) {
-      return NextResponse.json({ ok: true, ignored: true });
+    // Ignorar mensagens de grupo
+    if (body.isGroup) {
+      return NextResponse.json({ ok: true, ignored: "group" });
     }
 
-    // Extrair ação e ID da simulação: "SIM_{uuid}" ou "NAO_{uuid}"
-    const parts = buttonId.split("_");
-    const acao = parts[0];
-    const simId = parts.slice(1).join("_");
-
-    if (!simId || (acao !== "SIM" && acao !== "NAO")) {
-      console.log("[ZAPI Webhook] ButtonId não reconhecido:", buttonId);
-      return NextResponse.json({ ok: true, ignored: true });
+    // Ignorar mensagens enviadas por nós mesmos
+    if (body.fromMe) {
+      return NextResponse.json({ ok: true, ignored: "fromMe" });
     }
 
-    // Buscar dados completos da simulação
+    // Ignorar callbacks de status/delivery (não são mensagens)
+    if (body.type === "MessageStatusCallback" || body.type === "DeliveryCallback") {
+      return NextResponse.json({ ok: true, ignored: "status" });
+    }
+
+    // Pegar texto da mensagem e telefone
+    const texto = body.text?.message || "";
+    const phone = body.phone || "";
+
+    if (!texto || !phone) {
+      return NextResponse.json({ ok: true, ignored: "no_text_or_phone" });
+    }
+
+    const textoNorm = normalizar(texto);
+
+    // Detectar intenção: SIM (1) ou NAO (2)
+    const respostaSim = ["1", "SIM", "SIMM", "SIMMM", "TENHO", "TENHOINTERESSE", "QUERO", "INTERESSE"].includes(textoNorm);
+    const respostaNao = ["2", "NAO", "NAOO", "NAOQUERO", "SEMINTERESSE", "PARA", "PARAR", "SAIR", "CANCELAR", "REMOVER"].includes(textoNorm);
+
+    if (!respostaSim && !respostaNao) {
+      // Não é uma resposta ao follow-up, ignorar
+      return NextResponse.json({ ok: true, ignored: "not_followup_response" });
+    }
+
+    // Normalizar telefone pra buscar simulação
+    let foneNorm = phone.replace(/\D/g, "");
+
+    // Buscar simulação mais recente desse telefone que teve follow-up enviado
     const { data: sim } = await supabase
       .from("simulacoes")
       .select("*")
-      .eq("id", simId)
+      .or(`whatsapp.eq.${foneNorm},whatsapp.eq.${foneNorm.startsWith("55") ? foneNorm.slice(2) : `55${foneNorm}`}`)
+      .eq("follow_up_enviado", true)
+      .eq("opt_out_whatsapp", false)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (!sim) {
-      console.log("[ZAPI Webhook] Simulação não encontrada:", simId);
-      return NextResponse.json({ ok: true, error: "sim not found" });
+      console.log(`[ZAPI Webhook] Nenhuma simulação com follow-up para ${foneNorm}`);
+      return NextResponse.json({ ok: true, ignored: "no_sim_found" });
     }
 
     // ==================== NÃO TEM INTERESSE ====================
-    if (acao === "NAO") {
-      const foneNorm = (sim.whatsapp || phone).replace(/\D/g, "");
-
+    if (respostaNao) {
       // Marcar opt-out em TODAS as simulações desse número
       await supabase
         .from("simulacoes")
-        .update({ opt_out_whatsapp: true, follow_up_enviado: true, alerta_preco_enviado: true })
-        .eq("whatsapp", foneNorm);
+        .update({ opt_out_whatsapp: true })
+        .eq("whatsapp", sim.whatsapp);
 
-      if (foneNorm.length === 11) {
-        await supabase
-          .from("simulacoes")
-          .update({ opt_out_whatsapp: true, follow_up_enviado: true, alerta_preco_enviado: true })
-          .eq("whatsapp", `55${foneNorm}`);
-      }
+      // Também tentar com/sem 55
+      const foneAlt = sim.whatsapp.startsWith("55") ? sim.whatsapp.slice(2) : `55${sim.whatsapp}`;
+      await supabase
+        .from("simulacoes")
+        .update({ opt_out_whatsapp: true })
+        .eq("whatsapp", foneAlt);
 
       // Enviar mensagem de despedida
       await enviarWhatsApp(
-        sim.whatsapp || phone,
+        phone,
         `Entendido, ${(sim.nome || "").split(" ")[0] || ""}! Sem problemas 😊\n\nCaso mude de ideia, estamos sempre à disposição. Um abraço! 🐯`
       );
 
@@ -105,7 +147,7 @@ export async function POST(req: NextRequest) {
       if (chatId) {
         await sendTelegramMessage(
           `🚫 <b>Cliente não tem interesse</b>\n\n` +
-          `<b>${sim.nome}</b> clicou "Não tenho interesse" no follow-up.\n` +
+          `<b>${sim.nome}</b> respondeu "NAO" no follow-up.\n` +
           `Modelo: ${sim.modelo_usado || "?"} → ${sim.modelo_novo || "?"}\n` +
           `Removido de todas as listas automáticas.`,
           chatId
@@ -117,8 +159,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ==================== TEM INTERESSE ====================
-    if (acao === "SIM") {
-      const fone = (sim.whatsapp || phone).replace(/\D/g, "");
+    if (respostaSim) {
       const nome = (sim.nome || "").split(" ")[0] || "Cliente";
 
       // Montar resumo do aparelho usado
@@ -150,34 +191,41 @@ export async function POST(req: NextRequest) {
       const precoNovo = sim.preco_novo
         ? `R$ ${Number(sim.preco_novo).toLocaleString("pt-BR")}`
         : "—";
-      const diferenca = sim.diferenca
-        ? `R$ ${Number(sim.diferenca).toLocaleString("pt-BR")}`
+      const difNum = Number(sim.diferenca) || 0;
+      const diferenca = difNum > 0
+        ? `R$ ${difNum.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
         : "—";
-      const formaPagamento = sim.forma_pagamento || "";
+
+      // Calcular parcelas com juros (mesma tabela do sistema)
+      const parcela12x = difNum > 0 ? Math.round((difNum * 1.13) / 12) : 0;
+      const parcela21x = difNum > 0 ? Math.round((difNum * 1.22) / 21) : 0;
+
+      const opcoesPagamento = difNum > 0
+        ? `${diferenca} à vista no PIX\n12x de R$ ${parcela12x.toLocaleString("pt-BR")} no cartão\n21x de R$ ${parcela21x.toLocaleString("pt-BR")} no cartão`
+        : diferenca;
 
       // Montar mensagem completa
       const resumo = `Que ótimo, ${nome}! 😄\n\nAqui está o resumo da sua simulação:\n\n` +
         `📱 *Seu aparelho:*\n${modeloUsado}${corUsado}\n${condicoes}\nAvaliado em: *${avaliacaoUsado}*` +
         `${segundoAparelho}\n\n` +
         `🆕 *Produto desejado:*\n${modeloNovo}\nValor: *${precoNovo}*\n\n` +
-        `💰 *Valor da troca:*\n*${diferenca}*` +
-        `${formaPagamento ? `\n${formaPagamento}` : ""}\n\n` +
-        `As informações estão corretas? Em breve um dos nossos consultores vai te chamar pra finalizar! 🐯`;
+        `💰 *Valor da troca:*\n${opcoesPagamento}\n\n` +
+        `As informações estão corretas mesmo? 🐯`;
 
-      // Enviar resumo após 5 segundos (limite do Vercel serverless)
+      // Enviar resumo após 5 segundos
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      await enviarWhatsApp(sim.whatsapp || phone, resumo);
+      await enviarWhatsApp(phone, resumo);
 
       // Notificar vendedor no Telegram
       const chatId = process.env.TELEGRAM_VENDAS_CHAT_ID || process.env.TELEGRAM_CHAT_ID || "";
       const vendedor = sim.vendedor || "Equipe";
-      const foneFormatado = fone.startsWith("55") ? fone.slice(2) : fone;
+      const foneFormatado = foneNorm.startsWith("55") ? foneNorm.slice(2) : foneNorm;
 
       if (chatId) {
         await sendTelegramMessage(
           `🟢 <b>Cliente tem interesse!</b>\n\n` +
-          `<b>${sim.nome}</b> clicou "Tenho interesse" no follow-up!\n` +
+          `<b>${sim.nome}</b> respondeu "SIM" no follow-up!\n` +
           `📱 ${modeloUsado} → ${modeloNovo}\n` +
           `💰 Diferença: ${diferenca}\n` +
           `📞 ${foneFormatado}\n` +
@@ -187,7 +235,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      console.log(`[ZAPI Webhook] Interesse + resumo enviado: ${sim.nome} (${fone})`);
+      console.log(`[ZAPI Webhook] Interesse + resumo enviado: ${sim.nome} (${foneNorm})`);
       return NextResponse.json({ ok: true, action: "interested_summary_sent", nome: sim.nome });
     }
 
