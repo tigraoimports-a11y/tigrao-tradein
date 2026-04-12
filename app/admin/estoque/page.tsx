@@ -30,7 +30,7 @@ function formatProdutoDisplay(p: {
   cor?: string | null;
   observacao?: string | null;
 }): string {
-  const nomeRaw = String(p.produto || "");
+  const nomeRaw = String(p.produto || "").replace(/\s*=\s*/g, " ").replace(/\s+/g, " ").trim();
   const obs = String(p.observacao || "");
   const src = `${nomeRaw} ${obs}`;
   const up = src.toUpperCase();
