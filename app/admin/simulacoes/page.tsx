@@ -15,6 +15,7 @@ import {
   formatBRL,
 } from "@/lib/calculations";
 import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
+import { INSTALLMENT_RATES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
 import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
 
@@ -1099,7 +1100,7 @@ export default function AdminPage() {
                           </div>
                           <div className="bg-[#F5F5F7] rounded-lg p-2.5 space-y-1">
                             {selecionadas.map(n => {
-                              const parcela = Math.round(modalRow.diferenca / n);
+                              const parcela = (() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })();
                               return <div key={n} className="flex justify-between text-sm"><span className="text-[#86868B]">{n}x:</span><span className="font-bold text-[#1D1D1F]">{fmt(parcela)}</span></div>;
                             })}
                           </div>
@@ -1134,7 +1135,7 @@ export default function AdminPage() {
                               if (selecionadas.length > 0) {
                                 lines.push("*Parcelado:*");
                                 selecionadas.forEach(n => {
-                                  lines.push(`  ${n}x de ${fmt(Math.round(modalRow.diferenca / n))}`);
+                                  lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
                                 });
                                 lines.push("");
                               }
@@ -1179,18 +1180,48 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => {
-                    const params = new URLSearchParams({
-                      recover: "true",
-                      modelo_usado: modalRow.modelo_usado,
-                      storage_usado: modalRow.storage_usado,
-                      modelo_novo: modalRow.modelo_novo,
-                      storage_novo: modalRow.storage_novo,
-                    });
-                    window.open(`/troca?${params.toString()}`, "_blank");
+                    const selecionadas = modalParcelasVisiveis || [12, 18, 21];
+                    const lines: string[] = [];
+                    lines.push("*TIGRAO IMPORTS — ORCAMENTO*");
+                    lines.push("");
+                    lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
+                    if (modalRow.preco_novo) lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
+                    lines.push("");
+                    if (modalRow.modelo_usado) {
+                      lines.push(`*Seu aparelho na troca:*`);
+                      lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` (${modalRow.cor_usado})` : ""}`);
+                      if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
+                        modalRow.condicao_linhas.forEach(l => lines.push(`  ${l}`));
+                      }
+                      lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
+                      if (modalRow.modelo_usado2) {
+                        lines.push("");
+                        lines.push(`*2o aparelho:*`);
+                        lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` (${modalRow.cor_usado2})` : ""}`);
+                        if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
+                          modalRow.condicao_linhas2.forEach(l => lines.push(`  ${l}`));
+                        }
+                        lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                      }
+                      lines.push("");
+                    }
+                    if (modalRow.diferenca > 0) {
+                      lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
+                      lines.push("");
+                      lines.push("*Parcelado:*");
+                      selecionadas.forEach(n => {
+                        lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
+                      });
+                      lines.push("");
+                    }
+                    lines.push("_Orcamento valido por 24 horas._");
+                    const num = modalRow.whatsapp.replace(/\D/g, "");
+                    const full = num.startsWith("55") ? num : `55${num}`;
+                    window.open(`https://wa.me/${full}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
                   }}
                   className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
                 >
-                  Recuperar Carrinho
+                  Enviar Orcamento
                 </button>
                 <button
                   onClick={() => {
