@@ -339,7 +339,9 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
               <button
                 onClick={() => {
                   if (!semiNome.trim()) { alert("Informe seu nome"); return; }
-                  // Salvar simulação seminovo no banco de dados
+                  // Salvar simulação seminovo no banco de dados (com dados completos de condição)
+                  const condLines = condition && deviceType ? getAnyConditionLines(deviceType, condition) : [];
+                  const condLines2 = condition2 && deviceType2 ? getAnyConditionLines(deviceType2, condition2) : [];
                   fetch("/api/leads", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -357,7 +359,14 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                       diferenca: 0,
                       status: "GOSTEI",
                       formaPagamento: "WhatsApp Seminovo",
-                      ...(usedModel2 ? { modeloUsado2: usedModel2, storageUsado2: usedStorage2, corUsado2: usedColor2 || "", avaliacaoUsado2: tradeInValue2 || 0 } : {}),
+                      condicaoLinhas: condLines,
+                      ...(usedModel2 ? {
+                        modeloUsado2: usedModel2,
+                        storageUsado2: usedStorage2,
+                        corUsado2: usedColor2 || "",
+                        avaliacaoUsado2: tradeInValue2 || 0,
+                        condicaoLinhas2: condLines2,
+                      } : {}),
                     }),
                   }).catch(() => {});
                   const waNum = whatsappNumber || "5521967442665";

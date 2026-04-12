@@ -51,8 +51,8 @@ const REPASSE_PARCELAS_ORDER = [
   "19x", "20x", "21x",
 ];
 
-// Elo/Amex on Itau max 12x
-const ELO_AMEX_MAX = 12;
+// Elo/Amex on Itau — suporta até 21x
+const ELO_AMEX_MAX = 21;
 
 function getParcelasForBanco(banco: string): string[] {
   if (banco === "ITAU") return ITAU_PARCELAS;
@@ -174,9 +174,14 @@ export default function TaxasPage() {
 
   function hasChanges(): boolean {
     const rows = data[tab] ?? [];
+    const existingKeys = new Set(rows.map(r => editKey(r.banco, r.bandeira, r.parcelas)));
     for (const row of rows) {
       const key = editKey(row.banco, row.bandeira, row.parcelas);
       if (edits[key] !== undefined && edits[key] !== row.taxa_pct) return true;
+    }
+    // Novas taxas (keys que não existem no data)
+    for (const [key, val] of Object.entries(edits)) {
+      if (!existingKeys.has(key) && key.startsWith(tab + "|") && val !== undefined && val > 0) return true;
     }
     return false;
   }
@@ -185,6 +190,7 @@ export default function TaxasPage() {
     const rows = data[tab] ?? [];
     const updates: { banco: string; bandeira: string; parcelas: string; taxa_pct: number }[] = [];
 
+    // Edições de rows existentes
     for (const row of rows) {
       const key = editKey(row.banco, row.bandeira, row.parcelas);
       if (edits[key] !== undefined && edits[key] !== row.taxa_pct) {
@@ -194,6 +200,16 @@ export default function TaxasPage() {
           parcelas: row.parcelas,
           taxa_pct: edits[key],
         });
+      }
+    }
+
+    // Novas taxas (edits para rows que não existem)
+    const existingKeys = new Set(rows.map(r => editKey(r.banco, r.bandeira, r.parcelas)));
+    for (const [key, val] of Object.entries(edits)) {
+      if (existingKeys.has(key)) continue;
+      const [banco, bandeira, parcelas] = key.split("|");
+      if (banco === tab && val !== undefined && val > 0) {
+        updates.push({ banco, bandeira, parcelas, taxa_pct: val as number });
       }
     }
 
@@ -465,9 +481,36 @@ export default function TaxasPage() {
                             }
                             const row = findRow(tab, g.bandeiras[0], p);
                             if (!row) {
+                              // Sem row existente — mostrar input para criar nova taxa
+                              const newKey = editKey(tab, g.bandeiras[0], p);
+                              const newVal = edits[newKey] !== undefined ? edits[newKey] : "";
+                              const isNew = edits[newKey] !== undefined;
                               return (
-                                <td key={g.label} className="py-2.5 px-4 text-center text-sm" style={{ color: textDisabled }}>
-                                  --
+                                <td key={g.label} className="py-2.5 px-4 text-center">
+                                  <div className="inline-flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      max="100"
+                                      value={newVal}
+                                      placeholder="—"
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        for (const b of g.bandeiras) {
+                                          const k = editKey(tab, b, p);
+                                          setEdits(prev => ({ ...prev, [k]: isNaN(val) ? 0 : val }));
+                                        }
+                                      }}
+                                      className="w-20 text-center text-sm py-1.5 px-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8740E]/30 focus:border-[#E8740E]"
+                                      style={{
+                                        border: `1px solid ${isNew ? "#E8740E" : borderMain}`,
+                                        background: isNew ? bgInputEdited : bgInput,
+                                        color: textPrimary,
+                                      }}
+                                    />
+                                    <span className="text-xs" style={{ color: textSecondary }}>%</span>
+                                  </div>
                                 </td>
                               );
                             }

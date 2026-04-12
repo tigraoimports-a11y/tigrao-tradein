@@ -15,6 +15,7 @@ import {
   formatBRL,
 } from "@/lib/calculations";
 import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
+import { INSTALLMENT_RATES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
 import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
 
@@ -133,6 +134,7 @@ export default function AdminPage() {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
+  const [modalParcelasVisiveis, setModalParcelasVisiveis] = useState<number[] | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -614,7 +616,7 @@ export default function AdminPage() {
                   </tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} onClick={() => setModalRow(row)} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
+                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -852,10 +854,74 @@ export default function AdminPage() {
               </div>
 
               {/* New product */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
+              <div className={`rounded-xl p-4 space-y-2 ${!modalRow.preco_novo ? "bg-yellow-50 border border-yellow-300" : "bg-[#F5F5F7]"}`}>
                 <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Produto Novo</h3>
                 <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_novo} {modalRow.storage_novo}</p>
-                <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
+                {editMode ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#86868B]">Valor (R$):</span>
+                    <input
+                      type="number"
+                      value={editData.preco_novo || ""}
+                      onChange={(e) => setEditData(p => ({ ...p, preco_novo: e.target.value }))}
+                      className="flex-1 px-2.5 py-1.5 text-sm font-bold text-[#E8740E] rounded-lg border border-[#D2D2D7] focus:border-[#0071E3] focus:outline-none"
+                    />
+                  </div>
+                ) : !modalRow.preco_novo ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-yellow-800">Aguardando precificacao</p>
+                    <p className="text-xs text-yellow-700">Defina o valor de venda deste seminovo:</p>
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs text-yellow-700 font-medium">R$</span>
+                      <input
+                        type="number"
+                        placeholder="Ex: 7500"
+                        id="modal-preco-seminovo"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-yellow-400 text-sm focus:border-[#E8740E] focus:outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const v = parseFloat((e.target as HTMLInputElement).value);
+                            if (v > 0) {
+                              const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                              const dif = v - aval;
+                              fetch("/api/admin/simulacoes", {
+                                method: "PATCH",
+                                headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: modalRow.id, preco_novo: v, diferenca: dif }),
+                              }).then(() => {
+                                setModalRow({ ...modalRow, preco_novo: v, diferenca: dif } as SimulacaoRow);
+                                fetchData(password);
+                              });
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const input = document.getElementById("modal-preco-seminovo") as HTMLInputElement;
+                          const v = parseFloat(input?.value || "0");
+                          if (v > 0) {
+                            const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                            const dif = v - aval;
+                            fetch("/api/admin/simulacoes", {
+                              method: "PATCH",
+                              headers: { "x-admin-password": password, "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: modalRow.id, preco_novo: v, diferenca: dif }),
+                            }).then(() => {
+                              setModalRow({ ...modalRow, preco_novo: v, diferenca: dif } as SimulacaoRow);
+                              fetchData(password);
+                            });
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition"
+                      >
+                        Salvar e recalcular
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[#E8740E] font-bold text-sm">{fmt(modalRow.preco_novo)}</p>
+                )}
               </div>
 
               {/* Used device(s) */}
@@ -877,6 +943,7 @@ export default function AdminPage() {
                       cor_usado2: modalRow.cor_usado2 || "",
                       avaliacao_usado2: String(modalRow.avaliacao_usado2 || 0),
                       condicao_linhas2: (modalRow.condicao_linhas2 || []).join("\n"),
+                      preco_novo: String(modalRow.preco_novo || 0),
                     });
                     setEditMode(true);
                   }} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
@@ -915,10 +982,10 @@ export default function AdminPage() {
                     )}
                     {/* Resumo em tempo real */}
                     <div className="bg-[#F5F5F7] rounded-lg p-3 space-y-1">
-                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(modalRow.preco_novo)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-[#86868B]">Produto novo</span><span className="font-semibold">{fmt(Number(editData.preco_novo) || 0)}</span></div>
                       <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 1º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado) || 0)}</span></div>
                       {(Number(editData.avaliacao_usado2) || 0) > 0 && <div className="flex justify-between text-xs"><span className="text-[#86868B]">Avaliacao 2º</span><span className="font-semibold text-green-600">- {fmt(Number(editData.avaliacao_usado2) || 0)}</span></div>}
-                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt(modalRow.preco_novo - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
+                      <div className="flex justify-between text-sm pt-1 border-t border-[#E5E5EA]"><span className="font-bold text-[#E8740E]">Diferenca PIX</span><span className="font-bold text-[#E8740E]">{fmt((Number(editData.preco_novo) || 0) - (Number(editData.avaliacao_usado) || 0) - (Number(editData.avaliacao_usado2) || 0))}</span></div>
                     </div>
                     <button
                       disabled={savingEdit}
@@ -927,16 +994,17 @@ export default function AdminPage() {
                         try {
                           const aval1 = Number(editData.avaliacao_usado) || 0;
                           const aval2 = Number(editData.avaliacao_usado2) || 0;
-                          const dif = modalRow.preco_novo - aval1 - aval2;
+                          const precoNovo = Number(editData.preco_novo) || modalRow.preco_novo;
+                          const dif = precoNovo - aval1 - aval2;
                           const condLines1 = editData.condicao_linhas ? editData.condicao_linhas.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
                           const condLines2 = editData.condicao_linhas2 ? editData.condicao_linhas2.split("\n").map((l: string) => l.trim()).filter(Boolean) : null;
                           const res = await fetch("/api/admin/simulacoes", {
                             method: "PATCH",
                             headers: { "x-admin-password": password, "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif }),
+                            body: JSON.stringify({ id: modalRow.id, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, avaliacao_usado: aval1, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, avaliacao_usado2: aval2 || null, condicao_linhas2: condLines2, diferenca: dif, preco_novo: precoNovo }),
                           });
                           if (res.ok) {
-                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif } as SimulacaoRow);
+                            setModalRow({ ...modalRow, modelo_usado: editData.modelo_usado, storage_usado: editData.storage_usado, cor_usado: editData.cor_usado || null, condicao_linhas: condLines1, modelo_usado2: editData.modelo_usado2 || null, storage_usado2: editData.storage_usado2 || null, cor_usado2: editData.cor_usado2 || null, condicao_linhas2: condLines2, avaliacao_usado: aval1, avaliacao_usado2: aval2, diferenca: dif, preco_novo: precoNovo } as SimulacaoRow);
                             setEditMode(false);
                             fetchData(password);
                           } else { alert("Erro ao salvar"); }
@@ -949,13 +1017,21 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <>
-                    <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
-                    {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 && (
-                      <div className="text-xs text-[#6E6E73] space-y-0.5">
-                        {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
-                      </div>
+                    {modalRow.modelo_usado ? (
+                      <>
+                        <p className="text-[#1D1D1F] font-medium text-sm">{modalRow.modelo_usado} {modalRow.storage_usado}{modalRow.cor_usado ? ` — ${corParaPT(modalRow.cor_usado)}` : ""}</p>
+                        {modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0 ? (
+                          <div className="text-xs text-[#6E6E73] space-y-0.5">
+                            {modalRow.condicao_linhas.map((linha, i) => <p key={i}>{linha}</p>)}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-yellow-600 italic">Condicao nao informada — clique Editar para adicionar</p>
+                        )}
+                        <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-[#86868B] italic">Nenhum aparelho na troca informado</p>
                     )}
-                    <p className="text-green-600 font-bold text-sm">Avaliacao: {fmt(modalRow.avaliacao_usado)}</p>
                   </>
                 )}
               </div>
@@ -976,18 +1052,117 @@ export default function AdminPage() {
               )}
 
               {/* Financial summary */}
-              <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-semibold text-[#86868B] uppercase tracking-wider">Resumo Financeiro</h3>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#86868B]">Diferenca PIX:</span>
-                  <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
+              <div className={`rounded-xl overflow-hidden border ${!modalRow.preco_novo ? "border-yellow-300 bg-yellow-50" : "border-[#E8740E]/30 bg-gradient-to-b from-[#FFF8F2] to-white"}`}>
+                <div className={`px-4 py-2.5 ${!modalRow.preco_novo ? "bg-yellow-100" : "bg-[#E8740E]"}`}>
+                  <h3 className={`text-xs font-bold uppercase tracking-wider ${!modalRow.preco_novo ? "text-yellow-800" : "text-white"}`}>Resumo Financeiro</h3>
                 </div>
-                {modalRow.forma_pagamento && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#86868B]">Forma de pagamento:</span>
-                    <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
-                  </div>
+                <div className="p-4 space-y-2">
+                {!modalRow.preco_novo ? (
+                  <p className="text-sm text-yellow-700 italic">Defina o valor do seminovo acima para ver o resumo</p>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#86868B]">Produto novo:</span>
+                      <span className="text-[#1D1D1F] font-semibold">{fmt(modalRow.preco_novo)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#86868B]">Avaliacao troca:</span>
+                      <span className="text-green-600 font-semibold">- {fmt((modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0))}</span>
+                    </div>
+                    <div className="flex justify-between text-base pt-2 mt-1 border-t-2 border-[#E8740E]/20">
+                      <span className="text-[#E8740E] font-bold">No PIX:</span>
+                      <span className="text-[#E8740E] font-bold text-lg">{fmt(modalRow.diferenca)}</span>
+                    </div>
+                    {modalRow.diferenca > 0 && (() => {
+                      const TODAS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+                      const DEFAULT = [12, 18, 21];
+                      const selecionadas = modalParcelasVisiveis || DEFAULT;
+                      return (
+                        <div className="space-y-2 pt-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-[#1D1D1F] uppercase tracking-wider">Parcelamento</p>
+                            <button type="button" onClick={() => setModalParcelasVisiveis(selecionadas.length === TODAS.length ? DEFAULT : [...TODAS])} className="text-[10px] text-[#0071E3] font-semibold hover:underline">
+                              {selecionadas.length === TODAS.length ? "Padrao" : "Todas"}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-[3px]">
+                            {TODAS.map(n => {
+                              const ativo = selecionadas.includes(n);
+                              return (
+                                <button key={n} type="button"
+                                  onClick={() => setModalParcelasVisiveis(ativo ? selecionadas.filter(x => x !== n) : [...selecionadas, n].sort((a,b) => a-b))}
+                                  className={`w-8 h-7 rounded-md text-[11px] font-semibold transition-all ${ativo ? "bg-[#E8740E] text-white shadow-sm" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
+                                >
+                                  {n}x
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="bg-[#F5F5F7] rounded-lg p-2.5 space-y-1">
+                            {selecionadas.map(n => {
+                              const parcela = (() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })();
+                              return <div key={n} className="flex justify-between text-sm"><span className="text-[#86868B]">{n}x:</span><span className="font-bold text-[#1D1D1F]">{fmt(parcela)}</span></div>;
+                            })}
+                          </div>
+                          <button type="button"
+                            onClick={() => {
+                              const lines: string[] = [];
+                              lines.push("*TIGRAO IMPORTS — ORCAMENTO*");
+                              lines.push("");
+                              lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
+                              lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
+                              lines.push("");
+                              if (modalRow.modelo_usado) {
+                                lines.push(`*Seu aparelho na troca:*`);
+                                lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` (${modalRow.cor_usado})` : ""}`);
+                                if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
+                                  modalRow.condicao_linhas.forEach(l => lines.push(`  ${l}`));
+                                }
+                                lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
+                                if (modalRow.modelo_usado2) {
+                                  lines.push("");
+                                  lines.push(`*2o aparelho:*`);
+                                  lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` (${modalRow.cor_usado2})` : ""}`);
+                                  if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
+                                    modalRow.condicao_linhas2.forEach(l => lines.push(`  ${l}`));
+                                  }
+                                  lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                                }
+                                lines.push("");
+                              }
+                              lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
+                              lines.push("");
+                              if (selecionadas.length > 0) {
+                                lines.push("*Parcelado:*");
+                                selecionadas.forEach(n => {
+                                  lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
+                                });
+                                lines.push("");
+                              }
+                              lines.push("_Orcamento valido por 24 horas._");
+                              navigator.clipboard.writeText(lines.join("\n")).then(() => {
+                                const btn = document.getElementById("btn-copiar-wpp");
+                                if (btn) { btn.textContent = "✅ Copiado!"; setTimeout(() => { btn.textContent = "📋 Copiar para WhatsApp"; }, 2000); }
+                              });
+                            }}
+                            id="btn-copiar-wpp"
+                            className="w-full py-2.5 rounded-xl text-sm font-bold bg-[#25D366] text-white hover:bg-[#1DA851] transition-all shadow-sm flex items-center justify-center gap-2"
+                          >
+                            📋 Copiar para WhatsApp
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    {modalRow.forma_pagamento && (
+                      <div className="flex justify-between text-xs pt-1 border-t border-[#E5E5EA]">
+                        <span className="text-[#86868B]">Forma:</span>
+                        <span className="text-[#1D1D1F] font-medium">{modalRow.forma_pagamento}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-[#86868B] italic text-center pt-1">Orcamento valido por 24 horas</p>
+                  </>
                 )}
+                </div>
               </div>
 
               {/* Action buttons */}
@@ -1005,18 +1180,48 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => {
-                    const params = new URLSearchParams({
-                      recover: "true",
-                      modelo_usado: modalRow.modelo_usado,
-                      storage_usado: modalRow.storage_usado,
-                      modelo_novo: modalRow.modelo_novo,
-                      storage_novo: modalRow.storage_novo,
-                    });
-                    window.open(`/troca?${params.toString()}`, "_blank");
+                    const selecionadas = modalParcelasVisiveis || [12, 18, 21];
+                    const lines: string[] = [];
+                    lines.push("*TIGRAO IMPORTS — ORCAMENTO*");
+                    lines.push("");
+                    lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
+                    if (modalRow.preco_novo) lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
+                    lines.push("");
+                    if (modalRow.modelo_usado) {
+                      lines.push(`*Seu aparelho na troca:*`);
+                      lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` (${modalRow.cor_usado})` : ""}`);
+                      if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
+                        modalRow.condicao_linhas.forEach(l => lines.push(`  ${l}`));
+                      }
+                      lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
+                      if (modalRow.modelo_usado2) {
+                        lines.push("");
+                        lines.push(`*2o aparelho:*`);
+                        lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` (${modalRow.cor_usado2})` : ""}`);
+                        if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
+                          modalRow.condicao_linhas2.forEach(l => lines.push(`  ${l}`));
+                        }
+                        lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                      }
+                      lines.push("");
+                    }
+                    if (modalRow.diferenca > 0) {
+                      lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
+                      lines.push("");
+                      lines.push("*Parcelado:*");
+                      selecionadas.forEach(n => {
+                        lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
+                      });
+                      lines.push("");
+                    }
+                    lines.push("_Orcamento valido por 24 horas._");
+                    const num = modalRow.whatsapp.replace(/\D/g, "");
+                    const full = num.startsWith("55") ? num : `55${num}`;
+                    window.open(`https://wa.me/${full}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
                   }}
                   className="flex-1 min-w-[140px] py-2.5 rounded-xl bg-[#E8740E] hover:bg-[#D06A0C] text-white text-sm font-semibold transition-colors text-center"
                 >
-                  Recuperar Carrinho
+                  Enviar Orcamento
                 </button>
                 <button
                   onClick={() => {
@@ -1321,6 +1526,8 @@ function SimuladorInterno({ password }: { password: string }) {
   // --- Novo (compra) ---
   const [novoCat, setNovoCat] = useState("");
   const [novoModelo, setNovoModelo] = useState("");
+  const [novoSeminovo, setNovoSeminovo] = useState(false);
+  const [novoPrecoManual, setNovoPrecoManual] = useState<number | null>(null);
 
   // Fetch data
   useEffect(() => {
@@ -1459,12 +1666,13 @@ function SimuladorInterno({ password }: { password: string }) {
   }, [effectiveBaseValue, usadoCat, usadoModelo, bateria, marcasUso, arranhoes, trincado, defeito, manutencao, garantiaApple, garantiaMes, garantiaAno, caixaOriginal, ciclosBateria, tecladoCondition, temCarregador, temPencil, modelDiscounts]);
 
   // --- New device price ---
-  const newPrice = useMemo(() => {
+  const newPriceCatalogo = useMemo(() => {
     if (!novoModelo) return 0;
-    // novoModelo = "iPhone 16 Pro 256GB" — find it in precos
     const found = precos.find((p) => `${p.modelo} ${p.armazenamento}` === novoModelo);
     return found?.preco_pix || 0;
   }, [precos, novoModelo]);
+
+  const newPrice = novoSeminovo && novoPrecoManual !== null ? novoPrecoManual : newPriceCatalogo;
 
   // --- Quote ---
   const quote = useMemo(() => {
@@ -1710,7 +1918,18 @@ function SimuladorInterno({ password }: { password: string }) {
 
         {/* ─── APARELHO NOVO ─── */}
         <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-          <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Novo (compra)</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Novo (compra)</h3>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={novoSeminovo}
+                onChange={(e) => { setNovoSeminovo(e.target.checked); setNovoPrecoManual(null); }}
+                className="w-4 h-4 accent-[#E8740E] rounded"
+              />
+              <span className="text-xs font-medium text-[#86868B]">Seminovo</span>
+            </label>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -1729,7 +1948,47 @@ function SimuladorInterno({ password }: { password: string }) {
             </div>
           </div>
 
-          {newPrice > 0 && (
+          {/* Seminovo: valor manual */}
+          {novoSeminovo && novoModelo && (
+            <div className={`rounded-lg p-3 space-y-2 ${novoPrecoManual ? "bg-green-50 border border-green-200" : "bg-yellow-50 border border-yellow-300"}`}>
+              {!novoPrecoManual ? (
+                <>
+                  <p className="text-sm font-semibold text-yellow-800">Aguardando precificacao do seminovo</p>
+                  <p className="text-xs text-yellow-700">Defina o valor de venda manualmente:</p>
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs text-yellow-700 font-medium">Valor: R$</span>
+                    <input
+                      type="number"
+                      placeholder="Ex: 7500"
+                      id="novo-preco-manual"
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-yellow-400 text-sm focus:border-[#E8740E] focus:outline-none"
+                      onKeyDown={(e) => { if (e.key === "Enter") { const v = parseFloat((e.target as HTMLInputElement).value); if (v > 0) setNovoPrecoManual(v); } }}
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById("novo-preco-manual") as HTMLInputElement;
+                        const v = parseFloat(input?.value || "0");
+                        if (v > 0) setNovoPrecoManual(v);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-green-700">
+                    Valor seminovo: <b>{formatBRL(novoPrecoManual)}</b>
+                    <button onClick={() => setNovoPrecoManual(null)} className="ml-2 text-[10px] text-red-400 hover:text-red-600">alterar</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Preco do catálogo (produto novo) */}
+          {!novoSeminovo && newPrice > 0 && (
             <div className="bg-[#F5F5F7] rounded-lg p-3">
               <span className="text-sm text-[#86868B]">Preco PIX: </span>
               <span className="text-sm font-bold text-[#1D1D1F]">{formatBRL(newPrice)}</span>
