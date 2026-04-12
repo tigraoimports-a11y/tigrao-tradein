@@ -15,6 +15,7 @@ import {
   formatBRL,
 } from "@/lib/calculations";
 import type { ConditionData, IPadConditionData, MacBookConditionData, ModelDiscounts } from "@/lib/calculations";
+import { INSTALLMENT_RATES } from "@/lib/calculations";
 import type { UsedDeviceValue } from "@/lib/types";
 import FlexiblePaymentSimulator from "@/components/FlexiblePaymentSimulator";
 
@@ -1099,7 +1100,7 @@ export default function AdminPage() {
                           </div>
                           <div className="bg-[#F5F5F7] rounded-lg p-2.5 space-y-1">
                             {selecionadas.map(n => {
-                              const parcela = Math.round(modalRow.diferenca / n);
+                              const parcela = (() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })();
                               return <div key={n} className="flex justify-between text-sm"><span className="text-[#86868B]">{n}x:</span><span className="font-bold text-[#1D1D1F]">{fmt(parcela)}</span></div>;
                             })}
                           </div>
@@ -1134,7 +1135,7 @@ export default function AdminPage() {
                               if (selecionadas.length > 0) {
                                 lines.push("*Parcelado:*");
                                 selecionadas.forEach(n => {
-                                  lines.push(`  ${n}x de ${fmt(Math.round(modalRow.diferenca / n))}`);
+                                  lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
                                 });
                                 lines.push("");
                               }
@@ -1209,7 +1210,7 @@ export default function AdminPage() {
                       lines.push("");
                       lines.push("*Parcelado:*");
                       selecionadas.forEach(n => {
-                        lines.push(`  ${n}x de ${fmt(Math.round(modalRow.diferenca / n))}`);
+                        lines.push(`  ${n}x de ${fmt((() => { const rate = INSTALLMENT_RATES.find(r => r[0] === n)?.[1] || 1; return Math.round((modalRow.diferenca * rate) / n); })())}`);
                       });
                       lines.push("");
                     }
