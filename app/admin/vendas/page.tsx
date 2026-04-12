@@ -3858,10 +3858,12 @@ export default function VendasPage() {
                         const pagParts: string[] = [];
                         if (valorTrocaTotal > 0) pagParts.push(`Troca: ${fmt(valorTrocaTotal)}`);
                         if (temEntrada) pagParts.push(`PIX ${v.banco_pix || "ITAU"}: ${fmt(v.entrada_pix)}`);
+                        if (v.entrada_especie && v.entrada_especie > 0) pagParts.push(`Especie: ${fmt(v.entrada_especie)}`);
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
+                        const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - compVal));
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
@@ -3880,6 +3882,10 @@ export default function VendasPage() {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
                           pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
+                        }
+                        // Upgrade/troca sem forma definida: mostrar o complemento a pagar
+                        if (!v.forma && valorTrocaTotal > 0 && resto > 0) {
+                          pagParts.push(`Complemento: ${fmt(resto)}`);
                         }
                         if (v.banco_alt) {
                           pagParts.push(`2o: ${v.banco_alt} ${v.parc_alt || 0}x${v.band_alt ? ` ${v.band_alt}` : ""}${v.comp_alt ? ` (${fmt(v.comp_alt)})` : ""}`);

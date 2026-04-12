@@ -1321,6 +1321,8 @@ function SimuladorInterno({ password }: { password: string }) {
   // --- Novo (compra) ---
   const [novoCat, setNovoCat] = useState("");
   const [novoModelo, setNovoModelo] = useState("");
+  const [novoSeminovo, setNovoSeminovo] = useState(false);
+  const [novoPrecoManual, setNovoPrecoManual] = useState<number | null>(null);
 
   // Fetch data
   useEffect(() => {
@@ -1459,12 +1461,13 @@ function SimuladorInterno({ password }: { password: string }) {
   }, [effectiveBaseValue, usadoCat, usadoModelo, bateria, marcasUso, arranhoes, trincado, defeito, manutencao, garantiaApple, garantiaMes, garantiaAno, caixaOriginal, ciclosBateria, tecladoCondition, temCarregador, temPencil, modelDiscounts]);
 
   // --- New device price ---
-  const newPrice = useMemo(() => {
+  const newPriceCatalogo = useMemo(() => {
     if (!novoModelo) return 0;
-    // novoModelo = "iPhone 16 Pro 256GB" — find it in precos
     const found = precos.find((p) => `${p.modelo} ${p.armazenamento}` === novoModelo);
     return found?.preco_pix || 0;
   }, [precos, novoModelo]);
+
+  const newPrice = novoSeminovo && novoPrecoManual !== null ? novoPrecoManual : newPriceCatalogo;
 
   // --- Quote ---
   const quote = useMemo(() => {
@@ -1710,7 +1713,18 @@ function SimuladorInterno({ password }: { password: string }) {
 
         {/* ─── APARELHO NOVO ─── */}
         <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-4">
-          <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Novo (compra)</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-[#1D1D1F] text-sm">Aparelho Novo (compra)</h3>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={novoSeminovo}
+                onChange={(e) => { setNovoSeminovo(e.target.checked); setNovoPrecoManual(null); }}
+                className="w-4 h-4 accent-[#E8740E] rounded"
+              />
+              <span className="text-xs font-medium text-[#86868B]">Seminovo</span>
+            </label>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -1729,7 +1743,47 @@ function SimuladorInterno({ password }: { password: string }) {
             </div>
           </div>
 
-          {newPrice > 0 && (
+          {/* Seminovo: valor manual */}
+          {novoSeminovo && novoModelo && (
+            <div className={`rounded-lg p-3 space-y-2 ${novoPrecoManual ? "bg-green-50 border border-green-200" : "bg-yellow-50 border border-yellow-300"}`}>
+              {!novoPrecoManual ? (
+                <>
+                  <p className="text-sm font-semibold text-yellow-800">Aguardando precificacao do seminovo</p>
+                  <p className="text-xs text-yellow-700">Defina o valor de venda manualmente:</p>
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs text-yellow-700 font-medium">Valor: R$</span>
+                    <input
+                      type="number"
+                      placeholder="Ex: 7500"
+                      id="novo-preco-manual"
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-yellow-400 text-sm focus:border-[#E8740E] focus:outline-none"
+                      onKeyDown={(e) => { if (e.key === "Enter") { const v = parseFloat((e.target as HTMLInputElement).value); if (v > 0) setNovoPrecoManual(v); } }}
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById("novo-preco-manual") as HTMLInputElement;
+                        const v = parseFloat(input?.value || "0");
+                        if (v > 0) setNovoPrecoManual(v);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-green-700">
+                    Valor seminovo: <b>{formatBRL(novoPrecoManual)}</b>
+                    <button onClick={() => setNovoPrecoManual(null)} className="ml-2 text-[10px] text-red-400 hover:text-red-600">alterar</button>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Preco do catálogo (produto novo) */}
+          {!novoSeminovo && newPrice > 0 && (
             <div className="bg-[#F5F5F7] rounded-lg p-3">
               <span className="text-sm text-[#86868B]">Preco PIX: </span>
               <span className="text-sm font-bold text-[#1D1D1F]">{formatBRL(newPrice)}</span>
