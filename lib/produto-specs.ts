@@ -186,12 +186,14 @@ export const MACBOOK_CHIPS = ["A18", "A18 PRO", "M1", "M2", "M2 PRO", "M3", "M3 
 export const MACBOOK_RAMS = ["8GB", "16GB", "18GB", "24GB", "32GB", "36GB", "48GB", "64GB", "128GB"];
 export const MACBOOK_STORAGES = ["256GB", "512GB", "1TB", "2TB", "4TB", "8TB"];
 export const MACBOOK_NUCLEOS = [
+  "6C CPU/5C GPU",
   "8C CPU/7C GPU",
   "8C CPU/8C GPU",
   "8C CPU/10C GPU",
   "10C CPU/8C GPU",
   "10C CPU/10C GPU",
   "12C CPU/16C GPU",
+  "12C CPU/18C GPU",
   "12C CPU/19C GPU",
   "14C CPU/20C GPU",
   "14C CPU/32C GPU",
@@ -202,9 +204,11 @@ export const MAC_MINI_CHIPS = ["M1", "M2", "M2 PRO", "M4", "M4 PRO"];
 export const MAC_MINI_NUCLEOS = [
   "8C CPU/8C GPU",
   "8C CPU/10C GPU",
+  "10C CPU/8C GPU",
   "10C CPU/10C GPU",
   "12C CPU/16C GPU",
   "14C CPU/20C GPU",
+  "16C CPU/40C GPU",
 ];
 export const MAC_MINI_RAMS = ["8GB", "16GB", "24GB", "32GB", "48GB", "64GB"];
 export const MAC_MINI_STORAGES = ["256GB", "512GB", "1TB", "2TB"];

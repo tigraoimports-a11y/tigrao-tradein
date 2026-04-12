@@ -9,7 +9,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, MAC_MINI_NUCLEOS, MAC_MINI_RAMS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
@@ -5658,8 +5658,6 @@ export default function EstoquePage() {
                       showSaved(field);
                     };
                     const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
-                    const MM_NUCLEOS = ["10C CPU/10C GPU", "12C CPU/16C GPU", "14C CPU/20C GPU", "16C CPU/40C GPU"];
-                    const MM_RAMS = ["16GB", "24GB", "32GB", "36GB", "48GB", "64GB"];
                     const MM_SSDS = ["256GB", "512GB", "1TB", "2TB"];
                     return (
                       <>
@@ -5667,16 +5665,16 @@ export default function EstoquePage() {
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nucleos {saved("nucleos")}</p>
                           <select value={curNucleos} onChange={(e) => updateMmField("nucleos", e.target.value)} className={selCls}>
                             <option value="">— Selecionar —</option>
-                            {curNucleos && !MM_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
-                            {MM_NUCLEOS.map(n => <option key={n} value={n}>{n}</option>)}
+                            {curNucleos && !MAC_MINI_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {MAC_MINI_NUCLEOS.map(n => <option key={n} value={n}>{n}</option>)}
                           </select>
                         </div>
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
                           <select value={curRam} onChange={(e) => updateMmField("ram", e.target.value)} className={selCls}>
                             <option value="">— Selecionar —</option>
-                            {curRam && !MM_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
-                            {MM_RAMS.map(r => <option key={r} value={r}>{r}</option>)}
+                            {curRam && !MAC_MINI_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {MAC_MINI_RAMS.map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </div>
                         <div>
@@ -5991,20 +5989,7 @@ export default function EstoquePage() {
                   const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
                   if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
                 }
-                // Fallback: inferir nucleos padrao a partir do chip no nome
-                if (!cpu || !gpu) {
-                  const chipInName = nome.match(/(A18\s*PRO|M5\s*MAX|M5\s*PRO|M5|M4\s*MAX|M4\s*PRO|M4|M3\s*MAX|M3\s*PRO|M3)/i)?.[1]?.toUpperCase().replace(/\s+/g, " ");
-                  const defaultCores: Record<string, [string, string]> = {
-                    "A18 PRO": ["6", "5"],
-                    "M3": ["8", "10"], "M3 PRO": ["12", "18"], "M3 MAX": ["14", "30"],
-                    "M4": ["10", "10"], "M4 PRO": ["12", "16"], "M4 MAX": ["16", "40"],
-                    "M5": ["10", "10"], "M5 PRO": ["12", "16"], "M5 MAX": ["16", "40"],
-                  };
-                  if (chipInName && defaultCores[chipInName]) {
-                    const [dc, dg] = defaultCores[chipInName];
-                    cpu = cpu || dc; gpu = gpu || dg;
-                  }
-                }
+                // Nucleos: sem fallback automatico — admin define via select editavel
                 const tela = tag(/\[TELA:([^\]]+)\]/);
                 const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
                 const band = tag(/\[BAND:([^\]]+)\]/);
