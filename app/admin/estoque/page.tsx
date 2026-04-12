@@ -6472,14 +6472,46 @@ export default function EstoquePage() {
                   push("Tamanho", telaFinal);
                   push("RAM", ram);
                   push("SSD", ssd);
-                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  const mbChipFromName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1];
+                  const mbChipFromCores = (() => {
+                    if (!cpu || !gpu) return null;
+                    const c = parseInt(cpu), g = parseInt(gpu);
+                    if (c === 8 && g === 8) return "M4";
+                    if (c === 8 && g === 10) return "M4";
+                    if (c === 10 && g === 10) return "M4";
+                    if (c === 12 && g === 16) return "M4 Pro";
+                    if (c === 14 && g === 20) return "M4 Pro";
+                    if (c === 12 && g === 19) return "M4 Pro";
+                    if (c === 16 && g === 40) return "M4 Max";
+                    if (c === 6 && g === 5) return "A18 Pro";
+                    if (c === 8 && g === 7) return "M3";
+                    if (c === 11 && g === 14) return "M3 Pro";
+                    if (c === 12 && g === 18) return "M3 Pro";
+                    if (c === 14 && g === 30) return "M3 Max";
+                    return `${c}C CPU / ${g}C GPU`;
+                  })();
+                  push("Chip", mbChipFromName || mbChipFromCores || (cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : null));
                   push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Ciclos de bateria", ciclos);
                   push("Grade", grade);
                 } else if (baseCat === "MAC_MINI") {
                   push("RAM", ram);
                   push("SSD", ssd);
-                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  // Detectar chip pelo nome ou pelos nucleos
+                  const chipFromName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1];
+                  const chipFromCores = (() => {
+                    if (!cpu || !gpu) return null;
+                    const c = parseInt(cpu), g = parseInt(gpu);
+                    if (c === 10 && g === 10) return "M4";
+                    if (c === 12 && g === 16) return "M4 Pro";
+                    if (c === 14 && g === 20) return "M4 Pro";
+                    if (c === 16 && g === 40) return "M4 Max";
+                    if (c === 10 && g === 8) return "M4";
+                    if (c === 8 && g === 10) return "M3";
+                    if (c === 12 && g === 18) return "M3 Pro";
+                    return `${c}C CPU / ${g}C GPU`;
+                  })();
+                  push("Chip", chipFromName || chipFromCores || (cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : null));
                   push("Cor", p.cor ? corParaPT(p.cor) : null);
                 } else if (baseCat === "APPLE_WATCH") {
                   push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
