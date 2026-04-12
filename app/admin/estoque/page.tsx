@@ -4562,7 +4562,7 @@ export default function EstoquePage() {
                         const obsLimpo = cleanObs(obs);
                         const cliente = p._groupCliente || "";
                         return (
-                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%-6px)] sm:w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
                             {/* Cliente */}
                             <p className={`text-[10px] font-semibold uppercase tracking-wider ${textSecondary}`}>👤 {cliente}</p>
                             {/* Produto + Cor */}
@@ -4659,15 +4659,15 @@ export default function EstoquePage() {
                     // Expandir seriais ao clicar no card
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
+                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%-6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
                         {/* Produto + Cor */}
                         <div>
-                          <p className={`font-bold text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
-                          {corPt && <p className={`text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                          <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
+                          {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
                         </div>
                         {/* Quantidade */}
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
+                          <span className={`text-xs sm:text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
                             {qntTotal === 0 ? "Esgotado" : `${qntTotal} un.`}
                           </span>
                           {/* Badges para seminovos (bateria média, grades) */}
@@ -4682,7 +4682,7 @@ export default function EstoquePage() {
                         </div>
                         {/* Preço */}
                         <div className="flex items-center justify-between">
-                          <span className={`text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
+                          <span className={`text-xs sm:text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
                           {items.length > 1 && <span className={`text-[10px] ${textMuted}`}>{cardExpanded ? "▲" : "▼"} ver seriais</span>}
                           {items.length === 1 && (rep.imei || rep.serial_no) && (
                             <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(rep.serial_no || rep.imei || "").slice(-8)}</span>
