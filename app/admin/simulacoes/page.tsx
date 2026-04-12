@@ -1120,9 +1120,22 @@ export default function AdminPage() {
                               lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
                               lines.push("");
                               if (modalRow.modelo_usado) {
-                                lines.push(`Seu ${modalRow.modelo_usado} ${modalRow.storage_usado}: *${fmt(aval)}*`);
-                                if (modalRow.modelo_usado2) lines.push(`Seu ${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                                lines.push(`*Seu aparelho na troca:*`);
+                                lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` — ${modalRow.cor_usado}` : ""}`);
+                                if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
+                                  modalRow.condicao_linhas.forEach(l => lines.push(`• ${l}`));
+                                }
+                                lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
                                 lines.push("");
+                                if (modalRow.modelo_usado2) {
+                                  lines.push(`*2o aparelho na troca:*`);
+                                  lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` — ${modalRow.cor_usado2}` : ""}`);
+                                  if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
+                                    modalRow.condicao_linhas2.forEach(l => lines.push(`• ${l}`));
+                                  }
+                                  lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                                  lines.push("");
+                                }
                               }
                               lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
                               lines.push("");
