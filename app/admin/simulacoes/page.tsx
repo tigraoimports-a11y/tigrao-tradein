@@ -133,6 +133,7 @@ export default function AdminPage() {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
+  const [modalParcelasVisiveis, setModalParcelasVisiveis] = useState<number[] | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -614,7 +615,7 @@ export default function AdminPage() {
                   </tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} onClick={() => setModalRow(row)} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
+                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -1068,15 +1069,52 @@ export default function AdminPage() {
                       <span className="text-[#E8740E] font-bold">Diferenca PIX:</span>
                       <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
                     </div>
-                    {modalRow.diferenca > 0 && (
-                      <div className="text-xs text-[#86868B] space-y-0.5 pt-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1">Parcelamento (sem juros)</p>
-                        {[3, 6, 10, 12, 18, 21].map(n => {
-                          const parcela = Math.round(modalRow.diferenca / n);
-                          return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
-                        })}
-                      </div>
-                    )}
+                    {modalRow.diferenca > 0 && (() => {
+                      const TODAS = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+                      const DEFAULT = [12, 18, 21];
+                      return (
+                        <div className="text-xs text-[#86868B] space-y-1 pt-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider">Parcelamento</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const sel = modalParcelasVisiveis || DEFAULT;
+                                const todas = sel.length === TODAS.length;
+                                setModalParcelasVisiveis(todas ? DEFAULT : [...TODAS]);
+                              }}
+                              className="text-[10px] text-[#0071E3] hover:underline"
+                            >
+                              {(modalParcelasVisiveis || DEFAULT).length === TODAS.length ? "Menos" : "Todas"}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {TODAS.map(n => {
+                              const ativo = (modalParcelasVisiveis || DEFAULT).includes(n);
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = modalParcelasVisiveis || DEFAULT;
+                                    setModalParcelasVisiveis(
+                                      ativo ? current.filter(x => x !== n) : [...current, n].sort((a,b) => a-b)
+                                    );
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition ${ativo ? "bg-[#E8740E] text-white" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
+                                >
+                                  {n}x
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {(modalParcelasVisiveis || DEFAULT).map(n => {
+                            const parcela = Math.round(modalRow.diferenca / n);
+                            return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
+                          })}
+                        </div>
+                      );
+                    })()}
                     {modalRow.forma_pagamento && (
                       <div className="flex justify-between text-sm">
                         <span className="text-[#86868B]">Forma de pagamento:</span>
