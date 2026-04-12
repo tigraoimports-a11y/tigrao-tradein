@@ -5798,7 +5798,7 @@ export default function EstoquePage() {
                     // Pulseira: Apple Watch
                     const showPulseira = cat === "APPLE_WATCH";
                     // Ciclos: MacBook
-                    const showCiclos = cat === "MACBOOK";
+                    const showCiclos = cat === "MACBOOK" && p.tipo !== "NOVO" && p.tipo !== "A_CAMINHO";
                     const getLatestObs = () => {
                       // Lê observacao mais recente do estado (não do closure stale)
                       const el = document.getElementById(`obs-${p.id}`) as HTMLTextAreaElement;
@@ -6105,14 +6105,9 @@ export default function EstoquePage() {
                   showSaved("spec");
                 };
                 const editableTags: { label: string; tag: string; current: string }[] = [];
-                if (baseCat === "MACBOOK" || baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
-                if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
-                  editableTags.push({ label: "RAM", tag: "RAM", current: ram || "" });
-                  editableTags.push({ label: "SSD", tag: "SSD", current: ssd || "" });
-                  editableTags.push({ label: "CPU (núcleos)", tag: "CPU", current: cpu || "" });
-                  editableTags.push({ label: "GPU (núcleos)", tag: "GPU", current: gpu || "" });
-                  editableTags.push({ label: "Ciclos de bateria", tag: "CICLOS", current: ciclos || "" });
-                }
+                // MacBook e Mac Mini: editados via dropdowns acima (Nucleos/Tela/RAM/SSD)
+                // Apenas iPad usa editableTags para tela
+                if (baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
                 if (baseCat === "APPLE_WATCH") {
                   editableTags.push({ label: "Modelo da pulseira", tag: "BAND", current: band || "" });
                   editableTags.push({ label: "Tamanho da pulseira", tag: "PULSEIRA_TAM", current: pulseiraTam || "" });
