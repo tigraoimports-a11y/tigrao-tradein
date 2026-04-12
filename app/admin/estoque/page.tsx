@@ -669,7 +669,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /** Extrai o "modelo base" de um produto para agrupar em cards */
-function getModeloBase(produto: string, categoria: string): string {
+function getModeloBase(produto: string, categoria: string, observacao?: string | null): string {
   const p = produto.toUpperCase().trim();
   // Inferir categoria quando vier vazia/inválida baseado no nome do produto
   let baseCat = getBaseCat(categoria || "");
@@ -726,7 +726,11 @@ function getModeloBase(produto: string, categoria: string): string {
     const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
     let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
     if (!chip) {
-      const nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      let nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      if (!nucMatch && observacao) {
+        const obsNuc = observacao.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+        if (obsNuc) nucMatch = obsNuc;
+      }
       if (nucMatch) {
         const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
         if (c === 8 && (g === 8 || g === 10)) chip = " M4";
@@ -749,11 +753,17 @@ function getModeloBase(produto: string, categoria: string): string {
     const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
     const ssd = sorted.length >= 1 ? `/${sorted[sorted.length - 1].raw}` : "";
     const memPair = `${ram}${ssd}`;
-    // Chip: extrair do nome ou inferir dos nucleos
+    // Chip: extrair do nome, dos nucleos no nome, ou da tag [NUCLEOS:...] na observacao
     const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
     let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
     if (!chip) {
-      const nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      // Tentar nucleos no nome
+      let nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      // Fallback: nucleos na observacao [NUCLEOS:12C CPU/16C GPU]
+      if (!nucMatch && observacao) {
+        const obsNuc = observacao.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+        if (obsNuc) nucMatch = obsNuc;
+      }
       if (nucMatch) {
         const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
         if (c === 10 && g === 10) chip = " M4";
@@ -2457,7 +2467,7 @@ export default function EstoquePage() {
       catKey = p.categoria;
     }
     if (!byCat[catKey]) byCat[catKey] = {};
-    const modelo = getModeloBase(p.produto, p.categoria);
+    const modelo = getModeloBase(p.produto, p.categoria, p.observacao);
     if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
     byCat[catKey][modelo].push(p);
   });
@@ -4664,7 +4674,7 @@ export default function EstoquePage() {
                 if (allItems.length === 0) return null;
                 const grouped: Record<string, typeof allItems> = {};
                 allItems.forEach(p => {
-                  const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+                  const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
                   const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
                   const key = `${base}|||${cor}`;
                   if (!grouped[key]) grouped[key] = [];
