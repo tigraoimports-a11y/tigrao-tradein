@@ -4958,7 +4958,7 @@ export default function EstoquePage() {
         // reset serial/imei edit mode when a different product opens
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
-        const canEdit = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
+        const canEdit = isAdmin || p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         // IMEI/Serial editável para pendências (qualquer user) ou admin (qualquer status)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         const canEditImei = isPendente || isAdmin;
