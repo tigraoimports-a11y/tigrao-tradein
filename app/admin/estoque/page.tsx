@@ -102,12 +102,24 @@ function formatProdutoDisplay(p: {
     if (hasCell) parts.push("Wi-Fi + Cellular");
     else if (hasWifi) parts.push("Wi-Fi");
   } else if (baseCat === "MACBOOK") {
-    // Chip NÃO entra no nome de preview — só no modal de detalhes.
     let modelo = "MacBook";
     if (/NEO/.test(up)) modelo = "MacBook Neo";
     else if (/AIR/.test(up)) modelo = "MacBook Air";
     else if (/PRO/.test(up)) modelo = "MacBook Pro";
-    parts.push(modelo);
+    // Chip: extrair do nome ou inferir dos nucleos/observacao
+    const mbChip = up.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?|A\d+\s*PRO)/i)?.[1] || (() => {
+      const nucMatch = up.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i)
+        || obs.toUpperCase().match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+      if (!nucMatch) return /NEO/.test(up) ? "A18 Pro" : "";
+      const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+      if (c === 6 && g === 5) return "A18 Pro";
+      if (c === 8 && (g === 8 || g === 10)) return "M4";
+      if (c === 12 && (g === 16 || g === 19)) return "M4 Pro";
+      if (c === 14 && g === 20) return "M4 Pro";
+      if (c === 16 && g === 40) return "M4 Max";
+      return "";
+    })();
+    parts.push(modelo + (mbChip ? ` ${mbChip}` : ""));
     if (tela) parts.push(tela);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
@@ -149,7 +161,7 @@ function formatProdutoDisplay(p: {
     return cleanProdutoDisplay(nomeRaw);
   }
 
-  return parts.filter(Boolean).join(" ");
+  return parts.filter(p => p && p !== "=" && p !== "-").join(" ");
 }
 
 /** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
@@ -751,7 +763,7 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
         else if (c === 6 && g === 5) chip = " A18 Pro";
       }
     }
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
+    if (p.includes("NEO")) return `MacBook Neo${chip || " A18 Pro"}${size}${memPair}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
     return `MacBook${chip}${memPair}`;
