@@ -5626,6 +5626,70 @@ export default function EstoquePage() {
                       </>
                     );
                   })()}
+                  {canEdit && getBaseCat(p.categoria || "") === "MAC_MINI" && (() => {
+                    const cleanNome = (p.produto || "").replace(/=/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+                    const storages: string[] = [];
+                    cleanNome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    const sorted = storages.map(s => ({ raw: s, gb: s.includes("TB") ? parseInt(s) * 1024 : parseInt(s) })).sort((a, b) => a.gb - b.gb);
+                    const curRam = sorted.length >= 2 ? sorted[0].raw : "";
+                    const curSsd = sorted.length >= 1 ? sorted[sorted.length - 1].raw : "";
+                    const obsRaw = p.observacao || "";
+                    const nucTagMatch = obsRaw.match(/\[NUCLEOS:([^\]]+)\]/i);
+                    const curNucleos = nucTagMatch ? nucTagMatch[1].trim() : "";
+                    const updateMmField = async (field: "ram" | "ssd" | "nucleos", val: string) => {
+                      let novo = (p.produto || "").replace(/=/g, " ").replace(/\s+/g, " ").trim();
+                      let novaObs = obsRaw;
+                      if (field === "ram" && curRam) {
+                        novo = novo.replace(new RegExp(`\\b${curRam}\\b`), val || curRam);
+                      } else if (field === "ssd" && curSsd) {
+                        // Substituir a última ocorrência de storage
+                        const idx = novo.toUpperCase().lastIndexOf(curSsd);
+                        if (idx >= 0) novo = novo.slice(0, idx) + (val || curSsd) + novo.slice(idx + curSsd.length);
+                      } else if (field === "nucleos") {
+                        novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                        if (val) novaObs = (novaObs + ` [NUCLEOS:${val}]`).trim();
+                      }
+                      novo = novo.trim();
+                      const updates: Record<string, unknown> = { produto: novo };
+                      if (field === "nucleos" || novaObs !== obsRaw) updates.observacao = novaObs || null;
+                      await apiPatch(p.id, updates);
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo, observacao: (updates.observacao as string | null) ?? x.observacao } : x));
+                      setDetailProduct({ ...p, produto: novo, observacao: (updates.observacao as string | null) ?? p.observacao });
+                      showSaved(field);
+                    };
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    const MM_NUCLEOS = ["10C CPU/10C GPU", "12C CPU/16C GPU", "14C CPU/20C GPU", "16C CPU/40C GPU"];
+                    const MM_RAMS = ["16GB", "24GB", "32GB", "36GB", "48GB", "64GB"];
+                    const MM_SSDS = ["256GB", "512GB", "1TB", "2TB"];
+                    return (
+                      <>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nucleos {saved("nucleos")}</p>
+                          <select value={curNucleos} onChange={(e) => updateMmField("nucleos", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curNucleos && !MM_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {MM_NUCLEOS.map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
+                          <select value={curRam} onChange={(e) => updateMmField("ram", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curRam && !MM_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {MM_RAMS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
+                          <select value={curSsd} onChange={(e) => updateMmField("ssd", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curSsd && !MM_SSDS.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {MM_SSDS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
                   {(p.imei || isAdmin || canEditImei) && !CATS_SEM_IMEI.includes(getBaseCat(p.categoria || "")) && (
                     <div>
                       <p className={`text-[10px] uppercase tracking-wider ${mS}`}>IMEI {saved("imei")}</p>
