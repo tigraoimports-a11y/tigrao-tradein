@@ -4635,7 +4635,6 @@ export default function EstoquePage() {
             {/* ========== CARD VIEW (todas as outras abas) ========== */}
             {!isPendenciasTab && (() => {
               const catEntries = Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b));
-              // Pré-computar byLine para cada categoria (necessário para DnD)
               const catData = catEntries.map(([cat, modelos]) => {
                 const allItems = Object.values(modelos).flat()
                   .filter(p => !(tab === "estoque" && p.qnt === 0))
@@ -4658,7 +4657,6 @@ export default function EstoquePage() {
                   if (!byLine[modeloFull]) byLine[modeloFull] = [];
                   byLine[modeloFull].push(entry);
                 });
-                // Aplicar ordem customizada se existir
                 const savedOrder = lineOrder[cat] || [];
                 const lineNames = Object.keys(byLine);
                 const sortedLineNames = savedOrder.length > 0
