@@ -838,6 +838,9 @@ export default function EstoquePage() {
   const [importingInitial, setImportingInitial] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [detailProduct, setDetailProduct] = useState<ProdutoEstoque | null>(null);
+  // Drag-and-drop: ordem customizada das seções de modelo
+  const [lineOrder, setLineOrder] = useState<Record<string, string[]>>({});
+  const [reorderMode, setReorderMode] = useState(false);
   // Modal de reservar produto
   const [reservaTarget, setReservaTarget] = useState<ProdutoEstoque | null>(null);
   const [reservaForm, setReservaForm] = useState({ cliente: "", data: "", para: "", operador: "" });
@@ -1593,6 +1596,32 @@ export default function EstoquePage() {
   const refetchAll = useCallback(() => { fetchEstoque(); fetchFornecedores(); }, [fetchEstoque, fetchFornecedores]);
   useEffect(() => { refetchAll(); }, [refetchAll]);
   useAutoRefetch(refetchAll, !!password);
+
+  // Carregar ordem customizada das seções do estoque
+  useEffect(() => {
+    if (!password) return;
+    fetch("/api/admin/estoque-settings?key=estoque_line_order", { headers: { "x-admin-password": password } })
+      .then(r => r.json())
+      .then(d => { if (d.value) setLineOrder(d.value); })
+      .catch(() => {});
+  }, [password]);
+
+  const saveLineOrder = useCallback(async (newOrder: Record<string, string[]>) => {
+    setLineOrder(newOrder);
+    await fetch("/api/admin/estoque-settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ key: "estoque_line_order", value: newOrder }),
+    }).catch(() => {});
+  }, [password]);
+
+  const moveLineInOrder = useCallback((cat: string, sortedNames: string[], fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= sortedNames.length) return;
+    const items = Array.from(sortedNames);
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved);
+    saveLineOrder({ ...lineOrder, [cat]: items });
+  }, [lineOrder, saveLineOrder]);
 
   // Reset estados de edição quando abre novo produto no modal
   useEffect(() => {
@@ -4604,48 +4633,74 @@ export default function EstoquePage() {
               });
             })()}
             {/* ========== CARD VIEW (todas as outras abas) ========== */}
-            {!isPendenciasTab && Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b)).map(([cat, modelos]) => {
-              // Flatten all items, then group by modelo+cor
-              const allItems = Object.values(modelos).flat()
-                .filter(p => !(tab === "estoque" && p.qnt === 0))
-                .filter(p => !(tab === "seminovos" && p.qnt === 0));
-              if (allItems.length === 0) return null;
-              // Agrupar por modelo base + cor canônica
-              const grouped: Record<string, typeof allItems> = {};
-              allItems.forEach(p => {
-                const base = getModeloBase(p.produto, p.categoria).toUpperCase();
-                const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
-                const key = `${base}|||${cor}`;
-                if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(p);
-              });
-              // Ordenar por storage
-              const storageToNum = (name: string): number => { const m = name.match(/(\d+)\s*(GB|TB)/i); if (!m) return 0; return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]); };
-              const groupEntries = Object.entries(grouped).sort(([a], [b]) => { const sa = storageToNum(a); const sb = storageToNum(b); if (sa !== sb) return sa - sb; return a.localeCompare(b); });
-              // Agrupar cards por linha de modelo (ex: "iPhone 17 Pro Max") — sem storage
-              const byLine: Record<string, typeof groupEntries> = {};
-              groupEntries.forEach(entry => {
-                const [key] = entry;
-                const modeloFull = key.split("|||")[0];
-                const line = modeloFull;
-                if (!byLine[line]) byLine[line] = [];
-                byLine[line].push(entry);
-              });
-              const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
-              const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+            {!isPendenciasTab && (() => {
+              const catEntries = Object.entries(byCat).sort(([a], [b]) => a.localeCompare(b));
+              const catData = catEntries.map(([cat, modelos]) => {
+                const allItems = Object.values(modelos).flat()
+                  .filter(p => !(tab === "estoque" && p.qnt === 0))
+                  .filter(p => !(tab === "seminovos" && p.qnt === 0));
+                if (allItems.length === 0) return null;
+                const grouped: Record<string, typeof allItems> = {};
+                allItems.forEach(p => {
+                  const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+                  const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
+                  const key = `${base}|||${cor}`;
+                  if (!grouped[key]) grouped[key] = [];
+                  grouped[key].push(p);
+                });
+                const storageToNum = (name: string): number => { const m = name.match(/(\d+)\s*(GB|TB)/i); if (!m) return 0; return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]); };
+                const groupEntries = Object.entries(grouped).sort(([a], [b]) => { const sa = storageToNum(a); const sb = storageToNum(b); if (sa !== sb) return sa - sb; return a.localeCompare(b); });
+                const byLine: Record<string, typeof groupEntries> = {};
+                groupEntries.forEach(entry => {
+                  const [key] = entry;
+                  const modeloFull = key.split("|||")[0];
+                  if (!byLine[modeloFull]) byLine[modeloFull] = [];
+                  byLine[modeloFull].push(entry);
+                });
+                const savedOrder = lineOrder[cat] || [];
+                const lineNames = Object.keys(byLine);
+                const sortedLineNames = savedOrder.length > 0
+                  ? [...lineNames].sort((a, b) => {
+                      const ia = savedOrder.indexOf(a);
+                      const ib = savedOrder.indexOf(b);
+                      if (ia === -1 && ib === -1) return 0;
+                      if (ia === -1) return 1;
+                      if (ib === -1) return 1;
+                      return ia - ib;
+                    })
+                  : lineNames;
+                const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
+                const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
+                return { cat, byLine, sortedLineNames, groupEntries, totalQnt, totalVal };
+              }).filter(Boolean) as { cat: string; byLine: Record<string, [string, any[]][]>; sortedLineNames: string[]; groupEntries: [string, any[]][]; totalQnt: number; totalVal: number }[];
+
               return (
+              <>
+              {catData.map(({ cat, byLine, sortedLineNames, groupEntries, totalQnt, totalVal }) => (
               <div key={cat} className="space-y-5">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {groupEntries.length} modelo{groupEntries.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
+                  <button onClick={(e) => { e.stopPropagation(); setReorderMode(!reorderMode); }} className={`ml-auto text-[11px] px-2 py-1 rounded-lg transition-colors ${reorderMode ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
+                    {reorderMode ? "Pronto" : "Reordenar"}
+                  </button>
                 </h2>
-                {Object.entries(byLine).map(([lineName, lineEntries]) => {
+                <div className="space-y-4">
+                {sortedLineNames.map((lineName, lineIdx) => {
+                  const lineEntries = byLine[lineName];
+                  if (!lineEntries) return null;
                   const lineQnt = lineEntries.reduce((s, [, items]) => s + items.reduce((ss, p) => ss + p.qnt, 0), 0);
                   return (
                   <div key={lineName} className="space-y-2">
                     <h3 className={`text-sm font-semibold ${textSecondary} flex items-center gap-2`}>
+                      {reorderMode && (
+                        <span className="flex flex-col gap-0 mr-1">
+                          <button onClick={(e) => { e.stopPropagation(); moveLineInOrder(cat, sortedLineNames, lineIdx, lineIdx - 1); }} disabled={lineIdx === 0} className={`text-[10px] leading-none px-1 py-0.5 rounded transition-colors ${lineIdx === 0 ? "opacity-30 cursor-not-allowed" : "hover:bg-[#E8740E] hover:text-white cursor-pointer"}`}>▲</button>
+                          <button onClick={(e) => { e.stopPropagation(); moveLineInOrder(cat, sortedLineNames, lineIdx, lineIdx + 1); }} disabled={lineIdx === sortedLineNames.length - 1} className={`text-[10px] leading-none px-1 py-0.5 rounded transition-colors ${lineIdx === sortedLineNames.length - 1 ? "opacity-30 cursor-not-allowed" : "hover:bg-[#E8740E] hover:text-white cursor-pointer"}`}>▼</button>
+                        </span>
+                      )}
                       {lineName}
                       <span className={`text-[11px] font-normal ${textMuted}`}>{lineQnt} un.</span>
                     </h3>
@@ -4656,7 +4711,6 @@ export default function EstoquePage() {
                     const avgCusto = qntTotal > 0 ? Math.round(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0) / qntTotal) : (rep.custo_unitario || 0);
                     const corPt = rep.cor ? corParaPT(rep.cor) : "";
                     const isUsado = items.some(p => p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA");
-                    // Expandir seriais ao clicar no card
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
                       <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
@@ -4670,7 +4724,6 @@ export default function EstoquePage() {
                           <span className={`text-xs sm:text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
                             {qntTotal === 0 ? "Esgotado" : `${qntTotal} un.`}
                           </span>
-                          {/* Badges para seminovos (bateria média, grades) */}
                           {isUsado && (() => {
                             const bats = items.filter(p => p.bateria).map(p => p.bateria!);
                             const grades = [...new Set(items.map(p => (p.observacao || "").match(/\[GRADE_(A\+|AB|A|B)\]/)?.[1]).filter(Boolean))];
@@ -4709,9 +4762,12 @@ export default function EstoquePage() {
                   </div>
                   );
                 })}
+                </div>
               </div>
+              ))}
+              </>
               );
-            })}
+            })()}
             </>
           )}
         </div>
