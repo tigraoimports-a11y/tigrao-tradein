@@ -2120,6 +2120,7 @@ export default function GerarLinkPage() {
             <option value="loja">Retirada em Loja</option>
             <option value="shopping">Entrega em Shopping</option>
             <option value="residencia">Entrega em Residencia</option>
+            <option value="correios">📦 Envio Correios</option>
             <option value="outro">Outro local</option>
           </select>
         </div>
