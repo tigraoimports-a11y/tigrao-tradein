@@ -133,6 +133,7 @@ export default function AdminPage() {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [savingEdit, setSavingEdit] = useState(false);
+  const [modalParcelasVisiveis, setModalParcelasVisiveis] = useState<number[] | null>(null);
   const [filterPeriod, setFilterPeriod] = useState<"todos" | "hoje" | "ontem" | "7dias" | "30dias" | "mes" | "personalizado">("todos");
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -614,7 +615,7 @@ export default function AdminPage() {
                   </tr>
                 ) : (
                   filtered.map((row) => (
-                    <tr key={row.id} onClick={() => setModalRow(row)} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
+                    <tr key={row.id} onClick={() => { setModalRow(row); setModalParcelasVisiveis(null); setEditMode(false); }} className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${selected.has(row.id) ? "bg-orange-50" : ""}`}>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -1068,14 +1069,92 @@ export default function AdminPage() {
                       <span className="text-[#E8740E] font-bold">Diferenca PIX:</span>
                       <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
                     </div>
-                    {modalRow.diferenca > 0 && (
-                      <div className="text-xs text-[#86868B] space-y-0.5 pt-1">
-                        {[3, 6, 10, 12].map(n => {
-                          const parcela = Math.round(modalRow.diferenca / n);
-                          return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
-                        })}
-                      </div>
-                    )}
+                    {modalRow.diferenca > 0 && (() => {
+                      const TODAS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+                      const DEFAULT = [12, 18, 21];
+                      const selecionadas = modalParcelasVisiveis || DEFAULT;
+                      return (
+                        <div className="text-xs text-[#86868B] space-y-1 pt-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider">Parcelamento</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setModalParcelasVisiveis(selecionadas.length === TODAS.length ? DEFAULT : [...TODAS]);
+                              }}
+                              className="text-[10px] text-[#0071E3] hover:underline"
+                            >
+                              {selecionadas.length === TODAS.length ? "Menos" : "Todas"}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {TODAS.map(n => {
+                              const ativo = selecionadas.includes(n);
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() => {
+                                    setModalParcelasVisiveis(
+                                      ativo ? selecionadas.filter(x => x !== n) : [...selecionadas, n].sort((a,b) => a-b)
+                                    );
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition ${ativo ? "bg-[#E8740E] text-white" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
+                                >
+                                  {n}x
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {selecionadas.map(n => {
+                            const parcela = Math.round(modalRow.diferenca / n);
+                            return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
+                          })}
+                          {/* Botão copiar para WhatsApp */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                              const lines: string[] = [];
+                              lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
+                              lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
+                              lines.push("");
+                              if (modalRow.modelo_usado) {
+                                lines.push(`*Seu aparelho na troca:*`);
+                                lines.push(`${modalRow.modelo_usado} ${modalRow.storage_usado}${modalRow.cor_usado ? ` — ${modalRow.cor_usado}` : ""}`);
+                                if (modalRow.condicao_linhas && modalRow.condicao_linhas.length > 0) {
+                                  modalRow.condicao_linhas.forEach(l => lines.push(`• ${l}`));
+                                }
+                                lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado)}*`);
+                                lines.push("");
+                                if (modalRow.modelo_usado2) {
+                                  lines.push(`*2o aparelho na troca:*`);
+                                  lines.push(`${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}${modalRow.cor_usado2 ? ` — ${modalRow.cor_usado2}` : ""}`);
+                                  if (modalRow.condicao_linhas2 && modalRow.condicao_linhas2.length > 0) {
+                                    modalRow.condicao_linhas2.forEach(l => lines.push(`• ${l}`));
+                                  }
+                                  lines.push(`Avaliacao: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                                  lines.push("");
+                                }
+                              }
+                              lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
+                              lines.push("");
+                              lines.push("*Parcelado:*");
+                              selecionadas.forEach(n => {
+                                const parcela = Math.round(modalRow.diferenca / n);
+                                lines.push(`${n}x de ${fmt(parcela)}`);
+                              });
+                              navigator.clipboard.writeText(lines.join("\n")).then(() => {
+                                alert("Copiado para a area de transferencia!");
+                              });
+                            }}
+                            className="w-full mt-2 py-2 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition flex items-center justify-center gap-1.5"
+                          >
+                            📋 Copiar para WhatsApp
+                          </button>
+                        </div>
+                      );
+                    })()}
                     {modalRow.forma_pagamento && (
                       <div className="flex justify-between text-sm">
                         <span className="text-[#86868B]">Forma de pagamento:</span>
