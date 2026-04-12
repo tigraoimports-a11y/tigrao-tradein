@@ -1070,8 +1070,9 @@ export default function AdminPage() {
                       <span className="text-[#E8740E] font-bold">{fmt(modalRow.diferenca)}</span>
                     </div>
                     {modalRow.diferenca > 0 && (() => {
-                      const TODAS = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+                      const TODAS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
                       const DEFAULT = [12, 18, 21];
+                      const selecionadas = modalParcelasVisiveis || DEFAULT;
                       return (
                         <div className="text-xs text-[#86868B] space-y-1 pt-1">
                           <div className="flex items-center justify-between">
@@ -1079,26 +1080,23 @@ export default function AdminPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                const sel = modalParcelasVisiveis || DEFAULT;
-                                const todas = sel.length === TODAS.length;
-                                setModalParcelasVisiveis(todas ? DEFAULT : [...TODAS]);
+                                setModalParcelasVisiveis(selecionadas.length === TODAS.length ? DEFAULT : [...TODAS]);
                               }}
                               className="text-[10px] text-[#0071E3] hover:underline"
                             >
-                              {(modalParcelasVisiveis || DEFAULT).length === TODAS.length ? "Menos" : "Todas"}
+                              {selecionadas.length === TODAS.length ? "Menos" : "Todas"}
                             </button>
                           </div>
                           <div className="flex flex-wrap gap-1 mb-1">
                             {TODAS.map(n => {
-                              const ativo = (modalParcelasVisiveis || DEFAULT).includes(n);
+                              const ativo = selecionadas.includes(n);
                               return (
                                 <button
                                   key={n}
                                   type="button"
                                   onClick={() => {
-                                    const current = modalParcelasVisiveis || DEFAULT;
                                     setModalParcelasVisiveis(
-                                      ativo ? current.filter(x => x !== n) : [...current, n].sort((a,b) => a-b)
+                                      ativo ? selecionadas.filter(x => x !== n) : [...selecionadas, n].sort((a,b) => a-b)
                                     );
                                   }}
                                   className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition ${ativo ? "bg-[#E8740E] text-white" : "bg-[#F0F0F5] text-[#86868B] hover:bg-[#E5E5EA]"}`}
@@ -1108,10 +1106,39 @@ export default function AdminPage() {
                               );
                             })}
                           </div>
-                          {(modalParcelasVisiveis || DEFAULT).map(n => {
+                          {selecionadas.map(n => {
                             const parcela = Math.round(modalRow.diferenca / n);
                             return <div key={n} className="flex justify-between"><span>{n}x:</span><span className="font-medium text-[#1D1D1F]">{fmt(parcela)}</span></div>;
                           })}
+                          {/* Botão copiar para WhatsApp */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const aval = (modalRow.avaliacao_usado || 0) + (modalRow.avaliacao_usado2 || 0);
+                              const lines: string[] = [];
+                              lines.push(`*${modalRow.modelo_novo} ${modalRow.storage_novo}*`);
+                              lines.push(`Valor: *${fmt(modalRow.preco_novo)}*`);
+                              lines.push("");
+                              if (modalRow.modelo_usado) {
+                                lines.push(`Seu ${modalRow.modelo_usado} ${modalRow.storage_usado}: *${fmt(aval)}*`);
+                                if (modalRow.modelo_usado2) lines.push(`Seu ${modalRow.modelo_usado2} ${modalRow.storage_usado2 || ""}: *${fmt(modalRow.avaliacao_usado2 || 0)}*`);
+                                lines.push("");
+                              }
+                              lines.push(`*No PIX: ${fmt(modalRow.diferenca)}*`);
+                              lines.push("");
+                              lines.push("*Parcelado:*");
+                              selecionadas.forEach(n => {
+                                const parcela = Math.round(modalRow.diferenca / n);
+                                lines.push(`${n}x de ${fmt(parcela)}`);
+                              });
+                              navigator.clipboard.writeText(lines.join("\n")).then(() => {
+                                alert("Copiado para a area de transferencia!");
+                              });
+                            }}
+                            className="w-full mt-2 py-2 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition flex items-center justify-center gap-1.5"
+                          >
+                            📋 Copiar para WhatsApp
+                          </button>
                         </div>
                       );
                     })()}
