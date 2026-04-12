@@ -4562,7 +4562,7 @@ export default function EstoquePage() {
                         const obsLimpo = cleanObs(obs);
                         const cliente = p._groupCliente || "";
                         return (
-                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
                             {/* Cliente */}
                             <p className={`text-[10px] font-semibold uppercase tracking-wider ${textSecondary}`}>👤 {cliente}</p>
                             {/* Produto + Cor */}
@@ -4622,18 +4622,35 @@ export default function EstoquePage() {
               // Ordenar por storage
               const storageToNum = (name: string): number => { const m = name.match(/(\d+)\s*(GB|TB)/i); if (!m) return 0; return m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]); };
               const groupEntries = Object.entries(grouped).sort(([a], [b]) => { const sa = storageToNum(a); const sb = storageToNum(b); if (sa !== sb) return sa - sb; return a.localeCompare(b); });
+              // Agrupar cards por linha de modelo (ex: "iPhone 17 Pro Max") — sem storage
+              const byLine: Record<string, typeof groupEntries> = {};
+              groupEntries.forEach(entry => {
+                const [key] = entry;
+                const modeloFull = key.split("|||")[0];
+                const line = modeloFull;
+                if (!byLine[line]) byLine[line] = [];
+                byLine[line].push(entry);
+              });
               const totalQnt = allItems.reduce((s, p) => s + p.qnt, 0);
               const totalVal = allItems.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
               return (
-              <div key={cat} className="space-y-3">
+              <div key={cat} className="space-y-5">
                 <h2 className={`text-lg font-bold ${textPrimary} flex items-center gap-2`}>
                   {(dynamicCatLabels[cat] || cat)}
                   <span className={`text-xs font-normal ${textSecondary}`}>
                     {groupEntries.length} modelo{groupEntries.length !== 1 ? "s" : ""} | {totalQnt} un. | {fmt(totalVal)}
                   </span>
                 </h2>
-                <div className="flex flex-wrap gap-3">
-                  {groupEntries.map(([groupKey, items]) => {
+                {Object.entries(byLine).map(([lineName, lineEntries]) => {
+                  const lineQnt = lineEntries.reduce((s, [, items]) => s + items.reduce((ss, p) => ss + p.qnt, 0), 0);
+                  return (
+                  <div key={lineName} className="space-y-2">
+                    <h3 className={`text-sm font-semibold ${textSecondary} flex items-center gap-2`}>
+                      {lineName}
+                      <span className={`text-[11px] font-normal ${textMuted}`}>{lineQnt} un.</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                  {lineEntries.map(([groupKey, items]) => {
                     const rep = items[0];
                     const qntTotal = items.reduce((s, p) => s + p.qnt, 0);
                     const avgCusto = qntTotal > 0 ? Math.round(items.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0) / qntTotal) : (rep.custo_unitario || 0);
@@ -4642,15 +4659,15 @@ export default function EstoquePage() {
                     // Expandir seriais ao clicar no card
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
+                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
                         {/* Produto + Cor */}
                         <div>
-                          <p className={`font-bold text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
-                          {corPt && <p className={`text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                          <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
+                          {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
                         </div>
                         {/* Quantidade */}
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
+                          <span className={`text-xs sm:text-sm font-bold ${qntTotal === 0 ? "text-red-500" : qntTotal === 1 ? "text-yellow-500" : "text-green-500"}`}>
                             {qntTotal === 0 ? "Esgotado" : `${qntTotal} un.`}
                           </span>
                           {/* Badges para seminovos (bateria média, grades) */}
@@ -4665,7 +4682,7 @@ export default function EstoquePage() {
                         </div>
                         {/* Preço */}
                         <div className="flex items-center justify-between">
-                          <span className={`text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
+                          <span className={`text-xs sm:text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
                           {items.length > 1 && <span className={`text-[10px] ${textMuted}`}>{cardExpanded ? "▲" : "▼"} ver seriais</span>}
                           {items.length === 1 && (rep.imei || rep.serial_no) && (
                             <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(rep.serial_no || rep.imei || "").slice(-8)}</span>
@@ -4688,7 +4705,10 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                </div>
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
               );
             })}
