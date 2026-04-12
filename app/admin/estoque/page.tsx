@@ -149,7 +149,7 @@ function formatProdutoDisplay(p: {
     return cleanProdutoDisplay(nomeRaw);
   }
 
-  return parts.filter(Boolean).join(" ");
+  return parts.filter(p => p && p !== "=" && p !== "-").join(" ");
 }
 
 /** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
@@ -751,7 +751,7 @@ function getModeloBase(produto: string, categoria: string, observacao?: string |
         else if (c === 6 && g === 5) chip = " A18 Pro";
       }
     }
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
+    if (p.includes("NEO")) return `MacBook Neo${chip || " A18 Pro"}${size}${memPair}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
     return `MacBook${chip}${memPair}`;
