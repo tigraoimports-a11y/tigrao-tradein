@@ -53,6 +53,7 @@ export interface Venda {
   cpf: string | null;
   cnpj: string | null;
   email: string | null;
+  telefone: string | null;
   endereco: string | null;
   pessoa: string | null;
   cep: string | null;

@@ -117,7 +117,7 @@ export default function VendasPage() {
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
     data: hojeBR(),
-    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -369,7 +369,7 @@ export default function VendasPage() {
   }, [password]);
 
   // Campos que NÃO devem ser uppercased (emails, senhas, etc)
-  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
+  const noUpperFields = new Set(["email", "telefone", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
   const set = (field: string, value: string | boolean) => {
     const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
     setForm((f) => ({ ...f, [field]: v }));
@@ -952,6 +952,7 @@ export default function VendasPage() {
       cpf: form.cpf || null,
       cnpj: form.cnpj || null,
       email: form.email || null,
+      telefone: form.telefone || null,
       endereco: form.endereco || null,
       cep: form.cep?.replace(/\D/g, "") || null,
       bairro: form.bairro || null,
@@ -1323,7 +1324,7 @@ export default function VendasPage() {
       }
       setOfflineCount(getQueueCount());
       setDuplicadoInfo(null);
-      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
+      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, telefone: form.telefone, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
       setLastClienteData(clienteInfo);
       setProdutosCarrinho([]);
       clearProductFields();
@@ -1398,7 +1399,7 @@ export default function VendasPage() {
             // Limpar TODOS os campos (cliente + produto) após edição
             setForm({
               data: hojeBR(),
-              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1440,7 +1441,7 @@ export default function VendasPage() {
             // Limpar TODOS os campos (cliente + produto) após edição
             setForm({
               data: hojeBR(),
-              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1515,7 +1516,7 @@ export default function VendasPage() {
       // Limpar TODOS os campos do formulário para a próxima venda
       setForm({
         data: hojeBR(),
-        cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+        cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1650,6 +1651,7 @@ export default function VendasPage() {
     if (r.cpf) set("cpf", r.cpf);
     if (r.cnpj) { set("cnpj", r.cnpj); set("pessoa", "PJ"); }
     if (r.email) set("email", r.email);
+    if (r.telefone) set("telefone", r.telefone);
     if (r.endereco) set("endereco", r.endereco);
     if (r.cep) { set("cep", r.cep); fetchCep(r.cep.replace(/\D/g, "")); }
     if (r.bairro) set("bairro", r.bairro);
@@ -1749,6 +1751,7 @@ export default function VendasPage() {
       cpf: "",
       cnpj: "",
       email: "",
+      telefone: "",
       endereco: "",
       pessoa: "PF",
       origem: v.origem || "",
@@ -2002,7 +2005,7 @@ export default function VendasPage() {
               <button
                 onClick={() => {
                   setForm({
-                    data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+                    data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -2297,6 +2300,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
+                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(21) 99999-9999" className={inputCls} /></div>
               </div>
 
               {/* Historico do Cliente */}
@@ -2650,7 +2654,7 @@ export default function VendasPage() {
                 onClick={() => {
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -3588,7 +3592,7 @@ export default function VendasPage() {
             {form.cliente && (
               <button
                 onClick={() => {
-                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
+                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
                   setLastClienteData(null);
                 }}
                 className={`px-4 py-3 rounded-xl border text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"}`}
@@ -4334,6 +4338,7 @@ export default function VendasPage() {
                                               cpf: primaryVenda.cpf || "",
                                               cnpj: primaryVenda.cnpj || "",
                                               email: primaryVenda.email || "",
+                                              telefone: primaryVenda.telefone || "",
                                               endereco: primaryVenda.endereco || "",
                                               pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: primaryVenda.origem || "",
@@ -5127,7 +5132,7 @@ export default function VendasPage() {
                   // Limpar formulário completo após nota fiscal
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -5163,7 +5168,7 @@ export default function VendasPage() {
                   // Limpar formulário completo ao pular nota fiscal
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
