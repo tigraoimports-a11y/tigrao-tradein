@@ -174,6 +174,8 @@ export async function POST(request: Request) {
     troca_cor: body.troca_cor || null,
     troca_produto2: body.troca_produto2 || null,
     troca_valor2: Number(body.troca_valor2) || 0,
+    troca_condicao2: body.troca_condicao2 || null,
+    troca_cor2: body.troca_cor2 || null,
     desconto: Number(body.desconto) || 0,
     vendedor: body.vendedor || null,
     operador: getUser(request),

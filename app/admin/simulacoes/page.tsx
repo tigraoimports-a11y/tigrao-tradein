@@ -393,9 +393,14 @@ export default function AdminPage() {
                     const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
                     const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
-                    const trocaTotal = Number(h.troca_valor || 0) + Number(h.troca_valor2 || 0);
-                    // Puxar dados de troca da simulação vinculada se link_compras não tiver
-                    const sim = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+                    // Puxar dados de troca: 1) do link_compras, 2) da simulação por ID, 3) da simulação por nome/telefone
+                    const simById = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+                    const simByMatch = !simById && h.cliente_nome ? data.find(s => {
+                      const nomeMatch = s.nome && h.cliente_nome && s.nome.toLowerCase().trim() === h.cliente_nome.toLowerCase().trim();
+                      const telMatch = s.whatsapp && h.cliente_telefone && s.whatsapp.replace(/\D/g, "") === h.cliente_telefone.replace(/\D/g, "");
+                      return nomeMatch || telMatch;
+                    }) : null;
+                    const sim = simById || simByMatch;
                     const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
                     const trocaValDisplay = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
                     const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
@@ -494,7 +499,13 @@ export default function AdminPage() {
       {historicoModal && (() => {
         const h = historicoModal;
         const p = h.cliente_dados_preenchidos || {};
-        const sim = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+        const simById = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+        const simByMatch = !simById && h.cliente_nome ? data.find(s => {
+          const nomeMatch = s.nome && h.cliente_nome && s.nome.toLowerCase().trim() === h.cliente_nome.toLowerCase().trim();
+          const telMatch = s.whatsapp && h.cliente_telefone && s.whatsapp.replace(/\D/g, "") === h.cliente_telefone.replace(/\D/g, "");
+          return nomeMatch || telMatch;
+        }) : null;
+        const sim = simById || simByMatch;
         const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
         const trocaVal = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
         const trocaCor = h.troca_cor || sim?.cor_usado || null;
