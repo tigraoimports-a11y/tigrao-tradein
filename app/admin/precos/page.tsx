@@ -160,7 +160,7 @@ function PrecosContent() {
   function inferCategoria(modelo: string): string {
     const m = modelo.toUpperCase();
     if (m.includes("IPHONE") || m.includes("PHONE")) return "IPHONE";
-    if (m.includes("MAC MINI")) return "MAC_MINI";
+    if (m.includes("MAC MINI") || m.includes("MACMINI") || m.includes("MAC_MINI")) return "MAC_MINI";
     if (m.includes("MACBOOK") || m.includes("IMAC")) return "MACBOOK";
     if (m.includes("IPAD")) return "IPAD";
     if (m.includes("WATCH")) return "APPLE_WATCH";
