@@ -169,7 +169,7 @@ export default function EntregasPage() {
   const [coletaBateria, setColetaBateria] = useState("");
   const [coletaEstado, setColetaEstado] = useState<"A+" | "A" | "AB" | "B" | "">("");
   const [coletaCaixa, setColetaCaixa] = useState<"sim" | "nao" | "">("");
-  const [coletaMarcas, setColetaMarcas] = useState<"sim" | "nao" | "">("");
+  const [coletaMarcas, setColetaMarcas] = useState("");
 
   // Autocomplete de clientes — busca em entregas + vendas, retorna última compra
   type ClienteSug = {
@@ -530,7 +530,8 @@ export default function EntregasPage() {
     const trocaCaixa = qp.get("troca_caixa_original") || "";
     const trocaObsQp = qp.get("troca_observacao") || "";
     const diferencaPix = qp.get("diferenca_pix") || "";
-    const obs = diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "";
+    const obsQp = qp.get("observacao") || "";
+    const obs = obsQp || (diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "");
     // Monta observação consolidada da troca caso o param explícito não venha
     const trocaObsParts: string[] = [];
     if (trocaObsQp) trocaObsParts.push(trocaObsQp);
@@ -566,7 +567,7 @@ export default function EntregasPage() {
       if (batQp) setColetaBateria(batQp);
       if (estQp) setColetaEstado(estQp as "A+" | "A" | "AB" | "B" | "");
       if (caixaQp) setColetaCaixa(caixaQp as "sim" | "nao");
-      if (marcasQp) setColetaMarcas(marcasQp as "sim" | "nao");
+      if (marcasQp) setColetaMarcas(marcasQp);
     }
     if (produto) {
       setProdutos([cor ? `${produto} ${cor}`.trim() : produto]);
@@ -650,7 +651,7 @@ export default function EntregasPage() {
               if (coletaBateria) parts.push(`Bateria: ${coletaBateria}%`);
               if (coletaEstado) parts.push(`Estado: ${coletaEstado}`);
               if (coletaCaixa) parts.push(coletaCaixa === "sim" ? "Com caixa" : "Sem caixa");
-              if (coletaMarcas) parts.push(coletaMarcas === "sim" ? "Com marcas de uso" : "Sem marcas de uso");
+              if (coletaMarcas) parts.push(coletaMarcas);
               return parts.length ? parts.join("\n") : null;
             })()
           : trocasStr || null,
@@ -1155,12 +1156,12 @@ export default function EntregasPage() {
                 <input value={form.endereco} readOnly placeholder="Preenchido ao colar dados do cliente" className={`${inputCls} opacity-70 cursor-not-allowed`} />
               </div>
               <div>
-                <p className={labelCls}>Endereço de entrega</p>
-                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder="Onde será entregue (default = cadastro)" className={inputCls} />
+                <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Endereço da coleta" : "Endereço de entrega"}</p>
+                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder={modoColeta || form.tipo === "COLETA" ? "Onde será feita a coleta" : "Onde será entregue (default = cadastro)"} className={inputCls} />
               </div>
             </div>
             <div>
-              <p className={labelCls}>Local de Entrega</p>
+              <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Local da Coleta" : "Local de Entrega"}</p>
               <select value={form.local_entrega} onChange={(e) => {
                 const v = e.target.value;
                 set("local_entrega", v);
@@ -1233,12 +1234,8 @@ export default function EntregasPage() {
                     </select>
                   </div>
                   <div>
-                    <p className={labelCls}>Marcas de uso</p>
-                    <select value={coletaMarcas} onChange={(e) => setColetaMarcas(e.target.value as typeof coletaMarcas)} className={inputCls}>
-                      <option value="">-- Selecionar --</option>
-                      <option value="nao">Sem marcas</option>
-                      <option value="sim">Com marcas</option>
-                    </select>
+                    <p className={labelCls}>Obs. do aparelho</p>
+                    <input value={coletaMarcas} onChange={(e) => setColetaMarcas(e.target.value)} placeholder="Ex: sem marcas, arranhão lateral..." className={inputCls} />
                   </div>
                 </div>
                 <div>
@@ -1763,7 +1760,7 @@ export default function EntregasPage() {
               disabled={saving}
               className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
             >
-              {saving ? "Salvando..." : editingEntregaId ? "Salvar Alterações" : "Agendar Entrega"}
+              {saving ? "Salvando..." : editingEntregaId ? "Salvar Alterações" : modoColeta ? "Agendar Coleta" : "Agendar Entrega"}
             </button>
           </div>
         </div>

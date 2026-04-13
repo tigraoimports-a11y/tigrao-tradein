@@ -4732,18 +4732,21 @@ export default function EstoquePage() {
                                 const obs = p.observacao || "";
                                 const gradeM = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
                                 const grade = gradeM ? gradeM[1] : "";
-                                const temCaixa = obs.toUpperCase().includes("COM CAIXA") || obs.includes("📦");
-                                const semCaixa = obs.toUpperCase().includes("SEM CAIXA");
-                                const temMarcas = obs.toUpperCase().includes("COM MARCAS") || obs.toUpperCase().includes("MARCAS DE USO");
-                                const semMarcas = obs.toUpperCase().includes("SEM MARCAS");
+                                const temCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                                // Limpar obs: remover tags internas e deixar só texto livre
+                                const obsLimpa = obs
+                                  .replace(/\[GRADE_[^\]]+\]/g, "")
+                                  .replace(/\[COM_CAIXA\]/g, "").replace(/\[COM_CABO\]/g, "").replace(/\[COM_FONTE\]/g, "").replace(/\[COM_CARREGADOR\]/g, "")
+                                  .replace(/\[COM_PULSEIRA\]/g, "").replace(/\[CICLOS:\d+\]/g, "").replace(/\[RESP:[^\]]*\]/g, "").replace(/\[COM_QUEM:[^\]]*\]/g, "")
+                                  .replace(/\[NUCLEOS:[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
                                 const params = new URLSearchParams({
                                   modo: "coleta",
                                   cliente_nome: clienteNome,
                                   produto: prodNome,
                                   ...(p.bateria ? { coleta_bateria: String(p.bateria) } : {}),
                                   ...(grade ? { coleta_estado: grade } : {}),
-                                  ...(temCaixa ? { coleta_caixa: "sim" } : semCaixa ? { coleta_caixa: "nao" } : {}),
-                                  ...(temMarcas ? { coleta_marcas: "sim" } : semMarcas ? { coleta_marcas: "nao" } : {}),
+                                  ...(temCaixa ? { coleta_caixa: "sim" } : { coleta_caixa: "nao" }),
+                                  ...(obsLimpa ? { observacao: obsLimpa } : {}),
                                 });
                                 window.open(`/admin/entregas?${params.toString()}`, "_blank");
                               }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-green-500/40 text-green-400 hover:bg-green-600 hover:text-white" : "border-green-500/40 text-green-600 hover:bg-green-600 hover:text-white"}`}>🛵 Coleta</button>
