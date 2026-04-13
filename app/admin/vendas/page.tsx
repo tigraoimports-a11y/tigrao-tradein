@@ -2362,7 +2362,7 @@ export default function VendasPage() {
                   <div className="flex gap-2">
                     <input value={form.codigo_rastreio} onChange={(e) => set("codigo_rastreio", e.target.value.toUpperCase())} placeholder="Ex: BR123456789BR" className={`${inputCls} font-mono uppercase flex-1`} />
                     {form.codigo_rastreio && (
-                      <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
+                      <a href={`https://www.linkcorreios.com.br/${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
                     )}
                   </div>
                 </div>
@@ -3965,7 +3965,7 @@ export default function VendasPage() {
                                   <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {v.troca_produto}</span>
                                 )}
                                 {tab === "correios" && v.codigo_rastreio && (
-                                  <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors">📦 {v.codigo_rastreio}</a>
+                                  <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors">📦 {v.codigo_rastreio}</a>
                                 )}
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
@@ -4890,7 +4890,7 @@ export default function VendasPage() {
                                         {v.codigo_rastreio && (
                                           <p className="flex items-center gap-2">
                                             <strong>📦 Rastreio:</strong>
-                                            <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
+                                            <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
                                           </p>
                                         )}
                                         {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
