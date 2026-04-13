@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { getModeloBase } from "./produto-display";
 
 /**
  * Recalcula o balanço (custo_unitario = preço médio ponderado) de todos
- * os produtos EM ESTOQUE, agrupados por (categoria + nome sem cor).
+ * os produtos EM ESTOQUE, agrupados por (categoria + modelo base via getModeloBase).
  *
  * Pode ser chamado internamente por qualquer route sem HTTP round-trip.
  * Retorna { groups, updated }.
@@ -22,21 +23,14 @@ export async function recalcBalancos(): Promise<{ groups: number; updated: numbe
 
   if (error || !items || items.length === 0) return { groups: 0, updated: 0 };
 
-  function stripCor(produto: string, cor: string | null): string {
-    const p = (produto || "").toUpperCase().trim();
-    if (!cor) return p;
-    const c = cor.toUpperCase().trim();
-    if (!c) return p;
-    const re = new RegExp(`\\s+${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
-    return p.replace(re, "").trim();
-  }
-
   type Row = { id: string; categoria: string; produto: string; cor: string | null; qnt: number; custo_compra: number; custo_unitario: number };
   const groups = new Map<string, Row[]>();
   for (const raw of items as unknown as Row[]) {
     const cc = Number(raw.custo_compra || 0);
     if (cc <= 0) continue;
-    const key = `${raw.categoria || ""}|${stripCor(raw.produto, raw.cor)}`;
+    // Usa getModeloBase para agrupar de forma consistente com o restante do sistema
+    const modeloBase = getModeloBase(raw.produto, raw.categoria);
+    const key = `${raw.categoria || ""}|${modeloBase}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(raw);
   }
