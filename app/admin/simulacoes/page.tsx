@@ -145,12 +145,18 @@ export default function AdminPage() {
   interface HistoricoItem {
     id: string;
     created_at: string;
+    short_code: string;
     cliente_nome: string;
     cliente_telefone: string;
     cliente_email: string | null;
     produto: string;
-    preco_base: number;
+    produtos_extras: string | null;
+    cor: string | null;
+    valor: number;
     desconto: number;
+    entrada: number;
+    forma_pagamento: string | null;
+    parcelas: string | null;
     status: string;
     cliente_preencheu_em: string | null;
     cliente_dados_preenchidos: Record<string, string> | null;
@@ -159,10 +165,14 @@ export default function AdminPage() {
     operador: string | null;
     troca_produto: string | null;
     troca_valor: number | null;
+    troca_produto2: string | null;
+    troca_valor2: number | null;
     simulacao_id: string | null;
+    entrega_id: string | null;
   }
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
+  const [encaminhando, setEncaminhando] = useState<string | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -365,8 +375,8 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Troca", "Preencheu em", "Status", "Vendedor"].map(h => (
-                      <th key={h} className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
+                    {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Pagamento", "Troca", "Preencheu em", "Status", "Ações"].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -374,28 +384,83 @@ export default function AdminPage() {
                   {[...historico].sort((a, b) => (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)).map(h => {
                     const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
-                    const precoFinal = h.preco_base - (h.desconto || 0);
-                    const statusLabel = h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" ? "✅ Convertido" : h.cliente_preencheu_em ? "📝 Formulário preenchido" : "⏳ Aguardando";
-                    const statusColor = h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : h.cliente_preencheu_em ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
+                    const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
+                    const trocaTotal = Number(h.troca_valor || 0) + Number(h.troca_valor2 || 0);
+                    const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : "📝 Preenchido";
+                    const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700";
+                    const preench = h.cliente_dados_preenchidos || {};
+                    const enderecoResumo = [preench.endereco, preench.numero, preench.bairro].filter(Boolean).join(", ");
                     return (
                       <tr key={h.id} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA] transition-colors">
-                        <td className="px-4 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
-                        <td className="px-4 py-3 font-medium text-sm uppercase">{h.cliente_nome}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
+                        <td className="px-3 py-3 text-sm">
+                          <p className="font-medium uppercase">{h.cliente_nome}</p>
+                          {enderecoResumo && <p className="text-[10px] text-[#86868B] mt-0.5 truncate max-w-[180px]">📍 {enderecoResumo}</p>}
+                          {preench.cep && <p className="text-[10px] text-[#86868B]">CEP: {preench.cep}</p>}
+                        </td>
+                        <td className="px-3 py-3">
                           {h.cliente_telefone ? (
                             <a href={`https://wa.me/55${h.cliente_telefone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-800 text-xs font-mono">{h.cliente_telefone}</a>
                           ) : "—"}
                         </td>
-                        <td className="px-4 py-3 text-xs max-w-[200px] truncate">{h.produto}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-[#E8740E]">R$ {precoFinal.toLocaleString("pt-BR")}</td>
-                        <td className="px-4 py-3 text-xs">
+                        <td className="px-3 py-3 text-xs max-w-[200px]">
+                          <p className="truncate font-medium">{h.produto}</p>
+                          {h.cor && <p className="text-[10px] text-[#86868B]">{h.cor}</p>}
+                        </td>
+                        <td className="px-3 py-3 text-xs font-bold text-[#E8740E] whitespace-nowrap">R$ {valorFinal.toLocaleString("pt-BR")}</td>
+                        <td className="px-3 py-3 text-xs text-[#86868B]">
+                          {h.forma_pagamento || "—"}
+                          {h.parcelas && Number(h.parcelas) > 1 && <span className="block text-[10px]">{h.parcelas}x</span>}
+                          {Number(h.entrada || 0) > 0 && <span className="block text-[10px] text-green-600">Entrada: R$ {Number(h.entrada).toLocaleString("pt-BR")}</span>}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
                           {h.troca_produto ? (
-                            <span className="text-purple-600">🔄 {h.troca_produto}{h.troca_valor ? ` (R$ ${Number(h.troca_valor).toLocaleString("pt-BR")})` : ""}</span>
+                            <div>
+                              <p className="text-purple-600">🔄 {h.troca_produto}</p>
+                              {trocaTotal > 0 && <p className="text-[10px] font-semibold text-purple-700">R$ {trocaTotal.toLocaleString("pt-BR")}</p>}
+                              {h.troca_produto2 && <p className="text-purple-500 text-[10px] mt-0.5">🔄 {h.troca_produto2}</p>}
+                            </div>
                           ) : <span className="text-[#C0C0C5]">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-[#86868B] whitespace-nowrap">{preencheuDate}</td>
-                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span></td>
-                        <td className="px-4 py-3 text-xs text-[#86868B]">{h.vendedor || h.operador || "—"}</td>
+                        <td className="px-3 py-3 text-xs text-[#86868B] whitespace-nowrap">{preencheuDate}</td>
+                        <td className="px-3 py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${statusColor}`}>{statusLabel}</span></td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            {!h.entrega_id && h.status !== "ENCAMINHADO" && (
+                              <button
+                                disabled={encaminhando === h.id}
+                                onClick={async () => {
+                                  const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
+                                  if (!dataEntrega) return;
+                                  const [d, m, y] = dataEntrega.split("/");
+                                  const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
+                                  if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
+                                  setEncaminhando(h.id);
+                                  try {
+                                    const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                      body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
+                                    });
+                                    if (res.ok) {
+                                      setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
+                                      alert("✅ Entrega criada com sucesso! Veja em Entregas.");
+                                    } else {
+                                      const json = await res.json();
+                                      alert("Erro: " + (json.error || "Falha"));
+                                    }
+                                  } catch (err) { alert("Erro: " + String(err)); }
+                                  setEncaminhando(null);
+                                }}
+                                className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
+                              >
+                                {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                              </button>
+                            )}
+                            {h.entrega_id && <span className="text-[10px] text-green-600 font-semibold">✅ Entrega criada</span>}
+                            <span className="text-[10px] text-[#C0C0C5]">{h.vendedor || h.operador || ""}</span>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
