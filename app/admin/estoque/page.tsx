@@ -5179,11 +5179,21 @@ export default function EstoquePage() {
                             if (!novoNome) { setMsg("Selecione o modelo para gerar o nome"); return; }
                             const novaCor = recatRow.cor || null;
                             const novaCategoria = recatRow.categoria || p.categoria;
+                            // Salvar nucleos na observacao se MacBook/Mac Mini
+                            const specNucleos = recatRow.spec?.mb_nucleos || recatRow.spec?.mm_nucleos || "";
+                            let novaObs = p.observacao || "";
+                            if (specNucleos) {
+                              novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                              novaObs = (novaObs + ` [NUCLEOS:${specNucleos}]`).trim();
+                            }
                             try {
-                              const nomeAntigo = p.produto; // guardar antes de atualizar
-                              await apiPatch(p.id, { produto: novoNome, categoria: novaCategoria, cor: novaCor });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novoNome, categoria: novaCategoria, cor: novaCor } : x));
-                              setDetailProduct(prev => prev ? { ...prev, produto: novoNome, categoria: novaCategoria, cor: novaCor } : null);
+                              const nomeAntigo = p.produto;
+                              const patchData: Record<string, unknown> = { produto: novoNome, categoria: novaCategoria, cor: novaCor };
+                              if (specNucleos) patchData.observacao = novaObs;
+                              await apiPatch(p.id, patchData);
+                              const updatedFields = { produto: novoNome, categoria: novaCategoria, cor: novaCor, ...(specNucleos ? { observacao: novaObs } : {}) };
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, ...updatedFields } : x));
+                              setDetailProduct(prev => prev ? { ...prev, ...updatedFields } : null);
                               let vendaMsg = "";
                               if (p.fornecedor) {
                                 const res = await fetch("/api/vendas", {
