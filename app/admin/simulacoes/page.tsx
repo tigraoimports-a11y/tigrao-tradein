@@ -139,8 +139,30 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "historico" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
+  // Histórico: clientes que passaram por todo o funil (simulação → gostei → link gerado → formulário preenchido → chegou no WhatsApp)
+  interface HistoricoItem {
+    id: string;
+    created_at: string;
+    cliente_nome: string;
+    cliente_telefone: string;
+    cliente_email: string | null;
+    produto: string;
+    preco_base: number;
+    desconto: number;
+    status: string;
+    cliente_preencheu_em: string | null;
+    cliente_dados_preenchidos: Record<string, string> | null;
+    pagamento_pago: string | null;
+    vendedor: string | null;
+    operador: string | null;
+    troca_produto: string | null;
+    troca_valor: number | null;
+    simulacao_id: string | null;
+  }
+  const [historico, setHistorico] = useState<HistoricoItem[]>([]);
+  const [historicoLoading, setHistoricoLoading] = useState(false);
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -171,6 +193,26 @@ export default function AdminPage() {
     if (password) fetchData(password);
   }, [password, fetchData]);
   useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
+
+  // Fetch histórico (link_compras com formulário preenchido)
+  const fetchHistorico = useCallback(async () => {
+    if (!password) return;
+    setHistoricoLoading(true);
+    try {
+      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=200", {
+        headers: { "x-admin-password": password },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setHistorico((json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em));
+      }
+    } catch { /* silent */ }
+    setHistoricoLoading(false);
+  }, [password]);
+
+  useEffect(() => {
+    if (mainTab === "historico" && historico.length === 0) fetchHistorico();
+  }, [mainTab, fetchHistorico, historico.length]);
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -283,10 +325,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
-        {(["simulacoes", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
+        {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -301,6 +343,68 @@ export default function AdminPage() {
 
       {/* Funil tab — rendered inline */}
       {mainTab === "funil" && <FunnelPanel />}
+
+      {/* Histórico — clientes que completaram todo o funil */}
+      {mainTab === "historico" && (
+        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
+            <h2 className="font-bold text-[#1D1D1F]">📋 Histórico — Clientes que completaram o funil</h2>
+            <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
+              {historicoLoading ? "Carregando..." : "↻ Atualizar"}
+            </button>
+          </div>
+          <p className="px-5 pt-3 text-xs text-[#86868B]">
+            Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
+          </p>
+          {historicoLoading && historico.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[#86868B]">Carregando...</div>
+          ) : historico.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[#86868B]">Nenhum cliente completou o funil ainda</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                    {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Troca", "Preencheu em", "Status", "Vendedor"].map(h => (
+                      <th key={h} className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...historico].sort((a, b) => (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)).map(h => {
+                    const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+                    const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+                    const precoFinal = h.preco_base - (h.desconto || 0);
+                    const statusLabel = h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" ? "✅ Convertido" : h.cliente_preencheu_em ? "📝 Formulário preenchido" : "⏳ Aguardando";
+                    const statusColor = h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : h.cliente_preencheu_em ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
+                    return (
+                      <tr key={h.id} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA] transition-colors">
+                        <td className="px-4 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
+                        <td className="px-4 py-3 font-medium text-sm uppercase">{h.cliente_nome}</td>
+                        <td className="px-4 py-3">
+                          {h.cliente_telefone ? (
+                            <a href={`https://wa.me/55${h.cliente_telefone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-800 text-xs font-mono">{h.cliente_telefone}</a>
+                          ) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-xs max-w-[200px] truncate">{h.produto}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-[#E8740E]">R$ {precoFinal.toLocaleString("pt-BR")}</td>
+                        <td className="px-4 py-3 text-xs">
+                          {h.troca_produto ? (
+                            <span className="text-purple-600">🔄 {h.troca_produto}{h.troca_valor ? ` (R$ ${Number(h.troca_valor).toLocaleString("pt-BR")})` : ""}</span>
+                          ) : <span className="text-[#C0C0C5]">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-[#86868B] whitespace-nowrap">{preencheuDate}</td>
+                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span></td>
+                        <td className="px-4 py-3 text-xs text-[#86868B]">{h.vendedor || h.operador || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Perguntas Trade-In tab */}
       {mainTab === "perguntas" && (
