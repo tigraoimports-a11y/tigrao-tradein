@@ -4844,11 +4844,21 @@ export default function EstoquePage() {
                     const isUsado = items.some(p => p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA");
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
-                        {/* Produto + Cor */}
-                        <div>
-                          <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
-                          {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                      <div key={groupKey}
+                        draggable
+                        onDragStart={() => { dragCardRef.current = groupKey; setDragCardKey(groupKey); }}
+                        onDragOver={(e) => handleCardDragOver(e, groupKey)}
+                        onDragEnd={() => { handleCardDrop(cat, lineEntries); }}
+                        onDragLeave={() => { if (dropTarget?.modelo === groupKey) setDropTarget(null); }}
+                        className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0 ${dragCardKey === groupKey ? "opacity-40 scale-95" : ""} ${dropTarget?.modelo === groupKey ? (dropTarget.position === "before" ? "ring-2 ring-l ring-[#E8740E]" : "ring-2 ring-r ring-[#E8740E]") : ""}`}
+                        onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
+                        {/* Produto + Cor + Handle */}
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
+                            {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                          </div>
+                          <span className={`shrink-0 text-[10px] cursor-grab active:cursor-grabbing select-none ${textMuted} opacity-40 hover:opacity-100 transition-opacity`} title="Arrastar para reordenar">⠿</span>
                         </div>
                         {/* Quantidade */}
                         <div className="flex items-center gap-2">
