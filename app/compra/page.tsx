@@ -504,9 +504,7 @@ function CompraForm() {
     if (pagEntrega) lines.push(pagEntrega);
     if (local === "Entrega") {
       lines.push("");
-      lines.push("⚠️ *AVISO — TAXA DE DESLOCAMENTO*");
-      lines.push("Caso a entrega nao seja concluida por falta de limite no cartao, falta de limite no PIX, divergencia de valores ou qualquer situacao diferente do combinado, sera cobrada uma taxa de deslocamento referente ao custo do motoboy.");
-      lines.push("✅ *Cliente leu e concordou com os termos acima.*");
+      lines.push("⚠️ *TAXA DE DESLOCAMENTO:* Caso a compra nao seja concluida no ato da entrega (limite, divergencia, etc), sera cobrada taxa de deslocamento. ✅ Cliente ciente.");
     }
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
@@ -1105,8 +1103,7 @@ function CompraForm() {
                 </div>
               )}
               <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed">
-                <p className="font-bold mb-1">IMPORTANTE — Taxa de deslocamento</p>
-                <p>Caso a entrega nao seja concluida por falta de limite no cartao, falta de limite no PIX, divergencia de valores ou qualquer situacao diferente do combinado, sera cobrada uma <strong>taxa de deslocamento</strong> referente ao custo do motoboy.</p>
+                <p><strong>⚠️ Taxa de deslocamento:</strong> Caso a compra nao seja concluida no ato da entrega (falta de limite, divergencia, etc), sera cobrada uma taxa de deslocamento.</p>
               </div>
             </div>
           )}
