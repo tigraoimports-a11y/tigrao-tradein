@@ -4725,6 +4725,28 @@ export default function EstoquePage() {
                             {/* Ações */}
                             <div className="flex gap-2 pt-1 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
                               <button onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}>🏷️ Etiqueta</button>
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                const clienteNome = p.fornecedor || p.cliente || "";
+                                const prodNome = formatProdutoDisplay(p);
+                                const obs = p.observacao || "";
+                                const gradeM = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
+                                const grade = gradeM ? gradeM[1] : "";
+                                const temCaixa = obs.toUpperCase().includes("COM CAIXA") || obs.includes("📦");
+                                const semCaixa = obs.toUpperCase().includes("SEM CAIXA");
+                                const temMarcas = obs.toUpperCase().includes("COM MARCAS") || obs.toUpperCase().includes("MARCAS DE USO");
+                                const semMarcas = obs.toUpperCase().includes("SEM MARCAS");
+                                const params = new URLSearchParams({
+                                  modo: "coleta",
+                                  cliente_nome: clienteNome,
+                                  produto: prodNome,
+                                  ...(p.bateria ? { coleta_bateria: String(p.bateria) } : {}),
+                                  ...(grade ? { coleta_estado: grade } : {}),
+                                  ...(temCaixa ? { coleta_caixa: "sim" } : semCaixa ? { coleta_caixa: "nao" } : {}),
+                                  ...(temMarcas ? { coleta_marcas: "sim" } : semMarcas ? { coleta_marcas: "nao" } : {}),
+                                });
+                                window.open(`/admin/entregas?${params.toString()}`, "_blank");
+                              }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-green-500/40 text-green-400 hover:bg-green-600 hover:text-white" : "border-green-500/40 text-green-600 hover:bg-green-600 hover:text-white"}`}>🛵 Coleta</button>
                               <button onClick={(e) => { e.stopPropagation(); setBulkCustoKey(p.produto); setBulkCustoVal(String(p.custo_unitario || "")); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]"}`}>Editar preço</button>
                               <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Excluir "${formatProdutoDisplay(p)}"?`)) return; try { const res = await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ ids: [p.id] }) }); if (res.ok) { setEstoque(prev => prev.filter(r => r.id !== p.id)); setMsg("Produto excluído"); } else { const json = await res.json(); setMsg("Erro: " + (json.error || "Falha ao excluir")); } } catch (err) { setMsg("Erro: " + String(err)); } }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white" : "border-red-400/40 text-red-500 hover:bg-red-500 hover:text-white"}`}>🗑️ Excluir</button>
                             </div>
