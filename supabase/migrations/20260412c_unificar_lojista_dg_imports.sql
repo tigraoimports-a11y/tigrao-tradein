@@ -1,6 +1,6 @@
 -- Unificar lojistas duplicados: "DG IMPORT" e "LOJA DG IMPORTS" → "DG IMPORTS"
 
--- 1. Atualizar vendas que referenciam os nomes antigos
+-- 1. Atualizar vendas
 UPDATE vendas SET cliente = 'DG IMPORTS' WHERE cliente IN ('DG IMPORT', 'LOJA DG IMPORTS');
 UPDATE vendas SET fornecedor = 'DG IMPORTS' WHERE fornecedor IN ('DG IMPORT', 'LOJA DG IMPORTS');
 
@@ -8,16 +8,20 @@ UPDATE vendas SET fornecedor = 'DG IMPORTS' WHERE fornecedor IN ('DG IMPORT', 'L
 UPDATE estoque SET cliente = 'DG IMPORTS' WHERE cliente IN ('DG IMPORT', 'LOJA DG IMPORTS');
 UPDATE estoque SET fornecedor = 'DG IMPORTS' WHERE fornecedor IN ('DG IMPORT', 'LOJA DG IMPORTS');
 
--- 3. Atualizar lojistas (transferir saldo para DG IMPORTS e remover duplicados)
--- Primeiro garantir que DG IMPORTS existe
-INSERT INTO lojistas (nome) VALUES ('DG IMPORTS') ON CONFLICT (nome) DO NOTHING;
+-- 3. Lojistas: transferir saldo e renomear
+-- Somar saldo dos duplicados no principal (se existir)
+UPDATE lojistas SET
+  saldo_credito = saldo_credito + COALESCE(
+    (SELECT SUM(saldo_credito) FROM lojistas WHERE nome IN ('DG IMPORT', 'LOJA DG IMPORTS')), 0
+  )
+WHERE nome = 'DG IMPORTS';
 
--- Transferir saldo_credito dos duplicados para o principal
-UPDATE lojistas SET saldo_credito = saldo_credito + COALESCE(
-  (SELECT SUM(saldo_credito) FROM lojistas WHERE nome IN ('DG IMPORT', 'LOJA DG IMPORTS')), 0
-) WHERE nome = 'DG IMPORTS';
+-- Se DG IMPORTS nao existe mas DG IMPORT existe, renomear
+UPDATE lojistas SET nome = 'DG IMPORTS'
+WHERE nome = 'DG IMPORT'
+  AND NOT EXISTS (SELECT 1 FROM lojistas WHERE nome = 'DG IMPORTS');
 
--- Remover duplicados
+-- Remover duplicados restantes
 DELETE FROM lojistas WHERE nome IN ('DG IMPORT', 'LOJA DG IMPORTS');
 
 -- 4. Atualizar link_compras
