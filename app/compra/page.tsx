@@ -502,6 +502,7 @@ function CompraForm() {
     }
     lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
+    if (local === "Entrega") lines.push("✅ *Cliente ciente da taxa de deslocamento em caso de nao conclusao*");
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
@@ -1098,9 +1099,22 @@ function CompraForm() {
                   <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: BarraShopping, Village Mall..." className={inputCls} />
                 </div>
               )}
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed">
+                <p className="font-bold mb-1">IMPORTANTE — Taxa de deslocamento</p>
+                <p>Caso a entrega nao seja concluida por falta de limite no cartao, falta de limite no PIX, divergencia de valores ou qualquer situacao diferente do combinado, sera cobrada uma <strong>taxa de deslocamento</strong> referente ao custo do motoboy.</p>
+              </div>
             </div>
           )}
         </div>
+
+        {local === "Entrega" && (
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" required className="mt-1 accent-[#E8740E] w-4 h-4" />
+            <span className="text-xs text-[#6E6E73] leading-relaxed">
+              Estou ciente de que, caso a entrega nao seja concluida por falta de limite, divergencia de valores ou situacao diferente do combinado, sera cobrada uma <strong className="text-red-600">taxa de deslocamento</strong>.
+            </span>
+          </label>
+        )}
 
         <button type="submit"
           className="w-full py-3.5 bg-[#25D366] text-white font-bold text-lg rounded-xl shadow-sm hover:bg-[#20BD5A] active:bg-[#1DA851] transition-colors flex items-center justify-center gap-2">
