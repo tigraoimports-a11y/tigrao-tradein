@@ -645,9 +645,9 @@ export default function GastosPage() {
     })();
   }, [password]);
 
+  // Fetch inicial + auto-refetch ao focar (desabilitado no historico para evitar reset)
   useEffect(() => { fetchGastos(); }, [fetchGastos]);
-  // Auto-refetch só na aba "novo" (na aba historico, evita reset durante edicao)
-  useAutoRefetch(fetchGastos, tab === "novo");
+  useAutoRefetch(fetchGastos, false); // desabilitar completamente — fetch manual apenas
 
   const set = (field: string, value: string | boolean) => setForm((f) => ({ ...f, [field]: value }));
   const setBanco = (banco: Banco, value: string) => setBancoValores((bv) => ({ ...bv, [banco]: value }));
