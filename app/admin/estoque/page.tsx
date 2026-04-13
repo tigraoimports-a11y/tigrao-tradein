@@ -4267,7 +4267,7 @@ export default function EstoquePage() {
                                       {(() => {
                                         const rastreio = isSingleUnit ? group[0].codigo_rastreio : null;
                                         if (rastreio) return (
-                                          <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {rastreio}</a>
+                                          <a href={`https://www.linkcorreios.com.br/${rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {rastreio}</a>
                                         );
                                         if (isSingleUnit) return (
                                           <button onClick={() => {
@@ -4336,7 +4336,7 @@ export default function EstoquePage() {
                                         <td className={`px-4 py-2 text-center text-[11px] ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.data_compra ? p.data_compra.split("-").reverse().join("/") : "—"}</td>
                                         <td className="px-4 py-2 text-center" onClick={e => e.stopPropagation()}>
                                           {p.codigo_rastreio ? (
-                                            <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${p.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {p.codigo_rastreio}</a>
+                                            <a href={`https://www.linkcorreios.com.br/${p.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {p.codigo_rastreio}</a>
                                           ) : (
                                             <button onClick={() => {
                                               const code = prompt("Código de rastreio dos Correios:");
@@ -6476,7 +6476,7 @@ export default function EstoquePage() {
                       >✓</button>
                       {p.codigo_rastreio && (
                         <a
-                          href={`https://rastreamento.correios.com.br/app/index.php?objetos=${p.codigo_rastreio}`}
+                          href={`https://www.linkcorreios.com.br/${p.codigo_rastreio}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 px-3 h-8 flex items-center justify-center rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-bold text-[11px] gap-1"
