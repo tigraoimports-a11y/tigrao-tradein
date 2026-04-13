@@ -5984,12 +5984,16 @@ export default function EstoquePage() {
                 }
                 let cpu = tag(/\[CPU:([^\]]+)\]/);
                 let gpu = tag(/\[GPU:([^\]]+)\]/);
-                // Fallback: extrai do nome ex "(10C CPU/8C GPU)"
+                // Fallback 1: extrai de [NUCLEOS:6C CPU/5C GPU]
+                if (!cpu || !gpu) {
+                  const nucTag = obs.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+                  if (nucTag) { cpu = cpu || nucTag[1]; gpu = gpu || nucTag[2]; }
+                }
+                // Fallback 2: extrai do nome ex "(10C CPU/8C GPU)"
                 if (!cpu || !gpu) {
                   const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
                   if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
                 }
-                // Nucleos: sem fallback automatico — admin define via select editavel
                 const tela = tag(/\[TELA:([^\]]+)\]/);
                 const pulseiraTam = tag(/\[PULSEIRA_TAM:([^\]]+)\]/);
                 const band = tag(/\[BAND:([^\]]+)\]/);
