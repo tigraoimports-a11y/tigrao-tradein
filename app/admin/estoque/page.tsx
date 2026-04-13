@@ -1899,6 +1899,13 @@ export default function EstoquePage() {
 
   // Imprimir etiqueta do modal — formato Brother QL-820NWB 62mm continuous tape
   // Imprimir etiqueta(s) avulsa — pode ser 1 item ou array de items
+  // Encurta nome para primeiro + ultimo (ex: "PYETRA COSTA PINTO VILLAS BOAS" → "PYETRA VILLAS BOAS")
+  const shortName = (nome: string) => {
+    const parts = nome.trim().split(/\s+/);
+    if (parts.length <= 2) return nome;
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+  };
+
   const handlePrintEtiquetaDirect = (produtosParaImprimir: ProdutoEstoque[]) => {
     if (produtosParaImprimir.length === 0) return;
     const win = window.open("", "_blank", "width=600,height=400");
@@ -2006,7 +2013,7 @@ export default function EstoquePage() {
           ].filter(Boolean).join(" · ") || ""}</div>
           ${serial ? `<div class="sn">S/N: ${serial}</div>` : ""}
           ${imei ? `<div class="sn">IMEI: ${imei}</div>` : ""}
-          ${p.cliente ? `<div class="cliente">👤 ${p.cliente}</div>` : ""}
+          ${p.cliente ? `<div class="cliente">${shortName(p.cliente)}</div>` : ""}
           ${p.data_compra ? `<div class="data">📅 ${p.data_compra.split("-").reverse().join("/")}</div>` : ""}
           <div class="label-troca">Produto na troca</div>
         </div>
