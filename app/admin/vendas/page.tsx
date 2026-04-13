@@ -1216,11 +1216,8 @@ export default function VendasPage() {
       return;
     }
 
-    // Validação: forma de pagamento obrigatória (exceto vendas programadas e brindes)
-    if (!form.forma && !vendaProgramada && !form.is_brinde) {
-      setMsg("Selecione a FORMA DE PAGAMENTO antes de registrar");
-      return;
-    }
+    // Forma de pagamento é opcional — se não preenchida, venda vai como "Em Andamento" (AGUARDANDO)
+    // e o pagamento pode ser registrado depois na aba "Em Andamento"
 
     // Validação: comprovante obrigatório para vendas no CARTÃO (só se tem permissão de ver histórico)
     if (podeVerHistorico && (form.forma === "CARTAO" || form.forma === "LINK" || form.forma === "DEBITO") && !(parseFloat(form.valor_comprovante_input) > 0)) {
