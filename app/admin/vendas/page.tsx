@@ -4496,7 +4496,7 @@ export default function VendasPage() {
                                           ✏️ Editar
                                         </button>}
                                         {/* Gerar Termo de Procedência — só quando há troca */}
-                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (
+                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (<>
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4604,7 +4604,21 @@ export default function VendasPage() {
                                           >
                                             📜 Gerar Termo de Procedencia
                                           </button>
-                                        )}
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (!confirm("Recriar pendência da troca no estoque?")) return;
+                                              fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, troca_produto: v.troca_produto, produto_na_troca: v.produto_na_troca }),
+                                              }).then(r => { if (r.ok) setMsg("Pendência recriada!"); else r.json().then(j => setMsg("Erro: " + (j.error || "falha"))); }).catch(() => setMsg("Erro ao recriar"));
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
+                                          >
+                                            🔄 Recriar Pendência
+                                          </button>
+                                        </>)}
                                       </div>
                                       {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO e pra quem só tem vendas_andamento) */}
                                       {podeVerHistorico && v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">

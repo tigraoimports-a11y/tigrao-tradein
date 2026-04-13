@@ -372,13 +372,20 @@ export async function POST(req: NextRequest) {
     const nomeCliente = (body.cliente || data?.cliente || "").toUpperCase();
     const nomeProduto1 = sem1Final.produto || "PRODUTO DA TROCA — IDENTIFICAR";
     // Verificar se pendência já existe (evitar duplicata em caso de venda cancelada e relançada)
-    const { data: existingPend1 } = await supabase.from("estoque")
-      .select("id")
-      .eq("cliente", nomeCliente)
-      .eq("produto", nomeProduto1)
-      .eq("tipo", "PENDENCIA")
-      .eq("status", "PENDENTE")
-      .limit(1);
+    // Busca por serial/IMEI (mais confiável) OU por cliente+produto
+    let existingPend1: { id: string }[] | null = null;
+    if (sem1Final.serial_no) {
+      const { data: bySerial } = await supabase.from("estoque").select("id").eq("serial_no", String(sem1Final.serial_no).toUpperCase()).eq("tipo", "PENDENCIA").limit(1);
+      existingPend1 = bySerial;
+    }
+    if ((!existingPend1 || existingPend1.length === 0) && sem1Final.imei) {
+      const { data: byImei } = await supabase.from("estoque").select("id").eq("imei", String(sem1Final.imei).toUpperCase()).eq("tipo", "PENDENCIA").limit(1);
+      existingPend1 = byImei;
+    }
+    if (!existingPend1 || existingPend1.length === 0) {
+      const { data: byNome } = await supabase.from("estoque").select("id").ilike("cliente", nomeCliente).ilike("produto", nomeProduto1).eq("tipo", "PENDENCIA").eq("status", "PENDENTE").limit(1);
+      existingPend1 = byNome;
+    }
     if (existingPend1 && existingPend1.length > 0) {
       await logActivity(usuario, "Pendência troca já existia", `${nomeProduto1} R$${sem1Final.valor} — ${body.cliente || "?"} (reaproveitada)`, "estoque", existingPend1[0].id);
     } else {

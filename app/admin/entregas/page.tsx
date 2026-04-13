@@ -582,6 +582,23 @@ export default function EntregasPage() {
       if (trocaObsFinal) setTrocaObs(trocaObsFinal);
     }
     if (clienteNome || produto) setShowForm(true);
+    // Auto-buscar endereço do cliente quando nome vem via query params
+    if (clienteNome && clienteNome.length >= 2 && password) {
+      fetch(`/api/admin/entregas?search_clientes=${encodeURIComponent(clienteNome.trim())}`, { headers: apiHeaders() })
+        .then(r => r.json())
+        .then(j => {
+          const clientes = j.clientes || [];
+          // Buscar match exato (case-insensitive)
+          const match = clientes.find((s: { cliente: string }) => s.cliente?.toUpperCase() === clienteNome.toUpperCase());
+          if (match) {
+            if (match.endereco) { set("endereco", match.endereco); set("endereco_entrega", match.endereco); }
+            if (match.bairro) set("bairro", match.bairro);
+            if (match.regiao) set("regiao", match.regiao);
+            if (match.telefone && !clienteTel) set("telefone", match.telefone);
+          }
+        })
+        .catch(() => {});
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
