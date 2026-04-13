@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { modelo, armazenamento, preco_pix, status, categoria, tipo } = body;
 
-  if (!modelo || !armazenamento || preco_pix === undefined) {
+  if (!modelo || preco_pix === undefined) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
@@ -193,7 +193,7 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json();
   const { modelo, armazenamento } = body;
 
-  if (!modelo || !armazenamento) {
+  if (!modelo) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
