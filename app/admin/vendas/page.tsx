@@ -22,8 +22,8 @@ export default function VendasPage() {
   const dm = darkMode;
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [loading, setLoading] = useState(true);
-  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas"] as const;
-  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas">("nova", VENDAS_TABS);
+  const VENDAS_TABS = ["nova", "andamento", "programadas", "hoje", "finalizadas", "correios"] as const;
+  const [tab, setTab] = useTabParam<"nova" | "andamento" | "programadas" | "hoje" | "finalizadas" | "correios">("nova", VENDAS_TABS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1883,6 +1883,7 @@ export default function VendasPage() {
             { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
             { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA").length, color: "bg-purple-500", visible: podeVerAndamento },
+            { key: "correios", label: "📦 Correios", count: vendas.filter(v => v.local === "CORREIO" && v.codigo_rastreio).length, color: "bg-blue-500", visible: podeVerHistorico },
           ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
@@ -1891,7 +1892,7 @@ export default function VendasPage() {
         </div>
 
         {/* Filtros — só no histórico e em andamento */}
-        {(tab === "andamento" || tab === "programadas" || tab === "hoje" || tab === "finalizadas") && (
+        {(tab === "andamento" || tab === "programadas" || tab === "hoje" || tab === "finalizadas" || tab === "correios") && (
           <div className="flex gap-1.5 items-center ml-auto flex-wrap">
             <input
               type="text"
@@ -3623,6 +3624,8 @@ export default function VendasPage() {
             ? vendas.filter(v => v.status_pagamento === "PROGRAMADA")
             : tab === "hoje"
             ? vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hoje)
+            : tab === "correios"
+            ? vendas.filter(v => v.local === "CORREIO" && v.codigo_rastreio)
             : vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento)
           ).filter(v => !filtroBrinde || v.is_brinde);
           const tipoOrder = (t: string) => t === "UPGRADE" ? 0 : t === "VENDA" ? 1 : t === "ATACADO" ? 2 : 3;
@@ -3662,7 +3665,7 @@ export default function VendasPage() {
           }
           const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
 
-          const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : "Histórico de Vendas";
+          const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
           const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
           const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
 
@@ -3808,7 +3811,7 @@ export default function VendasPage() {
               ) : (
                 <div>
                   {filtered.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : "finalizada"}</div>
+                    <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
                     const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
@@ -3960,6 +3963,9 @@ export default function VendasPage() {
                                 )}
                                 {v.troca_produto && (
                                   <span className="block mt-0.5 text-[10px] text-purple-600 truncate whitespace-nowrap">🔄 {v.troca_produto}</span>
+                                )}
+                                {tab === "correios" && v.codigo_rastreio && (
+                                  <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors">📦 {v.codigo_rastreio}</a>
                                 )}
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
