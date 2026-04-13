@@ -1930,7 +1930,7 @@ export default function EstoquePage() {
           ${imei ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;line-height:1.25;color:#000">IMEI: ${imei}</div>` : ""}
           ${(p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA") && p.bateria ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.25;margin-top:0.2mm;color:#000">🔋 Bateria: ${p.bateria}%</div>` : ""}
           ${grade ? `<div style="font-size:6pt;font-weight:900;line-height:1.25;margin-top:0.2mm;color:#000;background:#FFF3CD;padding:0.3mm 1mm;border-radius:1mm;display:inline-block">Grade ${grade}</div>` : ""}
-          ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${fornecedor}</div>` : ""}
+          ${fornecedor ? `<div style="font-size:5.5pt;font-weight:bold;line-height:1.2;margin-top:0.2mm;color:#000">${shortName(fornecedor)}</div>` : ""}
         </div>
       </div>`;
     }).join("");
