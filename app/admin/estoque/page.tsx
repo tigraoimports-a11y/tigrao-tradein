@@ -632,6 +632,7 @@ interface ProdutoEstoque {
   custo_compra: number | null;
   encomenda_id: string | null;
   codigo_rastreio: string | null;
+  contato: string | null;
 }
 
 interface ImeiSearchResult {
@@ -4732,18 +4733,22 @@ export default function EstoquePage() {
                                 const obs = p.observacao || "";
                                 const gradeM = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
                                 const grade = gradeM ? gradeM[1] : "";
-                                const temCaixa = obs.toUpperCase().includes("COM CAIXA") || obs.includes("📦");
-                                const semCaixa = obs.toUpperCase().includes("SEM CAIXA");
-                                const temMarcas = obs.toUpperCase().includes("COM MARCAS") || obs.toUpperCase().includes("MARCAS DE USO");
-                                const semMarcas = obs.toUpperCase().includes("SEM MARCAS");
+                                const temCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                                // Limpar obs: remover tags internas e deixar só texto livre
+                                const obsLimpa = obs
+                                  .replace(/\[GRADE_[^\]]+\]/g, "")
+                                  .replace(/\[COM_CAIXA\]/g, "").replace(/\[COM_CABO\]/g, "").replace(/\[COM_FONTE\]/g, "").replace(/\[COM_CARREGADOR\]/g, "")
+                                  .replace(/\[COM_PULSEIRA\]/g, "").replace(/\[CICLOS:\d+\]/g, "").replace(/\[RESP:[^\]]*\]/g, "").replace(/\[COM_QUEM:[^\]]*\]/g, "")
+                                  .replace(/\[NUCLEOS:[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
                                 const params = new URLSearchParams({
                                   modo: "coleta",
                                   cliente_nome: clienteNome,
+                                  ...(p.contato ? { cliente_telefone: p.contato } : {}),
                                   produto: prodNome,
                                   ...(p.bateria ? { coleta_bateria: String(p.bateria) } : {}),
                                   ...(grade ? { coleta_estado: grade } : {}),
-                                  ...(temCaixa ? { coleta_caixa: "sim" } : semCaixa ? { coleta_caixa: "nao" } : {}),
-                                  ...(temMarcas ? { coleta_marcas: "sim" } : semMarcas ? { coleta_marcas: "nao" } : {}),
+                                  ...(temCaixa ? { coleta_caixa: "sim" } : { coleta_caixa: "nao" }),
+                                  ...(obsLimpa ? { observacao: obsLimpa } : {}),
                                 });
                                 window.open(`/admin/entregas?${params.toString()}`, "_blank");
                               }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-green-500/40 text-green-400 hover:bg-green-600 hover:text-white" : "border-green-500/40 text-green-600 hover:bg-green-600 hover:text-white"}`}>🛵 Coleta</button>
@@ -6471,6 +6476,38 @@ export default function EstoquePage() {
                         }}
                         className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
                         title="Salvar responsável"
+                      >✓</button>
+                    </div>
+                  </div>
+                )}
+                {/* Contato / WhatsApp do cliente (pendências) */}
+                {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (
+                  <div className="mt-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Contato / WhatsApp {saved("contato")}</p>
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        id={`contato-${p.id}`}
+                        key={`contato-${p.id}`}
+                        defaultValue={p.contato || ""}
+                        placeholder="(21) 99999-9999"
+                        inputMode="tel"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={async () => {
+                          const el = document.getElementById(`contato-${p.id}`) as HTMLInputElement;
+                          const novo = el?.value?.trim() || null;
+                          if (novo !== (p.contato || null)) {
+                            await apiPatch(p.id, { contato: novo });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, contato: novo } : x));
+                            setDetailProduct(prev => prev ? { ...prev, contato: novo } : null);
+                            showSaved("contato");
+                          }
+                        }}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                        title="Salvar contato"
                       >✓</button>
                     </div>
                   </div>
