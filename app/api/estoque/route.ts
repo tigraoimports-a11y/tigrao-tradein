@@ -139,9 +139,30 @@ export async function GET(req: NextRequest) {
         }
         // Deletar entrega vinculada
         await supabase.from("entregas").delete().eq("venda_id", entidade_id);
-        // Deletar pendência de troca (se tinha)
+        // Deletar pendência de troca (se tinha) — busca por serial/IMEI (preciso) ou cliente+data (fallback)
         if (venda.produto_na_troca && venda.cliente) {
-          await supabase.from("estoque").delete().eq("cliente", venda.cliente).in("tipo", ["PENDENCIA"]).eq("data_compra", venda.data);
+          let deletedPend = false;
+          if (venda.troca_serial) {
+            const { data: ps } = await supabase.from("estoque").select("id").eq("serial_no", venda.troca_serial).eq("tipo", "PENDENCIA").limit(1);
+            if (ps && ps.length > 0) { await supabase.from("estoque").delete().eq("id", ps[0].id); deletedPend = true; }
+          }
+          if (!deletedPend && venda.troca_imei) {
+            const { data: pi } = await supabase.from("estoque").select("id").eq("imei", venda.troca_imei).eq("tipo", "PENDENCIA").limit(1);
+            if (pi && pi.length > 0) { await supabase.from("estoque").delete().eq("id", pi[0].id); deletedPend = true; }
+          }
+          if (!deletedPend) {
+            // Fallback: busca por cliente + data (comportamento anterior, mas só deleta 1)
+            const { data: pf } = await supabase.from("estoque").select("id").ilike("cliente", venda.cliente).eq("tipo", "PENDENCIA").eq("data_compra", venda.data).limit(1);
+            if (pf && pf.length > 0) await supabase.from("estoque").delete().eq("id", pf[0].id);
+          }
+          // 2ª troca (se houver)
+          if (venda.troca_serial2) {
+            const { data: ps2 } = await supabase.from("estoque").select("id").eq("serial_no", venda.troca_serial2).eq("tipo", "PENDENCIA").limit(1);
+            if (ps2 && ps2.length > 0) await supabase.from("estoque").delete().eq("id", ps2[0].id);
+          } else if (venda.troca_imei2) {
+            const { data: pi2 } = await supabase.from("estoque").select("id").eq("imei", venda.troca_imei2).eq("tipo", "PENDENCIA").limit(1);
+            if (pi2 && pi2.length > 0) await supabase.from("estoque").delete().eq("id", pi2[0].id);
+          }
         }
         // Deletar a venda
         await supabase.from("vendas").delete().eq("id", entidade_id);
