@@ -447,7 +447,7 @@ export default function OrcamentoPage() {
                 }} className={inputCls}>
                   <option value="">— Selecionar seminovo —</option>
                   {seminovosFiltrados.map(item => {
-                    const nome = cleanSemiNome(item.produto);
+                    const nome = cleanSemiNome(item.produto).toUpperCase();
                     const details = cleanSemiDetails(item);
                     return (
                       <option key={item.id} value={item.id}>

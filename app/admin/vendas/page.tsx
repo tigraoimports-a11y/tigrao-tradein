@@ -1261,10 +1261,8 @@ export default function VendasPage() {
           ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
           : gForma === "DEBITO" ? 0.75
           : 0;
-        const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
-        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
-        const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
-        payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
+        // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+        payloads[0].preco_vendido = Math.round(gCompPrinc + gCompAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
     }
     if (payloads.length > 1) {
@@ -1284,22 +1282,16 @@ export default function VendasPage() {
             : gForma === "DEBITO" ? 0.75
             : 0;
 
-          // Total líquido from comprovante after tax
-          const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
-
           // Cartão alternativo (2o cartão)
           const gCompAlt = parseFloat(form.comp_alt) || 0;
-          const gTaxaAlt = gCompAlt > 0
-            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
-            : 0;
-          const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
 
           // Add entradas (pix, especie) — these are global
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
           // Trocas são por produto — somar todas as trocas de todos os produtos
           const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+          // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+          const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
@@ -1360,16 +1352,12 @@ export default function VendasPage() {
                 ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
                 : gForma === "DEBITO" ? 0.75
                 : 0;
-              const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
-              const gTaxaAlt = gCompAlt > 0
-                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
-                : 0;
-              const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
               const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
               const totalTrocas = groupPayloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-              const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+              // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+              const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
               let comprovanteDistribuido = 0;
               let vendidoDistribuido = 0;

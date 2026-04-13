@@ -95,15 +95,21 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
 
   const [questionsConfig, setQuestionsConfig] = useState<TradeInQuestion[] | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
-  // Mapa dinâmico de WhatsApp por vendedor — usa DB se disponível
+  const [tradeinConfig, setTradeinConfig] = useState<(TradeInConfig & { whatsapp_principal?: string; whatsapp_formularios?: string; whatsapp_formularios_seminovos?: string; whatsapp_vendedores?: Record<string, string> }) | null>(null);
+  // Mapa dinâmico de WhatsApp por vendedor — usa DB se disponível (normaliza keys pra lowercase)
   const VENDEDOR_WHATSAPP = useMemo(() => {
     const dbMap = tradeinConfig?.whatsapp_vendedores;
-    return dbMap && Object.keys(dbMap).length > 0 ? { ...DEFAULT_VENDEDOR_WHATSAPP, ...dbMap } : DEFAULT_VENDEDOR_WHATSAPP;
+    if (!dbMap || Object.keys(dbMap).length === 0) return DEFAULT_VENDEDOR_WHATSAPP;
+    const normalized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(dbMap)) {
+      normalized[key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")] = value;
+    }
+    return { ...DEFAULT_VENDEDOR_WHATSAPP, ...normalized };
   }, [tradeinConfig]);
-  // WhatsApp formulários — usa campo dedicado se disponível, senão principal
+  // WhatsApp formulários — lacrados e seminovos separados
   const whatsappPrincipal: string = tradeinConfig?.whatsapp_principal || config.whatsappNumero;
-  const whatsappFormularios: string = tradeinConfig?.whatsapp_formularios || whatsappPrincipal;
+  const whatsappFormulariosLacrados: string = tradeinConfig?.whatsapp_formularios || whatsappPrincipal;
+  const whatsappFormulariosSeminovos: string = tradeinConfig?.whatsapp_formularios_seminovos || whatsappPrincipal;
   const [deviceType, setDeviceType] = useState<DeviceType>("iphone");
   const [usedModel, setUsedModel] = useState("");
   const [usedStorage, setUsedStorage] = useState("");
@@ -398,7 +404,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
           )}
 
           {step === 2 && (
-            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig}
+            <StepNewDevice products={products} tradeInValue={totalTradeInValue} onNext={handleStep2Complete} onBack={() => setStep(hasSecondDevice ? 1.7 : 1)} usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} whatsappNumber={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormulariosSeminovos} condition={condition} deviceType={deviceType} tradeinConfig={tradeinConfig}
               usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
@@ -422,7 +428,7 @@ export default function TradeInCalculator({ vendedor: vendedorProp, temaParam }:
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}
-              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormularios}
+              whatsappNumero={(vendedor && VENDEDOR_WHATSAPP[vendedor]) || whatsappFormulariosLacrados}
               validadeHoras={config.validadeHoras} vendedor={vendedor}
               onReset={handleReset} onCotarOutro={handleCotarOutro}
               onGoToStep={handleGoToStep}
