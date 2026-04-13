@@ -5585,10 +5585,8 @@ export default function EstoquePage() {
                     const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
                     const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
                     const telaList = (detailModelConfigs.telas?.length ? detailModelConfigs.telas : ['13"', '14"', '15"', '16"']);
-                    const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
-                    const nucleosList = nucleosCatalog.length > 0
-                      ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
-                      : MACBOOK_NUCLEOS;
+                    // Sempre usar lista completa de nucleos (nao limitar pelo catalogo)
+                    const nucleosList = MACBOOK_NUCLEOS;
                     return (
                       <>
                         <div>
