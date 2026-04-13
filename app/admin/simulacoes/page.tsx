@@ -212,25 +212,82 @@ export default function AdminPage() {
   }, [password, fetchData]);
   useAutoRefetch(useCallback(() => { if (password) fetchData(password); }, [password, fetchData]), !!password);
 
-  // Fetch histórico (link_compras com formulário preenchido)
+  // Fetch histórico (link_compras com formulário preenchido + simulações GOSTEI sem link)
   const fetchHistorico = useCallback(async () => {
     if (!password) return;
     setHistoricoLoading(true);
     try {
+      // 1) Link_compras com formulário preenchido
       const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=200", {
         headers: { "x-admin-password": password },
       });
+      let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        setHistorico((json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em));
+        items = (json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em);
       }
+
+      // 2) Simulações GOSTEI que não têm link_compras — converter para HistoricoItem
+      // Pegar telefones já presentes nos link_compras
+      const linkTels = new Set(items.map(i => (i.cliente_telefone || "").replace(/\D/g, "").slice(-8)).filter(t => t.length >= 8));
+      const linkSimIds = new Set(items.map(i => i.simulacao_id).filter(Boolean));
+      const gosteiFiltrado = (data || []).filter(s =>
+        s.status === "GOSTEI" &&
+        !linkSimIds.has(s.id) &&
+        !(s.whatsapp && linkTels.has(s.whatsapp.replace(/\D/g, "").slice(-8)))
+      );
+      // Dedup por telefone (pegar só o mais recente)
+      const seen = new Set<string>();
+      for (const s of gosteiFiltrado) {
+        const tel8 = (s.whatsapp || "").replace(/\D/g, "").slice(-8);
+        if (tel8 && seen.has(tel8)) continue;
+        if (tel8) seen.add(tel8);
+        items.push({
+          id: `sim_${s.id}`,
+          created_at: s.created_at,
+          short_code: "",
+          tipo: "TROCA",
+          cliente_nome: s.nome,
+          cliente_telefone: s.whatsapp,
+          cliente_cpf: null,
+          cliente_email: null,
+          produto: `${s.modelo_novo} ${s.storage_novo}`.trim(),
+          produtos_extras: null,
+          cor: null,
+          valor: s.preco_novo || 0,
+          desconto: 0,
+          entrada: 0,
+          forma_pagamento: s.forma_pagamento || null,
+          parcelas: null,
+          status: "GOSTEI",
+          cliente_preencheu_em: s.created_at,
+          cliente_dados_preenchidos: null,
+          pagamento_pago: null,
+          vendedor: s.vendedor || null,
+          operador: null,
+          troca_produto: `${s.modelo_usado} ${s.storage_usado}`.trim(),
+          troca_valor: s.avaliacao_usado || 0,
+          troca_condicao: Array.isArray(s.condicao_linhas) ? s.condicao_linhas.join(" | ") : null,
+          troca_cor: s.cor_usado || null,
+          troca_produto2: s.modelo_usado2 ? `${s.modelo_usado2} ${s.storage_usado2 || ""}`.trim() : null,
+          troca_valor2: s.avaliacao_usado2 || 0,
+          troca_condicao2: Array.isArray(s.condicao_linhas2) ? s.condicao_linhas2.join(" | ") : null,
+          troca_cor2: s.cor_usado2 || null,
+          simulacao_id: s.id,
+          entrega_id: null,
+          observacao: null,
+        });
+      }
+
+      setHistorico(items);
     } catch { /* silent */ }
     setHistoricoLoading(false);
-  }, [password]);
+  }, [password, data]);
 
   useEffect(() => {
-    if (mainTab === "historico" && historico.length === 0) fetchHistorico();
-  }, [mainTab, fetchHistorico, historico.length]);
+    if (mainTab === "historico" && data && data.length > 0) fetchHistorico();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainTab, data?.length, password]);
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -393,21 +450,20 @@ export default function AdminPage() {
                     const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
                     const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
-                    // Puxar dados de troca: 1) do link_compras, 2) da simulação por ID, 3) da simulação por nome/telefone
-                    const simById = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
-                    const simByMatch = !simById && h.cliente_nome ? data.find(s => {
-                      const nomeMatch = s.nome && h.cliente_nome && s.nome.toLowerCase().trim() === h.cliente_nome.toLowerCase().trim();
-                      const telMatch = s.whatsapp && h.cliente_telefone && s.whatsapp.replace(/\D/g, "") === h.cliente_telefone.replace(/\D/g, "");
-                      return nomeMatch || telMatch;
-                    }) : null;
-                    const sim = simById || simByMatch;
+                    // Puxar dados de troca: 1) do link_compras, 2) da simulação por ID, 3) da simulação por telefone/nome
+                    const hTel = (h.cliente_telefone || "").replace(/\D/g, "");
+                    const hNome = (h.cliente_nome || "").toLowerCase().trim();
+                    const sim = (h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null)
+                      || (hTel.length >= 8 ? data.find(s => s.whatsapp && s.whatsapp.replace(/\D/g, "").includes(hTel.slice(-8))) : null)
+                      || (hNome.length >= 3 ? data.find(s => s.nome && s.nome.toLowerCase().trim().includes(hNome.split(" ")[0])) : null)
+                      || null;
                     const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
                     const trocaValDisplay = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
                     const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
                     const trocaVal2Display = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
                     const trocaTotalDisplay = trocaValDisplay + trocaVal2Display;
-                    const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : "📝 Preenchido";
-                    const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700";
+                    const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : h.status === "GOSTEI" ? "💚 Gostei" : "📝 Preenchido";
+                    const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : h.status === "GOSTEI" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700";
                     return (
                       <tr key={h.id} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA] transition-colors">
                         <td className="px-3 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
@@ -499,13 +555,12 @@ export default function AdminPage() {
       {historicoModal && (() => {
         const h = historicoModal;
         const p = h.cliente_dados_preenchidos || {};
-        const simById = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
-        const simByMatch = !simById && h.cliente_nome ? data.find(s => {
-          const nomeMatch = s.nome && h.cliente_nome && s.nome.toLowerCase().trim() === h.cliente_nome.toLowerCase().trim();
-          const telMatch = s.whatsapp && h.cliente_telefone && s.whatsapp.replace(/\D/g, "") === h.cliente_telefone.replace(/\D/g, "");
-          return nomeMatch || telMatch;
-        }) : null;
-        const sim = simById || simByMatch;
+        const hTel = (h.cliente_telefone || "").replace(/\D/g, "");
+        const hNome = (h.cliente_nome || "").toLowerCase().trim();
+        const sim = (h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null)
+          || (hTel.length >= 8 ? data.find(s => s.whatsapp && s.whatsapp.replace(/\D/g, "").includes(hTel.slice(-8))) : null)
+          || (hNome.length >= 3 ? data.find(s => s.nome && s.nome.toLowerCase().trim().includes(hNome.split(" ")[0])) : null)
+          || null;
         const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
         const trocaVal = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
         const trocaCor = h.troca_cor || sim?.cor_usado || null;
