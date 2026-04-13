@@ -93,7 +93,7 @@ export default function GerarLinkPage() {
       if (p.tipo !== "SEMINOVO") continue;
       const base = getModeloBase(p.produto, p.categoria || "SEMINOVOS");
       const corPt = p.cor ? corParaPT(p.cor) : "";
-      const nome = corPt ? `${base} ${corPt}` : base;
+      const nome = (corPt ? `${base} ${corPt}` : base).toUpperCase();
       const key = nome.toUpperCase();
       const prev = map.get(key);
       if (prev) {

@@ -139,7 +139,7 @@ export default function AdminPage() {
   const [filterModelo, setFilterModelo] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
-  const [mainTab, setMainTab] = useState<"simulacoes" | "historico" | "followup" | "funil" | "perguntas" | "whatsapp" | "simulador">("simulacoes");
+  const [mainTab, setMainTab] = useState<"simulacoes" | "historico" | "followup" | "funil" | "perguntas" | "simulador">("simulacoes");
   const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
   // Histórico: clientes que passaram por todo o funil (simulação → gostei → link gerado → formulário preenchido → chegou no WhatsApp)
   interface HistoricoItem {
@@ -400,10 +400,10 @@ export default function AdminPage() {
     <div className="space-y-6">
       {/* Main tabs: Simulações / Funil */}
       <div className="flex gap-2 items-center flex-wrap">
-        {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas", "whatsapp"] as const).map((t) => (
+        {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : t === "whatsapp" ? "WhatsApp" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -743,7 +743,7 @@ export default function AdminPage() {
       )}
 
       {/* WhatsApp Config tab */}
-      {mainTab === "whatsapp" && <WhatsAppConfigPanel password={password} />}
+      {/* WhatsApp config removido — centralizado em /admin/configuracoes */}
 
       {/* Simulador Interno tab */}
       {mainTab === "simulador" && <SimuladorInterno password={password} />}
@@ -1721,188 +1721,9 @@ export default function AdminPage() {
   );
 }
 
-/* ── WhatsApp Config Panel ── */
-const VENDEDORES_DEFAULT: { nome: string; label: string; numero: string }[] = [
-  { nome: "andre", label: "Andre", numero: "5521967442665" },
-  { nome: "bianca", label: "Bianca", numero: "5521972461357" },
-];
+/* WhatsApp Config Panel removido — ver /admin/configuracoes */
 
-function WhatsAppConfigPanel({ password }: { password: string }) {
-  const [principal, setPrincipal] = useState("5521967442665");
-  const [formularios, setFormularios] = useState(""); // WhatsApp para formulários (troca, seminovos, links de compra)
-  const defaultVendedores: Record<string, { numero: string; ativo: boolean }> = {};
-  for (const v of VENDEDORES_DEFAULT) defaultVendedores[v.nome] = { numero: v.numero, ativo: true };
-  const [vendedores, setVendedores] = useState<Record<string, { numero: string; ativo: boolean }>>(defaultVendedores);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    fetch("/api/admin/tradein-config", { headers: { "x-admin-password": password } })
-      .then(r => r.json())
-      .then(j => {
-        if (j.data) {
-          setPrincipal(j.data.whatsapp_principal || "5521967442665");
-          if (j.data.whatsapp_formularios) setFormularios(j.data.whatsapp_formularios);
-          // Converter formato antigo (string) pra novo (objeto com ativo)
-          const raw = j.data.whatsapp_vendedores || {};
-          const mapped: Record<string, { numero: string; ativo: boolean }> = {};
-          for (const v of VENDEDORES_DEFAULT) {
-            const existing = raw[v.nome];
-            if (typeof existing === "string") {
-              mapped[v.nome] = { numero: existing, ativo: true };
-            } else if (existing && typeof existing === "object") {
-              mapped[v.nome] = existing;
-            } else {
-              mapped[v.nome] = { numero: v.numero, ativo: true };
-            }
-          }
-          // Outros vendedores extras
-          for (const [k, val] of Object.entries(raw)) {
-            if (!mapped[k]) {
-              mapped[k] = typeof val === "string" ? { numero: val, ativo: true } : (val as { numero: string; ativo: boolean });
-            }
-          }
-          setVendedores(mapped);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [password]);
-
-  const salvar = async () => {
-    setSaving(true);
-    setMsg("");
-    try {
-      // Converter pra formato que o TradeInCalculator espera: { nome: "numero" } (só ativos)
-      const waMap: Record<string, string> = {};
-      for (const [nome, v] of Object.entries(vendedores)) {
-        if (v.ativo) waMap[nome] = v.numero;
-      }
-      const res = await fetch("/api/admin/tradein-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-admin-password": password },
-        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_formularios: formularios || principal, whatsapp_vendedores: waMap }),
-      });
-      const j = await res.json();
-      if (j.ok) { setMsg("Salvo!"); setTimeout(() => setMsg(""), 3000); }
-      else setMsg("Erro: " + (j.error || "desconhecido"));
-    } catch { setMsg("Erro de conexao"); }
-    setSaving(false);
-  };
-
-  const toggleVendedor = (nome: string) => {
-    setVendedores(prev => ({
-      ...prev,
-      [nome]: { ...prev[nome], ativo: !prev[nome]?.ativo },
-    }));
-  };
-
-  const setPrincipalFromVendedor = (numero: string) => {
-    setPrincipal(numero);
-  };
-
-  if (loading) return <p className="text-sm text-[#86868B]">Carregando...</p>;
-
-  return (
-    <div className="space-y-4 max-w-lg">
-      {/* Numero principal */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
-        <div>
-          <h2 className="font-bold text-[#1D1D1F] text-lg">WhatsApp Principal</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">Todas as mensagens do site vao pra esse numero. Clique num vendedor abaixo pra trocar rapido.</p>
-        </div>
-
-        {/* Seletor rapido */}
-        <div className="flex gap-2">
-          {Object.entries(vendedores).filter(([, v]) => v.ativo).map(([nome, v]) => {
-            const isActive = principal === v.numero;
-            return (
-              <button key={nome} onClick={() => setPrincipalFromVendedor(v.numero)}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? "bg-[#E8740E] text-white shadow-md" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"}`}>
-                {nome.charAt(0).toUpperCase() + nome.slice(1)}
-                {isActive && <span className="ml-1.5">&#x2705;</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
-          <span className="text-[#86868B]">Numero ativo:</span>
-          <span className="font-mono font-semibold text-[#1D1D1F]">{principal.replace(/^55/, "+55 ").replace(/\+(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
-        </div>
-
-        <button onClick={salvar} disabled={saving}
-          className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${msg === "Salvo!" ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
-          {saving ? "Salvando..." : msg === "Salvo!" ? "&#x2705; Salvo!" : "Salvar"}
-        </button>
-      </div>
-
-      {/* WhatsApp Formulários */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
-        <div>
-          <h2 className="font-bold text-[#1D1D1F] text-lg">WhatsApp Formulários</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">Número padrão para receber formulários de troca de lacrados, seminovos e links de compra. Se vazio, usa o WhatsApp Principal.</p>
-        </div>
-
-        {/* Seletor rapido */}
-        <div className="flex gap-2">
-          {Object.entries(vendedores).filter(([, v]) => v.ativo).map(([nome, v]) => {
-            const isActive = formularios === v.numero;
-            return (
-              <button key={nome} onClick={() => setFormularios(v.numero)}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? "bg-[#E8740E] text-white shadow-md" : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"}`}>
-                {nome.charAt(0).toUpperCase() + nome.slice(1)}
-                {isActive && <span className="ml-1.5">&#x2705;</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {formularios && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5F5F7] text-sm">
-            <span className="text-[#86868B]">Numero ativo:</span>
-            <span className="font-mono font-semibold text-[#1D1D1F]">{formularios.replace(/^55/, "+55 ").replace(/\+(\d{2})\s(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4")}</span>
-          </div>
-        )}
-
-        <button onClick={salvar} disabled={saving}
-          className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${msg === "Salvo!" ? "bg-green-500 text-white" : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}>
-          {saving ? "Salvando..." : msg === "Salvo!" ? "&#x2705; Salvo!" : "Salvar"}
-        </button>
-      </div>
-
-      {/* Vendedores com toggle */}
-      <div className="bg-white border border-[#D2D2D7] rounded-2xl p-5 shadow-sm space-y-4">
-        <div>
-          <h2 className="font-bold text-[#1D1D1F]">Vendedores</h2>
-          <p className="text-xs text-[#86868B] mt-0.5">Ative/desative vendedores. Quando ativo, o link ?ref=nome direciona pro numero dele.</p>
-        </div>
-
-        <div className="space-y-3">
-          {Object.entries(vendedores).map(([nome, v]) => (
-            <div key={nome} className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${v.ativo ? "bg-white border-[#D2D2D7]" : "bg-[#F5F5F7] border-[#E8E8ED] opacity-60"}`}>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-[#1D1D1F]">{nome.charAt(0).toUpperCase() + nome.slice(1)}</p>
-                <p className="text-xs font-mono text-[#86868B]">{v.numero.replace(/^55(\d{2})/, "+55 ($1) ").replace(/(\d{5})(\d{4})$/, "$1-$2")}</p>
-              </div>
-              {/* Toggle estilo iOS */}
-              <button onClick={() => toggleVendedor(nome)}
-                className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${v.ativo ? "bg-green-500" : "bg-[#D2D2D7]"}`}>
-                <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${v.ativo ? "translate-x-5" : "translate-x-0.5"}`} />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <button onClick={salvar} disabled={saving}
-          className="w-full py-3 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#F5A623] transition-colors disabled:opacity-50">
-          {saving ? "Salvando..." : "Salvar"}
-        </button>
-      </div>
-    </div>
-  );
-}
+/* WhatsApp Config Panel removido — ver /admin/configuracoes */
 
 // ──────────────────────────────────────────
 // Simulador Interno — formulário simples

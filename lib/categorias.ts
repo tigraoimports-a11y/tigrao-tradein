@@ -15,6 +15,7 @@ export interface Categoria {
 export const DEFAULT_CATEGORIAS_PRECOS: Categoria[] = [
   { key: "IPHONE", label: "iPhones", emoji: "\u{1F4F1}" },
   { key: "MACBOOK", label: "MacBooks", emoji: "\u{1F4BB}" },
+  { key: "MAC_MINI", label: "Mac Mini", emoji: "\u{1F5A5}\uFE0F" },
   { key: "IPAD", label: "iPads", emoji: "\u{1F4DF}" },
   { key: "APPLE_WATCH", label: "Apple Watch", emoji: "\u231A" },
   { key: "AIRPODS", label: "AirPods", emoji: "\u{1F3A7}" },

@@ -22,7 +22,8 @@ export default function ConfiguracoesPage() {
 
   // Contato do formulário de troca
   const [principal, setPrincipal] = useState("5521972461357"); // Bianca default
-  const [formularios, setFormularios] = useState(""); // WhatsApp formulários (troca, seminovos, links de compra)
+  const [formLacrados, setFormLacrados] = useState(""); // WhatsApp formulários lacrados
+  const [formSeminovos, setFormSeminovos] = useState(""); // WhatsApp formulários seminovos
   const [vendedores, setVendedores] = useState(VENDEDORES_PADRAO.map(v => ({ ...v })));
 
   const [loading, setLoading] = useState(true);
@@ -40,7 +41,8 @@ export default function ConfiguracoesPage() {
       .then(({ data }) => {
         if (!data) return;
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
-        if (data.whatsapp_formularios) setFormularios(String(data.whatsapp_formularios));
+        if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
+        if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
         // whatsapp_vendedores pode ser objeto {nome: numero} ou array
         const raw = data.whatsapp_vendedores;
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -104,15 +106,20 @@ export default function ConfiguracoesPage() {
     setSaving(true);
     setMsg("");
     try {
-      // salvar como {André: "55...", Bianca: "55...", ...}
+      // salvar com keys normalizadas (lowercase sem acento)
       const waMap: Record<string, string> = {};
       for (const v of vendedores) {
-        if (v.nome) waMap[v.nome] = v.numero;
+        if (v.nome) waMap[v.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")] = v.numero;
       }
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
         headers: { "x-admin-password": password, "Content-Type": "application/json" },
-        body: JSON.stringify({ whatsapp_principal: principal, whatsapp_formularios: formularios || principal, whatsapp_vendedores: waMap }),
+        body: JSON.stringify({
+          whatsapp_principal: principal,
+          whatsapp_formularios: formLacrados || principal,
+          whatsapp_formularios_seminovos: formSeminovos || principal,
+          whatsapp_vendedores: waMap,
+        }),
       });
       const j = await res.json();
       setMsg(j.ok ? "✅ Salvo com sucesso!" : "❌ Erro: " + (j.error || "desconhecido"));
@@ -186,12 +193,12 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
-        {/* WhatsApp Formulários */}
+        {/* WhatsApp Troca — Lacrados */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-3">
           <div>
-            <p className="font-bold text-[#1D1D1F]">📋 WhatsApp Formulários</p>
+            <p className="font-bold text-[#1D1D1F]">📦 WhatsApp Troca — Lacrados</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Número padrão para receber formulários de troca de lacrados, seminovos e links de compra. Se vazio, usa o número do Formulário de Troca.
+              Número que recebe formulários de troca por aparelhos lacrados (novos). Se vazio, usa o WhatsApp Principal.
             </p>
           </div>
 
@@ -200,37 +207,86 @@ export default function ConfiguracoesPage() {
               <button
                 key={v.nome}
                 type="button"
-                onClick={() => setFormularios(v.numero)}
+                onClick={() => setFormLacrados(v.numero)}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  formularios === v.numero
+                  formLacrados === v.numero
                     ? "bg-[#E8740E] text-white shadow-sm"
                     : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
                 }`}
               >
-                {v.nome} {formularios === v.numero && "✓"}
+                {v.nome} {formLacrados === v.numero && "✓"}
               </button>
             ))}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#86868B] mb-1">Número formulários (DDI + DDD + número)</label>
+            <label className="block text-xs font-medium text-[#86868B] mb-1">Número lacrados (DDI + DDD + número)</label>
             <input
-              value={formularios}
-              onChange={e => setFormularios(e.target.value.replace(/\D/g, ""))}
+              value={formLacrados}
+              onChange={e => setFormLacrados(e.target.value.replace(/\D/g, ""))}
               placeholder="5521972461357"
               className={inputCls}
               inputMode="numeric"
             />
           </div>
 
-          {formularios && (
+          {formLacrados && (
             <a
-              href={`https://wa.me/${formularios}`}
+              href={`https://wa.me/${formLacrados}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-xs text-[#E8740E] hover:underline"
             >
-              🔗 Testar: wa.me/{formularios}
+              🔗 Testar: wa.me/{formLacrados}
+            </a>
+          )}
+        </div>
+
+        {/* WhatsApp Troca — Seminovos */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-[#E8E8ED] space-y-3">
+          <div>
+            <p className="font-bold text-[#1D1D1F]">📱 WhatsApp Troca — Seminovos</p>
+            <p className="text-xs text-[#86868B] mt-1">
+              Número que recebe formulários de troca por seminovos (usados). Se vazio, usa o WhatsApp Principal.
+            </p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            {vendedores.filter(v => v.numero).map(v => (
+              <button
+                key={v.nome}
+                type="button"
+                onClick={() => setFormSeminovos(v.numero)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  formSeminovos === v.numero
+                    ? "bg-[#E8740E] text-white shadow-sm"
+                    : "bg-[#F5F5F7] border border-[#D2D2D7] text-[#6E6E73] hover:border-[#E8740E]"
+                }`}
+              >
+                {v.nome} {formSeminovos === v.numero && "✓"}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#86868B] mb-1">Número seminovos (DDI + DDD + número)</label>
+            <input
+              value={formSeminovos}
+              onChange={e => setFormSeminovos(e.target.value.replace(/\D/g, ""))}
+              placeholder="5521967442665"
+              className={inputCls}
+              inputMode="numeric"
+            />
+          </div>
+
+          {formSeminovos && (
+            <a
+              href={`https://wa.me/${formSeminovos}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-[#E8740E] hover:underline"
+            >
+              🔗 Testar: wa.me/{formSeminovos}
             </a>
           )}
         </div>

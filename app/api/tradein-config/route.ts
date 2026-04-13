@@ -44,6 +44,7 @@ export async function GET() {
     const result = { ...data };
     if (labels._whatsapp_principal) result.whatsapp_principal = labels._whatsapp_principal;
     if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
+    if (labels._whatsapp_formularios_seminovos) result.whatsapp_formularios_seminovos = labels._whatsapp_formularios_seminovos;
     if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
 
     return NextResponse.json({ data: result });
