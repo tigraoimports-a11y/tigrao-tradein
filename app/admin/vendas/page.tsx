@@ -764,7 +764,7 @@ export default function VendasPage() {
                   }
                 }
               }}
-              className="w-full px-4 py-3 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] text-[#1D1D1F] placeholder-[#86868B] focus:outline-none focus:border-[#E8740E]"
+              className={`w-full px-4 py-3 rounded-xl border placeholder-[#86868B] focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#1D1D1F]"}`}
             />
             {vendasPwError && <p className="text-[#E74C3C] text-sm text-center">Senha incorreta</p>}
             <button
@@ -2049,8 +2049,8 @@ export default function VendasPage() {
 
           {/* Indicador de venda duplicada */}
           {duplicadoInfo && (
-            <div className="flex items-center justify-between px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
-              <span className="text-xs text-blue-700">
+            <div className={`flex items-center justify-between px-4 py-2.5 border rounded-xl ${dm ? "bg-blue-900/30 border-blue-700 text-blue-300" : "bg-blue-50 border-blue-200"}`}>
+              <span className={`text-xs ${dm ? "text-blue-300" : "text-blue-700"}`}>
                 📋 Baseado na venda de <strong>{duplicadoInfo.data}</strong> para <strong>{duplicadoInfo.cliente}</strong>
               </span>
               <button
@@ -2072,7 +2072,7 @@ export default function VendasPage() {
                 </div>
                 <video ref={qrVideoRef} className="w-full rounded-xl bg-black aspect-square object-cover" playsInline muted />
                 {qrScanMsg && <p className={`mt-2 text-xs text-center ${qrScanMsg.startsWith("❌") || qrScanMsg.startsWith("⚠️") ? "text-red-500" : "text-[#86868B]"}`}>{qrScanMsg}</p>}
-                <button onClick={handleStopQR} className="mt-3 w-full py-2 rounded-xl text-xs font-semibold bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED] transition-colors">Cancelar</button>
+                <button onClick={handleStopQR} className={`mt-3 w-full py-2 rounded-xl text-xs font-semibold transition-colors ${dm ? "bg-[#2C2C2E] text-[#98989D] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8E8ED]"}`}>Cancelar</button>
               </div>
             </div>
           )}
@@ -2094,7 +2094,7 @@ export default function VendasPage() {
                 {iPhoneScanStatus === "error" && (
                   <div className="flex flex-col items-center gap-3 py-4 text-center">
                     <p className="text-red-500 text-sm">Erro ao criar sessão. Verifique se a tabela scan_sessions foi criada no Supabase.</p>
-                    <button onClick={handleCloseIPhoneScan} className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F5F5F7] text-[#86868B]">Fechar</button>
+                    <button onClick={handleCloseIPhoneScan} className={`px-4 py-2 rounded-xl text-xs font-semibold ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Fechar</button>
                   </div>
                 )}
                 {iPhoneScanStatus === "waiting" && iPhoneScanToken && (() => {
@@ -2139,7 +2139,7 @@ export default function VendasPage() {
               />
               <div className="flex gap-2">
                 <button onClick={handlePasteConfirm} className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors">Extrair dados</button>
-                <button onClick={() => { setShowPasteModal(false); setPasteText(""); }} className="px-4 py-2 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors">Cancelar</button>
+                <button onClick={() => { setShowPasteModal(false); setPasteText(""); }} className={`px-4 py-2 rounded-xl border text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"}`}>Cancelar</button>
               </div>
             </div>
           )}
@@ -2169,7 +2169,7 @@ export default function VendasPage() {
             </div>
           </div>
           {form.is_brinde && (
-            <div className="px-3 py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs">
+            <div className={`px-3 py-2 rounded-xl border text-xs ${dm ? "bg-pink-900/30 border-pink-700 text-pink-300" : "bg-pink-50 border-pink-200 text-pink-700"}`}>
               Esta venda sera registrada como brinde. Nao entrara no faturamento nem no lucro. O estoque sera atualizado normalmente.
             </div>
           )}
@@ -2180,7 +2180,7 @@ export default function VendasPage() {
               <div><p className={labelCls}>Nome da Loja</p><input value={form.cliente} onChange={(e) => set("cliente", e.target.value.toUpperCase())} placeholder="Ex: Mega Cell, TM Cel..." className={inputCls} /></div>
 
               {/* Entrega cobrada à parte */}
-              <div className="p-3 rounded-xl border border-[#E0E0E5] bg-[#FAFAFA]">
+              <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Entrega (cobrada à parte)</span>
                   <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
@@ -2212,7 +2212,7 @@ export default function VendasPage() {
 
               {/* Crédito de Lojista — aparece sempre em ATACADO, mesmo sem saldo (facilita cadastrar/ver) */}
               {form.tipo === "ATACADO" && form.cliente && (
-                <div className="p-3 rounded-xl border border-blue-200 bg-blue-50">
+                <div className={`p-3 rounded-xl border ${dm ? "border-blue-700 bg-blue-900/30" : "border-blue-200 bg-blue-50"}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-700">💳 Crédito do Lojista</span>
                     <span className="text-sm font-bold text-blue-700">Saldo: R$ {creditoLojistaSaldo.toLocaleString("pt-BR")}</span>
@@ -2258,7 +2258,7 @@ export default function VendasPage() {
               {/* Toggle PF / PJ */}
               <div className="flex gap-2">
                 {(["PF", "PJ"] as const).map((p) => (
-                  <button key={p} onClick={() => set("pessoa", p)} className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.pessoa === p ? "bg-[#E8740E] text-white" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}>
+                  <button key={p} onClick={() => set("pessoa", p)} className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${form.pessoa === p ? "bg-[#E8740E] text-white" : dm ? "bg-[#2C2C2E] text-[#98989D] border border-[#3A3A3C] hover:border-[#E8740E]" : "bg-[#F5F5F7] text-[#86868B] border border-[#D2D2D7] hover:border-[#E8740E]"}`}>
                     {p === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
                   </button>
                 ))}
@@ -2269,7 +2269,7 @@ export default function VendasPage() {
                   {/* Dropdown Clientes Recorrentes */}
                   {showClienteSuggestions && clientesRecorrentes.length > 0 && (
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
-                      <div className="px-3 py-1.5 bg-[#F5F5F7] text-[10px] font-bold text-[#86868B] uppercase">Clientes recorrentes</div>
+                      <div className={`px-3 py-1.5 text-[10px] font-bold uppercase ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Clientes recorrentes</div>
                       {clientesRecorrentes.map((c, i) => (
                         <button
                           key={i}
@@ -2311,7 +2311,7 @@ export default function VendasPage() {
 
               {/* Historico do Cliente */}
               {(clienteHistorico || loadingHistorico) && form.cliente.length >= 3 && (
-                <div className="bg-[#F5F5F7] border border-[#E0E0E5] rounded-xl px-4 py-3">
+                <div className={`border rounded-xl px-4 py-3 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F5F5F7] border-[#E0E0E5]"}`}>
                   {loadingHistorico ? (
                     <p className="text-[11px] text-[#86868B]">Buscando historico...</p>
                   ) : clienteHistorico && (
@@ -2399,7 +2399,7 @@ export default function VendasPage() {
                 const pVendido = parseFloat(p.preco_vendido) || 0;
                 const pLucro = pVendido - pCusto;
                 return (
-                  <div key={i} className="px-4 py-3 bg-[#F5F5F7] border border-[#D2D2D7] rounded-xl space-y-1">
+                  <div key={i} className={`px-4 py-3 border rounded-xl space-y-1 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-[#F5F5F7] border-[#D2D2D7]"}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-[#1D1D1F] truncate">{p.produto}</span>
                       <div className="ml-3 flex gap-1 flex-shrink-0">
@@ -2774,7 +2774,7 @@ export default function VendasPage() {
                       setForm(f => ({ ...f, valor_comprovante_input: clean, preco_vendido: newVendido }));
                     }
                   }} placeholder="Valor da maquina" className={inputCls} /></div>
-                  <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                  <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                     <span>Taxa: <strong className="text-[#E8740E]">0.75%</strong></span>
                     <span>Recebimento: <strong className="text-blue-600">D+1</strong></span>
                     {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
@@ -2814,7 +2814,7 @@ export default function VendasPage() {
                           }
                         }
                       }} placeholder="Valor da maquina" className={inputCls} /></div>
-                      <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                      <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                         <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (() => {
                           const liqPrincDisp = calcularLiquido(parseFloat(form.valor_comprovante_input) || 0, taxa);
@@ -2855,7 +2855,7 @@ export default function VendasPage() {
                           }
                         }
                       }} placeholder="Valor total do link" className={inputCls} /></div>
-                      <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                      <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                         <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                         {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
                           <>
@@ -2949,7 +2949,7 @@ export default function VendasPage() {
 
               {/* Resumo misto */}
               {(entradaPix > 0 || entradaEspecie > 0) && (
-                <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                <div className={`rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                   {entradaPix > 0 && <span>PIX: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaPix)}</strong></span>}
                   {entradaEspecie > 0 && <span>Especie: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaEspecie)}</strong></span>}
                   {valorTroca > 0 && <span>Troca: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(valorTroca)}</strong></span>}
@@ -3067,7 +3067,7 @@ export default function VendasPage() {
                     recalcVendido({ comp: clean });
                   }} placeholder="Valor do PIX" className={inputCls} /></div>
                   {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
-                    <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                    <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                       {entradaEspecie > 0 && <span>+ Especie: <strong>{fmt(entradaEspecie)}</strong></span>}
                       {valorTroca > 0 && <span>+ Troca: <strong>{fmt(valorTroca)}</strong></span>}
                       <span>= Vendido: <strong className="text-green-600">{fmt(Math.round((parseFloat(form.valor_comprovante_input) || 0) + entradaEspecie + valorTroca))}</strong></span>
@@ -3086,7 +3086,7 @@ export default function VendasPage() {
                       setMoney("valor_comprovante_input", e.target.value);
                       recalcVendido({ comp: clean });
                     }} placeholder="Valor da maquina" className={inputCls} /></div>
-                    <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                    <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                       <span>Taxa: <strong className="text-[#E8740E]">0.75%</strong></span>
                       <span>Recebimento: <strong className="text-blue-600">D+1</strong></span>
                       {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
@@ -3118,7 +3118,7 @@ export default function VendasPage() {
                           setMoney("valor_comprovante_input", e.target.value);
                           recalcVendido({ comp: clean });
                         }} placeholder="Valor da maquina" className={inputCls} /></div>
-                        <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                        <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                           <span>Taxa: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                           {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
                             <>
@@ -3145,7 +3145,7 @@ export default function VendasPage() {
                           setMoney("valor_comprovante_input", e.target.value);
                           recalcVendido({ comp: clean });
                         }} placeholder="Valor total do link" className={inputCls} /></div>
-                        <div className="col-span-2 md:col-span-3 bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                        <div className={`col-span-2 md:col-span-3 rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                           <span>Taxa MP: <strong className="text-[#E8740E]">{taxa.toFixed(2)}%</strong></span>
                           {(parseFloat(form.valor_comprovante_input) || 0) > 0 && (
                             <>
@@ -3235,7 +3235,7 @@ export default function VendasPage() {
 
                 {/* Resumo misto */}
                 {(entradaPix > 0 || entradaEspecie > 0) && (
-                  <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-xs text-[#86868B] flex flex-wrap gap-3">
+                  <div className={`rounded-lg px-3 py-2 text-xs flex flex-wrap gap-3 ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                     {entradaPix > 0 && <span>PIX: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaPix)}</strong></span>}
                     {entradaEspecie > 0 && <span>Especie: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(entradaEspecie)}</strong></span>}
                     {valorTroca > 0 && <span>Troca: <strong className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>{fmt(valorTroca)}</strong></span>}
@@ -3589,7 +3589,7 @@ export default function VendasPage() {
                   setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
                   setLastClienteData(null);
                 }}
-                className="px-4 py-3 rounded-xl border border-[#D2D2D7] text-[#86868B] text-sm hover:bg-[#F5F5F7] transition-colors"
+                className={`px-4 py-3 rounded-xl border text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"}`}
               >
                 Limpar
               </button>
@@ -3658,7 +3658,7 @@ export default function VendasPage() {
                   <select
                     value={ordenar}
                     onChange={(e) => setOrdenar(e.target.value as typeof ordenar)}
-                    className="text-[10px] px-2 py-1 rounded-lg bg-[#F5F5F7] border border-[#D2D2D7] text-[#86868B] focus:outline-none focus:border-[#E8740E]"
+                    className={`text-[10px] px-2 py-1 rounded-lg border focus:outline-none focus:border-[#E8740E] ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] border-[#D2D2D7] text-[#86868B]"}`}
                   >
                     <option value="recente">⏰ Mais recente</option>
                     <option value="antigo">⏰ Mais antigo</option>
@@ -3820,7 +3820,7 @@ export default function VendasPage() {
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                              <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
                                 {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
                                   <th className="px-3 py-2 w-8">
                                     <input
@@ -3894,7 +3894,7 @@ export default function VendasPage() {
                         return (
                           <React.Fragment key={v.id}>
                             <tr
-                              className={`border-b border-[#F5F5F7] hover:bg-[#F5F5F7] transition-colors cursor-pointer ${isExpanded ? "bg-[#F5F5F7]" : ""} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10 dark:bg-[#E8740E]/15" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""}`}
+                              className={`border-b transition-colors cursor-pointer ${dm ? `border-[#3A3A3C] hover:bg-[#2C2C2E] ${isExpanded ? "bg-[#2C2C2E]" : ""}` : `border-[#F5F5F7] hover:bg-[#F5F5F7] ${isExpanded ? "bg-[#F5F5F7]" : ""}`} ${selecionadas.has(v.id) ? "bg-[#E8740E]/10" : ""} ${isGrupo ? "border-l-4 border-l-[#E8740E]" : ""}`}
                               onClick={() => setExpandedId(isExpanded ? null : v.id)}
                             >
                               {(tab === "andamento" || tab === "finalizadas" || tab === "hoje") && (
@@ -3932,7 +3932,7 @@ export default function VendasPage() {
                                 )}
                               </td>
                               <td className="px-3 py-2.5 font-medium whitespace-nowrap text-sm uppercase">{v.cliente}</td>
-                              <td className="px-3 py-2.5"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F5F7] text-[#86868B]">{v.origem}</span></td>
+                              <td className="px-3 py-2.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>{v.origem}</span></td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.tipo === "UPGRADE" ? "bg-purple-100 text-purple-700" : v.tipo === "ATACADO" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{v.tipo}</span>
                                 {v.is_brinde && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-100 text-pink-700">BRINDE</span>}
@@ -3977,7 +3977,7 @@ export default function VendasPage() {
 
                             {/* Linha expandida */}
                             {isExpanded && (
-                              <tr className="bg-[#FAFAFA]">
+                              <tr className={dm ? "bg-[#1C1C1E]" : "bg-[#FAFAFA]"}>
                                 <td colSpan={13} className="px-5 py-4">
                                   {/* MODO EDIÇÃO */}
                                   {editingId === v.id ? (() => {
@@ -4061,7 +4061,7 @@ export default function VendasPage() {
                                             </button>
                                             <button
                                               onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
-                                              className="px-3 py-1.5 rounded-lg text-xs text-[#86868B] border border-[#D2D2D7] hover:bg-[#F5F5F7] transition-colors"
+                                              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${dm ? "text-[#98989D] border-[#3A3A3C] hover:bg-[#2C2C2E]" : "text-[#86868B] border-[#D2D2D7] hover:bg-[#F5F5F7]"}`}
                                             >
                                               Cancelar
                                             </button>
@@ -4238,7 +4238,7 @@ export default function VendasPage() {
                                                 }} placeholder="Valor da maquina" className={`w-full px-2 py-1.5 border border-[#E8740E] rounded-lg text-xs ${dm ? "bg-[#2C2C2E] text-[#F5F5F7]" : "bg-white"}`} />
                                               </label>
                                               <div className="col-span-1 md:col-span-3 flex items-end">
-                                                <div className="bg-[#F5F5F7] rounded-lg px-3 py-2 text-[10px] text-[#86868B] flex flex-wrap gap-2 w-full">
+                                                <div className={`rounded-lg px-3 py-2 text-[10px] flex flex-wrap gap-2 w-full ${dm ? "bg-[#2C2C2E] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>
                                                   <span>Taxa: <strong className="text-[#E8740E]">{efTaxa.toFixed(2)}%</strong></span>
                                                   {(parseFloat(ef.valor_comprovante) || 0) > 0 && (
                                                     <>
