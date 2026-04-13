@@ -5,6 +5,7 @@ import { sendPaymentNotification, sendSaleNotification, sendCancelNotification }
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
 import { recalcularSaldoDia } from "@/lib/saldos";
+import { recalcBalancos } from "@/lib/recalc-balancos";
 
 function auth(req: NextRequest) {
   const pw = req.headers.get("x-admin-password");
@@ -328,6 +329,8 @@ export async function POST(req: NextRequest) {
         "estoque",
         estoqueId
       );
+      // Recalcular preço médio após saída — os itens restantes precisam manter o balanço atualizado
+      try { await recalcBalancos(); } catch { /* silent */ }
     }
   }
 

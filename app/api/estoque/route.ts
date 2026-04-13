@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
 import { hasPermission } from "@/lib/permissions";
 import { recalcBalancos } from "@/lib/recalc-balancos";
+import { getModeloBase } from "@/lib/produto-display";
 
 function auth(req: NextRequest) {
   return req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
@@ -329,22 +330,29 @@ export async function POST(req: NextRequest) {
   }
 
   if (produtoNome && !hasSerial) {
-    let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario").eq("produto", produtoNome).in("status", ["EM ESTOQUE", "ESGOTADO"]);
+    let existQuery = supabase.from("estoque").select("id, qnt, custo_unitario, custo_compra").eq("produto", produtoNome).in("status", ["EM ESTOQUE", "ESGOTADO"]);
     if (categoriaNome) existQuery = existQuery.eq("categoria", categoriaNome);
     if (corNome) existQuery = existQuery.eq("cor", corNome);
     else existQuery = existQuery.is("cor", null);
     const { data: existing } = await existQuery.limit(1).single();
 
     if (existing) {
-      // Merge: somar quantidade apenas. NÃO recalcula custo_unitario (balanço)
-      // — balanço é recalculado via endpoint /api/admin/recalc-balancos
-      // agrupando por categoria + modelo (sem cor).
+      // Merge: somar quantidade E recalcular custo_compra como média ponderada.
+      // Isso garante que o balanço (preço médio) fique correto após recalcBalancos.
       const existQnt = Number(existing.qnt || 0);
       const addQnt = Number(body.qnt || 1);
       const totalQnt = existQnt + addQnt;
 
+      // Calcular custo_compra médio ponderado no merge
+      const existCusto = Number(existing.custo_compra || existing.custo_unitario || 0);
+      const newCusto = Number(body.custo_compra || body.custo_unitario || 0);
+      const newCustoCompra = totalQnt > 0
+        ? Math.round(((existQnt * existCusto) + (addQnt * newCusto)) / totalQnt * 100) / 100
+        : existCusto;
+
       const { error: ue } = await supabase.from("estoque").update({
         qnt: totalQnt,
+        custo_compra: newCustoCompra,
         status: totalQnt > 0 ? "EM ESTOQUE" : "ESGOTADO",
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
@@ -408,55 +416,20 @@ export async function PATCH(req: NextRequest) {
     // Buscar todos os itens EM ESTOQUE da mesma categoria
     const { data: items } = await supabase
       .from("estoque")
-      .select("id, produto, cor, qnt, custo_unitario, categoria")
+      .select("id, produto, cor, qnt, custo_compra, custo_unitario, categoria")
       .eq("categoria", categoria)
       .eq("status", "EM ESTOQUE");
 
     if (!items || items.length === 0) return NextResponse.json({ ok: true, rebalanced: 0 });
 
-    // Importar getModeloBase não é possível aqui (é client-side), então reimplementar a lógica de agrupamento
-    // Agrupar por modelo-base: extrair modelo+memória do nome do produto (sem cor)
-    function extractModeloBase(produto: string, cat: string): string {
-      const p = produto.toUpperCase().trim();
-      const getMem = () => {
-        const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
-        if (all.length === 0) return "";
-        const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
-        return ` ${vals.sort((a, b) => b.gb - a.gb)[0].raw}`;
-      };
-      const getSize = () => { const m = p.match(/(\d{2})[""]/); return m ? ` ${m[1]}"` : ""; };
-      if (cat === "IPHONES") {
-        const match = p.match(/IPHONE\s*(\d+)(E)?\s*(PRO\s*MAX|PRO|PLUS|AIR)?/i);
-        if (match) {
-          const num = match[1] + (match[2] ? "e" : "");
-          const variant = match[3] ? " " + match[3].trim() : "";
-          return `iPhone ${num}${variant}${getMem()}`;
-        }
-      }
-      if (cat === "IPADS") {
-        const mem = getMem(); const size = getSize();
-        if (p.includes("MINI")) return `iPad Mini${size}${mem}`;
-        if (p.includes("AIR")) return `iPad Air${size}${mem}`;
-        if (p.includes("PRO")) return `iPad Pro${size}${mem}`;
-        return `iPad${mem}`;
-      }
-      if (cat === "APPLE_WATCH") {
-        const match = p.match(/(?:WATCH|APPLE\s*WATCH)\s*(S\d+|SE|ULTRA\s*\d*|SERIES\s*\d+)/i);
-        const size = getSize();
-        return match ? `Apple Watch ${match[1].trim()}${size}` : produto;
-      }
-      if (cat === "MAC_MINI") { return `Mac Mini${getMem()}`; }
-      return produto;
-    }
-
-    // Filtrar itens do mesmo modelo-base
-    const groupItems = items.filter(i => extractModeloBase(i.produto, i.categoria) === modelo);
+    // Filtrar itens do mesmo modelo-base usando getModeloBase compartilhado
+    const groupItems = items.filter(i => getModeloBase(i.produto, i.categoria) === modelo);
     if (groupItems.length <= 1) return NextResponse.json({ ok: true, rebalanced: 0 });
 
-    // Calcular preço médio ponderado
+    // Calcular preço médio ponderado usando custo_compra (custo real de aquisição)
     let totalCusto = 0, totalQnt = 0;
     for (const i of groupItems) {
-      totalCusto += (i.custo_unitario || 0) * (i.qnt || 1);
+      totalCusto += (i.custo_compra || i.custo_unitario || 0) * (i.qnt || 1);
       totalQnt += (i.qnt || 1);
     }
     if (totalQnt === 0) return NextResponse.json({ ok: true, rebalanced: 0 });
@@ -520,6 +493,11 @@ export async function PATCH(req: NextRequest) {
   // Log no activity_log para aparecer no painel
   if (alteracoes.length > 0) {
     await logActivity(usuario, "Editou estoque", `${antes?.produto || "?"}: ${alteracoes.join(", ")}`, "estoque", id).catch(() => {});
+  }
+
+  // Recalcular preço médio se custo_unitario foi alterado manualmente
+  if (fields.custo_unitario !== undefined || fields.qnt !== undefined || fields.status !== undefined) {
+    try { await recalcBalancos(); } catch { /* silent */ }
   }
 
   // ── Auto-update encomenda vinculada quando produto chega ──
