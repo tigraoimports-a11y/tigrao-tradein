@@ -146,8 +146,10 @@ export default function AdminPage() {
     id: string;
     created_at: string;
     short_code: string;
+    tipo: string;
     cliente_nome: string;
     cliente_telefone: string;
+    cliente_cpf: string | null;
     cliente_email: string | null;
     produto: string;
     produtos_extras: string | null;
@@ -165,14 +167,20 @@ export default function AdminPage() {
     operador: string | null;
     troca_produto: string | null;
     troca_valor: number | null;
+    troca_condicao: string | null;
+    troca_cor: string | null;
     troca_produto2: string | null;
     troca_valor2: number | null;
+    troca_condicao2: string | null;
+    troca_cor2: string | null;
     simulacao_id: string | null;
     entrega_id: string | null;
+    observacao: string | null;
   }
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [encaminhando, setEncaminhando] = useState<string | null>(null);
+  const [historicoModal, setHistoricoModal] = useState<HistoricoItem | null>(null);
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -386,17 +394,22 @@ export default function AdminPage() {
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
                     const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
                     const trocaTotal = Number(h.troca_valor || 0) + Number(h.troca_valor2 || 0);
+                    // Puxar dados de troca da simulação vinculada se link_compras não tiver
+                    const sim = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+                    const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
+                    const trocaValDisplay = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
+                    const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
+                    const trocaVal2Display = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
+                    const trocaTotalDisplay = trocaValDisplay + trocaVal2Display;
                     const statusLabel = h.entrega_id ? "🚚 Entrega criada" : h.pagamento_pago ? "✅ Pago" : h.status === "CONVERTIDO" || h.status === "ENCAMINHADO" ? "✅ Convertido" : "📝 Preenchido";
                     const statusColor = h.entrega_id || h.status === "ENCAMINHADO" ? "bg-green-100 text-green-700" : h.pagamento_pago || h.status === "CONVERTIDO" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700";
-                    const preench = h.cliente_dados_preenchidos || {};
-                    const enderecoResumo = [preench.endereco, preench.numero, preench.bairro].filter(Boolean).join(", ");
                     return (
                       <tr key={h.id} className="border-b border-[#F5F5F7] hover:bg-[#FAFAFA] transition-colors">
                         <td className="px-3 py-3 text-xs text-[#86868B] whitespace-nowrap">{criadoDate}</td>
                         <td className="px-3 py-3 text-sm">
-                          <p className="font-medium uppercase">{h.cliente_nome}</p>
-                          {enderecoResumo && <p className="text-[10px] text-[#86868B] mt-0.5 truncate max-w-[180px]">📍 {enderecoResumo}</p>}
-                          {preench.cep && <p className="text-[10px] text-[#86868B]">CEP: {preench.cep}</p>}
+                          <button onClick={() => setHistoricoModal(h)} className="text-left hover:text-[#E8740E] transition-colors">
+                            <p className="font-medium uppercase underline decoration-dotted underline-offset-2">{h.cliente_nome}</p>
+                          </button>
                         </td>
                         <td className="px-3 py-3">
                           {h.cliente_telefone ? (
@@ -414,11 +427,17 @@ export default function AdminPage() {
                           {Number(h.entrada || 0) > 0 && <span className="block text-[10px] text-green-600">Entrada: R$ {Number(h.entrada).toLocaleString("pt-BR")}</span>}
                         </td>
                         <td className="px-3 py-3 text-xs">
-                          {h.troca_produto ? (
+                          {trocaNome ? (
                             <div>
-                              <p className="text-purple-600">🔄 {h.troca_produto}</p>
-                              {trocaTotal > 0 && <p className="text-[10px] font-semibold text-purple-700">R$ {trocaTotal.toLocaleString("pt-BR")}</p>}
-                              {h.troca_produto2 && <p className="text-purple-500 text-[10px] mt-0.5">🔄 {h.troca_produto2}</p>}
+                              <p className="text-purple-600">🔄 {trocaNome}</p>
+                              {trocaValDisplay > 0 && <p className="text-[10px] font-semibold text-purple-700">R$ {trocaValDisplay.toLocaleString("pt-BR")}</p>}
+                              {trocaNome2 && (
+                                <>
+                                  <p className="text-purple-500 text-[10px] mt-0.5">🔄 {trocaNome2}</p>
+                                  {trocaVal2Display > 0 && <p className="text-[10px] text-purple-600">R$ {trocaVal2Display.toLocaleString("pt-BR")}</p>}
+                                </>
+                              )}
+                              {trocaTotalDisplay > 0 && trocaNome2 && <p className="text-[10px] font-bold text-purple-800 mt-0.5">Total: R$ {trocaTotalDisplay.toLocaleString("pt-BR")}</p>}
                             </div>
                           ) : <span className="text-[#C0C0C5]">—</span>}
                         </td>
@@ -470,6 +489,184 @@ export default function AdminPage() {
           )}
         </div>
       )}
+
+      {/* Modal detalhado do Histórico */}
+      {historicoModal && (() => {
+        const h = historicoModal;
+        const p = h.cliente_dados_preenchidos || {};
+        const sim = h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null;
+        const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
+        const trocaVal = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
+        const trocaCor = h.troca_cor || sim?.cor_usado || null;
+        const trocaCond = h.troca_condicao || (sim?.condicao_linhas ? sim.condicao_linhas.join(" | ") : null);
+        const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
+        const trocaVal2 = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
+        const trocaCor2 = h.troca_cor2 || sim?.cor_usado2 || null;
+        const trocaCond2 = h.troca_condicao2 || (sim?.condicao_linhas2 ? sim.condicao_linhas2.join(" | ") : null);
+        const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
+        const formatDate = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+        const Row = ({ label, value, color }: { label: string; value: string | number | null | undefined; color?: string }) => (
+          value ? <div className="flex justify-between py-1.5 border-b border-[#F5F5F7]"><span className="text-[#86868B] text-xs">{label}</span><span className={`text-sm font-medium ${color || "text-[#1D1D1F]"}`}>{value}</span></div> : null
+        );
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setHistoricoModal(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+                <h3 className="font-bold text-[#1D1D1F] text-lg">Detalhes do Cliente</h3>
+                <button onClick={() => setHistoricoModal(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F7]">&times;</button>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Dados do Cliente */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Cliente</h4>
+                  <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                    <Row label="Nome" value={h.cliente_nome?.toUpperCase()} />
+                    <Row label="CPF" value={h.cliente_cpf || p.cpf} />
+                    {p.cnpj && <Row label="CNPJ" value={p.cnpj} />}
+                    <Row label="Telefone" value={h.cliente_telefone} />
+                    <Row label="Email" value={h.cliente_email || p.email} />
+                    {p.instagram && <Row label="Instagram" value={p.instagram} />}
+                  </div>
+                </div>
+
+                {/* Endereço */}
+                {(p.endereco || p.cep) && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Endereço</h4>
+                    <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                      <Row label="CEP" value={p.cep} />
+                      <Row label="Endereço" value={[p.endereco, p.numero].filter(Boolean).join(", ")} />
+                      {p.complemento && <Row label="Complemento" value={p.complemento} />}
+                      <Row label="Bairro" value={p.bairro} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Produto */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Produto Novo</h4>
+                  <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                    <Row label="Produto" value={h.produto} />
+                    {h.cor && <Row label="Cor" value={h.cor} />}
+                    <Row label="Valor" value={`R$ ${valorFinal.toLocaleString("pt-BR")}`} color="text-[#E8740E] font-bold" />
+                    {Number(h.desconto || 0) > 0 && <Row label="Desconto" value={`R$ ${Number(h.desconto).toLocaleString("pt-BR")}`} color="text-red-500" />}
+                  </div>
+                </div>
+
+                {/* Pagamento */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Pagamento</h4>
+                  <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                    <Row label="Forma" value={h.forma_pagamento || p.forma_pagamento} />
+                    {(h.parcelas && Number(h.parcelas) > 1) && <Row label="Parcelas" value={`${h.parcelas}x`} />}
+                    {Number(h.entrada || 0) > 0 && <Row label="Entrada" value={`R$ ${Number(h.entrada).toLocaleString("pt-BR")}`} color="text-green-600" />}
+                    <Row label="Status" value={h.pagamento_pago ? "Pago" : "Pendente"} color={h.pagamento_pago ? "text-green-600" : "text-yellow-600"} />
+                  </div>
+                </div>
+
+                {/* Troca */}
+                {trocaNome && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Aparelho na Troca</h4>
+                    <div className="bg-purple-50 rounded-xl p-3 space-y-0.5">
+                      <Row label="Aparelho 1" value={trocaNome} color="text-purple-700" />
+                      {trocaCor && <Row label="Cor" value={trocaCor} />}
+                      {trocaVal > 0 && <Row label="Avaliação" value={`R$ ${trocaVal.toLocaleString("pt-BR")}`} color="text-purple-700 font-bold" />}
+                      {trocaCond && <Row label="Condição" value={trocaCond} />}
+                      {trocaNome2 && (
+                        <>
+                          <div className="border-t border-purple-200 my-2" />
+                          <Row label="Aparelho 2" value={trocaNome2} color="text-purple-600" />
+                          {trocaCor2 && <Row label="Cor" value={trocaCor2} />}
+                          {trocaVal2 > 0 && <Row label="Avaliação" value={`R$ ${trocaVal2.toLocaleString("pt-BR")}`} color="text-purple-600 font-bold" />}
+                          {trocaCond2 && <Row label="Condição" value={trocaCond2} />}
+                        </>
+                      )}
+                      {(trocaVal + trocaVal2) > 0 && trocaNome2 && (
+                        <div className="border-t border-purple-300 pt-1.5 mt-1">
+                          <Row label="Total Troca" value={`R$ ${(trocaVal + trocaVal2).toLocaleString("pt-BR")}`} color="text-purple-800 font-bold" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Entrega */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Entrega / Logística</h4>
+                  <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                    <Row label="Local" value={p.local} />
+                    <Row label="Data Entrega" value={p.data_entrega} />
+                    <Row label="Horário" value={p.horario} />
+                    <Row label="Vendedor" value={h.vendedor || p.vendedor} />
+                    <Row label="Operador" value={h.operador} />
+                    <Row label="Entrega" value={h.entrega_id ? "Criada" : "Pendente"} color={h.entrega_id ? "text-green-600" : "text-yellow-600"} />
+                  </div>
+                </div>
+
+                {/* Datas */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Datas</h4>
+                  <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-0.5">
+                    <Row label="Link criado em" value={formatDate(h.created_at)} />
+                    <Row label="Formulário preenchido em" value={formatDate(h.cliente_preencheu_em)} />
+                  </div>
+                </div>
+
+                {/* Observação */}
+                {h.observacao && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-[#86868B] mb-2 tracking-wider">Observação</h4>
+                    <div className="bg-yellow-50 rounded-xl p-3 text-sm text-[#1D1D1F]">{h.observacao}</div>
+                  </div>
+                )}
+
+                {/* Ações */}
+                <div className="flex gap-2 pt-2">
+                  {h.cliente_telefone && (
+                    <a href={`https://wa.me/55${h.cliente_telefone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold text-center transition-colors">
+                      WhatsApp
+                    </a>
+                  )}
+                  {!h.entrega_id && h.status !== "ENCAMINHADO" && (
+                    <button
+                      disabled={encaminhando === h.id}
+                      onClick={async () => {
+                        const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
+                        if (!dataEntrega) return;
+                        const [d, m, y] = dataEntrega.split("/");
+                        const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
+                        if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
+                        setEncaminhando(h.id);
+                        try {
+                          const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                            body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
+                          });
+                          if (res.ok) {
+                            setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
+                            setHistoricoModal(prev => prev ? { ...prev, status: "ENCAMINHADO", entrega_id: "created" } : null);
+                            alert("Entrega criada com sucesso! Veja em Entregas.");
+                          } else {
+                            const json = await res.json();
+                            alert("Erro: " + (json.error || "Falha"));
+                          }
+                        } catch (err) { alert("Erro: " + String(err)); }
+                        setEncaminhando(null);
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold text-center transition-colors disabled:opacity-50"
+                    >
+                      {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Perguntas Trade-In tab */}
       {mainTab === "perguntas" && (
