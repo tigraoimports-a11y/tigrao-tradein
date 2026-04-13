@@ -88,6 +88,8 @@ export interface Venda {
   data_programada: string | null;
   // Crédito de lojista usado nesta venda
   credito_lojista_usado: number;
+  // Código de rastreio dos Correios
+  codigo_rastreio: string | null;
 }
 
 export interface Reajuste {
