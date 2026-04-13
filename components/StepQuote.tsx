@@ -322,12 +322,49 @@ export default function StepQuote(p: StepQuoteProps) {
           ...(parc && parc !== "pix" ? { parcelas: parc } : {}),
           ...(entNum > 0 ? { entrada_pix: String(Math.round(entNum)) } : {}),
         });
-        const compraUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/compra?${params.toString()}`;
+        const baseOrigin = typeof window !== "undefined" ? window.location.origin : "";
+        const compraUrl = `${baseOrigin}/compra?${params.toString()}`;
         return (
-          <button onClick={() => {
+          <button onClick={async () => {
             onTrackAction?.("quote_whatsapp");
             salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag });
             if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).fbq) (window as unknown as Record<string, (a: string, b: string, c: Record<string, unknown>) => void>).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" });
+            // Criar short_code + link_compras para rastrear no Histórico
+            try {
+              const shortData: Record<string, string> = {};
+              for (const [k, v] of params.entries()) shortData[k] = v;
+              const shortRes = await fetch("/api/short-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: shortData }) });
+              const shortJson = await shortRes.json();
+              if (shortJson.code) {
+                // Criar link_compras (fire-and-forget, sem auth — endpoint público)
+                fetch("/api/link-compras-auto", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    short_code: shortJson.code,
+                    url_curta: `${baseOrigin}/c/${shortJson.code}`,
+                    tipo: usedModel ? "TROCA" : "COMPRA",
+                    cliente_nome: clienteNome || null,
+                    cliente_telefone: clienteWhatsApp || null,
+                    produto: `${newModel} ${newStorage}`.trim(),
+                    cor: usedColor || null,
+                    valor: Math.round(newPrice),
+                    troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
+                    troca_valor: Math.round(valor1),
+                    troca_condicao: condStr || null,
+                    troca_cor: usedColor || null,
+                    troca_produto2: hasSecond && usedModel2 ? `${usedModel2} ${usedStorage2 || ""}`.trim() : null,
+                    troca_valor2: hasSecond ? Math.round(valor2) : 0,
+                    troca_condicao2: cond2Lines || null,
+                    troca_cor2: hasSecond ? (usedColor2 || null) : null,
+                    vendedor: vendedor || null,
+                  }),
+                }).catch(() => {});
+                // Adicionar short code à URL de compra
+                params.set("short", shortJson.code);
+                window.open(`${baseOrigin}/compra?${params.toString()}`, "_blank");
+                return;
+              }
+            } catch { /* fallback: abre sem short code */ }
             window.open(compraUrl, "_blank");
           }}
             className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
