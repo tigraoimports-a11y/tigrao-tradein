@@ -409,16 +409,6 @@ export default function StepUsedDeviceMulti({ usedValues, excludedModels, modelD
               >{c}</button>
             ))}
           </div>
-          {!cor && (
-            <input
-              type="text"
-              value={cor}
-              onChange={(e) => setCor(e.target.value)}
-              placeholder="Ou digite a cor manualmente..."
-              className="w-full mt-2 px-4 py-2.5 rounded-xl text-[14px] text-center"
-              style={{ backgroundColor: "var(--ti-input-bg)", border: "1px solid var(--ti-card-border)", color: "var(--ti-text)" }}
-            />
-          )}
         </Section>
       )}
 

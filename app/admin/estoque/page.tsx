@@ -9,7 +9,7 @@ import { getCategoriasEstoque, addCategoriaEstoque, removeCategoriaEstoque, edit
 import type { Categoria } from "@/lib/categorias";
 
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, type ProdutoSpec } from "@/lib/produto-specs";
+import { buildProdutoName as buildProdutoNameFromSpec, CORES_POR_CATEGORIA, COR_EN_TO_PT, COR_OBRIGATORIA, IPHONE_ORIGENS, WATCH_PULSEIRAS, WATCH_BAND_MODELS, getIphoneCores, MACBOOK_RAMS, MACBOOK_STORAGES, MACBOOK_NUCLEOS, MAC_MINI_NUCLEOS, MAC_MINI_RAMS, type ProdutoSpec } from "@/lib/produto-specs";
 import ProdutoSpecFields, { createEmptyProdutoRow, type ProdutoRowState } from "@/components/admin/ProdutoSpecFields";
 import type { Banco } from "@/lib/admin-types";
 import { corParaPT, formatCorEtiquetaPTEN } from "@/lib/cor-pt";
@@ -30,7 +30,7 @@ function formatProdutoDisplay(p: {
   cor?: string | null;
   observacao?: string | null;
 }): string {
-  const nomeRaw = String(p.produto || "");
+  const nomeRaw = String(p.produto || "").replace(/\s*=\s*/g, " ").replace(/\s+/g, " ").trim();
   const obs = String(p.observacao || "");
   const src = `${nomeRaw} ${obs}`;
   const up = src.toUpperCase();
@@ -49,12 +49,15 @@ function formatProdutoDisplay(p: {
   // RAM: vem de tag [RAM:X] ou, se não, o menor valor GB/TB quando há 2+
   const ramTag = obs.match(/\[RAM:([^\]]+)\]/);
   let ram = ramTag ? ramTag[1].trim().toUpperCase() : "";
+  // Limpar valores invalidos
+  if (ram && !/\d/.test(ram)) ram = "";
   if (!ram && sorted.length >= 2) {
     ram = sorted[sorted.length - 1].raw;
   }
   // SSD: tag [SSD:X] ou storage principal
   const ssdTag = obs.match(/\[SSD:([^\]]+)\]/);
-  const ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+  let ssd = ssdTag ? ssdTag[1].trim().toUpperCase() : storage;
+  if (ssd && !/\d/.test(ssd)) ssd = storage;
 
   // Tela (polegadas)
   const telaTag = obs.match(/\[TELA:([^\]]+)\]/);
@@ -102,19 +105,42 @@ function formatProdutoDisplay(p: {
     if (hasCell) parts.push("Wi-Fi + Cellular");
     else if (hasWifi) parts.push("Wi-Fi");
   } else if (baseCat === "MACBOOK") {
-    // Chip NÃO entra no nome de preview — só no modal de detalhes.
     let modelo = "MacBook";
     if (/NEO/.test(up)) modelo = "MacBook Neo";
     else if (/AIR/.test(up)) modelo = "MacBook Air";
     else if (/PRO/.test(up)) modelo = "MacBook Pro";
-    parts.push(modelo);
+    // Chip: extrair do nome ou inferir dos nucleos/observacao
+    const mbChip = up.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?|A\d+\s*PRO)/i)?.[1] || (() => {
+      const nucMatch = up.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i)
+        || obs.toUpperCase().match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+      if (!nucMatch) return /NEO/.test(up) ? "A18 Pro" : "";
+      const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+      if (c === 6 && g === 5) return "A18 Pro";
+      if (c === 8 && (g === 8 || g === 10)) return "M4";
+      if (c === 12 && (g === 16 || g === 19)) return "M4 Pro";
+      if (c === 14 && g === 20) return "M4 Pro";
+      if (c === 16 && g === 40) return "M4 Max";
+      return "";
+    })();
+    parts.push(modelo + (mbChip ? ` ${mbChip}` : ""));
     if (tela) parts.push(tela);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
     if (cor) parts.push(cor);
   } else if (baseCat === "MAC_MINI") {
-    // Chip NÃO entra no nome de preview — só no modal de detalhes.
-    parts.push("Mac Mini");
+    // Chip: extrair do nome ou inferir dos nucleos (nome ou observacao)
+    const mmChip = up.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1] || (() => {
+      const nucMatch = up.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i)
+        || obs.toUpperCase().match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+      if (!nucMatch) return "";
+      const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+      if (c === 10 && g === 10) return "M4";
+      if (c === 12 && g === 16) return "M4 Pro";
+      if (c === 14 && g === 20) return "M4 Pro";
+      if (c === 16 && g === 40) return "M4 Max";
+      return "";
+    })();
+    parts.push(`Mac Mini${mmChip ? " " + mmChip : ""}`);
     if (ram) parts.push(ram);
     if (ssd) parts.push(ssd);
   } else if (baseCat === "APPLE_WATCH") {
@@ -138,7 +164,7 @@ function formatProdutoDisplay(p: {
     return cleanProdutoDisplay(nomeRaw);
   }
 
-  return parts.filter(Boolean).join(" ");
+  return parts.filter(p => p && p !== "=" && p !== "-").join(" ");
 }
 
 /** Limpa o nome do produto para exibição: remove código de origem, info de chip e tags. */
@@ -669,7 +695,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /** Extrai o "modelo base" de um produto para agrupar em cards */
-function getModeloBase(produto: string, categoria: string): string {
+function getModeloBase(produto: string, categoria: string, observacao?: string | null): string {
   const p = produto.toUpperCase().trim();
   // Inferir categoria quando vier vazia/inválida baseado no nome do produto
   let baseCat = getBaseCat(categoria || "");
@@ -722,24 +748,56 @@ function getModeloBase(produto: string, categoria: string): string {
     const ssd = sorted.length >= 1 ? ` ${sorted[sorted.length - 1].raw}` : "";
     const memPair = `${ram}${ssd}`;
     const size = getSize();
-    // Extrair chip (M4, M5, M4 Pro, M5 Pro)
-    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
-    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
-    if (p.includes("NEO")) return `MacBook Neo${chip}${size}${memPair}`;
+    // Extrair chip do nome ou inferir dos nucleos
+    const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
+    let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
+    if (!chip) {
+      let nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      if (!nucMatch && observacao) {
+        const obsNuc = observacao.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+        if (obsNuc) nucMatch = obsNuc;
+      }
+      if (nucMatch) {
+        const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+        if (c === 8 && (g === 8 || g === 10)) chip = " M4";
+        else if (c === 12 && (g === 16 || g === 19)) chip = " M4 Pro";
+        else if (c === 14 && g === 20) chip = " M4 Pro";
+        else if (c === 16 && g === 40) chip = " M4 Max";
+        else if (c === 6 && g === 5) chip = " A18 Pro";
+      }
+    }
+    if (p.includes("NEO")) return `MacBook Neo${chip || " A18 Pro"}${size}${memPair}`;
     if (p.includes("AIR")) return `MacBook Air${chip}${size}${memPair}`;
     if (p.includes("PRO")) return `MacBook Pro${chip}${size}${memPair}`;
     return `MacBook${chip}${memPair}`;
   }
   if (baseCat === "MAC_MINI") {
-    // Mac Mini: agrupar por RAM + SSD (mesmo padrão do MacBook)
+    // Mac Mini: agrupar por chip + RAM + SSD
     const all = [...p.matchAll(/(\d+)\s*(GB|TB)/gi)];
     const vals = all.map(m => ({ raw: `${m[1]}${m[2].toUpperCase()}`, gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]) }));
     const sorted = [...vals].sort((a, b) => a.gb - b.gb);
     const ram = sorted.length >= 2 ? ` ${sorted[0].raw}` : "";
     const ssd = sorted.length >= 1 ? `/${sorted[sorted.length - 1].raw}` : "";
     const memPair = `${ram}${ssd}`;
-    const chipMatch = p.match(/M(\d+)(\s*PRO)?/i);
-    const chip = chipMatch ? ` M${chipMatch[1]}${chipMatch[2] ? " Pro" : ""}` : "";
+    // Chip: extrair do nome, dos nucleos no nome, ou da tag [NUCLEOS:...] na observacao
+    const chipMatch = p.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i);
+    let chip = chipMatch ? ` ${chipMatch[1].replace(/\s+/g, " ").trim()}` : "";
+    if (!chip) {
+      // Tentar nucleos no nome
+      let nucMatch = p.match(/(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU/i);
+      // Fallback: nucleos na observacao [NUCLEOS:12C CPU/16C GPU]
+      if (!nucMatch && observacao) {
+        const obsNuc = observacao.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+        if (obsNuc) nucMatch = obsNuc;
+      }
+      if (nucMatch) {
+        const c = parseInt(nucMatch[1]), g = parseInt(nucMatch[2]);
+        if (c === 10 && g === 10) chip = " M4";
+        else if (c === 12 && g === 16) chip = " M4 Pro";
+        else if (c === 14 && g === 20) chip = " M4 Pro";
+        else if (c === 16 && g === 40) chip = " M4 Max";
+      }
+    }
     return `Mac Mini${chip}${memPair}`;
   }
   if (baseCat === "APPLE_WATCH") {
@@ -2435,7 +2493,7 @@ export default function EstoquePage() {
       catKey = p.categoria;
     }
     if (!byCat[catKey]) byCat[catKey] = {};
-    const modelo = getModeloBase(p.produto, p.categoria);
+    const modelo = getModeloBase(p.produto, p.categoria, p.observacao);
     if (!byCat[catKey][modelo]) byCat[catKey][modelo] = [];
     byCat[catKey][modelo].push(p);
   });
@@ -4642,7 +4700,7 @@ export default function EstoquePage() {
                 if (allItems.length === 0) return null;
                 const grouped: Record<string, typeof allItems> = {};
                 allItems.forEach(p => {
-                  const base = getModeloBase(p.produto, p.categoria).toUpperCase();
+                  const base = getModeloBase(p.produto, p.categoria, p.observacao).toUpperCase();
                   const cor = p.cor ? corParaPT(p.cor).toUpperCase() : "";
                   const key = `${base}|||${cor}`;
                   if (!grouped[key]) grouped[key] = [];
@@ -4900,7 +4958,7 @@ export default function EstoquePage() {
         // reset serial/imei edit mode when a different product opens
         // (tracked via editingDetailSerial / editingDetailImei in page state)
         const cpIco = <svg className="w-3 h-3 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
-        const canEdit = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
+        const canEdit = isAdmin || p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         // IMEI/Serial editável para pendências (qualquer user) ou admin (qualquer status)
         const isPendente = p.tipo === "PENDENCIA" || p.status === "PENDENTE" || p.status === "A CAMINHO";
         const canEditImei = isPendente || isAdmin;
@@ -5121,11 +5179,21 @@ export default function EstoquePage() {
                             if (!novoNome) { setMsg("Selecione o modelo para gerar o nome"); return; }
                             const novaCor = recatRow.cor || null;
                             const novaCategoria = recatRow.categoria || p.categoria;
+                            // Salvar nucleos na observacao se MacBook/Mac Mini
+                            const specNucleos = recatRow.spec?.mb_nucleos || recatRow.spec?.mm_nucleos || "";
+                            let novaObs = p.observacao || "";
+                            if (specNucleos) {
+                              novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                              novaObs = (novaObs + ` [NUCLEOS:${specNucleos}]`).trim();
+                            }
                             try {
-                              const nomeAntigo = p.produto; // guardar antes de atualizar
-                              await apiPatch(p.id, { produto: novoNome, categoria: novaCategoria, cor: novaCor });
-                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novoNome, categoria: novaCategoria, cor: novaCor } : x));
-                              setDetailProduct(prev => prev ? { ...prev, produto: novoNome, categoria: novaCategoria, cor: novaCor } : null);
+                              const nomeAntigo = p.produto;
+                              const patchData: Record<string, unknown> = { produto: novoNome, categoria: novaCategoria, cor: novaCor };
+                              if (specNucleos) patchData.observacao = novaObs;
+                              await apiPatch(p.id, patchData);
+                              const updatedFields = { produto: novoNome, categoria: novaCategoria, cor: novaCor, ...(specNucleos ? { observacao: novaObs } : {}) };
+                              setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, ...updatedFields } : x));
+                              setDetailProduct(prev => prev ? { ...prev, ...updatedFields } : null);
                               let vendaMsg = "";
                               if (p.fornecedor) {
                                 const res = await fetch("/api/vendas", {
@@ -5527,10 +5595,8 @@ export default function EstoquePage() {
                     const ramList = (detailModelConfigs.ram?.length ? detailModelConfigs.ram : MACBOOK_RAMS);
                     const ssdList = (detailModelConfigs.ssd?.length ? detailModelConfigs.ssd : MACBOOK_STORAGES);
                     const telaList = (detailModelConfigs.telas?.length ? detailModelConfigs.telas : ['13"', '14"', '15"', '16"']);
-                    const nucleosCatalog = [...(detailModelConfigs.chips_air || detailModelConfigs.chip_air || []), ...(detailModelConfigs.chips_pro_max || detailModelConfigs.chip_pro_max || [])];
-                    const nucleosList = nucleosCatalog.length > 0
-                      ? nucleosCatalog.map(n => n.replace(/^\(|\)$/g, "").trim())
-                      : MACBOOK_NUCLEOS;
+                    // Sempre usar lista completa de nucleos (nao limitar pelo catalogo)
+                    const nucleosList = MACBOOK_NUCLEOS;
                     return (
                       <>
                         <div>
@@ -5563,6 +5629,68 @@ export default function EstoquePage() {
                             <option value="">— Selecionar —</option>
                             {curSsd && !ssdList.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
                             {ssdList.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {canEdit && getBaseCat(p.categoria || "") === "MAC_MINI" && (() => {
+                    const cleanNome = (p.produto || "").replace(/=/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+                    const storages: string[] = [];
+                    cleanNome.replace(/\b(\d+(?:GB|TB))\b/g, (m) => { storages.push(m); return m; });
+                    const sorted = storages.map(s => ({ raw: s, gb: s.includes("TB") ? parseInt(s) * 1024 : parseInt(s) })).sort((a, b) => a.gb - b.gb);
+                    const curRam = sorted.length >= 2 ? sorted[0].raw : "";
+                    const curSsd = sorted.length >= 1 ? sorted[sorted.length - 1].raw : "";
+                    const obsRaw = p.observacao || "";
+                    const nucTagMatch = obsRaw.match(/\[NUCLEOS:([^\]]+)\]/i);
+                    const curNucleos = nucTagMatch ? nucTagMatch[1].trim() : "";
+                    const updateMmField = async (field: "ram" | "ssd" | "nucleos", val: string) => {
+                      let novo = (p.produto || "").replace(/=/g, " ").replace(/\s+/g, " ").trim();
+                      let novaObs = obsRaw;
+                      if (field === "ram" && curRam) {
+                        novo = novo.replace(new RegExp(`\\b${curRam}\\b`), val || curRam);
+                      } else if (field === "ssd" && curSsd) {
+                        // Substituir a última ocorrência de storage
+                        const idx = novo.toUpperCase().lastIndexOf(curSsd);
+                        if (idx >= 0) novo = novo.slice(0, idx) + (val || curSsd) + novo.slice(idx + curSsd.length);
+                      } else if (field === "nucleos") {
+                        novaObs = novaObs.replace(/\s*\[NUCLEOS:[^\]]+\]/gi, "").trim();
+                        if (val) novaObs = (novaObs + ` [NUCLEOS:${val}]`).trim();
+                      }
+                      novo = novo.trim();
+                      const updates: Record<string, unknown> = { produto: novo };
+                      if (field === "nucleos" || novaObs !== obsRaw) updates.observacao = novaObs || null;
+                      await apiPatch(p.id, updates);
+                      setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, produto: novo, observacao: (updates.observacao as string | null) ?? x.observacao } : x));
+                      setDetailProduct({ ...p, produto: novo, observacao: (updates.observacao as string | null) ?? p.observacao });
+                      showSaved(field);
+                    };
+                    const selCls = `w-full text-[13px] mt-0.5 px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`;
+                    const MM_SSDS = ["256GB", "512GB", "1TB", "2TB"];
+                    return (
+                      <>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Nucleos {saved("nucleos")}</p>
+                          <select value={curNucleos} onChange={(e) => updateMmField("nucleos", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curNucleos && !MAC_MINI_NUCLEOS.includes(curNucleos) && <option value={curNucleos}>{curNucleos}</option>}
+                            {MAC_MINI_NUCLEOS.map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>RAM {saved("ram")}</p>
+                          <select value={curRam} onChange={(e) => updateMmField("ram", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curRam && !MAC_MINI_RAMS.includes(curRam) && <option value={curRam}>{curRam}</option>}
+                            {MAC_MINI_RAMS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider ${mS}`}>SSD {saved("ssd")}</p>
+                          <select value={curSsd} onChange={(e) => updateMmField("ssd", e.target.value)} className={selCls}>
+                            <option value="">— Selecionar —</option>
+                            {curSsd && !MM_SSDS.includes(curSsd) && <option value={curSsd}>{curSsd}</option>}
+                            {MM_SSDS.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </>
@@ -5678,7 +5806,7 @@ export default function EstoquePage() {
                     // Pulseira: Apple Watch
                     const showPulseira = cat === "APPLE_WATCH";
                     // Ciclos: MacBook
-                    const showCiclos = cat === "MACBOOK";
+                    const showCiclos = cat === "MACBOOK" && p.tipo !== "NOVO" && p.tipo !== "A_CAMINHO";
                     const getLatestObs = () => {
                       // Lê observacao mais recente do estado (não do closure stale)
                       const el = document.getElementById(`obs-${p.id}`) as HTMLTextAreaElement;
@@ -5847,11 +5975,29 @@ export default function EstoquePage() {
                 const gradeRaw = obs.match(/\[GRADE_(APLUS|AB|A|B)\]/);
                 const grade = gradeRaw ? (gradeRaw[1] === "APLUS" ? "A+" : gradeRaw[1]) : null;
                 const ciclos = tag(/\[CICLOS:(\d+)\]/);
-                const ram = tag(/\[RAM:([^\]]+)\]/);
-                const ssd = tag(/\[SSD:([^\]]+)\]/);
+                let ram = tag(/\[RAM:([^\]]+)\]/);
+                let ssd = tag(/\[SSD:([^\]]+)\]/);
+                // Limpar valores invalidos (ex: "=")
+                if (ram && !/\d/.test(ram)) ram = null;
+                if (ssd && !/\d/.test(ssd)) ssd = null;
+                // Fallback: extrair RAM e SSD do nome (2 valores GB/TB → menor=RAM, maior=SSD)
+                if ((!ram || !ssd) && (baseCat === "MACBOOK" || baseCat === "MAC_MINI")) {
+                  const cleanNome = nome.replace(/=/g, " ");
+                  const gbVals = [...cleanNome.matchAll(/(\d+)\s*(GB|TB)/gi)].map(m => ({
+                    raw: `${m[1]}${m[2].toUpperCase()}`,
+                    gb: m[2].toUpperCase() === "TB" ? parseInt(m[1]) * 1024 : parseInt(m[1]),
+                  })).sort((a, b) => a.gb - b.gb);
+                  if (!ram && gbVals.length >= 2) ram = gbVals[0].raw;
+                  if (!ssd && gbVals.length >= 1) ssd = gbVals[gbVals.length - 1].raw;
+                }
                 let cpu = tag(/\[CPU:([^\]]+)\]/);
                 let gpu = tag(/\[GPU:([^\]]+)\]/);
-                // Fallback: extrai do nome ex "(10C CPU/8C GPU)"
+                // Fallback 1: extrai de [NUCLEOS:6C CPU/5C GPU]
+                if (!cpu || !gpu) {
+                  const nucTag = obs.match(/\[NUCLEOS:(\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\]/i);
+                  if (nucTag) { cpu = cpu || nucTag[1]; gpu = gpu || nucTag[2]; }
+                }
+                // Fallback 2: extrai do nome ex "(10C CPU/8C GPU)"
                 if (!cpu || !gpu) {
                   const m = nome.match(/\((\d+)C?\s*CPU\s*\/\s*(\d+)C?\s*GPU\)/i);
                   if (m) { cpu = cpu || m[1]; gpu = gpu || m[2]; }
@@ -5904,14 +6050,46 @@ export default function EstoquePage() {
                   push("Tamanho", telaFinal);
                   push("RAM", ram);
                   push("SSD", ssd);
-                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  const mbChipName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?|A\d+\s*PRO)/i)?.[1] || (() => {
+                    if (cpu && gpu) {
+                      const c = parseInt(cpu), g = parseInt(gpu);
+                      if (c === 8 && (g === 8 || g === 10)) return "M4";
+                      if (c === 10 && g === 10) return "M4";
+                      if (c === 12 && (g === 16 || g === 19)) return "M4 Pro";
+                      if (c === 14 && g === 20) return "M4 Pro";
+                      if (c === 16 && g === 40) return "M4 Max";
+                      if (c === 6 && g === 5) return "A18 Pro";
+                      if (c === 8 && g === 7) return "M3";
+                      if (c === 11 && g === 14) return "M3 Pro";
+                      if (c === 12 && g === 18) return "M3 Pro";
+                      if (c === 14 && g === 30) return "M3 Max";
+                    }
+                    // Fallback: Neo = A18 Pro
+                    if (/NEO/i.test(nome)) return "A18 Pro";
+                    return null;
+                  })();
+                  const nucleos = cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : null;
+                  push("Chip", mbChipName && nucleos ? `${mbChipName} (${nucleos})` : mbChipName || nucleos);
                   push("Cor", p.cor ? corParaPT(p.cor) : null);
                   push("Ciclos de bateria", ciclos);
                   push("Grade", grade);
                 } else if (baseCat === "MAC_MINI") {
                   push("RAM", ram);
                   push("SSD", ssd);
-                  push("Chip", cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : (cpu || gpu));
+                  const mmChipName = nome.match(/(M\d+\s*(?:PRO|MAX|ULTRA)?)/i)?.[1] || (() => {
+                    if (!cpu || !gpu) return null;
+                    const c = parseInt(cpu), g = parseInt(gpu);
+                    if (c === 10 && g === 10) return "M4";
+                    if (c === 12 && g === 16) return "M4 Pro";
+                    if (c === 14 && g === 20) return "M4 Pro";
+                    if (c === 16 && g === 40) return "M4 Max";
+                    if (c === 10 && g === 8) return "M4";
+                    if (c === 8 && g === 10) return "M3";
+                    if (c === 12 && g === 18) return "M3 Pro";
+                    return null;
+                  })();
+                  const mmNucleos = cpu && gpu ? `${cpu}C CPU / ${gpu}C GPU` : null;
+                  push("Chip", mmChipName && mmNucleos ? `${mmChipName} (${mmNucleos})` : mmChipName || mmNucleos);
                   push("Cor", p.cor ? corParaPT(p.cor) : null);
                 } else if (baseCat === "APPLE_WATCH") {
                   push("Tamanho", tamMm ? tamMm[1] + "mm" : null);
@@ -5939,14 +6117,9 @@ export default function EstoquePage() {
                   showSaved("spec");
                 };
                 const editableTags: { label: string; tag: string; current: string }[] = [];
-                if (baseCat === "MACBOOK" || baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
-                if (baseCat === "MACBOOK" || baseCat === "MAC_MINI") {
-                  editableTags.push({ label: "RAM", tag: "RAM", current: ram || "" });
-                  editableTags.push({ label: "SSD", tag: "SSD", current: ssd || "" });
-                  editableTags.push({ label: "CPU (núcleos)", tag: "CPU", current: cpu || "" });
-                  editableTags.push({ label: "GPU (núcleos)", tag: "GPU", current: gpu || "" });
-                  editableTags.push({ label: "Ciclos de bateria", tag: "CICLOS", current: ciclos || "" });
-                }
+                // MacBook e Mac Mini: editados via dropdowns acima (Nucleos/Tela/RAM/SSD)
+                // Apenas iPad usa editableTags para tela
+                if (baseCat === "IPADS") editableTags.push({ label: "Tamanho (tela)", tag: "TELA", current: tela || "" });
                 if (baseCat === "APPLE_WATCH") {
                   editableTags.push({ label: "Modelo da pulseira", tag: "BAND", current: band || "" });
                   editableTags.push({ label: "Tamanho da pulseira", tag: "PULSEIRA_TAM", current: pulseiraTam || "" });
