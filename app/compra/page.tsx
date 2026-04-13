@@ -502,7 +502,12 @@ function CompraForm() {
     }
     lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
-    if (local === "Entrega") lines.push("✅ *Cliente ciente da taxa de deslocamento em caso de nao conclusao*");
+    if (local === "Entrega") {
+      lines.push("");
+      lines.push("⚠️ *AVISO — TAXA DE DESLOCAMENTO*");
+      lines.push("Caso a entrega nao seja concluida por falta de limite no cartao, falta de limite no PIX, divergencia de valores ou qualquer situacao diferente do combinado, sera cobrada uma taxa de deslocamento referente ao custo do motoboy.");
+      lines.push("✅ *Cliente leu e concordou com os termos acima.*");
+    }
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
 
