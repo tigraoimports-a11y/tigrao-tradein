@@ -631,6 +631,7 @@ interface ProdutoEstoque {
   origem_compra: string | null;
   custo_compra: number | null;
   encomenda_id: string | null;
+  codigo_rastreio: string | null;
 }
 
 interface ImeiSearchResult {
@@ -4190,6 +4191,7 @@ export default function EstoquePage() {
                               <th className="px-4 py-2 text-right w-24">Valor unit.</th>
                               <th className="px-4 py-2 text-left w-28">Fornecedor</th>
                               <th className="px-4 py-2 text-center w-24">Compra</th>
+                              <th className="px-4 py-2 text-center w-32">Rastreio</th>
                               <th className="px-4 py-2 text-center w-24">Previsão</th>
                               <th className="px-4 py-2 text-right w-24">Total</th>
                               {isAdmin && <th className="px-2 py-2 w-20"></th>}
@@ -4261,6 +4263,24 @@ export default function EstoquePage() {
                                     <td className={`px-4 py-3 text-right text-sm ${textSecondary}`}>{group[0].custo_unitario ? fmt(group[0].custo_unitario) : "—"}</td>
                                     <td className={`px-4 py-3 text-sm ${textSecondary}`}>{fornecedorUniq || "—"}</td>
                                     <td className={`px-4 py-3 text-center text-[11px] ${textSecondary}`}>{group[0].data_compra ? group[0].data_compra.split("-").reverse().join("/") : "—"}</td>
+                                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                                      {(() => {
+                                        const rastreio = isSingleUnit ? group[0].codigo_rastreio : null;
+                                        if (rastreio) return (
+                                          <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {rastreio}</a>
+                                        );
+                                        if (isSingleUnit) return (
+                                          <button onClick={() => {
+                                            const code = prompt("Código de rastreio dos Correios:");
+                                            if (code === null) return;
+                                            const val = code.trim().toUpperCase() || null;
+                                            apiPatch(group[0].id, { codigo_rastreio: val });
+                                            setEstoque(prev => prev.map(p => p.id === group[0].id ? { ...p, codigo_rastreio: val } : p));
+                                          }} className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${dm ? "text-[#636366] hover:text-blue-400" : "text-[#C0C0C5] hover:text-blue-500"}`}>+ rastreio</button>
+                                        );
+                                        return <span className={`text-[10px] ${textMuted}`}>—</span>;
+                                      })()}
+                                    </td>
                                     <td className={`px-4 py-3 text-center text-[11px] font-semibold ${(() => {
                                       const prev = calcPrevisao(group[0].data_compra, group[0].origem_compra);
                                       if (!prev) return textSecondary;
@@ -4314,6 +4334,19 @@ export default function EstoquePage() {
                                         <td className={`px-4 py-2 text-right text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.custo_unitario ? fmt(p.custo_unitario) : "—"}</td>
                                         <td className={`px-4 py-2 text-sm ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.fornecedor || "—"}</td>
                                         <td className={`px-4 py-2 text-center text-[11px] ${textSecondary}`} onClick={() => setDetailProduct(p)}>{p.data_compra ? p.data_compra.split("-").reverse().join("/") : "—"}</td>
+                                        <td className="px-4 py-2 text-center" onClick={e => e.stopPropagation()}>
+                                          {p.codigo_rastreio ? (
+                                            <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${p.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${dm ? "bg-blue-900/40 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white"}`}>📦 {p.codigo_rastreio}</a>
+                                          ) : (
+                                            <button onClick={() => {
+                                              const code = prompt("Código de rastreio dos Correios:");
+                                              if (code === null) return;
+                                              const val = code.trim().toUpperCase() || null;
+                                              apiPatch(p.id, { codigo_rastreio: val });
+                                              setEstoque(prev => prev.map(r => r.id === p.id ? { ...r, codigo_rastreio: val } : r));
+                                            }} className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${dm ? "text-[#636366] hover:text-blue-400" : "text-[#C0C0C5] hover:text-blue-500"}`}>+ rastreio</button>
+                                          )}
+                                        </td>
                                         <td className={`px-4 py-2 text-center text-[11px] font-semibold ${(() => {
                                           const prev = calcPrevisao(p.data_compra, p.origem_compra);
                                           if (!prev) return textSecondary;
@@ -4338,7 +4371,7 @@ export default function EstoquePage() {
                           {pendentes.length > 0 && (
                             <tfoot>
                               <tr className={`${dm ? "bg-[#2C2C2E]" : "bg-[#F5F5F7]"}`}>
-                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 8 : 6}>TOTAL PENDENTE</td>
+                                <td className={`px-4 py-2 text-[11px] font-bold ${textSecondary}`} colSpan={isAdmin ? 9 : 7}>TOTAL PENDENTE</td>
                                 <td className="px-4 py-2 text-right text-sm font-bold text-[#E8740E]" colSpan={isAdmin ? 2 : 1}>{fmt(origemTotal)}</td>
                               </tr>
                             </tfoot>
@@ -6410,6 +6443,45 @@ export default function EstoquePage() {
                         className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
                         title="Salvar responsável"
                       >✓</button>
+                    </div>
+                  </div>
+                )}
+                {/* Código de Rastreio */}
+                {(p.tipo === "A_CAMINHO" || p.status === "A CAMINHO") && (
+                  <div className="mt-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Código de Rastreio {saved("rastreio")}</p>
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        id={`rastreio-${p.id}`}
+                        key={`rastreio-${p.id}`}
+                        defaultValue={p.codigo_rastreio || ""}
+                        placeholder="Ex: BR123456789BR"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border font-mono uppercase ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={async () => {
+                          const el = document.getElementById(`rastreio-${p.id}`) as HTMLInputElement;
+                          const val = el?.value?.trim().toUpperCase() || null;
+                          if (val !== (p.codigo_rastreio || null)) {
+                            await apiPatch(p.id, { codigo_rastreio: val });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, codigo_rastreio: val } : x));
+                            setDetailProduct(prev => prev ? { ...prev, codigo_rastreio: val } : null);
+                            showSaved("rastreio");
+                          }
+                        }}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                        title="Salvar código de rastreio"
+                      >✓</button>
+                      {p.codigo_rastreio && (
+                        <a
+                          href={`https://rastreamento.correios.com.br/app/index.php?objetos=${p.codigo_rastreio}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 px-3 h-8 flex items-center justify-center rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-bold text-[11px] gap-1"
+                        >📦 Rastrear</a>
+                      )}
                     </div>
                   </div>
                 )}

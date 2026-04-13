@@ -138,6 +138,8 @@ export default function VendasPage() {
     usar_credito_loja: "",
     // Brinde / Cortesia
     is_brinde: false as boolean,
+    // Rastreio Correios (quando local = CORREIO)
+    codigo_rastreio: "",
   });
   const [creditoLojistaSaldo, setCreditoLojistaSaldo] = useState(0);
   // Restaurar rascunho do localStorage ao montar
@@ -1035,6 +1037,8 @@ export default function VendasPage() {
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
+      // Rastreio Correios
+      codigo_rastreio: form.local === "CORREIO" && form.codigo_rastreio ? form.codigo_rastreio.trim().toUpperCase() : null,
     };
 
     if (prodFields._estoqueId) {
@@ -1423,7 +1427,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1465,7 +1469,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1540,7 +1544,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+        frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
         is_brinde: false,
       });
       setCatSel("");
@@ -1810,7 +1814,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false, usar_credito_loja: "",
+      frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
       is_brinde: false,
     });
     setCatSel("");
@@ -2025,7 +2029,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -2350,6 +2354,18 @@ export default function VendasPage() {
                   <option value="">—</option><option>VENDA</option><option>UPGRADE</option><option>ATACADO</option>
                 </select></div>
               </div>
+              {/* Código de Rastreio — quando envio por Correios */}
+              {form.local === "CORREIO" && (
+                <div>
+                  <p className={labelCls}>Código de Rastreio (Correios)</p>
+                  <div className="flex gap-2">
+                    <input value={form.codigo_rastreio} onChange={(e) => set("codigo_rastreio", e.target.value.toUpperCase())} placeholder="Ex: BR123456789BR" className={`${inputCls} font-mono uppercase flex-1`} />
+                    {form.codigo_rastreio && (
+                      <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* CEP */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
@@ -2662,7 +2678,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -4395,6 +4411,7 @@ export default function VendasPage() {
                                               frete_recebido: !!primaryVenda.frete_recebido,
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
+                                              codigo_rastreio: primaryVenda.codigo_rastreio || "",
                                             });
                                             setProdutoManual(true);
                                             // Ativar checkbox de troca somente se a venda realmente tem troca
@@ -4864,6 +4881,12 @@ export default function VendasPage() {
                                         </p>
                                         <p><strong>Fornecedor:</strong> {v.fornecedor || "—"}</p>
                                         <p><strong>Local:</strong> {v.local || "—"}</p>
+                                        {v.codigo_rastreio && (
+                                          <p className="flex items-center gap-2">
+                                            <strong>📦 Rastreio:</strong>
+                                            <a href={`https://rastreamento.correios.com.br/app/index.php?objetos=${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
+                                          </p>
+                                        )}
                                         {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
                                           <p>
                                             <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
@@ -5127,7 +5150,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -5163,7 +5186,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "",
+                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
