@@ -4649,7 +4649,13 @@ export default function EstoquePage() {
                         const obsLimpo = cleanObs(obs);
                         const cliente = p._groupCliente || "";
                         return (
-                          <div key={p.id} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => setDetailProduct(p)}>
+                          <div key={p.id} className={`${bgCard} border ${selectedIds.has(p.id) ? "border-[#E8740E] ring-2 ring-[#E8740E]/30" : borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (selectMode) { toggleSelect(p.id); } else { setDetailProduct(p); } }}>
+                            {/* Checkbox de seleção */}
+                            {selectMode && (
+                              <div className="flex items-center gap-2">
+                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] ${selectedIds.has(p.id) ? "bg-[#E8740E] border-[#E8740E] text-white" : `${dm ? "border-[#636366]" : "border-[#D2D2D7]"}`}`}>{selectedIds.has(p.id) ? "✓" : ""}</span>
+                              </div>
+                            )}
                             {/* Cliente */}
                             <p className={`text-[10px] font-semibold uppercase tracking-wider ${textSecondary}`}>👤 {cliente}</p>
                             {/* Produto + Cor */}
