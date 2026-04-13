@@ -553,6 +553,21 @@ export default function EntregasPage() {
       valor: valor ? String(Math.round(parseFloat(valor))) : f.valor,
       observacao: obs || f.observacao,
     }));
+    // Modo coleta via query param (vindo de /admin/estoque pendências)
+    const modoQp = qp.get("modo") || "";
+    if (modoQp === "coleta") {
+      setModoColeta(true);
+      setModoSimples(false);
+      set("tipo", "COLETA");
+      const batQp = qp.get("coleta_bateria") || "";
+      const estQp = qp.get("coleta_estado") || "";
+      const caixaQp = qp.get("coleta_caixa") || "";
+      const marcasQp = qp.get("coleta_marcas") || "";
+      if (batQp) setColetaBateria(batQp);
+      if (estQp) setColetaEstado(estQp as "A+" | "A" | "AB" | "B" | "");
+      if (caixaQp) setColetaCaixa(caixaQp as "sim" | "nao");
+      if (marcasQp) setColetaMarcas(marcasQp as "sim" | "nao");
+    }
     if (produto) {
       setProdutos([cor ? `${produto} ${cor}`.trim() : produto]);
       setProdutoManual(true);
