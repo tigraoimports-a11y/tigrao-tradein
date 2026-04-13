@@ -4614,7 +4614,7 @@ export default function EstoquePage() {
                             <div className="flex items-center justify-between">
                               <span className={`text-sm font-bold ${p.custo_unitario ? "text-[#E8740E]" : "text-red-500"}`}>{p.custo_unitario ? fmt(p.custo_unitario) : "Sem preço"}</span>
                               {(p.imei || p.serial_no) && (
-                                <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(p.serial_no || p.imei || "").slice(-8)}</span>
+                                <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{p.serial_no || p.imei || ""}</span>
                               )}
                             </div>
                             {obsLimpo && <p className={`text-[10px] ${textMuted} truncate`}>{obsLimpo}</p>}
@@ -4738,7 +4738,7 @@ export default function EstoquePage() {
                           <span className={`text-xs sm:text-sm font-bold ${avgCusto ? "text-[#E8740E]" : "text-red-500"}`}>{avgCusto ? fmt(avgCusto) : "Sem preço"}</span>
                           {items.length > 1 && <span className={`text-[10px] ${textMuted}`}>{cardExpanded ? "▲" : "▼"} ver seriais</span>}
                           {items.length === 1 && (rep.imei || rep.serial_no) && (
-                            <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>#{(rep.serial_no || rep.imei || "").slice(-8)}</span>
+                            <span className={`text-[10px] font-mono ${dm ? "text-[#636366]" : "text-[#86868B]"}`}>{rep.serial_no || rep.imei || ""}</span>
                           )}
                         </div>
                         {/* Seriais expandidos */}
