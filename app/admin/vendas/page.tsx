@@ -28,7 +28,7 @@ export default function VendasPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reajusteId, setReajusteId] = useState<string | null>(null);
-  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
+  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [vendaProgramada, setVendaProgramada] = useState(false);
@@ -4803,7 +4803,7 @@ export default function VendasPage() {
                                         )}
                                         {/* Botão Reajuste — só admin */}
                                         {podeVerHistorico && <button
-                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" }); }}
+                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" }); }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
                                         >
                                           💲 Reajuste
@@ -4935,11 +4935,11 @@ export default function VendasPage() {
                                     {Array.isArray(v.reajustes) && v.reajustes.length > 0 && (
                                       <div className="md:col-span-3 space-y-2">
                                         <h4 className="text-xs font-bold text-amber-600 uppercase">💲 Reajustes</h4>
-                                        {v.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string }, i: number) => (
+                                        {v.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string; forma?: string; observacao?: string | null }, i: number) => (
                                           <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${dm ? "bg-amber-900/20" : "bg-amber-50"}`}>
                                             <span className="text-sm font-bold text-amber-600">+R$ {r.valor.toLocaleString("pt-BR")}</span>
-                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.motivo}</span>
-                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>PIX {r.banco}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.motivo}{r.observacao ? ` (${r.observacao})` : ""}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.forma || "PIX"} {r.banco}</span>
                                             <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.data?.split("-").reverse().join("/")}</span>
                                           </div>
                                         ))}
@@ -4957,7 +4957,7 @@ export default function VendasPage() {
                                           </div>
                                           <div>
                                             <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Motivo</p>
-                                            <select value={reajForm.motivo} onChange={e => setReajForm(f => ({ ...f, motivo: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                            <select value={reajForm.motivo} onChange={e => setReajForm(f => ({ ...f, motivo: e.target.value, ...(e.target.value !== "Outro" ? {} : {}) }))} className="w-full px-3 py-2 border rounded-lg text-sm">
                                               <option value="">Selecionar...</option>
                                               <option value="Sem caixa original">Sem caixa original</option>
                                               <option value="Sem cabo">Sem cabo</option>
@@ -4987,6 +4987,20 @@ export default function VendasPage() {
                                             </select>
                                           </div>
                                         </div>
+                                        {reajForm.motivo && (
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">
+                                              Observação do reajuste {reajForm.motivo === "Outro" && <span className="text-red-500">*</span>}
+                                            </p>
+                                            <input
+                                              type="text"
+                                              placeholder={reajForm.motivo === "Outro" ? "Ex: Cliente informou detalhe não previsto inicialmente" : "Detalhamento adicional (opcional)"}
+                                              value={reajForm.observacao}
+                                              onChange={e => setReajForm(f => ({ ...f, observacao: e.target.value }))}
+                                              className="w-full px-3 py-2 border rounded-lg text-sm"
+                                            />
+                                          </div>
+                                        )}
                                         <div className="flex gap-2">
                                           <button
                                             onClick={async (e) => {
@@ -4994,8 +5008,9 @@ export default function VendasPage() {
                                               try {
                                               const valor = parseFloat(reajForm.valor);
                                               if (!valor || !reajForm.motivo) { alert("Preencha valor e motivo"); return; }
+                                              if (reajForm.motivo === "Outro" && !reajForm.observacao.trim()) { alert("Informe o motivo do reajuste"); return; }
                                               const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje };
+                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje, observacao: reajForm.observacao.trim() || null };
                                               const reajustesAtuais = Array.isArray(v.reajustes) ? [...v.reajustes] : [];
                                               const novosReajustes = [...reajustesAtuais, novoReajuste];
                                               const res = await fetch("/api/vendas", {

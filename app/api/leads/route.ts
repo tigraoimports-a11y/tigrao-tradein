@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     // 2º produto na troca (se existir)
     if (body.modeloUsado2) row.modelo_usado2 = body.modeloUsado2;
     if (body.storageUsado2) row.storage_usado2 = body.storageUsado2;
-    if (body.corUsado2) row.cor_usado2 = body.corUsado2;
+    if (body.corUsado2 != null) row.cor_usado2 = body.corUsado2 || null;
     if (body.avaliacaoUsado2) row.avaliacao_usado2 = body.avaliacaoUsado2;
     if (body.condicaoLinhas2) row.condicao_linhas2 = body.condicaoLinhas2;
     let { error } = await supabase.from("simulacoes").insert([row]);
