@@ -4,6 +4,7 @@ import { hojeBR } from "@/lib/date-utils";
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAdmin } from "@/components/admin/AdminShell";
 import { getTaxa, calcularLiquido } from "@/lib/taxas";
+import { INSTALLMENT_RATES } from "@/lib/calculations";
 import { formatProdutoDisplay, getModeloBase } from "@/lib/produto-display";
 import { corParaPT } from "@/lib/cor-pt";
 
@@ -466,13 +467,12 @@ export default function EntregasPage() {
     ? parseFloat(valorPag1Override) || 0
     : Math.max(0, valorAPagar - valorPag2);
 
-  // Cálculo de parcelas com taxa embutida (mesma tabela do /gerar-link e Nova Venda)
-  const TAXAS_PARCELAS: Record<number, number> = {
-    1: 4, 2: 5, 3: 5.5, 4: 6, 5: 7, 6: 7.5,
-    7: 8, 8: 9.1, 9: 10, 10: 11, 11: 12, 12: 13,
-    13: 14, 14: 15, 15: 16, 16: 17, 17: 18, 18: 19,
-    19: 20, 20: 21, 21: 22,
-  };
+  // Cálculo de parcelas com taxa embutida — mesma tabela do site de trade-in.
+  // Fonte única: INSTALLMENT_RATES em lib/calculations.ts (usada pelo /troca).
+  // Ex: [12, 1.13] → 12x tem taxa de 13%. Convertemos multiplicador → percentual.
+  const TAXAS_PARCELAS: Record<number, number> = Object.fromEntries(
+    INSTALLMENT_RATES.map(([n, rate]) => [n, Math.round((rate - 1) * 1000) / 10])
+  );
   const isCartaoCredito = form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Link de Pagamento";
   const nParcelas = parseInt(form.parcelas) || 0;
   const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
