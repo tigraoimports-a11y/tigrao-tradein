@@ -188,6 +188,15 @@ export default function AdminPage() {
   const [gerarHorario, setGerarHorario] = useState("");
   const [gerarEntregador, setGerarEntregador] = useState("");
   const [gerarObs, setGerarObs] = useState("");
+  // Campos adicionais para casos LEGADOS (sem cliente_dados_preenchidos):
+  // admin preenche endereço/forma de pagamento manualmente a partir do WhatsApp do cliente.
+  const [gerarLocal, setGerarLocal] = useState<"Residencia" | "Shopping" | "Correios" | "Retirada">("Residencia");
+  const [gerarShoppingNome, setGerarShoppingNome] = useState("");
+  const [gerarEndereco, setGerarEndereco] = useState("");
+  const [gerarBairro, setGerarBairro] = useState("");
+  const [gerarFormaPag, setGerarFormaPag] = useState("");
+  const [gerarParcelas, setGerarParcelas] = useState("");
+  const [gerarEntrada, setGerarEntrada] = useState("");
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -407,6 +416,14 @@ export default function AdminPage() {
     setGerarHorario((p.horario || "").trim());
     setGerarEntregador("");
     setGerarObs("");
+    // Reset dos campos manuais (usados só em caso legado)
+    setGerarLocal("Residencia");
+    setGerarShoppingNome("");
+    setGerarEndereco("");
+    setGerarBairro("");
+    setGerarFormaPag("");
+    setGerarParcelas("");
+    setGerarEntrada("");
     setGerarEntregaItem(target);
   }, [historico, fetchHistorico, password]);
 
@@ -415,6 +432,50 @@ export default function AdminPage() {
     if (!gerarData) { alert("Informe a data da entrega"); return; }
     setEncaminhando(gerarEntregaItem.id);
     try {
+      // Caso legado (sem cliente_dados_preenchidos): admin preencheu endereço/pagamento
+      // manualmente no modal. Salva isso no link_compras antes de encaminhar, pra que
+      // encaminhar-entrega peque os valores corretos na hora de criar a entrega.
+      const isLegado = !gerarEntregaItem.cliente_dados_preenchidos;
+      const parcelasN = Number(gerarParcelas) || 0;
+      const entradaN = Number(gerarEntrada) || 0;
+      if (isLegado && (gerarEndereco || gerarFormaPag || gerarLocal !== "Residencia")) {
+        // Monta o label de local no mesmo formato que /compra manda (pra bater com
+        // o parse em encaminhar-entrega).
+        const localLabel =
+          gerarLocal === "Shopping" && gerarShoppingNome ? `Entrega - Shopping: ${gerarShoppingNome}` :
+          gerarLocal === "Shopping" ? "Entrega - Shopping" :
+          gerarLocal === "Correios" ? "Entrega - Correios" :
+          gerarLocal === "Retirada" ? "Retirada em loja" :
+          "Entrega - Residencia";
+        const preench: Record<string, string | number | null> = {
+          endereco_completo: gerarEndereco || null,
+          bairro: gerarBairro || null,
+          local: localLabel,
+        };
+        if (gerarFormaPag) preench.forma_pagamento = gerarFormaPag;
+        if (parcelasN > 0) preench.parcelas = String(parcelasN);
+        // Limpa campos vazios pra não poluir o JSON
+        Object.keys(preench).forEach(k => { if (preench[k] == null) delete preench[k]; });
+        const patchBody: Record<string, unknown> = {
+          id: gerarEntregaItem.id,
+          cliente_dados_preenchidos: preench,
+          cliente_preencheu_em: new Date().toISOString(),
+        };
+        if (gerarFormaPag) patchBody.forma_pagamento = gerarFormaPag;
+        if (parcelasN > 0) patchBody.parcelas = parcelasN;
+        if (entradaN > 0) patchBody.entrada = entradaN;
+        const patchRes = await fetch("/api/admin/link-compras", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+          body: JSON.stringify(patchBody),
+        });
+        if (!patchRes.ok) {
+          const pj = await patchRes.json().catch(() => ({}));
+          setEncaminhando(null);
+          alert("Erro ao salvar dados no link: " + (pj.error || "falha"));
+          return;
+        }
+      }
       const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
@@ -952,10 +1013,80 @@ export default function AdminPage() {
                 {/* Aviso quando o formulário completo não foi salvo no banco
                     (cliente preencheu via Trade-in e mandou direto pelo WhatsApp). */}
                 {!h.cliente_dados_preenchidos && (
-                  <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-xs text-yellow-900">
-                    <p className="font-bold mb-1">⚠️ Cliente fez simulação de Trade-in e enviou o formulário completo pelo WhatsApp.</p>
-                    <p>Endereço, CEP, CPF e outros dados pessoais NÃO ficaram salvos no banco (fluxo antigo). Confira esses dados no WhatsApp dele antes de confirmar, ou crie a entrega manualmente em <b>Entregas</b>.</p>
-                  </div>
+                  <>
+                    <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-xs text-yellow-900">
+                      <p className="font-bold mb-1">⚠️ Cliente legado — dados NÃO foram salvos no banco.</p>
+                      <p>Cola endereço e forma de pagamento aqui (confere no WhatsApp do cliente). Vai ser salvo no link e usado na entrega.</p>
+                    </div>
+                    {/* Campos manuais pra caso legado */}
+                    <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-3 bg-[#FAFAFC]">
+                      <p className="text-xs font-bold text-[#1D1D1F]">📝 Preencher a partir do WhatsApp do cliente</p>
+                      <div>
+                        <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Local de entrega</label>
+                        <select value={gerarLocal} onChange={(e) => setGerarLocal(e.target.value as typeof gerarLocal)}
+                          className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E] bg-white">
+                          <option value="Residencia">🏠 Entrega em Residência</option>
+                          <option value="Shopping">🏬 Entrega em Shopping</option>
+                          <option value="Correios">📦 Envio pelos Correios</option>
+                          <option value="Retirada">🏪 Retirada em loja</option>
+                        </select>
+                      </div>
+                      {gerarLocal === "Shopping" && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Nome do shopping</label>
+                          <input type="text" value={gerarShoppingNome} onChange={(e) => setGerarShoppingNome(e.target.value)}
+                            placeholder="Ex: Shopping Metropolitano"
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                        </div>
+                      )}
+                      {gerarLocal === "Residencia" && (
+                        <>
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Endereço completo (rua, número, complemento)</label>
+                            <input type="text" value={gerarEndereco} onChange={(e) => setGerarEndereco(e.target.value)}
+                              placeholder="Ex: Rua Francisco de Paula, 570 - Apto 703"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Bairro</label>
+                            <input type="text" value={gerarBairro} onChange={(e) => setGerarBairro(e.target.value)}
+                              placeholder="Ex: Barra Olímpica"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                        </>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Forma de pagamento</label>
+                          <select value={gerarFormaPag} onChange={(e) => setGerarFormaPag(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E] bg-white">
+                            <option value="">—</option>
+                            <option value="PIX">PIX</option>
+                            <option value="Cartao Credito">Cartão de Crédito</option>
+                            <option value="Link de Pagamento">Link de Pagamento</option>
+                            <option value="PIX + Cartao">PIX + Cartão</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                          </select>
+                        </div>
+                        {(gerarFormaPag === "Cartao Credito" || gerarFormaPag === "Link de Pagamento" || gerarFormaPag === "PIX + Cartao") && (
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Parcelas</label>
+                            <input type="number" min="1" max="21" value={gerarParcelas} onChange={(e) => setGerarParcelas(e.target.value)}
+                              placeholder="Ex: 10"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                        )}
+                      </div>
+                      {gerarFormaPag === "PIX + Cartao" && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Entrada PIX (R$)</label>
+                          <input type="number" min="0" step="0.01" value={gerarEntrada} onChange={(e) => setGerarEntrada(e.target.value)}
+                            placeholder="Ex: 2500"
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
                 {/* Dados do formulário (read-only, só pra conferir) */}
                 <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3 text-xs">
