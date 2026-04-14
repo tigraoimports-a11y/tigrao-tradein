@@ -1049,8 +1049,10 @@ export default function EntregasPage() {
                     // === Pagamento ===
                     if (low.includes("forma de pagamento") || low.includes("forma pagamento")) {
                       const inline = afterColon(line);
-                      if (inline && inline.length > 3) r.forma_pagamento = inline;
-                      section = "pagamento"; continue;
+                      if (inline && inline.length >= 2) r.forma_pagamento = inline;
+                      section = "pagamento";
+                      // Não dá continue — deixa cair nas regex de pix/parcelas abaixo,
+                      // porque o inline pode ter "Entrada PIX R$ X + Yx de R$ Z".
                     }
                     // PIX antes: "Entrada PIX R$ 2.100"
                     if (!r.entrada_pix) {
