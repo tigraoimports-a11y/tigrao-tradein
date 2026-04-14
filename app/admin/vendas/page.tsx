@@ -33,6 +33,7 @@ export default function VendasPage() {
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [vendaProgramada, setVendaProgramada] = useState(false);
   const [programadaJaPago, setProgramadaJaPago] = useState(false);
+  const [programadaComSinal, setProgramadaComSinal] = useState(false);
   const [dataProgramada, setDataProgramada] = useState("");
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -1552,7 +1553,7 @@ export default function VendasPage() {
       setShowSegundaTroca(false); setTrocaEnabled(false);
       setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
       setSerialBusca(""); setScanMsg("");
-      setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+      setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
@@ -2040,7 +2041,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
                   setTimeout(() => setMsg(""), 2000);
@@ -2698,7 +2699,7 @@ export default function VendasPage() {
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
-                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
                 }}
@@ -3564,8 +3565,12 @@ export default function VendasPage() {
                   checked={vendaProgramada}
                   onChange={(e) => {
                     setVendaProgramada(e.target.checked);
-                    if (!e.target.checked) { setProgramadaJaPago(false); setDataProgramada(""); }
-                    else {
+                    if (!e.target.checked) {
+                      setProgramadaJaPago(false);
+                      setProgramadaComSinal(false);
+                      setDataProgramada("");
+                      setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                    } else {
                       // Default: amanhã
                       const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
                       setDataProgramada(amanha.toISOString().split("T")[0]);
@@ -3579,16 +3584,80 @@ export default function VendasPage() {
               </label>
               {vendaProgramada && (
                 <div className="space-y-2 pl-6">
-                  <div className="flex gap-3 items-center">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" checked={!programadaJaPago} onChange={() => setProgramadaJaPago(false)} className="accent-purple-500" />
+                      <input
+                        type="radio"
+                        checked={!programadaJaPago && !programadaComSinal}
+                        onChange={() => {
+                          setProgramadaJaPago(false);
+                          setProgramadaComSinal(false);
+                          setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                        }}
+                        className="accent-purple-500"
+                      />
                       <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>⏳ Aguardando pagamento</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" checked={programadaJaPago} onChange={() => setProgramadaJaPago(true)} className="accent-green-500" />
+                      <input
+                        type="radio"
+                        checked={programadaComSinal}
+                        onChange={() => {
+                          setProgramadaComSinal(true);
+                          setProgramadaJaPago(false);
+                          setForm(f => ({ ...f, banco_sinal: f.banco_sinal || "ITAU" }));
+                        }}
+                        className="accent-amber-500"
+                      />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💰 Sinal pago — saldo na retirada</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={programadaJaPago}
+                        onChange={() => {
+                          setProgramadaJaPago(true);
+                          setProgramadaComSinal(false);
+                          setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                        }}
+                        className="accent-green-500"
+                      />
                       <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✅ Já pago — entrega futura</span>
                     </label>
                   </div>
+                  {programadaComSinal && (
+                    <div className={`flex flex-wrap gap-3 items-center p-2 rounded-lg ${dm ? "bg-amber-900/20 border border-amber-700/40" : "bg-amber-50 border border-amber-200"}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Valor do sinal:</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={form.sinal_antecipado}
+                          onChange={(e) => setForm(f => ({ ...f, sinal_antecipado: e.target.value }))}
+                          className={`w-28 px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Banco:</span>
+                        <select
+                          value={form.banco_sinal}
+                          onChange={(e) => setForm(f => ({ ...f, banco_sinal: e.target.value }))}
+                          className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        >
+                          <option value="ITAU">ITAU</option>
+                          <option value="INFINITE">INFINITE</option>
+                          <option value="MERCADO_PAGO">MERCADO_PAGO</option>
+                          <option value="ESPECIE">ESPECIE</option>
+                        </select>
+                      </div>
+                      {(parseFloat(form.sinal_antecipado) || 0) > 0 && (parseFloat(form.preco_vendido) || 0) > 0 && (
+                        <span className={`text-[11px] ${dm ? "text-amber-300" : "text-amber-700"}`}>
+                          Saldo restante: R$ {((parseFloat(form.preco_vendido) || 0) - (parseFloat(form.sinal_antecipado) || 0)).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex gap-3 items-center">
                     <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data programada:</span>
                     <input
@@ -3607,9 +3676,9 @@ export default function VendasPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : programadaComSinal ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
             >
-              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : programadaComSinal ? `Programar c/ Sinal R$ ${parseFloat(form.sinal_antecipado || "0").toFixed(2)}` : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -3995,14 +4064,23 @@ export default function VendasPage() {
                                     💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
                                   </span>
                                 )}
+                                {Number(v.sinal_antecipado || 0) > 0 && v.status_pagamento === "PROGRAMADA" && (
+                                  <span className="block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                                    💰 Sinal {v.banco_sinal ? `${v.banco_sinal}` : ""}: {fmt(Number(v.sinal_antecipado))} — saldo {fmt((Number(v.preco_vendido) || 0) - Number(v.sinal_antecipado || 0))}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
                                   v.status_pagamento === "AGUARDANDO" ? "bg-yellow-100 text-yellow-700" :
                                   v.status_pagamento === "CANCELADO" ? "bg-red-100 text-red-600" :
+                                  v.status_pagamento === "PROGRAMADA" ? (Number(v.sinal_antecipado || 0) > 0 ? "bg-amber-100 text-amber-700" : "bg-purple-100 text-purple-700") :
                                   "bg-green-100 text-green-700"
                                 }`}>
-                                  {v.status_pagamento === "AGUARDANDO" ? "⏳ Pendente" : v.status_pagamento === "CANCELADO" ? "❌ Cancelado" : "✅ Finalizado"}
+                                  {v.status_pagamento === "AGUARDANDO" ? "⏳ Pendente" :
+                                    v.status_pagamento === "CANCELADO" ? "❌ Cancelado" :
+                                    v.status_pagamento === "PROGRAMADA" ? (Number(v.sinal_antecipado || 0) > 0 ? "💰 Sinal pago" : "📅 Programada") :
+                                    "✅ Finalizado"}
                                 </span>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-[#86868B]">{isExpanded ? "▲" : "▼"}</td>
