@@ -456,13 +456,26 @@ export default function VendasPage() {
   useEffect(() => { if (password) { fetchEstoque(); fetchFornecedores(); } }, [password, fetchEstoque, fetchFornecedores]);
 
   // Auto-selecionar produto por serial/IMEI — chamado direto no onChange
+  // Busca no estoque filtrado primeiro; se não achar, busca na API (produto pode estar com status/tipo inesperado)
   const autoSelecionarPorSerial = useCallback((val: string) => {
     const v = val.trim().toUpperCase();
     if (!v || v.length < 5) return;
-    const found = estoque.find(p =>
+    let found = estoque.find(p =>
       (p.serial_no && p.serial_no.toUpperCase() === v) ||
       (p.imei && p.imei.toUpperCase() === v)
     );
+    // Se não achou no estoque filtrado, buscar via API (pode estar com status diferente)
+    if (!found && v.length >= 8) {
+      fetch(`/api/estoque?serial=${encodeURIComponent(v)}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } })
+        .then(r => r.json())
+        .then(j => {
+          const item = (j.data || []).find((p: EstoqueItem) => p.qnt > 0 && ((p.serial_no || "").toUpperCase() === v || (p.imei || "").toUpperCase() === v));
+          if (item && item.status !== "EM ESTOQUE") {
+            setMsg(`⚠️ Produto encontrado mas com status "${item.status}" (tipo: ${item.tipo}). Mova para estoque antes de vender.`);
+          }
+        })
+        .catch(() => {});
+    }
     if (found) {
       const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
       setCatSel(`${found.categoria}__${tipoKey}`);
