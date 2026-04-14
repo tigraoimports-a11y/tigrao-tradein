@@ -179,6 +179,7 @@ export default function AdminPage() {
   }
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
+  const [historicoBusca, setHistoricoBusca] = useState("");
   const [encaminhando, setEncaminhando] = useState<string | null>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoItem | null>(null);
   // Modal "Gerar Entrega": coleta data/horário/entregador/obs, pré-preenchidos do formulário do cliente
@@ -505,33 +506,108 @@ export default function AdminPage() {
       {mainTab === "funil" && <FunnelPanel />}
 
       {/* Histórico — clientes que completaram todo o funil */}
-      {mainTab === "historico" && (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
-            <h2 className="font-bold text-[#1D1D1F]">📋 Histórico de Formulários — Clientes que completaram o funil</h2>
-            <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
-              {historicoLoading ? "Carregando..." : "↻ Atualizar"}
-            </button>
+      {mainTab === "historico" && (() => {
+        // Filtro por nome/whatsapp (digits-insensitive)
+        const qRaw = historicoBusca.trim().toLowerCase();
+        const qDigits = qRaw.replace(/\D/g, "");
+        const filtrados = historico.filter(h => {
+          if (!qRaw) return true;
+          const nome = (h.cliente_nome || "").toLowerCase();
+          const tel = (h.cliente_telefone || "").replace(/\D/g, "");
+          if (nome.includes(qRaw)) return true;
+          if (qDigits.length >= 3 && tel.includes(qDigits)) return true;
+          return false;
+        });
+        // Ordena do mais recente pro mais antigo por data de preenchimento (ou criação)
+        const ordenados = [...filtrados].sort((a, b) =>
+          (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)
+        );
+        // Agrupa por dia (YYYY-MM-DD em America/Sao_Paulo)
+        const dayKey = (iso: string) => {
+          const d = new Date(iso);
+          const saoPaulo = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+          const yyyy = saoPaulo.getFullYear();
+          const mm = String(saoPaulo.getMonth() + 1).padStart(2, "0");
+          const dd = String(saoPaulo.getDate()).padStart(2, "0");
+          return `${yyyy}-${mm}-${dd}`;
+        };
+        const grupos = new Map<string, HistoricoItem[]>();
+        for (const h of ordenados) {
+          const k = dayKey(h.cliente_preencheu_em || h.created_at);
+          const arr = grupos.get(k) || [];
+          arr.push(h);
+          grupos.set(k, arr);
+        }
+        const gruposOrdenados = Array.from(grupos.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+        const hojeKey = dayKey(new Date().toISOString());
+        const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+        const ontemKey = dayKey(ontem.toISOString());
+        const formatDiaHeader = (k: string) => {
+          if (k === hojeKey) return "Hoje";
+          if (k === ontemKey) return "Ontem";
+          const [y, m, d] = k.split("-");
+          return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+        };
+        return (
+        <div className="space-y-4">
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="font-bold text-[#1D1D1F]">📋 Histórico de Formulários — Clientes que completaram o funil</h2>
+              <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
+                {historicoLoading ? "Carregando..." : "↻ Atualizar"}
+              </button>
+            </div>
+            <p className="px-5 pt-3 text-xs text-[#86868B]">
+              Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
+            </p>
+            <div className="px-5 py-3 flex items-center gap-2">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  value={historicoBusca}
+                  onChange={(e) => setHistoricoBusca(e.target.value)}
+                  placeholder="🔍 Buscar por nome ou WhatsApp..."
+                  className="w-full pl-3 pr-8 py-2 text-sm border border-[#D2D2D7] rounded-lg focus:outline-none focus:border-[#E8740E]"
+                />
+                {historicoBusca && (
+                  <button
+                    onClick={() => setHistoricoBusca("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#86868B] hover:text-[#E8740E] text-sm"
+                    title="Limpar"
+                  >✕</button>
+                )}
+              </div>
+              <span className="text-xs text-[#86868B]">
+                {filtrados.length === historico.length
+                  ? `${historico.length} ${historico.length === 1 ? "registro" : "registros"}`
+                  : `${filtrados.length} de ${historico.length}`}
+              </span>
+            </div>
           </div>
-          <p className="px-5 pt-3 text-xs text-[#86868B]">
-            Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
-          </p>
           {historicoLoading && historico.length === 0 ? (
-            <div className="px-5 py-10 text-center text-[#86868B]">Carregando...</div>
-          ) : historico.length === 0 ? (
-            <div className="px-5 py-10 text-center text-[#86868B]">Nenhum cliente completou o funil ainda</div>
+            <div className="px-5 py-10 text-center text-[#86868B] bg-white border border-[#D2D2D7] rounded-2xl">Carregando...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[#86868B] bg-white border border-[#D2D2D7] rounded-2xl">
+              {historico.length === 0 ? "Nenhum cliente completou o funil ainda" : "Nenhum cliente encontrado para a busca"}
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Pagamento", "Troca", "Preencheu em", "Status", "Ações"].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...historico].sort((a, b) => (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)).map(h => {
+            gruposOrdenados.map(([diaKey, itens]) => (
+              <div key={diaKey} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-5 py-3 bg-gradient-to-r from-[#FFF4EC] to-white border-b border-[#D2D2D7] flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-[#1D1D1F] capitalize">🗓️ {formatDiaHeader(diaKey)}</h3>
+                  <span className="text-xs text-[#86868B]">{itens.length} {itens.length === 1 ? "cliente" : "clientes"}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Pagamento", "Troca", "Preencheu em", "Status", "Ações"].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map(h => {
                     const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
                     const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
@@ -607,12 +683,15 @@ export default function AdminPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Modal detalhado do Histórico */}
       {historicoModal && (() => {
