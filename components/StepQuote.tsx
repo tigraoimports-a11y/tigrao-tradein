@@ -328,48 +328,54 @@ export default function StepQuote(p: StepQuoteProps) {
         const baseOrigin = typeof window !== "undefined" ? window.location.origin : "";
         const compraUrl = `${baseOrigin}/compra?${params.toString()}`;
         return (
-          <button disabled={fechando} onClick={() => {
+          <button disabled={fechando} onClick={async () => {
             if (fechando) return;
             setFechando(true);
             onTrackAction?.("quote_whatsapp");
             salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag });
             if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).fbq) (window as unknown as Record<string, (a: string, b: string, c: Record<string, unknown>) => void>).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" });
-            // Abrir a página de compra IMEDIATAMENTE (antes de qualquer await)
-            // Safari bloqueia window.open após awaits — usar location.href que funciona sempre
-            // Criar short_code em background e redirecionar se conseguir
+            // Criar short_code ANTES de navegar, pra que /compra receba ?short=<code>
+            // e consiga salvar o cliente_dados_preenchidos na submissão. window.location.href
+            // (diferente de window.open) funciona bem após await no Safari.
             const shortData: Record<string, string> = {};
             for (const [k, v] of params.entries()) shortData[k] = v;
-            fetch("/api/short-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: shortData }) })
-              .then(r => r.json())
-              .then(shortJson => {
-                if (shortJson.code) {
-                  // Criar link_compras (fire-and-forget)
-                  fetch("/api/link-compras-auto", {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      short_code: shortJson.code,
-                      url_curta: `${baseOrigin}/c/${shortJson.code}`,
-                      tipo: usedModel ? "TROCA" : "COMPRA",
-                      cliente_nome: clienteNome || null,
-                      cliente_telefone: clienteWhatsApp || null,
-                      produto: `${newModel} ${newStorage}`.trim(),
-                      cor: usedColor || null,
-                      valor: Math.round(newPrice),
-                      troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
-                      troca_valor: Math.round(valor1),
-                      troca_condicao: condStr || null,
-                      troca_cor: usedColor || null,
-                      troca_produto2: hasSecond && usedModel2 ? `${usedModel2} ${usedStorage2 || ""}`.trim() : null,
-                      troca_valor2: hasSecond ? Math.round(valor2) : 0,
-                      troca_condicao2: cond2Lines || null,
-                      troca_cor2: hasSecond ? (usedColor2 || null) : null,
-                      vendedor: vendedor || null,
-                    }),
-                  }).catch(() => {});
-                }
-              }).catch(() => {});
-            // Navegar imediatamente (síncrono) — não espera short code
-            window.location.href = compraUrl;
+            let finalUrl = compraUrl;
+            try {
+              const shortRes = await fetch("/api/short-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: shortData }) });
+              const shortJson = await shortRes.json();
+              if (shortJson.code) {
+                // Criar link_compras (fire-and-forget) — evita bloquear navegação
+                fetch("/api/link-compras-auto", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    short_code: shortJson.code,
+                    url_curta: `${baseOrigin}/c/${shortJson.code}`,
+                    tipo: usedModel ? "TROCA" : "COMPRA",
+                    cliente_nome: clienteNome || null,
+                    cliente_telefone: clienteWhatsApp || null,
+                    produto: `${newModel} ${newStorage}`.trim(),
+                    cor: usedColor || null,
+                    valor: Math.round(newPrice),
+                    troca_produto: usedModel ? `${usedModel} ${usedStorage || ""}`.trim() : null,
+                    troca_valor: Math.round(valor1),
+                    troca_condicao: condStr || null,
+                    troca_cor: usedColor || null,
+                    troca_produto2: hasSecond && usedModel2 ? `${usedModel2} ${usedStorage2 || ""}`.trim() : null,
+                    troca_valor2: hasSecond ? Math.round(valor2) : 0,
+                    troca_condicao2: cond2Lines || null,
+                    troca_cor2: hasSecond ? (usedColor2 || null) : null,
+                    vendedor: vendedor || null,
+                  }),
+                }).catch(() => {});
+                // Inclui ?short=<code> na URL de /compra pra que a submissão salve o preenchimento
+                const u = new URL(compraUrl);
+                u.searchParams.set("short", shortJson.code);
+                finalUrl = u.toString();
+              }
+            } catch {
+              // Se falhar, segue sem short (modo degradado, igual comportamento antigo)
+            }
+            window.location.href = finalUrl;
           }}
             className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>

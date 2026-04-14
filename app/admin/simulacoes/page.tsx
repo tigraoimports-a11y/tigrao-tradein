@@ -223,15 +223,18 @@ export default function AdminPage() {
     if (!password) return;
     setHistoricoLoading(true);
     try {
-      // 1) Link_compras com formulário preenchido (limite 500 = max da API, pra evitar
-      //    que registros recentes sumam e apareçam só como Gostei-sem-link)
-      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=500", {
+      // 1) Link_compras com formulário preenchido OU auto-criados pelo simulador de trade-in.
+      //    incluir_simulador=1 pega também os GOSTEI onde o cliente enviou o formulário
+      //    completo só pelo WhatsApp (cliente_preencheu_em null mas operador=Simulador).
+      const res = await fetch("/api/admin/link-compras?preenchidos=1&incluir_simulador=1&limit=500", {
         headers: { "x-admin-password": password },
       });
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        items = (json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em);
+        items = (json.data || []).filter((r: HistoricoItem) =>
+          r.cliente_preencheu_em || r.operador === "Simulador"
+        );
       }
 
       // 2) Simulações GOSTEI que não têm link_compras — converter para HistoricoItem
@@ -298,21 +301,25 @@ export default function AdminPage() {
 
   // Abre o modal de Gerar Entrega com dados pré-preenchidos do formulário do cliente.
   // Se o item é um "sim_" (simulação sem link_compras), tenta achar um link_compras
-  // real com o mesmo telefone pra carregar os dados completos do formulário.
+  // real com o mesmo telefone. Prioriza link com cliente_dados_preenchidos; se não
+  // tiver, aceita um link auto-criado pelo simulador (operador=Simulador) — nesse
+  // caso o admin vai precisar conferir endereço no WhatsApp.
   const openGerarEntrega = useCallback((h: HistoricoItem) => {
-    // Se for um item simulado (sim_...), procurar link_compras real pelo telefone
     let target = h;
     if (h.id.startsWith("sim_")) {
       const tel8 = (h.cliente_telefone || "").replace(/\D/g, "").slice(-8);
-      const real = tel8.length >= 8
-        ? historico.find(x => !x.id.startsWith("sim_")
-            && (x.cliente_telefone || "").replace(/\D/g, "").slice(-8) === tel8
-            && x.cliente_dados_preenchidos)
-        : null;
+      const candidatos = tel8.length >= 8
+        ? historico.filter(x => !x.id.startsWith("sim_")
+            && (x.cliente_telefone || "").replace(/\D/g, "").slice(-8) === tel8)
+        : [];
+      // Prefere link com formulário completo preenchido
+      const comForm = candidatos.find(x => x.cliente_dados_preenchidos);
+      const qualquer = candidatos[0] || null;
+      const real = comForm || qualquer;
       if (real) {
         target = real;
       } else {
-        alert("⚠️ Esse cliente só tem simulação — ainda não preencheu o formulário de compra completo (endereço, CPF, etc.). Peça pra ele preencher o link de compra antes de gerar a entrega.");
+        alert("⚠️ Esse cliente só tem simulação — ainda não chegou ao formulário de compra. Peça pra ele clicar em 'DESEJO FECHAR MEU PEDIDO' na simulação.");
         return;
       }
     }
@@ -798,6 +805,14 @@ export default function AdminPage() {
                 <button onClick={() => setGerarEntregaItem(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F7]">&times;</button>
               </div>
               <div className="p-5 space-y-4">
+                {/* Aviso quando o formulário completo não foi salvo no banco
+                    (cliente preencheu via Trade-in e mandou direto pelo WhatsApp). */}
+                {!h.cliente_dados_preenchidos && (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-xs text-yellow-900">
+                    <p className="font-bold mb-1">⚠️ Cliente fez simulação de Trade-in e enviou o formulário completo pelo WhatsApp.</p>
+                    <p>Endereço, CEP, CPF e outros dados pessoais NÃO ficaram salvos no banco (fluxo antigo). Confira esses dados no WhatsApp dele antes de confirmar, ou crie a entrega manualmente em <b>Entregas</b>.</p>
+                  </div>
+                )}
                 {/* Dados do formulário (read-only, só pra conferir) */}
                 <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3 text-xs">
                   <p className="font-bold text-[#1D1D1F] text-sm">📋 Dados do formulário enviado pelo cliente</p>

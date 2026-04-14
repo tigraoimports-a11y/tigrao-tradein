@@ -117,7 +117,16 @@ export async function GET(request: Request) {
   else if (arquivado === "1") query = query.eq("arquivado", true);
 
   if (tipo === "COMPRA" || tipo === "TROCA") query = query.eq("tipo", tipo);
-  if (url.searchParams.get("preenchidos") === "1") query = query.not("cliente_preencheu_em", "is", null);
+  if (url.searchParams.get("preenchidos") === "1") {
+    // Se incluir_simulador=1, também retorna link_compras auto-criados pelo
+    // simulador de trade-in (operador=Simulador), mesmo que o cliente tenha
+    // enviado o formulário só via WhatsApp (sem POST de preenchimento).
+    if (url.searchParams.get("incluir_simulador") === "1") {
+      query = query.or("cliente_preencheu_em.not.is.null,operador.eq.Simulador");
+    } else {
+      query = query.not("cliente_preencheu_em", "is", null);
+    }
+  }
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to + "T23:59:59");
 
