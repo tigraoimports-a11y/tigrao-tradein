@@ -659,6 +659,202 @@ const fmtDate = (d: string | null | undefined): string => {
   return d;
 };
 
+/**
+ * Converte strings de produto em Title Case adequado para Apple products.
+ * Ex: "IPHONE 17 PRO 512GB" → "iPhone 17 Pro 512GB"
+ */
+function titleCaseProduto(s: string): string {
+  let out = s.toLowerCase();
+  out = out.replace(/\biphone\b/g, "iPhone");
+  out = out.replace(/\bipad\b/g, "iPad");
+  out = out.replace(/\bimac\b/g, "iMac");
+  out = out.replace(/\bairpods?\b/g, "AirPods");
+  out = out.replace(/\bapple watch\b/g, "Apple Watch");
+  out = out.replace(/\bmacbook\b/g, "MacBook");
+  out = out.replace(/\bmac mini\b/g, "Mac Mini");
+  out = out.replace(/\bmac studio\b/g, "Mac Studio");
+  out = out.replace(/\bpro max\b/g, "Pro Max");
+  out = out.replace(/\bpro\b/g, "Pro");
+  out = out.replace(/\bmax\b/g, "Max");
+  out = out.replace(/\bmini\b/g, "Mini");
+  out = out.replace(/\bair\b/g, "Air");
+  out = out.replace(/\bplus\b/g, "Plus");
+  out = out.replace(/\bse\b/g, "SE");
+  out = out.replace(/\bultra\b/g, "Ultra");
+  out = out.replace(/\b(\d+)\s*gb\b/g, "$1GB");
+  out = out.replace(/\b(\d+)\s*tb\b/g, "$1TB");
+  out = out.replace(/\bm(\d+)\b/g, "M$1");
+  out = out.replace(/\b(\d+)\s*mm\b/g, "$1mm");
+  return out.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * Extrai nome canônico do produto (sem cor, sem conectividade, sem pulseira)
+ * e retorna também campo extra (conectividade pra Apple Watch).
+ */
+function cleanProductForAtacado(produto: string, categoria: string): { base: string; extra?: string } {
+  let nome = (produto || "").trim();
+  // Remove sufixos regionais (VC LL J BE BR HN IN ZA BZ ZD ZP) e parênteses
+  nome = nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "");
+  // Remove info SIM
+  nome = nome.replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "");
+  // Remove "(8C CPU/10C GPU)"
+  nome = nome.replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ");
+
+  const cat = getBaseCat(categoria);
+  let extra: string | undefined;
+
+  // Cores em inglês e algumas em português que aparecem no nome do produto
+  const COLOR_WORDS = [
+    "BLACK", "WHITE", "BLUE", "RED", "PURPLE", "YELLOW", "GREEN", "PINK",
+    "SPACE BLACK", "SPACE GRAY", "SPACE GREY", "DEEP PURPLE", "DEEP BLUE",
+    "COSMIC ORANGE", "MIDNIGHT", "STARLIGHT", "SILVER", "GOLD", "SAGE",
+    "LAVENDER", "CREAM", "NATURAL TITANIUM", "BLUE TITANIUM", "WHITE TITANIUM",
+    "BLACK TITANIUM", "DESERT TITANIUM", "NATURAL", "TITANIUM", "ULTRAMARINE",
+    "TEAL", "MEIA-NOITE", "MEIA NOITE", "SKY BLUE", "ORANGE",
+  ].sort((a, b) => b.length - a.length);
+  const colorRe = new RegExp("\\b(" + COLOR_WORDS.map(c => c.replace(/\s+/g, "\\s+")).join("|") + ")\\b", "gi");
+
+  if (cat === "APPLE_WATCH") {
+    // Extrai conectividade
+    const connMatch = nome.match(/\b(GPS\s*\+\s*CEL|GPS\+CEL|GPS)\b/i);
+    if (connMatch) {
+      const raw = connMatch[1].toUpperCase().replace(/\s+/g, "");
+      extra = raw === "GPS" ? "GPS" : "GPS+Cel";
+      nome = nome.replace(/\b(GPS\s*\+\s*CEL|GPS\+CEL|GPS)\b/gi, " ");
+    }
+    // Remove tudo depois de PULSEIRA
+    nome = nome.replace(/\s*PULSEIRA.*/gi, "");
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|ROXA?|ROXO|VERMELHA?|VERMELHO|ROSA|DOURADA?|DOURADO|BEGE|AMARELO|AMARELA|LARANJA|CINZA)\b/gi, " ");
+  } else if (cat === "IPADS") {
+    // Remove WI-FI
+    nome = nome.replace(/\bWI[-\s]?FI\b/gi, " ");
+    // iPad Pro redundância: "IPAD PRO 11 M5 11\"" → "IPAD PRO M5 11\""
+    nome = nome.replace(/\b(ipad\s+pro)\s+\d+\s+(m\d+)\b/gi, "$1 $2");
+    // Pra iPad Mini, remove tamanho de tela (sempre 8.3")
+    if (/\bmini\b/i.test(nome)) {
+      nome = nome.replace(/\b\d+(\.\d+)?\s*["']/g, " ");
+    }
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|CINZA|DOURADA?|DOURADO)\b/gi, " ");
+  } else if (cat === "IPHONES") {
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|CINZA|DOURADA?|DOURADO|ROXA?|ROXO|ROSA|VERMELHA?|VERMELHO|LARANJA|AMARELO|AMARELA|BEGE)\b/gi, " ");
+  } else if (cat === "MACBOOK" || cat === "MAC_MINI") {
+    nome = nome.replace(/\bWI[-\s]?FI\b/gi, " ");
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|CINZA|DOURADA?|DOURADO)\b/gi, " ");
+  }
+
+  nome = nome.replace(/\s{2,}/g, " ").trim();
+  nome = titleCaseProduto(nome);
+
+  return { base: nome, extra };
+}
+
+/**
+ * Gera texto estruturado pro WhatsApp a partir de uma lista de produtos.
+ * Agrupa por categoria, merge de cores/conectividades, Title Case.
+ */
+function buildAtacadoText(fonte: ProdutoEstoque[]): string {
+  const catEmoji: Record<string, string> = {
+    IPHONES: "📱", IPADS: "📲", MACBOOK: "💻", MAC_MINI: "🖥️",
+    APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
+  };
+  const catLabel: Record<string, string> = {
+    IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
+    APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
+  };
+  const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+
+  type Entry = { base: string; colors: string[]; extras: string[] };
+  const groups: Record<string, Map<string, Entry>> = {};
+
+  for (const p of fonte) {
+    const cat = getBaseCat(p.categoria || "OUTROS");
+    if (!groups[cat]) groups[cat] = new Map();
+    const { base, extra } = cleanProductForAtacado(p.produto || "", p.categoria || "");
+    // Pra Apple Watch, cor é agrupada junto com base (merge só conectividade)
+    const keyForGroup = cat === "APPLE_WATCH"
+      ? `${base}||${(p.cor || "").toUpperCase()}`
+      : base;
+    const cor = p.cor ? (corParaPT(p.cor) || p.cor) : "";
+
+    let entry = groups[cat].get(keyForGroup);
+    if (!entry) { entry = { base, colors: [], extras: [] }; groups[cat].set(keyForGroup, entry); }
+    if (cor && !entry.colors.includes(cor)) entry.colors.push(cor);
+    if (extra && !entry.extras.includes(extra)) entry.extras.push(extra);
+  }
+
+  const iphoneFamily = (base: string): number => {
+    if (/\bpro\s+max\b/i.test(base)) return 3;
+    if (/\bpro\b/i.test(base)) return 2;
+    if (/\bplus\b/i.test(base)) return 1;
+    return 0;
+  };
+  const extractCapGB = (base: string): number => {
+    const m = base.match(/(\d+)(GB|TB)\b/i);
+    if (!m) return 0;
+    const n = parseInt(m[1]);
+    return m[2].toUpperCase() === "TB" ? n * 1024 : n;
+  };
+
+  const lines: string[] = ["🚨 *ESTOQUE – ATACADO*", ""];
+  const sortedCats = Object.keys(groups).sort((a, b) => {
+    const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  for (const cat of sortedCats) {
+    const emoji = catEmoji[cat] || "📦";
+    const label = catLabel[cat] || cat;
+    lines.push(`${emoji} *${label}*`);
+    const entries = Array.from(groups[cat].values());
+
+    // Chave do "modelo" sem capacidade (prefixo) — pra sort e agrupamento visual
+    const modelPrefix = (base: string): string => base.replace(/\s*\d+(GB|TB)\b.*$/i, "").trim();
+
+    if (cat === "IPHONES") {
+      entries.sort((a, b) => {
+        const fa = iphoneFamily(a.base), fb = iphoneFamily(b.base);
+        if (fa !== fb) return fa - fb;
+        const pa = modelPrefix(a.base), pb = modelPrefix(b.base);
+        if (pa !== pb) return pa.localeCompare(pb);
+        return extractCapGB(a.base) - extractCapGB(b.base);
+      });
+      let currentFamily = -1;
+      for (const e of entries) {
+        const f = iphoneFamily(e.base);
+        if (currentFamily !== -1 && f !== currentFamily) lines.push("");
+        currentFamily = f;
+        const parts = [e.base];
+        if (e.extras.length > 0) parts.push(e.extras.join(" / "));
+        if (e.colors.length > 0) parts.push(e.colors.join(" / "));
+        lines.push(parts.join(" – "));
+      }
+    } else {
+      entries.sort((a, b) => {
+        const pa = modelPrefix(a.base), pb = modelPrefix(b.base);
+        if (pa !== pb) return pa.localeCompare(pb);
+        return extractCapGB(a.base) - extractCapGB(b.base);
+      });
+      for (const e of entries) {
+        const parts = [e.base];
+        if (e.extras.length > 0) parts.push(e.extras.join(" / "));
+        if (e.colors.length > 0) parts.push(e.colors.join(" / "));
+        lines.push(parts.join(" – "));
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
+}
+
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
 const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 function getBaseCat(cat: string): string {
@@ -4128,37 +4324,9 @@ export default function EstoquePage() {
                         </div>
                         <button
                           onClick={() => {
-                            const catEmoji: Record<string, string> = { IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
-                            const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios" };
-                            const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
                             const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                            const groups: Record<string, string[]> = {};
-                            for (const p of fonte) {
-                              const cat = p.categoria || "OUTROS";
-                              if (!groups[cat]) groups[cat] = [];
-                              const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
-                                .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                                .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
-                                .replace(/\s{2,}/g, " ").trim();
-                              const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
-                              groups[cat].push(`${nome}${cor}`);
-                            }
-                            const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
-                            const sortedCatsAtacado = Object.keys(groups).sort((a, b) => {
-                              const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
-                              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-                            });
-                            for (const cat of sortedCatsAtacado) {
-                              const emoji = catEmoji[cat] || "📦";
-                              const label = catLabel[cat] || cat;
-                              lines.push(`${emoji} *${label}*`);
-                              const seen = new Set<string>();
-                              for (const item of groups[cat]) {
-                                if (!seen.has(item)) { seen.add(item); lines.push(item); }
-                              }
-                              lines.push("");
-                            }
-                            navigator.clipboard.writeText(lines.join("\n").trim());
+                            const texto = buildAtacadoText(fonte);
+                            navigator.clipboard.writeText(texto);
                             setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
                           }}
                           className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
@@ -4700,51 +4868,9 @@ export default function EstoquePage() {
                   </div>
                 <button
                   onClick={() => {
-                    // Agrupa por categoria
-                    const catEmoji: Record<string, string> = {
-                      IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️",
-                      APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
-                    };
-                    const catLabel: Record<string, string> = {
-                      IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
-                      APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
-                    };
-                    const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
-
-                    // Agrupa por categoria → lista de "modelo – cor"
                     const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                    const groups: Record<string, string[]> = {};
-                    for (const p of fonte) {
-                      const cat = p.categoria || "OUTROS";
-                      if (!groups[cat]) groups[cat] = [];
-                      // Extrai nome limpo + cor
-                      const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
-                        .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                        .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
-                        .replace(/\s{2,}/g, " ").trim();
-                      const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
-                      groups[cat].push(`${nome}${cor}`);
-                    }
-
-                    // Monta texto
-                    const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
-                    const sortedCats = Object.keys(groups).sort((a, b) => {
-                      const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
-                      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-                    });
-                    for (const cat of sortedCats) {
-                      const emoji = catEmoji[cat] || "📦";
-                      const label = catLabel[cat] || cat;
-                      lines.push(`${emoji} *${label}*`);
-                      // Remove duplicatas mantendo ordem
-                      const seen = new Set<string>();
-                      for (const item of groups[cat]) {
-                        if (!seen.has(item)) { seen.add(item); lines.push(item); }
-                      }
-                      lines.push("");
-                    }
-
-                    navigator.clipboard.writeText(lines.join("\n").trim());
+                    const texto = buildAtacadoText(fonte);
+                    navigator.clipboard.writeText(texto);
                     setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
                   }}
                   className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
