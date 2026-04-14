@@ -231,6 +231,11 @@ export default function GerarLinkPage() {
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
+  // Link Mercado Pago (gerado via API MP — independente do "Gerar Link" do form)
+  const [mpLink, setMpLink] = useState("");
+  const [mpLoading, setMpLoading] = useState(false);
+  const [mpErr, setMpErr] = useState("");
+  const [mpCopied, setMpCopied] = useState(false);
 
   // Dados do cliente (pré-preenchimento via cola de texto)
   const [incluirDadosCliente, setIncluirDadosCliente] = useState(true);
@@ -941,6 +946,67 @@ export default function GerarLinkPage() {
       document.body.removeChild(ta);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  // ── Link Mercado Pago ─────────────────────────────────────
+  async function gerarLinkMP() {
+    setMpErr("");
+    setMpLink("");
+    setMpCopied(false);
+
+    // Valida valor e parcelas
+    if (!valorComTaxa || valorComTaxa <= 0) {
+      setMpErr("Informe o valor do produto antes de gerar o link MP.");
+      return;
+    }
+    const useCart = carrinhoLink.length > 0;
+    const prodsFilled = useCart ? carrinhoLink.map(i => i.nome) : produtos.filter(Boolean);
+    if (prodsFilled.length === 0) {
+      setMpErr("Selecione ao menos um produto.");
+      return;
+    }
+    const maxP = numParcelas > 0 ? Math.min(numParcelas, 12) : 1;
+    const titulo = prodsFilled.join(" + ");
+
+    setMpLoading(true);
+    try {
+      const res = await fetch("/api/admin/mp-preference", {
+        method: "POST",
+        headers: adminHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          titulo,
+          valor: valorComTaxa,
+          maxParcelas: maxP,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMpErr(data?.error || "Falha ao gerar link MP.");
+        return;
+      }
+      setMpLink(data.init_point || data.sandbox_init_point || "");
+    } catch {
+      setMpErr("Erro de rede ao contatar o servidor.");
+    } finally {
+      setMpLoading(false);
+    }
+  }
+
+  async function copiarMpLink() {
+    try {
+      await navigator.clipboard.writeText(mpLink);
+      setMpCopied(true);
+      setTimeout(() => setMpCopied(false), 2000);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = mpLink;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setMpCopied(true);
+      setTimeout(() => setMpCopied(false), 2000);
     }
   }
 
@@ -2263,6 +2329,49 @@ export default function GerarLinkPage() {
         >
           Gerar Link
         </button>
+
+        {/* ── Link Mercado Pago (pagamento via MP) ─────── */}
+        <div className={`rounded-xl p-3 border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
+          <p className={`text-xs font-semibold mb-1 ${dm ? "text-[#E5E5E7]" : "text-[#1D1D1F]"}`}>
+            💳 Gerar Link de Pagamento (Mercado Pago)
+          </p>
+          <p className={`text-[11px] mb-2 ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+            R$ {valorComTaxa.toLocaleString("pt-BR")} • até {numParcelas > 0 ? numParcelas : 1}x sem acréscimo
+          </p>
+          <button
+            onClick={gerarLinkMP}
+            disabled={mpLoading || (carrinhoLink.length === 0 && !produtos.some(Boolean)) || valorComTaxa <= 0}
+            className="w-full py-2.5 bg-[#00B1EA] text-white font-bold rounded-xl hover:bg-[#0097C7] active:bg-[#007FAA] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {mpLoading ? "Gerando..." : "Gerar Link MP"}
+          </button>
+          {mpErr && (
+            <p className="text-xs text-red-500 mt-2">{mpErr}</p>
+          )}
+          {mpLink && (
+            <div className="mt-3 space-y-2">
+              <div className={`rounded-lg p-2 break-all text-xs font-mono border ${dm ? "border-[#3A3A3C] bg-[#0A0A0A] text-[#E5E5E7]" : "border-[#D2D2D7] bg-white text-[#1D1D1F]"}`}>
+                {mpLink}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={copiarMpLink}
+                  className={`flex-1 py-2 text-sm font-bold rounded-xl transition-colors ${mpCopied ? "bg-green-500 text-white" : "bg-[#1D1D1F] text-white hover:bg-[#333]"}`}
+                >
+                  {mpCopied ? "Copiado!" : "Copiar"}
+                </button>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(mpLink)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2 px-3 bg-[#25D366] text-white font-bold rounded-xl hover:bg-[#20BD5A] transition-colors flex items-center gap-1 text-sm"
+                >
+                  WhatsApp
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {generatedLink && (
