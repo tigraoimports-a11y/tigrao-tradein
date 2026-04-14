@@ -46,6 +46,18 @@ const STATUS_CONFIG: Record<EntregaStatus, { label: string; color: string; color
   CANCELADA: { label: "Cancelada", color: "text-red-600", colorDark: "text-red-400", bg: "bg-red-100", bgDark: "bg-red-900/30", border: "border-red-300", borderDark: "border-red-600", icon: "🔴" },
 };
 
+// Labels de status adaptados para coleta
+function getStatusLabel(status: EntregaStatus, tipo: string | null): string {
+  if (tipo === "COLETA") {
+    switch (status) {
+      case "SAIU": return "Saiu p/ Coleta";
+      case "ENTREGUE": return "Coletado";
+      default: return STATUS_CONFIG[status]?.label || status;
+    }
+  }
+  return STATUS_CONFIG[status]?.label || status;
+}
+
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
 
 function getWeekRange(offset: number) {
@@ -151,7 +163,13 @@ export default function EntregasPage() {
   const [filtroBia, setFiltroBia] = useState<"todas" | "finalizada" | "pendentes_final" | "comprovante" | "sem_comprovante">("todas");
   const [showForm, setShowForm] = useState(false);
   const [modoSimples, setModoSimples] = useState(false);
+  const [modoColeta, setModoColeta] = useState(false);
   const [rastreio, setRastreio] = useState("");
+  // Campos específicos da coleta (aparelho)
+  const [coletaBateria, setColetaBateria] = useState("");
+  const [coletaEstado, setColetaEstado] = useState<"A+" | "A" | "AB" | "B" | "">("");
+  const [coletaCaixa, setColetaCaixa] = useState<"sim" | "nao" | "">("");
+  const [coletaMarcas, setColetaMarcas] = useState("");
 
   // Autocomplete de clientes — busca em entregas + vendas, retorna última compra
   type ClienteSug = {
@@ -341,7 +359,7 @@ export default function EntregasPage() {
     for (const p of estoque) {
       if (p.tipo !== "SEMINOVO" || p.qnt <= 0) continue;
       const baseKey = getModeloBase(p.produto, p.categoria);
-      const nome = formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: null, observacao: null });
+      const nome = formatProdutoDisplay({ produto: p.produto, categoria: p.categoria, cor: null, observacao: null }).toUpperCase();
       if (!groups.has(baseKey)) groups.set(baseKey, { nome, key: baseKey, items: [] });
       groups.get(baseKey)!.items.push(p);
     }
@@ -512,7 +530,8 @@ export default function EntregasPage() {
     const trocaCaixa = qp.get("troca_caixa_original") || "";
     const trocaObsQp = qp.get("troca_observacao") || "";
     const diferencaPix = qp.get("diferenca_pix") || "";
-    const obs = diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "";
+    const obsQp = qp.get("observacao") || "";
+    const obs = obsQp || (diferencaPix ? `Diferença PIX: R$ ${diferencaPix}` : "");
     // Monta observação consolidada da troca caso o param explícito não venha
     const trocaObsParts: string[] = [];
     if (trocaObsQp) trocaObsParts.push(trocaObsQp);
@@ -530,10 +549,26 @@ export default function EntregasPage() {
       cliente: clienteNome || f.cliente,
       telefone: clienteTel || f.telefone,
       endereco: endereco || f.endereco,
+      endereco_entrega: endereco || f.endereco_entrega,
       bairro: bairro || f.bairro,
       valor: valor ? String(Math.round(parseFloat(valor))) : f.valor,
       observacao: obs || f.observacao,
     }));
+    // Modo coleta via query param (vindo de /admin/estoque pendências)
+    const modoQp = qp.get("modo") || "";
+    if (modoQp === "coleta") {
+      setModoColeta(true);
+      setModoSimples(false);
+      set("tipo", "COLETA");
+      const batQp = qp.get("coleta_bateria") || "";
+      const estQp = qp.get("coleta_estado") || "";
+      const caixaQp = qp.get("coleta_caixa") || "";
+      const marcasQp = qp.get("coleta_marcas") || "";
+      if (batQp) setColetaBateria(batQp);
+      if (estQp) setColetaEstado(estQp as "A+" | "A" | "AB" | "B" | "");
+      if (caixaQp) setColetaCaixa(caixaQp as "sim" | "nao");
+      if (marcasQp) setColetaMarcas(marcasQp);
+    }
     if (produto) {
       setProdutos([cor ? `${produto} ${cor}`.trim() : produto]);
       setProdutoManual(true);
@@ -547,6 +582,23 @@ export default function EntregasPage() {
       if (trocaObsFinal) setTrocaObs(trocaObsFinal);
     }
     if (clienteNome || produto) setShowForm(true);
+    // Auto-buscar endereço do cliente quando nome vem via query params
+    if (clienteNome && clienteNome.length >= 2 && password) {
+      fetch(`/api/admin/entregas?search_clientes=${encodeURIComponent(clienteNome.trim())}`, { headers: apiHeaders() })
+        .then(r => r.json())
+        .then(j => {
+          const clientes = j.clientes || [];
+          // Buscar match exato (case-insensitive)
+          const match = clientes.find((s: { cliente: string }) => s.cliente?.toUpperCase() === clienteNome.toUpperCase());
+          if (match) {
+            if (match.endereco) { set("endereco", match.endereco); set("endereco_entrega", match.endereco); }
+            if (match.bairro) set("bairro", match.bairro);
+            if (match.regiao) set("regiao", match.regiao);
+            if (match.telefone && !clienteTel) set("telefone", match.telefone);
+          }
+        })
+        .catch(() => {});
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
@@ -609,22 +661,31 @@ export default function EntregasPage() {
           return parts.length ? parts.join(" | ") : null;
         })(),
         produto: produtosStr || null,
-        tipo: trocaAtiva ? "UPGRADE" : (form.tipo || null),
-        detalhes_upgrade: trocasStr || null,
-        forma_pagamento: jaPago ? "JÁ PAGO" : (formaPagDetalhada || null),
-        valor: valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null),
+        tipo: modoColeta ? "COLETA" : trocaAtiva ? "UPGRADE" : (form.tipo || null),
+        detalhes_upgrade: modoColeta
+          ? (() => {
+              const parts: string[] = [];
+              if (coletaBateria) parts.push(`Bateria: ${coletaBateria}%`);
+              if (coletaEstado) parts.push(`Estado: ${coletaEstado}`);
+              if (coletaCaixa) parts.push(coletaCaixa === "sim" ? "Com caixa" : "Sem caixa");
+              if (coletaMarcas) parts.push(coletaMarcas);
+              return parts.length ? parts.join("\n") : null;
+            })()
+          : trocasStr || null,
+        forma_pagamento: modoColeta ? null : jaPago ? "JÁ PAGO" : (formaPagDetalhada || null),
+        valor: modoColeta ? null : (valorAPagar > 0 ? valorAPagar : (form.valor ? parseFloat(form.valor) : null)),
         // Campos estruturados pra exibicao detalhada no modal.
         // `entrada` guarda Pix/Espécie/Transferência do pagamento 2 (não-cartão) — NÃO incluímos cartão aqui.
-        entrada: form.forma_pagamento_2 && !isCartao2 && form.valor_2 ? parseFloat(form.valor_2) : null,
-        parcelas: form.parcelas ? parseInt(form.parcelas) : null,
-        valor_total: valorTotalFinal > 0 ? valorTotalFinal : (form.valor ? parseFloat(form.valor) : null),
+        entrada: modoColeta ? null : (form.forma_pagamento_2 && !isCartao2 && form.valor_2 ? parseFloat(form.valor_2) : null),
+        parcelas: modoColeta ? null : (form.parcelas ? parseInt(form.parcelas) : null),
+        valor_total: modoColeta ? null : (valorTotalFinal > 0 ? valorTotalFinal : (form.valor ? parseFloat(form.valor) : null)),
         vendedor: form.vendedor || null,
         regiao: form.regiao || null,
       }),
     });
     const json = await res.json();
     if (json.ok) {
-      setMsg(isEdit ? "Entrega atualizada!" : "Entrega agendada!");
+      setMsg(isEdit ? (modoColeta ? "Coleta atualizada!" : "Entrega atualizada!") : (modoColeta ? "Coleta agendada!" : "Entrega agendada!"));
       setForm({ ...emptyForm, data_entrega: hojeBR() });
       setClienteUltimaCompra(null);
       setProdutos([""]); setTrocas([]); setShowPagAlt(false);
@@ -632,9 +693,11 @@ export default function EntregasPage() {
       setCatSel(""); setEstoqueId("");
       setValorPag1Override("");
       setDesconto(""); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setTrocaCor(""); setTrocaBateria(""); setTrocaObs(""); setProdutoManual(false); setSerialBusca("");
+      setColetaBateria(""); setColetaEstado(""); setColetaCaixa(""); setColetaMarcas("");
       setEditingEntregaId(null);
       setRastreio("");
       setModoSimples(false);
+      setModoColeta(false);
       setShowForm(false);
       fetchEntregas();
     } else {
@@ -769,7 +832,7 @@ export default function EntregasPage() {
         <h1 className="text-lg font-bold text-[#1D1D1F]">Agenda de Entregas</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowForm(!showForm || modoSimples); setModoSimples(false); setMsg(""); }}
+            onClick={() => { setShowForm(!showForm || modoSimples || modoColeta); setModoSimples(false); setModoColeta(false); setMsg(""); }}
             className="px-4 py-2 rounded-xl bg-[#E8740E] text-white text-sm font-semibold hover:bg-[#F5A623] transition-colors"
           >
             {showForm && !modoSimples ? "Fechar" : "+ Nova Entrega"}
@@ -779,12 +842,26 @@ export default function EntregasPage() {
               const willOpen = !(showForm && modoSimples);
               setShowForm(willOpen);
               setModoSimples(willOpen);
+              setModoColeta(false);
               if (willOpen && !form.tipo) set("tipo", "CORREIOS");
               setMsg("");
             }}
             className="px-4 py-2 rounded-xl border-2 border-[#E8740E] text-[#E8740E] text-sm font-semibold hover:bg-[#FFF5EB] transition-colors"
           >
             {showForm && modoSimples ? "Fechar" : "📮 Entrega Simplificada"}
+          </button>
+          <button
+            onClick={() => {
+              const willOpen = !(showForm && modoColeta);
+              setShowForm(willOpen);
+              setModoColeta(willOpen);
+              setModoSimples(false);
+              if (willOpen) set("tipo", "COLETA");
+              setMsg("");
+            }}
+            className="px-4 py-2 rounded-xl border-2 border-green-600 text-green-600 text-sm font-semibold hover:bg-green-50 transition-colors"
+          >
+            {showForm && modoColeta ? "Fechar" : "🛵 Agendar Coleta"}
           </button>
         </div>
       </div>
@@ -800,7 +877,7 @@ export default function EntregasPage() {
         <div className="bg-white border border-[#D2D2D7] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? "✏️ Editar Entrega" : modoSimples ? "📮 Nova Entrega Simplificada (Correios / externa)" : "Agendar Nova Entrega"}</h2>
+              <h2 className="text-sm font-bold text-[#1D1D1F]">{editingEntregaId ? (form.tipo === "COLETA" ? "✏️ Editar Coleta" : "✏️ Editar Entrega") : modoColeta ? "🛵 Agendar Coleta" : modoSimples ? "📮 Nova Entrega Simplificada (Correios / externa)" : "Agendar Nova Entrega"}</h2>
               {editingEntregaId && <button onClick={() => { setEditingEntregaId(null); setForm({ ...emptyForm, data_entrega: hojeBR() }); setProdutos([""]); setTrocaAtiva(false); setTrocaValor(""); setTrocaProduto(""); setDesconto(""); }} className="text-xs text-red-500 hover:underline">Cancelar edição</button>}
               <button
                 type="button"
@@ -1048,9 +1125,8 @@ export default function EntregasPage() {
                         onClick={() => {
                           set("cliente", s.cliente);
                           if (s.telefone) set("telefone", s.telefone);
-                          // Preenche endereco cadastro como referência (readonly).
-                          // O endereco_entrega é preenchido em branco — usuário decide.
-                          if (s.endereco) set("endereco", s.endereco);
+                          // Preenche endereco cadastro + endereco_entrega (admin pode alterar depois)
+                          if (s.endereco) { set("endereco", s.endereco); set("endereco_entrega", s.endereco); }
                           if (s.bairro) set("bairro", s.bairro);
                           if (s.regiao) set("regiao", s.regiao);
                           setClienteUltimaCompra(s.ultima_compra);
@@ -1097,12 +1173,12 @@ export default function EntregasPage() {
                 <input value={form.endereco} readOnly placeholder="Preenchido ao colar dados do cliente" className={`${inputCls} opacity-70 cursor-not-allowed`} />
               </div>
               <div>
-                <p className={labelCls}>Endereço de entrega</p>
-                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder="Onde será entregue (default = cadastro)" className={inputCls} />
+                <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Endereço da coleta" : "Endereço de entrega"}</p>
+                <input value={form.endereco_entrega} onChange={(e) => set("endereco_entrega", e.target.value)} placeholder={modoColeta || form.tipo === "COLETA" ? "Onde será feita a coleta" : "Onde será entregue (default = cadastro)"} className={inputCls} />
               </div>
             </div>
             <div>
-              <p className={labelCls}>Local de Entrega</p>
+              <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Local da Coleta" : "Local de Entrega"}</p>
               <select value={form.local_entrega} onChange={(e) => {
                 const v = e.target.value;
                 set("local_entrega", v);
@@ -1143,7 +1219,59 @@ export default function EntregasPage() {
                 <input value={rastreio} onChange={(e) => setRastreio(e.target.value)} placeholder="Ex: BR123456789BR" className={inputCls} />
               </div>
             )}
-            {!modoSimples && (<>
+            {/* ==== COLETA ==== */}
+            {modoColeta && (
+              <div className="col-span-2 md:col-span-3 space-y-3 border-t border-green-300 pt-3 mt-1">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wider">🛵 Dados da Coleta</p>
+                <div>
+                  <p className={labelCls}>Produto a coletar</p>
+                  <input value={produtos[0] || ""} onChange={(e) => setProdutos([e.target.value])} placeholder="Ex: iPhone 15 128GB Preto" className={inputCls} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <p className={labelCls}>Bateria %</p>
+                    <input value={coletaBateria} onChange={(e) => setColetaBateria(e.target.value.replace(/\D/g, ""))} placeholder="Ex: 87" className={inputCls} inputMode="numeric" />
+                  </div>
+                  <div>
+                    <p className={labelCls}>Estado (grade)</p>
+                    <select value={coletaEstado} onChange={(e) => setColetaEstado(e.target.value as typeof coletaEstado)} className={inputCls}>
+                      <option value="">-- Selecionar --</option>
+                      <option value="A+">A+ (Excelente)</option>
+                      <option value="A">A (Muito bom)</option>
+                      <option value="AB">AB (Bom)</option>
+                      <option value="B">B (Regular)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className={labelCls}>Caixa original</p>
+                    <select value={coletaCaixa} onChange={(e) => setColetaCaixa(e.target.value as typeof coletaCaixa)} className={inputCls}>
+                      <option value="">-- Selecionar --</option>
+                      <option value="sim">Com caixa</option>
+                      <option value="nao">Sem caixa</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className={labelCls}>Obs. do aparelho</p>
+                    <input value={coletaMarcas} onChange={(e) => setColetaMarcas(e.target.value)} placeholder="Ex: sem marcas, arranhão lateral..." className={inputCls} />
+                  </div>
+                </div>
+                <div>
+                  <p className={labelCls}>Vendedor</p>
+                  <input value={form.vendedor} onChange={(e) => set("vendedor", e.target.value)} placeholder="Ex: Nicolas" className={inputCls} />
+                </div>
+                <div>
+                  <p className={labelCls}>Motoboy / Responsável</p>
+                  <select value={form.entregador} onChange={(e) => set("entregador", e.target.value)} className={inputCls}>
+                    <option value="">Aguardando motoboy</option>
+                    <option value="Igor">Igor</option>
+                    <option value="Leandro">Leandro</option>
+                    <option value="Retirada">Retirada</option>
+                    <option value="Correios">Correios</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            {!modoSimples && !modoColeta && (<>
             {/* Produto — seleção do estoque ou manual */}
             <div className="col-span-2 md:col-span-3 space-y-3 border-t border-[#E5E5EA] pt-3 mt-1">
               <div className="flex items-center justify-between">
@@ -1571,7 +1699,7 @@ export default function EntregasPage() {
             </div>
             </>)}
             <div>
-              <p className={labelCls}>Data da Entrega</p>
+              <p className={labelCls}>{modoColeta || form.tipo === "COLETA" ? "Data da Coleta" : "Data da Entrega"}</p>
               <input type="date" value={form.data_entrega} onChange={(e) => set("data_entrega", e.target.value)} className={inputCls} />
             </div>
             <div>
@@ -1649,7 +1777,7 @@ export default function EntregasPage() {
               disabled={saving}
               className="flex-1 py-3 rounded-xl bg-[#E8740E] text-white font-semibold hover:bg-[#F5A623] transition-colors disabled:opacity-50"
             >
-              {saving ? "Salvando..." : editingEntregaId ? "Salvar Alterações" : "Agendar Entrega"}
+              {saving ? "Salvando..." : editingEntregaId ? "Salvar Alterações" : modoColeta ? "Agendar Coleta" : "Agendar Entrega"}
             </button>
           </div>
         </div>
@@ -1911,6 +2039,7 @@ export default function EntregasPage() {
                   {e.horario && <span className={`text-sm font-bold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>{e.horario}</span>}
                 </div>
                 <div className="flex items-center gap-1">
+                  {e.tipo === "COLETA" && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-600/20 text-green-700">🛵 COLETA</span>}
                   {e.finalizada && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/20 text-green-600">✅</span>}
                   {e.comprovante_lancado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600">🧾</span>}
                 </div>
@@ -2401,51 +2530,71 @@ export default function EntregasPage() {
                               : `bg-white border border-[#D2D2D7] text-[#86868B] hover:${c.bg} hover:${c.color} hover:${c.border}`
                           }`}
                         >
-                          {c.icon} {c.label}
+                          {c.icon} {getStatusLabel(status, e.tipo)}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Copiar formulário motoboy */}
+                {/* Copiar formulário motoboy / coleta */}
                 <div className="pt-2 border-t border-[#D2D2D7]">
                   <button
                     onClick={() => {
-                      const regiao = e.regiao || e.bairro || "";
-                      const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
-                      const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
-                      // Limpa detalhes da troca: remove linha "Avaliação: R$ X" (motoboy não precisa saber o valor)
-                      const trocaTexto = e.detalhes_upgrade
-                        ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:")).join(" / ")
-                        : "";
-                      // Limpa OBS: remove "Endereço cadastro: ..." (resíduo de entregas antigas)
-                      const obsLimpa = (e.observacao || "")
-                        .split(" | ")
-                        .filter(p => !p.startsWith("Endereço cadastro:"))
-                        .join(" | ")
-                        .trim();
-                      const msg = [
-                        `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
-                        `🛵`,
-                        `⏰ *HORÁRIO:* ${e.horario || "A combinar"}`,
-                        `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
-                        `🍎 *PRODUTO:* ${e.produto || ""}`,
-                        `‼️ *TIPO:* ${tipoLabel}`,
-                        ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
-                        `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas)}`,
-                        `🧑 *CLIENTE:* ${e.cliente || ""}`,
-                        `📞 *CONTATO:* ${e.telefone || ""}`,
-                        obsLimpa ? `OBS: ${obsLimpa}` : "",
-                        `💼 Vendedor: ${e.vendedor || ""}`,
-                        "________________________________",
-                      ].filter(Boolean).join("\n");
-                      navigator.clipboard.writeText(msg);
-                      alert("Formulário copiado! Cole no WhatsApp do motoboy.");
+                      if (e.tipo === "COLETA") {
+                        // Formulário de COLETA — sem valores financeiros
+                        const detalhesAparelho = e.detalhes_upgrade
+                          ? e.detalhes_upgrade.split("\n").filter(l => !l.toLowerCase().startsWith("avaliação") && !l.toLowerCase().startsWith("avaliacao")).join("\n• ")
+                          : "";
+                        const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        const msg = [
+                          `🛵 *COLETA* 🛵`,
+                          ``,
+                          `⏰ *HORÁRIO:* ${e.horario || "Horário a combinar"}`,
+                          `📍 *LOCAL COLETA:* ${e.endereco || "A definir"}${e.bairro ? ` - ${e.bairro}` : ""}`,
+                          `🍎 *PRODUTO:* ${e.produto || ""}`,
+                          ``,
+                          ...(detalhesAparelho ? [`📱 *APARELHO NA COLETA:*`, `• ${detalhesAparelho}`] : []),
+                          ``,
+                          `🧑 *CLIENTE:* ${e.cliente || ""}`,
+                          `📞 *CONTATO:* ${e.telefone || ""}`,
+                          obsLimpa ? `\nOBS: ${obsLimpa}` : "",
+                          ``,
+                          `💼 Vendedor: ${e.vendedor || ""}`,
+                        ].filter(l => l !== undefined).join("\n");
+                        navigator.clipboard.writeText(msg);
+                        alert("Formulário de coleta copiado! Cole no WhatsApp do motoboy.");
+                      } else {
+                        // Formulário de ENTREGA
+                        const regiao = e.regiao || e.bairro || "";
+                        const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
+                        const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
+                        const trocaTexto = e.detalhes_upgrade
+                          ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:")).join(" / ")
+                          : "";
+                        const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
+                        const msg = [
+                          `🛵 *ENTREGA ${regiao.toUpperCase()}* 🛵`,
+                          `🛵`,
+                          `⏰ *HORÁRIO:* ${e.horario || "A combinar"}`,
+                          `📍 *LOCAL:* ${e.endereco || "A definir"} - ${e.bairro || ""}`,
+                          `🍎 *PRODUTO:* ${e.produto || ""}`,
+                          `‼️ *TIPO:* ${tipoLabel}`,
+                          ...(isUpgrade && trocaTexto ? [`🔄 *PRODUTO NA TROCA:* ${trocaTexto}`] : []),
+                          `💵 *PAGAMENTO:* ${formatPagamentoDisplay(e.forma_pagamento, e.valor, e.valor_total, e.entrada, e.parcelas)}`,
+                          `🧑 *CLIENTE:* ${e.cliente || ""}`,
+                          `📞 *CONTATO:* ${e.telefone || ""}`,
+                          obsLimpa ? `OBS: ${obsLimpa}` : "",
+                          `💼 Vendedor: ${e.vendedor || ""}`,
+                          "________________________________",
+                        ].filter(Boolean).join("\n");
+                        navigator.clipboard.writeText(msg);
+                        alert("Formulário copiado! Cole no WhatsApp do motoboy.");
+                      }
                     }}
-                    className="w-full py-2.5 rounded-xl text-center text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors mb-2"
+                    className={`w-full py-2.5 rounded-xl text-center text-sm font-semibold transition-colors mb-2 ${e.tipo === "COLETA" ? "bg-green-600 text-white hover:bg-green-700" : "bg-[#E8740E] text-white hover:bg-[#D06A0D]"}`}
                   >
-                    📋 Copiar Formulário Motoboy
+                    {e.tipo === "COLETA" ? "📋 Copiar Formulário Coleta" : "📋 Copiar Formulário Motoboy"}
                   </button>
                 </div>
 
@@ -2494,6 +2643,26 @@ export default function EntregasPage() {
                         if (obsLine) setTrocaObs(obsLine);
                       }
                       setProdutoManual(true);
+                      // Ativar modo coleta se editando uma coleta
+                      if (e.tipo === "COLETA") {
+                        setModoColeta(true);
+                        setModoSimples(false);
+                        setTrocaAtiva(false);
+                        // Carregar campos do aparelho dos detalhes_upgrade
+                        if (e.detalhes_upgrade) {
+                          const lines = e.detalhes_upgrade.split("\n");
+                          const batLine = lines.find(l => l.startsWith("Bateria:"));
+                          if (batLine) setColetaBateria(batLine.replace("Bateria:", "").replace("%", "").trim());
+                          const estLine = lines.find(l => l.startsWith("Estado:"));
+                          if (estLine) setColetaEstado(estLine.replace("Estado:", "").trim() as "A+" | "A" | "AB" | "B" | "");
+                          if (lines.some(l => l.includes("Com caixa"))) setColetaCaixa("sim");
+                          else if (lines.some(l => l.includes("Sem caixa"))) setColetaCaixa("nao");
+                          if (lines.some(l => l.includes("Com marcas"))) setColetaMarcas("sim");
+                          else if (lines.some(l => l.includes("Sem marcas"))) setColetaMarcas("nao");
+                        }
+                      } else {
+                        setModoColeta(false);
+                      }
                       setEditingEntregaId(e.id);
                       setShowForm(true);
                       setSelectedEntrega(null);

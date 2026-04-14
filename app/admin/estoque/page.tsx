@@ -632,6 +632,7 @@ interface ProdutoEstoque {
   custo_compra: number | null;
   encomenda_id: string | null;
   codigo_rastreio: string | null;
+  contato: string | null;
 }
 
 interface ImeiSearchResult {
@@ -4725,6 +4726,32 @@ export default function EstoquePage() {
                             {/* Ações */}
                             <div className="flex gap-2 pt-1 border-t border-dashed" style={{ borderColor: dm ? "#3A3A3C" : "#E5E5EA" }}>
                               <button onClick={(e) => { e.stopPropagation(); handlePrintEtiquetaPendencia(p); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white" : "border-[#E8740E]/40 text-[#E8740E] hover:bg-[#E8740E] hover:text-white"}`}>🏷️ Etiqueta</button>
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                const clienteNome = p.fornecedor || p.cliente || "";
+                                const prodNome = formatProdutoDisplay(p);
+                                const obs = p.observacao || "";
+                                const gradeM = obs.match(/\[GRADE_(A\+|AB|A|B)\]/);
+                                const grade = gradeM ? gradeM[1] : "";
+                                const temCaixa = obs.includes("[COM_CAIXA]") || /com\s+caixa/i.test(obs);
+                                // Limpar obs: remover tags internas e deixar só texto livre
+                                const obsLimpa = obs
+                                  .replace(/\[GRADE_[^\]]+\]/g, "")
+                                  .replace(/\[COM_CAIXA\]/g, "").replace(/\[COM_CABO\]/g, "").replace(/\[COM_FONTE\]/g, "").replace(/\[COM_CARREGADOR\]/g, "")
+                                  .replace(/\[COM_PULSEIRA\]/g, "").replace(/\[CICLOS:\d+\]/g, "").replace(/\[RESP:[^\]]*\]/g, "").replace(/\[COM_QUEM:[^\]]*\]/g, "")
+                                  .replace(/\[NUCLEOS:[^\]]*\]/g, "").replace(/\s{2,}/g, " ").trim();
+                                const params = new URLSearchParams({
+                                  modo: "coleta",
+                                  cliente_nome: clienteNome,
+                                  ...(p.contato ? { cliente_telefone: p.contato } : {}),
+                                  produto: prodNome,
+                                  ...(p.bateria ? { coleta_bateria: String(p.bateria) } : {}),
+                                  ...(grade ? { coleta_estado: grade } : {}),
+                                  ...(temCaixa ? { coleta_caixa: "sim" } : { coleta_caixa: "nao" }),
+                                  ...(obsLimpa ? { observacao: obsLimpa } : {}),
+                                });
+                                window.open(`/admin/entregas?${params.toString()}`, "_blank");
+                              }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-green-500/40 text-green-400 hover:bg-green-600 hover:text-white" : "border-green-500/40 text-green-600 hover:bg-green-600 hover:text-white"}`}>🛵 Coleta</button>
                               <button onClick={(e) => { e.stopPropagation(); setBulkCustoKey(p.produto); setBulkCustoVal(String(p.custo_unitario || "")); }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-[#3A3A3C] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:text-[#E8740E] hover:border-[#E8740E]"}`}>Editar preço</button>
                               <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Excluir "${formatProdutoDisplay(p)}"?`)) return; try { const res = await fetch("/api/estoque", { method: "DELETE", headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(userName) }, body: JSON.stringify({ ids: [p.id] }) }); if (res.ok) { setEstoque(prev => prev.filter(r => r.id !== p.id)); setMsg("Produto excluído"); } else { const json = await res.json(); setMsg("Erro: " + (json.error || "Falha ao excluir")); } } catch (err) { setMsg("Erro: " + String(err)); } }} className={`text-[10px] px-2 py-1 rounded border transition-colors ${dm ? "border-red-500/40 text-red-400 hover:bg-red-500 hover:text-white" : "border-red-400/40 text-red-500 hover:bg-red-500 hover:text-white"}`}>🗑️ Excluir</button>
                             </div>
@@ -4817,11 +4844,21 @@ export default function EstoquePage() {
                     const isUsado = items.some(p => p.tipo === "SEMINOVO" || p.tipo === "PENDENCIA");
                     const cardExpanded = expandedModels.has(groupKey);
                     return (
-                      <div key={groupKey} className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0`} onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
-                        {/* Produto + Cor */}
-                        <div>
-                          <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
-                          {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                      <div key={groupKey}
+                        draggable
+                        onDragStart={() => { dragCardRef.current = groupKey; setDragCardKey(groupKey); }}
+                        onDragOver={(e) => handleCardDragOver(e, groupKey)}
+                        onDragEnd={() => { handleCardDrop(cat, lineEntries); }}
+                        onDragLeave={() => { if (dropTarget?.modelo === groupKey) setDropTarget(null); }}
+                        className={`${bgCard} border ${borderCard} rounded-xl p-3 sm:p-4 space-y-2 hover:shadow-md transition-shadow cursor-pointer w-[calc(50%_-_6px)] sm:w-[280px] shrink-0 ${dragCardKey === groupKey ? "opacity-40 scale-95" : ""} ${dropTarget?.modelo === groupKey ? (dropTarget.position === "before" ? "ring-2 ring-l ring-[#E8740E]" : "ring-2 ring-r ring-[#E8740E]") : ""}`}
+                        onClick={() => { if (items.length === 1) { setDetailProduct(items[0]); } else { setExpandedModels(prev => { const s = new Set(prev); s.has(groupKey) ? s.delete(groupKey) : s.add(groupKey); return s; }); } }}>
+                        {/* Produto + Cor + Handle */}
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-bold text-xs sm:text-sm ${textPrimary} leading-tight`}>{formatProdutoDisplay(rep)}</p>
+                            {corPt && <p className={`text-[10px] sm:text-xs ${textSecondary} mt-0.5`}>{corPt}</p>}
+                          </div>
+                          <span className={`shrink-0 text-[10px] cursor-grab active:cursor-grabbing select-none ${textMuted} opacity-40 hover:opacity-100 transition-opacity`} title="Arrastar para reordenar">⠿</span>
                         </div>
                         {/* Quantidade */}
                         <div className="flex items-center gap-2">
@@ -6449,6 +6486,38 @@ export default function EstoquePage() {
                         }}
                         className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
                         title="Salvar responsável"
+                      >✓</button>
+                    </div>
+                  </div>
+                )}
+                {/* Contato / WhatsApp do cliente (pendências) */}
+                {(p.tipo === "PENDENCIA" || p.status === "PENDENTE") && (
+                  <div className="mt-3">
+                    <p className={`text-[10px] uppercase tracking-wider ${mS}`}>Contato / WhatsApp {saved("contato")}</p>
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        id={`contato-${p.id}`}
+                        key={`contato-${p.id}`}
+                        defaultValue={p.contato || ""}
+                        placeholder="(21) 99999-9999"
+                        inputMode="tel"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLButtonElement)?.click(); } }}
+                        className={`flex-1 text-[13px] px-2 py-1.5 rounded-lg border ${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"} focus:border-[#E8740E] focus:outline-none`}
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={async () => {
+                          const el = document.getElementById(`contato-${p.id}`) as HTMLInputElement;
+                          const novo = el?.value?.trim() || null;
+                          if (novo !== (p.contato || null)) {
+                            await apiPatch(p.id, { contato: novo });
+                            setEstoque(prev => prev.map(x => x.id === p.id ? { ...x, contato: novo } : x));
+                            setDetailProduct(prev => prev ? { ...prev, contato: novo } : null);
+                            showSaved("contato");
+                          }
+                        }}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 hover:bg-green-600 text-white font-bold text-sm"
+                        title="Salvar contato"
                       >✓</button>
                     </div>
                   </div>

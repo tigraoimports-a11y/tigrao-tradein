@@ -117,7 +117,7 @@ export default function VendasPage() {
   // Form state — ALL hooks must be before any conditional return
   const [form, setForm] = useState({
     data: hojeBR(),
-    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -369,7 +369,7 @@ export default function VendasPage() {
   }, [password]);
 
   // Campos que NÃO devem ser uppercased (emails, senhas, etc)
-  const noUpperFields = new Set(["email", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
+  const noUpperFields = new Set(["email", "telefone", "data", "cep", "cpf", "cnpj", "custo", "preco_vendido", "valor_comprovante_input", "entrada_pix", "entrada_especie", "entrada_fiado", "sinal_antecipado", "comp_alt", "qnt_parcelas", "parc_alt", "fiado_qnt_parcelas", "fiado_data_inicio", "fiado_intervalo", "pessoa", "valor_total_venda"]);
   const set = (field: string, value: string | boolean) => {
     const v = typeof value === "string" && !noUpperFields.has(field) ? value.toUpperCase() : value;
     setForm((f) => ({ ...f, [field]: v }));
@@ -456,13 +456,26 @@ export default function VendasPage() {
   useEffect(() => { if (password) { fetchEstoque(); fetchFornecedores(); } }, [password, fetchEstoque, fetchFornecedores]);
 
   // Auto-selecionar produto por serial/IMEI — chamado direto no onChange
+  // Busca no estoque filtrado primeiro; se não achar, busca na API (produto pode estar com status/tipo inesperado)
   const autoSelecionarPorSerial = useCallback((val: string) => {
     const v = val.trim().toUpperCase();
     if (!v || v.length < 5) return;
-    const found = estoque.find(p =>
+    let found = estoque.find(p =>
       (p.serial_no && p.serial_no.toUpperCase() === v) ||
       (p.imei && p.imei.toUpperCase() === v)
     );
+    // Se não achou no estoque filtrado, buscar via API (pode estar com status diferente)
+    if (!found && v.length >= 8) {
+      fetch(`/api/estoque?serial=${encodeURIComponent(v)}`, { headers: { "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") } })
+        .then(r => r.json())
+        .then(j => {
+          const item = (j.data || []).find((p: EstoqueItem) => p.qnt > 0 && ((p.serial_no || "").toUpperCase() === v || (p.imei || "").toUpperCase() === v));
+          if (item && item.status !== "EM ESTOQUE") {
+            setMsg(`⚠️ Produto encontrado mas com status "${item.status}" (tipo: ${item.tipo}). Mova para estoque antes de vender.`);
+          }
+        })
+        .catch(() => {});
+    }
     if (found) {
       const tipoKey = (found.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
       setCatSel(`${found.categoria}__${tipoKey}`);
@@ -483,7 +496,7 @@ export default function VendasPage() {
     const cats: { key: string; label: string }[] = [];
     const catSet = new Set<string>();
     for (const p of estoque) {
-      const tipo = (p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+      const tipo = (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO";
       const key = `${p.categoria}__${tipo}`;
       if (!catSet.has(key)) {
         catSet.add(key);
@@ -503,7 +516,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -952,6 +965,7 @@ export default function VendasPage() {
       cpf: form.cpf || null,
       cnpj: form.cnpj || null,
       email: form.email || null,
+      telefone: form.telefone || null,
       endereco: form.endereco || null,
       cep: form.cep?.replace(/\D/g, "") || null,
       bairro: form.bairro || null,
@@ -1261,10 +1275,8 @@ export default function VendasPage() {
           ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
           : gForma === "DEBITO" ? 0.75
           : 0;
-        const liqPrinc = gTaxa > 0 ? calcularLiquido(gCompPrinc, gTaxa) : gCompPrinc;
-        const gTaxaAlt = getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK");
-        const liqAlt = gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt;
-        payloads[0].preco_vendido = Math.round(liqPrinc + liqAlt + gEntradaPix + gEntradaEspecie + gTroca);
+        // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+        payloads[0].preco_vendido = Math.round(gCompPrinc + gCompAlt + gEntradaPix + gEntradaEspecie + gTroca);
       }
     }
     if (payloads.length > 1) {
@@ -1284,22 +1296,16 @@ export default function VendasPage() {
             : gForma === "DEBITO" ? 0.75
             : 0;
 
-          // Total líquido from comprovante after tax
-          const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
-
           // Cartão alternativo (2o cartão)
           const gCompAlt = parseFloat(form.comp_alt) || 0;
-          const gTaxaAlt = gCompAlt > 0
-            ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
-            : 0;
-          const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
 
           // Add entradas (pix, especie) — these are global
           const gEntradaPix = parseFloat(form.entrada_pix) || 0;
           const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
           // Trocas são por produto — somar todas as trocas de todos os produtos
           const totalTrocas = payloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-          const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+          // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+          const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
           let comprovanteDistribuido = 0;
           let vendidoDistribuido = 0;
@@ -1331,7 +1337,7 @@ export default function VendasPage() {
       }
       setOfflineCount(getQueueCount());
       setDuplicadoInfo(null);
-      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
+      const clienteInfo = { cliente: form.cliente, cpf: form.cpf, cnpj: form.cnpj, email: form.email, telefone: form.telefone, endereco: form.endereco, pessoa: form.pessoa, origem: form.origem, tipo: form.tipo };
       setLastClienteData(clienteInfo);
       setProdutosCarrinho([]);
       clearProductFields();
@@ -1360,16 +1366,12 @@ export default function VendasPage() {
                 ? getTaxa(gBanco, gBandeira, gParcelas, gForma === "LINK" ? "CARTAO" : gForma)
                 : gForma === "DEBITO" ? 0.75
                 : 0;
-              const totalLiquido = gTaxa > 0 ? calcularLiquido(comprovanteTotal, gTaxa) : comprovanteTotal;
               const gCompAlt = parseFloat(form.comp_alt) || 0;
-              const gTaxaAlt = gCompAlt > 0
-                ? getTaxa(form.banco_alt || "ITAU", form.band_alt || null, parseInt(form.parc_alt) || 0, (form.forma_alt || form.forma || "CARTAO") as "CARTAO" | "LINK")
-                : 0;
-              const liqAlt = gCompAlt > 0 ? (gTaxaAlt > 0 ? calcularLiquido(gCompAlt, gTaxaAlt) : gCompAlt) : 0;
               const gEntradaPix = parseFloat(form.entrada_pix) || 0;
               const gEntradaEspecie = parseFloat(form.entrada_especie) || 0;
               const totalTrocas = groupPayloads.reduce((s, p) => s + (parseFloat(String(p.produto_na_troca)) || 0), 0);
-              const totalRecebido = totalLiquido + liqAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
+              // preco_vendido = valor BRUTO (o que o cliente pagou) — sem descontar taxa
+              const totalRecebido = comprovanteTotal + gCompAlt + gEntradaPix + gEntradaEspecie + totalTrocas;
 
               let comprovanteDistribuido = 0;
               let vendidoDistribuido = 0;
@@ -1410,7 +1412,7 @@ export default function VendasPage() {
             // Limpar TODOS os campos (cliente + produto) após edição
             setForm({
               data: hojeBR(),
-              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1452,7 +1454,7 @@ export default function VendasPage() {
             // Limpar TODOS os campos (cliente + produto) após edição
             setForm({
               data: hojeBR(),
-              cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+              cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
               custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
               qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
               entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1527,7 +1529,7 @@ export default function VendasPage() {
       // Limpar TODOS os campos do formulário para a próxima venda
       setForm({
         data: hojeBR(),
-        cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+        cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
         custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
         qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
         entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -1664,6 +1666,7 @@ export default function VendasPage() {
     if (r.cpf) set("cpf", r.cpf);
     if (r.cnpj) { set("cnpj", r.cnpj); set("pessoa", "PJ"); }
     if (r.email) set("email", r.email);
+    if (r.telefone) set("telefone", r.telefone);
     if (r.endereco) set("endereco", r.endereco);
     if (r.cep) { set("cep", r.cep); fetchCep(r.cep.replace(/\D/g, "")); }
     if (r.bairro) set("bairro", r.bairro);
@@ -1763,6 +1766,7 @@ export default function VendasPage() {
       cpf: "",
       cnpj: "",
       email: "",
+      telefone: "",
       endereco: "",
       pessoa: "PF",
       origem: v.origem || "",
@@ -2016,7 +2020,7 @@ export default function VendasPage() {
               <button
                 onClick={() => {
                   setForm({
-                    data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
+                    data: hojeBR(), cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -2314,6 +2318,7 @@ export default function VendasPage() {
                   <div><p className={labelCls}>CPF</p><input value={form.cpf} onChange={(e) => set("cpf", e.target.value)} placeholder="000.000.000-00" className={inputCls} /></div>
                 )}
                 <div><p className={labelCls}>Email</p><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="cliente@email.com" className={inputCls} /></div>
+                <div><p className={labelCls}>WhatsApp</p><input type="tel" value={form.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="(21) 99999-9999" className={inputCls} /></div>
               </div>
 
               {/* Historico do Cliente */}
@@ -2667,7 +2672,7 @@ export default function VendasPage() {
                 onClick={() => {
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -3609,7 +3614,7 @@ export default function VendasPage() {
             {form.cliente && (
               <button
                 onClick={() => {
-                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
+                  setForm((f) => ({ ...f, cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF" as "PF" | "PJ", cep: "", bairro: "", cidade: "", uf: "", local: "" }));
                   setLastClienteData(null);
                 }}
                 className={`px-4 py-3 rounded-xl border text-sm transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:bg-[#2C2C2E]" : "border-[#D2D2D7] text-[#86868B] hover:bg-[#F5F5F7]"}`}
@@ -4355,6 +4360,7 @@ export default function VendasPage() {
                                               cpf: primaryVenda.cpf || "",
                                               cnpj: primaryVenda.cnpj || "",
                                               email: primaryVenda.email || "",
+                                              telefone: primaryVenda.telefone || "",
                                               endereco: primaryVenda.endereco || "",
                                               pessoa: (primaryVenda.pessoa === "PJ" ? "PJ" : "PF") as "PF" | "PJ",
                                               origem: primaryVenda.origem || "",
@@ -4512,7 +4518,7 @@ export default function VendasPage() {
                                           ✏️ Editar
                                         </button>}
                                         {/* Gerar Termo de Procedência — só quando há troca */}
-                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (
+                                        {(v.troca_produto || (v.produto_na_troca && parseFloat(String(v.produto_na_troca)) > 0)) && (<>
                                           <button
                                             onClick={async (e) => {
                                               e.stopPropagation();
@@ -4620,7 +4626,21 @@ export default function VendasPage() {
                                           >
                                             📜 Gerar Termo de Procedencia
                                           </button>
-                                        )}
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (!confirm("Recriar pendência da troca no estoque?")) return;
+                                              fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, troca_produto: v.troca_produto, produto_na_troca: v.produto_na_troca }),
+                                              }).then(r => { if (r.ok) setMsg("Pendência recriada!"); else r.json().then(j => setMsg("Erro: " + (j.error || "falha"))); }).catch(() => setMsg("Erro ao recriar"));
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
+                                          >
+                                            🔄 Recriar Pendência
+                                          </button>
+                                        </>)}
                                       </div>
                                       {/* Nota Fiscal — drop zone + botão (esconde pra ATACADO e pra quem só tem vendas_andamento) */}
                                       {podeVerHistorico && v.origem !== "ATACADO" && <div className="flex gap-2 flex-wrap items-center">
@@ -5148,7 +5168,7 @@ export default function VendasPage() {
                   // Limpar formulário completo após nota fiscal
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
@@ -5184,7 +5204,7 @@ export default function VendasPage() {
                   // Limpar formulário completo ao pular nota fiscal
                   setForm({
                     data: hojeBR(),
-                    cliente: "", cpf: "", cnpj: "", email: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
+                    cliente: "", cpf: "", cnpj: "", email: "", telefone: "", endereco: "", pessoa: "PF", origem: "", tipo: "", produto: "", fornecedor: "",
                     custo: "", preco_vendido: "", valor_comprovante_input: "", banco: "ITAU", forma: "",
                     qnt_parcelas: "", bandeira: "", local: "", produto_na_troca: "",
                     entrada_pix: "", banco_pix: "ITAU", entrada_especie: "", banco_2nd: "", banco_alt: "",
