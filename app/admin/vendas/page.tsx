@@ -2282,32 +2282,61 @@ export default function VendasPage() {
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
                       <div className={`px-3 py-1.5 text-[10px] font-bold uppercase ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Clientes recorrentes</div>
                       {clientesRecorrentes.map((c, i) => (
-                        <button
-                          key={i}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            set("cliente", c.cliente);
-                            set("origem", c.origem);
-                            set("tipo", c.tipo);
-                            set("forma", c.forma);
-                            set("banco", c.banco);
-                            if (c.pessoa) set("pessoa", c.pessoa);
-                            if (c.cpf) set("cpf", c.cpf);
-                            if (c.cnpj) set("cnpj", c.cnpj);
-                            if (c.email) set("email", c.email);
-                            if (c.endereco) set("endereco", c.endereco);
-                            if (c.cep) set("cep", c.cep);
-                            if (c.bairro) set("bairro", c.bairro);
-                            if (c.cidade) set("cidade", c.cidade);
-                            if (c.uf) set("uf", c.uf);
-                            setShowClienteSuggestions(false);
-                            setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
-                        >
-                          <span className="text-sm font-medium text-[#1D1D1F]">{c.cliente}</span>
-                          <span className="block text-[10px] text-[#86868B]">{c.qtd} compra{c.qtd > 1 ? "s" : ""} — Ultimo: {c.ultimoProduto}</span>
-                        </button>
+                        <div key={i} className="flex items-center border-b border-[#F5F5F7] last:border-0">
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              set("cliente", c.cliente);
+                              set("origem", c.origem);
+                              set("tipo", c.tipo);
+                              set("forma", c.forma);
+                              set("banco", c.banco);
+                              if (c.pessoa) set("pessoa", c.pessoa);
+                              if (c.cpf) set("cpf", c.cpf);
+                              if (c.cnpj) set("cnpj", c.cnpj);
+                              if (c.email) set("email", c.email);
+                              if (c.endereco) set("endereco", c.endereco);
+                              if (c.cep) set("cep", c.cep);
+                              if (c.bairro) set("bairro", c.bairro);
+                              if (c.cidade) set("cidade", c.cidade);
+                              if (c.uf) set("uf", c.uf);
+                              setShowClienteSuggestions(false);
+                              setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
+                            }}
+                            className="flex-1 px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors"
+                          >
+                            <span className="text-sm font-medium text-[#1D1D1F]">{c.cliente}</span>
+                            <span className="block text-[10px] text-[#86868B]">{c.qtd} compra{c.qtd > 1 ? "s" : ""} — Ultimo: {c.ultimoProduto}</span>
+                          </button>
+                          {clientesRecorrentes.length >= 2 && (
+                            <button
+                              onMouseDown={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const outros = clientesRecorrentes.filter((_, j) => j !== i);
+                                const nomeNovo = c.cliente;
+                                const listaAntigos = outros.map(o => `• ${o.cliente} (${o.qtd} compra${o.qtd > 1 ? "s" : ""})`).join("\n");
+                                if (!confirm(`Unificar para "${nomeNovo}"?\n\nOs seguintes clientes serão renomeados:\n${listaAntigos}\n\nTodas as vendas, entregas e dados serão transferidos.`)) return;
+                                setShowClienteSuggestions(false);
+                                for (const o of outros) {
+                                  try {
+                                    await fetch("/api/admin/merge-cliente", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                      body: JSON.stringify({ nomeAntigo: o.cliente, nomeNovo }),
+                                    });
+                                  } catch { /* ignore */ }
+                                }
+                                setMsg(`Clientes unificados para "${nomeNovo}"`);
+                                fetchVendas();
+                              }}
+                              className="shrink-0 px-2 py-1 mr-2 rounded text-[9px] font-bold text-[#E8740E] hover:bg-orange-50 transition-colors"
+                              title={`Unificar todos para ${c.cliente}`}
+                            >
+                              Unificar
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
