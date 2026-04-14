@@ -4935,6 +4935,43 @@ export default function VendasPage() {
                                           </button>
                                         )}
                                       </div>
+
+                                      {/* Campo de rastreio inline para vendas CORREIO */}
+                                      {v.local === "CORREIO" && (
+                                        <div className="mt-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                          <span className="text-xs font-semibold text-blue-500">📦 Rastreio:</span>
+                                          {v.codigo_rastreio ? (
+                                            <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-blue-500 hover:underline">{v.codigo_rastreio}</a>
+                                          ) : (
+                                            <span className={`text-xs ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Não informado</span>
+                                          )}
+                                          <input
+                                            id={`rastreio-input-${v.id}`}
+                                            defaultValue={v.codigo_rastreio || ""}
+                                            placeholder="BR123456789BR"
+                                            className={`px-2 py-1 border rounded font-mono text-xs uppercase w-40 ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7]"}`}
+                                          />
+                                          <button
+                                            onClick={async () => {
+                                              const input = document.getElementById(`rastreio-input-${v.id}`) as HTMLInputElement;
+                                              const codigo = input?.value?.trim().toUpperCase() || "";
+                                              if (!codigo) return;
+                                              const res = await fetch("/api/vendas", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                                body: JSON.stringify({ id: v.id, codigo_rastreio: codigo }),
+                                              });
+                                              if (res.ok) {
+                                                setVendas(prev => prev.map(r => r.id === v.id ? { ...r, codigo_rastreio: codigo } : r));
+                                                setMsg(`Rastreio ${codigo} salvo! Venda movida para aba Correios.`);
+                                              }
+                                            }}
+                                            className="px-2 py-1 rounded text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                                          >
+                                            Salvar
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Detalhes da venda */}
