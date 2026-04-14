@@ -238,7 +238,7 @@ export default function GerarLinkPage() {
   const [mpCopied, setMpCopied] = useState(false);
 
   // Dados do cliente (pré-preenchimento via cola de texto)
-  const [incluirDadosCliente, setIncluirDadosCliente] = useState(true);
+  const [incluirDadosCliente, setIncluirDadosCliente] = useState(false);
   const [dadosClienteTexto, setDadosClienteTexto] = useState("");
   const [cliNome, setCliNome] = useState("");
   const [cliCpf, setCliCpf] = useState("");
