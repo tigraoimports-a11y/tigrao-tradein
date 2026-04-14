@@ -13,12 +13,23 @@ export async function POST(request: Request) {
     }
 
     // Verificar se já existe (evitar duplicata)
+    // 1. Por short_code exato
     const { data: existing } = await supabase
       .from("link_compras")
       .select("id")
       .eq("short_code", body.short_code)
       .maybeSingle();
     if (existing) return NextResponse.json({ ok: true, exists: true });
+
+    // 2. Mesmo cliente + mesmo produto nos últimos 30 minutos (evita múltiplos cliques)
+    if (body.cliente_telefone || body.cliente_nome) {
+      const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      let q = supabase.from("link_compras").select("id").eq("produto", body.produto || "").gte("created_at", since);
+      if (body.cliente_telefone) q = q.eq("cliente_telefone", body.cliente_telefone);
+      else if (body.cliente_nome) q = q.ilike("cliente_nome", body.cliente_nome);
+      const { data: recent } = await q.limit(1);
+      if (recent && recent.length > 0) return NextResponse.json({ ok: true, exists: true });
+    }
 
     const payload = {
       short_code: body.short_code,

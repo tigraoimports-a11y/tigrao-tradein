@@ -61,6 +61,7 @@ export default function StepQuote(p: StepQuoteProps) {
   const [sairLoading, setSairLoading] = useState(false); const [showFeedback, setShowFeedback] = useState(false); const [showAllParc, setShowAllParc] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [payMode, setPayMode] = useState<"simples" | "flex">("simples");
+  const [fechando, setFechando] = useState(false);
   const [flexBlocks, setFlexBlocks] = useState<PaymentBlock[]>([]);
   const [flexSummary, setFlexSummary] = useState<PaymentSummary | null>(null);
   const countdown = useCountdown(validadeHoras);
@@ -325,7 +326,9 @@ export default function StepQuote(p: StepQuoteProps) {
         const baseOrigin = typeof window !== "undefined" ? window.location.origin : "";
         const compraUrl = `${baseOrigin}/compra?${params.toString()}`;
         return (
-          <button onClick={() => {
+          <button disabled={fechando} onClick={() => {
+            if (fechando) return;
+            setFechando(true);
             onTrackAction?.("quote_whatsapp");
             salvarLead({ ...leadBase, status: "GOSTEI", formaPagamento: formaPag });
             if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).fbq) (window as unknown as Record<string, (a: string, b: string, c: Record<string, unknown>) => void>).fbq("track", "CompleteRegistration", { content_name: `${newModel} ${newStorage}`, value: dif, currency: "BRL" });
@@ -368,7 +371,7 @@ export default function StepQuote(p: StepQuoteProps) {
           }}
             className="block w-full py-4 rounded-2xl text-[17px] font-semibold text-center transition-all duration-200 active:scale-[0.98]"
             style={{ backgroundColor: "#22c55e", color: "#fff", border: "1px solid #22c55e" }}>
-            DESEJO FECHAR MEU PEDIDO
+            {fechando ? "Redirecionando..." : "DESEJO FECHAR MEU PEDIDO"}
           </button>
         );
       })()}
