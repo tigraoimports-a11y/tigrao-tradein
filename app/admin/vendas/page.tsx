@@ -4008,10 +4008,10 @@ export default function VendasPage() {
                           pagParts.push(`${v.banco} ${v.qnt_parcelas}x${v.bandeira ? ` ${v.bandeira}` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
                         } else if (v.banco === "MERCADO_PAGO") {
                           pagParts.push(`Link MP${v.qnt_parcelas ? ` ${v.qnt_parcelas}x` : ""}${v.valor_comprovante ? ` (${fmt(v.valor_comprovante)})` : ""}`);
-                        } else if (v.forma && v.forma !== "CARTAO") {
+                        } else if (v.forma && v.forma !== "CARTAO" && resto > 0) {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
-                          pagParts.push(resto > 0 ? `${lbl}${banco}: ${fmt(resto)}` : `${lbl}${banco}`);
+                          pagParts.push(`${lbl}${banco}: ${fmt(resto)}`);
                         }
                         // Sem forma definida mas tem complemento a pagar
                         if (!v.forma && resto > 0) {
