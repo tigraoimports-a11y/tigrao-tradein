@@ -716,7 +716,7 @@ function CompraForm() {
             <span className="text-green-600 font-bold text-sm">&#x2705; {trocaProduto2Param ? "Trocas confirmadas" : "Troca confirmada"}</span>
           </div>
           <div>
-            <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaProduto2Param ? " (1º)" : ""}</p>
+            <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaCorParam ? ` — ${trocaCorParam}` : ""}{trocaProduto2Param ? " (1º)" : ""}</p>
             {trocaNum1 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum1)}</p>}
             {trocaCond && <p className="text-[#86868B] text-xs">{trocaCond}</p>}
             {trocaCaixaParam && (
@@ -727,7 +727,7 @@ function CompraForm() {
           </div>
           {trocaProduto2Param && (
             <div className="pt-2 border-t border-green-200">
-              <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param} (2º)</p>
+              <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param}{trocaCor2Param ? ` — ${trocaCor2Param}` : ""} (2º)</p>
               {trocaNum2 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum2)}</p>}
               {trocaCond2Param && <p className="text-[#86868B] text-xs">{trocaCond2Param}</p>}
               {trocaCaixa2Param && (
