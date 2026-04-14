@@ -93,7 +93,7 @@ export function rateLimitPublic(req: NextRequest): NextResponse | null {
   return rateLimit(req, 30, ONE_MINUTE, "public");
 }
 
-/** 10 requests per hour — for lead/simulation submission endpoints */
+/** 30 requests per hour — for lead/simulation submission endpoints */
 export function rateLimitSubmission(req: NextRequest): NextResponse | null {
-  return rateLimit(req, 10, ONE_HOUR, "submission");
+  return rateLimit(req, 30, ONE_HOUR, "submission");
 }
