@@ -1700,12 +1700,7 @@ export default function EstoquePage() {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         const errMsg = j.error || `HTTP ${res.status}`;
-        const isMissingTable = /relation.*does not exist|rastreios_envio/i.test(errMsg);
-        if (isMissingTable) {
-          alert(`⚠️ Migration nao rodada!\n\nA tabela rastreios_envio nao existe no banco.\nVa em /admin/migrations e rode a migration:\n20260414_rastreios_envio.sql`);
-        } else {
-          alert(`Erro ao adicionar rastreio: ${errMsg}`);
-        }
+        alert(`❌ Erro ao adicionar rastreio\n\nMensagem do Supabase:\n${errMsg}\n\nStatus: ${res.status}`);
         setMsg(`Erro ao adicionar rastreio: ${errMsg}`);
         return;
       }
