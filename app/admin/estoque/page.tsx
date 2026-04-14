@@ -872,6 +872,9 @@ export default function EstoquePage() {
   const [encomendaMap, setEncomendaMap] = useState<Map<string, string>>(new Map()); // estoque_id → cliente
   // Códigos de rastreio por pedido (origem + data) — keyed por `${origem}|${data}` → array de {id, codigo}
   const [rastreiosEnvio, setRastreiosEnvio] = useState<Map<string, { id: string; codigo: string }[]>>(new Map());
+  // Estado do input inline: qual key esta em modo "adicionar" + texto digitado
+  const [addingRastreioKey, setAddingRastreioKey] = useState<string | null>(null);
+  const [addingRastreioText, setAddingRastreioText] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
   const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
@@ -4230,10 +4233,17 @@ export default function EstoquePage() {
                             const key = rastreiosKey(origemKey, dataPed);
                             const codigos = rastreiosEnvio.get(key) || [];
                             const dataFmt = dataPed.split("-").reverse().join("/");
+                            const isAdding = addingRastreioKey === key;
+                            const submitNovoCodigo = async () => {
+                              const code = addingRastreioText.trim().toUpperCase();
+                              if (!code) return;
+                              await addRastreiosEnvio(origemKey, dataPed, [code]);
+                              setAddingRastreioText("");
+                            };
                             return (
                               <div key={key} className={`flex items-center gap-2 flex-wrap px-4 py-2 border-b ${dm ? "bg-[#1F2937] border-[#3A3A3C]" : "bg-blue-50 border-blue-100"}`}>
                                 <span className={`text-[11px] font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>📦 Rastreios ({dataFmt}):</span>
-                                {codigos.length === 0 && (
+                                {codigos.length === 0 && !isAdding && (
                                   <span className={`text-[11px] italic ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>nenhum</span>
                                 )}
                                 {codigos.map(r => (
@@ -4249,16 +4259,38 @@ export default function EstoquePage() {
                                     >✕</button>
                                   </span>
                                 ))}
-                                <button
-                                  onClick={() => {
-                                    const raw = prompt("Códigos de rastreio dos Correios (um por linha ou separados por vírgula/espaço):");
-                                    if (raw === null) return;
-                                    const codigos = raw.split(/[\n,;\s]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
-                                    if (codigos.length === 0) return;
-                                    addRastreiosEnvio(origemKey, dataPed, codigos);
-                                  }}
-                                  className={`text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${dm ? "bg-blue-900/30 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-white border border-blue-300 text-blue-600 hover:bg-blue-500 hover:text-white hover:border-blue-500"}`}
-                                >+ adicionar</button>
+                                {isAdding ? (
+                                  <span className={`inline-flex items-center gap-1 rounded-full overflow-hidden text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] border border-blue-700" : "bg-white border border-blue-400"}`}>
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={addingRastreioText}
+                                      onChange={e => setAddingRastreioText(e.target.value.toUpperCase())}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") { e.preventDefault(); submitNovoCodigo(); }
+                                        if (e.key === "Escape") { e.preventDefault(); setAddingRastreioKey(null); setAddingRastreioText(""); }
+                                      }}
+                                      placeholder="Ex: BR123456789BR"
+                                      className={`px-2 py-1 text-[11px] font-mono font-semibold outline-none bg-transparent w-44 ${dm ? "text-blue-200 placeholder-blue-900" : "text-blue-700 placeholder-blue-300"}`}
+                                    />
+                                    <button
+                                      onClick={submitNovoCodigo}
+                                      disabled={!addingRastreioText.trim()}
+                                      className={`px-2 py-1 font-bold ${addingRastreioText.trim() ? (dm ? "bg-blue-700 hover:bg-blue-600 text-white" : "bg-blue-500 hover:bg-blue-600 text-white") : (dm ? "bg-[#3A3A3C] text-[#6E6E73]" : "bg-[#E5E5EA] text-[#AEAEB2]")}`}
+                                      title="Salvar"
+                                    >✓</button>
+                                    <button
+                                      onClick={() => { setAddingRastreioKey(null); setAddingRastreioText(""); }}
+                                      className={`px-1.5 py-1 ${dm ? "hover:bg-red-900/60 text-red-300" : "hover:bg-red-500 hover:text-white text-red-500"}`}
+                                      title="Cancelar"
+                                    >✕</button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => { setAddingRastreioKey(key); setAddingRastreioText(""); }}
+                                    className={`text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${dm ? "bg-blue-900/30 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-white border border-blue-300 text-blue-600 hover:bg-blue-500 hover:text-white hover:border-blue-500"}`}
+                                  >{codigos.length === 0 ? "+ adicionar código" : "+ outro código"}</button>
+                                )}
                               </div>
                             );
                           });
