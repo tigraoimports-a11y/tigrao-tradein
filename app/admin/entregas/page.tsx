@@ -2628,7 +2628,7 @@ export default function EntregasPage() {
                   <div className="text-sm">
                     <span className="text-[#86868B]">Tipo: </span>
                     <span className="text-[#1D1D1F] font-medium">{e.tipo}</span>
-                    {e.detalhes_upgrade && <span className="text-[#86868B]"> — {e.detalhes_upgrade}</span>}
+                    {e.detalhes_upgrade && <span className="text-[#86868B]"> — {e.detalhes_upgrade.split("\n").filter(l => !/^avalia[cç][aã]o[:s]/i.test(l.trim())).map(l => l.replace(/\s*[-—]\s*R\$\s*[\d.,]+/g, "").replace(/\s*\(R\$\s*[\d.,]+\)/g, "").trim()).filter(Boolean).join(" / ")}</span>}
                   </div>
                 )}
                 {e.forma_pagamento && (
@@ -2697,7 +2697,7 @@ export default function EntregasPage() {
                 {e.observacao && (
                   <div className="text-sm p-3 bg-[#F5F5F7] rounded-lg">
                     <span className="text-[#86868B]">Obs: </span>
-                    <span className="text-[#1D1D1F]">{e.observacao}</span>
+                    <span className="text-[#1D1D1F]">{e.observacao.replace(/\s*\(R\$\s*[\d.,]+\)/g, "").replace(/R\$\s*[\d.,]+/g, "").trim()}</span>
                   </div>
                 )}
 
