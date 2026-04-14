@@ -194,6 +194,10 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
   const [saving, setSaving] = useState(false);
   // Extra serial/IMEI pairs for qnt > 1 (index 0 = unit 2, index 1 = unit 3, etc.)
   const [multiSerials, setMultiSerials] = useState<Array<{serial_no: string; imei: string}>>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newRowState, setNewRowState] = useState<ProdutoRowState | null>(null);
+  const [savingNew, setSavingNew] = useState(false);
 
   const reload = async () => {
     try {
@@ -237,6 +241,57 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
     const tags = `${prefix}${caixaTag}${gradeTag}`;
     const combined = tags ? (origem ? `${tags} ${origem}` : tags) : origem;
     return combined || null;
+  };
+
+  const deleteProduct = async (id: string, nome: string) => {
+    if (!confirm(`Remover "${nome}" deste pedido?\n\nO valor do gasto NÃO será alterado.`)) return;
+    setDeletingId(id);
+    try {
+      await fetch("/api/estoque", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ id }),
+      });
+      await reload();
+    } catch { /* ignore */ }
+    setDeletingId(null);
+  };
+
+  const saveNewProduct = async () => {
+    if (!newRowState) return;
+    setSavingNew(true);
+    try {
+      const obs = buildObs(newRowState.condicao, "", newRowState.caixa, newRowState.grade);
+      const row = {
+        produto: newRowState.produto,
+        categoria: newRowState.categoria,
+        qnt: parseInt(newRowState.qnt) || 1,
+        custo_unitario: parseFloat(newRowState.custo_unitario) || 0,
+        custo_compra: parseFloat(newRowState.custo_unitario) || 0,
+        cor: newRowState.cor || null,
+        fornecedor: newRowState.fornecedor || null,
+        serial_no: newRowState.serial_no ? newRowState.serial_no.toUpperCase() : null,
+        imei: newRowState.imei ? newRowState.imei.toUpperCase() : null,
+        observacao: obs,
+        status: "A CAMINHO",
+        tipo: "A_CAMINHO",
+        pedido_fornecedor_id: pedidoFornecedorId,
+      };
+      const res = await fetch("/api/estoque", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ action: "add_to_pedido", row }),
+      });
+      const json = await res.json();
+      if (json.ok || json.data) {
+        setAddingNew(false);
+        setNewRowState(null);
+        await reload();
+      } else {
+        alert("Erro: " + (json.error || "falha ao salvar"));
+      }
+    } catch (err) { alert("Erro de conexão: " + err); }
+    setSavingNew(false);
   };
 
   const startEdit = (p: any) => {
@@ -393,6 +448,9 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
         Produtos do pedido ({produtos.length})
       </p>
       <div className="space-y-1.5">
+        {produtos.length === 0 && !addingNew && (
+          <p className={`text-xs italic ${dm ? "text-[#6E6E73]" : "text-[#86868B]"}`}>Nenhum produto vinculado</p>
+        )}
         {produtos.map((p: any) => (
           <div key={p.id} className={`px-3 py-2 rounded-lg text-xs ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
             {editId === p.id && editRowState ? (
@@ -503,12 +561,52 @@ function ProdutosVinculados({ pedidoFornecedorId, password, dm, fornecedores }: 
                   <button onClick={() => startEdit(p)} className={`text-[10px] font-semibold ${dm ? "text-[#F5A623]" : "text-[#E8740E]"} hover:underline`}>
                     Editar
                   </button>
+                  <button
+                    onClick={() => deleteProduct(p.id, p.produto)}
+                    disabled={deletingId === p.id}
+                    className={`text-[10px] font-semibold text-red-500 hover:underline disabled:opacity-50`}
+                  >
+                    {deletingId === p.id ? "..." : "Excluir"}
+                  </button>
                 </div>
               </div>
             )}
           </div>
         ))}
       </div>
+
+      {/* Form para adicionar novo produto */}
+      {addingNew && newRowState && (
+        <div className={`mt-2 px-3 py-3 rounded-lg space-y-3 ${dm ? "bg-[#3A3A3C]" : "bg-[#F0F0F5]"}`}>
+          <p className={`text-[10px] font-semibold uppercase tracking-wider ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Novo produto</p>
+          <ProdutoSpecFields
+            row={newRowState}
+            onChange={setNewRowState}
+            onRemove={() => { setAddingNew(false); setNewRowState(null); }}
+            fornecedores={fornecedores}
+            inputCls={inputCls}
+            labelCls={`text-[10px] font-semibold uppercase tracking-wider mb-1 block ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}
+            darkMode={dm}
+            index={0}
+          />
+          <div className="flex gap-2">
+            <button onClick={saveNewProduct} disabled={savingNew || !newRowState.produto} className="px-3 py-1 rounded bg-[#E8740E] text-white text-[10px] font-semibold hover:bg-[#D06A0D] disabled:opacity-50">
+              {savingNew ? "Salvando..." : "Salvar"}
+            </button>
+            <button onClick={() => { setAddingNew(false); setNewRowState(null); }} className={`px-3 py-1 rounded text-[10px] font-semibold ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => { setAddingNew(true); setNewRowState(createEmptyProdutoRow()); }}
+        className={`mt-2 w-full py-2 rounded-lg border-2 border-dashed text-xs font-semibold transition-colors ${dm ? "border-[#3A3A3C] text-[#98989D] hover:border-[#E8740E] hover:text-[#E8740E]" : "border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E] hover:text-[#E8740E]"}`}
+      >
+        + Adicionar Produto
+      </button>
     </div>
   );
 }
