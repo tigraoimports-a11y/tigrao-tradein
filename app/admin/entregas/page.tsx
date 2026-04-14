@@ -1052,23 +1052,44 @@ export default function EntregasPage() {
                       if (inline && inline.length > 3) r.forma_pagamento = inline;
                       section = "pagamento"; continue;
                     }
-                    // "Entrada PIX R$ 2.100 + 10x de R$ 579,70 no cartao (total cartao: R$ 3.770,67)"
-                    const pixM = line.match(/entrada\s+pix\s+R?\$?\s*([\d.,]+)/i);
-                    if (pixM) r.entrada_pix = parseMoney(pixM[1]);
-                    const parcM = line.match(/(\d+)x\s+de\s+R?\$?\s*([\d.,]+)/i);
-                    if (parcM) { r.parcelas_n = parseInt(parcM[1]); r.parcelas_val = parseMoney(parcM[2]); r.parcelas_str = `${r.parcelas_n}x de R$ ${parcM[2]}`; }
+                    // PIX antes: "Entrada PIX R$ 2.100"
+                    if (!r.entrada_pix) {
+                      const pixA = line.match(/entrada\s+pix[^\d]*([\d.,]+)/i);
+                      if (pixA) r.entrada_pix = parseMoney(pixA[1]);
+                    }
+                    // PIX depois: "entrada de 2.500 no pix" / "entrada de R$ 2.500 no pix"
+                    if (!r.entrada_pix) {
+                      const pixB = line.match(/entrada\s+(?:de\s+)?R?\$?\s*([\d.,]+)[^\n]*?pix/i);
+                      if (pixB) r.entrada_pix = parseMoney(pixB[1]);
+                    }
+                    // Parcelas: "10x de R$ 579,70"
+                    if (!r.parcelas_n) {
+                      const parcM = line.match(/(\d+)x\s+de\s+R?\$?\s*([\d.,]+)/i);
+                      if (parcM) {
+                        r.parcelas_n = parseInt(parcM[1]);
+                        r.parcelas_val = parseMoney(parcM[2]);
+                        r.parcelas_str = `${r.parcelas_n}x de R$ ${parcM[2]}`;
+                      } else {
+                        // "3.770 em 10x no cartao" / "R$ 3.770 em 10x"
+                        const parcT = line.match(/R?\$?\s*([\d.,]+)\s+em\s+(\d+)\s*x/i);
+                        if (parcT) {
+                          const total = parseMoney(parcT[1]);
+                          r.parcelas_n = parseInt(parcT[2]);
+                          if (r.parcelas_n > 0 && total > 0) {
+                            r.parcelas_val = total / r.parcelas_n;
+                            r.parcelas_str = `${r.parcelas_n}x de R$ ${r.parcelas_val.toFixed(2).replace(".", ",")}`;
+                          }
+                        } else {
+                          // "10x no cartao" sem valor explícito
+                          const parcS = line.match(/(\d+)x\s+no\s+cart/i);
+                          if (parcS) r.parcelas_n = parseInt(parcS[1]);
+                        }
+                      }
+                    }
                     // "💰 R$ 8.000,00 à vista no PIX"
                     if (low.includes("vista") && low.includes("pix") && !r.entrada_pix) {
                       const m = line.match(/R?\$?\s*([\d.,]+)/); if (m) r.entrada_pix = parseMoney(m[1]);
                     }
-                  }
-
-                  // Montar forma_pagamento se veio separado
-                  if (!r.forma_pagamento && (r.entrada_pix || r.parcelas_str)) {
-                    const parts: string[] = [];
-                    if (r.entrada_pix) parts.push(`Entrada PIX R$ ${r.entrada_pix.toLocaleString("pt-BR")}`);
-                    if (r.parcelas_str) parts.push(`${r.parcelas_str} no cartão`);
-                    r.forma_pagamento = parts.join(" + ");
                   }
 
                   // === Aplicar no formulário ===
@@ -1085,7 +1106,42 @@ export default function EntregasPage() {
                   if (r.vendedor) { set("vendedor", r.vendedor); applied.push("vendedor"); }
                   if (r.local_entrega) { set("local_entrega", r.local_entrega); applied.push("local"); }
                   if (r.shopping_nome) set("shopping_nome", r.shopping_nome);
-                  if (r.forma_pagamento) { set("forma_pagamento", r.forma_pagamento); applied.push("pagamento"); }
+
+                  // === Pagamento: dividir em Pag1 / Pag2 usando valores do select ===
+                  const formaTxt = (r.forma_pagamento || "").toLowerCase();
+                  const hasPix = !!r.entrada_pix;
+                  const hasParc = !!r.parcelas_n;
+                  if (hasPix && hasParc) {
+                    // Cartão + Entrada PIX → Pag1 = Cartão Crédito, Pag2 = Pix
+                    set("forma_pagamento", "Cartao Credito");
+                    set("parcelas", String(r.parcelas_n));
+                    setShowPagAlt(true);
+                    set("forma_pagamento_2", "Pix");
+                    set("valor_2", String(Math.round(r.entrada_pix!)));
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão + PIX R$ ${r.entrada_pix!.toLocaleString("pt-BR")}`);
+                  } else if (hasParc) {
+                    set("forma_pagamento", "Cartao Credito");
+                    set("parcelas", String(r.parcelas_n));
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão`);
+                  } else if (hasPix || /pix/.test(formaTxt)) {
+                    set("forma_pagamento", "Pix");
+                    applied.push("pagamento: Pix");
+                  } else if (/d[ée]bito/i.test(formaTxt)) {
+                    set("forma_pagamento", "Cartao Debito");
+                    applied.push("pagamento: Cartão Débito");
+                  } else if (/link/.test(formaTxt)) {
+                    set("forma_pagamento", "Link de Pagamento");
+                    applied.push("pagamento: Link");
+                  } else if (/esp[ée]cie|dinheiro/i.test(formaTxt)) {
+                    set("forma_pagamento", "Especie");
+                    applied.push("pagamento: Espécie");
+                  } else if (/transf/i.test(formaTxt)) {
+                    set("forma_pagamento", "Transferencia");
+                    applied.push("pagamento: Transferência");
+                  } else if (/cart/i.test(formaTxt)) {
+                    set("forma_pagamento", "Cartao Credito");
+                    applied.push("pagamento: Cartão Crédito");
+                  }
 
                   const valorVenda = r.produto_valor
                     || (r.entrada_pix && r.parcelas_n && r.parcelas_val ? Math.round(r.entrada_pix + r.parcelas_n * r.parcelas_val) : 0);
