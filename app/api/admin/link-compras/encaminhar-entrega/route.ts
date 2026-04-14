@@ -39,9 +39,27 @@ export async function POST(request: Request) {
   const preench = link.cliente_dados_preenchidos || {};
   const cliente = preench.nome || link.cliente_nome || "";
   const telefone = preench.telefone || link.cliente_telefone || null;
-  const endereco = preench.endereco_completo
-    || (preench.endereco ? `${preench.endereco}${preench.numero ? `, ${preench.numero}` : ""}${preench.complemento ? ` - ${preench.complemento}` : ""}` : null);
-  const bairro = preench.bairro || null;
+  // Endereço final da entrega:
+  // - Shopping: "Entrega - Shopping: X" vira endereço "X" (pro motoboy ir ao shopping)
+  // - Correios/Retirada em loja: usa o próprio label como endereço (bairro fica null)
+  // - Residência (default): rua + número + complemento (endereço de casa do cliente)
+  const localPref = typeof preench.local === "string" ? preench.local.trim() : "";
+  const localLower = localPref.toLowerCase();
+  let endereco: string | null = null;
+  let bairro: string | null = preench.bairro || null;
+  if (localLower.includes("shopping:")) {
+    // "Entrega - Shopping: Shopping Metropolitano" → "Shopping Metropolitano"
+    const m = localPref.match(/shopping:\s*(.+)$/i);
+    endereco = m ? m[1].trim() : localPref;
+    bairro = null;
+  } else if (localLower.includes("correios") || localLower.includes("retirada")) {
+    endereco = localPref;
+    bairro = null;
+  } else {
+    // Residência (padrão): endereço de casa do cliente
+    endereco = preench.endereco_completo
+      || (preench.endereco ? `${preench.endereco}${preench.numero ? `, ${preench.numero}` : ""}${preench.complemento ? ` - ${preench.complemento}` : ""}` : null);
+  }
 
   if (!cliente) return NextResponse.json({ error: "Nome do cliente ausente — cliente ainda não preencheu?" }, { status: 400 });
 
@@ -67,21 +85,18 @@ export async function POST(request: Request) {
   const valorBase = link.valor != null ? Number(link.valor) - Number(link.desconto || 0) : 0;
   const entradaVal = Number(link.entrada || 0);
   const trocaVal = Number(link.troca_valor || 0) + Number(link.troca_valor2 || 0);
-  const parcelasNum = Number(link.parcelas || 0);
-  const forma = link.forma_pagamento || "";
+  const parcelasNum = Number(link.parcelas || 0) || Number(preench.parcelas || 0);
+  // Pega forma de pagamento do link_compras ou do formulário preenchido pelo cliente
+  // (link-compras-auto não salva forma_pagamento; ela só chega via preenchimento do /compra).
+  const forma = link.forma_pagamento || preench.forma_pagamento || "";
   const isCartao = forma === "Cartao Credito" || forma === "Link de Pagamento";
   const restante = Math.max(0, valorBase - entradaVal - trocaVal);
   const taxaPct = isCartao && parcelasNum > 0 ? (TAXAS[parcelasNum] || 0) : 0;
   const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
   const valorFinal = entradaVal + restanteComTaxa;
 
-  // Monta a observação enriquecida com tudo que a Bia precisa pra entrega:
-  // - observação manual do admin (se houver)
-  // - produto(s) na troca com cor/condição/valor
-  // - local preferido que o cliente marcou no formulário
-  // - short_code (fallback de rastreabilidade)
-  const obsParts: string[] = [];
-  if (observacao) obsParts.push(String(observacao).trim());
+  // Campo detalhes_upgrade é usado pela aba de entregas pra listar trocas do pedido
+  // (o texto do motoboy tem uma seção "PRODUTO NA TROCA" própria que lê desse campo).
   const trocaLinhas: string[] = [];
   if (link.troca_produto) {
     const t1 = [
@@ -90,7 +105,7 @@ export async function POST(request: Request) {
       link.troca_condicao ? link.troca_condicao : null,
       Number(link.troca_valor) ? `R$ ${Number(link.troca_valor).toLocaleString("pt-BR")}` : null,
     ].filter(Boolean).join(" • ");
-    trocaLinhas.push(`🔄 Troca 1: ${t1}`);
+    trocaLinhas.push(t1);
   }
   if (link.troca_produto2) {
     const t2 = [
@@ -99,18 +114,21 @@ export async function POST(request: Request) {
       link.troca_condicao2 ? link.troca_condicao2 : null,
       Number(link.troca_valor2) ? `R$ ${Number(link.troca_valor2).toLocaleString("pt-BR")}` : null,
     ].filter(Boolean).join(" • ");
-    trocaLinhas.push(`🔄 Troca 2: ${t2}`);
+    trocaLinhas.push(t2);
   }
-  if (trocaLinhas.length > 0) obsParts.push(trocaLinhas.join("\n"));
-  if (preench.local) obsParts.push(`📍 Local preferido: ${preench.local}`);
+  const detalhesUpgrade = trocaLinhas.length > 0 ? trocaLinhas.join("\n") : null;
+
+  // Observação enxuta (sem duplicar dados que já saem em outros campos do texto do motoboy):
+  // - observação manual do admin (se houver)
+  // - instagram do cliente (info extra útil)
+  // - short_code (rastreabilidade)
+  // Troca e local NÃO entram aqui: troca vai em detalhes_upgrade (seção PRODUTO NA TROCA),
+  // e o local vira o próprio endereco da entrega.
+  const obsParts: string[] = [];
+  if (observacao) obsParts.push(String(observacao).trim());
   if (preench.instagram) obsParts.push(`Instagram: ${preench.instagram}`);
   obsParts.push(`Encaminhada do link ${link.short_code}`);
   const observacaoFinal = obsParts.filter(Boolean).join("\n");
-
-  // Campo detalhes_upgrade é usado pela aba de entregas pra listar trocas do pedido
-  const detalhesUpgrade = trocaLinhas.length > 0
-    ? trocaLinhas.map(l => l.replace(/^🔄\s*Troca \d:\s*/, "")).join("\n")
-    : null;
 
   const { data: entrega, error: e2 } = await supabase
     .from("entregas")
