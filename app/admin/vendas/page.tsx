@@ -3990,8 +3990,10 @@ export default function VendasPage() {
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
+                        const creditoVal = parseFloat(String(v.credito_lojista_usado || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal));
+                        if (creditoVal > 0) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
