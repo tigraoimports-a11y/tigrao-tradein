@@ -43,6 +43,13 @@ export async function GET(req: NextRequest) {
   const categoria = searchParams.get("categoria");
   const action = searchParams.get("action");
   const imeiSearch = searchParams.get("imei");
+  const serialSearch = searchParams.get("serial");
+
+  // Buscar por serial
+  if (serialSearch) {
+    const { data: items } = await supabase.from("estoque").select("*").ilike("serial_no", `%${serialSearch}%`).limit(20);
+    return NextResponse.json({ data: items ?? [] });
+  }
 
   // Buscar por IMEI
   if (imeiSearch) {

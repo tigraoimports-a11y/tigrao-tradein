@@ -372,7 +372,7 @@ export default function StepNewDevice({ products, tradeInValue, onNext, onBack, 
                   }).catch(() => {});
                   const waNum = WHATSAPP_SEMINOVO;
                   const msg = encodeURIComponent(buildWhatsAppMsg());
-                  window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank");
+                  window.location.href = `https://wa.me/${waNum}?text=${msg}`;
                 }}
                 className="w-full py-4 rounded-2xl text-[15px] font-semibold text-white transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2"
                 style={{ backgroundColor: "#25D366" }}>
