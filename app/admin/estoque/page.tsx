@@ -4256,20 +4256,33 @@ export default function EstoquePage() {
                 return d.toISOString().split("T")[0];
               };
 
-              // Agrupar por origem (em vez de por data)
-              const byOrigem: Record<string, typeof allItems> = {};
+              // Agrupar por (origem + data_compra) — cada par vira um card separado.
+              // Produtos comprados em dias diferentes geram pedidos/envios diferentes, então
+              // não faz sentido misturar no mesmo card (rastreios e previsões ficariam ambíguos).
+              const NO_DATA = "_SEM_DATA_";
+              const byOrigemData = new Map<string, typeof allItems>();
+              const keyMeta = new Map<string, { origem: string; data: string | null }>();
               allItems.forEach(p => {
                 const orig = p.origem_compra && ORIGEM_CONFIG[p.origem_compra] ? p.origem_compra : "SEM_ORIGEM";
-                if (!byOrigem[orig]) byOrigem[orig] = [];
-                byOrigem[orig].push(p);
+                const data = p.data_compra || null;
+                const k = `${orig}::${data || NO_DATA}`;
+                if (!byOrigemData.has(k)) {
+                  byOrigemData.set(k, []);
+                  keyMeta.set(k, { origem: orig, data });
+                }
+                byOrigemData.get(k)!.push(p);
               });
-              // Dentro de cada origem, ordena por data de compra (mais recente primeiro)
-              for (const items of Object.values(byOrigem)) {
-                items.sort((a, b) => (b.data_compra || "").localeCompare(a.data_compra || ""));
-              }
-              const sortedOrigens = ORIGEM_ORDER.filter(o => byOrigem[o]?.length > 0);
+              // Ordena: primeiro pela ordem das origens, depois por data desc (mais recente primeiro)
+              const sortedKeys = Array.from(byOrigemData.keys()).sort((a, b) => {
+                const ma = keyMeta.get(a)!;
+                const mb = keyMeta.get(b)!;
+                const ia = ORIGEM_ORDER.indexOf(ma.origem);
+                const ib = ORIGEM_ORDER.indexOf(mb.origem);
+                if (ia !== ib) return ia - ib;
+                return (mb.data || "").localeCompare(ma.data || "");
+              });
 
-              if (sortedOrigens.length === 0) return (
+              if (sortedKeys.length === 0) return (
                 <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
                   <p className={textSecondary}>Nenhum produto a caminho.</p>
                 </div>
@@ -4363,17 +4376,20 @@ export default function EstoquePage() {
                     </div>
                   )}
 
-                  {/* Cards por ORIGEM */}
-                  {sortedOrigens.map(origemKey => {
-                    const items = byOrigem[origemKey];
+                  {/* Cards por (ORIGEM + DATA DE COMPRA) */}
+                  {sortedKeys.map(cardKey => {
+                    const { origem: origemKey, data: dataKey } = keyMeta.get(cardKey)!;
+                    const items = byOrigemData.get(cardKey)!;
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
                     const origemTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                     const cfg = ORIGEM_CONFIG[origemKey];
                     const headerColor = cfg ? cfg.cor : "bg-gray-500";
-                    const headerLabel = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
+                    const dataFmt = dataKey ? dataKey.split("-").reverse().join("/") : null;
+                    const origemTxt = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
+                    const headerLabel = dataFmt ? `${origemTxt} • 🗓️ ${dataFmt}` : `${origemTxt} • sem data`;
                     return (
-                      <div key={origemKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                      <div key={cardKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
                         <div className={`px-4 py-2.5 flex items-center justify-between ${headerColor}`}>
                           <span className="font-bold text-white text-[13px]">
                             {headerLabel}
@@ -4397,24 +4413,23 @@ export default function EstoquePage() {
                             )}
                           </div>
                         </div>
-                        {/* Códigos de rastreio por pedido (origem + data) — 1 linha por data_compra */}
+                        {/* Códigos de rastreio — cada card já é de um pedido único (origem + data) */}
                         {(() => {
-                          const datasPend = Array.from(new Set(pendentes.map(p => p.data_compra).filter(Boolean))).sort().reverse() as string[];
-                          if (datasPend.length === 0) return null;
-                          return datasPend.map(dataPed => {
-                            const key = rastreiosKey(origemKey, dataPed);
-                            const codigos = rastreiosEnvio.get(key) || [];
-                            const dataFmt = dataPed.split("-").reverse().join("/");
-                            const isAdding = addingRastreioKey === key;
-                            const submitNovoCodigo = async () => {
-                              const code = addingRastreioText.trim().toUpperCase();
-                              if (!code) return;
-                              await addRastreiosEnvio(origemKey, dataPed, [code]);
-                              setAddingRastreioText("");
-                            };
-                            return (
-                              <div key={key} className={`flex items-center gap-2 flex-wrap px-4 py-2 border-b ${dm ? "bg-[#1F2937] border-[#3A3A3C]" : "bg-blue-50 border-blue-100"}`}>
-                                <span className={`text-[11px] font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>📦 Rastreios ({dataFmt}):</span>
+                          if (!dataKey || pendentes.length === 0) return null;
+                          const dataPed = dataKey;
+                          const key = rastreiosKey(origemKey, dataPed);
+                          const codigos = rastreiosEnvio.get(key) || [];
+                          const dataFmtRast = dataPed.split("-").reverse().join("/");
+                          const isAdding = addingRastreioKey === key;
+                          const submitNovoCodigo = async () => {
+                            const code = addingRastreioText.trim().toUpperCase();
+                            if (!code) return;
+                            await addRastreiosEnvio(origemKey, dataPed, [code]);
+                            setAddingRastreioText("");
+                          };
+                          return (
+                            <div key={key} className={`flex items-center gap-2 flex-wrap px-4 py-2 border-b ${dm ? "bg-[#1F2937] border-[#3A3A3C]" : "bg-blue-50 border-blue-100"}`}>
+                              <span className={`text-[11px] font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>📦 Rastreios ({dataFmtRast}):</span>
                                 {codigos.length === 0 && !isAdding && (
                                   <span className={`text-[11px] italic ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>nenhum</span>
                                 )}
@@ -4465,7 +4480,6 @@ export default function EstoquePage() {
                                 )}
                               </div>
                             );
-                          });
                         })()}
                         {/* Barra rapida: definir origem pra todos do grupo SEM_ORIGEM */}
                         {origemKey === "SEM_ORIGEM" && pendentes.length > 0 && selectedACaminho.size === 0 && (
@@ -4530,7 +4544,7 @@ export default function EstoquePage() {
                                 groupMap.get(base)!.push(p);
                               });
                               return Array.from(groupMap.entries()).flatMap(([baseModel, group]) => {
-                                const groupKey = `${origemKey}::${baseModel}`;
+                                const groupKey = `${origemKey}::${dataKey || NO_DATA}::${baseModel}`;
                                 const isExpanded = expandedACaminhoGroups.has(groupKey);
                                 const totalQnt = group.reduce((s, p) => s + p.qnt, 0);
                                 const totalVal = group.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
@@ -4700,7 +4714,7 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                  {sortedOrigens.length > 1 && grandTotal > 0 && (
+                  {sortedKeys.length > 1 && grandTotal > 0 && (
                     <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
                       <span className={`text-xs font-bold ${textSecondary}`}>TOTAL PENDENTE ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"} a caminho)</span>
                       <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
