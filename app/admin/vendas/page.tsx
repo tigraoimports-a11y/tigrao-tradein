@@ -4091,11 +4091,6 @@ export default function VendasPage() {
                                   ))}
                                 </div>
                                 <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.recebimento === "D+0" ? "bg-green-100 text-green-700" : v.recebimento === "D+1" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"}`}>{v.recebimento}</span>
-                                {Number(v.credito_lojista_usado || 0) > 0 && (
-                                  <span className="inline-block mt-0.5 ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">
-                                    💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
-                                  </span>
-                                )}
                                 {Number(v.sinal_antecipado || 0) > 0 && v.status_pagamento === "PROGRAMADA" && (
                                   <span className="block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
                                     💰 Sinal {v.banco_sinal ? `${v.banco_sinal}` : ""}: {fmt(Number(v.sinal_antecipado))} — saldo {fmt((Number(v.preco_vendido) || 0) - Number(v.sinal_antecipado || 0))}
