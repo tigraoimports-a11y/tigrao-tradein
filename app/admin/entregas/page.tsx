@@ -212,10 +212,12 @@ export default function EntregasPage() {
     valor: "",
     parcelas: "",
     maquina: "",
+    taxa_incluida: "",        // "1" = Valor R$ do Pag1 já inclui a taxa do cartão
     forma_pagamento_2: "",
     valor_2: "",
     parcelas_2: "",
     maquina_2: "",
+    taxa_incluida_2: "",      // "1" = Valor R$ do Pag2 já inclui a taxa do cartão
     vendedor: "",
     regiao: "",
     local_entrega: "",
@@ -474,15 +476,29 @@ export default function EntregasPage() {
   const isCartaoCredito = form.forma_pagamento === "Cartao Credito" || form.forma_pagamento === "Link de Pagamento";
   const nParcelas = parseInt(form.parcelas) || 0;
   const taxaAtual = isCartaoCredito && nParcelas > 0 ? (TAXAS_PARCELAS[nParcelas] || 0) : 0;
-  // Taxa aplicada sobre o valor do PAGAMENTO 1 (não o total a pagar) — importante quando há split
-  const totalComTaxa = taxaAtual > 0 ? Math.ceil(valorPag1 * (1 + taxaAtual / 100)) : valorPag1;
+  // Se taxa_incluida="1", o valorPag1 já vem com taxa embutida — não multiplicamos de novo.
+  // Caso contrário, aplica a taxa por cima (comportamento padrão).
+  const taxaJaInclusaPag1 = form.taxa_incluida === "1";
+  const totalComTaxa = taxaAtual > 0
+    ? (taxaJaInclusaPag1 ? valorPag1 : Math.ceil(valorPag1 * (1 + taxaAtual / 100)))
+    : valorPag1;
+  // Base do Pag1 (valor sem taxa) — quando taxa já está inclusa, deriva dividindo
+  const valorPag1Base = taxaJaInclusaPag1 && taxaAtual > 0
+    ? Math.round(valorPag1 / (1 + taxaAtual / 100))
+    : valorPag1;
   const valorParcela = nParcelas > 0 ? Math.ceil(totalComTaxa / nParcelas) : 0;
 
   // Pagamento 2 pode ser cartão também — calcula taxa/parcelas separadamente
   const isCartao2 = form.forma_pagamento_2 === "Cartao Credito" || form.forma_pagamento_2 === "Link de Pagamento";
   const nParcelas2 = parseInt(form.parcelas_2) || 0;
   const taxaAtual2 = isCartao2 && nParcelas2 > 0 ? (TAXAS_PARCELAS[nParcelas2] || 0) : 0;
-  const totalComTaxa2 = taxaAtual2 > 0 ? Math.ceil(valorPag2 * (1 + taxaAtual2 / 100)) : valorPag2;
+  const taxaJaInclusaPag2 = form.taxa_incluida_2 === "1";
+  const totalComTaxa2 = taxaAtual2 > 0
+    ? (taxaJaInclusaPag2 ? valorPag2 : Math.ceil(valorPag2 * (1 + taxaAtual2 / 100)))
+    : valorPag2;
+  const valorPag2Base = taxaJaInclusaPag2 && taxaAtual2 > 0
+    ? Math.round(valorPag2 / (1 + taxaAtual2 / 100))
+    : valorPag2;
   const valorParcela2 = nParcelas2 > 0 ? Math.ceil(totalComTaxa2 / nParcelas2) : 0;
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
@@ -1122,6 +1138,17 @@ export default function EntregasPage() {
                   const formaTxt = (r.forma_pagamento || "").toLowerCase();
                   const hasPix = !!r.entrada_pix;
                   const hasParc = !!r.parcelas_n;
+                  // Quando o texto diz "10x de R$ 579,70" ou "3.770 em 10x", o valor
+                  // é o TOTAL cobrado no cartão — já inclui a taxa da máquina.
+                  // Guardamos esse total para jogar no override do Pag1 com flag "taxa_incluida".
+                  const totalCartaoComTaxa = (hasParc && r.parcelas_val)
+                    ? Math.round(r.parcelas_n! * r.parcelas_val)
+                    : 0;
+                  // Taxa usada pra derivar a base sem taxa (pra ajustar o form.valor)
+                  const taxaCartao = hasParc ? (TAXAS_PARCELAS[r.parcelas_n!] || 0) : 0;
+                  const baseCartao = totalCartaoComTaxa > 0 && taxaCartao > 0
+                    ? Math.round(totalCartaoComTaxa / (1 + taxaCartao / 100))
+                    : totalCartaoComTaxa;
                   if (hasPix && hasParc) {
                     // Cartão + Entrada PIX → Pag1 = Cartão Crédito, Pag2 = Pix
                     const mq = maquinaFromParcelas(r.parcelas_n!);
@@ -1130,11 +1157,14 @@ export default function EntregasPage() {
                       forma_pagamento: "Cartao Credito",
                       parcelas: String(r.parcelas_n),
                       maquina: mq || f.maquina,
+                      taxa_incluida: totalCartaoComTaxa > 0 ? "1" : "",
                       forma_pagamento_2: "Pix",
                       valor_2: String(Math.round(r.entrada_pix!)),
+                      taxa_incluida_2: "",
                     }));
+                    if (totalCartaoComTaxa > 0) setValorPag1Override(String(totalCartaoComTaxa));
                     setShowPagAlt(true);
-                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""} + PIX R$ ${r.entrada_pix!.toLocaleString("pt-BR")}`);
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""}${totalCartaoComTaxa > 0 ? ` R$ ${totalCartaoComTaxa.toLocaleString("pt-BR")}` : ""} + PIX R$ ${r.entrada_pix!.toLocaleString("pt-BR")}`);
                   } else if (hasParc) {
                     const mq = maquinaFromParcelas(r.parcelas_n!);
                     setForm(f => ({
@@ -1142,8 +1172,10 @@ export default function EntregasPage() {
                       forma_pagamento: "Cartao Credito",
                       parcelas: String(r.parcelas_n),
                       maquina: mq || f.maquina,
+                      taxa_incluida: totalCartaoComTaxa > 0 ? "1" : "",
                     }));
-                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""}`);
+                    if (totalCartaoComTaxa > 0) setValorPag1Override(String(totalCartaoComTaxa));
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""}${totalCartaoComTaxa > 0 ? ` R$ ${totalCartaoComTaxa.toLocaleString("pt-BR")}` : ""}`);
                   } else if (hasPix || /pix/.test(formaTxt)) {
                     set("forma_pagamento", "Pix");
                     applied.push("pagamento: Pix");
@@ -1164,8 +1196,12 @@ export default function EntregasPage() {
                     applied.push("pagamento: Cartão Crédito");
                   }
 
+                  // Valor base da venda (sem taxa do cartão) — soma base cartão + entrada pix.
+                  // Assim o "A pagar" (base) bate com a soma dos pagamentos base no validador.
                   const valorVenda = r.produto_valor
-                    || (r.entrada_pix && r.parcelas_n && r.parcelas_val ? Math.round(r.entrada_pix + r.parcelas_n * r.parcelas_val) : 0);
+                    || (hasPix && hasParc ? Math.round(baseCartao + (r.entrada_pix || 0)) : 0)
+                    || (hasParc ? baseCartao : 0)
+                    || (hasPix ? Math.round(r.entrada_pix!) : 0);
                   if (valorVenda > 0) set("valor", String(valorVenda));
 
                   // === Produto: tentar encaixar no catálogo ===
@@ -1715,11 +1751,22 @@ export default function EntregasPage() {
                     placeholder={valorAPagar > 0 ? String(valorAPagar) : "0"}
                     className={inputCls}
                   />
+                  {isCartaoCredito && (
+                    <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer text-[10px] text-[#86868B]">
+                      <input
+                        type="checkbox"
+                        checked={form.taxa_incluida === "1"}
+                        onChange={(e) => set("taxa_incluida", e.target.checked ? "1" : "")}
+                        className="accent-[#E8740E]"
+                      />
+                      Taxa já incluída no valor
+                    </label>
+                  )}
                   {valorPag1Override && (
                     <button
                       type="button"
-                      onClick={() => setValorPag1Override("")}
-                      className="text-[10px] text-[#E8740E] hover:underline mt-1"
+                      onClick={() => { setValorPag1Override(""); set("taxa_incluida", ""); }}
+                      className="text-[10px] text-[#E8740E] hover:underline mt-1 block"
                     >
                       ↺ Voltar pro automático
                     </button>
@@ -1756,8 +1803,8 @@ export default function EntregasPage() {
               {isCartaoCredito && nParcelas > 0 && valorPag1 > 0 && (
                 <div className="bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2.5 text-xs">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span className="text-[#86868B]">Valor a parcelar: <b className="text-[#1D1D1F]">R$ {valorPag1.toLocaleString("pt-BR")}</b></span>
-                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorPag1).toLocaleString("pt-BR")}</b></span>
+                    <span className="text-[#86868B]">Base (sem taxa): <b className="text-[#1D1D1F]">R$ {valorPag1Base.toLocaleString("pt-BR")}</b></span>
+                    <span className="text-red-500">Taxa {form.forma_pagamento === "Link de Pagamento" ? "link" : "cartão"} ({taxaAtual}%): <b>+R$ {(totalComTaxa - valorPag1Base).toLocaleString("pt-BR")}</b></span>
                     <span className="text-[#86868B]">Total c/ taxa: <b className="text-[#1D1D1F]">R$ {totalComTaxa.toLocaleString("pt-BR")}</b></span>
                     <span className="text-[#E8740E] font-bold">{nParcelas}x de R$ {valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
@@ -1808,6 +1855,17 @@ export default function EntregasPage() {
                   <div>
                     <p className={labelCls}>Valor R$</p>
                     <input type="number" value={form.valor_2} onChange={(e) => set("valor_2", e.target.value)} placeholder="0" className={inputCls} />
+                    {isCartao2 && (
+                      <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer text-[10px] text-[#86868B]">
+                        <input
+                          type="checkbox"
+                          checked={form.taxa_incluida_2 === "1"}
+                          onChange={(e) => set("taxa_incluida_2", e.target.checked ? "1" : "")}
+                          className="accent-[#E8740E]"
+                        />
+                        Taxa já incluída no valor
+                      </label>
+                    )}
                   </div>
                   {isCartao2 && (<>
                     <div>
@@ -1835,8 +1893,8 @@ export default function EntregasPage() {
                     {nParcelas2 > 0 && valorPag2 > 0 && (
                       <div className="col-span-2 bg-[#FFF8F0] border border-[#E8740E]/30 rounded-lg px-3 py-2 text-xs">
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                          <span className="text-[#86868B]">Valor a parcelar: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorPag2.toLocaleString("pt-BR")}</b></span>
-                          <span className="text-red-500">Taxa ({taxaAtual2}%): <b>+R$ {(totalComTaxa2 - valorPag2).toLocaleString("pt-BR")}</b></span>
+                          <span className="text-[#86868B]">Base (sem taxa): <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {valorPag2Base.toLocaleString("pt-BR")}</b></span>
+                          <span className="text-red-500">Taxa ({taxaAtual2}%): <b>+R$ {(totalComTaxa2 - valorPag2Base).toLocaleString("pt-BR")}</b></span>
                           <span className="text-[#86868B]">Total c/ taxa: <b className={dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}>R$ {totalComTaxa2.toLocaleString("pt-BR")}</b></span>
                           <span className="text-[#E8740E] font-bold">{nParcelas2}x de R$ {valorParcela2.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
@@ -1849,7 +1907,7 @@ export default function EntregasPage() {
 
             {/* Validador da soma dos pagamentos (soma valores-base, pré-taxa) */}
             {(valorPag1 > 0 || valorPag2 > 0) && valorAPagar > 0 && (() => {
-              const soma = valorPag1 + valorPag2;
+              const soma = valorPag1Base + valorPag2Base;
               const diff = soma - valorAPagar;
               const ok = Math.abs(diff) < 1;
               const totalCliente = totalComTaxa + totalComTaxa2;
@@ -1857,8 +1915,8 @@ export default function EntregasPage() {
                 <div className={`col-span-2 md:col-span-3 px-3 py-2 rounded-lg text-xs flex items-center gap-2 ${ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-amber-50 border border-amber-200 text-amber-700"}`}>
                   <span>{ok ? "✅" : "⚠️"}</span>
                   <span>
-                    Pagamento 1: <b>R$ {valorPag1.toLocaleString("pt-BR")}</b>
-                    {valorPag2 > 0 && <> + Pagamento 2: <b>R$ {valorPag2.toLocaleString("pt-BR")}</b></>}
+                    Pagamento 1: <b>R$ {valorPag1Base.toLocaleString("pt-BR")}</b>
+                    {valorPag2 > 0 && <> + Pagamento 2: <b>R$ {valorPag2Base.toLocaleString("pt-BR")}</b></>}
                     {" = "}<b>R$ {soma.toLocaleString("pt-BR")}</b>
                     {" · "}Valor a pagar: <b>R$ {valorAPagar.toLocaleString("pt-BR")}</b>
                     {(taxaAtual > 0 || taxaAtual2 > 0) && <> · Total cliente c/ taxa: <b>R$ {totalCliente.toLocaleString("pt-BR")}</b></>}
@@ -2570,7 +2628,7 @@ export default function EntregasPage() {
                   <div className="text-sm">
                     <span className="text-[#86868B]">Tipo: </span>
                     <span className="text-[#1D1D1F] font-medium">{e.tipo}</span>
-                    {e.detalhes_upgrade && <span className="text-[#86868B]"> — {e.detalhes_upgrade.split("\n").filter(l => !/^avalia[cç][aã]o[:s]/i.test(l.trim())).map(l => l.replace(/\s*[-—]\s*R\$\s*[\d.,]+/g, "").replace(/\s*\(R\$\s*[\d.,]+\)/g, "").trim()).filter(Boolean).join(" / ")}</span>}
+                    {e.detalhes_upgrade && <span className="text-[#86868B]"> — {e.detalhes_upgrade}</span>}
                   </div>
                 )}
                 {e.forma_pagamento && (
@@ -2639,7 +2697,7 @@ export default function EntregasPage() {
                 {e.observacao && (
                   <div className="text-sm p-3 bg-[#F5F5F7] rounded-lg">
                     <span className="text-[#86868B]">Obs: </span>
-                    <span className="text-[#1D1D1F]">{e.observacao.replace(/\s*\(R\$\s*[\d.,]+\)/g, "").replace(/R\$\s*[\d.,]+/g, "").trim()}</span>
+                    <span className="text-[#1D1D1F]">{e.observacao}</span>
                   </div>
                 )}
 
@@ -2797,10 +2855,12 @@ export default function EntregasPage() {
                         valor: e.valor != null ? String(e.valor) : "",
                         parcelas: "",
                         maquina: "",
+                        taxa_incluida: "",
                         forma_pagamento_2: "",
                         valor_2: "",
                         parcelas_2: "",
                         maquina_2: "",
+                        taxa_incluida_2: "",
                         vendedor: e.vendedor || "",
                         regiao: e.regiao || "",
                         local_entrega: "",
