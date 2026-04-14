@@ -404,6 +404,7 @@ export async function POST(req: NextRequest) {
         origem: sem1Final.origem || null,
         garantia: sem1Final.garantia || null,
         cliente: nomeCliente || null,
+        contato: body.telefone || data?.telefone || null,
         fornecedor: nomeCliente || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
@@ -452,6 +453,7 @@ export async function POST(req: NextRequest) {
         origem: sem2Final.origem || null,
         garantia: sem2Final.garantia || null,
         cliente: nomeCliente2 || null,
+        contato: body.telefone || data?.telefone || null,
         fornecedor: nomeCliente2 || null,
         data_compra: body.data || data?.data || null,
         updated_at: new Date().toISOString(),
@@ -595,14 +597,39 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
+  // Capturar estoque_id novo antes de deletar do fields
+  const novoEstoqueId = fields._estoque_id || null;
+
   // Remover campos internos que não existem na tabela vendas
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
   delete fields.usar_credito_loja; // virtual — só usado no POST
 
+  // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
+  const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
+  const estoqueIdAnterior = vendaAnterior?.estoque_id || null;
+
+  // Se tem novo estoque_id, vincular na venda
+  if (novoEstoqueId) {
+    fields.estoque_id = novoEstoqueId;
+  }
+
   // Todos os campos de troca existem na tabela vendas após migration 20260406_vendas_troca_serial_imei
   const { data, error } = await supabase.from("vendas").update(fields).eq("id", id).select();
+
+  // Se o produto foi trocado (estoque_id mudou), devolver o antigo ao estoque
+  if (!error && estoqueIdAnterior && novoEstoqueId && estoqueIdAnterior !== novoEstoqueId) {
+    const { data: itemAntigo } = await supabase.from("estoque").select("id, qnt").eq("id", estoqueIdAnterior).single();
+    if (itemAntigo) {
+      await supabase.from("estoque").update({
+        qnt: Number(itemAntigo.qnt || 0) + 1,
+        status: "EM ESTOQUE",
+        updated_at: new Date().toISOString(),
+      }).eq("id", estoqueIdAnterior);
+      console.log(`[Vendas PATCH] Produto anterior devolvido ao estoque: ${estoqueIdAnterior}`);
+    }
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Se serial_no foi atualizado, marcar estoque correspondente como ESGOTADO
@@ -784,6 +811,7 @@ export async function PATCH(req: NextRequest) {
             imei: venda.troca_imei ? String(venda.troca_imei).toUpperCase() : null,
             garantia: venda.troca_garantia || null,
             cliente: nomeCliente,
+            contato: venda.telefone || null,
             fornecedor: nomeCliente,
             data_compra: venda.data,
             updated_at: new Date().toISOString(),
@@ -840,6 +868,7 @@ export async function PATCH(req: NextRequest) {
             imei: venda.troca_imei2 ? String(venda.troca_imei2).toUpperCase() : null,
             garantia: venda.troca_garantia2 || null,
             cliente: nomeCliente,
+            contato: venda.telefone || null,
             fornecedor: nomeCliente,
             data_compra: venda.data,
             updated_at: new Date().toISOString(),
