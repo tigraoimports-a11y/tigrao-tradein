@@ -1190,6 +1190,9 @@ export default function EstoquePage() {
   const [selectedACaminho, setSelectedACaminho] = useState<Set<string>>(new Set());
   // Grupos expandidos na aba A Caminho (key = "date::baseModel")
   const [expandedACaminhoGroups, setExpandedACaminhoGroups] = useState<Set<string>>(new Set());
+  // Modal "Copiar Texto Atacado" — escolher quais produtos vão no texto
+  const [atacadoModalOpen, setAtacadoModalOpen] = useState(false);
+  const [atacadoExcluded, setAtacadoExcluded] = useState<Set<string>>(new Set());
 
   const handleImeiSearch = async () => {
     if (!imeiSearch.trim()) return;
@@ -4324,14 +4327,12 @@ export default function EstoquePage() {
                         </div>
                         <button
                           onClick={() => {
-                            const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                            const texto = buildAtacadoText(fonte);
-                            navigator.clipboard.writeText(texto);
-                            setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
+                            setAtacadoExcluded(new Set());
+                            setAtacadoModalOpen(true);
                           }}
                           className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                         >
-                          📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
+                          📋 {selectedACaminho.size > 0 ? `Selecionar & Copiar (${selectedACaminho.size})` : "Selecionar & Copiar Atacado"}
                         </button>
                       </div>
                     </div>
@@ -4868,14 +4869,12 @@ export default function EstoquePage() {
                   </div>
                 <button
                   onClick={() => {
-                    const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                    const texto = buildAtacadoText(fonte);
-                    navigator.clipboard.writeText(texto);
-                    setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
+                    setAtacadoExcluded(new Set());
+                    setAtacadoModalOpen(true);
                   }}
                   className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                 >
-                  📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
+                  📋 {selectedACaminho.size > 0 ? `Selecionar & Copiar (${selectedACaminho.size})` : "Selecionar & Copiar Atacado"}
                 </button>
                 </div>
               </div>
@@ -7059,6 +7058,153 @@ export default function EstoquePage() {
                 </div>
               </div>
               <div className="h-4" />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal "Selecionar & Copiar Atacado" — escolhe quais produtos vão no texto */}
+      {atacadoModalOpen && (() => {
+        // Base: se há seleção ativa nas linhas da tabela, usa só esses; senão, todos "a caminho"
+        const base = selectedACaminho.size > 0
+          ? aCaminho.filter(p => selectedACaminho.has(p.id))
+          : aCaminho;
+        // Fonte final pro texto = base menos o que o usuário excluiu no modal
+        const fonte = base.filter(p => !atacadoExcluded.has(p.id));
+        const previewText = fonte.length > 0 ? buildAtacadoText(fonte) : "(nenhum produto selecionado)";
+        const incluidos = fonte.length;
+        const totalBase = base.length;
+
+        // Agrupa por categoria + modelo/capacidade pra facilitar o toggle
+        const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
+        for (const p of base) {
+          const cat = getBaseCat(p.categoria || "OUTROS");
+          const { base: modelo } = cleanProductForAtacado(p.produto || "", p.categoria || "");
+          if (!byCat[cat]) byCat[cat] = {};
+          if (!byCat[cat][modelo]) byCat[cat][modelo] = [];
+          byCat[cat][modelo].push(p);
+        }
+        const catLabels: Record<string, string> = {
+          IPHONES: "📱 iPhones", IPADS: "📲 iPads", MACBOOK: "💻 MacBooks", MAC_MINI: "🖥️ Mac Mini",
+          APPLE_WATCH: "⌚ Apple Watch", AIRPODS: "🎧 AirPods", ACESSORIOS: "🔌 Acessórios", OUTROS: "📦 Outros",
+        };
+        const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS", "OUTROS"];
+        const sortedCats = Object.keys(byCat).sort((a, b) => {
+          const ia = catOrder.indexOf(a), ib = catOrder.indexOf(b);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+        const toggleGroup = (prods: ProdutoEstoque[]) => {
+          const allExcluded = prods.every(p => atacadoExcluded.has(p.id));
+          setAtacadoExcluded(prev => {
+            const n = new Set(prev);
+            if (allExcluded) {
+              for (const p of prods) n.delete(p.id);
+            } else {
+              for (const p of prods) n.add(p.id);
+            }
+            return n;
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setAtacadoModalOpen(false)}>
+            <div className={`w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"} max-h-[92vh] flex flex-col`} onClick={(e) => e.stopPropagation()}>
+              <div className={`px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"} flex items-center justify-between sticky top-0 ${dm ? "bg-[#1C1C1E]" : "bg-white"} z-10`}>
+                <div>
+                  <h3 className={`text-base font-bold ${textPrimary}`}>📋 Selecionar & Copiar Texto Atacado</h3>
+                  <p className={`text-xs ${textMuted}`}>Desmarque os produtos que <b>não</b> quer que apareçam no texto. {incluidos} de {totalBase} serão incluídos.</p>
+                </div>
+                <button onClick={() => setAtacadoModalOpen(false)} className={`w-8 h-8 flex items-center justify-center rounded-full text-xl ${dm ? "hover:bg-[#3A3A3C] text-[#98989D]" : "hover:bg-[#F0F0F5] text-[#86868B]"}`}>×</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-0">
+                {/* Coluna esquerda: lista de produtos com checkboxes */}
+                <div className={`p-4 border-r ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"} space-y-4`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      onClick={() => setAtacadoExcluded(new Set())}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                      ✓ Marcar todos
+                    </button>
+                    <button
+                      onClick={() => setAtacadoExcluded(new Set(base.map(p => p.id)))}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                      ✕ Desmarcar todos
+                    </button>
+                  </div>
+                  {sortedCats.map(cat => {
+                    const catProds = Object.values(byCat[cat]).flat();
+                    const allOff = catProds.every(p => atacadoExcluded.has(p.id));
+                    return (
+                      <div key={cat}>
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>{catLabels[cat] || cat}</h4>
+                          <button
+                            onClick={() => toggleGroup(catProds)}
+                            className={`text-[10px] font-semibold ${dm ? "text-[#F5A623] hover:underline" : "text-[#E8740E] hover:underline"}`}>
+                            {allOff ? "Marcar tudo" : "Desmarcar tudo"}
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(byCat[cat])
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([modelo, prods]) => {
+                            const groupOff = prods.every(p => atacadoExcluded.has(p.id));
+                            const totalQnt = prods.reduce((s, p) => s + (p.qnt || 0), 0);
+                            return (
+                              <label key={modelo} className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${groupOff ? (dm ? "bg-[#2C2C2E] opacity-50" : "bg-[#F9F9F9] opacity-60") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]")}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={!groupOff}
+                                  onChange={() => toggleGroup(prods)}
+                                  className="mt-0.5 accent-[#E8740E]"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-xs font-semibold ${textPrimary} truncate`}>{modelo}</p>
+                                  <p className={`text-[10px] ${textMuted}`}>
+                                    {totalQnt} un. {prods.length > 1 ? `(${prods.length} variantes)` : ""}
+                                    {prods.some(p => p.cor) && ` — ${[...new Set(prods.map(p => p.cor).filter(Boolean).map(c => corParaPT(c!) || c))].join(", ")}`}
+                                  </p>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Coluna direita: preview do texto */}
+                <div className="p-4 flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>👁 Preview do texto</h4>
+                    <span className={`text-[10px] ${textMuted}`}>{incluidos} produto(s)</span>
+                  </div>
+                  <pre className={`flex-1 text-xs font-mono whitespace-pre-wrap p-3 rounded-lg overflow-y-auto ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA]"}`}>
+{previewText}
+                  </pre>
+                </div>
+              </div>
+
+              <div className={`px-5 py-3 border-t ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E8E8ED] bg-white"} flex items-center justify-end gap-2`}>
+                <button
+                  onClick={() => setAtacadoModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                  Cancelar
+                </button>
+                <button
+                  disabled={incluidos === 0}
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewText);
+                    setMsg(`📋 Texto copiado! ${incluidos} produto(s) no atacado.`);
+                    setAtacadoModalOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors disabled:opacity-40">
+                  📋 Copiar {incluidos > 0 ? `(${incluidos})` : ""}
+                </button>
+              </div>
             </div>
           </div>
         );
