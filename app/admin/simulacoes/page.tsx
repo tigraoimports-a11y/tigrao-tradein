@@ -223,8 +223,9 @@ export default function AdminPage() {
     if (!password) return;
     setHistoricoLoading(true);
     try {
-      // 1) Link_compras com formulário preenchido
-      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=200", {
+      // 1) Link_compras com formulário preenchido (limite 500 = max da API, pra evitar
+      //    que registros recentes sumam e apareçam só como Gostei-sem-link)
+      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=500", {
         headers: { "x-admin-password": password },
       });
       let items: HistoricoItem[] = [];
@@ -295,9 +296,27 @@ export default function AdminPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab, data?.length, password]);
 
-  // Abre o modal de Gerar Entrega com dados pré-preenchidos do formulário do cliente
+  // Abre o modal de Gerar Entrega com dados pré-preenchidos do formulário do cliente.
+  // Se o item é um "sim_" (simulação sem link_compras), tenta achar um link_compras
+  // real com o mesmo telefone pra carregar os dados completos do formulário.
   const openGerarEntrega = useCallback((h: HistoricoItem) => {
-    const p = h.cliente_dados_preenchidos || {};
+    // Se for um item simulado (sim_...), procurar link_compras real pelo telefone
+    let target = h;
+    if (h.id.startsWith("sim_")) {
+      const tel8 = (h.cliente_telefone || "").replace(/\D/g, "").slice(-8);
+      const real = tel8.length >= 8
+        ? historico.find(x => !x.id.startsWith("sim_")
+            && (x.cliente_telefone || "").replace(/\D/g, "").slice(-8) === tel8
+            && x.cliente_dados_preenchidos)
+        : null;
+      if (real) {
+        target = real;
+      } else {
+        alert("⚠️ Esse cliente só tem simulação — ainda não preencheu o formulário de compra completo (endereço, CPF, etc.). Peça pra ele preencher o link de compra antes de gerar a entrega.");
+        return;
+      }
+    }
+    const p = target.cliente_dados_preenchidos || {};
     // Data de entrega: preferir o que o cliente informou; senão, hoje
     let dataDefault = "";
     const pd = (p.data_entrega || "").trim();
@@ -315,8 +334,8 @@ export default function AdminPage() {
     setGerarHorario((p.horario || "").trim());
     setGerarEntregador("");
     setGerarObs("");
-    setGerarEntregaItem(h);
-  }, []);
+    setGerarEntregaItem(target);
+  }, [historico]);
 
   const confirmarGerarEntrega = async () => {
     if (!gerarEntregaItem) return;
@@ -766,35 +785,84 @@ export default function AdminPage() {
         const trocaVal2 = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
         const trocaCor2 = h.troca_cor2 || sim?.cor_usado2 || null;
         const trocaCond2 = h.troca_condicao2 || (sim?.condicao_linhas2 ? sim.condicao_linhas2.join(" | ") : null);
-        const enderecoResumo = [p.endereco, p.numero].filter(Boolean).join(", ")
-          + (p.complemento ? ` - ${p.complemento}` : "")
-          + (p.bairro ? ` — ${p.bairro}` : "")
-          + (p.cep ? ` (CEP ${p.cep})` : "");
+        const endLinha1 = [p.endereco, p.numero].filter(Boolean).join(", ")
+          + (p.complemento ? ` - ${p.complemento}` : "");
         const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
+        const cpfCnpj = h.cliente_cpf || p.cpf || p.cnpj || null;
+        const email = h.cliente_email || p.email || null;
         return (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setGerarEntregaItem(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
                 <h3 className="font-bold text-[#1D1D1F] text-lg">🚚 Gerar Entrega</h3>
                 <button onClick={() => setGerarEntregaItem(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F7]">&times;</button>
               </div>
               <div className="p-5 space-y-4">
                 {/* Dados do formulário (read-only, só pra conferir) */}
-                <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-1 text-xs">
-                  <p className="font-bold text-[#1D1D1F] text-sm mb-1">📋 Dados do formulário do cliente</p>
-                  <p><span className="text-[#86868B]">Cliente:</span> <b>{(h.cliente_nome || "—").toUpperCase()}</b></p>
-                  {h.cliente_telefone && <p><span className="text-[#86868B]">WhatsApp:</span> {h.cliente_telefone}</p>}
-                  {enderecoResumo.trim() && <p><span className="text-[#86868B]">Endereço:</span> {enderecoResumo}</p>}
-                  <p><span className="text-[#86868B]">Produto novo:</span> <b>{h.produto}</b>{h.cor ? ` (${h.cor})` : ""}</p>
-                  {valorFinal > 0 && <p><span className="text-[#86868B]">Valor:</span> <b className="text-[#E8740E]">R$ {valorFinal.toLocaleString("pt-BR")}</b></p>}
-                  {h.forma_pagamento && <p><span className="text-[#86868B]">Pagamento:</span> {h.forma_pagamento}{h.parcelas && Number(h.parcelas) > 1 ? ` em ${h.parcelas}x` : ""}{Number(h.entrada || 0) > 0 ? ` (entrada R$ ${Number(h.entrada).toLocaleString("pt-BR")})` : ""}</p>}
-                  {trocaNome && (
-                    <p><span className="text-[#86868B]">Troca:</span> <span className="text-purple-700">🔄 {trocaNome}{trocaCor ? ` — ${trocaCor}` : ""}{trocaVal > 0 ? ` — R$ ${trocaVal.toLocaleString("pt-BR")}` : ""}</span>{trocaCond ? <span className="block text-[10px] text-purple-600 pl-5">{trocaCond}</span> : null}</p>
+                <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3 text-xs">
+                  <p className="font-bold text-[#1D1D1F] text-sm">📋 Dados do formulário enviado pelo cliente</p>
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Cliente</p>
+                    <div className="space-y-0.5">
+                      <p><span className="text-[#86868B]">Nome:</span> <b>{(h.cliente_nome || "—").toUpperCase()}</b></p>
+                      {cpfCnpj && <p><span className="text-[#86868B]">{p.cnpj ? "CNPJ" : "CPF"}:</span> {cpfCnpj}</p>}
+                      {h.cliente_telefone && <p><span className="text-[#86868B]">WhatsApp:</span> {h.cliente_telefone}</p>}
+                      {email && <p><span className="text-[#86868B]">Email:</span> {email}</p>}
+                      {p.instagram && <p><span className="text-[#86868B]">Instagram:</span> {p.instagram}</p>}
+                    </div>
+                  </div>
+
+                  {(p.cep || p.endereco || p.bairro) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Endereço da entrega</p>
+                      <div className="space-y-0.5">
+                        {p.cep && <p><span className="text-[#86868B]">CEP:</span> {p.cep}</p>}
+                        {endLinha1 && <p><span className="text-[#86868B]">Endereço:</span> {endLinha1}</p>}
+                        {p.bairro && <p><span className="text-[#86868B]">Bairro:</span> {p.bairro}</p>}
+                      </div>
+                    </div>
                   )}
-                  {trocaNome2 && (
-                    <p><span className="text-[#86868B]">Troca 2:</span> <span className="text-purple-600">🔄 {trocaNome2}{trocaCor2 ? ` — ${trocaCor2}` : ""}{trocaVal2 > 0 ? ` — R$ ${trocaVal2.toLocaleString("pt-BR")}` : ""}</span>{trocaCond2 ? <span className="block text-[10px] text-purple-600 pl-5">{trocaCond2}</span> : null}</p>
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Compra</p>
+                    <div className="space-y-0.5">
+                      <p><span className="text-[#86868B]">Produto novo:</span> <b>{h.produto}</b>{h.cor ? ` (${h.cor})` : ""}</p>
+                      {valorFinal > 0 && <p><span className="text-[#86868B]">Valor:</span> <b className="text-[#E8740E]">R$ {valorFinal.toLocaleString("pt-BR")}</b></p>}
+                      {h.forma_pagamento && <p><span className="text-[#86868B]">Pagamento:</span> {h.forma_pagamento}{h.parcelas && Number(h.parcelas) > 1 ? ` em ${h.parcelas}x` : ""}{Number(h.entrada || 0) > 0 ? ` (entrada R$ ${Number(h.entrada).toLocaleString("pt-BR")})` : ""}</p>}
+                    </div>
+                  </div>
+
+                  {(trocaNome || trocaNome2) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Aparelho(s) na troca</p>
+                      <div className="space-y-1">
+                        {trocaNome && (
+                          <div>
+                            <p><span className="text-purple-700">🔄 {trocaNome}</span>{trocaCor ? ` — ${trocaCor}` : ""}{trocaVal > 0 ? ` — R$ ${trocaVal.toLocaleString("pt-BR")}` : ""}</p>
+                            {trocaCond && <p className="text-[10px] text-purple-600 pl-5">{trocaCond}</p>}
+                          </div>
+                        )}
+                        {trocaNome2 && (
+                          <div>
+                            <p><span className="text-purple-600">🔄 {trocaNome2}</span>{trocaCor2 ? ` — ${trocaCor2}` : ""}{trocaVal2 > 0 ? ` — R$ ${trocaVal2.toLocaleString("pt-BR")}` : ""}</p>
+                            {trocaCond2 && <p className="text-[10px] text-purple-600 pl-5">{trocaCond2}</p>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
-                  {p.local && <p><span className="text-[#86868B]">Local preferido:</span> {p.local}</p>}
+
+                  {(p.local || p.data_entrega || p.horario) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Entrega escolhida pelo cliente</p>
+                      <div className="space-y-0.5">
+                        {p.local && <p><span className="text-[#86868B]">Local:</span> {p.local}</p>}
+                        {p.data_entrega && <p><span className="text-[#86868B]">Data:</span> {p.data_entrega}</p>}
+                        {p.horario && <p><span className="text-[#86868B]">Horário:</span> {p.horario}</p>}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Campos editáveis */}
