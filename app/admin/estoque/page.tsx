@@ -870,6 +870,8 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [encomendaMap, setEncomendaMap] = useState<Map<string, string>>(new Map()); // estoque_id → cliente
+  // Códigos de rastreio por pedido (origem + data) — keyed por `${origem}|${data}` → array de {id, codigo}
+  const [rastreiosEnvio, setRastreiosEnvio] = useState<Map<string, { id: string; codigo: string }[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
   const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
@@ -1665,6 +1667,71 @@ export default function EstoquePage() {
       .then(d => { if (d.value) setLineOrder(d.value); })
       .catch(() => {});
   }, [password]);
+
+  // === Rastreios de envio (nível de pedido: origem + data) ===
+  const rastreiosKey = (origem: string, data: string) => `${origem}|${data}`;
+
+  const loadRastreiosEnvio = useCallback(async (origem: string, data: string) => {
+    try {
+      const res = await fetch(`/api/admin/rastreios-envio?origem=${encodeURIComponent(origem)}&data=${encodeURIComponent(data)}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const list: { id: string; codigo: string }[] = (j.codigos || []).map((r: { id: string; codigo_rastreio: string }) => ({ id: r.id, codigo: r.codigo_rastreio }));
+      setRastreiosEnvio(prev => {
+        const n = new Map(prev);
+        n.set(rastreiosKey(origem, data), list);
+        return n;
+      });
+    } catch {/* silencioso */}
+  }, [password]);
+
+  const addRastreiosEnvio = async (origem: string, data: string, codigos: string[]) => {
+    try {
+      const res = await fetch("/api/admin/rastreios-envio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ origem, data, codigos }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setMsg(`Erro ao adicionar rastreio: ${j.error || res.status}`);
+        return;
+      }
+      await loadRastreiosEnvio(origem, data);
+    } catch (e) {
+      setMsg(`Erro: ${String(e)}`);
+    }
+  };
+
+  const removeRastreioEnvio = async (id: string, origem: string, data: string) => {
+    try {
+      const res = await fetch(`/api/admin/rastreios-envio?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) return;
+      await loadRastreiosEnvio(origem, data);
+    } catch {/* silencioso */}
+  };
+
+  // Carregar rastreios de envio pra cada (origem + data) com itens A_CAMINHO
+  useEffect(() => {
+    if (!password || estoque.length === 0) return;
+    const pairs = new Set<string>();
+    for (const p of estoque) {
+      if (p.tipo !== "A_CAMINHO") continue;
+      const origem = p.origem_compra || "SEM_ORIGEM";
+      const data = p.data_compra;
+      if (!data) continue;
+      pairs.add(`${origem}|${data}`);
+    }
+    for (const key of pairs) {
+      const [origem, data] = key.split("|");
+      loadRastreiosEnvio(origem, data);
+    }
+  }, [estoque, password, loadRastreiosEnvio]);
 
   const saveLineOrder = useCallback(async (newOrder: Record<string, string[]>) => {
     setLineOrder(newOrder);
@@ -4155,6 +4222,47 @@ export default function EstoquePage() {
                             )}
                           </div>
                         </div>
+                        {/* Códigos de rastreio por pedido (origem + data) — 1 linha por data_compra */}
+                        {(() => {
+                          const datasPend = Array.from(new Set(pendentes.map(p => p.data_compra).filter(Boolean))).sort().reverse() as string[];
+                          if (datasPend.length === 0) return null;
+                          return datasPend.map(dataPed => {
+                            const key = rastreiosKey(origemKey, dataPed);
+                            const codigos = rastreiosEnvio.get(key) || [];
+                            const dataFmt = dataPed.split("-").reverse().join("/");
+                            return (
+                              <div key={key} className={`flex items-center gap-2 flex-wrap px-4 py-2 border-b ${dm ? "bg-[#1F2937] border-[#3A3A3C]" : "bg-blue-50 border-blue-100"}`}>
+                                <span className={`text-[11px] font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>📦 Rastreios ({dataFmt}):</span>
+                                {codigos.length === 0 && (
+                                  <span className={`text-[11px] italic ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>nenhum</span>
+                                )}
+                                {codigos.map(r => (
+                                  <span key={r.id} className={`inline-flex items-center gap-1 rounded-full overflow-hidden text-[11px] font-semibold ${dm ? "bg-blue-900/40 text-blue-200" : "bg-white text-blue-700 border border-blue-200"}`}>
+                                    <a href={`https://www.linkcorreios.com.br/${r.codigo}`} target="_blank" rel="noopener noreferrer" className="px-2 py-1 hover:underline">{r.codigo}</a>
+                                    <button
+                                      onClick={() => {
+                                        if (!confirm(`Remover código ${r.codigo}?`)) return;
+                                        removeRastreioEnvio(r.id, origemKey, dataPed);
+                                      }}
+                                      className={`px-1.5 py-1 ${dm ? "hover:bg-red-900/60 text-red-300" : "hover:bg-red-500 hover:text-white text-red-500"}`}
+                                      title="Remover"
+                                    >✕</button>
+                                  </span>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    const raw = prompt("Códigos de rastreio dos Correios (um por linha ou separados por vírgula/espaço):");
+                                    if (raw === null) return;
+                                    const codigos = raw.split(/[\n,;\s]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
+                                    if (codigos.length === 0) return;
+                                    addRastreiosEnvio(origemKey, dataPed, codigos);
+                                  }}
+                                  className={`text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${dm ? "bg-blue-900/30 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-white border border-blue-300 text-blue-600 hover:bg-blue-500 hover:text-white hover:border-blue-500"}`}
+                                >+ adicionar</button>
+                              </div>
+                            );
+                          });
+                        })()}
                         {/* Barra rapida: definir origem pra todos do grupo SEM_ORIGEM */}
                         {origemKey === "SEM_ORIGEM" && pendentes.length > 0 && selectedACaminho.size === 0 && (
                           <div className={`flex items-center gap-2 px-4 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-yellow-50"} border-b ${dm ? "border-[#3A3A3C]" : "border-yellow-200"}`}>
