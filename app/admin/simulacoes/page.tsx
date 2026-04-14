@@ -305,7 +305,11 @@ export default function AdminPage() {
   // real com o mesmo telefone. Prioriza link com cliente_dados_preenchidos; se não
   // tiver, aceita um link auto-criado pelo simulador (operador=Simulador) — nesse
   // caso o admin vai precisar conferir endereço no WhatsApp.
-  const openGerarEntrega = useCallback((h: HistoricoItem) => {
+  //
+  // Caso legado (clientes que fizeram trade-in antes de 14/04 — bug da race condition
+  // no StepQuote): não existe link_compras nenhum. A gente cria um link_compras na
+  // hora usando os dados da simulação, pra que o admin possa prosseguir com a entrega.
+  const openGerarEntrega = useCallback(async (h: HistoricoItem) => {
     let target = h;
     if (h.id.startsWith("sim_")) {
       const tel8 = (h.cliente_telefone || "").replace(/\D/g, "").slice(-8);
@@ -320,8 +324,69 @@ export default function AdminPage() {
       if (real) {
         target = real;
       } else {
-        alert("⚠️ Esse cliente só tem simulação — ainda não chegou ao formulário de compra. Peça pra ele clicar em 'DESEJO FECHAR MEU PEDIDO' na simulação.");
-        return;
+        // Caso legado: sem link_compras. Cria um na hora a partir da simulação.
+        const confirma = confirm(
+          "Esse cliente fez a simulação mas não tem link de compra registrado " +
+          "(pode ter preenchido antes da correção do dia 14/04).\n\n" +
+          "Deseja criar o link agora pra prosseguir com a entrega?\n" +
+          "Você vai precisar conferir endereço e forma de pagamento no WhatsApp do cliente."
+        );
+        if (!confirma) return;
+        try {
+          setEncaminhando(h.id);
+          const shortCode = `manual-${(h.simulacao_id || "").slice(0, 8) || Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36).slice(-4)}`;
+          const res = await fetch("/api/link-compras-auto", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              short_code: shortCode,
+              tipo: h.troca_produto ? "TROCA" : "COMPRA",
+              cliente_nome: h.cliente_nome,
+              cliente_telefone: h.cliente_telefone,
+              produto: h.produto,
+              cor: h.cor,
+              valor: h.valor,
+              troca_produto: h.troca_produto,
+              troca_valor: h.troca_valor,
+              troca_condicao: h.troca_condicao,
+              troca_cor: h.troca_cor,
+              troca_produto2: h.troca_produto2,
+              troca_valor2: h.troca_valor2,
+              troca_condicao2: h.troca_condicao2,
+              troca_cor2: h.troca_cor2,
+              vendedor: h.vendedor,
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok || (!json.data && !json.exists)) {
+            setEncaminhando(null);
+            alert("Erro ao criar link: " + (json.error || "falha desconhecida"));
+            return;
+          }
+          // Se o endpoint retornou dados do novo link, usa direto; senão, re-fetch
+          if (json.data && json.data.id) {
+            target = json.data as HistoricoItem;
+          } else {
+            // fallback: re-fetcha e procura pelo short_code
+            await fetchHistorico();
+            const lookupRes = await fetch(`/api/admin/link-compras?q=${encodeURIComponent(shortCode)}&preenchidos=1&incluir_simulador=1&limit=5`, {
+              headers: { "x-admin-password": password },
+            });
+            const lookupJson = await lookupRes.json();
+            const novo = (lookupJson.data || []).find((x: { short_code: string }) => x.short_code === shortCode);
+            if (!novo) {
+              setEncaminhando(null);
+              alert("Link criado, mas não foi possível abrir o modal. Clique em Atualizar e tente novamente.");
+              return;
+            }
+            target = novo as HistoricoItem;
+          }
+          setEncaminhando(null);
+        } catch (err) {
+          setEncaminhando(null);
+          alert("Erro ao criar link: " + String(err));
+          return;
+        }
       }
     }
     const p = target.cliente_dados_preenchidos || {};
@@ -343,7 +408,7 @@ export default function AdminPage() {
     setGerarEntregador("");
     setGerarObs("");
     setGerarEntregaItem(target);
-  }, [historico]);
+  }, [historico, fetchHistorico, password]);
 
   const confirmarGerarEntrega = async () => {
     if (!gerarEntregaItem) return;
