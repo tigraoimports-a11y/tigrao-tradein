@@ -119,6 +119,25 @@ export async function POST(req: NextRequest) {
     if (body.corUsado2 != null) row.cor_usado2 = body.corUsado2 || null;
     if (body.avaliacaoUsado2) row.avaliacao_usado2 = body.avaliacaoUsado2;
     if (body.condicaoLinhas2) row.condicao_linhas2 = body.condicaoLinhas2;
+
+    // Checagem de duplicidade real: mesmo whatsapp + produto novo + produto usado nos últimos 2 minutos
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: existing } = await supabase
+      .from("simulacoes")
+      .select("id")
+      .eq("whatsapp", body.whatsapp || "")
+      .eq("modelo_novo", body.modeloNovo || "")
+      .eq("storage_novo", body.storageNovo || "")
+      .eq("modelo_usado", body.modeloUsado || "")
+      .eq("storage_usado", body.storageUsado || "")
+      .gte("created_at", twoMinAgo)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log("[leads] Duplicidade detectada, ignorando re-envio");
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+
     let { error } = await supabase.from("simulacoes").insert([row]);
 
     // Fallback: se colunas cor_usado*/2 ainda não existem no banco, tenta sem elas
