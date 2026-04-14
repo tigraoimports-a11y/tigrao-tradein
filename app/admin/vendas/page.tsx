@@ -4011,7 +4011,6 @@ export default function VendasPage() {
                         } else if (v.forma && v.forma !== "CARTAO") {
                           const lbl = formaLabel(v.forma);
                           const banco = v.banco && v.banco !== v.forma ? ` ${v.banco}` : "";
-                          // Valor a mostrar: resto > 0 usa resto, senão usa valor_comprovante se disponível
                           const valorForma = resto > 0 ? resto : (compVal > 0 ? compVal : 0);
                           if (valorForma > 0) pagParts.push(`${lbl}${banco}: ${fmt(valorForma)}`);
                         }
