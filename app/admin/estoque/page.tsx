@@ -1699,11 +1699,19 @@ export default function EstoquePage() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setMsg(`Erro ao adicionar rastreio: ${j.error || res.status}`);
+        const errMsg = j.error || `HTTP ${res.status}`;
+        const isMissingTable = /relation.*does not exist|rastreios_envio/i.test(errMsg);
+        if (isMissingTable) {
+          alert(`⚠️ Migration nao rodada!\n\nA tabela rastreios_envio nao existe no banco.\nVa em /admin/migrations e rode a migration:\n20260414_rastreios_envio.sql`);
+        } else {
+          alert(`Erro ao adicionar rastreio: ${errMsg}`);
+        }
+        setMsg(`Erro ao adicionar rastreio: ${errMsg}`);
         return;
       }
       await loadRastreiosEnvio(origem, data);
     } catch (e) {
+      alert(`Erro: ${String(e)}`);
       setMsg(`Erro: ${String(e)}`);
     }
   };
