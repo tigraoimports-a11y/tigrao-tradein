@@ -676,12 +676,13 @@ export async function PATCH(req: NextRequest) {
     // Deletar reajustes antigos desta venda
     await supabase.from("reajustes").delete().eq("venda_ref", id);
     // Inserir todos os reajustes atuais
-    const reajInserts = fields.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string }) => ({
+    const reajInserts = fields.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string; observacao?: string }) => ({
       data: r.data || hojeBR(),
       cliente: venda.cliente || "?",
       motivo: r.motivo || "",
       valor: r.valor,
       banco: r.banco || null,
+      observacao: r.observacao || null,
       venda_ref: id,
     }));
     if (reajInserts.length > 0) {
