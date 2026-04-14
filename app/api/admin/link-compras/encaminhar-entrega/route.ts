@@ -75,6 +75,43 @@ export async function POST(request: Request) {
   const restanteComTaxa = taxaPct > 0 ? Math.ceil(restante * (1 + taxaPct / 100)) : restante;
   const valorFinal = entradaVal + restanteComTaxa;
 
+  // Monta a observação enriquecida com tudo que a Bia precisa pra entrega:
+  // - observação manual do admin (se houver)
+  // - produto(s) na troca com cor/condição/valor
+  // - local preferido que o cliente marcou no formulário
+  // - short_code (fallback de rastreabilidade)
+  const obsParts: string[] = [];
+  if (observacao) obsParts.push(String(observacao).trim());
+  const trocaLinhas: string[] = [];
+  if (link.troca_produto) {
+    const t1 = [
+      link.troca_produto,
+      link.troca_cor ? `cor ${link.troca_cor}` : null,
+      link.troca_condicao ? link.troca_condicao : null,
+      Number(link.troca_valor) ? `R$ ${Number(link.troca_valor).toLocaleString("pt-BR")}` : null,
+    ].filter(Boolean).join(" • ");
+    trocaLinhas.push(`🔄 Troca 1: ${t1}`);
+  }
+  if (link.troca_produto2) {
+    const t2 = [
+      link.troca_produto2,
+      link.troca_cor2 ? `cor ${link.troca_cor2}` : null,
+      link.troca_condicao2 ? link.troca_condicao2 : null,
+      Number(link.troca_valor2) ? `R$ ${Number(link.troca_valor2).toLocaleString("pt-BR")}` : null,
+    ].filter(Boolean).join(" • ");
+    trocaLinhas.push(`🔄 Troca 2: ${t2}`);
+  }
+  if (trocaLinhas.length > 0) obsParts.push(trocaLinhas.join("\n"));
+  if (preench.local) obsParts.push(`📍 Local preferido: ${preench.local}`);
+  if (preench.instagram) obsParts.push(`Instagram: ${preench.instagram}`);
+  obsParts.push(`Encaminhada do link ${link.short_code}`);
+  const observacaoFinal = obsParts.filter(Boolean).join("\n");
+
+  // Campo detalhes_upgrade é usado pela aba de entregas pra listar trocas do pedido
+  const detalhesUpgrade = trocaLinhas.length > 0
+    ? trocaLinhas.map(l => l.replace(/^🔄\s*Troca \d:\s*/, "")).join("\n")
+    : null;
+
   const { data: entrega, error: e2 } = await supabase
     .from("entregas")
     .insert({
@@ -83,12 +120,13 @@ export async function POST(request: Request) {
       endereco,
       bairro,
       data_entrega,
-      horario: horario || null,
+      horario: horario || preench.horario || null,
       status: "PENDENTE",
       entregador: entregador || null,
-      observacao: observacao || `Encaminhada do link ${link.short_code}`,
+      observacao: observacaoFinal,
+      detalhes_upgrade: detalhesUpgrade,
       produto: produtoTxt,
-      tipo: link.tipo === "TROCA" ? "TROCA" : null,
+      tipo: link.tipo === "TROCA" || trocaLinhas.length > 0 ? "TROCA" : null,
       forma_pagamento: (() => {
         if (!forma) return null;
         if (isCartao && parcelasNum > 0) return `${parcelasNum}x no ${forma === "Link de Pagamento" ? "Link" : "Cartão"}`;

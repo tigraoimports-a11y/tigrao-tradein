@@ -181,6 +181,12 @@ export default function AdminPage() {
   const [historicoLoading, setHistoricoLoading] = useState(false);
   const [encaminhando, setEncaminhando] = useState<string | null>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoItem | null>(null);
+  // Modal "Gerar Entrega": coleta data/horário/entregador/obs, pré-preenchidos do formulário do cliente
+  const [gerarEntregaItem, setGerarEntregaItem] = useState<HistoricoItem | null>(null);
+  const [gerarData, setGerarData] = useState("");
+  const [gerarHorario, setGerarHorario] = useState("");
+  const [gerarEntregador, setGerarEntregador] = useState("");
+  const [gerarObs, setGerarObs] = useState("");
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -288,6 +294,59 @@ export default function AdminPage() {
     if (mainTab === "historico" && data && data.length > 0) fetchHistorico();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab, data?.length, password]);
+
+  // Abre o modal de Gerar Entrega com dados pré-preenchidos do formulário do cliente
+  const openGerarEntrega = useCallback((h: HistoricoItem) => {
+    const p = h.cliente_dados_preenchidos || {};
+    // Data de entrega: preferir o que o cliente informou; senão, hoje
+    let dataDefault = "";
+    const pd = (p.data_entrega || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(pd)) {
+      dataDefault = pd.slice(0, 10);
+    } else if (/^\d{2}\/\d{2}\/\d{4}/.test(pd)) {
+      const [d, m, y] = pd.split("/");
+      dataDefault = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+    if (!dataDefault) {
+      const hoje = new Date();
+      dataDefault = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+    }
+    setGerarData(dataDefault);
+    setGerarHorario((p.horario || "").trim());
+    setGerarEntregador("");
+    setGerarObs("");
+    setGerarEntregaItem(h);
+  }, []);
+
+  const confirmarGerarEntrega = async () => {
+    if (!gerarEntregaItem) return;
+    if (!gerarData) { alert("Informe a data da entrega"); return; }
+    setEncaminhando(gerarEntregaItem.id);
+    try {
+      const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+        body: JSON.stringify({
+          link_id: gerarEntregaItem.id,
+          data_entrega: gerarData,
+          horario: gerarHorario || null,
+          entregador: gerarEntregador || null,
+          observacao: gerarObs || null,
+        }),
+      });
+      if (res.ok) {
+        const id = gerarEntregaItem.id;
+        setHistorico(prev => prev.map(x => x.id === id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
+        setHistoricoModal(prev => prev && prev.id === id ? { ...prev, status: "ENCAMINHADO", entrega_id: "created" } : prev);
+        setGerarEntregaItem(null);
+        alert("✅ Entrega criada com sucesso! Veja em Entregas.");
+      } else {
+        const json = await res.json();
+        alert("Erro: " + (json.error || "Falha"));
+      }
+    } catch (err) { alert("Erro: " + String(err)); }
+    setEncaminhando(null);
+  };
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -403,7 +462,7 @@ export default function AdminPage() {
         {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico de Formulários (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -423,7 +482,7 @@ export default function AdminPage() {
       {mainTab === "historico" && (
         <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
-            <h2 className="font-bold text-[#1D1D1F]">📋 Histórico — Clientes que completaram o funil</h2>
+            <h2 className="font-bold text-[#1D1D1F]">📋 Histórico de Formulários — Clientes que completaram o funil</h2>
             <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
               {historicoLoading ? "Carregando..." : "↻ Atualizar"}
             </button>
@@ -509,32 +568,10 @@ export default function AdminPage() {
                             {!h.entrega_id && h.status !== "ENCAMINHADO" && (
                               <button
                                 disabled={encaminhando === h.id}
-                                onClick={async () => {
-                                  const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
-                                  if (!dataEntrega) return;
-                                  const [d, m, y] = dataEntrega.split("/");
-                                  const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
-                                  if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
-                                  setEncaminhando(h.id);
-                                  try {
-                                    const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                      body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
-                                    });
-                                    if (res.ok) {
-                                      setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
-                                      alert("✅ Entrega criada com sucesso! Veja em Entregas.");
-                                    } else {
-                                      const json = await res.json();
-                                      alert("Erro: " + (json.error || "Falha"));
-                                    }
-                                  } catch (err) { alert("Erro: " + String(err)); }
-                                  setEncaminhando(null);
-                                }}
+                                onClick={() => openGerarEntrega(h)}
                                 className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                                {encaminhando === h.id ? "Criando..." : "🚚 Gerar Entrega"}
                               </button>
                             )}
                             {h.entrega_id && <span className="text-[10px] text-green-600 font-semibold">✅ Entrega criada</span>}
@@ -698,35 +735,112 @@ export default function AdminPage() {
                   {!h.entrega_id && h.status !== "ENCAMINHADO" && (
                     <button
                       disabled={encaminhando === h.id}
-                      onClick={async () => {
-                        const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
-                        if (!dataEntrega) return;
-                        const [d, m, y] = dataEntrega.split("/");
-                        const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
-                        if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
-                        setEncaminhando(h.id);
-                        try {
-                          const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                            body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
-                          });
-                          if (res.ok) {
-                            setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
-                            setHistoricoModal(prev => prev ? { ...prev, status: "ENCAMINHADO", entrega_id: "created" } : null);
-                            alert("Entrega criada com sucesso! Veja em Entregas.");
-                          } else {
-                            const json = await res.json();
-                            alert("Erro: " + (json.error || "Falha"));
-                          }
-                        } catch (err) { alert("Erro: " + String(err)); }
-                        setEncaminhando(null);
-                      }}
+                      onClick={() => openGerarEntrega(h)}
                       className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold text-center transition-colors disabled:opacity-50"
                     >
-                      {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                      {encaminhando === h.id ? "Criando..." : "🚚 Gerar Entrega"}
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal: Gerar Entrega — pré-preenchido com dados do formulário */}
+      {gerarEntregaItem && (() => {
+        const h = gerarEntregaItem;
+        const p = h.cliente_dados_preenchidos || {};
+        const hTel = (h.cliente_telefone || "").replace(/\D/g, "");
+        const hNome = (h.cliente_nome || "").toLowerCase().trim();
+        const sim = (h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null)
+          || (hTel.length >= 8 ? data.find(s => s.whatsapp && s.whatsapp.replace(/\D/g, "").includes(hTel.slice(-8))) : null)
+          || (hNome.length >= 3 ? data.find(s => s.nome && s.nome.toLowerCase().trim().includes(hNome.split(" ")[0])) : null)
+          || null;
+        const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
+        const trocaVal = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
+        const trocaCor = h.troca_cor || sim?.cor_usado || null;
+        const trocaCond = h.troca_condicao || (sim?.condicao_linhas ? sim.condicao_linhas.join(" | ") : null);
+        const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
+        const trocaVal2 = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
+        const trocaCor2 = h.troca_cor2 || sim?.cor_usado2 || null;
+        const trocaCond2 = h.troca_condicao2 || (sim?.condicao_linhas2 ? sim.condicao_linhas2.join(" | ") : null);
+        const enderecoResumo = [p.endereco, p.numero].filter(Boolean).join(", ")
+          + (p.complemento ? ` - ${p.complemento}` : "")
+          + (p.bairro ? ` — ${p.bairro}` : "")
+          + (p.cep ? ` (CEP ${p.cep})` : "");
+        const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
+        return (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setGerarEntregaItem(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+                <h3 className="font-bold text-[#1D1D1F] text-lg">🚚 Gerar Entrega</h3>
+                <button onClick={() => setGerarEntregaItem(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F7]">&times;</button>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Dados do formulário (read-only, só pra conferir) */}
+                <div className="bg-[#F5F5F7] rounded-xl p-3 space-y-1 text-xs">
+                  <p className="font-bold text-[#1D1D1F] text-sm mb-1">📋 Dados do formulário do cliente</p>
+                  <p><span className="text-[#86868B]">Cliente:</span> <b>{(h.cliente_nome || "—").toUpperCase()}</b></p>
+                  {h.cliente_telefone && <p><span className="text-[#86868B]">WhatsApp:</span> {h.cliente_telefone}</p>}
+                  {enderecoResumo.trim() && <p><span className="text-[#86868B]">Endereço:</span> {enderecoResumo}</p>}
+                  <p><span className="text-[#86868B]">Produto novo:</span> <b>{h.produto}</b>{h.cor ? ` (${h.cor})` : ""}</p>
+                  {valorFinal > 0 && <p><span className="text-[#86868B]">Valor:</span> <b className="text-[#E8740E]">R$ {valorFinal.toLocaleString("pt-BR")}</b></p>}
+                  {h.forma_pagamento && <p><span className="text-[#86868B]">Pagamento:</span> {h.forma_pagamento}{h.parcelas && Number(h.parcelas) > 1 ? ` em ${h.parcelas}x` : ""}{Number(h.entrada || 0) > 0 ? ` (entrada R$ ${Number(h.entrada).toLocaleString("pt-BR")})` : ""}</p>}
+                  {trocaNome && (
+                    <p><span className="text-[#86868B]">Troca:</span> <span className="text-purple-700">🔄 {trocaNome}{trocaCor ? ` — ${trocaCor}` : ""}{trocaVal > 0 ? ` — R$ ${trocaVal.toLocaleString("pt-BR")}` : ""}</span>{trocaCond ? <span className="block text-[10px] text-purple-600 pl-5">{trocaCond}</span> : null}</p>
+                  )}
+                  {trocaNome2 && (
+                    <p><span className="text-[#86868B]">Troca 2:</span> <span className="text-purple-600">🔄 {trocaNome2}{trocaCor2 ? ` — ${trocaCor2}` : ""}{trocaVal2 > 0 ? ` — R$ ${trocaVal2.toLocaleString("pt-BR")}` : ""}</span>{trocaCond2 ? <span className="block text-[10px] text-purple-600 pl-5">{trocaCond2}</span> : null}</p>
+                  )}
+                  {p.local && <p><span className="text-[#86868B]">Local preferido:</span> {p.local}</p>}
+                </div>
+
+                {/* Campos editáveis */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Data da entrega *</label>
+                    <input type="date" value={gerarData} onChange={(e) => setGerarData(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                    {p.data_entrega && (
+                      <p className="text-[10px] text-[#86868B] mt-1">Sugerido pelo cliente: {p.data_entrega}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Horário</label>
+                    <input type="time" value={gerarHorario} onChange={(e) => setGerarHorario(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                    {p.horario && (
+                      <p className="text-[10px] text-[#86868B] mt-1">Sugerido pelo cliente: {p.horario}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Entregador (opcional)</label>
+                    <input type="text" value={gerarEntregador} onChange={(e) => setGerarEntregador(e.target.value)}
+                      placeholder="Ex: Bia, João..."
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Observação extra (opcional)</label>
+                    <textarea value={gerarObs} onChange={(e) => setGerarObs(e.target.value)}
+                      placeholder="Dados da troca são adicionados automaticamente."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                  </div>
+                </div>
+
+                {/* Ações */}
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setGerarEntregaItem(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5E7] text-[#1D1D1F] text-sm font-semibold transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={confirmarGerarEntrega}
+                    disabled={encaminhando === h.id || !gerarData}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                    {encaminhando === h.id ? "Criando..." : "✅ Confirmar e criar entrega"}
+                  </button>
                 </div>
               </div>
             </div>
