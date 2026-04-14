@@ -52,10 +52,10 @@ export async function POST(request: Request) {
       operador: "Simulador",
     };
 
-    const { error } = await supabase.from("link_compras").insert(payload);
+    const { data: inserted, error } = await supabase.from("link_compras").insert(payload).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, data: inserted });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -146,6 +146,9 @@ export default function ClientesPage() {
   const [notas, setNotas] = useState<{ id: string; data: string; cliente: string; produto: string; preco_vendido: number; nota_fiscal_url: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
+  const [merging, setMerging] = useState(false);
+  const toggleMerge = (nome: string) => setMergeSelection(prev => { const n = new Set(prev); if (n.has(nome)) n.delete(nome); else n.add(nome); return n; });
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const toggleDate = (key: string) => setExpandedDates(prev => {
     const n = new Set(prev);
@@ -835,19 +838,70 @@ export default function ClientesPage() {
         ))}
       </div>
 
+      {/* Barra de merge */}
+      {mergeSelection.size >= 2 && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-[#E8740E] ${dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]"}`}>
+          <span className={`text-sm font-semibold ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>
+            {mergeSelection.size} selecionados
+          </span>
+          <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>→ Unificar para:</span>
+          {Array.from(mergeSelection).map(nome => (
+            <button
+              key={nome}
+              disabled={merging}
+              onClick={async () => {
+                const outros = Array.from(mergeSelection).filter(n => n !== nome);
+                if (!confirm(`Unificar todos para "${nome}"?\n\n${outros.map(o => `• ${o}`).join("\n")}\n\nTodas as vendas, entregas e dados serão transferidos para "${nome}".`)) return;
+                setMerging(true);
+                for (const antigo of outros) {
+                  try {
+                    await fetch("/api/admin/merge-cliente", {
+                      method: "POST",
+                      headers: { ...apiHeaders() as Record<string, string>, "Content-Type": "application/json" },
+                      body: JSON.stringify({ nomeAntigo: antigo, nomeNovo: nome }),
+                    });
+                  } catch { /* ignore */ }
+                }
+                setMergeSelection(new Set());
+                setMerging(false);
+                // Recarregar dados
+                setLoading(true);
+                try {
+                  const params = new URLSearchParams({ tab });
+                  if (debouncedSearch) params.set("search", debouncedSearch);
+                  const res = await fetch(`/api/admin/clientes?${params}`, { headers: apiHeaders() });
+                  if (res.ok) {
+                    const json = await res.json();
+                    setClientes(json.clientes || json.data || []);
+                  }
+                } catch { /* ignore */ }
+                setLoading(false);
+                fetchSaldosLojistas();
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors disabled:opacity-50"
+            >
+              {merging ? "Unificando..." : nome}
+            </button>
+          ))}
+          <button onClick={() => setMergeSelection(new Set())} className={`ml-auto text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"} hover:underline`}>
+            Limpar
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className={tableCls}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className={`border-b ${dm ? "border-[#3A3A3C] bg-[#2C2C2E]" : "border-[#D2D2D7] bg-[#F5F5F7]"}`}>
-                {["Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", ...(tab === "lojistas" ? ["Saldo Crédito", ""] : []), "Ultima Compra", "Cliente Desde", "Local"].map((h, i) => (
+                {["", "Cliente", tab === "lojistas" ? "CNPJ" : "CPF", "Compras", "Total Gasto", ...(tab === "lojistas" ? ["Saldo Crédito", ""] : []), "Ultima Compra", "Cliente Desde", "Local"].map((h, i) => (
                   <th key={`${h}-${i}`} className={thCls}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(() => { const colSpan = tab === "lojistas" ? 9 : 7; return loading ? (
+              {(() => { const colSpan = tab === "lojistas" ? 10 : 8; return loading ? (
                 <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>Carregando...</td></tr>
               ) : sorted.length === 0 ? (
                 <tr><td colSpan={colSpan} className={`px-4 py-12 text-center ${mM}`}>
@@ -872,6 +926,9 @@ export default function ClientesPage() {
                     }}
                     className={`${rowCls} ${expandedId === c.nome ? (dm ? "bg-[#2C2C2E]" : "bg-[#FFF8F0]") : ""}`}
                   >
+                    <td className="px-2 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={mergeSelection.has(c.nome)} onChange={() => toggleMerge(c.nome)} className="w-4 h-4 accent-[#E8740E] cursor-pointer" />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs">{expandedId === c.nome ? "▼" : "▶"}</span>
@@ -910,7 +967,7 @@ export default function ClientesPage() {
                   {/* Expanded: lista de compras */}
                   {expandedId === c.nome && (
                     <tr>
-                      <td colSpan={tab === "lojistas" ? 9 : 7} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
+                      <td colSpan={tab === "lojistas" ? 10 : 8} className={`px-6 py-4 ${dm ? "bg-[#1A1A1C]" : "bg-[#FAFAFA]"}`}>
                         <div className="space-y-3">
                           <div className="flex flex-wrap gap-4 text-xs">
                             {c.cpf && <span className={mS}>CPF: <strong className={mP}>{c.cpf}</strong></span>}

@@ -490,10 +490,10 @@ export default function TradeInCalculatorMulti({ vendedor: vendedorProp, temaPar
           {step === 4 && (
             <StepQuote
               newModel={newModel} newStorage={newStorage} newPrice={newPrice}
-              usedModel={usedModel} usedStorage={usedStorage} condition={condition} deviceType={deviceType}
+              usedModel={usedModel} usedStorage={usedStorage} usedColor={usedColor} condition={condition} deviceType={deviceType}
               tradeInValue={totalTradeInValue}
               allProducts={products}
-              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined}
+              usedModel2={hasSecondDevice ? usedModel2 : undefined} usedStorage2={hasSecondDevice ? usedStorage2 : undefined} usedColor2={hasSecondDevice ? usedColor2 : undefined}
               condition2={hasSecondDevice ? condition2 : undefined} deviceType2={hasSecondDevice ? deviceType2 : undefined}
               tradeInValue1={hasSecondDevice ? tradeInValue : undefined} tradeInValue2={hasSecondDevice ? tradeInValue2 : undefined}
               clienteNome={clienteNome} clienteWhatsApp={clienteWhatsApp} clienteInstagram={clienteInstagram} clienteOrigem={clienteOrigem}

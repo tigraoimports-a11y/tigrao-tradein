@@ -659,6 +659,202 @@ const fmtDate = (d: string | null | undefined): string => {
   return d;
 };
 
+/**
+ * Converte strings de produto em Title Case adequado para Apple products.
+ * Ex: "IPHONE 17 PRO 512GB" → "iPhone 17 Pro 512GB"
+ */
+function titleCaseProduto(s: string): string {
+  let out = s.toLowerCase();
+  out = out.replace(/\biphone\b/g, "iPhone");
+  out = out.replace(/\bipad\b/g, "iPad");
+  out = out.replace(/\bimac\b/g, "iMac");
+  out = out.replace(/\bairpods?\b/g, "AirPods");
+  out = out.replace(/\bapple watch\b/g, "Apple Watch");
+  out = out.replace(/\bmacbook\b/g, "MacBook");
+  out = out.replace(/\bmac mini\b/g, "Mac Mini");
+  out = out.replace(/\bmac studio\b/g, "Mac Studio");
+  out = out.replace(/\bpro max\b/g, "Pro Max");
+  out = out.replace(/\bpro\b/g, "Pro");
+  out = out.replace(/\bmax\b/g, "Max");
+  out = out.replace(/\bmini\b/g, "Mini");
+  out = out.replace(/\bair\b/g, "Air");
+  out = out.replace(/\bplus\b/g, "Plus");
+  out = out.replace(/\bse\b/g, "SE");
+  out = out.replace(/\bultra\b/g, "Ultra");
+  out = out.replace(/\b(\d+)\s*gb\b/g, "$1GB");
+  out = out.replace(/\b(\d+)\s*tb\b/g, "$1TB");
+  out = out.replace(/\bm(\d+)\b/g, "M$1");
+  out = out.replace(/\b(\d+)\s*mm\b/g, "$1mm");
+  return out.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * Extrai nome canônico do produto (sem cor, sem conectividade, sem pulseira)
+ * e retorna também campo extra (conectividade pra Apple Watch).
+ */
+function cleanProductForAtacado(produto: string, categoria: string): { base: string; extra?: string } {
+  let nome = (produto || "").trim();
+  // Remove sufixos regionais (VC LL J BE BR HN IN ZA BZ ZD ZP) e parênteses
+  nome = nome.replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "");
+  // Remove info SIM
+  nome = nome.replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "");
+  // Remove "(8C CPU/10C GPU)"
+  nome = nome.replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ");
+
+  const cat = getBaseCat(categoria);
+  let extra: string | undefined;
+
+  // Cores em inglês e algumas em português que aparecem no nome do produto
+  const COLOR_WORDS = [
+    "BLACK", "WHITE", "BLUE", "RED", "PURPLE", "YELLOW", "GREEN", "PINK",
+    "SPACE BLACK", "SPACE GRAY", "SPACE GREY", "DEEP PURPLE", "DEEP BLUE",
+    "COSMIC ORANGE", "MIDNIGHT", "STARLIGHT", "SILVER", "GOLD", "SAGE",
+    "LAVENDER", "CREAM", "NATURAL TITANIUM", "BLUE TITANIUM", "WHITE TITANIUM",
+    "BLACK TITANIUM", "DESERT TITANIUM", "NATURAL", "TITANIUM", "ULTRAMARINE",
+    "TEAL", "MEIA-NOITE", "MEIA NOITE", "SKY BLUE", "ORANGE",
+  ].sort((a, b) => b.length - a.length);
+  const colorRe = new RegExp("\\b(" + COLOR_WORDS.map(c => c.replace(/\s+/g, "\\s+")).join("|") + ")\\b", "gi");
+
+  if (cat === "APPLE_WATCH") {
+    // Extrai conectividade
+    const connMatch = nome.match(/\b(GPS\s*\+\s*CEL|GPS\+CEL|GPS)\b/i);
+    if (connMatch) {
+      const raw = connMatch[1].toUpperCase().replace(/\s+/g, "");
+      extra = raw === "GPS" ? "GPS" : "GPS+Cel";
+      nome = nome.replace(/\b(GPS\s*\+\s*CEL|GPS\+CEL|GPS)\b/gi, " ");
+    }
+    // Remove tudo depois de PULSEIRA
+    nome = nome.replace(/\s*PULSEIRA.*/gi, "");
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|ROXA?|ROXO|VERMELHA?|VERMELHO|ROSA|DOURADA?|DOURADO|BEGE|AMARELO|AMARELA|LARANJA|CINZA)\b/gi, " ");
+  } else if (cat === "IPADS") {
+    // Remove WI-FI
+    nome = nome.replace(/\bWI[-\s]?FI\b/gi, " ");
+    // iPad Pro redundância: "IPAD PRO 11 M5 11\"" → "IPAD PRO M5 11\""
+    nome = nome.replace(/\b(ipad\s+pro)\s+\d+\s+(m\d+)\b/gi, "$1 $2");
+    // Pra iPad Mini, remove tamanho de tela (sempre 8.3")
+    if (/\bmini\b/i.test(nome)) {
+      nome = nome.replace(/\b\d+(\.\d+)?\s*["']/g, " ");
+    }
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|CINZA|DOURADA?|DOURADO)\b/gi, " ");
+  } else if (cat === "IPHONES") {
+    // Remove cores
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|VERDE|CINZA|DOURADA?|DOURADO|ROXA?|ROXO|ROSA|VERMELHA?|VERMELHO|LARANJA|AMARELO|AMARELA|BEGE)\b/gi, " ");
+  } else if (cat === "MACBOOK" || cat === "MAC_MINI") {
+    nome = nome.replace(/\bWI[-\s]?FI\b/gi, " ");
+    nome = nome.replace(colorRe, " ");
+    nome = nome.replace(/\b(PRETA?|PRETO|BRANCA?|BRANCO|PRATA|AZUL|CINZA|DOURADA?|DOURADO)\b/gi, " ");
+  }
+
+  nome = nome.replace(/\s{2,}/g, " ").trim();
+  nome = titleCaseProduto(nome);
+
+  return { base: nome, extra };
+}
+
+/**
+ * Gera texto estruturado pro WhatsApp a partir de uma lista de produtos.
+ * Agrupa por categoria, merge de cores/conectividades, Title Case.
+ */
+function buildAtacadoText(fonte: ProdutoEstoque[]): string {
+  const catEmoji: Record<string, string> = {
+    IPHONES: "📱", IPADS: "📲", MACBOOK: "💻", MAC_MINI: "🖥️",
+    APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
+  };
+  const catLabel: Record<string, string> = {
+    IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
+    APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
+  };
+  const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
+
+  type Entry = { base: string; colors: string[]; extras: string[] };
+  const groups: Record<string, Map<string, Entry>> = {};
+
+  for (const p of fonte) {
+    const cat = getBaseCat(p.categoria || "OUTROS");
+    if (!groups[cat]) groups[cat] = new Map();
+    const { base, extra } = cleanProductForAtacado(p.produto || "", p.categoria || "");
+    // Pra Apple Watch, cor é agrupada junto com base (merge só conectividade)
+    const keyForGroup = cat === "APPLE_WATCH"
+      ? `${base}||${(p.cor || "").toUpperCase()}`
+      : base;
+    const cor = p.cor ? (corParaPT(p.cor) || p.cor) : "";
+
+    let entry = groups[cat].get(keyForGroup);
+    if (!entry) { entry = { base, colors: [], extras: [] }; groups[cat].set(keyForGroup, entry); }
+    if (cor && !entry.colors.includes(cor)) entry.colors.push(cor);
+    if (extra && !entry.extras.includes(extra)) entry.extras.push(extra);
+  }
+
+  const iphoneFamily = (base: string): number => {
+    if (/\bpro\s+max\b/i.test(base)) return 3;
+    if (/\bpro\b/i.test(base)) return 2;
+    if (/\bplus\b/i.test(base)) return 1;
+    return 0;
+  };
+  const extractCapGB = (base: string): number => {
+    const m = base.match(/(\d+)(GB|TB)\b/i);
+    if (!m) return 0;
+    const n = parseInt(m[1]);
+    return m[2].toUpperCase() === "TB" ? n * 1024 : n;
+  };
+
+  const lines: string[] = ["🚨 *ESTOQUE – ATACADO*", ""];
+  const sortedCats = Object.keys(groups).sort((a, b) => {
+    const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  for (const cat of sortedCats) {
+    const emoji = catEmoji[cat] || "📦";
+    const label = catLabel[cat] || cat;
+    lines.push(`${emoji} *${label}*`);
+    const entries = Array.from(groups[cat].values());
+
+    // Chave do "modelo" sem capacidade (prefixo) — pra sort e agrupamento visual
+    const modelPrefix = (base: string): string => base.replace(/\s*\d+(GB|TB)\b.*$/i, "").trim();
+
+    if (cat === "IPHONES") {
+      entries.sort((a, b) => {
+        const fa = iphoneFamily(a.base), fb = iphoneFamily(b.base);
+        if (fa !== fb) return fa - fb;
+        const pa = modelPrefix(a.base), pb = modelPrefix(b.base);
+        if (pa !== pb) return pa.localeCompare(pb);
+        return extractCapGB(a.base) - extractCapGB(b.base);
+      });
+      let currentFamily = -1;
+      for (const e of entries) {
+        const f = iphoneFamily(e.base);
+        if (currentFamily !== -1 && f !== currentFamily) lines.push("");
+        currentFamily = f;
+        const parts = [e.base];
+        if (e.extras.length > 0) parts.push(e.extras.join(" / "));
+        if (e.colors.length > 0) parts.push(e.colors.join(" / "));
+        lines.push(parts.join(" – "));
+      }
+    } else {
+      entries.sort((a, b) => {
+        const pa = modelPrefix(a.base), pb = modelPrefix(b.base);
+        if (pa !== pb) return pa.localeCompare(pb);
+        return extractCapGB(a.base) - extractCapGB(b.base);
+      });
+      for (const e of entries) {
+        const parts = [e.base];
+        if (e.extras.length > 0) parts.push(e.extras.join(" / "));
+        if (e.colors.length > 0) parts.push(e.colors.join(" / "));
+        lines.push(parts.join(" – "));
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
+}
+
 // Mapear categoria customizada para base estruturada (ex: APPLE_WATCH_ATACADO → APPLE_WATCH)
 const STRUCTURED_CATS_LIST = ["IPHONES", "MACBOOK", "MAC_MINI", "IPADS", "APPLE_WATCH", "AIRPODS", "SEMINOVOS"];
 function getBaseCat(cat: string): string {
@@ -870,6 +1066,11 @@ export default function EstoquePage() {
   const bgInline = dm ? "bg-[#2C2C2E]" : "bg-white";
   const [estoque, setEstoque] = useState<ProdutoEstoque[]>([]);
   const [encomendaMap, setEncomendaMap] = useState<Map<string, string>>(new Map()); // estoque_id → cliente
+  // Códigos de rastreio por pedido (origem + data) — keyed por `${origem}|${data}` → array de {id, codigo}
+  const [rastreiosEnvio, setRastreiosEnvio] = useState<Map<string, { id: string; codigo: string }[]>>(new Map());
+  // Estado do input inline: qual key esta em modo "adicionar" + texto digitado
+  const [addingRastreioKey, setAddingRastreioKey] = useState<string | null>(null);
+  const [addingRastreioText, setAddingRastreioText] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const ESTOQUE_TABS = ["estoque", "seminovos", "reservas", "atacado", "pendencias", "acaminho", "reposicao", "esgotados", "acabando", "novo", "scan", "historico", "etiquetas"] as const;
   const [tab, setTab] = useTabParam<"estoque" | "seminovos" | "reservas" | "atacado" | "pendencias" | "acaminho" | "reposicao" | "esgotados" | "acabando" | "novo" | "scan" | "historico" | "etiquetas">("estoque", ESTOQUE_TABS);
@@ -989,6 +1190,9 @@ export default function EstoquePage() {
   const [selectedACaminho, setSelectedACaminho] = useState<Set<string>>(new Set());
   // Grupos expandidos na aba A Caminho (key = "date::baseModel")
   const [expandedACaminhoGroups, setExpandedACaminhoGroups] = useState<Set<string>>(new Set());
+  // Modal "Copiar Texto Atacado" — escolher quais produtos vão no texto
+  const [atacadoModalOpen, setAtacadoModalOpen] = useState(false);
+  const [atacadoExcluded, setAtacadoExcluded] = useState<Set<string>>(new Set());
 
   const handleImeiSearch = async () => {
     if (!imeiSearch.trim()) return;
@@ -1665,6 +1869,74 @@ export default function EstoquePage() {
       .then(d => { if (d.value) setLineOrder(d.value); })
       .catch(() => {});
   }, [password]);
+
+  // === Rastreios de envio (nível de pedido: origem + data) ===
+  const rastreiosKey = (origem: string, data: string) => `${origem}|${data}`;
+
+  const loadRastreiosEnvio = useCallback(async (origem: string, data: string) => {
+    try {
+      const res = await fetch(`/api/admin/rastreios-envio?origem=${encodeURIComponent(origem)}&data=${encodeURIComponent(data)}`, {
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const list: { id: string; codigo: string }[] = (j.codigos || []).map((r: { id: string; codigo_rastreio: string }) => ({ id: r.id, codigo: r.codigo_rastreio }));
+      setRastreiosEnvio(prev => {
+        const n = new Map(prev);
+        n.set(rastreiosKey(origem, data), list);
+        return n;
+      });
+    } catch {/* silencioso */}
+  }, [password]);
+
+  const addRastreiosEnvio = async (origem: string, data: string, codigos: string[]) => {
+    try {
+      const res = await fetch("/api/admin/rastreios-envio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
+        body: JSON.stringify({ origem, data, codigos }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const errMsg = j.error || `HTTP ${res.status}`;
+        alert(`❌ Erro ao adicionar rastreio\n\nMensagem do Supabase:\n${errMsg}\n\nStatus: ${res.status}`);
+        setMsg(`Erro ao adicionar rastreio: ${errMsg}`);
+        return;
+      }
+      await loadRastreiosEnvio(origem, data);
+    } catch (e) {
+      alert(`Erro: ${String(e)}`);
+      setMsg(`Erro: ${String(e)}`);
+    }
+  };
+
+  const removeRastreioEnvio = async (id: string, origem: string, data: string) => {
+    try {
+      const res = await fetch(`/api/admin/rastreios-envio?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": password },
+      });
+      if (!res.ok) return;
+      await loadRastreiosEnvio(origem, data);
+    } catch {/* silencioso */}
+  };
+
+  // Carregar rastreios de envio pra cada (origem + data) com itens A_CAMINHO
+  useEffect(() => {
+    if (!password || estoque.length === 0) return;
+    const pairs = new Set<string>();
+    for (const p of estoque) {
+      if (p.tipo !== "A_CAMINHO") continue;
+      const origem = p.origem_compra || "SEM_ORIGEM";
+      const data = p.data_compra;
+      if (!data) continue;
+      pairs.add(`${origem}|${data}`);
+    }
+    for (const key of pairs) {
+      const [origem, data] = key.split("|");
+      loadRastreiosEnvio(origem, data);
+    }
+  }, [estoque, password, loadRastreiosEnvio]);
 
   const saveLineOrder = useCallback(async (newOrder: Record<string, string[]>) => {
     setLineOrder(newOrder);
@@ -3984,20 +4256,33 @@ export default function EstoquePage() {
                 return d.toISOString().split("T")[0];
               };
 
-              // Agrupar por origem (em vez de por data)
-              const byOrigem: Record<string, typeof allItems> = {};
+              // Agrupar por (origem + data_compra) — cada par vira um card separado.
+              // Produtos comprados em dias diferentes geram pedidos/envios diferentes, então
+              // não faz sentido misturar no mesmo card (rastreios e previsões ficariam ambíguos).
+              const NO_DATA = "_SEM_DATA_";
+              const byOrigemData = new Map<string, typeof allItems>();
+              const keyMeta = new Map<string, { origem: string; data: string | null }>();
               allItems.forEach(p => {
                 const orig = p.origem_compra && ORIGEM_CONFIG[p.origem_compra] ? p.origem_compra : "SEM_ORIGEM";
-                if (!byOrigem[orig]) byOrigem[orig] = [];
-                byOrigem[orig].push(p);
+                const data = p.data_compra || null;
+                const k = `${orig}::${data || NO_DATA}`;
+                if (!byOrigemData.has(k)) {
+                  byOrigemData.set(k, []);
+                  keyMeta.set(k, { origem: orig, data });
+                }
+                byOrigemData.get(k)!.push(p);
               });
-              // Dentro de cada origem, ordena por data de compra (mais recente primeiro)
-              for (const items of Object.values(byOrigem)) {
-                items.sort((a, b) => (b.data_compra || "").localeCompare(a.data_compra || ""));
-              }
-              const sortedOrigens = ORIGEM_ORDER.filter(o => byOrigem[o]?.length > 0);
+              // Ordena: primeiro pela ordem das origens, depois por data desc (mais recente primeiro)
+              const sortedKeys = Array.from(byOrigemData.keys()).sort((a, b) => {
+                const ma = keyMeta.get(a)!;
+                const mb = keyMeta.get(b)!;
+                const ia = ORIGEM_ORDER.indexOf(ma.origem);
+                const ib = ORIGEM_ORDER.indexOf(mb.origem);
+                if (ia !== ib) return ia - ib;
+                return (mb.data || "").localeCompare(ma.data || "");
+              });
 
-              if (sortedOrigens.length === 0) return (
+              if (sortedKeys.length === 0) return (
                 <div className={`${bgCard} border ${borderCard} rounded-2xl p-12 text-center shadow-sm`}>
                   <p className={textSecondary}>Nenhum produto a caminho.</p>
                 </div>
@@ -4055,42 +4340,12 @@ export default function EstoquePage() {
                         </div>
                         <button
                           onClick={() => {
-                            const catEmoji: Record<string, string> = { IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️", APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌" };
-                            const catLabel: Record<string, string> = { IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini", APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios" };
-                            const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
-                            const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                            const groups: Record<string, string[]> = {};
-                            for (const p of fonte) {
-                              const cat = p.categoria || "OUTROS";
-                              if (!groups[cat]) groups[cat] = [];
-                              const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
-                                .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                                .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
-                                .replace(/\s{2,}/g, " ").trim();
-                              const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
-                              groups[cat].push(`${nome}${cor}`);
-                            }
-                            const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
-                            const sortedCatsAtacado = Object.keys(groups).sort((a, b) => {
-                              const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
-                              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-                            });
-                            for (const cat of sortedCatsAtacado) {
-                              const emoji = catEmoji[cat] || "📦";
-                              const label = catLabel[cat] || cat;
-                              lines.push(`${emoji} *${label}*`);
-                              const seen = new Set<string>();
-                              for (const item of groups[cat]) {
-                                if (!seen.has(item)) { seen.add(item); lines.push(item); }
-                              }
-                              lines.push("");
-                            }
-                            navigator.clipboard.writeText(lines.join("\n").trim());
-                            setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
+                            setAtacadoExcluded(new Set());
+                            setAtacadoModalOpen(true);
                           }}
                           className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                         >
-                          📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
+                          📋 {selectedACaminho.size > 0 ? `Selecionar & Copiar (${selectedACaminho.size})` : "Selecionar & Copiar Atacado"}
                         </button>
                       </div>
                     </div>
@@ -4121,17 +4376,20 @@ export default function EstoquePage() {
                     </div>
                   )}
 
-                  {/* Cards por ORIGEM */}
-                  {sortedOrigens.map(origemKey => {
-                    const items = byOrigem[origemKey];
+                  {/* Cards por (ORIGEM + DATA DE COMPRA) */}
+                  {sortedKeys.map(cardKey => {
+                    const { origem: origemKey, data: dataKey } = keyMeta.get(cardKey)!;
+                    const items = byOrigemData.get(cardKey)!;
                     const pendentes = items.filter(p => p.tipo === "A_CAMINHO");
                     const recebidos = items.filter(p => p.tipo !== "A_CAMINHO");
                     const origemTotal = pendentes.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
                     const cfg = ORIGEM_CONFIG[origemKey];
                     const headerColor = cfg ? cfg.cor : "bg-gray-500";
-                    const headerLabel = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
+                    const dataFmt = dataKey ? dataKey.split("-").reverse().join("/") : null;
+                    const origemTxt = cfg ? `${cfg.emoji} ${cfg.label} (${cfg.dias === 0 ? "mesmo dia" : `D+${cfg.dias}`})` : "📦 SEM ORIGEM DEFINIDA";
+                    const headerLabel = dataFmt ? `${origemTxt} • 🗓️ ${dataFmt}` : `${origemTxt} • sem data`;
                     return (
-                      <div key={origemKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
+                      <div key={cardKey} className={`${bgCard} border ${borderCard} rounded-2xl overflow-hidden shadow-sm`}>
                         <div className={`px-4 py-2.5 flex items-center justify-between ${headerColor}`}>
                           <span className="font-bold text-white text-[13px]">
                             {headerLabel}
@@ -4155,6 +4413,74 @@ export default function EstoquePage() {
                             )}
                           </div>
                         </div>
+                        {/* Códigos de rastreio — cada card já é de um pedido único (origem + data) */}
+                        {(() => {
+                          if (!dataKey || pendentes.length === 0) return null;
+                          const dataPed = dataKey;
+                          const key = rastreiosKey(origemKey, dataPed);
+                          const codigos = rastreiosEnvio.get(key) || [];
+                          const dataFmtRast = dataPed.split("-").reverse().join("/");
+                          const isAdding = addingRastreioKey === key;
+                          const submitNovoCodigo = async () => {
+                            const code = addingRastreioText.trim().toUpperCase();
+                            if (!code) return;
+                            await addRastreiosEnvio(origemKey, dataPed, [code]);
+                            setAddingRastreioText("");
+                          };
+                          return (
+                            <div key={key} className={`flex items-center gap-2 flex-wrap px-4 py-2 border-b ${dm ? "bg-[#1F2937] border-[#3A3A3C]" : "bg-blue-50 border-blue-100"}`}>
+                              <span className={`text-[11px] font-semibold ${dm ? "text-blue-300" : "text-blue-700"}`}>📦 Rastreios ({dataFmtRast}):</span>
+                                {codigos.length === 0 && !isAdding && (
+                                  <span className={`text-[11px] italic ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>nenhum</span>
+                                )}
+                                {codigos.map(r => (
+                                  <span key={r.id} className={`inline-flex items-center gap-1 rounded-full overflow-hidden text-[11px] font-semibold ${dm ? "bg-blue-900/40 text-blue-200" : "bg-white text-blue-700 border border-blue-200"}`}>
+                                    <a href={`https://www.linkcorreios.com.br/${r.codigo}`} target="_blank" rel="noopener noreferrer" className="px-2 py-1 hover:underline">{r.codigo}</a>
+                                    <button
+                                      onClick={() => {
+                                        if (!confirm(`Remover código ${r.codigo}?`)) return;
+                                        removeRastreioEnvio(r.id, origemKey, dataPed);
+                                      }}
+                                      className={`px-1.5 py-1 ${dm ? "hover:bg-red-900/60 text-red-300" : "hover:bg-red-500 hover:text-white text-red-500"}`}
+                                      title="Remover"
+                                    >✕</button>
+                                  </span>
+                                ))}
+                                {isAdding ? (
+                                  <span className={`inline-flex items-center gap-1 rounded-full overflow-hidden text-[11px] font-semibold ${dm ? "bg-[#2C2C2E] border border-blue-700" : "bg-white border border-blue-400"}`}>
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={addingRastreioText}
+                                      onChange={e => setAddingRastreioText(e.target.value.toUpperCase())}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") { e.preventDefault(); submitNovoCodigo(); }
+                                        if (e.key === "Escape") { e.preventDefault(); setAddingRastreioKey(null); setAddingRastreioText(""); }
+                                      }}
+                                      placeholder="Ex: BR123456789BR"
+                                      className={`px-2 py-1 text-[11px] font-mono font-semibold outline-none bg-transparent w-44 ${dm ? "text-blue-200 placeholder-blue-900" : "text-blue-700 placeholder-blue-300"}`}
+                                    />
+                                    <button
+                                      onClick={submitNovoCodigo}
+                                      disabled={!addingRastreioText.trim()}
+                                      className={`px-2 py-1 font-bold ${addingRastreioText.trim() ? (dm ? "bg-blue-700 hover:bg-blue-600 text-white" : "bg-blue-500 hover:bg-blue-600 text-white") : (dm ? "bg-[#3A3A3C] text-[#6E6E73]" : "bg-[#E5E5EA] text-[#AEAEB2]")}`}
+                                      title="Salvar"
+                                    >✓</button>
+                                    <button
+                                      onClick={() => { setAddingRastreioKey(null); setAddingRastreioText(""); }}
+                                      className={`px-1.5 py-1 ${dm ? "hover:bg-red-900/60 text-red-300" : "hover:bg-red-500 hover:text-white text-red-500"}`}
+                                      title="Cancelar"
+                                    >✕</button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => { setAddingRastreioKey(key); setAddingRastreioText(""); }}
+                                    className={`text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${dm ? "bg-blue-900/30 text-blue-300 hover:bg-blue-700 hover:text-white" : "bg-white border border-blue-300 text-blue-600 hover:bg-blue-500 hover:text-white hover:border-blue-500"}`}
+                                  >{codigos.length === 0 ? "+ adicionar código" : "+ outro código"}</button>
+                                )}
+                              </div>
+                            );
+                        })()}
                         {/* Barra rapida: definir origem pra todos do grupo SEM_ORIGEM */}
                         {origemKey === "SEM_ORIGEM" && pendentes.length > 0 && selectedACaminho.size === 0 && (
                           <div className={`flex items-center gap-2 px-4 py-2 ${dm ? "bg-[#2C2C2E]" : "bg-yellow-50"} border-b ${dm ? "border-[#3A3A3C]" : "border-yellow-200"}`}>
@@ -4218,7 +4544,7 @@ export default function EstoquePage() {
                                 groupMap.get(base)!.push(p);
                               });
                               return Array.from(groupMap.entries()).flatMap(([baseModel, group]) => {
-                                const groupKey = `${origemKey}::${baseModel}`;
+                                const groupKey = `${origemKey}::${dataKey || NO_DATA}::${baseModel}`;
                                 const isExpanded = expandedACaminhoGroups.has(groupKey);
                                 const totalQnt = group.reduce((s, p) => s + p.qnt, 0);
                                 const totalVal = group.reduce((s, p) => s + p.qnt * (p.custo_unitario || 0), 0);
@@ -4388,7 +4714,7 @@ export default function EstoquePage() {
                       </div>
                     );
                   })}
-                  {sortedOrigens.length > 1 && grandTotal > 0 && (
+                  {sortedKeys.length > 1 && grandTotal > 0 && (
                     <div className={`${bgCard} border ${borderCard} rounded-xl px-4 py-3 flex items-center justify-between`}>
                       <span className={`text-xs font-bold ${textSecondary}`}>TOTAL PENDENTE ({filtered.length} {filtered.length === 1 ? "produto" : "produtos"} a caminho)</span>
                       <span className="text-base font-bold text-[#E8740E]">{fmt(grandTotal)}</span>
@@ -4557,56 +4883,12 @@ export default function EstoquePage() {
                   </div>
                 <button
                   onClick={() => {
-                    // Agrupa por categoria
-                    const catEmoji: Record<string, string> = {
-                      IPHONES: "📱", IPADS: "📱", MACBOOK: "💻", MAC_MINI: "🖥️",
-                      APPLE_WATCH: "⌚", AIRPODS: "🎧", ACESSORIOS: "🔌",
-                    };
-                    const catLabel: Record<string, string> = {
-                      IPHONES: "iPhones", IPADS: "iPads", MACBOOK: "MacBooks", MAC_MINI: "Mac Mini",
-                      APPLE_WATCH: "Apple Watch", AIRPODS: "AirPods", ACESSORIOS: "Acessórios",
-                    };
-                    const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS"];
-
-                    // Agrupa por categoria → lista de "modelo – cor"
-                    const fonte = selectedACaminho.size > 0 ? aCaminho.filter(p => selectedACaminho.has(p.id)) : aCaminho;
-                    const groups: Record<string, string[]> = {};
-                    for (const p of fonte) {
-                      const cat = p.categoria || "OUTROS";
-                      if (!groups[cat]) groups[cat] = [];
-                      // Extrai nome limpo + cor
-                      const nome = (p.produto || "").replace(/\s+(VC|LL|J|BE|BR|HN|IN|ZA|BZ|ZD|ZP)\s*(\([^)]*\))?/gi, "")
-                        .replace(/[-–]?\s*(IP\s+)?-?\s*(CHIP\s+)?(F[ÍI]SICO\s*\+?\s*)?E-?SIM/gi, "")
-                        .replace(/\s*\(\d+C\s*CPU\/\d+C\s*GPU\)\s*/gi, " ")
-                        .replace(/\s{2,}/g, " ").trim();
-                      const cor = p.cor ? ` – ${corParaPT(p.cor) || p.cor}` : "";
-                      groups[cat].push(`${nome}${cor}`);
-                    }
-
-                    // Monta texto
-                    const lines: string[] = ["🎁 *ESTOQUE – ATACADO*", ""];
-                    const sortedCats = Object.keys(groups).sort((a, b) => {
-                      const ia = catOrder.indexOf(a); const ib = catOrder.indexOf(b);
-                      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-                    });
-                    for (const cat of sortedCats) {
-                      const emoji = catEmoji[cat] || "📦";
-                      const label = catLabel[cat] || cat;
-                      lines.push(`${emoji} *${label}*`);
-                      // Remove duplicatas mantendo ordem
-                      const seen = new Set<string>();
-                      for (const item of groups[cat]) {
-                        if (!seen.has(item)) { seen.add(item); lines.push(item); }
-                      }
-                      lines.push("");
-                    }
-
-                    navigator.clipboard.writeText(lines.join("\n").trim());
-                    setMsg(selectedACaminho.size > 0 ? `📋 Texto copiado (${selectedACaminho.size} selecionados)!` : "📋 Texto copiado! Cole no WhatsApp.");
+                    setAtacadoExcluded(new Set());
+                    setAtacadoModalOpen(true);
                   }}
                   className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors"
                 >
-                  📋 {selectedACaminho.size > 0 ? `Copiar ${selectedACaminho.size} Selecionados` : "Copiar Texto Atacado"}
+                  📋 {selectedACaminho.size > 0 ? `Selecionar & Copiar (${selectedACaminho.size})` : "Selecionar & Copiar Atacado"}
                 </button>
                 </div>
               </div>
@@ -6790,6 +7072,153 @@ export default function EstoquePage() {
                 </div>
               </div>
               <div className="h-4" />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal "Selecionar & Copiar Atacado" — escolhe quais produtos vão no texto */}
+      {atacadoModalOpen && (() => {
+        // Base: se há seleção ativa nas linhas da tabela, usa só esses; senão, todos "a caminho"
+        const base = selectedACaminho.size > 0
+          ? aCaminho.filter(p => selectedACaminho.has(p.id))
+          : aCaminho;
+        // Fonte final pro texto = base menos o que o usuário excluiu no modal
+        const fonte = base.filter(p => !atacadoExcluded.has(p.id));
+        const previewText = fonte.length > 0 ? buildAtacadoText(fonte) : "(nenhum produto selecionado)";
+        const incluidos = fonte.length;
+        const totalBase = base.length;
+
+        // Agrupa por categoria + modelo/capacidade pra facilitar o toggle
+        const byCat: Record<string, Record<string, ProdutoEstoque[]>> = {};
+        for (const p of base) {
+          const cat = getBaseCat(p.categoria || "OUTROS");
+          const { base: modelo } = cleanProductForAtacado(p.produto || "", p.categoria || "");
+          if (!byCat[cat]) byCat[cat] = {};
+          if (!byCat[cat][modelo]) byCat[cat][modelo] = [];
+          byCat[cat][modelo].push(p);
+        }
+        const catLabels: Record<string, string> = {
+          IPHONES: "📱 iPhones", IPADS: "📲 iPads", MACBOOK: "💻 MacBooks", MAC_MINI: "🖥️ Mac Mini",
+          APPLE_WATCH: "⌚ Apple Watch", AIRPODS: "🎧 AirPods", ACESSORIOS: "🔌 Acessórios", OUTROS: "📦 Outros",
+        };
+        const catOrder = ["AIRPODS", "APPLE_WATCH", "IPADS", "IPHONES", "MACBOOK", "MAC_MINI", "ACESSORIOS", "OUTROS"];
+        const sortedCats = Object.keys(byCat).sort((a, b) => {
+          const ia = catOrder.indexOf(a), ib = catOrder.indexOf(b);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+        const toggleGroup = (prods: ProdutoEstoque[]) => {
+          const allExcluded = prods.every(p => atacadoExcluded.has(p.id));
+          setAtacadoExcluded(prev => {
+            const n = new Set(prev);
+            if (allExcluded) {
+              for (const p of prods) n.delete(p.id);
+            } else {
+              for (const p of prods) n.add(p.id);
+            }
+            return n;
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setAtacadoModalOpen(false)}>
+            <div className={`w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl ${dm ? "bg-[#1C1C1E] border border-[#3A3A3C]" : "bg-white border border-[#E5E5EA]"} max-h-[92vh] flex flex-col`} onClick={(e) => e.stopPropagation()}>
+              <div className={`px-5 py-4 border-b ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"} flex items-center justify-between sticky top-0 ${dm ? "bg-[#1C1C1E]" : "bg-white"} z-10`}>
+                <div>
+                  <h3 className={`text-base font-bold ${textPrimary}`}>📋 Selecionar & Copiar Texto Atacado</h3>
+                  <p className={`text-xs ${textMuted}`}>Desmarque os produtos que <b>não</b> quer que apareçam no texto. {incluidos} de {totalBase} serão incluídos.</p>
+                </div>
+                <button onClick={() => setAtacadoModalOpen(false)} className={`w-8 h-8 flex items-center justify-center rounded-full text-xl ${dm ? "hover:bg-[#3A3A3C] text-[#98989D]" : "hover:bg-[#F0F0F5] text-[#86868B]"}`}>×</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-0">
+                {/* Coluna esquerda: lista de produtos com checkboxes */}
+                <div className={`p-4 border-r ${dm ? "border-[#3A3A3C]" : "border-[#E8E8ED]"} space-y-4`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      onClick={() => setAtacadoExcluded(new Set())}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                      ✓ Marcar todos
+                    </button>
+                    <button
+                      onClick={() => setAtacadoExcluded(new Set(base.map(p => p.id)))}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                      ✕ Desmarcar todos
+                    </button>
+                  </div>
+                  {sortedCats.map(cat => {
+                    const catProds = Object.values(byCat[cat]).flat();
+                    const allOff = catProds.every(p => atacadoExcluded.has(p.id));
+                    return (
+                      <div key={cat}>
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>{catLabels[cat] || cat}</h4>
+                          <button
+                            onClick={() => toggleGroup(catProds)}
+                            className={`text-[10px] font-semibold ${dm ? "text-[#F5A623] hover:underline" : "text-[#E8740E] hover:underline"}`}>
+                            {allOff ? "Marcar tudo" : "Desmarcar tudo"}
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(byCat[cat])
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([modelo, prods]) => {
+                            const groupOff = prods.every(p => atacadoExcluded.has(p.id));
+                            const totalQnt = prods.reduce((s, p) => s + (p.qnt || 0), 0);
+                            return (
+                              <label key={modelo} className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${groupOff ? (dm ? "bg-[#2C2C2E] opacity-50" : "bg-[#F9F9F9] opacity-60") : (dm ? "hover:bg-[#2C2C2E]" : "hover:bg-[#F5F5F7]")}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={!groupOff}
+                                  onChange={() => toggleGroup(prods)}
+                                  className="mt-0.5 accent-[#E8740E]"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-xs font-semibold ${textPrimary} truncate`}>{modelo}</p>
+                                  <p className={`text-[10px] ${textMuted}`}>
+                                    {totalQnt} un. {prods.length > 1 ? `(${prods.length} variantes)` : ""}
+                                    {prods.some(p => p.cor) && ` — ${[...new Set(prods.map(p => p.cor).filter(Boolean).map(c => corParaPT(c!) || c))].join(", ")}`}
+                                  </p>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Coluna direita: preview do texto */}
+                <div className="p-4 flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className={`text-xs font-bold uppercase tracking-wider ${textSecondary}`}>👁 Preview do texto</h4>
+                    <span className={`text-[10px] ${textMuted}`}>{incluidos} produto(s)</span>
+                  </div>
+                  <pre className={`flex-1 text-xs font-mono whitespace-pre-wrap p-3 rounded-lg overflow-y-auto ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] border border-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA]"}`}>
+{previewText}
+                  </pre>
+                </div>
+              </div>
+
+              <div className={`px-5 py-3 border-t ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E8E8ED] bg-white"} flex items-center justify-end gap-2`}>
+                <button
+                  onClick={() => setAtacadoModalOpen(false)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold ${dm ? "bg-[#2C2C2E] text-[#F5F5F7] hover:bg-[#3A3A3C]" : "bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA]"} transition-colors`}>
+                  Cancelar
+                </button>
+                <button
+                  disabled={incluidos === 0}
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewText);
+                    setMsg(`📋 Texto copiado! ${incluidos} produto(s) no atacado.`);
+                    setAtacadoModalOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#E8740E] text-white hover:bg-[#D06A0D] transition-colors disabled:opacity-40">
+                  📋 Copiar {incluidos > 0 ? `(${incluidos})` : ""}
+                </button>
+              </div>
             </div>
           </div>
         );

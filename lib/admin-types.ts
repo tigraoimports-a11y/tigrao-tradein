@@ -101,6 +101,7 @@ export interface Reajuste {
   motivo: string;
   valor: number;
   banco: string | null;
+  observacao: string | null;
   venda_ref: string | null;
 }
 

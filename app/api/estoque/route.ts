@@ -239,6 +239,20 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  // Ação de adicionar produto a um pedido de fornecedor existente
+  if (body.action === "add_to_pedido") {
+    const row = body.row as Record<string, unknown>;
+    if (!row?.produto || !row?.pedido_fornecedor_id) return NextResponse.json({ error: "produto and pedido_fornecedor_id required" }, { status: 400 });
+    if (row.produto && typeof row.produto === "string") row.produto = normalizeProdutoNome(row.produto.trim());
+    row.updated_at = new Date().toISOString();
+    if (row.custo_compra == null) row.custo_compra = row.custo_unitario;
+    const { data, error } = await supabase.from("estoque").insert([row]).select();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const usuario = getUsuario(req);
+    await logActivity(usuario, "Produto adicionado a pedido", String(row.produto), "estoque", String(row.pedido_fornecedor_id));
+    return NextResponse.json({ ok: true, data });
+  }
+
   // Ação de importar em lote
   if (body.action === "import") {
     const rows = body.rows as Record<string, unknown>[];

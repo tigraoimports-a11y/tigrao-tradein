@@ -179,8 +179,24 @@ export default function AdminPage() {
   }
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
+  const [historicoBusca, setHistoricoBusca] = useState("");
   const [encaminhando, setEncaminhando] = useState<string | null>(null);
   const [historicoModal, setHistoricoModal] = useState<HistoricoItem | null>(null);
+  // Modal "Gerar Entrega": coleta data/horário/entregador/obs, pré-preenchidos do formulário do cliente
+  const [gerarEntregaItem, setGerarEntregaItem] = useState<HistoricoItem | null>(null);
+  const [gerarData, setGerarData] = useState("");
+  const [gerarHorario, setGerarHorario] = useState("");
+  const [gerarEntregador, setGerarEntregador] = useState("");
+  const [gerarObs, setGerarObs] = useState("");
+  // Campos adicionais para casos LEGADOS (sem cliente_dados_preenchidos):
+  // admin preenche endereço/forma de pagamento manualmente a partir do WhatsApp do cliente.
+  const [gerarLocal, setGerarLocal] = useState<"Residencia" | "Shopping" | "Correios" | "Retirada">("Residencia");
+  const [gerarShoppingNome, setGerarShoppingNome] = useState("");
+  const [gerarEndereco, setGerarEndereco] = useState("");
+  const [gerarBairro, setGerarBairro] = useState("");
+  const [gerarFormaPag, setGerarFormaPag] = useState("");
+  const [gerarParcelas, setGerarParcelas] = useState("");
+  const [gerarEntrada, setGerarEntrada] = useState("");
 
   const fetchData = useCallback(async (pw: string) => {
     setLoading(true);
@@ -217,14 +233,18 @@ export default function AdminPage() {
     if (!password) return;
     setHistoricoLoading(true);
     try {
-      // 1) Link_compras com formulário preenchido
-      const res = await fetch("/api/admin/link-compras?preenchidos=1&limit=200", {
+      // 1) Link_compras com formulário preenchido OU auto-criados pelo simulador de trade-in.
+      //    incluir_simulador=1 pega também os GOSTEI onde o cliente enviou o formulário
+      //    completo só pelo WhatsApp (cliente_preencheu_em null mas operador=Simulador).
+      const res = await fetch("/api/admin/link-compras?preenchidos=1&incluir_simulador=1&limit=500", {
         headers: { "x-admin-password": password },
       });
       let items: HistoricoItem[] = [];
       if (res.ok) {
         const json = await res.json();
-        items = (json.data || []).filter((r: HistoricoItem) => r.cliente_preencheu_em);
+        items = (json.data || []).filter((r: HistoricoItem) =>
+          r.cliente_preencheu_em || r.operador === "Simulador"
+        );
       }
 
       // 2) Simulações GOSTEI que não têm link_compras — converter para HistoricoItem
@@ -288,6 +308,198 @@ export default function AdminPage() {
     if (mainTab === "historico" && data && data.length > 0) fetchHistorico();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab, data?.length, password]);
+
+  // Abre o modal de Gerar Entrega com dados pré-preenchidos do formulário do cliente.
+  // Se o item é um "sim_" (simulação sem link_compras), tenta achar um link_compras
+  // real com o mesmo telefone. Prioriza link com cliente_dados_preenchidos; se não
+  // tiver, aceita um link auto-criado pelo simulador (operador=Simulador) — nesse
+  // caso o admin vai precisar conferir endereço no WhatsApp.
+  //
+  // Caso legado (clientes que fizeram trade-in antes de 14/04 — bug da race condition
+  // no StepQuote): não existe link_compras nenhum. A gente cria um link_compras na
+  // hora usando os dados da simulação, pra que o admin possa prosseguir com a entrega.
+  const openGerarEntrega = useCallback(async (h: HistoricoItem) => {
+    let target = h;
+    if (h.id.startsWith("sim_")) {
+      const tel8 = (h.cliente_telefone || "").replace(/\D/g, "").slice(-8);
+      const candidatos = tel8.length >= 8
+        ? historico.filter(x => !x.id.startsWith("sim_")
+            && (x.cliente_telefone || "").replace(/\D/g, "").slice(-8) === tel8)
+        : [];
+      // Prefere link com formulário completo preenchido
+      const comForm = candidatos.find(x => x.cliente_dados_preenchidos);
+      const qualquer = candidatos[0] || null;
+      const real = comForm || qualquer;
+      if (real) {
+        target = real;
+      } else {
+        // Caso legado: sem link_compras. Cria um na hora a partir da simulação.
+        const confirma = confirm(
+          "Esse cliente fez a simulação mas não tem link de compra registrado " +
+          "(pode ter preenchido antes da correção do dia 14/04).\n\n" +
+          "Deseja criar o link agora pra prosseguir com a entrega?\n" +
+          "Você vai precisar conferir endereço e forma de pagamento no WhatsApp do cliente."
+        );
+        if (!confirma) return;
+        try {
+          setEncaminhando(h.id);
+          const shortCode = `manual-${(h.simulacao_id || "").slice(0, 8) || Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36).slice(-4)}`;
+          const res = await fetch("/api/link-compras-auto", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              short_code: shortCode,
+              tipo: h.troca_produto ? "TROCA" : "COMPRA",
+              cliente_nome: h.cliente_nome,
+              cliente_telefone: h.cliente_telefone,
+              produto: h.produto,
+              cor: h.cor,
+              valor: h.valor,
+              troca_produto: h.troca_produto,
+              troca_valor: h.troca_valor,
+              troca_condicao: h.troca_condicao,
+              troca_cor: h.troca_cor,
+              troca_produto2: h.troca_produto2,
+              troca_valor2: h.troca_valor2,
+              troca_condicao2: h.troca_condicao2,
+              troca_cor2: h.troca_cor2,
+              vendedor: h.vendedor,
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok || (!json.data && !json.exists)) {
+            setEncaminhando(null);
+            alert("Erro ao criar link: " + (json.error || "falha desconhecida"));
+            return;
+          }
+          // Se o endpoint retornou dados do novo link, usa direto; senão, re-fetch
+          if (json.data && json.data.id) {
+            target = json.data as HistoricoItem;
+          } else {
+            // fallback: re-fetcha e procura pelo short_code
+            await fetchHistorico();
+            const lookupRes = await fetch(`/api/admin/link-compras?q=${encodeURIComponent(shortCode)}&preenchidos=1&incluir_simulador=1&limit=5`, {
+              headers: { "x-admin-password": password },
+            });
+            const lookupJson = await lookupRes.json();
+            const novo = (lookupJson.data || []).find((x: { short_code: string }) => x.short_code === shortCode);
+            if (!novo) {
+              setEncaminhando(null);
+              alert("Link criado, mas não foi possível abrir o modal. Clique em Atualizar e tente novamente.");
+              return;
+            }
+            target = novo as HistoricoItem;
+          }
+          setEncaminhando(null);
+        } catch (err) {
+          setEncaminhando(null);
+          alert("Erro ao criar link: " + String(err));
+          return;
+        }
+      }
+    }
+    const p = target.cliente_dados_preenchidos || {};
+    // Data de entrega: preferir o que o cliente informou; senão, hoje
+    let dataDefault = "";
+    const pd = (p.data_entrega || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(pd)) {
+      dataDefault = pd.slice(0, 10);
+    } else if (/^\d{2}\/\d{2}\/\d{4}/.test(pd)) {
+      const [d, m, y] = pd.split("/");
+      dataDefault = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+    if (!dataDefault) {
+      const hoje = new Date();
+      dataDefault = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+    }
+    setGerarData(dataDefault);
+    setGerarHorario((p.horario || "").trim());
+    setGerarEntregador("");
+    setGerarObs("");
+    // Reset dos campos manuais (usados só em caso legado)
+    setGerarLocal("Residencia");
+    setGerarShoppingNome("");
+    setGerarEndereco("");
+    setGerarBairro("");
+    setGerarFormaPag("");
+    setGerarParcelas("");
+    setGerarEntrada("");
+    setGerarEntregaItem(target);
+  }, [historico, fetchHistorico, password]);
+
+  const confirmarGerarEntrega = async () => {
+    if (!gerarEntregaItem) return;
+    if (!gerarData) { alert("Informe a data da entrega"); return; }
+    setEncaminhando(gerarEntregaItem.id);
+    try {
+      // Caso legado (sem cliente_dados_preenchidos): admin preencheu endereço/pagamento
+      // manualmente no modal. Salva isso no link_compras antes de encaminhar, pra que
+      // encaminhar-entrega peque os valores corretos na hora de criar a entrega.
+      const isLegado = !gerarEntregaItem.cliente_dados_preenchidos;
+      const parcelasN = Number(gerarParcelas) || 0;
+      const entradaN = Number(gerarEntrada) || 0;
+      if (isLegado && (gerarEndereco || gerarFormaPag || gerarLocal !== "Residencia")) {
+        // Monta o label de local no mesmo formato que /compra manda (pra bater com
+        // o parse em encaminhar-entrega).
+        const localLabel =
+          gerarLocal === "Shopping" && gerarShoppingNome ? `Entrega - Shopping: ${gerarShoppingNome}` :
+          gerarLocal === "Shopping" ? "Entrega - Shopping" :
+          gerarLocal === "Correios" ? "Entrega - Correios" :
+          gerarLocal === "Retirada" ? "Retirada em loja" :
+          "Entrega - Residencia";
+        const preench: Record<string, string | number | null> = {
+          endereco_completo: gerarEndereco || null,
+          bairro: gerarBairro || null,
+          local: localLabel,
+        };
+        if (gerarFormaPag) preench.forma_pagamento = gerarFormaPag;
+        if (parcelasN > 0) preench.parcelas = String(parcelasN);
+        // Limpa campos vazios pra não poluir o JSON
+        Object.keys(preench).forEach(k => { if (preench[k] == null) delete preench[k]; });
+        const patchBody: Record<string, unknown> = {
+          id: gerarEntregaItem.id,
+          cliente_dados_preenchidos: preench,
+          cliente_preencheu_em: new Date().toISOString(),
+        };
+        if (gerarFormaPag) patchBody.forma_pagamento = gerarFormaPag;
+        if (parcelasN > 0) patchBody.parcelas = parcelasN;
+        if (entradaN > 0) patchBody.entrada = entradaN;
+        const patchRes = await fetch("/api/admin/link-compras", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+          body: JSON.stringify(patchBody),
+        });
+        if (!patchRes.ok) {
+          const pj = await patchRes.json().catch(() => ({}));
+          setEncaminhando(null);
+          alert("Erro ao salvar dados no link: " + (pj.error || "falha"));
+          return;
+        }
+      }
+      const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+        body: JSON.stringify({
+          link_id: gerarEntregaItem.id,
+          data_entrega: gerarData,
+          horario: gerarHorario || null,
+          entregador: gerarEntregador || null,
+          observacao: gerarObs || null,
+        }),
+      });
+      if (res.ok) {
+        const id = gerarEntregaItem.id;
+        setHistorico(prev => prev.map(x => x.id === id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
+        setHistoricoModal(prev => prev && prev.id === id ? { ...prev, status: "ENCAMINHADO", entrega_id: "created" } : prev);
+        setGerarEntregaItem(null);
+        alert("✅ Entrega criada com sucesso! Veja em Entregas.");
+      } else {
+        const json = await res.json();
+        alert("Erro: " + (json.error || "Falha"));
+      }
+    } catch (err) { alert("Erro: " + String(err)); }
+    setEncaminhando(null);
+  };
 
   // Unique models for filter dropdown — must be before any early return (Rules of Hooks)
   const uniqueModelos = useMemo(() => {
@@ -403,7 +615,7 @@ export default function AdminPage() {
         {(["simulacoes", "historico", "simulador", "followup", "funil", "perguntas"] as const).map((t) => (
           <button key={t} onClick={() => setMainTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${mainTab === t ? "bg-[#E8740E] text-white" : "bg-white border border-[#D2D2D7] text-[#86868B] hover:border-[#E8740E]"}`}>
-            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
+            {t === "simulacoes" ? "Simulacoes" : t === "historico" ? `📋 Histórico de Formulários (${historico.length})` : t === "simulador" ? "Simulador Interno" : t === "followup" ? `Follow-up (${data.filter(d => d.status === "SAIR" && !d.follow_up_enviado).length})` : t === "perguntas" ? "Perguntas Trade-In" : "Funil de Conversao"}
           </button>
         ))}
         <div className="flex-1" />
@@ -420,33 +632,108 @@ export default function AdminPage() {
       {mainTab === "funil" && <FunnelPanel />}
 
       {/* Histórico — clientes que completaram todo o funil */}
-      {mainTab === "historico" && (
-        <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between">
-            <h2 className="font-bold text-[#1D1D1F]">📋 Histórico — Clientes que completaram o funil</h2>
-            <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
-              {historicoLoading ? "Carregando..." : "↻ Atualizar"}
-            </button>
+      {mainTab === "historico" && (() => {
+        // Filtro por nome/whatsapp (digits-insensitive)
+        const qRaw = historicoBusca.trim().toLowerCase();
+        const qDigits = qRaw.replace(/\D/g, "");
+        const filtrados = historico.filter(h => {
+          if (!qRaw) return true;
+          const nome = (h.cliente_nome || "").toLowerCase();
+          const tel = (h.cliente_telefone || "").replace(/\D/g, "");
+          if (nome.includes(qRaw)) return true;
+          if (qDigits.length >= 3 && tel.includes(qDigits)) return true;
+          return false;
+        });
+        // Ordena do mais recente pro mais antigo por data de preenchimento (ou criação)
+        const ordenados = [...filtrados].sort((a, b) =>
+          (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)
+        );
+        // Agrupa por dia (YYYY-MM-DD em America/Sao_Paulo)
+        const dayKey = (iso: string) => {
+          const d = new Date(iso);
+          const saoPaulo = new Date(d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+          const yyyy = saoPaulo.getFullYear();
+          const mm = String(saoPaulo.getMonth() + 1).padStart(2, "0");
+          const dd = String(saoPaulo.getDate()).padStart(2, "0");
+          return `${yyyy}-${mm}-${dd}`;
+        };
+        const grupos = new Map<string, HistoricoItem[]>();
+        for (const h of ordenados) {
+          const k = dayKey(h.cliente_preencheu_em || h.created_at);
+          const arr = grupos.get(k) || [];
+          arr.push(h);
+          grupos.set(k, arr);
+        }
+        const gruposOrdenados = Array.from(grupos.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+        const hojeKey = dayKey(new Date().toISOString());
+        const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+        const ontemKey = dayKey(ontem.toISOString());
+        const formatDiaHeader = (k: string) => {
+          if (k === hojeKey) return "Hoje";
+          if (k === ontemKey) return "Ontem";
+          const [y, m, d] = k.split("-");
+          return new Date(Number(y), Number(m) - 1, Number(d)).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+        };
+        return (
+        <div className="space-y-4">
+          <div className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="font-bold text-[#1D1D1F]">📋 Histórico de Formulários — Clientes que completaram o funil</h2>
+              <button onClick={fetchHistorico} disabled={historicoLoading} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#F5F5F7] text-[#86868B] hover:bg-[#E8740E] hover:text-white transition-colors disabled:opacity-50">
+                {historicoLoading ? "Carregando..." : "↻ Atualizar"}
+              </button>
+            </div>
+            <p className="px-5 pt-3 text-xs text-[#86868B]">
+              Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
+            </p>
+            <div className="px-5 py-3 flex items-center gap-2">
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  value={historicoBusca}
+                  onChange={(e) => setHistoricoBusca(e.target.value)}
+                  placeholder="🔍 Buscar por nome ou WhatsApp..."
+                  className="w-full pl-3 pr-8 py-2 text-sm border border-[#D2D2D7] rounded-lg focus:outline-none focus:border-[#E8740E]"
+                />
+                {historicoBusca && (
+                  <button
+                    onClick={() => setHistoricoBusca("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#86868B] hover:text-[#E8740E] text-sm"
+                    title="Limpar"
+                  >✕</button>
+                )}
+              </div>
+              <span className="text-xs text-[#86868B]">
+                {filtrados.length === historico.length
+                  ? `${historico.length} ${historico.length === 1 ? "registro" : "registros"}`
+                  : `${filtrados.length} de ${historico.length}`}
+              </span>
+            </div>
           </div>
-          <p className="px-5 pt-3 text-xs text-[#86868B]">
-            Clientes que fizeram simulação → clicaram &quot;Gostei, fechar pedido&quot; → preencheram o formulário de compra → chegaram no WhatsApp
-          </p>
           {historicoLoading && historico.length === 0 ? (
-            <div className="px-5 py-10 text-center text-[#86868B]">Carregando...</div>
-          ) : historico.length === 0 ? (
-            <div className="px-5 py-10 text-center text-[#86868B]">Nenhum cliente completou o funil ainda</div>
+            <div className="px-5 py-10 text-center text-[#86868B] bg-white border border-[#D2D2D7] rounded-2xl">Carregando...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[#86868B] bg-white border border-[#D2D2D7] rounded-2xl">
+              {historico.length === 0 ? "Nenhum cliente completou o funil ainda" : "Nenhum cliente encontrado para a busca"}
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
-                    {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Pagamento", "Troca", "Preencheu em", "Status", "Ações"].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...historico].sort((a, b) => (b.cliente_preencheu_em || b.created_at).localeCompare(a.cliente_preencheu_em || a.created_at)).map(h => {
+            gruposOrdenados.map(([diaKey, itens]) => (
+              <div key={diaKey} className="bg-white border border-[#D2D2D7] rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-5 py-3 bg-gradient-to-r from-[#FFF4EC] to-white border-b border-[#D2D2D7] flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-[#1D1D1F] capitalize">🗓️ {formatDiaHeader(diaKey)}</h3>
+                  <span className="text-xs text-[#86868B]">{itens.length} {itens.length === 1 ? "cliente" : "clientes"}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[#D2D2D7] bg-[#F5F5F7]">
+                        {["Data", "Cliente", "WhatsApp", "Produto", "Valor", "Pagamento", "Troca", "Preencheu em", "Status", "Ações"].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-[#86868B]">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map(h => {
                     const preencheuDate = h.cliente_preencheu_em ? new Date(h.cliente_preencheu_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
                     const criadoDate = new Date(h.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
                     const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
@@ -509,32 +796,10 @@ export default function AdminPage() {
                             {!h.entrega_id && h.status !== "ENCAMINHADO" && (
                               <button
                                 disabled={encaminhando === h.id}
-                                onClick={async () => {
-                                  const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
-                                  if (!dataEntrega) return;
-                                  const [d, m, y] = dataEntrega.split("/");
-                                  const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
-                                  if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
-                                  setEncaminhando(h.id);
-                                  try {
-                                    const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                                      body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
-                                    });
-                                    if (res.ok) {
-                                      setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
-                                      alert("✅ Entrega criada com sucesso! Veja em Entregas.");
-                                    } else {
-                                      const json = await res.json();
-                                      alert("Erro: " + (json.error || "Falha"));
-                                    }
-                                  } catch (err) { alert("Erro: " + String(err)); }
-                                  setEncaminhando(null);
-                                }}
+                                onClick={() => openGerarEntrega(h)}
                                 className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50"
                               >
-                                {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                                {encaminhando === h.id ? "Criando..." : "🚚 Gerar Entrega"}
                               </button>
                             )}
                             {h.entrega_id && <span className="text-[10px] text-green-600 font-semibold">✅ Entrega criada</span>}
@@ -544,12 +809,15 @@ export default function AdminPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Modal detalhado do Histórico */}
       {historicoModal && (() => {
@@ -698,35 +966,239 @@ export default function AdminPage() {
                   {!h.entrega_id && h.status !== "ENCAMINHADO" && (
                     <button
                       disabled={encaminhando === h.id}
-                      onClick={async () => {
-                        const dataEntrega = prompt("Data da entrega (DD/MM/AAAA):", new Date().toLocaleDateString("pt-BR"));
-                        if (!dataEntrega) return;
-                        const [d, m, y] = dataEntrega.split("/");
-                        const dataISO = `${y}-${m?.padStart(2, "0")}-${d?.padStart(2, "0")}`;
-                        if (!dataISO || dataISO.length !== 10) { alert("Data inválida"); return; }
-                        setEncaminhando(h.id);
-                        try {
-                          const res = await fetch("/api/admin/link-compras/encaminhar-entrega", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
-                            body: JSON.stringify({ link_id: h.id, data_entrega: dataISO }),
-                          });
-                          if (res.ok) {
-                            setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: "ENCAMINHADO", entrega_id: "created" } : x));
-                            setHistoricoModal(prev => prev ? { ...prev, status: "ENCAMINHADO", entrega_id: "created" } : null);
-                            alert("Entrega criada com sucesso! Veja em Entregas.");
-                          } else {
-                            const json = await res.json();
-                            alert("Erro: " + (json.error || "Falha"));
-                          }
-                        } catch (err) { alert("Erro: " + String(err)); }
-                        setEncaminhando(null);
-                      }}
+                      onClick={() => openGerarEntrega(h)}
                       className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold text-center transition-colors disabled:opacity-50"
                     >
-                      {encaminhando === h.id ? "Criando..." : "🚚 + Entrega"}
+                      {encaminhando === h.id ? "Criando..." : "🚚 Gerar Entrega"}
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal: Gerar Entrega — pré-preenchido com dados do formulário */}
+      {gerarEntregaItem && (() => {
+        const h = gerarEntregaItem;
+        const p = h.cliente_dados_preenchidos || {};
+        const hTel = (h.cliente_telefone || "").replace(/\D/g, "");
+        const hNome = (h.cliente_nome || "").toLowerCase().trim();
+        const sim = (h.simulacao_id ? data.find(s => s.id === h.simulacao_id) : null)
+          || (hTel.length >= 8 ? data.find(s => s.whatsapp && s.whatsapp.replace(/\D/g, "").includes(hTel.slice(-8))) : null)
+          || (hNome.length >= 3 ? data.find(s => s.nome && s.nome.toLowerCase().trim().includes(hNome.split(" ")[0])) : null)
+          || null;
+        const trocaNome = h.troca_produto || (sim ? `${sim.modelo_usado} ${sim.storage_usado}`.trim() : null);
+        const trocaVal = Number(h.troca_valor || 0) || (sim?.avaliacao_usado || 0);
+        const trocaCor = h.troca_cor || sim?.cor_usado || null;
+        const trocaCond = h.troca_condicao || (sim?.condicao_linhas ? sim.condicao_linhas.join(" | ") : null);
+        const trocaNome2 = h.troca_produto2 || (sim?.modelo_usado2 ? `${sim.modelo_usado2} ${sim.storage_usado2 || ""}`.trim() : null);
+        const trocaVal2 = Number(h.troca_valor2 || 0) || (sim?.avaliacao_usado2 || 0);
+        const trocaCor2 = h.troca_cor2 || sim?.cor_usado2 || null;
+        const trocaCond2 = h.troca_condicao2 || (sim?.condicao_linhas2 ? sim.condicao_linhas2.join(" | ") : null);
+        const endLinha1 = [p.endereco, p.numero].filter(Boolean).join(", ")
+          + (p.complemento ? ` - ${p.complemento}` : "");
+        const valorFinal = Number(h.valor || 0) - Number(h.desconto || 0);
+        const cpfCnpj = h.cliente_cpf || p.cpf || p.cnpj || null;
+        const email = h.cliente_email || p.email || null;
+        return (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setGerarEntregaItem(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[#D2D2D7] flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+                <h3 className="font-bold text-[#1D1D1F] text-lg">🚚 Gerar Entrega</h3>
+                <button onClick={() => setGerarEntregaItem(null)} className="text-[#86868B] hover:text-[#1D1D1F] text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F7]">&times;</button>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Aviso quando o formulário completo não foi salvo no banco
+                    (cliente preencheu via Trade-in e mandou direto pelo WhatsApp). */}
+                {!h.cliente_dados_preenchidos && (
+                  <>
+                    <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-xs text-yellow-900">
+                      <p className="font-bold mb-1">⚠️ Cliente legado — dados NÃO foram salvos no banco.</p>
+                      <p>Cola endereço e forma de pagamento aqui (confere no WhatsApp do cliente). Vai ser salvo no link e usado na entrega.</p>
+                    </div>
+                    {/* Campos manuais pra caso legado */}
+                    <div className="border border-[#D2D2D7] rounded-xl p-4 space-y-3 bg-[#FAFAFC]">
+                      <p className="text-xs font-bold text-[#1D1D1F]">📝 Preencher a partir do WhatsApp do cliente</p>
+                      <div>
+                        <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Local de entrega</label>
+                        <select value={gerarLocal} onChange={(e) => setGerarLocal(e.target.value as typeof gerarLocal)}
+                          className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E] bg-white">
+                          <option value="Residencia">🏠 Entrega em Residência</option>
+                          <option value="Shopping">🏬 Entrega em Shopping</option>
+                          <option value="Correios">📦 Envio pelos Correios</option>
+                          <option value="Retirada">🏪 Retirada em loja</option>
+                        </select>
+                      </div>
+                      {gerarLocal === "Shopping" && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Nome do shopping</label>
+                          <input type="text" value={gerarShoppingNome} onChange={(e) => setGerarShoppingNome(e.target.value)}
+                            placeholder="Ex: Shopping Metropolitano"
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                        </div>
+                      )}
+                      {gerarLocal === "Residencia" && (
+                        <>
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Endereço completo (rua, número, complemento)</label>
+                            <input type="text" value={gerarEndereco} onChange={(e) => setGerarEndereco(e.target.value)}
+                              placeholder="Ex: Rua Francisco de Paula, 570 - Apto 703"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Bairro</label>
+                            <input type="text" value={gerarBairro} onChange={(e) => setGerarBairro(e.target.value)}
+                              placeholder="Ex: Barra Olímpica"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                        </>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Forma de pagamento</label>
+                          <select value={gerarFormaPag} onChange={(e) => setGerarFormaPag(e.target.value)}
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E] bg-white">
+                            <option value="">—</option>
+                            <option value="PIX">PIX</option>
+                            <option value="Cartao Credito">Cartão de Crédito</option>
+                            <option value="Link de Pagamento">Link de Pagamento</option>
+                            <option value="PIX + Cartao">PIX + Cartão</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                          </select>
+                        </div>
+                        {(gerarFormaPag === "Cartao Credito" || gerarFormaPag === "Link de Pagamento" || gerarFormaPag === "PIX + Cartao") && (
+                          <div>
+                            <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Parcelas</label>
+                            <input type="number" min="1" max="21" value={gerarParcelas} onChange={(e) => setGerarParcelas(e.target.value)}
+                              placeholder="Ex: 10"
+                              className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                          </div>
+                        )}
+                      </div>
+                      {gerarFormaPag === "PIX + Cartao" && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#1D1D1F] block mb-1">Entrada PIX (R$)</label>
+                          <input type="number" min="0" step="0.01" value={gerarEntrada} onChange={(e) => setGerarEntrada(e.target.value)}
+                            placeholder="Ex: 2500"
+                            className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+                {/* Dados do formulário (read-only, só pra conferir) */}
+                <div className="bg-[#F5F5F7] rounded-xl p-4 space-y-3 text-xs">
+                  <p className="font-bold text-[#1D1D1F] text-sm">📋 Dados do formulário enviado pelo cliente</p>
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Cliente</p>
+                    <div className="space-y-0.5">
+                      <p><span className="text-[#86868B]">Nome:</span> <b>{(h.cliente_nome || "—").toUpperCase()}</b></p>
+                      {cpfCnpj && <p><span className="text-[#86868B]">{p.cnpj ? "CNPJ" : "CPF"}:</span> {cpfCnpj}</p>}
+                      {h.cliente_telefone && <p><span className="text-[#86868B]">WhatsApp:</span> {h.cliente_telefone}</p>}
+                      {email && <p><span className="text-[#86868B]">Email:</span> {email}</p>}
+                      {p.instagram && <p><span className="text-[#86868B]">Instagram:</span> {p.instagram}</p>}
+                    </div>
+                  </div>
+
+                  {(p.cep || p.endereco || p.bairro) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Endereço da entrega</p>
+                      <div className="space-y-0.5">
+                        {p.cep && <p><span className="text-[#86868B]">CEP:</span> {p.cep}</p>}
+                        {endLinha1 && <p><span className="text-[#86868B]">Endereço:</span> {endLinha1}</p>}
+                        {p.bairro && <p><span className="text-[#86868B]">Bairro:</span> {p.bairro}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Compra</p>
+                    <div className="space-y-0.5">
+                      <p><span className="text-[#86868B]">Produto novo:</span> <b>{h.produto}</b>{h.cor ? ` (${h.cor})` : ""}</p>
+                      {valorFinal > 0 && <p><span className="text-[#86868B]">Valor:</span> <b className="text-[#E8740E]">R$ {valorFinal.toLocaleString("pt-BR")}</b></p>}
+                      {h.forma_pagamento && <p><span className="text-[#86868B]">Pagamento:</span> {h.forma_pagamento}{h.parcelas && Number(h.parcelas) > 1 ? ` em ${h.parcelas}x` : ""}{Number(h.entrada || 0) > 0 ? ` (entrada R$ ${Number(h.entrada).toLocaleString("pt-BR")})` : ""}</p>}
+                    </div>
+                  </div>
+
+                  {(trocaNome || trocaNome2) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Aparelho(s) na troca</p>
+                      <div className="space-y-1">
+                        {trocaNome && (
+                          <div>
+                            <p><span className="text-purple-700">🔄 {trocaNome}</span>{trocaCor ? ` — ${trocaCor}` : ""}{trocaVal > 0 ? ` — R$ ${trocaVal.toLocaleString("pt-BR")}` : ""}</p>
+                            {trocaCond && <p className="text-[10px] text-purple-600 pl-5">{trocaCond}</p>}
+                          </div>
+                        )}
+                        {trocaNome2 && (
+                          <div>
+                            <p><span className="text-purple-600">🔄 {trocaNome2}</span>{trocaCor2 ? ` — ${trocaCor2}` : ""}{trocaVal2 > 0 ? ` — R$ ${trocaVal2.toLocaleString("pt-BR")}` : ""}</p>
+                            {trocaCond2 && <p className="text-[10px] text-purple-600 pl-5">{trocaCond2}</p>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {(p.local || p.data_entrega || p.horario) && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#86868B] mb-1">Entrega escolhida pelo cliente</p>
+                      <div className="space-y-0.5">
+                        {p.local && <p><span className="text-[#86868B]">Local:</span> {p.local}</p>}
+                        {p.data_entrega && <p><span className="text-[#86868B]">Data:</span> {p.data_entrega}</p>}
+                        {p.horario && <p><span className="text-[#86868B]">Horário:</span> {p.horario}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Campos editáveis */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Data da entrega *</label>
+                    <input type="date" value={gerarData} onChange={(e) => setGerarData(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                    {p.data_entrega && (
+                      <p className="text-[10px] text-[#86868B] mt-1">Sugerido pelo cliente: {p.data_entrega}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Horário</label>
+                    <input type="time" value={gerarHorario} onChange={(e) => setGerarHorario(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                    {p.horario && (
+                      <p className="text-[10px] text-[#86868B] mt-1">Sugerido pelo cliente: {p.horario}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Entregador (opcional)</label>
+                    <input type="text" value={gerarEntregador} onChange={(e) => setGerarEntregador(e.target.value)}
+                      placeholder="Ex: Bia, João..."
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#1D1D1F] block mb-1">Observação extra (opcional)</label>
+                    <textarea value={gerarObs} onChange={(e) => setGerarObs(e.target.value)}
+                      placeholder="Dados da troca são adicionados automaticamente."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-[#D2D2D7] rounded-lg text-sm focus:outline-none focus:border-[#E8740E]" />
+                  </div>
+                </div>
+
+                {/* Ações */}
+                <div className="flex gap-2 pt-2">
+                  <button onClick={() => setGerarEntregaItem(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-[#F5F5F7] hover:bg-[#E5E5E7] text-[#1D1D1F] text-sm font-semibold transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={confirmarGerarEntrega}
+                    disabled={encaminhando === h.id || !gerarData}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                    {encaminhando === h.id ? "Criando..." : "✅ Confirmar e criar entrega"}
+                  </button>
                 </div>
               </div>
             </div>

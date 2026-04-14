@@ -14,6 +14,7 @@ interface HorarioRow {
 const VENDEDORES_PADRAO = [
   { nome: "André",   numero: "5521967442665" },
   { nome: "Bianca",  numero: "5521972461357" },
+  { nome: "Nicolas", numero: "5521995618747" },
   { nome: "Nicole",  numero: "" },
 ];
 
@@ -43,14 +44,30 @@ export default function ConfiguracoesPage() {
         if (data.whatsapp_principal) setPrincipal(String(data.whatsapp_principal));
         if (data.whatsapp_formularios) setFormLacrados(String(data.whatsapp_formularios));
         if (data.whatsapp_formularios_seminovos) setFormSeminovos(String(data.whatsapp_formularios_seminovos));
-        // whatsapp_vendedores pode ser objeto {nome: numero} ou array
+        // whatsapp_vendedores: { andre: "5521...", ... }
+        // whatsapp_vendedores_nomes: { andre: "André", ... } (display names)
         const raw = data.whatsapp_vendedores;
+        const nomesMap = (data.whatsapp_vendedores_nomes || {}) as Record<string, string>;
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-          // formato {André: "5521...", ...}
-          setVendedores(VENDEDORES_PADRAO.map(v => ({
-            nome: v.nome,
-            numero: (raw as Record<string, string>)[v.nome] ?? v.numero,
-          })));
+          const dbMap = raw as Record<string, string>;
+          const nomesUsados = new Set<string>();
+          const resultado: { nome: string; numero: string }[] = [];
+          // Primeiro: vendedores padrão (mantém ordem)
+          for (const v of VENDEDORES_PADRAO) {
+            const key = v.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (key in dbMap) {
+              resultado.push({ nome: nomesMap[key] || v.nome, numero: dbMap[key] });
+              nomesUsados.add(key);
+            }
+          }
+          // Depois: vendedores extras que só existem no banco
+          for (const [key, num] of Object.entries(dbMap)) {
+            if (!nomesUsados.has(key)) {
+              const nome = nomesMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
+              resultado.push({ nome, numero: num });
+            }
+          }
+          if (resultado.length > 0) setVendedores(resultado);
         }
       })
       .catch(() => {})
@@ -106,10 +123,15 @@ export default function ConfiguracoesPage() {
     setSaving(true);
     setMsg("");
     try {
-      // salvar com keys normalizadas (lowercase sem acento)
+      // salvar com keys normalizadas (lowercase sem acento) para compatibilidade com VENDEDOR_WHATSAPP
       const waMap: Record<string, string> = {};
+      const waNomes: Record<string, string> = {}; // key normalizada → nome display
       for (const v of vendedores) {
-        if (v.nome) waMap[v.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")] = v.numero;
+        if (v.nome.trim()) {
+          const key = v.nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          waMap[key] = v.numero;
+          waNomes[key] = v.nome.trim();
+        }
       }
       const res = await fetch("/api/admin/tradein-config", {
         method: "PUT",
@@ -119,6 +141,7 @@ export default function ConfiguracoesPage() {
           whatsapp_formularios: formLacrados || principal,
           whatsapp_formularios_seminovos: formSeminovos || principal,
           whatsapp_vendedores: waMap,
+          whatsapp_vendedores_nomes: waNomes,
         }),
       });
       const j = await res.json();
@@ -296,15 +319,23 @@ export default function ConfiguracoesPage() {
           <div>
             <p className="font-bold text-[#1D1D1F]">👤 Vendedores — Links de Compra</p>
             <p className="text-xs text-[#86868B] mt-1">
-              Cada vendedor tem um link próprio (/andre, /bianca, /nicolas, /nicole). Quando o cliente submete, a mensagem vai pro WhatsApp do vendedor.
-              Nicole opera pelo Instagram — deixe vazio para usar o da Bianca.
+              Cada vendedor tem um link próprio (ex: /andre, /bianca). Quando o cliente submete, a mensagem vai pro WhatsApp do vendedor.
             </p>
           </div>
 
           <div className="space-y-2">
             {vendedores.map((v, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="w-16 shrink-0 text-sm font-semibold text-[#1D1D1F]">{v.nome}</span>
+                <input
+                  value={v.nome}
+                  onChange={e => {
+                    const upd = [...vendedores];
+                    upd[i] = { ...upd[i], nome: e.target.value };
+                    setVendedores(upd);
+                  }}
+                  placeholder="Nome"
+                  className="w-24 shrink-0 px-2 py-2.5 bg-[#F5F5F7] border border-[#D2D2D7] rounded-lg text-sm font-semibold text-[#1D1D1F] focus:outline-none focus:border-[#E8740E] focus:ring-1 focus:ring-[#E8740E]"
+                />
                 <input
                   inputMode="numeric"
                   value={v.numero}
@@ -313,12 +344,28 @@ export default function ConfiguracoesPage() {
                     upd[i] = { ...upd[i], numero: e.target.value.replace(/\D/g, "") };
                     setVendedores(upd);
                   }}
-                  placeholder={v.nome === "Nicole" ? "vazio → usa Bianca" : "5521999999999"}
+                  placeholder="5521999999999"
                   className={inputCls}
                 />
+                <button
+                  type="button"
+                  onClick={() => setVendedores(vendedores.filter((_, j) => j !== i))}
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                  title="Remover vendedor"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setVendedores([...vendedores, { nome: "", numero: "" }])}
+            className="w-full py-2 rounded-lg text-sm font-semibold text-[#E8740E] border border-dashed border-[#E8740E] hover:bg-orange-50 transition-all"
+          >
+            + Adicionar vendedor
+          </button>
         </div>
 
         {/* Horários de Entrega / Retirada */}

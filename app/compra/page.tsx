@@ -431,7 +431,7 @@ function CompraForm() {
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
     const enderecoFull = `${endereco}, ${numero}${complemento ? ` - ${complemento}` : ""}`;
-    const pagEntrega = local === "Correios" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
+    const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
 
     const lines = [
       `Ola, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliacao de troca no site e preenchi o formulario de compra." : "Vim pelo formulario de compra!"}`,
@@ -502,7 +502,7 @@ function CompraForm() {
     }
     lines.push(`*Local:* ${localStr}`);
     if (pagEntrega) lines.push(pagEntrega);
-    if (local === "Entrega") {
+    if (local === "Entrega" && !pagamentoPagoParam) {
       lines.push("");
       lines.push("⚠️ *TAXA DE DESLOCAMENTO:* Caso a compra nao seja concluida no ato da entrega (limite, divergencia, etc), sera cobrada taxa de deslocamento. ✅ Cliente ciente.");
     }
@@ -716,7 +716,7 @@ function CompraForm() {
             <span className="text-green-600 font-bold text-sm">&#x2705; {trocaProduto2Param ? "Trocas confirmadas" : "Troca confirmada"}</span>
           </div>
           <div>
-            <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaProduto2Param ? " (1º)" : ""}</p>
+            <p className="text-[#1D1D1F] font-semibold">{trocaProduto}{trocaCorParam ? ` — ${trocaCorParam}` : ""}{trocaProduto2Param ? " (1º)" : ""}</p>
             {trocaNum1 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum1)}</p>}
             {trocaCond && <p className="text-[#86868B] text-xs">{trocaCond}</p>}
             {trocaCaixaParam && (
@@ -727,7 +727,7 @@ function CompraForm() {
           </div>
           {trocaProduto2Param && (
             <div className="pt-2 border-t border-green-200">
-              <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param} (2º)</p>
+              <p className="text-[#1D1D1F] font-semibold">{trocaProduto2Param}{trocaCor2Param ? ` — ${trocaCor2Param}` : ""} (2º)</p>
               {trocaNum2 > 0 && <p className="text-green-600 font-bold">Avaliacao: R$ {fmt(trocaNum2)}</p>}
               {trocaCond2Param && <p className="text-[#86868B] text-xs">{trocaCond2Param}</p>}
               {trocaCaixa2Param && (
@@ -1093,23 +1093,27 @@ function CompraForm() {
                   &#x1F3EC; <span className="font-medium">Shopping</span>
                 </label>
               </div>
-              <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
-                {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
-              </div>
+              {!pagamentoPagoParam && (
+                <div className={`p-3 rounded-lg text-sm font-semibold text-center ${tipoEntrega === "Residencia" ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
+                  {tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : "✅ PAGAR NA ENTREGA"}
+                </div>
+              )}
               {tipoEntrega === "Shopping" && (
                 <div>
                   <label className={labelCls}>Qual shopping? *</label>
                   <input type="text" required value={shopping} onChange={(e) => setShopping(e.target.value)} placeholder="Ex: BarraShopping, Village Mall..." className={inputCls} />
                 </div>
               )}
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed">
-                <p><strong>⚠️ Taxa de deslocamento:</strong> Caso a compra nao seja concluida no ato da entrega (falta de limite, divergencia, etc), sera cobrada uma taxa de deslocamento.</p>
-              </div>
+              {!pagamentoPagoParam && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs leading-relaxed">
+                  <p><strong>⚠️ Taxa de deslocamento:</strong> Caso a compra nao seja concluida no ato da entrega (falta de limite, divergencia, etc), sera cobrada uma taxa de deslocamento.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {local === "Entrega" && (
+        {local === "Entrega" && !pagamentoPagoParam && (
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" required className="mt-1 accent-[#E8740E] w-4 h-4" />
             <span className="text-xs text-[#6E6E73] leading-relaxed">

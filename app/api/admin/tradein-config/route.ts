@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   if (labels._whatsapp_formularios) result.whatsapp_formularios = labels._whatsapp_formularios;
   if (labels._whatsapp_formularios_seminovos) result.whatsapp_formularios_seminovos = labels._whatsapp_formularios_seminovos;
   if (labels._whatsapp_vendedores) result.whatsapp_vendedores = labels._whatsapp_vendedores;
+  if (labels._whatsapp_vendedores_nomes) result.whatsapp_vendedores_nomes = labels._whatsapp_vendedores_nomes;
 
   return NextResponse.json({ data: result });
 }
@@ -38,7 +39,7 @@ export async function PUT(req: NextRequest) {
   if (body.origens !== undefined) updates.origens = body.origens;
 
   // Salvar whatsapp config dentro do campo labels (JSONB) pra não depender de colunas novas
-  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_formularios_seminovos !== undefined || body.whatsapp_vendedores !== undefined || body.labels !== undefined) {
+  if (body.whatsapp_principal !== undefined || body.whatsapp_formularios !== undefined || body.whatsapp_formularios_seminovos !== undefined || body.whatsapp_vendedores !== undefined || body.whatsapp_vendedores_nomes !== undefined || body.labels !== undefined) {
     const { data: current } = await supabase.from("tradein_config").select("labels").limit(1).single();
     const currentLabels = (current?.labels && typeof current.labels === "object") ? current.labels as Record<string, unknown> : {};
     const newLabels = { ...currentLabels };
@@ -47,6 +48,7 @@ export async function PUT(req: NextRequest) {
     if (body.whatsapp_formularios !== undefined) newLabels._whatsapp_formularios = body.whatsapp_formularios;
     if (body.whatsapp_formularios_seminovos !== undefined) newLabels._whatsapp_formularios_seminovos = body.whatsapp_formularios_seminovos;
     if (body.whatsapp_vendedores !== undefined) newLabels._whatsapp_vendedores = body.whatsapp_vendedores;
+    if (body.whatsapp_vendedores_nomes !== undefined) newLabels._whatsapp_vendedores_nomes = body.whatsapp_vendedores_nomes;
     updates.labels = newLabels;
   }
 

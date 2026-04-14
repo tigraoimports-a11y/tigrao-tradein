@@ -28,11 +28,12 @@ export default function VendasPage() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reajusteId, setReajusteId] = useState<string | null>(null);
-  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" });
+  const [reajForm, setReajForm] = useState({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editandoVendaId, setEditandoVendaId] = useState<string | null>(null);
   const [vendaProgramada, setVendaProgramada] = useState(false);
   const [programadaJaPago, setProgramadaJaPago] = useState(false);
+  const [programadaComSinal, setProgramadaComSinal] = useState(false);
   const [dataProgramada, setDataProgramada] = useState("");
   const [editandoGrupoIds, setEditandoGrupoIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -1552,7 +1553,7 @@ export default function VendasPage() {
       setShowSegundaTroca(false); setTrocaEnabled(false);
       setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
       setSerialBusca(""); setScanMsg("");
-      setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+      setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
       const plural = successCount > 1 ? "s" : "";
@@ -1883,10 +1884,10 @@ export default function VendasPage() {
           {([
             { key: "nova", label: "Nova Venda", count: 0, color: "bg-[#E8740E]", visible: podeVerHistorico || !!(user?.permissoes?.includes("vendas_registrar")) },
             { key: "andamento", label: "Em Andamento", count: vendas.filter(v => v.status_pagamento === "AGUARDANDO").length, color: "bg-yellow-500", visible: podeVerAndamento },
-            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerHistorico },
+            { key: "hoje", label: "Finalizadas Hoje", count: vendas.filter(v => (v.status_pagamento === "FINALIZADO" || !v.status_pagamento) && (v.data_programada || v.data) === hojeStr).length, color: "bg-blue-500", visible: podeVerAndamento },
             { key: "finalizadas", label: "Histórico", count: vendas.filter(v => v.status_pagamento === "FINALIZADO" || !v.status_pagamento).length, color: "bg-green-600", visible: podeVerHistorico },
             { key: "programadas", label: "Programadas", count: vendas.filter(v => v.status_pagamento === "PROGRAMADA").length, color: "bg-purple-500", visible: podeVerAndamento },
-            { key: "correios", label: "📦 Correios", count: vendas.filter(v => v.local === "CORREIO" && v.codigo_rastreio).length, color: "bg-blue-500", visible: podeVerHistorico },
+            { key: "correios", label: "📦 Correios", count: vendas.filter(v => v.local === "CORREIO" && v.codigo_rastreio).length, color: "bg-blue-500", visible: podeVerAndamento },
           ] as const).filter(t => t.visible).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key as typeof tab)} className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${tab === t.key ? `${t.color} text-white` : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#98989D]" : "bg-white border border-[#D2D2D7] text-[#86868B]"} hover:border-[#E8740E]`}`}>
               {t.label}{t.count > 0 ? ` (${t.count})` : ""}
@@ -2040,7 +2041,7 @@ export default function VendasPage() {
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
-                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
                   setTimeout(() => setMsg(""), 2000);
@@ -2282,32 +2283,61 @@ export default function VendasPage() {
                     <div className={`absolute z-50 left-0 right-0 top-full mt-1 border rounded-xl shadow-lg overflow-hidden max-h-[200px] overflow-y-auto ${dm ? "bg-[#2C2C2E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"}`}>
                       <div className={`px-3 py-1.5 text-[10px] font-bold uppercase ${dm ? "bg-[#3A3A3C] text-[#98989D]" : "bg-[#F5F5F7] text-[#86868B]"}`}>Clientes recorrentes</div>
                       {clientesRecorrentes.map((c, i) => (
-                        <button
-                          key={i}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            set("cliente", c.cliente);
-                            set("origem", c.origem);
-                            set("tipo", c.tipo);
-                            set("forma", c.forma);
-                            set("banco", c.banco);
-                            if (c.pessoa) set("pessoa", c.pessoa);
-                            if (c.cpf) set("cpf", c.cpf);
-                            if (c.cnpj) set("cnpj", c.cnpj);
-                            if (c.email) set("email", c.email);
-                            if (c.endereco) set("endereco", c.endereco);
-                            if (c.cep) set("cep", c.cep);
-                            if (c.bairro) set("bairro", c.bairro);
-                            if (c.cidade) set("cidade", c.cidade);
-                            if (c.uf) set("uf", c.uf);
-                            setShowClienteSuggestions(false);
-                            setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors border-b border-[#F5F5F7] last:border-0"
-                        >
-                          <span className="text-sm font-medium text-[#1D1D1F]">{c.cliente}</span>
-                          <span className="block text-[10px] text-[#86868B]">{c.qtd} compra{c.qtd > 1 ? "s" : ""} — Ultimo: {c.ultimoProduto}</span>
-                        </button>
+                        <div key={i} className="flex items-center border-b border-[#F5F5F7] last:border-0">
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              set("cliente", c.cliente);
+                              set("origem", c.origem);
+                              set("tipo", c.tipo);
+                              set("forma", c.forma);
+                              set("banco", c.banco);
+                              if (c.pessoa) set("pessoa", c.pessoa);
+                              if (c.cpf) set("cpf", c.cpf);
+                              if (c.cnpj) set("cnpj", c.cnpj);
+                              if (c.email) set("email", c.email);
+                              if (c.endereco) set("endereco", c.endereco);
+                              if (c.cep) set("cep", c.cep);
+                              if (c.bairro) set("bairro", c.bairro);
+                              if (c.cidade) set("cidade", c.cidade);
+                              if (c.uf) set("uf", c.uf);
+                              setShowClienteSuggestions(false);
+                              setMsg(`Cliente recorrente: ${c.cliente} (${c.qtd} compra${c.qtd > 1 ? "s" : ""})`);
+                            }}
+                            className="flex-1 px-3 py-2 text-left hover:bg-[#FFF8F0] transition-colors"
+                          >
+                            <span className="text-sm font-medium text-[#1D1D1F]">{c.cliente}</span>
+                            <span className="block text-[10px] text-[#86868B]">{c.qtd} compra{c.qtd > 1 ? "s" : ""} — Ultimo: {c.ultimoProduto}</span>
+                          </button>
+                          {clientesRecorrentes.length >= 2 && (
+                            <button
+                              onMouseDown={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const outros = clientesRecorrentes.filter((_, j) => j !== i);
+                                const nomeNovo = c.cliente;
+                                const listaAntigos = outros.map(o => `• ${o.cliente} (${o.qtd} compra${o.qtd > 1 ? "s" : ""})`).join("\n");
+                                if (!confirm(`Unificar para "${nomeNovo}"?\n\nOs seguintes clientes serão renomeados:\n${listaAntigos}\n\nTodas as vendas, entregas e dados serão transferidos.`)) return;
+                                setShowClienteSuggestions(false);
+                                for (const o of outros) {
+                                  try {
+                                    await fetch("/api/admin/merge-cliente", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", "x-admin-password": password, "x-admin-user": encodeURIComponent(user?.nome || "sistema") },
+                                      body: JSON.stringify({ nomeAntigo: o.cliente, nomeNovo }),
+                                    });
+                                  } catch { /* ignore */ }
+                                }
+                                setMsg(`Clientes unificados para "${nomeNovo}"`);
+                                fetchVendas();
+                              }}
+                              className="shrink-0 px-2 py-1 mr-2 rounded text-[9px] font-bold text-[#E8740E] hover:bg-orange-50 transition-colors"
+                              title={`Unificar todos para ${c.cliente}`}
+                            >
+                              Unificar
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -2698,7 +2728,7 @@ export default function VendasPage() {
                   setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
                   setSerialBusca(""); setScanMsg("");
                   setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
-                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setProgramadaComSinal(false); setDataProgramada("");
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
                 }}
@@ -3564,8 +3594,12 @@ export default function VendasPage() {
                   checked={vendaProgramada}
                   onChange={(e) => {
                     setVendaProgramada(e.target.checked);
-                    if (!e.target.checked) { setProgramadaJaPago(false); setDataProgramada(""); }
-                    else {
+                    if (!e.target.checked) {
+                      setProgramadaJaPago(false);
+                      setProgramadaComSinal(false);
+                      setDataProgramada("");
+                      setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                    } else {
                       // Default: amanhã
                       const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
                       setDataProgramada(amanha.toISOString().split("T")[0]);
@@ -3579,16 +3613,80 @@ export default function VendasPage() {
               </label>
               {vendaProgramada && (
                 <div className="space-y-2 pl-6">
-                  <div className="flex gap-3 items-center">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" checked={!programadaJaPago} onChange={() => setProgramadaJaPago(false)} className="accent-purple-500" />
+                      <input
+                        type="radio"
+                        checked={!programadaJaPago && !programadaComSinal}
+                        onChange={() => {
+                          setProgramadaJaPago(false);
+                          setProgramadaComSinal(false);
+                          setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                        }}
+                        className="accent-purple-500"
+                      />
                       <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>⏳ Aguardando pagamento</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" checked={programadaJaPago} onChange={() => setProgramadaJaPago(true)} className="accent-green-500" />
+                      <input
+                        type="radio"
+                        checked={programadaComSinal}
+                        onChange={() => {
+                          setProgramadaComSinal(true);
+                          setProgramadaJaPago(false);
+                          setForm(f => ({ ...f, banco_sinal: f.banco_sinal || "ITAU" }));
+                        }}
+                        className="accent-amber-500"
+                      />
+                      <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>💰 Sinal pago — saldo na retirada</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={programadaJaPago}
+                        onChange={() => {
+                          setProgramadaJaPago(true);
+                          setProgramadaComSinal(false);
+                          setForm(f => ({ ...f, sinal_antecipado: "", banco_sinal: "" }));
+                        }}
+                        className="accent-green-500"
+                      />
                       <span className={`text-xs font-medium ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>✅ Já pago — entrega futura</span>
                     </label>
                   </div>
+                  {programadaComSinal && (
+                    <div className={`flex flex-wrap gap-3 items-center p-2 rounded-lg ${dm ? "bg-amber-900/20 border border-amber-700/40" : "bg-amber-50 border border-amber-200"}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Valor do sinal:</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={form.sinal_antecipado}
+                          onChange={(e) => setForm(f => ({ ...f, sinal_antecipado: e.target.value }))}
+                          className={`w-28 px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs ${dm ? "text-[#F5F5F7]" : "text-[#1D1D1F]"}`}>Banco:</span>
+                        <select
+                          value={form.banco_sinal}
+                          onChange={(e) => setForm(f => ({ ...f, banco_sinal: e.target.value }))}
+                          className={`px-2 py-1 rounded-lg border text-xs ${dm ? "bg-[#2C2C2E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border-[#D2D2D7] text-[#1D1D1F]"}`}
+                        >
+                          <option value="ITAU">ITAU</option>
+                          <option value="INFINITE">INFINITE</option>
+                          <option value="MERCADO_PAGO">MERCADO_PAGO</option>
+                          <option value="ESPECIE">ESPECIE</option>
+                        </select>
+                      </div>
+                      {(parseFloat(form.sinal_antecipado) || 0) > 0 && (parseFloat(form.preco_vendido) || 0) > 0 && (
+                        <span className={`text-[11px] ${dm ? "text-amber-300" : "text-amber-700"}`}>
+                          Saldo restante: R$ {((parseFloat(form.preco_vendido) || 0) - (parseFloat(form.sinal_antecipado) || 0)).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex gap-3 items-center">
                     <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>Data programada:</span>
                     <input
@@ -3607,9 +3705,9 @@ export default function VendasPage() {
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
+              className={`flex-1 py-3 rounded-xl font-semibold transition-colors disabled:opacity-50 ${vendaProgramada && !editandoVendaId ? (programadaJaPago ? "bg-green-600 text-white hover:bg-green-700" : programadaComSinal ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-purple-600 text-white hover:bg-purple-700") : "bg-[#E8740E] text-white hover:bg-[#F5A623]"}`}
             >
-              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
+              {saving ? "Salvando..." : editandoVendaId ? "Salvar Alteracoes" : vendaProgramada ? `📅 ${programadaJaPago ? "Finalizar e Programar" : programadaComSinal ? `Programar c/ Sinal R$ ${parseFloat(form.sinal_antecipado || "0").toFixed(2)}` : "Programar Venda"} para ${dataProgramada || form.data}` : produtosCarrinho.length > 0 ? `Registrar ${produtosCarrinho.length + (form.produto ? 1 : 0)} Vendas` : "Registrar Venda"}
             </button>
             {form.cliente && (
               <button
@@ -3892,8 +3990,10 @@ export default function VendasPage() {
                         const entradaVal = parseFloat(String(v.entrada_pix || 0)) || 0;
                         const espVal = parseFloat(String(v.entrada_especie || 0)) || 0;
                         const compVal = parseFloat(String(v.valor_comprovante || 0)) || 0;
+                        const creditoVal = parseFloat(String(v.credito_lojista_usado || 0)) || 0;
                         const precoTotal = parseFloat(String(v.preco_vendido || 0)) || 0;
-                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal));
+                        if (creditoVal > 0) pagParts.push(`Crédito: ${fmt(creditoVal)}`);
+                        const resto = Math.max(0, Math.round(precoTotal - valorTrocaTotal - entradaVal - espVal - compVal - creditoVal));
                         const formaLabel = (f: string | null | undefined) => {
                           if (!f) return "";
                           if (f === "DINHEIRO" || f === "ESPECIE") return "💵 Espécie";
@@ -3995,14 +4095,23 @@ export default function VendasPage() {
                                     💳 Crédito: {fmt(Number(v.credito_lojista_usado))}
                                   </span>
                                 )}
+                                {Number(v.sinal_antecipado || 0) > 0 && v.status_pagamento === "PROGRAMADA" && (
+                                  <span className="block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                                    💰 Sinal {v.banco_sinal ? `${v.banco_sinal}` : ""}: {fmt(Number(v.sinal_antecipado))} — saldo {fmt((Number(v.preco_vendido) || 0) - Number(v.sinal_antecipado || 0))}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5">
                                 <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
                                   v.status_pagamento === "AGUARDANDO" ? "bg-yellow-100 text-yellow-700" :
                                   v.status_pagamento === "CANCELADO" ? "bg-red-100 text-red-600" :
+                                  v.status_pagamento === "PROGRAMADA" ? (Number(v.sinal_antecipado || 0) > 0 ? "bg-amber-100 text-amber-700" : "bg-purple-100 text-purple-700") :
                                   "bg-green-100 text-green-700"
                                 }`}>
-                                  {v.status_pagamento === "AGUARDANDO" ? "⏳ Pendente" : v.status_pagamento === "CANCELADO" ? "❌ Cancelado" : "✅ Finalizado"}
+                                  {v.status_pagamento === "AGUARDANDO" ? "⏳ Pendente" :
+                                    v.status_pagamento === "CANCELADO" ? "❌ Cancelado" :
+                                    v.status_pagamento === "PROGRAMADA" ? (Number(v.sinal_antecipado || 0) > 0 ? "💰 Sinal pago" : "📅 Programada") :
+                                    "✅ Finalizado"}
                                 </span>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-[#86868B]">{isExpanded ? "▲" : "▼"}</td>
@@ -4803,7 +4912,7 @@ export default function VendasPage() {
                                         )}
                                         {/* Botão Reajuste — só admin */}
                                         {podeVerHistorico && <button
-                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX" }); }}
+                                          onClick={(e) => { e.stopPropagation(); setReajusteId(reajusteId === v.id ? null : v.id); setReajForm({ valor: "", motivo: "", banco: "ITAU", forma: "PIX", observacao: "" }); }}
                                           className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors"
                                         >
                                           💲 Reajuste
@@ -4935,11 +5044,11 @@ export default function VendasPage() {
                                     {Array.isArray(v.reajustes) && v.reajustes.length > 0 && (
                                       <div className="md:col-span-3 space-y-2">
                                         <h4 className="text-xs font-bold text-amber-600 uppercase">💲 Reajustes</h4>
-                                        {v.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string }, i: number) => (
+                                        {v.reajustes.map((r: { valor: number; motivo: string; banco: string; data: string; forma?: string; observacao?: string | null }, i: number) => (
                                           <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${dm ? "bg-amber-900/20" : "bg-amber-50"}`}>
                                             <span className="text-sm font-bold text-amber-600">+R$ {r.valor.toLocaleString("pt-BR")}</span>
-                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.motivo}</span>
-                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>PIX {r.banco}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.motivo}{r.observacao ? ` (${r.observacao})` : ""}</span>
+                                            <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.forma || "PIX"} {r.banco}</span>
                                             <span className={`text-xs ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>{r.data?.split("-").reverse().join("/")}</span>
                                           </div>
                                         ))}
@@ -4957,7 +5066,7 @@ export default function VendasPage() {
                                           </div>
                                           <div>
                                             <p className="text-xs font-bold text-[#86868B] uppercase mb-1">Motivo</p>
-                                            <select value={reajForm.motivo} onChange={e => setReajForm(f => ({ ...f, motivo: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                            <select value={reajForm.motivo} onChange={e => setReajForm(f => ({ ...f, motivo: e.target.value, ...(e.target.value !== "Outro" ? {} : {}) }))} className="w-full px-3 py-2 border rounded-lg text-sm">
                                               <option value="">Selecionar...</option>
                                               <option value="Sem caixa original">Sem caixa original</option>
                                               <option value="Sem cabo">Sem cabo</option>
@@ -4987,6 +5096,20 @@ export default function VendasPage() {
                                             </select>
                                           </div>
                                         </div>
+                                        {reajForm.motivo && (
+                                          <div>
+                                            <p className="text-xs font-bold text-[#86868B] uppercase mb-1">
+                                              Observação do reajuste {reajForm.motivo === "Outro" && <span className="text-red-500">*</span>}
+                                            </p>
+                                            <input
+                                              type="text"
+                                              placeholder={reajForm.motivo === "Outro" ? "Ex: Cliente informou detalhe não previsto inicialmente" : "Detalhamento adicional (opcional)"}
+                                              value={reajForm.observacao}
+                                              onChange={e => setReajForm(f => ({ ...f, observacao: e.target.value }))}
+                                              className="w-full px-3 py-2 border rounded-lg text-sm"
+                                            />
+                                          </div>
+                                        )}
                                         <div className="flex gap-2">
                                           <button
                                             onClick={async (e) => {
@@ -4994,8 +5117,9 @@ export default function VendasPage() {
                                               try {
                                               const valor = parseFloat(reajForm.valor);
                                               if (!valor || !reajForm.motivo) { alert("Preencha valor e motivo"); return; }
+                                              if (reajForm.motivo === "Outro" && !reajForm.observacao.trim()) { alert("Informe o motivo do reajuste"); return; }
                                               const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje };
+                                              const novoReajuste = { valor, motivo: reajForm.motivo, banco: reajForm.banco, forma: reajForm.forma || "PIX", data: hoje, observacao: reajForm.observacao.trim() || null };
                                               const reajustesAtuais = Array.isArray(v.reajustes) ? [...v.reajustes] : [];
                                               const novosReajustes = [...reajustesAtuais, novoReajuste];
                                               const res = await fetch("/api/vendas", {
