@@ -496,7 +496,7 @@ export default function VendasPage() {
     const cats: { key: string; label: string }[] = [];
     const catSet = new Set<string>();
     for (const p of estoque) {
-      const tipo = (p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO";
+      const tipo = (p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO";
       const key = `${p.categoria}__${tipo}`;
       if (!catSet.has(key)) {
         catSet.add(key);
@@ -516,7 +516,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo ?? "NOVO") === "SEMINOVO" ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
   })() : [];
 
   const fetchVendas = useCallback(async () => {
