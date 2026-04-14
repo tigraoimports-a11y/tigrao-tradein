@@ -487,6 +487,15 @@ export default function EntregasPage() {
 
   const set = (field: string, value: string) => setForm((f) => ({ ...f, [field]: value }));
 
+  // Regra do André: 1x a 12x = INFINITE | 13x a 21x = ITAU
+  const maquinaFromParcelas = (n: number | string): "INFINITE" | "ITAU" | "" => {
+    const num = typeof n === "string" ? parseInt(n) : n;
+    if (!num || num <= 0) return "";
+    if (num <= 12) return "INFINITE";
+    if (num <= 21) return "ITAU";
+    return "";
+  };
+
   const fetchEntregas = useCallback(async () => {
     setLoading(true);
     try {
@@ -1115,16 +1124,26 @@ export default function EntregasPage() {
                   const hasParc = !!r.parcelas_n;
                   if (hasPix && hasParc) {
                     // Cartão + Entrada PIX → Pag1 = Cartão Crédito, Pag2 = Pix
-                    set("forma_pagamento", "Cartao Credito");
-                    set("parcelas", String(r.parcelas_n));
+                    const mq = maquinaFromParcelas(r.parcelas_n!);
+                    setForm(f => ({
+                      ...f,
+                      forma_pagamento: "Cartao Credito",
+                      parcelas: String(r.parcelas_n),
+                      maquina: mq || f.maquina,
+                      forma_pagamento_2: "Pix",
+                      valor_2: String(Math.round(r.entrada_pix!)),
+                    }));
                     setShowPagAlt(true);
-                    set("forma_pagamento_2", "Pix");
-                    set("valor_2", String(Math.round(r.entrada_pix!)));
-                    applied.push(`pagamento: ${r.parcelas_n}x cartão + PIX R$ ${r.entrada_pix!.toLocaleString("pt-BR")}`);
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""} + PIX R$ ${r.entrada_pix!.toLocaleString("pt-BR")}`);
                   } else if (hasParc) {
-                    set("forma_pagamento", "Cartao Credito");
-                    set("parcelas", String(r.parcelas_n));
-                    applied.push(`pagamento: ${r.parcelas_n}x cartão`);
+                    const mq = maquinaFromParcelas(r.parcelas_n!);
+                    setForm(f => ({
+                      ...f,
+                      forma_pagamento: "Cartao Credito",
+                      parcelas: String(r.parcelas_n),
+                      maquina: mq || f.maquina,
+                    }));
+                    applied.push(`pagamento: ${r.parcelas_n}x cartão${mq ? ` (${mq})` : ""}`);
                   } else if (hasPix || /pix/.test(formaTxt)) {
                     set("forma_pagamento", "Pix");
                     applied.push("pagamento: Pix");
@@ -1710,7 +1729,14 @@ export default function EntregasPage() {
                   <>
                     <div>
                       <p className={labelCls}>Parcelas {form.forma_pagamento === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
-                      <select value={form.parcelas} onChange={(e) => set("parcelas", e.target.value)} className={inputCls}>
+                      <select
+                        value={form.parcelas}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm(f => ({ ...f, parcelas: v, maquina: maquinaFromParcelas(v) || f.maquina }));
+                        }}
+                        className={inputCls}
+                      >
                         <option value="">—</option>
                         {(form.forma_pagamento === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
                       </select>
@@ -1786,7 +1812,14 @@ export default function EntregasPage() {
                   {isCartao2 && (<>
                     <div>
                       <p className={labelCls}>Parcelas {form.forma_pagamento_2 === "Link de Pagamento" && <span className="text-[10px] text-[#86868B]">(máx. 12x)</span>}</p>
-                      <select value={form.parcelas_2} onChange={(e) => set("parcelas_2", e.target.value)} className={inputCls}>
+                      <select
+                        value={form.parcelas_2}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm(f => ({ ...f, parcelas_2: v, maquina_2: maquinaFromParcelas(v) || f.maquina_2 }));
+                        }}
+                        className={inputCls}
+                      >
                         <option value="">—</option>
                         {(form.forma_pagamento_2 === "Link de Pagamento" ? [1,2,3,4,5,6,7,8,9,10,11,12] : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]).map(n => <option key={n} value={String(n)}>{n}x</option>)}
                       </select>
