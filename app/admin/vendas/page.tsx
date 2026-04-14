@@ -395,7 +395,7 @@ export default function VendasPage() {
       setCatSel(`${found.categoria}__${tipoKey}`);
       setEstoqueId(found.id);
       set("produto", found.produto);
-      set("custo", String(found.custo_unitario || 0));
+      set("custo", String(Math.round(found.custo_unitario || 0)));
       if (found.fornecedor) set("fornecedor", found.fornecedor);
       if (found.serial_no) { set("serial_no", found.serial_no); setSerialBusca(found.serial_no); }
       if (found.imei) { set("imei", found.imei); if (!found.serial_no) setSerialBusca(found.imei); }
@@ -469,7 +469,7 @@ export default function VendasPage() {
       setEstoqueId(found.id);
       setForm(f => ({ ...f,
         produto: found.produto.toUpperCase(),
-        custo: String(found.custo_unitario || 0),
+        custo: String(Math.round(found.custo_unitario || 0)),
         fornecedor: found.fornecedor ? found.fornecedor.toUpperCase() : f.fornecedor,
         serial_no: found.serial_no ? found.serial_no.toUpperCase() : f.serial_no,
         imei: found.imei ? found.imei.toUpperCase() : f.imei,
@@ -1548,6 +1548,8 @@ export default function VendasPage() {
       setEstoqueId("");
       setProdutoManual(false);
       setShowSegundaTroca(false); setTrocaEnabled(false);
+      setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
+      setSerialBusca(""); setScanMsg("");
       setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
       localStorage.removeItem("tigrao_venda_draft");
       const statusTxt = vendaProgramada ? "programada" : "registrada";
@@ -2032,6 +2034,9 @@ export default function VendasPage() {
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
                   setProdutosCarrinho([]); setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null); setLastClienteData(null);
+                  setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
+                  setSerialBusca(""); setScanMsg("");
+                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
                   localStorage.removeItem("tigrao_venda_draft");
                   setMsg("Formulario limpo!");
                   setTimeout(() => setMsg(""), 2000);
@@ -2595,7 +2600,7 @@ export default function VendasPage() {
                                                 } else {
                                                   setEstoqueId(p.id);
                                                   set("produto", p.produto);
-                                                  set("custo", String(p.custo_unitario));
+                                                  set("custo", String(Math.round(p.custo_unitario || 0)));
                                                   if (p.fornecedor) set("fornecedor", p.fornecedor);
                                                   if (p.serial_no) set("serial_no", p.serial_no);
                                                   if (p.imei) set("imei", p.imei);
@@ -2685,6 +2690,10 @@ export default function VendasPage() {
                   setEstoqueId("");
                   setProdutoManual(false);
                   setProdutosCarrinho([]);
+                  setTrocaRow(createEmptyProdutoRow()); setTrocaRow2(createEmptyProdutoRow());
+                  setSerialBusca(""); setScanMsg("");
+                  setEditandoVendaId(null); setEditandoGrupoIds([]); setDuplicadoInfo(null);
+                  setVendaProgramada(false); setProgramadaJaPago(false); setDataProgramada("");
                   setMsg("");
                   localStorage.removeItem("tigrao_venda_draft");
                 }}
