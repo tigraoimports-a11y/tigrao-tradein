@@ -26,6 +26,7 @@ interface MpPrefBody {
   valor?: number;
   maxParcelas?: number;
   externalRef?: string;
+  shortCode?: string; // Se informado, após pagamento redireciona pra /c/{shortCode}?pago=mp
 }
 
 export async function POST(request: Request) {
@@ -63,6 +64,18 @@ export async function POST(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://tigrao-tradein.vercel.app";
 
+  // Se veio shortCode, redireciona pro formulário de pedido após pagamento aprovado.
+  // MP automaticamente anexa ?payment_id=X&status=Y&external_reference=Z na back_url.
+  // Isso permite o cliente continuar o preenchimento (endereço, data entrega, etc)
+  // direto no /compra, já com flag "pago via MP".
+  // Query param `pp=mp` mapeia pra `pagamento_pago=mp` no /compra via KEY_MAP.
+  // MP automaticamente anexa payment_id, status, external_reference, merchant_order_id
+  // na URL ao redirecionar — repassamos tudo isso pro /compra via /c/[d].
+  const shortCode = (body.shortCode || "").trim();
+  const successUrl = shortCode
+    ? `${baseUrl}/c/${shortCode}?pp=mp`
+    : `${baseUrl}/pagamento/sucesso`;
+
   const payload = {
     items: [
       {
@@ -79,7 +92,7 @@ export async function POST(request: Request) {
       excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
     },
     back_urls: {
-      success: `${baseUrl}/pagamento/sucesso`,
+      success: successUrl,
       pending: `${baseUrl}/pagamento/pendente`,
       failure: `${baseUrl}/pagamento/erro`,
     },

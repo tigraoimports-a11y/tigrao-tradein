@@ -969,8 +969,53 @@ export default function GerarLinkPage() {
     const maxP = numParcelas > 0 ? Math.min(numParcelas, 12) : 1;
     const titulo = prodsFilled.join(" + ");
 
+    // Monta shortData enxuto pro formulário pós-pagamento (só o que importa:
+    // produto, vendedor, entrega). Client data e forma pagamento ficam por
+    // conta do /compra + override do pagamento_pago=mp.
+    const corPTSimples = useCart ? (carrinhoLink[0].cor || "") : (corSel ? corParaPT(corSel) : "");
+    const nomeProdutoFinal = corPTSimples ? `${prodsFilled[0]} ${corPTSimples}` : prodsFilled[0];
+    const aplicarCorExtra = (nome: string, idx: number): string => {
+      if (useCart) {
+        const item = carrinhoLink[idx];
+        return item?.cor ? `${nome} ${item.cor}` : nome;
+      }
+      const cor = coresExtras[idx - 1];
+      if (!cor) return nome;
+      return `${nome} ${corParaPT(cor)}`;
+    };
+    const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+
+    const shortData: Record<string, string> = {};
+    shortData.p = nomeProdutoFinal;
+    for (let i = 1; i < prodsFilled.length; i++) {
+      shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
+    }
+    // Usa valorComTaxa (valor efetivamente pago no MP) em vez de rawPreco
+    shortData.v = String(valorComTaxa);
+    shortData.s = vendedorNome || "";
+    shortData.w = whatsappDestino;
+    if (localEntrega) shortData.l = localEntrega;
+    if (shoppingNome) shortData.sh = shoppingNome;
+    if (horario) shortData.h = horario;
+    if (dataEntrega) shortData.dt = dataEntrega;
+
     setMpLoading(true);
     try {
+      // 1. Cria short-link (armazena dados do produto/vendedor pro /compra)
+      let shortCode = "";
+      try {
+        const shortRes = await fetch("/api/short-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: shortData }),
+        });
+        const shortJson = await shortRes.json();
+        if (shortJson.code) shortCode = shortJson.code;
+      } catch {
+        // Se falhar, seguimos sem shortCode — MP cai na página genérica de sucesso
+      }
+
+      // 2. Cria preferência no MP (back_url aponta pro /c/{shortCode}?pp=mp)
       const res = await fetch("/api/admin/mp-preference", {
         method: "POST",
         headers: adminHeaders({ "Content-Type": "application/json" }),
@@ -978,6 +1023,7 @@ export default function GerarLinkPage() {
           titulo,
           valor: valorComTaxa,
           maxParcelas: maxP,
+          shortCode,
         }),
       });
       const data = await res.json();
