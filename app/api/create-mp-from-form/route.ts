@@ -80,6 +80,10 @@ interface CreateMpFromFormBody {
   // Se há entrada PIX, o MP cobra só o restante (valorParcelar). Se não,
   // cobra o valor total do pedido.
   valorMp: number;
+  // Número do WhatsApp do vendedor (ex: "5521999998888") — usado pela
+  // /pagamento-confirmado pra redirecionar o cliente pro chat do vendedor
+  // com a mensagem do pedido + comprovante MP já pré-preenchida.
+  whatsappVendedor?: string;
 }
 
 export async function POST(request: Request) {
@@ -161,6 +165,8 @@ export async function POST(request: Request) {
     entrega: body.entrega || null,
     isFromTradeIn: !!body.isFromTradeIn,
     valorMp,
+    // WhatsApp do vendedor (pra redirect do cliente após pagamento aprovado)
+    whatsappVendedor: body.whatsappVendedor || null,
     preenchidoEm: new Date().toISOString(),
   };
 
