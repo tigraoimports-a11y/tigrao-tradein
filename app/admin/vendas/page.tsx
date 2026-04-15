@@ -1054,10 +1054,10 @@ export default function VendasPage() {
       data_programada: vendaProgramada && dataProgramada ? dataProgramada : null,
       vendedor: user?.nome || null,
       // Entrega atacado (cobrada à parte)
-      frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
-      frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
-      frete_forma: form.tipo === "ATACADO" && form.frete_forma ? form.frete_forma : null,
-      frete_banco: form.tipo === "ATACADO" && form.frete_banco ? form.frete_banco : null,
+      frete_valor: parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || null,
+      frete_recebido: form.frete_valor ? !!form.frete_recebido : null,
+      frete_forma: form.frete_forma || null,
+      frete_banco: form.frete_banco || null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
       _lojista_id: creditoLojistaId || null,
@@ -2233,30 +2233,16 @@ export default function VendasPage() {
                   />
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
-                {/* Forma e banco do pagamento da entrega */}
+                {/* Banco do PIX da entrega */}
                 {form.frete_valor && (
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div>
-                      <p className={labelCls}>Forma do Pagamento</p>
-                      <select value={form.frete_forma} onChange={(e) => set("frete_forma", e.target.value)} className={inputCls}>
-                        <option value="">— Selecionar —</option>
-                        <option value="PIX">PIX</option>
-                        <option value="CARTAO">Cartão de Crédito</option>
-                        <option value="DEBITO">Débito</option>
-                        <option value="LINK">Link Mercado Pago</option>
-                        <option value="ESPECIE">Espécie (Dinheiro)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <p className={labelCls}>Banco / Máquina</p>
-                      <select value={form.frete_banco} onChange={(e) => set("frete_banco", e.target.value)} className={inputCls}>
-                        <option value="">— Selecionar —</option>
-                        <option value="ITAU">Itaú</option>
-                        <option value="INFINITE">InfinitePay</option>
-                        <option value="MERCADO_PAGO">Mercado Pago</option>
-                        <option value="ESPECIE">Espécie</option>
-                      </select>
-                    </div>
+                  <div className="mt-3">
+                    <p className={labelCls}>Banco do PIX</p>
+                    <select value={form.frete_banco} onChange={(e) => { set("frete_banco", e.target.value); set("frete_forma", e.target.value ? "PIX" : ""); }} className={inputCls}>
+                      <option value="">— Selecionar —</option>
+                      <option value="ITAU">Itaú</option>
+                      <option value="INFINITE">InfinitePay</option>
+                      <option value="MERCADO_PAGO">Mercado Pago</option>
+                    </select>
                   </div>
                 )}
               </div>
@@ -2440,6 +2426,33 @@ export default function VendasPage() {
                     {form.codigo_rastreio && (
                       <a href={`https://www.linkcorreios.com.br/${form.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className={`shrink-0 px-3 flex items-center justify-center rounded-xl text-[12px] font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white gap-1`}>📦 Rastrear</a>
                     )}
+                  </div>
+                </div>
+              )}
+              {/* 🚚 Taxa de Entrega — vendas normais */}
+              {(form.local === "ENTREGA" || form.local === "CORREIO") && (
+                <div className={`p-3 rounded-xl border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#E0E0E5] bg-[#FAFAFA]"}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#86868B]">🚚 Taxa de Entrega</span>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-[#86868B]">
+                      <input type="checkbox" checked={!!form.frete_recebido} onChange={(e) => set("frete_recebido", e.target.checked)} className="w-4 h-4 rounded accent-[#E8740E]" />
+                      Já recebido
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className={labelCls}>Valor (R$)</p>
+                      <input type="text" inputMode="numeric" value={form.frete_valor} onChange={(e) => { const digits = e.target.value.replace(/\D/g, ""); set("frete_valor", digits ? Number(digits).toLocaleString("pt-BR") : ""); }} placeholder="Ex: 30" className={inputCls} />
+                    </div>
+                    <div>
+                      <p className={labelCls}>Banco do PIX</p>
+                      <select value={form.frete_banco} onChange={(e) => { set("frete_banco", e.target.value); set("frete_forma", e.target.value ? "PIX" : ""); }} className={inputCls}>
+                        <option value="">— Selecionar —</option>
+                        <option value="ITAU">Itaú</option>
+                        <option value="INFINITE">InfinitePay</option>
+                        <option value="MERCADO_PAGO">Mercado Pago</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
@@ -5207,9 +5220,9 @@ export default function VendasPage() {
                                             <a href={`https://www.linkcorreios.com.br/${v.codigo_rastreio}`} target="_blank" rel="noopener noreferrer" className="font-mono text-blue-500 hover:text-blue-700 underline">{v.codigo_rastreio}</a>
                                           </p>
                                         )}
-                                        {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
+                                        {(v.frete_valor ?? 0) > 0 && (
                                           <p>
-                                            <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            <strong>🚚 Taxa Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
                                             {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` ${v.frete_banco}` : ""})</span>}
                                             {" "}
                                             <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
