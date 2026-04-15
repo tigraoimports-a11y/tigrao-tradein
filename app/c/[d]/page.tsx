@@ -16,6 +16,10 @@ const KEY_MAP: Record<string, string> = {
   // Dados do cliente pré-preenchidos pelo vendedor no gerar-link
   cn: "nome", ccpf: "cpf", cem: "email", cte: "telefone",
   ccep: "cep", cen: "endereco", cnu: "numero", cco: "complemento", cba: "bairro",
+  // MP redirect: params anexados pelo MP após pagamento aprovado
+  payment_id: "payment_id",
+  preference_id: "preference_id",
+  merchant_order_id: "merchant_order_id",
 };
 
 async function resolveData(d: string): Promise<Record<string, string>> {
@@ -91,11 +95,26 @@ export async function generateMetadata({ params }: { params: Promise<{ d: string
   };
 }
 
-export default async function ShortLinkPage({ params }: { params: Promise<{ d: string }> }) {
+export default async function ShortLinkPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ d: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { d } = await params;
+  const sp = await searchParams;
   const data = await resolveData(d);
   // Anexa o short_code pra que /compra possa enviar o preenchimento de volta
   if (d.length <= 8 && /^[A-Za-z0-9]+$/.test(d)) data.short = d;
+
+  // Anexa query params da URL (ex: pp=mp + payment_id=X vindos do MP após pagamento).
+  // Estes sobrescrevem o que veio do short-link (último valor vence).
+  for (const [k, v] of Object.entries(sp)) {
+    if (!v || Array.isArray(v)) continue;
+    data[k] = v;
+  }
+
   const redirectUrl = buildRedirectUrl(data);
 
   return (

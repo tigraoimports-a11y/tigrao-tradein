@@ -106,10 +106,15 @@ function CompraForm() {
     "Cartao Debito": "Debito", "Cartao+Debito": "Debito",
     "Pix + Cartao": "PIX + Cartao", "Pix+%2B+Cartao": "PIX + Cartao",
   };
+  // Identificadores do pagamento MP (vindos da back_url do MP após pagamento aprovado)
+  const mpPaymentId = searchParams.get("payment_id") || "";
+  const mpPreferenceId = searchParams.get("preference_id") || "";
   const pagamentoPagoStr = pagamentoPagoParam === "link"
     ? "Pedido pago no Instagram via link"
     : pagamentoPagoParam === "pix"
     ? "Pedido pago via PIX (Instagram)"
+    : pagamentoPagoParam === "mp"
+    ? "Pago via Mercado Pago (Link)"
     : "";
   const formaParam = pagamentoPagoStr || FORMA_MAP[formaRaw] || formaRaw;
   const parcelasParam = searchParams.get("parcelas") || "";
@@ -462,6 +467,16 @@ function CompraForm() {
       ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
       ...(descontoParam > 0 ? [`*Total final:* R$ ${fmt(valorBaseFinal)}`] : []),
       `*Forma de pagamento:* ${pagStr}`,
+      // Detalhes do pagamento MP (quando pago via link MP)
+      ...(pagamentoPagoParam === "mp" && mpPaymentId
+        ? [
+            `*ID do pagamento MP:* ${mpPaymentId}`,
+            `*Comprovante:* https://www.mercadopago.com.br/activities/1/detail/${mpPaymentId}`,
+          ]
+        : []),
+      ...(pagamentoPagoParam === "mp" && !mpPaymentId && mpPreferenceId
+        ? [`*Preference MP:* ${mpPreferenceId}`]
+        : []),
     ];
 
     // Trade-in info
@@ -739,6 +754,23 @@ function CompraForm() {
           )}
           {preco > 0 && descontoParam > 0 && <p className="text-blue-500 font-semibold text-sm pt-2 border-t border-green-200">Desconto: - R$ {fmt(descontoParam)}</p>}
           {preco > 0 && <p className={`text-[#E8740E] font-bold text-lg ${descontoParam > 0 ? "" : "pt-2 border-t border-green-200"}`}>{trocaNum > 0 ? "Diferenca a pagar" : "Total"}: R$ {fmt(valorBase)}</p>}
+        </div>
+      )}
+
+      {/* Badge: pagamento já efetuado via Mercado Pago */}
+      {pagamentoPagoParam === "mp" && (
+        <div className="mx-4 mt-3 bg-green-50 rounded-xl p-4 shadow-sm border border-green-200">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-green-600 font-bold text-sm">&#x2705; Pagamento aprovado via Mercado Pago</span>
+          </div>
+          <p className="text-[#1D1D1F] text-sm">
+            Para finalizar, preencha seus dados e endereço de entrega abaixo.
+          </p>
+          {mpPaymentId && (
+            <p className="text-[#86868B] text-xs mt-1">
+              ID do pagamento: <span className="font-mono">{mpPaymentId}</span>
+            </p>
+          )}
         </div>
       )}
 
