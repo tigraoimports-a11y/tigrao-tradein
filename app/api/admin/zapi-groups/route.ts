@@ -50,8 +50,26 @@ export async function GET(request: Request) {
     const deviceInfo = await deviceRes.json().catch(() => null);
 
     if (!chatsRes.ok) {
+      // Tenta extrair mensagem útil da resposta Z-API. Formatos comuns:
+      //   { error: "mensagem" } / { message: "mensagem" } / "string direta" / null
+      const zapiMsg =
+        (data && typeof data === "object" && (data.error || data.message)) ||
+        (typeof data === "string" ? data : null) ||
+        "sem mensagem";
       return NextResponse.json(
-        { error: "Z-API retornou erro", status: chatsRes.status, details: data },
+        {
+          error: `Z-API erro ${chatsRes.status}: ${zapiMsg}`,
+          status: chatsRes.status,
+          details: data,
+          deviceInfo,
+          instanceIdEndsWith: instanceId.slice(-6),
+          hint:
+            chatsRes.status === 401 || chatsRes.status === 403
+              ? "Token inválido ou expirado. Confira ZAPI_TOKEN e ZAPI_CLIENT_TOKEN no Vercel."
+              : chatsRes.status === 404
+              ? "Instância não encontrada. Confira ZAPI_INSTANCE_ID no Vercel."
+              : "Pode ser que o WhatsApp esteja desconectado na Z-API. Acesse o painel da Z-API e reconecte o número.",
+        },
         { status: 502 }
       );
     }
