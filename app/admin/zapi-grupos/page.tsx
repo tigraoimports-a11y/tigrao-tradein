@@ -16,6 +16,8 @@ export default function ZapiGruposPage() {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [totalChats, setTotalChats] = useState(0);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [phoneConectado, setPhoneConectado] = useState<string | null>(null);
+  const [nomeConectado, setNomeConectado] = useState<string | null>(null);
 
   useEffect(() => {
     if (!password) return;
@@ -27,6 +29,8 @@ export default function ZapiGruposPage() {
         if (!r.ok) throw new Error(json.error || "Erro ao buscar grupos");
         setGrupos(json.groups || []);
         setTotalChats(json.totalChats || 0);
+        setPhoneConectado(json.phoneConectado || null);
+        setNomeConectado(json.nomeConectado || null);
       })
       .catch((err) => setErro(String(err?.message || err)))
       .finally(() => setLoading(false));
@@ -71,6 +75,18 @@ export default function ZapiGruposPage() {
           {" "}no Vercel.
         </p>
       </div>
+
+      {(phoneConectado || nomeConectado) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
+          <strong>WhatsApp conectado na Z-API:</strong>{" "}
+          {nomeConectado && <span>{nomeConectado} </span>}
+          {phoneConectado && <span className="font-mono">({phoneConectado})</span>}
+          <div className="mt-1 text-xs">
+            Só aparecem aqui os grupos onde esse número está como membro.
+            Se o grupo que você quer não aparecer, confirme que esse número participa dele.
+          </div>
+        </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
         <strong>Dica:</strong> se o grupo desejado não aparecer, mande alguma
