@@ -519,7 +519,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -2585,7 +2585,7 @@ export default function VendasPage() {
 
                 {/* Produtos agrupados por modelo */}
                 {(serialBusca.trim() || catSel) && (() => {
-                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
+                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE");
                   const filtrados = serialBusca.trim()
                     ? baseList.filter(p => (p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase())) || p.produto.toUpperCase().includes(serialBusca.trim().toUpperCase()))
                     : baseList;
@@ -2699,7 +2699,10 @@ export default function VendasPage() {
                                                   : `${dm ? "bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F5F7]" : "bg-white border border-[#D2D2D7] text-[#1D1D1F]"} hover:border-[#E8740E]`
                                               }`}
                                             >
-                                              {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                              <span className="flex flex-col items-start gap-0.5">
+                                                {p.serial_no ? <span className={`font-mono text-[11px] ${isSelected ? "text-white" : "text-purple-500"}`}>{p.serial_no}</span> : <span>{fmt(p.custo_unitario)}</span>}
+                                                {p.reserva_cliente && <span className={`text-[9px] font-semibold ${isSelected ? "text-white/80" : "text-orange-600"}`}>📌 {p.reserva_cliente}</span>}
+                                              </span>
                                             </button>
                                           );
                                         })}
