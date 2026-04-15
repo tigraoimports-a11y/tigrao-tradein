@@ -82,10 +82,22 @@ export async function POST(request: Request) {
     ? `${baseUrl}/c/${shortCode}?pp=mp`
     : `${baseUrl}/pagamento/sucesso`;
 
+  // ID único do item (melhora score de Qualidade da Integração MP):
+  // combina timestamp + 6 chars aleatórios pra rastreabilidade sem colisão.
+  const itemId = `TIGRAO-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+  // Referência externa: sempre enviar (ação obrigatória no scoring MP).
+  // Prefere o externalRef vindo do admin, senão usa o shortCode, senão gera um.
+  const externalReference =
+    body.externalRef || shortCode || itemId;
+
   const payload = {
     items: [
       {
+        id: itemId, // +4 pontos no score MP
         title: titulo.slice(0, 250), // MP limita título
+        description: titulo.slice(0, 600), // +4 pontos no score MP
+        category_id: "electronics", // +4 pontos (loja de eletrônicos Apple)
         quantity: 1,
         unit_price: Math.round(valor * 100) / 100,
         currency_id: "BRL",
@@ -103,7 +115,10 @@ export async function POST(request: Request) {
       failure: `${baseUrl}/pagamento/erro`,
     },
     auto_return: "approved",
-    ...(body.externalRef ? { external_reference: body.externalRef } : {}),
+    external_reference: externalReference, // Ação obrigatória no scoring MP
+    // Webhook pra notificações de mudança de status (ação obrigatória no scoring MP).
+    // Endpoint em /api/mp-webhook só loga e retorna 200 (não usamos ainda pra lógica).
+    notification_url: `${baseUrl}/api/mp-webhook`,
     statement_descriptor: "TIGRAOIMPORTS",
   };
 
