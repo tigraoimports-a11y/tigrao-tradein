@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyPagamentoAprovado } from "@/lib/zapi";
 
 // ============================================================
 // MP Webhook — recebe notificações de mudança de status
@@ -6,13 +7,16 @@ import { NextResponse } from "next/server";
 // Endpoint chamado pelo Mercado Pago quando um pagamento muda
 // de status (aprovado, recusado, estornado, etc.).
 //
-// Requerido pela "Qualidade da Integração" do MP (ação obrigatória).
 // Aponta pra cá via `notification_url` em /api/admin/mp-preference.
 //
-// Por enquanto só loga o evento e retorna 200. Futuramente podemos:
-//   - Registrar em activity_log
-//   - Atualizar status de pedido em vendas
-//   - Enviar notificação pro vendedor via WhatsApp/Telegram
+// Fluxo quando chega notificação de pagamento aprovado:
+//   1. MP POST com { type: "payment", data: { id } }
+//   2. Buscamos detalhes do pagamento via GET /v1/payments/{id}
+//   3. Se status=approved → buscamos link_compras pelo external_reference
+//      (que é o short_code) e disparamos notificação WhatsApp pro grupo.
+//   4. Tudo é "best-effort": qualquer erro é logado mas não bloqueia a
+//      resposta 200 pro MP (se a gente retornasse 500, o MP reagendaria
+//      e a gente tomaria notificação duplicada depois).
 //
 // MP envia 2 tipos de request:
 //   1. GET de validação (health-check) — retornar 200
@@ -26,6 +30,98 @@ export async function GET() {
   return NextResponse.json({ ok: true });
 }
 
+interface MpPayment {
+  id: number | string;
+  status: string; // "approved" | "pending" | "rejected" | ...
+  external_reference?: string;
+  transaction_amount?: number;
+  installments?: number;
+  payer?: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: { area_code?: string; number?: string };
+  };
+  additional_info?: {
+    items?: Array<{ title?: string }>;
+  };
+}
+
+async function fetchPayment(paymentId: string): Promise<MpPayment | null> {
+  const token = process.env.MP_ACCESS_TOKEN;
+  if (!token) {
+    console.error("[mp-webhook] MP_ACCESS_TOKEN não configurado — não consigo buscar pagamento");
+    return null;
+  }
+  try {
+    const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      console.error("[mp-webhook] erro ao buscar pagamento MP:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    return (await res.json()) as MpPayment;
+  } catch (err) {
+    console.error("[mp-webhook] exceção ao buscar pagamento:", err);
+    return null;
+  }
+}
+
+async function handleApprovedPayment(paymentId: string) {
+  const payment = await fetchPayment(paymentId);
+  if (!payment) return;
+  if (payment.status !== "approved") {
+    console.log(`[mp-webhook] payment ${paymentId} status=${payment.status} — ignorando`);
+    return;
+  }
+
+  const externalRef = payment.external_reference || "";
+  if (!externalRef) {
+    console.log(`[mp-webhook] payment ${paymentId} sem external_reference — pulando notificação`);
+    return;
+  }
+
+  // external_reference é o short_code do link_compras (ou um fallback gerado).
+  // Se for short_code, buscamos os dados do cliente/produto pra montar a msg.
+  const { supabase } = await import("@/lib/supabase");
+  const { data: link } = await supabase
+    .from("link_compras")
+    .select("id, cliente_nome, cliente_telefone, produto, valor, parcelas, short_code, notificado_pago")
+    .eq("short_code", externalRef)
+    .maybeSingle();
+
+  if (!link) {
+    console.log(`[mp-webhook] link_compras não encontrado para ref=${externalRef} — skip`);
+    return;
+  }
+
+  // Evita notificar 2x o mesmo pagamento (MP pode reenviar webhooks).
+  if (link.notificado_pago) {
+    console.log(`[mp-webhook] link ${link.id} já notificado — skip`);
+    return;
+  }
+
+  // Dispara WhatsApp
+  const ok = await notifyPagamentoAprovado({
+    cliente: link.cliente_nome || "Cliente sem nome",
+    telefone: link.cliente_telefone,
+    produto: link.produto || "Produto",
+    valor: Number(payment.transaction_amount || link.valor || 0),
+    parcelas: payment.installments ? String(payment.installments) : link.parcelas,
+    shortCode: link.short_code,
+    mpPaymentId: String(payment.id),
+  });
+
+  // Marca como notificado no banco pra evitar duplicatas
+  if (ok) {
+    await supabase
+      .from("link_compras")
+      .update({ notificado_pago: true, notificado_pago_em: new Date().toISOString() })
+      .eq("id", link.id);
+  }
+}
+
 // POST: notificação de evento
 export async function POST(request: Request) {
   try {
@@ -33,8 +129,7 @@ export async function POST(request: Request) {
     const topic = request.headers.get("x-topic") || body?.type || "unknown";
     const id = body?.data?.id || body?.id || "unknown";
 
-    // Log estruturado pra depuração no Vercel. Sem ações ainda —
-    // só confirmamos recebimento pro MP não marcar como falha.
+    // Log estruturado pra depuração no Vercel.
     console.log("[mp-webhook]", {
       topic,
       action: body?.action,
@@ -42,6 +137,15 @@ export async function POST(request: Request) {
       live_mode: body?.live_mode,
       date_created: body?.date_created,
     });
+
+    // Só processamos eventos de "payment". Outros tipos (merchant_order, etc)
+    // só logam e seguem. Processamento é fire-and-forget: respondemos 200 imediato
+    // e disparamos notificação em background pra não estourar o timeout de 22s do MP.
+    if (topic === "payment" && id && id !== "unknown") {
+      handleApprovedPayment(String(id)).catch((err) =>
+        console.error("[mp-webhook] erro no handler assíncrono:", err)
+      );
+    }
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
