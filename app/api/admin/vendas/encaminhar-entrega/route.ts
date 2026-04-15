@@ -116,6 +116,9 @@ export async function POST(request: Request) {
       })(),
       forma_pagamento: formaPag,
       valor: Number(venda.preco_vendido || 0) || null,
+      entrada: (Number(venda.entrada_pix || 0) + Number(venda.entrada_especie || 0)) || null,
+      parcelas: venda.qnt_parcelas || null,
+      valor_total: Number(venda.preco_vendido || 0) || null,
       vendedor: venda.vendedor || null,
     })
     .select()

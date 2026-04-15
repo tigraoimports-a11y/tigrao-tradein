@@ -127,12 +127,13 @@ function CompraForm() {
   const horarioParam = searchParams.get("horario") || "";
   const dataEntregaParam = searchParams.get("data_entrega") || "";
 
-  // Produtos adicionais (vindo do gerador de link)
-  const produtosExtras: string[] = [];
+  // Produtos adicionais (vindo do gerador de link) — com preço individual
+  const produtosExtras: { nome: string; preco: number }[] = [];
   for (let i = 2; i <= 10; i++) {
     const p = searchParams.get(`produto${i}`);
-    if (p) produtosExtras.push(p);
-    else break;
+    if (!p) break;
+    const pv = parseFloat(searchParams.get(`preco${i}`) || "0") || 0;
+    produtosExtras.push({ nome: p, preco: pv });
   }
 
   // Products from API
@@ -397,7 +398,7 @@ function CompraForm() {
     const localStr = local === "Loja" ? "Retirada em loja"
       : local === "Correios" ? "Envio Correios"
       : tipoEntrega === "Shopping" ? `Entrega - Shopping: ${shopping}`
-      : "Entrega - Residencia";
+      : "Entrega - Residência";
 
     // Valor base para cálculos (usa precoFinal definido acima)
     const descontoFinal = parseFloat(String(descontoParam)) || 0;
@@ -414,24 +415,33 @@ function CompraForm() {
       return { n, total, vp };
     })() : null;
 
-    // Forma de pagamento com detalhes completos
-    let pagStr = formaPagamento;
-    if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
-      pagStr = `Link de Pagamento — ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} (total R$ ${fmt2(parcelasCalc.total)})`;
-    } else if (formaPagamento.includes("Cartao") && parcelas && parcelasCalc) {
-      if (entradaFinal > 0) {
-        pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
-      } else {
-        pagStr = `R$ ${fmt2(parcelasCalc.total)} em ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao`;
-      }
-    } else if (formaPagamento === "Link de Pagamento" && parcelas) {
-      pagStr = `Link de Pagamento — ${parcelas}x`;
-    } else if (formaPagamento === "PIX") {
-      pagStr = `PIX — R$ ${fmt(valorBaseFinal)}`;
-    } else if (formaPagamento === "PIX + Cartao" && parcelas && parcelasCalc) {
-      pagStr = `Entrada PIX R$ ${fmt(entradaFinal)} + ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)} no cartao (total cartao: R$ ${fmt2(parcelasCalc.total)})`;
+    // Pagamento estruturado (bloco de linhas)
+    const pagLines: string[] = [];
+    if (formaPagamento === "PIX") {
+      pagLines.push(`*Forma:* PIX`);
+      pagLines.push(`*Valor:* R$ ${fmt(valorBaseFinal)}`);
     } else if (formaPagamento === "Debito") {
-      pagStr = `Debito — R$ ${fmt(valorBaseFinal)}`;
+      pagLines.push(`*Forma:* Débito`);
+      pagLines.push(`*Valor:* R$ ${fmt(valorBaseFinal)}`);
+    } else if ((formaPagamento.includes("Cartao") || formaPagamento === "PIX + Cartao") && parcelas && parcelasCalc) {
+      if (entradaFinal > 0) {
+        pagLines.push(`*Forma:* PIX + Cartão`);
+        pagLines.push(`*Entrada PIX:* R$ ${fmt(entradaFinal)}`);
+        pagLines.push(`*Parcelas:* ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)}`);
+        pagLines.push(`*Total no cartão:* R$ ${fmt2(parcelasCalc.total)}`);
+      } else {
+        pagLines.push(`*Forma:* Cartão de Crédito`);
+        pagLines.push(`*Parcelas:* ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)}`);
+        pagLines.push(`*Total:* R$ ${fmt2(parcelasCalc.total)}`);
+      }
+    } else if (formaPagamento === "Link de Pagamento" && parcelas && parcelasCalc) {
+      pagLines.push(`*Forma:* Link de Pagamento`);
+      pagLines.push(`*Parcelas:* ${parcelasCalc.n}x de R$ ${fmt2(parcelasCalc.vp)}`);
+      pagLines.push(`*Total:* R$ ${fmt2(parcelasCalc.total)}`);
+    } else if (formaPagamento === "Link de Pagamento" && parcelas) {
+      pagLines.push(`*Forma:* Link de Pagamento — ${parcelas}x`);
+    } else {
+      pagLines.push(`*Forma:* ${formaPagamento}`);
     }
 
     const isTradeInFlow = isFromTradeIn || trocaProduto;
@@ -439,15 +449,16 @@ function CompraForm() {
     const pagEntrega = pagamentoPagoParam ? "" : local === "Correios" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" && tipoEntrega === "Residencia" ? "⚠️ PAGAMENTO ANTECIPADO" : local === "Entrega" ? "✅ PAGAR NA ENTREGA" : "";
 
     const lines = [
-      `Ola, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliacao de troca no site e preenchi o formulario de compra." : "Vim pelo formulario de compra!"}`,
+      `Olá, me chamo ${nome}. ${isTradeInFlow ? "Fiz a avaliação de troca no site e preenchi o formulário de compra." : "Vim pelo formulário de compra!"}`,
       "",
-      `*DADOS DA COMPRA -- TigraoImports*`,
+      `*━━━ DADOS DA COMPRA — Tigrão Imports ━━━*`,
       "",
+      `*📋 DADOS PESSOAIS*`,
       // Dados pessoais / empresa
       ...(pessoa === "PJ"
         ? [
-            `*Tipo:* Pessoa Juridica`,
-            `*Razao Social:* ${nome}`,
+            `*Tipo:* Pessoa Jurídica`,
+            `*Razão Social:* ${nome}`,
             `*CNPJ:* ${cnpj}`,
           ]
         : [
@@ -458,15 +469,19 @@ function CompraForm() {
       `*Telefone:* ${telefone}`,
       ...(instagram ? [`*Instagram:* ${instagram}`] : []),
       `*CEP:* ${cep}`,
-      `*Endereco:* ${enderecoFull}`,
+      `*Endereço:* ${enderecoFull}`,
       `*Bairro:* ${bairro}`,
       "",
-      // Produto e pagamento
-      `*Produto:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
-      ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p}`)),
+      // Produtos
+      `*🛒 ${produtosExtras.length > 0 ? "PRODUTOS" : "PRODUTO"}*`,
+      `*Produto 1:* ${produtoFinal}${corSel ? ` — ${corSel}` : ""}${precoFinal > 0 ? ` — R$ ${fmt(precoFinal)}` : ""}`,
+      ...(produtosExtras.map((p, i) => `*Produto ${i + 2}:* ${p.nome}${p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}`)),
       ...(descontoParam > 0 ? [`*Desconto:* - R$ ${fmt(descontoParam)}`] : []),
-      ...(descontoParam > 0 ? [`*Total final:* R$ ${fmt(valorBaseFinal)}`] : []),
-      `*Forma de pagamento:* ${pagStr}`,
+      ...(descontoParam > 0 || produtosExtras.length > 0 ? [`*Total:* R$ ${fmt(valorBaseFinal)}`] : []),
+      "",
+      // Pagamento
+      `*💳 PAGAMENTO*`,
+      ...pagLines,
       // Detalhes do pagamento MP (quando pago via link MP)
       ...(pagamentoPagoParam === "mp" && mpPaymentId
         ? [
@@ -483,34 +498,35 @@ function CompraForm() {
     if (temTroca && (trocaProduto || descTroca)) {
       const temDoisUsados = !!trocaProduto2Param;
       lines.push("");
-      lines.push(temDoisUsados ? `*MEUS APARELHOS NA TROCA:*` : `*MEU APARELHO NA TROCA:*`);
+      lines.push(`*🔄 ${temDoisUsados ? "APARELHOS NA TROCA" : "APARELHO NA TROCA"}*`);
       if (trocaProduto) {
         if (temDoisUsados) lines.push(``, `*Aparelho 1:*`);
-        lines.push(`Modelo: ${trocaProduto}`);
-        if (trocaCorParam) lines.push(`Cor: ${trocaCorParam}`);
-        if (trocaNum1 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum1)}`);
-        if (trocaCond) lines.push(`Condicao: ${trocaCond}`);
-        if (trocaCaixaParam) lines.push(`Caixa original: ${trocaCaixaParam === "1" ? "Sim" : "Nao"}`);
+        lines.push(`*Modelo:* ${trocaProduto}`);
+        if (trocaCorParam) lines.push(`*Cor:* ${trocaCorParam}`);
+        if (trocaNum1 > 0) lines.push(`*Valor avaliado:* R$ ${fmt(trocaNum1)}`);
+        if (trocaCond) lines.push(`*Condição:* ${trocaCond}`);
+        if (trocaCaixaParam) lines.push(`*Caixa original:* ${trocaCaixaParam === "1" ? "Sim" : "Não"}`);
       } else if (descTroca) {
-        lines.push(`Modelo: ${descTroca}`);
+        lines.push(`*Modelo:* ${descTroca}`);
       }
-      // 2º produto na troca
+      // 2o produto na troca
       if (temDoisUsados) {
         lines.push(``, `*Aparelho 2:*`);
-        lines.push(`Modelo: ${trocaProduto2Param}`);
-        if (trocaCor2Param) lines.push(`Cor: ${trocaCor2Param}`);
-        if (trocaNum2 > 0) lines.push(`Valor avaliado: R$ ${fmt(trocaNum2)}`);
-        if (trocaCond2Param) lines.push(`Condicao: ${trocaCond2Param}`);
-        if (trocaCaixa2Param) lines.push(`Caixa original: ${trocaCaixa2Param === "1" ? "Sim" : "Nao"}`);
+        lines.push(`*Modelo:* ${trocaProduto2Param}`);
+        if (trocaCor2Param) lines.push(`*Cor:* ${trocaCor2Param}`);
+        if (trocaNum2 > 0) lines.push(`*Valor avaliado:* R$ ${fmt(trocaNum2)}`);
+        if (trocaCond2Param) lines.push(`*Condição:* ${trocaCond2Param}`);
+        if (trocaCaixa2Param) lines.push(`*Caixa original:* ${trocaCaixa2Param === "1" ? "Sim" : "Não"}`);
       }
-      if (valorBase > 0) { lines.push(""); lines.push(`*Diferenca a pagar: R$ ${fmt(valorBase)}*`); }
+      if (valorBase > 0) { lines.push(""); lines.push(`*Diferença a pagar:* R$ ${fmt(valorBase)}`); }
     }
 
     // Vendedor, origem, entrega
     lines.push("");
+    lines.push(`*📍 ENTREGA*`);
     if (vendedor) lines.push(`*Vendedor:* ${vendedor}`);
-    if (origem) lines.push(`*Como conheceu:* ${origem}`);
-    lines.push(`*Horario:* ${horario}`);
+    if (origem) lines.push(`*Indicação:* ${origem}`);
+    lines.push(`*Horário:* ${horario}`);
     if (dataEntrega) {
       const [y, m, d] = dataEntrega.split("-");
       lines.push(`*Data:* ${d}/${m}/${y}`);
@@ -519,7 +535,7 @@ function CompraForm() {
     if (pagEntrega) lines.push(pagEntrega);
     if (local === "Entrega" && !pagamentoPagoParam) {
       lines.push("");
-      lines.push("⚠️ *TAXA DE DESLOCAMENTO:* Caso a compra nao seja concluida no ato da entrega (limite, divergencia, etc), sera cobrada taxa de deslocamento. ✅ Cliente ciente.");
+      lines.push("⚠️ *TAXA DE DESLOCAMENTO:* Caso a compra não seja concluída no ato da entrega (limite, divergência, etc), será cobrada taxa de deslocamento. ✅ Cliente ciente.");
     }
 
     // Entrega NÃO é criada automaticamente — equipe cria manualmente na agenda
@@ -537,7 +553,7 @@ function CompraForm() {
             cep, endereco, numero, complemento, bairro,
             endereco_completo: enderecoFullTxt,
             produto: produtoFinal, cor: corSel, preco: precoFinal,
-            forma_pagamento: pagStr,
+            forma_pagamento: pagLines.join(" | "),
             local: localStr, horario, data_entrega: dataEntrega,
             vendedor, origem,
           },
@@ -621,7 +637,7 @@ function CompraForm() {
               <>
                 <p className="text-[#1D1D1F] font-bold text-lg mt-1">{produtoParam}</p>
                 {produtosExtras.map((p, i) => (
-                  <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p}</p>
+                  <p key={i} className="text-[#1D1D1F] font-semibold text-base mt-1">{p.nome}{p.preco > 0 ? ` — R$ ${fmt(p.preco)}` : ""}</p>
                 ))}
                 {preco > 0 && (
                   <div className="mt-2 space-y-1">
@@ -1118,7 +1134,7 @@ function CompraForm() {
               <div className="flex gap-3">
                 <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Residencia" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Residencia" checked={tipoEntrega === "Residencia"} onChange={() => { setTipoEntrega("Residencia"); setShopping(""); }} className="sr-only" />
-                  &#x1F3E0; <span className="font-medium">Residencia</span>
+                  &#x1F3E0; <span className="font-medium">Residência</span>
                 </label>
                 <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 cursor-pointer transition-colors ${tipoEntrega === "Shopping" ? "border-[#E8740E] bg-[#FFF5EB] text-[#E8740E]" : "border-[#D2D2D7] bg-[#F5F5F7] text-[#6E6E73]"}`}>
                   <input type="radio" name="tipoEntrega" value="Shopping" checked={tipoEntrega === "Shopping"} onChange={() => setTipoEntrega("Shopping")} className="sr-only" />

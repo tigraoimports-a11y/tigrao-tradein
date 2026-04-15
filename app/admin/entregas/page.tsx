@@ -2806,7 +2806,9 @@ export default function EntregasPage() {
                         const isUpgrade = e.tipo === "UPGRADE" || !!e.detalhes_upgrade;
                         const tipoLabel = isUpgrade ? "UPGRADE (Troca)" : "Compra";
                         const trocaTexto = e.detalhes_upgrade
-                          ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:")).join(" / ")
+                          ? e.detalhes_upgrade.split("\n").filter(l => !l.startsWith("Avaliação:"))
+                              .map(l => l.replace(/\s*—\s*R\$\s*[\d.,]+/g, "")) // Remove valor avaliado (motoboy não vê)
+                              .join(" / ")
                           : "";
                         const obsLimpa = (e.observacao || "").split(" | ").filter(p => !p.startsWith("Endereço cadastro:")).join(" | ").trim();
                         const msg = [

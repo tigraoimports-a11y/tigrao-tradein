@@ -887,6 +887,9 @@ export default function GerarLinkPage() {
     shortData.p = nomeProdutoFinal;
     for (let i = 1; i < prodsFilled.length; i++) {
       shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
+      // Preço individual do produto extra
+      const precoExtra = useCart ? (carrinhoLink[i]?.preco || 0) : (precosPorProduto[i] || 0);
+      if (precoExtra > 0) shortData[`v${i + 1}`] = String(precoExtra);
     }
     if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
     if (descontoNum > 0) shortData.dc = String(descontoNum);
