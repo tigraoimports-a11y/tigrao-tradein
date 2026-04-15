@@ -11,6 +11,7 @@ const KEY_MAP: Record<string, string> = {
   tp: "troca_produto", tv: "troca_valor", tc: "troca_cor", tcd: "troca_cond",
   tp2: "troca_produto2", tv2: "troca_valor2", tc2: "troca_cor2", tcd2: "troca_cond2",
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
+  v2: "preco2", v3: "preco3", v4: "preco4", v5: "preco5",
   pp: "pagamento_pago",
   short: "short",
   // Dados do cliente pré-preenchidos pelo vendedor no gerar-link
