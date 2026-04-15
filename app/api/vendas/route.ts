@@ -634,6 +634,7 @@ export async function PATCH(req: NextRequest) {
   delete fields._estoque_id;
   delete fields.forma_sinal;
   delete fields.usar_credito_loja; // virtual — só usado no POST
+  delete fields._lojista_id; // virtual — só usado no POST
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
   const { data: vendaAnterior } = await supabase.from("vendas").select("estoque_id, serial_no, produto").eq("id", id).single();
