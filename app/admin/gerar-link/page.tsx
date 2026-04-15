@@ -231,6 +231,12 @@ export default function GerarLinkPage() {
   const [copied, setCopied] = useState(false);
   const [pasteMsg, setPasteMsg] = useState("");
   const [pagamentoPago, setPagamentoPago] = useState<"" | "link" | "pix">("");
+  // Fluxo invertido: habilita botão "Pagar com Mercado Pago" no /compra.
+  // Cliente preenche o formulário ANTES de pagar — no clique, o servidor cria
+  // a preference MP com tudo pré-preenchido e redireciona pro checkout.
+  // Vantagem: quando MP confirma, o webhook já tem todos os dados e envia a
+  // notificação COMPLETA pro grupo (sem depender do cliente terminar o fluxo).
+  const [pagarMp, setPagarMp] = useState(false);
   const [taxaEntrega, setTaxaEntrega] = useState("");
   // Link Mercado Pago (gerado via API MP — independente do "Gerar Link" do form)
   const [mpLink, setMpLink] = useState("");
@@ -603,6 +609,8 @@ export default function GerarLinkPage() {
         if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
         if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
         if (pagamentoPago) shortData.pp = pagamentoPago;
+        // pm=1 → formulário primeiro, depois cliente paga MP direto do /compra
+        if (pagarMp) shortData.pm = "1";
         if (incluirDadosCliente) {
           if (cliNome.trim()) shortData.cn = cliNome.trim();
           if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
@@ -805,6 +813,7 @@ export default function GerarLinkPage() {
     // Pagamento
     setForma("Cartao Credito"); setParcelas("21"); setEntradaPix(""); setDesconto("");
     setPagamentoPago("");
+    setPagarMp(false);
     // Entrega
     setLocalEntrega("shopping"); setShoppingNome(""); setHorario(""); setDataEntrega(""); setTaxaEntrega("");
     // Troca
@@ -920,6 +929,8 @@ export default function GerarLinkPage() {
     if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
     if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
     if (pagamentoPago) shortData.pp = pagamentoPago;
+    // pm=1 → habilita botão "Pagar com Mercado Pago" no /compra (fluxo invertido)
+    if (pagarMp) shortData.pm = "1";
 
     // Dados do cliente pré-preenchidos (quando o vendedor incluir)
     if (incluirDadosCliente) {
@@ -2545,6 +2556,30 @@ export default function GerarLinkPage() {
             </p>
           )}
         </div>
+
+        {/* Fluxo invertido: formulário primeiro, pagamento MP depois */}
+        {!pagamentoPago && (
+          <div className={`rounded-xl p-3 border ${dm ? "border-[#3A3A3C] bg-[#1C1C1E]" : "border-[#009EE3]/30 bg-[#E6F6FD]"}`}>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pagarMp}
+                onChange={(e) => setPagarMp(e.target.checked)}
+                className="mt-0.5 accent-[#009EE3] w-4 h-4 shrink-0"
+              />
+              <div className="flex-1">
+                <p className={`text-sm font-semibold ${dm ? "text-[#E5E5E7]" : "text-[#1D1D1F]"}`}>
+                  💳 Formulário primeiro, depois Mercado Pago
+                </p>
+                <p className={`text-[11px] leading-relaxed mt-0.5 ${dm ? "text-[#98989D]" : "text-[#6E6E73]"}`}>
+                  Cliente preenche os dados e clica em <strong>"Pagar com Mercado Pago"</strong>.
+                  Quando MP aprovar, a notificação do pedido completo chega no grupo automaticamente
+                  — sem delay de 5s e com todos os dados preenchidos.
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
 
         <button
           onClick={gerarLink}
