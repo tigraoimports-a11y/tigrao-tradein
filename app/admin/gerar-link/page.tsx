@@ -420,6 +420,7 @@ export default function GerarLinkPage() {
 
   // === Editar link existente ===
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [editingShortCode, setEditingShortCode] = useState<string | null>(null);
   const [viewDataLink, setViewDataLink] = useState<LinkCompra | null>(null);
   const [editDados, setEditDados] = useState<Record<string, string>>({});
   const [editLink, setEditLink] = useState<Record<string, string>>({});
@@ -519,6 +520,7 @@ export default function GerarLinkPage() {
   function editarLink(l: LinkCompra) {
     reutilizarLink(l);
     setEditingLinkId(l.id);
+    setEditingShortCode(l.short_code || null);
     setPasteMsg(`✏️ Editando link ${l.short_code}. Ao clicar em "Gerar Link" as alterações serão salvas.`);
   }
 
@@ -562,8 +564,63 @@ export default function GerarLinkPage() {
         }),
       });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setPasteMsg(`❌ Erro ao salvar: ${j.error || res.status}`); return false; }
-      setPasteMsg(`✅ Link ${editingLinkId.slice(0, 6)} atualizado.`);
+
+      // Atualizar dados do short link (activity_log) para o cliente ver as mudanças
+      if (editingShortCode) {
+        const aplicarCorExtra = (nome: string, idx: number): string => {
+          if (useCart) { const item = carrinhoLink[idx]; return item?.cor ? `${nome} ${item.cor}` : nome; }
+          const cor = coresExtras[idx - 1]; return cor ? `${nome} ${corParaPT(cor)}` : nome;
+        };
+        const whatsappDestino = getWhatsAppByVendedor(vendedorNome);
+        const shortData: Record<string, string> = {};
+        shortData.p = nomeProdutoFinal;
+        for (let i = 1; i < prodsFilled.length; i++) {
+          shortData[`p${i + 1}`] = aplicarCorExtra(prodsFilled[i], i);
+        }
+        if (rawPreco && rawPreco !== "0") shortData.v = rawPreco;
+        if (descontoNum > 0) shortData.dc = String(descontoNum);
+        shortData.s = vendedorNome || "";
+        shortData.w = whatsappDestino;
+        if (forma) shortData.f = forma;
+        if (parcelas) shortData.x = parcelas;
+        if (rawEntrada && rawEntrada !== "0") shortData.e = rawEntrada;
+        if (localEntrega) shortData.l = localEntrega;
+        if (shoppingNome) shortData.sh = shoppingNome;
+        if (horario) shortData.h = horario;
+        if (dataEntrega) shortData.dt = dataEntrega;
+        if (trocaProduto) shortData.tp = trocaProduto;
+        if (trocaCondicao) shortData.tcd = trocaCondicao;
+        if (trocaCor) shortData.tc = trocaCor;
+        const rawTroca = trocaValor.replace(/\./g, "").replace(",", ".");
+        if (rawTroca && rawTroca !== "0") shortData.tv = rawTroca;
+        if (temSegundaTroca && trocaProduto2) shortData.tp2 = trocaProduto2;
+        const rawTroca2 = trocaValor2.replace(/\./g, "").replace(",", ".");
+        if (temSegundaTroca && rawTroca2 && rawTroca2 !== "0") shortData.tv2 = rawTroca2;
+        if (temSegundaTroca && trocaCondicao2) shortData.tcd2 = trocaCondicao2;
+        if (temSegundaTroca && trocaCor2) shortData.tc2 = trocaCor2;
+        if (pagamentoPago) shortData.pp = pagamentoPago;
+        if (incluirDadosCliente) {
+          if (cliNome.trim()) shortData.cn = cliNome.trim();
+          if (cliCpf.trim()) shortData.ccpf = cliCpf.trim();
+          if (cliEmail.trim()) shortData.cem = cliEmail.trim();
+          if (cliTelefone.trim()) shortData.cte = cliTelefone.trim();
+          if (cliCep.trim()) shortData.ccep = cliCep.trim();
+          if (cliEndereco.trim()) shortData.cen = cliEndereco.trim();
+          if (cliNumero.trim()) shortData.cnu = cliNumero.trim();
+          if (cliComplemento.trim()) shortData.cco = cliComplemento.trim();
+          if (cliBairro.trim()) shortData.cba = cliBairro.trim();
+        }
+        shortData.short = editingShortCode;
+        await fetch("/api/short-link", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: editingShortCode, data: shortData }),
+        }).catch(() => {}); // best-effort
+      }
+
+      setPasteMsg(`✅ Link ${editingShortCode || editingLinkId.slice(0, 6)} atualizado.`);
       setEditingLinkId(null);
+      setEditingShortCode(null);
       return true;
     } catch (e) {
       setPasteMsg(`❌ Erro: ${String(e)}`);
@@ -753,6 +810,7 @@ export default function GerarLinkPage() {
     // Link gerado
     setGeneratedLink(""); setCopied(false); setPasteMsg("");
     setVendedorNome("");
+    setEditingLinkId(null); setEditingShortCode(null);
   }
 
   const rawPreco = preco.replace(/\./g, "").replace(",", ".");

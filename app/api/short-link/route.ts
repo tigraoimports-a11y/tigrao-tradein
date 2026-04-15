@@ -27,6 +27,22 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ code });
 }
 
+// PATCH: update short link data
+export async function PATCH(req: NextRequest) {
+  const body = await req.json();
+  const { code, data } = body;
+  if (!code || !data) return NextResponse.json({ error: "code and data required" }, { status: 400 });
+
+  const { error } = await supabase
+    .from("activity_log")
+    .update({ detalhes: JSON.stringify(data) })
+    .eq("entidade", "short_link")
+    .eq("acao", code);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 // GET: resolve short link
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");

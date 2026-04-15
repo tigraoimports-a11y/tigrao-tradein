@@ -208,7 +208,9 @@ export async function POST(req: NextRequest) {
 
   // Crédito de lojista (abatimento): valor vem em usar_credito_loja (opcional, só ATACADO)
   const usarCreditoLoja = Number(body.usar_credito_loja || 0);
+  const lojistaIdDireto = body._lojista_id || null;
   delete body.usar_credito_loja;
+  delete body._lojista_id;
   // Salvar na coluna credito_lojista_usado (para rastreio na tela de operações)
   if (usarCreditoLoja > 0) body.credito_lojista_usado = usarCreditoLoja;
 
@@ -227,11 +229,13 @@ export async function POST(req: NextRequest) {
       tipo: "SINAL",
       valor: Number(body.sinal_antecipado),
       data: body.data || new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
-      forma: "PIX",
+      forma: body.forma_sinal || "PIX",
       banco: body.banco_sinal || "ITAU",
     };
     body.pagamento_historia = [sinalHist];
   }
+  // Remover campo virtual forma_sinal (não existe na tabela vendas)
+  delete body.forma_sinal;
 
   const { data, error } = await supabase.from("vendas").insert({
     ...body,
@@ -243,30 +247,35 @@ export async function POST(req: NextRequest) {
 
   // Abater crédito do lojista (se solicitado) — usa tabela `lojistas` (saldo_credito),
   // mesma fonte de verdade da tela Clientes/Lojistas e do lookup na Nova Venda.
-  if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO") && body.cliente) {
+  let creditoDebitError: string | null = null;
+  if (usarCreditoLoja > 0 && (body.tipo === "ATACADO" || body.origem === "ATACADO")) {
     try {
-      // 1) Localiza o lojista por cpf/cnpj/nome
-      const normNome = String(body.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
-      const cpfDig = String(body.cpf || "").replace(/\D/g, "");
-      const cnpjDig = String(body.cnpj || "").replace(/\D/g, "");
-      let lojistaId: string | null = null;
-      if (cpfDig) {
-        const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
-        if (l) lojistaId = l.id;
-      }
-      if (!lojistaId && cnpjDig) {
-        const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
-        if (l) lojistaId = l.id;
-      }
-      if (!lojistaId && normNome) {
-        const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", normNome);
-        if (ls && ls.length > 0) {
-          const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
-          lojistaId = alvo.id;
+      // 1) Usa lojista_id direto se o frontend enviou (mais confiável)
+      let lojistaId: string | null = lojistaIdDireto;
+
+      // 2) Fallback: localiza por cpf/cnpj/nome
+      if (!lojistaId && body.cliente) {
+        const normNome = String(body.cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const cpfDig = String(body.cpf || "").replace(/\D/g, "");
+        const cnpjDig = String(body.cnpj || "").replace(/\D/g, "");
+        if (cpfDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cpf", cpfDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && cnpjDig) {
+          const { data: l } = await supabase.from("lojistas").select("id").eq("cnpj", cnpjDig).maybeSingle();
+          if (l) lojistaId = l.id;
+        }
+        if (!lojistaId && normNome) {
+          const { data: ls } = await supabase.from("lojistas").select("id, nome").ilike("nome", `%${normNome}%`);
+          if (ls && ls.length > 0) {
+            const alvo = ls.find((l: { nome: string }) => (l.nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase() === normNome.toUpperCase()) || ls[0];
+            lojistaId = alvo.id;
+          }
         }
       }
       if (lojistaId) {
-        await supabase.rpc("mover_saldo_lojista", {
+        const { error: rpcErr } = await supabase.rpc("mover_saldo_lojista", {
           p_lojista_id: lojistaId,
           p_tipo: "DEBITO",
           p_valor: usarCreditoLoja,
@@ -274,11 +283,18 @@ export async function POST(req: NextRequest) {
           p_motivo: `Venda ${data?.id?.slice(0, 8)}`,
           p_usuario: usuario,
         });
-        await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+        if (rpcErr) {
+          creditoDebitError = `Erro ao debitar crédito: ${rpcErr.message}`;
+          console.error("[Vendas] RPC mover_saldo_lojista erro:", rpcErr);
+        } else {
+          await logActivity(usuario, "Crédito lojista usado em venda", `${body.cliente}: -R$${usarCreditoLoja}`, "vendas", data?.id);
+        }
       } else {
+        creditoDebitError = `Lojista não encontrado para debitar crédito (cliente: ${body.cliente})`;
         console.warn("[Vendas] Crédito solicitado mas lojista não encontrado:", body.cliente);
       }
     } catch (e) {
+      creditoDebitError = `Erro inesperado ao debitar crédito: ${String(e)}`;
       console.error("[Vendas] Erro ao debitar crédito lojista:", e);
     }
   }
@@ -518,7 +534,7 @@ export async function POST(req: NextRequest) {
   // Recalcular saldos do dia automaticamente
   if (body.data) recalcularSaldoDia(supabase, body.data).catch(() => {});
 
-  return NextResponse.json({ ok: true, data });
+  return NextResponse.json({ ok: true, data, ...(creditoDebitError ? { creditoDebitError } : {}) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -616,6 +632,7 @@ export async function PATCH(req: NextRequest) {
   delete fields._seminovo;
   delete fields._seminovo2;
   delete fields._estoque_id;
+  delete fields.forma_sinal;
   delete fields.usar_credito_loja; // virtual — só usado no POST
 
   // Buscar venda anterior para comparar estoque_id (devolver produto se trocou)
