@@ -13,6 +13,7 @@ const KEY_MAP: Record<string, string> = {
   p2: "produto2", p3: "produto3", p4: "produto4", p5: "produto5",
   v2: "preco2", v3: "preco3", v4: "preco4", v5: "preco5",
   pp: "pagamento_pago",
+  te: "taxa_entrega",
   short: "short",
   // Dados do cliente pré-preenchidos pelo vendedor no gerar-link
   cn: "nome", ccpf: "cpf", cem: "email", cte: "telefone",
