@@ -84,8 +84,6 @@ export interface Venda {
   frete_recebido: boolean | null;
   frete_forma: string | null;
   frete_banco: string | null;
-  frete_parcelas: number | null;
-  frete_bandeira: string | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
   // Brinde / Cortesia — não impacta faturamento nem lucro
   is_brinde: boolean;
