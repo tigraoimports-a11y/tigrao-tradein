@@ -316,6 +316,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Se ainda não tem estoque_id e nem serial, tentar vincular por nome do produto
+  if (!estoqueId && !body.serial_no && body.produto) {
+    const { data: foundByName } = await supabase
+      .from("estoque")
+      .select("id")
+      .ilike("produto", `%${body.produto}%`)
+      .eq("status", "EM ESTOQUE")
+      .gt("qnt", 0)
+      .limit(1);
+    if (foundByName && foundByName.length > 0) {
+      estoqueId = foundByName[0].id;
+      if (data?.id) await supabase.from("vendas").update({ estoque_id: estoqueId }).eq("id", data.id);
+    }
+  }
+
   // Proteção anti-duplicidade: marcar como ESGOTADO quaisquer outros itens ativos
   // com o mesmo serial (exceto o que acabou de ser vinculado).
   if (body.serial_no) {
@@ -733,6 +748,39 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Ao finalizar, garantir que o estoque foi deduzido (proteção contra criação com erro parcial)
+  if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
+    const venda = data[0];
+    const eid = venda.estoque_id;
+    const sn = venda.serial_no;
+    if (eid) {
+      const { data: eItem } = await supabase.from("estoque").select("id, qnt, status").eq("id", eid).single();
+      if (eItem && eItem.status === "EM ESTOQUE" && eItem.qnt > 0) {
+        const novaQnt = Math.max(0, eItem.qnt - 1);
+        await supabase.from("estoque").update({ qnt: novaQnt, status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", eid);
+        console.log(`[Vendas PATCH] Estoque deduzido na finalização: ${eid} → qnt=${novaQnt}`);
+      }
+    } else if (sn) {
+      const serialU = String(sn).toUpperCase();
+      const { data: found } = await supabase.from("estoque").select("id, qnt").eq("serial_no", serialU).eq("status", "EM ESTOQUE").limit(1);
+      if (found && found.length > 0) {
+        const novaQnt = Math.max(0, found[0].qnt - 1);
+        await supabase.from("estoque").update({ qnt: novaQnt, status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", found[0].id);
+        await supabase.from("vendas").update({ estoque_id: found[0].id }).eq("id", id);
+        console.log(`[Vendas PATCH] Estoque deduzido por serial na finalização: ${serialU} → qnt=${novaQnt}`);
+      }
+    } else if (venda.produto) {
+      // Fallback: buscar por nome do produto no estoque
+      const { data: found } = await supabase.from("estoque").select("id, qnt").ilike("produto", `%${venda.produto}%`).eq("status", "EM ESTOQUE").gt("qnt", 0).limit(1);
+      if (found && found.length > 0) {
+        const novaQnt = Math.max(0, found[0].qnt - 1);
+        await supabase.from("estoque").update({ qnt: novaQnt, status: novaQnt === 0 ? "ESGOTADO" : "EM ESTOQUE", updated_at: new Date().toISOString() }).eq("id", found[0].id);
+        await supabase.from("vendas").update({ estoque_id: found[0].id }).eq("id", id);
+        console.log(`[Vendas PATCH] Estoque deduzido por nome na finalização: ${venda.produto} → qnt=${novaQnt}`);
+      }
+    }
+  }
+
   // Enviar notificação no Telegram quando venda é FINALIZADA
   if (fields.status_pagamento === "FINALIZADO" && data && data.length > 0) {
     const venda = data[0];
@@ -762,7 +810,7 @@ export async function PATCH(req: NextRequest) {
           to: venda.email!,
           clienteNome: venda.cliente || "Cliente",
           produto: `${venda.produto || ""}${venda.cor ? ` ${venda.cor}` : ""}`.trim(),
-          valor: Number(venda.preco_vendido || 0) - Number(venda.credito_lojista_usado || 0),
+          valor: Number(venda.valor_comprovante || venda.preco_vendido || 0),
           notaFiscalUrl: venda.nota_fiscal_url!,
         }).then(() => {
           console.log("[Vendas] NF enviada por email para:", venda.email);
