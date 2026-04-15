@@ -966,7 +966,12 @@ export default function GerarLinkPage() {
       setMpErr("Selecione ao menos um produto.");
       return;
     }
-    const maxP = numParcelas > 0 ? Math.min(numParcelas, 12) : 1;
+    // `maxP` = máximo de parcelas permitido ao cliente no checkout MP.
+    // Sempre 12, pra cliente poder escolher qualquer parcelamento até o limite
+    // do "parcelado vendedor" configurado na conta MP. `numParcelas` (o que o
+    // admin escolheu no form) entra só como `default_installments` (sugestão).
+    const maxP = 12;
+    const defaultInstallments = numParcelas > 0 ? Math.min(numParcelas, 12) : undefined;
     const titulo = prodsFilled.join(" + ");
 
     // Monta shortData enxuto pro formulário pós-pagamento (só o que importa:
@@ -1023,6 +1028,7 @@ export default function GerarLinkPage() {
           titulo,
           valor: valorComTaxa,
           maxParcelas: maxP,
+          defaultInstallments,
           shortCode,
         }),
       });

@@ -24,9 +24,10 @@ function auth(request: Request) {
 interface MpPrefBody {
   titulo?: string;
   valor?: number;
-  maxParcelas?: number;
+  maxParcelas?: number; // Máximo de parcelas que o cliente pode escolher (default: 12)
+  defaultInstallments?: number; // Parcelas pré-selecionadas (sugestão do admin)
   externalRef?: string;
-  shortCode?: string; // Se informado, após pagamento redireciona pra /c/{shortCode}?pago=mp
+  shortCode?: string; // Se informado, após pagamento redireciona pra /c/{shortCode}?pp=mp
 }
 
 export async function POST(request: Request) {
@@ -51,7 +52,12 @@ export async function POST(request: Request) {
 
   const titulo = (body.titulo || "").trim();
   const valor = Number(body.valor);
-  const maxParcelas = Math.max(1, Math.min(12, Number(body.maxParcelas) || 1));
+  // Default: 12x (cliente escolhe livremente). A config de "parcelado vendedor"
+  // na conta MP é quem define quais parcelas são sem juros.
+  const maxParcelas = Math.max(1, Math.min(12, Number(body.maxParcelas) || 12));
+  const defaultInst = body.defaultInstallments
+    ? Math.max(1, Math.min(maxParcelas, Number(body.defaultInstallments)))
+    : undefined;
 
   if (!titulo) {
     return NextResponse.json({ error: "titulo obrigatório" }, { status: 400 });
@@ -86,8 +92,8 @@ export async function POST(request: Request) {
       },
     ],
     payment_methods: {
-      installments: maxParcelas,
-      default_installments: maxParcelas,
+      installments: maxParcelas, // Máximo de parcelas que o cliente pode escolher
+      ...(defaultInst ? { default_installments: defaultInst } : {}),
       // Excluir boleto (só cartão e PIX/crédito)
       excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
     },
