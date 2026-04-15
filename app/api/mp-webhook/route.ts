@@ -13,8 +13,14 @@ import { notifyPagamentoAprovado } from "@/lib/zapi";
 //   1. MP POST com { type: "payment", data: { id } }
 //   2. Buscamos detalhes do pagamento via GET /v1/payments/{id}
 //   3. Se status=approved → buscamos link_compras pelo external_reference
-//      (que é o short_code) e disparamos notificação WhatsApp pro grupo.
-//   4. Tudo é "best-effort": qualquer erro é logado mas não bloqueia a
+//      (que é o short_code).
+//   4. Fluxo INVERTIDO (cliente preencheu formulário antes de pagar —
+//      cliente_dados_preenchidos existe): NÃO notifica o grupo. O próprio
+//      cliente vai abrir o WhatsApp do vendedor via /pagamento-confirmado
+//      com a mensagem completa + comprovante.
+//   5. Fluxo ANTIGO (Link MP direto, sem formulário): notifica o grupo
+//      com formato compacto pra avisar a equipe que um pagamento chegou.
+//   6. Tudo é "best-effort": qualquer erro é logado mas não bloqueia a
 //      resposta 200 pro MP (se a gente retornasse 500, o MP reagendaria
 //      e a gente tomaria notificação duplicada depois).
 //
@@ -83,11 +89,13 @@ async function handleApprovedPayment(paymentId: string) {
   }
 
   // external_reference é o short_code do link_compras (ou um fallback gerado).
-  // Se for short_code, buscamos os dados do cliente/produto pra montar a msg.
+  // Buscamos o link_compras COMPLETO — se o cliente preencheu o formulário
+  // antes de pagar (fluxo invertido), temos endereço, troca, entrega etc e
+  // podemos montar uma notificação idêntica ao que ele enviaria pelo WhatsApp.
   const { supabase } = await import("@/lib/supabase");
   const { data: link } = await supabase
     .from("link_compras")
-    .select("id, cliente_nome, cliente_telefone, produto, valor, parcelas, short_code, notificado_pago")
+    .select("*")
     .eq("short_code", externalRef)
     .maybeSingle();
 
@@ -102,22 +110,65 @@ async function handleApprovedPayment(paymentId: string) {
     return;
   }
 
-  // Dispara WhatsApp
-  const ok = await notifyPagamentoAprovado({
-    cliente: link.cliente_nome || "Cliente sem nome",
-    telefone: link.cliente_telefone,
-    produto: link.produto || "Produto",
-    valor: Number(payment.transaction_amount || link.valor || 0),
-    parcelas: payment.installments ? String(payment.installments) : link.parcelas,
-    shortCode: link.short_code,
-    mpPaymentId: String(payment.id),
-  });
+  // Fallback de dados do cliente: se o link_compras ainda não tem nome/telefone
+  // (cliente pagou antes de preencher o formulário), usamos o que o MP sabe
+  // sobre o pagador (nome do cartão, telefone de cadastro, etc).
+  const nomeMp = [payment.payer?.first_name, payment.payer?.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const telefoneMp =
+    payment.payer?.phone?.area_code && payment.payer?.phone?.number
+      ? `(${payment.payer.phone.area_code}) ${payment.payer.phone.number}`
+      : null;
+
+  // Fluxo invertido (cliente preencheu formulário ANTES de pagar):
+  // NÃO notificamos o grupo aqui — o próprio cliente vai abrir o WhatsApp
+  // do vendedor (via /pagamento-confirmado) com a mensagem COMPLETA e o
+  // comprovante MP. Notificar o grupo aqui geraria duplicidade e roubaria
+  // o pedido do vendedor que gerou o link.
+  //
+  // Só disparamos notificação pro grupo no fluxo ANTIGO (cliente pagou
+  // Link MP sem preencher formulário antes — não sabemos quem ele é).
+  const snapshot = (link.cliente_dados_preenchidos ?? null) as Record<string, unknown> | null;
+  const temFormularioCompleto = !!snapshot && !!snapshot.cliente;
+
+  let ok = false;
+
+  if (temFormularioCompleto) {
+    // Fluxo invertido: cliente já foi redirecionado pro /pagamento-confirmado
+    // que abre o WhatsApp do vendedor. Nada pra notificar aqui.
+    console.log(
+      `[mp-webhook] fluxo invertido: link ${link.id} (short=${link.short_code}) ` +
+        `tem formulário preenchido — cliente vai abrir WhatsApp do vendedor direto. ` +
+        `Skip notificação do grupo.`
+    );
+    ok = true; // marcamos como notificado mesmo (não tem o que enviar)
+  } else {
+    // Fluxo antigo (Link MP direto sem formulário):
+    // Usa formato compacto (só cliente/produto/valor) pro grupo — não temos
+    // dados completos ainda. A ideia é alertar a equipe que um pagamento
+    // chegou e o cliente ainda vai preencher o /compra.
+    ok = await notifyPagamentoAprovado({
+      cliente: link.cliente_nome || nomeMp || "Cliente (aguardando formulário)",
+      telefone: link.cliente_telefone || telefoneMp,
+      produto: link.produto || "Produto",
+      valor: Number(payment.transaction_amount || link.valor || 0),
+      parcelas: payment.installments ? String(payment.installments) : link.parcelas,
+      shortCode: link.short_code,
+      mpPaymentId: String(payment.id),
+    });
+  }
 
   // Marca como notificado no banco pra evitar duplicatas
   if (ok) {
     await supabase
       .from("link_compras")
-      .update({ notificado_pago: true, notificado_pago_em: new Date().toISOString() })
+      .update({
+        notificado_pago: true,
+        notificado_pago_em: new Date().toISOString(),
+        mp_payment_id: String(payment.id),
+      })
       .eq("id", link.id);
   }
 }
