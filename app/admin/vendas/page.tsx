@@ -135,6 +135,7 @@ export default function VendasPage() {
     cep: "", bairro: "", cidade: "", uf: "",
     // Atacado: frete/entrega cobrado a parte
     frete_valor: "", frete_recebido: false as boolean,
+    frete_forma: "" as string, frete_banco: "" as string,
     // Crédito de lojista (ATACADO): valor a abater do saldo pré-pago
     usar_credito_loja: "",
     // Brinde / Cortesia
@@ -300,7 +301,7 @@ export default function VendasPage() {
   const [produtosCarrinho, setProdutosCarrinho] = useState<ProdutoCarrinho[]>([]);
 
   // Estoque: catálogo de produtos
-  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null }
+  interface EstoqueItem { id: string; produto: string; categoria: string; tipo: string; qnt: number; custo_unitario: number; cor: string | null; fornecedor: string | null; status: string; serial_no: string | null; imei: string | null; reserva_cliente: string | null }
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
   const [catSel, setCatSel] = useState("");
   const [estoqueId, setEstoqueId] = useState("");
@@ -518,7 +519,7 @@ export default function VendasPage() {
 
   const produtosFiltrados = catSel ? (() => {
     const [cat, tipo] = catSel.split("__");
-    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE");
+    return estoque.filter(p => p.categoria === cat && ((p.tipo === "SEMINOVO" || p.tipo === "NAO_ATIVADO") ? "SEMINOVO" : "NOVO") === tipo && p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
   })() : [];
 
   const fetchVendas = useCallback(async () => {
@@ -1055,6 +1056,8 @@ export default function VendasPage() {
       // Entrega atacado (cobrada à parte)
       frete_valor: form.tipo === "ATACADO" ? (parseFloat(String(form.frete_valor).replace(/\./g, "").replace(",", ".")) || 0) : null,
       frete_recebido: form.tipo === "ATACADO" ? !!form.frete_recebido : null,
+      frete_forma: form.tipo === "ATACADO" && form.frete_forma ? form.frete_forma : null,
+      frete_banco: form.tipo === "ATACADO" && form.frete_banco ? form.frete_banco : null,
       // Crédito de lojista: valor a abater do saldo (backend debita automaticamente)
       usar_credito_loja: form.tipo === "ATACADO" ? (parseFloat(String(form.usar_credito_loja || "0").replace(/\./g, "").replace(",", ".")) || 0) : 0,
       _lojista_id: creditoLojistaId || null,
@@ -1433,7 +1436,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1475,7 +1478,7 @@ export default function VendasPage() {
               troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
               serial_no: "", imei: "",
               cep: "", bairro: "", cidade: "", uf: "",
-              frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+              frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
               is_brinde: false,
             });
             setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false);
@@ -1553,7 +1556,7 @@ export default function VendasPage() {
         troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
         serial_no: "", imei: "",
         cep: "", bairro: "", cidade: "", uf: "",
-        frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+        frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
         is_brinde: false,
       });
       setCatSel("");
@@ -1828,7 +1831,7 @@ export default function VendasPage() {
       cidade: "",
       uf: "",
       frete_valor: "",
-      frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+      frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
       is_brinde: false,
     });
     setCatSel("");
@@ -2044,7 +2047,7 @@ export default function VendasPage() {
                     produto_na_troca2: "", troca_produto2: "", troca_cor2: "", troca_categoria2: "", troca_bateria2: "", troca_obs2: "", troca_grade2: "", troca_caixa2: "", troca_cabo2: "", troca_fonte2: "",
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "", cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setCatSel(""); setEstoqueId(""); setProdutoManual(false); setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -2230,6 +2233,32 @@ export default function VendasPage() {
                   />
                   <p className="text-[10px] text-[#86868B] mt-1">Opcional. Some ao lucro da venda e aparece no card &quot;Faturamento com entregas&quot;.</p>
                 </div>
+                {/* Forma e banco do pagamento da entrega */}
+                {form.frete_valor && (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div>
+                      <p className={labelCls}>Forma do Pagamento</p>
+                      <select value={form.frete_forma} onChange={(e) => set("frete_forma", e.target.value)} className={inputCls}>
+                        <option value="">— Selecionar —</option>
+                        <option value="PIX">PIX</option>
+                        <option value="CARTAO">Cartão de Crédito</option>
+                        <option value="DEBITO">Débito</option>
+                        <option value="LINK">Link Mercado Pago</option>
+                        <option value="ESPECIE">Espécie (Dinheiro)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <p className={labelCls}>Banco / Máquina</p>
+                      <select value={form.frete_banco} onChange={(e) => set("frete_banco", e.target.value)} className={inputCls}>
+                        <option value="">— Selecionar —</option>
+                        <option value="ITAU">Itaú</option>
+                        <option value="INFINITE">InfinitePay</option>
+                        <option value="MERCADO_PAGO">Mercado Pago</option>
+                        <option value="ESPECIE">Espécie</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Crédito de Lojista — aparece sempre em ATACADO, mesmo sem saldo (facilita cadastrar/ver) */}
@@ -2543,7 +2572,7 @@ export default function VendasPage() {
 
                 {/* Produtos agrupados por modelo */}
                 {(serialBusca.trim() || catSel) && (() => {
-                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE");
+                  const baseList = catSel ? produtosFiltrados : estoque.filter(p => p.qnt > 0 && p.status === "EM ESTOQUE" && !p.reserva_cliente);
                   const filtrados = serialBusca.trim()
                     ? baseList.filter(p => (p.serial_no && p.serial_no.toUpperCase().includes(serialBusca.trim().toUpperCase())) || p.produto.toUpperCase().includes(serialBusca.trim().toUpperCase()))
                     : baseList;
@@ -2726,7 +2755,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -4568,6 +4597,8 @@ export default function VendasPage() {
                                               uf: primaryVenda.uf || "",
                                               frete_valor: primaryVenda.frete_valor != null ? String(primaryVenda.frete_valor) : "",
                                               frete_recebido: !!primaryVenda.frete_recebido,
+                                              frete_forma: primaryVenda.frete_forma || "",
+                                              frete_banco: primaryVenda.frete_banco || "",
                                               usar_credito_loja: "",
                                               is_brinde: !!primaryVenda.is_brinde,
                                               codigo_rastreio: primaryVenda.codigo_rastreio || "",
@@ -5179,6 +5210,8 @@ export default function VendasPage() {
                                         {v.tipo === "ATACADO" && (v.frete_valor ?? 0) > 0 && (
                                           <p>
                                             <strong>🚚 Entrega:</strong> R$ {Number(v.frete_valor).toLocaleString("pt-BR")}{" "}
+                                            {v.frete_forma && <span className={`text-[10px] ${dm ? "text-[#98989D]" : "text-[#86868B]"}`}>({v.frete_forma}{v.frete_banco ? ` ${v.frete_banco}` : ""})</span>}
+                                            {" "}
                                             <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${v.frete_recebido ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
                                               {v.frete_recebido ? "RECEBIDO" : "PENDENTE"}
                                             </span>
@@ -5454,7 +5487,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);
@@ -5490,7 +5523,7 @@ export default function VendasPage() {
                     troca_serial2: "", troca_imei2: "", troca_garantia2: "", troca_pulseira2: "", troca_ciclos2: "",
                     serial_no: "", imei: "",
                     cep: "", bairro: "", cidade: "", uf: "",
-                    frete_valor: "", frete_recebido: false, usar_credito_loja: "", codigo_rastreio: "",
+                    frete_valor: "", frete_recebido: false, frete_forma: "", frete_banco: "", usar_credito_loja: "", codigo_rastreio: "",
                     is_brinde: false,
                   });
                   setShowSegundaTroca(false); setTrocaEnabled(false);

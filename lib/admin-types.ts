@@ -82,6 +82,8 @@ export interface Venda {
   // Entrega atacado cobrada à parte
   frete_valor: number | null;
   frete_recebido: boolean | null;
+  frete_forma: string | null;
+  frete_banco: string | null;
   reajustes: { valor: number; motivo: string; banco: string; data: string }[];
   // Brinde / Cortesia — não impacta faturamento nem lucro
   is_brinde: boolean;
