@@ -50,7 +50,9 @@ export async function GET(req: NextRequest) {
   // Fetch vendas
   let query = supabase
     .from("vendas")
-    .select("id, data, produto, preco_vendido, custo, lucro, created_at, origem, tipo")
+    .select("id, data, produto, preco_vendido, custo, lucro, created_at, origem, tipo, status_pagamento")
+    .neq("status_pagamento", "CANCELADO")
+    .neq("status_pagamento", "PROGRAMADA")
     .order("data", { ascending: true });
 
   if (fromDate) query = query.gte("data", fromDate);

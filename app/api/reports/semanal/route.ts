@@ -183,7 +183,8 @@ async function fetchSemanaData(inicio: string, fim: string, semanaNum: number, e
       .select("data, cliente, produto, preco_vendido, custo, lucro, tipo, origem, forma, banco, qnt_parcelas, status_pagamento")
       .gte("data", inicio)
       .lte("data", fim)
-      .neq("status_pagamento", "CANCELADO"),
+      .neq("status_pagamento", "CANCELADO")
+      .neq("status_pagamento", "PROGRAMADA"),
     supabase
       .from("gastos")
       .select("data, valor, tipo, categoria, descricao, banco, is_dep_esp")

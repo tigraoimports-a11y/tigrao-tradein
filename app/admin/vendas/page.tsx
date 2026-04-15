@@ -3775,8 +3775,9 @@ export default function VendasPage() {
           const datasOrdenadas = [...vendasPorData.keys()].sort((a, b) => b.localeCompare(a));
 
           const titulo = tab === "andamento" ? "Vendas em Andamento" : tab === "hoje" ? "Finalizadas Hoje" : tab === "correios" ? "📦 Envios pelos Correios" : tab === "programadas" ? "Vendas Programadas" : "Histórico de Vendas";
-          const totalVendido = filtered.reduce((s, v) => s + (v.preco_vendido || 0), 0);
-          const totalLucro = filtered.reduce((s, v) => s + (v.lucro || 0), 0);
+          const filteredFinanceiro = filtered.filter(v => v.status_pagamento !== "PROGRAMADA");
+          const totalVendido = filteredFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+          const totalLucro = filteredFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
 
           return (
             <div className={`${dm ? "bg-[#1C1C1E] border-[#3A3A3C]" : "bg-white border-[#D2D2D7]"} border rounded-2xl overflow-hidden shadow-sm`}>
@@ -3923,8 +3924,9 @@ export default function VendasPage() {
                     <div className="px-4 py-8 text-center text-[#86868B]">Nenhuma venda {tab === "andamento" ? "em andamento" : tab === "hoje" ? "finalizada hoje" : tab === "correios" ? "com rastreio dos Correios" : "finalizada"}</div>
                   ) : datasOrdenadas.map((dataKey) => {
                     const vendasDoDia = vendasPorData.get(dataKey) || [];
-                    const lucroDia = vendasDoDia.reduce((s, v) => s + (v.lucro || 0), 0);
-                    const vendidoDia = vendasDoDia.reduce((s, v) => s + (v.preco_vendido || 0), 0);
+                    const vendasDoDiaFinanceiro = vendasDoDia.filter(v => v.status_pagamento !== "PROGRAMADA");
+                    const lucroDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.lucro || 0), 0);
+                    const vendidoDia = vendasDoDiaFinanceiro.reduce((s, v) => s + (v.preco_vendido || 0), 0);
                     const qtdDia = vendasDoDia.length;
                     const [y, m, d] = (dataKey || "").split("-");
                     const dataLabel = d && m && y ? `${d}/${m}/${y}` : dataKey;
@@ -4082,8 +4084,17 @@ export default function VendasPage() {
                               </td>
                               <td className="px-3 py-2.5 text-[#86868B] text-xs">{fmt(v.custo)}</td>
                               <td className="px-3 py-2.5 font-medium text-xs">{fmt(v.preco_vendido)}</td>
-                              <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
-                              <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                              {v.status_pagamento === "PROGRAMADA" ? (
+                                <>
+                                  <td className="px-3 py-2.5 text-xs"><span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold text-[10px]">Programada</span></td>
+                                  <td className="px-3 py-2.5 text-xs"><span className="text-amber-600 text-[10px]">—</span></td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={`px-3 py-2.5 font-bold text-xs ${v.lucro >= 0 ? "text-green-600" : "text-red-500"}`}>{fmt(v.lucro)}</td>
+                                  <td className="px-3 py-2.5 text-[#86868B] text-xs">{Number(v.margem_pct || 0).toFixed(1)}%</td>
+                                </>
+                              )}
                               <td className="px-3 py-2.5 text-xs max-w-[250px]">
                                 <div className="space-y-0.5">
                                   {pagParts.map((p, i) => (
